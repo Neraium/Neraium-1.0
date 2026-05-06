@@ -25,6 +25,9 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
+- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata plus preview rows.
+
+CSV uploads are parsed in memory only. The backend does not save uploaded files permanently and does not run analysis.
 
 ## Tests
 

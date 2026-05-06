@@ -38,6 +38,7 @@ The backend exposes:
 - `GET /api/health`
 - `GET /api/app`
 - `GET /api/facility/systems`
+- `POST /api/data/upload`
 
 ## Frontend Setup
 
@@ -53,8 +54,10 @@ Current frontend sections:
 
 - Overview
 - Facility Systems
-- Data Upload
+- Data Upload with CSV validation and preview
 - Reports
+
+CSV uploads are parsed in memory for validation and preview only. Files are not stored permanently, and no analysis engine is run at this stage.
 
 ## Tests
 

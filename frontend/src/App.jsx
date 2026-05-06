@@ -258,22 +258,153 @@ function FacilitySystemsPage({ systems }) {
 }
 
 function DataUploadPage() {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadState, setUploadState] = useState("idle");
+  const [uploadError, setUploadError] = useState("");
+  const [uploadResult, setUploadResult] = useState(null);
+
+  async function handleUpload(event) {
+    event.preventDefault();
+    if (!selectedFile) {
+      setUploadError("Choose a CSV file exported from facility or sensor systems.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    setUploadState("uploading");
+    setUploadError("");
+    setUploadResult(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "CSV upload could not be validated.");
+      }
+
+      setUploadResult(payload);
+      setUploadState("complete");
+    } catch (error) {
+      setUploadError(error.message);
+      setUploadState("error");
+    }
+  }
+
   return (
     <section className="upload-layout">
       <div className="section-heading">
         <h2>Facility data ingestion</h2>
         <p>
-          CSV ingestion will support historical facility data and sensor exports.
+          Upload CSV exports from cultivation sensors or facility systems to
+          validate structure and preview the first rows. Files are parsed for
+          this session and are not stored permanently.
         </p>
       </div>
 
-      <div className="upload-zone" aria-label="CSV ingestion placeholder">
-        <strong>CSV upload area</strong>
-        <span>
-          Upload handling is not active yet. This space is reserved for facility
-          exports, sensor readings, and controlled environment history.
-        </span>
+      <form className="upload-zone" onSubmit={handleUpload}>
+        <label htmlFor="csv-upload">
+          <strong>CSV sensor export</strong>
+          <span>
+            CSV ingestion supports historical facility data and sensor exports
+            for controlled environment review.
+          </span>
+        </label>
+        <input
+          accept=".csv,text/csv"
+          id="csv-upload"
+          type="file"
+          onChange={(event) => {
+            setSelectedFile(event.target.files?.[0] ?? null);
+            setUploadError("");
+          }}
+        />
+        <button type="submit" disabled={uploadState === "uploading"}>
+          {uploadState === "uploading" ? "Uploading" : "Validate CSV"}
+        </button>
+        {selectedFile && <p className="selected-file">{selectedFile.name}</p>}
+        {uploadError && <p className="form-error">{uploadError}</p>}
+      </form>
+
+      {uploadResult && <UploadResult result={uploadResult} />}
+    </section>
+  );
+}
+
+function UploadResult({ result }) {
+  return (
+    <section className="upload-result" aria-label="CSV upload result">
+      <div className="result-summary">
+        <div>
+          <span>File</span>
+          <strong>{result.filename}</strong>
+        </div>
+        <div>
+          <span>Rows</span>
+          <strong>{result.row_count}</strong>
+        </div>
+        <div>
+          <span>Columns</span>
+          <strong>{result.column_count}</strong>
+        </div>
+        <div>
+          <span>Timestamp</span>
+          <strong>{result.detected_timestamp_column ?? "Not detected"}</strong>
+        </div>
       </div>
+
+      <div className="result-section">
+        <h3>Columns</h3>
+        <div className="column-list">
+          {result.columns.map((column) => (
+            <span key={column}>{column || "Unnamed column"}</span>
+          ))}
+        </div>
+      </div>
+
+      <div className="result-section">
+        <h3>Preview rows</h3>
+        {result.preview_rows.length > 0 ? (
+          <div className="preview-table-wrap">
+            <table className="preview-table">
+              <thead>
+                <tr>
+                  {result.columns.map((column) => (
+                    <th key={column}>{column || "Unnamed"}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.preview_rows.map((row, rowIndex) => (
+                  <tr key={`${result.filename}-${rowIndex}`}>
+                    {result.columns.map((column) => (
+                      <td key={`${column}-${rowIndex}`}>{row[column]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="empty-note">No preview rows were found in this CSV.</p>
+        )}
+      </div>
+
+      {result.warnings.length > 0 && (
+        <div className="result-section">
+          <h3>Warnings</h3>
+          <ul className="warning-list">
+            {result.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

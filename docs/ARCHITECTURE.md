@@ -6,7 +6,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 
 - A FastAPI backend exposes versioned API endpoints under `/api`.
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
-- Automated tests currently cover backend health behavior and placeholder facility systems.
+- Automated tests currently cover backend health behavior, placeholder facility systems, and CSV upload validation.
 
 This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
 
@@ -25,6 +25,7 @@ Initial endpoints:
 - `GET /api/health` reports API availability.
 - `GET /api/app` returns basic application metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
+- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata without permanent storage.
 
 The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
 
@@ -47,8 +48,10 @@ Current frontend sections:
 
 - Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
 - Facility Systems lists hardcoded monitored systems for HVAC, humidity control, airflow, irrigation, lighting, and the sensor network.
-- Data Upload reserves space for future CSV ingestion of historical facility data and sensor exports.
+- Data Upload validates CSV exports from historical facility data and sensor systems, then displays columns, warnings, and preview rows.
 - Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report.
+
+CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run the Neraium engine.
 
 ## Local Integration
 

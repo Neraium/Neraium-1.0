@@ -8,7 +8,7 @@ The app shell positions Neraium around environmental drift in controlled grow fa
 
 - Overview: product orientation, API status, and facility summary placeholders.
 - Facility Systems: placeholder monitored systems for cultivation operations.
-- Data Upload: CSV ingestion placeholder for historical facility data and sensor exports.
+- Data Upload: CSV ingestion flow for historical facility data and sensor exports, with validation results and preview rows.
 - Reports: placeholder report list for the first customer-facing report structure.
 
 ## Local Setup
@@ -28,7 +28,7 @@ The app runs at `http://127.0.0.1:3010`.
 
 ## Backend Connection
 
-By default, the frontend calls `http://127.0.0.1:8010/api/health`.
+By default, the frontend calls the local backend at `http://127.0.0.1:8010` for API health, facility systems, and CSV upload validation.
 
 To use another backend URL, set:
 
