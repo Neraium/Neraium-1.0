@@ -12,31 +12,32 @@ def determine_overall_result(signals: list[dict], limitations: list[str]) -> str
 def build_summary(overall_result: str, signals: list[dict], limitations: list[str]) -> str:
     if overall_result == RESULT_NORMAL:
         return (
-            "The uploaded cultivation data appears usable and the first engine pass "
-            "did not flag baseline drift or relationship changes requiring review."
+            "Neraium SII v1 reviewed the uploaded cultivation data as system behavior. "
+            "The engine did not find corroborated baseline movement or relationship "
+            "changes requiring operator review."
         )
     if overall_result == RESULT_ELEVATED:
         return (
-            "The uploaded cultivation data contains elevated review signals from "
-            "baseline or relationship comparison. Review the evidence before using "
-            "this file for operational decisions."
+            "Neraium SII v1 found elevated system behavior changes across the uploaded "
+            "cultivation data. Review the grouped evidence, persistence notes, and "
+            "operator checks before using this file for operational decisions."
         )
     if signals:
         return (
-            "The uploaded cultivation data contains review signals that should be "
-            "checked against facility context."
+            "Neraium SII v1 found system behavior signals that should be checked "
+            "against facility context and operator logs."
         )
     if limitations:
         return (
-            "The engine pass was limited by the available data. Review the listed "
-            "limitations before relying on this upload."
+            "Neraium SII v1 was limited by the available cultivation data. Review "
+            "the listed limitations before relying on this upload."
         )
     return "The engine pass completed with no additional findings."
 
 
 def base_limitations() -> list[str]:
     return [
-        "This deterministic engine pass uses only the uploaded CSV profile, mapping, baseline comparison, and paired numeric relationships.",
-        "It does not predict crop stress, equipment failure, yield impact, or root cause.",
+        "Neraium SII v1 uses only the uploaded CSV profile, cultivation mapping, baseline comparison, and paired numeric relationships.",
+        "It does not forecast crop stress, equipment failure, yield impact, or root cause.",
         "No data is stored permanently and no AI or LLM analysis is used.",
     ]

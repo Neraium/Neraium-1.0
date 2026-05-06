@@ -26,19 +26,25 @@ def evaluate_relationships(
     if len(rows) < MIN_BASELINE_ROWS:
         limitations.append("Relationship review skipped because there are not enough rows.")
         audit_trace.append("relationships.skipped:insufficient_rows")
+        audit_trace.append("relationship_checks_attempted:0")
+        audit_trace.append("relationship_checks_skipped:insufficient_rows")
         return signals, evidence, recommended_checks, limitations, audit_trace
 
     if len(numeric_columns) < 2:
         limitations.append("Relationship review skipped because fewer than two numeric columns were available.")
         audit_trace.append("relationships.skipped:insufficient_numeric_columns")
+        audit_trace.append("relationship_checks_attempted:0")
+        audit_trace.append("relationship_checks_skipped:insufficient_numeric_columns")
         return signals, evidence, recommended_checks, limitations, audit_trace
 
     window_size = max(1, math.ceil(len(rows) * BASELINE_WINDOW_FRACTION))
     baseline_rows = rows[:window_size]
     recent_rows = rows[-window_size:]
     column_indexes = {column: columns.index(column) for column in numeric_columns if column in columns}
+    attempted_checks = 0
 
     for first_column, second_column in combinations(column_indexes.keys(), 2):
+        attempted_checks += 1
         baseline_corr = correlation_for_pair(
             baseline_rows,
             column_indexes[first_column],
@@ -51,6 +57,7 @@ def evaluate_relationships(
         )
         if baseline_corr is None or recent_corr is None:
             audit_trace.append(f"relationships.pair_skipped:{first_column}:{second_column}")
+            audit_trace.append("relationship_checks_skipped:insufficient_paired_values")
             continue
 
         change = recent_corr - baseline_corr
@@ -86,6 +93,9 @@ def evaluate_relationships(
 
     if not evidence:
         audit_trace.append("relationships.skipped:no_comparable_pairs")
+        audit_trace.append("relationship_checks_skipped:no_comparable_pairs")
+
+    audit_trace.append(f"relationship_checks_attempted:{attempted_checks}")
 
     return signals, evidence, recommended_checks, limitations, audit_trace
 

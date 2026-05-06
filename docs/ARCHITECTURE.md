@@ -6,7 +6,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 
 - A FastAPI backend exposes versioned API endpoints under `/api`.
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
-- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, deterministic cultivation engine output, and deterministic operator report generation.
+- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, deterministic Neraium SII v1 engine output, and deterministic operator report generation.
 
 This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
 
@@ -50,10 +50,12 @@ Current frontend sections:
 
 - Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
 - Facility Systems lists hardcoded monitored systems for HVAC, humidity control, airflow, irrigation, lighting, and the sensor network.
-- Data Upload validates CSV exports from historical facility data and sensor systems, then displays cultivation mapping, data quality, time range, numeric column profiles, baseline comparison, engine result, operator report, columns, warnings, readiness, and preview rows.
+- Data Upload validates CSV exports from historical facility data and sensor systems, then displays cultivation mapping, data quality, time range, numeric column profiles, baseline comparison, Neraium SII v1 engine result, operator report, columns, warnings, readiness, and preview rows.
 - Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report, and shows the latest generated upload report for the current frontend session when one exists.
 
-CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run non-deterministic analysis. Cultivation mapping, profiling, baseline comparison, engine result, and operator reports are deterministic and limited to basic usability checks for cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window; engine output and reports do not predict failures, crop stress, yield impact, or root cause.
+CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run non-deterministic analysis. Cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, and operator reports are deterministic and limited to uploaded cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window.
+
+Neraium SII v1 treats the upload as cultivation system behavior rather than generic anomaly detection. It groups evidence by cultivation category, counts corroborating numeric signals, evaluates whether recent-window drift appears persistent within the uploaded rows, and returns an audit trace with baseline/recent windows, columns analyzed, columns skipped, relationship checks attempted, and relationship checks skipped with reasons. Engine output and reports do not predict failures, crop stress, yield impact, or root cause.
 
 ## Local Integration
 

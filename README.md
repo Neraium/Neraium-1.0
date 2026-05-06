@@ -54,10 +54,10 @@ Current frontend sections:
 
 - Overview
 - Facility Systems
-- Data Upload with CSV validation, cultivation mapping, profiling, baseline comparison, engine result, operator report, and preview
+- Data Upload with CSV validation, cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, operator report, and preview
 - Reports
 
-CSV uploads are parsed in memory for validation, preview, cultivation column mapping, lightweight data profiling, simple baseline comparison, a deterministic engine result, and a plain-English operator report only. The upload response includes data quality, timestamp range, cultivation mapping, numeric column profiles, baseline versus recent averages, `engine_result`, warnings, readiness, and `operator_report`. Files are not stored permanently, and no non-deterministic analysis is run at this stage.
+CSV uploads are parsed in memory for validation, preview, cultivation column mapping, lightweight data profiling, simple baseline comparison, a deterministic Neraium SII v1 engine result, and a plain-English operator report only. The upload response includes data quality, timestamp range, cultivation mapping, numeric column profiles, baseline versus recent averages, `engine_result`, warnings, readiness, and `operator_report`. `engine_result` includes system-level evidence, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details. Files are not stored permanently, and no non-deterministic analysis is run at this stage.
 
 ## Tests
 

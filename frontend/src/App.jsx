@@ -603,6 +603,12 @@ function UploadResult({ result }) {
 }
 
 function EngineResult({ result }) {
+  const systemEvidence = result.system_evidence;
+  const persistenceAssessment = result.persistence_assessment;
+  const changedCategories = systemEvidence?.categories_showing_meaningful_change ?? 0;
+  const changedSignals = systemEvidence?.numeric_signals_showing_meaningful_change ?? 0;
+  const corroborationLevel = systemEvidence?.corroboration_level ?? "limited";
+
   return (
     <section className="engine-result" aria-label="Engine result">
       <div className={`assessment-banner assessment-banner--${result.overall_result}`}>
@@ -625,10 +631,30 @@ function EngineResult({ result }) {
           <strong>{result.evidence.length}</strong>
         </div>
         <div>
+          <span>Corroboration</span>
+          <strong>{formatShortLabel(corroborationLevel)}</strong>
+        </div>
+        <div>
+          <span>Changed categories</span>
+          <strong>{changedCategories}</strong>
+        </div>
+        <div>
+          <span>Changed signals</span>
+          <strong>{changedSignals}</strong>
+        </div>
+        <div>
+          <span>Persistence</span>
+          <strong>{formatShortLabel(persistenceAssessment?.status ?? "limited")}</strong>
+        </div>
+        <div>
           <span>Audit entries</span>
           <strong>{result.audit_trace.length}</strong>
         </div>
       </div>
+
+      {systemEvidence && <SystemEvidence evidence={systemEvidence} />}
+
+      {persistenceAssessment && <PersistenceAssessment assessment={persistenceAssessment} />}
 
       {result.signals.length > 0 && (
         <ReportList title="Signals" items={result.signals.map((signal) => signal.message)} />
@@ -641,7 +667,120 @@ function EngineResult({ result }) {
       {result.limitations.length > 0 && (
         <ReportList title="Limitations" items={result.limitations} />
       )}
+
+      {result.audit_trace.length > 0 && (
+        <ReportList title="Audit trace" items={result.audit_trace} />
+      )}
     </section>
+  );
+}
+
+function SystemEvidence({ evidence }) {
+  const categoriesWithEvidence = Object.entries(evidence.categories).filter(
+    ([, category]) => category.signals.length > 0 || category.evidence.length > 0,
+  );
+
+  return (
+    <div className="result-section">
+      <h3>System Evidence</h3>
+      {categoriesWithEvidence.length > 0 ? (
+        <div className="mapping-grid">
+          {categoriesWithEvidence.map(([category, categoryEvidence]) => (
+            <article className="mapping-card" key={category}>
+              <h4>{category}</h4>
+              {categoryEvidence.columns.length > 0 && (
+                <div className="column-list">
+                  {categoryEvidence.columns.map((column) => (
+                    <span key={`${category}-${column}`}>{column}</span>
+                  ))}
+                </div>
+              )}
+              {categoryEvidence.signals.length > 0 && (
+                <ul className="compact-list">
+                  {categoryEvidence.signals.map((signal) => (
+                    <li key={`${category}-${signal.type}-${signal.message}`}>
+                      {signal.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {categoryEvidence.signals.length === 0 && categoryEvidence.evidence.length > 0 && (
+                <ul className="compact-list">
+                  {categoryEvidence.evidence.map((item) => (
+                    <li key={`${category}-${formatEvidenceKey(item)}`}>
+                      {formatEvidenceItem(item)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-note">
+          No cultivation system categories showed meaningful change in this upload.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PersistenceAssessment({ assessment }) {
+  return (
+    <div className="result-section">
+      <h3>Persistence Assessment</h3>
+      <div className="quality-grid">
+        <div>
+          <span>Status</span>
+          <strong>{formatShortLabel(assessment.status)}</strong>
+        </div>
+        <div>
+          <span>Columns assessed</span>
+          <strong>{assessment.columns_assessed}</strong>
+        </div>
+        <div>
+          <span>Persistent columns</span>
+          <strong>{assessment.persistent_columns.length}</strong>
+        </div>
+      </div>
+
+      {assessment.details.length > 0 && (
+        <div className="profile-table-wrap">
+          <table className="profile-table">
+            <thead>
+              <tr>
+                <th>Column</th>
+                <th>Direction</th>
+                <th>Recent rows checked</th>
+                <th>Supporting rows</th>
+                <th>Support</th>
+                <th>Persistent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assessment.details.map((detail) => (
+                <tr key={detail.column}>
+                  <td>{detail.column}</td>
+                  <td>{detail.direction}</td>
+                  <td>{detail.recent_values_checked}</td>
+                  <td>{detail.supporting_recent_rows}</td>
+                  <td>{detail.support_percent}%</td>
+                  <td>{detail.persistent ? "Yes" : "No"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {assessment.limitations.length > 0 && (
+        <ul className="warning-list">
+          {assessment.limitations.map((limitation) => (
+            <li key={limitation}>{limitation}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -747,6 +886,30 @@ function formatEngineResult(result) {
     return "Needs review";
   }
   return "Normal";
+}
+
+function formatShortLabel(value) {
+  return value.replaceAll("_", " ").replace(/^\w/, (character) => character.toUpperCase());
+}
+
+function formatEvidenceKey(item) {
+  if (item.type === "column_drift") {
+    return `${item.type}-${item.column}-${item.direction}-${item.drift_flag}`;
+  }
+  if (item.type === "relationship_change") {
+    return `${item.type}-${item.columns.join("-")}-${item.change}`;
+  }
+  return JSON.stringify(item);
+}
+
+function formatEvidenceItem(item) {
+  if (item.type === "column_drift") {
+    return `${item.column} moved ${item.direction} from ${item.baseline_average} to ${item.recent_average} with a ${item.drift_flag} flag.`;
+  }
+  if (item.type === "relationship_change") {
+    return `${item.columns.join(" and ")} changed paired behavior by ${item.change}.`;
+  }
+  return "Evidence item recorded for this category.";
 }
 
 function ReportsPage({ latestUploadResult }) {

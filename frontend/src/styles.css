@@ -655,6 +655,18 @@ h4 {
   padding-left: 18px;
   color: #465349;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.compact-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #465349;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .latest-report-card {
