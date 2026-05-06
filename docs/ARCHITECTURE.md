@@ -66,6 +66,8 @@ During local development:
 
 CORS is configured in the backend for the local frontend origins.
 
+AWS deployment preparation is documented in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for AWS App Runner on port `8080`, while local development keeps the dedicated Neraium ports listed above.
+
 ## Near-Term Extension Points
 
 Future work should add capabilities in small, explicit layers:

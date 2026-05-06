@@ -20,6 +20,15 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
+## Container Build
+
+The backend includes a Dockerfile for AWS App Runner preparation. The container serves `app.main:app` with uvicorn on port `8080`.
+
+```powershell
+docker build -t neraium-backend:local .\backend
+docker run --rm -p 8080:8080 neraium-backend:local
+```
+
 ## Endpoints
 
 - `GET /api/health` returns API availability.

@@ -74,3 +74,14 @@ From the repository root:
 .\scripts\start-backend.ps1
 .\scripts\start-frontend.ps1
 ```
+
+Additional validation helpers:
+
+```powershell
+.\scripts\test-backend.ps1
+.\scripts\build-frontend.ps1
+```
+
+## AWS Deployment Preparation
+
+Deployment preparation notes are in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for AWS App Runner on port `8080`; local backend development remains on port `8010`, and local frontend development remains on port `3010`.
