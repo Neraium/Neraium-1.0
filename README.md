@@ -1,19 +1,63 @@
-# Neraium 1.0
+# Neraium
 
-Neraium is a customer-facing infrastructure intelligence application for identifying and explaining system-level change in physical operations.
+Neraium is a customer-facing application for infrastructure intelligence in physical systems.
 
-This repository contains the production application for pilot customers.
-
-## Product Principle
-
-Neraium's core intelligence is the infrastructure intelligence engine.
-
-Customer-facing AI features are explanation and workflow layers. They explain Neraium output, evidence, and recommended operator checks. They do not replace or override the core engine.
+This repository is the production-oriented foundation for pilot customer access. It currently contains a FastAPI backend, a Vite React frontend, initial tests, and architecture notes.
 
 ## Repository Structure
 
-backend/    API, services, engine integration, customer-facing endpoints
-frontend/   Customer-facing web application
+```text
+backend/    FastAPI application and backend documentation
+frontend/   Vite React customer-facing app shell
 docs/       Architecture and implementation notes
-scripts/    Developer and deployment scripts
-tests/      Backend and integration tests
+scripts/    Local development helper scripts
+tests/      Backend tests
+```
+
+## Prerequisites
+
+- Python 3.11+
+- Node.js 20+
+- npm
+
+## Backend Setup
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The backend exposes:
+
+- `GET /api/health`
+- `GET /api/app`
+
+## Frontend Setup
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at `http://127.0.0.1:3000` and calls the local backend at `http://127.0.0.1:8000`.
+
+## Tests
+
+```powershell
+$env:PYTHONPATH = ".\backend"
+python -m pytest tests
+```
+
+## Helper Scripts
+
+From the repository root:
+
+```powershell
+.\scripts\start-backend.ps1
+.\scripts\start-frontend.ps1
+```
