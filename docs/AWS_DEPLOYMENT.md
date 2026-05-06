@@ -15,7 +15,7 @@ This document captures the current deployment preparation for Neraium-1.0. It do
 The backend includes `backend/Dockerfile` for container deployment. It runs the FastAPI app with:
 
 ```text
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8080}
 ```
 
 App Runner setup notes:
@@ -30,6 +30,9 @@ Required backend environment variables:
 
 ```text
 APP_ENV=production
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8080
+CORS_ORIGINS=https://<amplify-frontend-domain>
 ```
 
 Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials, or AI/LLM configuration.
@@ -57,6 +60,12 @@ VITE_API_BASE_URL=https://<app-runner-url>
 ```
 
 The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_URL` is not set.
+
+Required frontend environment variables:
+
+```text
+VITE_API_BASE_URL=https://<app-runner-url>
+```
 
 ## Local Validation Commands
 

@@ -28,7 +28,7 @@ The app runs at `http://127.0.0.1:3010`.
 
 ## Backend Connection
 
-By default, the frontend calls the local backend at `http://127.0.0.1:8010` for API health, facility systems, and CSV upload validation.
+Frontend API configuration is centralized in `frontend/src/config.js`. By default, the frontend calls the local backend at `http://127.0.0.1:8010` for API health, facility systems, and CSV upload validation.
 
 The Engine Result section displays system evidence by cultivation category, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details from the upload response.
 

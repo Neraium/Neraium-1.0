@@ -40,6 +40,13 @@ The backend exposes:
 - `GET /api/facility/systems`
 - `POST /api/data/upload`
 
+Backend configuration is read from environment variables with local defaults:
+
+- `APP_ENV=development`
+- `BACKEND_HOST=127.0.0.1`
+- `BACKEND_PORT=8010`
+- `CORS_ORIGINS=http://127.0.0.1:3010,http://localhost:3010`
+
 ## Frontend Setup
 
 ```powershell
@@ -48,7 +55,7 @@ npm install
 npm run dev
 ```
 
-The frontend runs at `http://127.0.0.1:3010` and calls the local backend at `http://127.0.0.1:8010`.
+The frontend runs at `http://127.0.0.1:3010` and calls the API configured by `VITE_API_BASE_URL`. The local default remains `http://127.0.0.1:8010`.
 
 Current frontend sections:
 

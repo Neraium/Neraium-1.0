@@ -20,9 +20,24 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
+Local helper script from the repository root:
+
+```powershell
+.\scripts\start-backend.ps1
+```
+
+Configuration is centralized in `backend/app/core/config.py` and read from environment variables:
+
+- `APP_ENV` defaults to `development`.
+- `BACKEND_HOST` defaults to `127.0.0.1`.
+- `BACKEND_PORT` defaults to `8010`.
+- `CORS_ORIGINS` defaults to `http://127.0.0.1:3010,http://localhost:3010`.
+
+For AWS App Runner, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, and `CORS_ORIGINS` to the deployed frontend origin.
+
 ## Container Build
 
-The backend includes a Dockerfile for AWS App Runner preparation. The container serves `app.main:app` with uvicorn on port `8080`.
+The backend includes a Dockerfile for AWS App Runner preparation. The container serves `app.main:app` with uvicorn and defaults to port `8080`.
 
 ```powershell
 docker build -t neraium-backend:local .\backend
