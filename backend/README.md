@@ -25,9 +25,9 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, warnings, data readiness, and a plain-English operator report.
+- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, deterministic engine result, warnings, data readiness, and a plain-English operator report.
 
-CSV uploads are parsed in memory only. The backend does not save uploaded files permanently and does not run the Neraium engine. Cultivation mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. The operator report is deterministic and uses only existing profiling, mapping, and baseline outputs.
+CSV uploads are parsed in memory only. The backend does not save uploaded files permanently. Cultivation mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. The cultivation engine v1 is deterministic and returns signals, evidence, recommended checks, limitations, and audit trace without prediction or root-cause claims.
 
 ## Tests
 

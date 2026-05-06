@@ -6,7 +6,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 
 - A FastAPI backend exposes versioned API endpoints under `/api`.
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
-- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, and deterministic operator report generation.
+- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, deterministic cultivation engine output, and deterministic operator report generation.
 
 This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
 
@@ -18,6 +18,7 @@ The backend lives in `backend/app`.
 backend/app/main.py          FastAPI app factory, CORS, router registration
 backend/app/routers/         Route modules grouped by responsibility
 backend/app/services/        Upload parsing, mapping, profiling, comparison, and report services
+backend/app/engine/          Deterministic cultivation intelligence engine v1
 backend/requirements.txt     Python runtime and test dependencies
 ```
 
@@ -26,7 +27,7 @@ Initial endpoints:
 - `GET /api/health` reports API availability.
 - `GET /api/app` returns basic application metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, operator report, data quality, warnings, and readiness without permanent storage.
+- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, engine result, operator report, data quality, warnings, and readiness without permanent storage.
 
 The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
 
@@ -49,10 +50,10 @@ Current frontend sections:
 
 - Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
 - Facility Systems lists hardcoded monitored systems for HVAC, humidity control, airflow, irrigation, lighting, and the sensor network.
-- Data Upload validates CSV exports from historical facility data and sensor systems, then displays cultivation mapping, data quality, time range, numeric column profiles, baseline comparison, operator report, columns, warnings, readiness, and preview rows.
+- Data Upload validates CSV exports from historical facility data and sensor systems, then displays cultivation mapping, data quality, time range, numeric column profiles, baseline comparison, engine result, operator report, columns, warnings, readiness, and preview rows.
 - Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report, and shows the latest generated upload report for the current frontend session when one exists.
 
-CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run the Neraium engine. Cultivation mapping, profiling, baseline comparison, and operator reports are deterministic and limited to basic usability checks for cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window; reports do not predict failures, crop stress, yield impact, or root cause.
+CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run non-deterministic analysis. Cultivation mapping, profiling, baseline comparison, engine result, and operator reports are deterministic and limited to basic usability checks for cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window; engine output and reports do not predict failures, crop stress, yield impact, or root cause.
 
 ## Local Integration
 

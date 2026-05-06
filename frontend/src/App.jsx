@@ -349,6 +349,7 @@ function UploadResult({ result }) {
   const timestampProfile = result.timestamp_profile;
   const baselineAnalysis = result.baseline_analysis;
   const cultivationMapping = result.cultivation_mapping;
+  const engineResult = result.engine_result;
 
   return (
     <section className="upload-result" aria-label="CSV upload result">
@@ -546,6 +547,8 @@ function UploadResult({ result }) {
 
       {cultivationMapping && <CultivationMapping mapping={cultivationMapping} />}
 
+      {engineResult && <EngineResult result={engineResult} />}
+
       {result.operator_report && <OperatorReport report={result.operator_report} />}
 
       <div className="result-section">
@@ -594,6 +597,49 @@ function UploadResult({ result }) {
             ))}
           </ul>
         </div>
+      )}
+    </section>
+  );
+}
+
+function EngineResult({ result }) {
+  return (
+    <section className="engine-result" aria-label="Engine result">
+      <div className={`assessment-banner assessment-banner--${result.overall_result}`}>
+        <span>Engine Result</span>
+        <strong>{formatEngineResult(result.overall_result)}</strong>
+        <p>{result.summary}</p>
+      </div>
+
+      <div className="quality-grid">
+        <div>
+          <span>Engine version</span>
+          <strong>{result.engine_version}</strong>
+        </div>
+        <div>
+          <span>Signals</span>
+          <strong>{result.signals.length}</strong>
+        </div>
+        <div>
+          <span>Evidence items</span>
+          <strong>{result.evidence.length}</strong>
+        </div>
+        <div>
+          <span>Audit entries</span>
+          <strong>{result.audit_trace.length}</strong>
+        </div>
+      </div>
+
+      {result.signals.length > 0 && (
+        <ReportList title="Signals" items={result.signals.map((signal) => signal.message)} />
+      )}
+
+      {result.recommended_checks.length > 0 && (
+        <ReportList title="Recommended checks" items={result.recommended_checks} />
+      )}
+
+      {result.limitations.length > 0 && (
+        <ReportList title="Limitations" items={result.limitations} />
       )}
     </section>
   );
@@ -691,6 +737,16 @@ function formatReadiness(readiness) {
 
 function formatAssessment(assessment) {
   return assessment === "normal" ? "Normal" : "Needs review";
+}
+
+function formatEngineResult(result) {
+  if (result === "elevated") {
+    return "Elevated";
+  }
+  if (result === "needs_review") {
+    return "Needs review";
+  }
+  return "Normal";
 }
 
 function ReportsPage({ latestUploadResult }) {

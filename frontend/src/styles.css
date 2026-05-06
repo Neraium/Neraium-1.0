@@ -478,6 +478,10 @@ h4 {
   border-left-color: #b2792c;
 }
 
+.assessment-banner--elevated {
+  border-left-color: #a33d2f;
+}
+
 .result-section {
   display: grid;
   gap: 12px;
@@ -584,6 +588,7 @@ h4 {
   color: #7b4c18;
 }
 
+.engine-result,
 .operator-report {
   display: grid;
   gap: 18px;

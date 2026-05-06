@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.engine import run_engine_analysis
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
 from app.services.cultivation_mapping import map_cultivation_columns
@@ -36,6 +37,11 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         warnings.append("No obvious timestamp column detected.")
 
     numeric_profiles = profile_numeric_columns(columns, data_rows)
+    warnings.extend(
+        f"{profile['column']} contains {profile['missing_count']} missing numeric values."
+        for profile in numeric_profiles
+        if profile["missing_count"] > 0
+    )
     timestamp_profile = profile_timestamps(columns, data_rows, detected_timestamp_column)
     warnings.extend(timestamp_profile["warnings"])
     warnings.extend(
@@ -59,6 +65,14 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         baseline_analysis=baseline_analysis,
         cultivation_mapping=cultivation_mapping,
     )
+    engine_result = run_engine_analysis(
+        columns=columns,
+        rows=data_rows,
+        data_quality=data_quality,
+        baseline_analysis=baseline_analysis,
+        cultivation_mapping=cultivation_mapping,
+        numeric_profiles=numeric_profiles,
+    )
 
     return {
         "filename": filename,
@@ -74,4 +88,5 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "baseline_analysis": baseline_analysis,
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
+        "engine_result": engine_result,
     }
