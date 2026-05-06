@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./styles.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8010";
 
 function App() {
   const [apiStatus, setApiStatus] = useState({
@@ -53,10 +53,12 @@ function App() {
         <div className="hero__content">
           <p className="eyebrow">Neraium</p>
           <h1 id="page-title">Neraium</h1>
-          <p className="subtitle">Infrastructure Intelligence for Physical Systems</p>
+          <p className="subtitle">
+            Environmental drift intelligence for cannabis grow facilities
+          </p>
           <p className="intro">
-            A focused application foundation for operational teams that need clear,
-            system-level infrastructure insight.
+            Neraium helps cultivation teams detect and explain environmental drift
+            before it becomes crop stress.
           </p>
         </div>
 

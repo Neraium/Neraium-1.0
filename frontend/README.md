@@ -15,16 +15,16 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://127.0.0.1:3000`.
+The app runs at `http://127.0.0.1:3010`.
 
 ## Backend Connection
 
-By default, the frontend calls `http://127.0.0.1:8000/api/health`.
+By default, the frontend calls `http://127.0.0.1:8010/api/health`.
 
 To use another backend URL, set:
 
 ```powershell
-$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8010"
 ```
 
 ## Build
