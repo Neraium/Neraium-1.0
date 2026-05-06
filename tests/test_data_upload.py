@@ -27,6 +27,8 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
     assert payload["data_quality"]["readiness"] == "ready"
     assert payload["data_quality"]["numeric_column_count"] == 2
     assert payload["timestamp_profile"]["estimated_sample_interval"] == "5 minutes"
+    assert payload["cultivation_mapping"]["categories"]["temperature"] == ["temperature"]
+    assert payload["cultivation_mapping"]["categories"]["humidity"] == ["humidity"]
     assert payload["preview_rows"][0] == {
         "timestamp": "2026-05-01T08:00:00Z",
         "room": "Flower 1",
@@ -351,12 +353,14 @@ def test_upload_report_references_only_available_sections() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["operator_report"]["source_sections_used"] == [
+    source_sections = response.json()["operator_report"]["source_sections_used"]
+    assert source_sections[:4] == [
         "data_quality",
         "timestamp_profile",
         "numeric_profiles",
         "baseline_analysis",
     ]
+    assert "cultivation_mapping" in source_sections
 
 
 def test_upload_report_for_empty_profile_does_not_make_unsupported_claims() -> None:

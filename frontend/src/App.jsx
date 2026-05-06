@@ -348,6 +348,7 @@ function UploadResult({ result }) {
   const quality = result.data_quality;
   const timestampProfile = result.timestamp_profile;
   const baselineAnalysis = result.baseline_analysis;
+  const cultivationMapping = result.cultivation_mapping;
 
   return (
     <section className="upload-result" aria-label="CSV upload result">
@@ -543,6 +544,8 @@ function UploadResult({ result }) {
         </div>
       )}
 
+      {cultivationMapping && <CultivationMapping mapping={cultivationMapping} />}
+
       {result.operator_report && <OperatorReport report={result.operator_report} />}
 
       <div className="result-section">
@@ -593,6 +596,55 @@ function UploadResult({ result }) {
         </div>
       )}
     </section>
+  );
+}
+
+function CultivationMapping({ mapping }) {
+  const categoryEntries = Object.entries(mapping.categories);
+
+  return (
+    <div className="result-section">
+      <h3>Cultivation Mapping</h3>
+      <div className="quality-grid">
+        <div>
+          <span>Mapped columns</span>
+          <strong>{mapping.mapped_column_count}</strong>
+        </div>
+        <div>
+          <span>Unknown columns</span>
+          <strong>{mapping.unknown_column_count}</strong>
+        </div>
+        <div>
+          <span>Coverage</span>
+          <strong>{mapping.coverage_percent}%</strong>
+        </div>
+      </div>
+
+      <div className="mapping-grid">
+        {categoryEntries.map(([category, columns]) => (
+          <article className="mapping-card" key={category}>
+            <h4>{category}</h4>
+            {columns.length > 0 ? (
+              <div className="column-list">
+                {columns.map((column) => (
+                  <span key={`${category}-${column}`}>{column}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-note">No columns mapped.</p>
+            )}
+          </article>
+        ))}
+      </div>
+
+      {mapping.warnings.length > 0 && (
+        <ul className="warning-list">
+          {mapping.warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import pytest
 
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
+from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import (
     build_data_quality,
     detect_timestamp_column,
@@ -128,3 +129,108 @@ def test_operator_report_uses_existing_sections() -> None:
         "baseline_analysis",
     ]
     assert "usable for initial review" in report["summary"]
+
+
+def test_cultivation_mapping_maps_core_categories() -> None:
+    mapping = map_cultivation_columns(
+        [
+            "canopy_temp",
+            "relative_humidity",
+            "irrigation_pump",
+            "ppfd",
+            "batch_name",
+        ]
+    )
+
+    assert mapping["categories"]["temperature"] == ["canopy_temp"]
+    assert mapping["categories"]["humidity"] == ["relative_humidity"]
+    assert mapping["categories"]["irrigation"] == ["irrigation_pump"]
+    assert mapping["categories"]["lighting"] == ["ppfd"]
+    assert mapping["categories"]["unknown"] == ["batch_name"]
+
+
+def test_cultivation_mapping_counts_coverage() -> None:
+    mapping = map_cultivation_columns(["temp", "rh", "zone"])
+
+    assert mapping["mapped_column_count"] == 2
+    assert mapping["unknown_column_count"] == 1
+    assert mapping["coverage_percent"] == 66.6667
+    assert mapping["warnings"] == [
+        "Some columns could not be mapped to a cultivation system category."
+    ]
+
+
+def test_operator_report_references_mapped_categories_when_present() -> None:
+    data_quality = {
+        "row_count": 6,
+        "column_count": 2,
+        "numeric_column_count": 1,
+        "timestamp_detected": True,
+        "warnings": [],
+        "readiness": "ready",
+    }
+    timestamp_profile = {
+        "detected_timestamp_column": "timestamp",
+        "first_timestamp": "2026-05-01T08:00:00",
+        "last_timestamp": "2026-05-01T08:25:00",
+        "estimated_sample_interval": "5 minutes",
+        "warnings": [],
+    }
+    baseline_analysis = {
+        "baseline_window_rows": 2,
+        "recent_window_rows": 2,
+        "columns_analyzed": 1,
+        "column_drift": [],
+        "overall_assessment": "normal",
+        "warnings": [],
+    }
+    cultivation_mapping = map_cultivation_columns(["temperature", "humidity"])
+
+    report = build_operator_report(
+        data_quality=data_quality,
+        timestamp_profile=timestamp_profile,
+        numeric_profiles=[],
+        baseline_analysis=baseline_analysis,
+        cultivation_mapping=cultivation_mapping,
+    )
+
+    assert "cultivation_mapping" in report["source_sections_used"]
+    assert any("temperature, humidity" in item for item in report["key_observations"])
+
+
+def test_operator_report_omits_mapping_source_when_no_categories_mapped() -> None:
+    data_quality = {
+        "row_count": 6,
+        "column_count": 1,
+        "numeric_column_count": 0,
+        "timestamp_detected": False,
+        "warnings": [],
+        "readiness": "not_ready",
+    }
+    timestamp_profile = {
+        "detected_timestamp_column": None,
+        "first_timestamp": None,
+        "last_timestamp": None,
+        "estimated_sample_interval": None,
+        "warnings": [],
+    }
+    baseline_analysis = {
+        "baseline_window_rows": 0,
+        "recent_window_rows": 0,
+        "columns_analyzed": 0,
+        "column_drift": [],
+        "overall_assessment": "needs_review",
+        "warnings": [],
+    }
+    cultivation_mapping = map_cultivation_columns(["batch_name"])
+
+    report = build_operator_report(
+        data_quality=data_quality,
+        timestamp_profile=timestamp_profile,
+        numeric_profiles=[],
+        baseline_analysis=baseline_analysis,
+        cultivation_mapping=cultivation_mapping,
+    )
+
+    assert "cultivation_mapping" not in report["source_sections_used"]
+    assert not any("Cultivation mapping identified" in item for item in report["key_observations"])

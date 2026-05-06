@@ -624,6 +624,20 @@ h4 {
   gap: 14px;
 }
 
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mapping-card {
+  min-height: 126px;
+  padding: 16px;
+  border: 1px solid #d8d6cc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .report-block {
   padding-top: 14px;
   border-top: 1px solid #e6e4dc;
@@ -704,7 +718,8 @@ h4 {
   .result-summary,
   .quality-grid,
   .time-grid,
-  .report-grid {
+  .report-grid,
+  .mapping-grid {
     grid-template-columns: 1fr;
   }
 }

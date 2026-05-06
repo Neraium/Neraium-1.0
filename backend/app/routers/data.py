@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
+from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import (
     build_data_quality,
     build_warnings,
@@ -50,11 +51,13 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         warnings=warnings,
     )
     baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
+    cultivation_mapping = map_cultivation_columns(columns)
     operator_report = build_operator_report(
         data_quality=data_quality,
         timestamp_profile=timestamp_profile,
         numeric_profiles=numeric_profiles,
         baseline_analysis=baseline_analysis,
+        cultivation_mapping=cultivation_mapping,
     )
 
     return {
@@ -69,5 +72,6 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "timestamp_profile": timestamp_profile,
         "data_quality": data_quality,
         "baseline_analysis": baseline_analysis,
+        "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
     }

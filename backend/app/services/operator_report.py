@@ -6,6 +6,7 @@ def build_operator_report(
     timestamp_profile: dict[str, Any],
     numeric_profiles: list[dict[str, Any]],
     baseline_analysis: dict[str, Any],
+    cultivation_mapping: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report_warnings = list(
         dict.fromkeys(
@@ -13,6 +14,7 @@ def build_operator_report(
                 *data_quality["warnings"],
                 *timestamp_profile["warnings"],
                 *baseline_analysis["warnings"],
+                *(cultivation_mapping["warnings"] if cultivation_mapping else []),
             ]
         )
     )
@@ -31,13 +33,19 @@ def build_operator_report(
             "last_timestamp": timestamp_profile["last_timestamp"],
             "estimated_sample_interval": timestamp_profile["estimated_sample_interval"],
         },
-        "key_observations": key_observations(data_quality, timestamp_profile, baseline_analysis),
+        "key_observations": key_observations(
+            data_quality,
+            timestamp_profile,
+            baseline_analysis,
+            cultivation_mapping,
+        ),
         "columns_requiring_review": columns_requiring_review,
         "recommended_operator_checks": recommended_operator_checks(
             data_quality,
             timestamp_profile,
             baseline_analysis,
             columns_requiring_review,
+            cultivation_mapping,
         ),
         "limitations": report_limitations(data_quality, baseline_analysis),
         "source_sections_used": [
@@ -45,6 +53,11 @@ def build_operator_report(
             "timestamp_profile",
             "numeric_profiles",
             "baseline_analysis",
+            *(
+                ["cultivation_mapping"]
+                if cultivation_mapping and cultivation_mapping["mapped_column_count"] > 0
+                else []
+            ),
         ],
         "warnings": report_warnings,
     }
@@ -73,6 +86,7 @@ def key_observations(
     data_quality: dict[str, Any],
     timestamp_profile: dict[str, Any],
     baseline_analysis: dict[str, Any],
+    cultivation_mapping: dict[str, Any] | None = None,
 ) -> list[str]:
     observations = [
         (
@@ -112,6 +126,17 @@ def key_observations(
             observations.append("No numeric columns were flagged by the simple baseline comparison.")
     else:
         observations.append("Baseline comparison was limited because not enough usable rows were available.")
+
+    if cultivation_mapping and cultivation_mapping["mapped_column_count"] > 0:
+        mapped_categories = [
+            category
+            for category, mapped_columns in cultivation_mapping["categories"].items()
+            if category != "unknown" and mapped_columns
+        ]
+        observations.append(
+            "Cultivation mapping identified columns for: "
+            f"{', '.join(mapped_categories)}."
+        )
 
     return observations
 
@@ -158,6 +183,7 @@ def recommended_operator_checks(
     timestamp_profile: dict[str, Any],
     baseline_analysis: dict[str, Any],
     columns_requiring_review: list[dict[str, Any]],
+    cultivation_mapping: dict[str, Any] | None = None,
 ) -> list[str]:
     checks: list[str] = []
     if not timestamp_profile["detected_timestamp_column"]:
@@ -171,6 +197,8 @@ def recommended_operator_checks(
         checks.append(f"Review source sensor channels for: {column_names}.")
     if baseline_analysis["overall_assessment"] == "needs_review":
         checks.append("Compare the baseline and recent windows against facility logs for the same period.")
+    if cultivation_mapping and cultivation_mapping["unknown_column_count"]:
+        checks.append("Review unmapped CSV columns and rename source exports when labels are unclear.")
     if not checks:
         checks.append("Confirm the uploaded period and sensor channels match the facility area under review.")
     return checks
