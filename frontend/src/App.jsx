@@ -302,8 +302,8 @@ function DataUploadPage() {
         <h2>Facility data ingestion</h2>
         <p>
           Upload CSV exports from cultivation sensors or facility systems to
-          validate structure and preview the first rows. Files are parsed for
-          this session and are not stored permanently.
+          validate structure, profile numeric readings, and preview the first
+          rows. Files are parsed for this session and are not stored permanently.
         </p>
       </div>
 
@@ -337,8 +337,22 @@ function DataUploadPage() {
 }
 
 function UploadResult({ result }) {
+  const quality = result.data_quality;
+  const timestampProfile = result.timestamp_profile;
+
   return (
     <section className="upload-result" aria-label="CSV upload result">
+      {quality && (
+        <div className={`readiness-banner readiness-banner--${quality.readiness}`}>
+          <span>Readiness</span>
+          <strong>{formatReadiness(quality.readiness)}</strong>
+          <p>
+            Lightweight data profiling checks whether this cultivation sensor
+            export has usable rows, numeric readings, and timestamp context.
+          </p>
+        </div>
+      )}
+
       <div className="result-summary">
         <div>
           <span>File</span>
@@ -356,7 +370,93 @@ function UploadResult({ result }) {
           <span>Timestamp</span>
           <strong>{result.detected_timestamp_column ?? "Not detected"}</strong>
         </div>
+        <div>
+          <span>Numeric columns</span>
+          <strong>{quality?.numeric_column_count ?? result.numeric_profiles?.length ?? 0}</strong>
+        </div>
       </div>
+
+      {quality && (
+        <div className="result-section">
+          <h3>Data Quality Summary</h3>
+          <div className="quality-grid">
+            <div>
+              <span>Rows</span>
+              <strong>{quality.row_count}</strong>
+            </div>
+            <div>
+              <span>Columns</span>
+              <strong>{quality.column_count}</strong>
+            </div>
+            <div>
+              <span>Numeric columns</span>
+              <strong>{quality.numeric_column_count}</strong>
+            </div>
+            <div>
+              <span>Timestamp detected</span>
+              <strong>{quality.timestamp_detected ? "Yes" : "No"}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {timestampProfile && (
+        <div className="result-section">
+          <h3>Time range</h3>
+          <div className="time-grid">
+            <div>
+              <span>First timestamp</span>
+              <strong>{timestampProfile.first_timestamp ?? "Not available"}</strong>
+            </div>
+            <div>
+              <span>Last timestamp</span>
+              <strong>{timestampProfile.last_timestamp ?? "Not available"}</strong>
+            </div>
+            <div>
+              <span>Estimated sample interval</span>
+              <strong>{timestampProfile.estimated_sample_interval ?? "Not available"}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.numeric_profiles?.length > 0 && (
+        <div className="result-section">
+          <h3>Numeric column profile</h3>
+          <div className="profile-table-wrap">
+            <table className="profile-table">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th>Min</th>
+                  <th>Max</th>
+                  <th>Average</th>
+                  <th>Missing</th>
+                  <th>Variability</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.numeric_profiles.map((profile) => (
+                  <tr key={profile.column}>
+                    <td>{profile.column}</td>
+                    <td>{profile.min}</td>
+                    <td>{profile.max}</td>
+                    <td>{profile.average}</td>
+                    <td>
+                      {profile.missing_count} ({profile.missing_percent}%)
+                    </td>
+                    <td>
+                      <span className={`flag flag--${profile.variability}`}>
+                        {profile.variability}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="result-section">
         <h3>Columns</h3>
@@ -407,6 +507,16 @@ function UploadResult({ result }) {
       )}
     </section>
   );
+}
+
+function formatReadiness(readiness) {
+  if (readiness === "ready") {
+    return "Ready";
+  }
+  if (readiness === "needs_review") {
+    return "Needs review";
+  }
+  return "Not ready";
 }
 
 function ReportsPage() {

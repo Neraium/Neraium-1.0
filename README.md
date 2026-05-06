@@ -57,7 +57,7 @@ Current frontend sections:
 - Data Upload with CSV validation and preview
 - Reports
 
-CSV uploads are parsed in memory for validation and preview only. Files are not stored permanently, and no analysis engine is run at this stage.
+CSV uploads are parsed in memory for validation, preview, and lightweight data profiling only. The upload response includes data quality, timestamp range, numeric column profiles, warnings, and readiness. Files are not stored permanently, and no analysis engine is run at this stage.
 
 ## Tests
 
