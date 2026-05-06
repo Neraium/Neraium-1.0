@@ -1,30 +1,42 @@
 # AWS Deployment Preparation
 
-This document captures the current deployment preparation for Neraium-1.0. It does not deploy resources automatically.
+This document captures the current deployment preparation for Neraium-1.0. It does not deploy resources automatically and does not add infrastructure-as-code yet.
 
 ## Targets
 
-- Backend: AWS App Runner
-- Frontend: AWS Amplify Hosting or another static host for the Vite build output
+- Backend: Amazon ECS Express Mode / ECS Fargate
+- Backend container image registry: Amazon ECR
+- Frontend: AWS Amplify Hosting
 - Production backend port: `8080`
 - Local backend port: `8010`
 - Local frontend port: `3010`
 
-## Backend: AWS App Runner
+## Backend: ECS Express Mode / ECS Fargate
 
-The backend includes `backend/Dockerfile` for container deployment. It runs the FastAPI app with:
+The backend remains a FastAPI Docker container. `backend/Dockerfile` runs:
 
 ```text
 python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8080}
 ```
 
-App Runner setup notes:
+Backend deployment notes:
 
-1. Build from the `backend` directory using `backend/Dockerfile`.
-2. Configure the service port as `8080`.
-3. Use `/api/health` as the health check endpoint.
-4. Confirm the deployed service returns a healthy response at `https://<app-runner-url>/api/health`.
-5. Keep local development on `127.0.0.1:8010`; production port `8080` is only for the container runtime.
+1. Build the backend Docker image from the repository root:
+
+```powershell
+docker build -t neraium-backend:local .\backend
+```
+
+2. Create an Amazon ECR repository for the backend image.
+3. Tag and push the backend image to Amazon ECR.
+4. Create an Amazon ECS Express Mode service from the ECR image.
+5. Configure the container port as `8080`.
+6. Configure the health check path as `/api/health`.
+7. Confirm the ECS-generated public HTTPS URL returns a healthy response:
+
+```text
+https://<ecs-backend-url>/api/health
+```
 
 Required backend environment variables:
 
@@ -35,11 +47,13 @@ BACKEND_PORT=8080
 CORS_ORIGINS=https://<amplify-frontend-domain>
 ```
 
-Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials, or AI/LLM configuration.
+Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, or AI/LLM configuration.
 
-## Frontend: AWS Amplify Or Static Vite Build
+## Frontend: AWS Amplify Hosting
 
-The frontend is a static Vite React app. Production builds are created with:
+The frontend remains a static Vite React app hosted by AWS Amplify Hosting.
+
+Production builds are created with:
 
 ```powershell
 cd frontend
@@ -49,23 +63,31 @@ npm run build
 
 Amplify setup notes:
 
-1. Set the app root to `frontend` if Amplify is connected to the repository root.
-2. Use `npm install` for dependency installation.
-3. Use `npm run build` as the build command.
-4. Publish the `frontend/dist` directory.
-5. Set `VITE_API_BASE_URL` to the deployed App Runner backend URL, for example:
+1. Connect Amplify Hosting to the GitHub repository.
+2. Set the app root to `frontend` if Amplify is connected to the repository root.
+3. Use `npm install` for dependency installation.
+4. Use `npm run build` as the build command.
+5. Publish the `frontend/dist` directory.
+6. Set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL.
+
+Required frontend environment variable:
 
 ```text
-VITE_API_BASE_URL=https://<app-runner-url>
+VITE_API_BASE_URL=https://<ecs-backend-url>
 ```
 
 The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_URL` is not set.
 
-Required frontend environment variables:
+## Deployment Order
 
-```text
-VITE_API_BASE_URL=https://<app-runner-url>
-```
+1. Push the latest GitHub `main` branch.
+2. Build and push the backend Docker image to Amazon ECR.
+3. Deploy the backend through Amazon ECS Express Mode / ECS Fargate.
+4. Confirm `https://<ecs-backend-url>/api/health` works.
+5. Deploy the frontend through AWS Amplify Hosting.
+6. Set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify.
+7. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
+8. Test the CSV upload flow from the live frontend.
 
 ## Local Validation Commands
 
@@ -81,7 +103,7 @@ Frontend production build:
 .\scripts\build-frontend.ps1
 ```
 
-Dockerfile syntax and image build check:
+Docker image build check:
 
 ```powershell
 docker build -t neraium-backend:local .\backend

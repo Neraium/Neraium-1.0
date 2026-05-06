@@ -32,13 +32,13 @@ Frontend API configuration is centralized in `frontend/src/config.js`. By defaul
 
 The Engine Result section displays system evidence by cultivation category, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details from the upload response.
 
-To use another backend URL, including the production AWS App Runner URL, set:
+To use another backend URL, including the production ECS backend URL, set:
 
 ```powershell
 $env:VITE_API_BASE_URL = "http://127.0.0.1:8010"
 ```
 
-For static hosting or AWS Amplify, set `VITE_API_BASE_URL` in the frontend build environment before running `npm run build`.
+For AWS Amplify Hosting, set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL in the frontend build environment before running `npm run build`.
 
 ## Build
 

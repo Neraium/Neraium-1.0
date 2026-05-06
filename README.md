@@ -91,4 +91,4 @@ Additional validation helpers:
 
 ## AWS Deployment Preparation
 
-Deployment preparation notes are in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for AWS App Runner on port `8080`; local backend development remains on port `8010`, and local frontend development remains on port `3010`.
+Deployment preparation notes are in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for Amazon ECS Express Mode / ECS Fargate on port `8080`; local backend development remains on port `8010`, and local frontend development remains on port `3010`.
