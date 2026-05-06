@@ -54,10 +54,10 @@ Current frontend sections:
 
 - Overview
 - Facility Systems
-- Data Upload with CSV validation, profiling, baseline comparison, and preview
+- Data Upload with CSV validation, profiling, baseline comparison, operator report, and preview
 - Reports
 
-CSV uploads are parsed in memory for validation, preview, lightweight data profiling, and simple baseline comparison only. The upload response includes data quality, timestamp range, numeric column profiles, baseline versus recent averages, warnings, and readiness. Files are not stored permanently, and no analysis engine is run at this stage.
+CSV uploads are parsed in memory for validation, preview, lightweight data profiling, simple baseline comparison, and a plain-English operator report only. The upload response includes data quality, timestamp range, numeric column profiles, baseline versus recent averages, warnings, readiness, and `operator_report`. Files are not stored permanently, and no analysis engine is run at this stage.
 
 ## Tests
 

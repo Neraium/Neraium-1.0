@@ -74,6 +74,7 @@ function App() {
     detail: "Connecting to the Neraium API.",
   });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
+  const [latestUploadResult, setLatestUploadResult] = useState(null);
 
   useEffect(() => {
     let isActive = true;
@@ -178,8 +179,13 @@ function App() {
         <PageHeader activePage={activePage} />
         {activePage === "Overview" && <OverviewPage apiStatus={apiStatus} />}
         {activePage === "Facility Systems" && <FacilitySystemsPage systems={systems} />}
-        {activePage === "Data Upload" && <DataUploadPage />}
-        {activePage === "Reports" && <ReportsPage />}
+        {activePage === "Data Upload" && (
+          <DataUploadPage
+            latestUploadResult={latestUploadResult}
+            onUploadComplete={setLatestUploadResult}
+          />
+        )}
+        {activePage === "Reports" && <ReportsPage latestUploadResult={latestUploadResult} />}
       </section>
     </main>
   );
@@ -257,11 +263,11 @@ function FacilitySystemsPage({ systems }) {
   );
 }
 
-function DataUploadPage() {
+function DataUploadPage({ latestUploadResult, onUploadComplete }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
-  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadResult, setUploadResult] = useState(latestUploadResult);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -289,6 +295,7 @@ function DataUploadPage() {
       }
 
       setUploadResult(payload);
+      onUploadComplete(payload);
       setUploadState("complete");
     } catch (error) {
       setUploadError(error.message);
@@ -536,6 +543,8 @@ function UploadResult({ result }) {
         </div>
       )}
 
+      {result.operator_report && <OperatorReport report={result.operator_report} />}
+
       <div className="result-section">
         <h3>Columns</h3>
         <div className="column-list">
@@ -587,6 +596,37 @@ function UploadResult({ result }) {
   );
 }
 
+function OperatorReport({ report }) {
+  return (
+    <section className="operator-report" aria-label="Operator report">
+      <div className="report-header">
+        <span>Operator Report</span>
+        <h3>{report.title}</h3>
+        <p>{report.summary}</p>
+      </div>
+
+      <div className="report-grid">
+        <ReportList title="Key observations" items={report.key_observations} />
+        <ReportList title="Recommended operator checks" items={report.recommended_operator_checks} />
+        <ReportList title="Limitations" items={report.limitations} />
+      </div>
+    </section>
+  );
+}
+
+function ReportList({ title, items }) {
+  return (
+    <div className="report-block">
+      <h4>{title}</h4>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function formatReadiness(readiness) {
   if (readiness === "ready") {
     return "Ready";
@@ -601,16 +641,30 @@ function formatAssessment(assessment) {
   return assessment === "normal" ? "Normal" : "Needs review";
 }
 
-function ReportsPage() {
+function ReportsPage({ latestUploadResult }) {
+  const latestReport = latestUploadResult?.operator_report;
+
   return (
     <section className="list-panel">
       <div className="section-heading">
         <h2>Reports</h2>
         <p>
-          Report generation is not active yet. These report types define the
-          first customer-facing review structure.
+          Upload reports are generated from the current session only. No report
+          history is stored yet.
         </p>
       </div>
+
+      {latestReport && (
+        <article className="latest-report-card">
+          <span>Latest upload report</span>
+          <h3>{latestReport.title}</h3>
+          <p>{latestReport.summary}</p>
+          <div className="latest-report-meta">
+            <strong>{formatReadiness(latestReport.data_readiness)}</strong>
+            <span>{latestUploadResult.filename}</span>
+          </div>
+        </article>
+      )}
 
       <div className="report-list">
         {REPORTS.map((report) => (

@@ -280,6 +280,104 @@ def test_upload_baseline_handles_too_few_rows() -> None:
     assert "At least 5 data rows are needed for baseline comparison." in analysis["warnings"]
 
 
+def test_upload_generates_operator_report_from_ready_data() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,75,58" for index in range(10)
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("ready-report.csv", f"timestamp,temperature,humidity\n{rows}", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    report = response.json()["operator_report"]
+    assert report["title"] == "Cultivation Data Upload Report"
+    assert report["data_readiness"] == "ready"
+    assert "usable for initial review" in report["summary"]
+    assert report["time_coverage"]["detected_timestamp_column"] == "timestamp"
+    assert report["key_observations"]
+    assert report["recommended_operator_checks"]
+
+
+def test_upload_report_includes_limitations_when_data_needs_review() -> None:
+    client = TestClient(create_app())
+    csv_content = (
+        "timestamp,humidity\n"
+        "2026-05-01T08:00:00Z,55\n"
+        "not-a-time,110\n"
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("limited-report.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    report = response.json()["operator_report"]
+    assert report["data_readiness"] == "needs_review"
+    assert any("Evidence is limited" in limitation for limitation in report["limitations"])
+
+
+def test_upload_report_does_not_invent_causes() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,{70 + index}" for index in range(10)
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("cause-check.csv", f"timestamp,temperature\n{rows}", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    report_text = str(response.json()["operator_report"]).lower()
+    assert "root cause is" not in report_text
+    assert "caused by" not in report_text
+    assert "will fail" not in report_text
+    assert "yield impact is" not in report_text
+
+
+def test_upload_report_references_only_available_sections() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,75" for index in range(6)
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("sections-used.csv", f"timestamp,temperature\n{rows}", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["operator_report"]["source_sections_used"] == [
+        "data_quality",
+        "timestamp_profile",
+        "numeric_profiles",
+        "baseline_analysis",
+    ]
+
+
+def test_upload_report_for_empty_profile_does_not_make_unsupported_claims() -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("header-only-report.csv", "timestamp,temperature\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    report = response.json()["operator_report"]
+    report_text = str(report).lower()
+    assert report["data_readiness"] == "not_ready"
+    assert "does not yet have enough usable structure" in report["summary"]
+    assert "root cause" in report_text
+    assert "predict" in report_text
+    assert "root cause is" not in report_text
+    assert "crop stress prediction" not in report_text
+
+
 def test_upload_rejects_invalid_extension() -> None:
     client = TestClient(create_app())
 

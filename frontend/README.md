@@ -8,8 +8,8 @@ The app shell positions Neraium around environmental drift in controlled grow fa
 
 - Overview: product orientation, API status, and facility summary placeholders.
 - Facility Systems: placeholder monitored systems for cultivation operations.
-- Data Upload: CSV ingestion flow for historical facility data and sensor exports, with validation results, data quality, timestamp range, numeric profiles, baseline comparison, warnings, readiness, and preview rows.
-- Reports: placeholder report list for the first customer-facing report structure.
+- Data Upload: CSV ingestion flow for historical facility data and sensor exports, with validation results, data quality, timestamp range, numeric profiles, baseline comparison, operator report, warnings, readiness, and preview rows.
+- Reports: placeholder report list plus the latest generated upload report for the current frontend session.
 
 ## Local Setup
 

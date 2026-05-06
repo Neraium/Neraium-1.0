@@ -25,9 +25,9 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, timestamp profile, numeric column profiles, baseline comparison, warnings, and data readiness.
+- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, timestamp profile, numeric column profiles, baseline comparison, warnings, data readiness, and a plain-English operator report.
 
-CSV uploads are parsed in memory only. The backend does not save uploaded files permanently and does not run the Neraium engine. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only.
+CSV uploads are parsed in memory only. The backend does not save uploaded files permanently and does not run the Neraium engine. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. The operator report is deterministic and uses only existing profiling and baseline outputs.
 
 ## Tests
 

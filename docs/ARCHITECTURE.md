@@ -6,7 +6,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 
 - A FastAPI backend exposes versioned API endpoints under `/api`.
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
-- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, lightweight data profiling, and simple baseline comparison.
+- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, lightweight data profiling, simple baseline comparison, and deterministic operator report generation.
 
 This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
 
@@ -25,7 +25,7 @@ Initial endpoints:
 - `GET /api/health` reports API availability.
 - `GET /api/app` returns basic application metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, timestamp profile, numeric column profiles, baseline comparison, data quality, warnings, and readiness without permanent storage.
+- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, timestamp profile, numeric column profiles, baseline comparison, operator report, data quality, warnings, and readiness without permanent storage.
 
 The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
 
@@ -48,10 +48,10 @@ Current frontend sections:
 
 - Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
 - Facility Systems lists hardcoded monitored systems for HVAC, humidity control, airflow, irrigation, lighting, and the sensor network.
-- Data Upload validates CSV exports from historical facility data and sensor systems, then displays data quality, time range, numeric column profiles, baseline comparison, columns, warnings, readiness, and preview rows.
-- Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report.
+- Data Upload validates CSV exports from historical facility data and sensor systems, then displays data quality, time range, numeric column profiles, baseline comparison, operator report, columns, warnings, readiness, and preview rows.
+- Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report, and shows the latest generated upload report for the current frontend session when one exists.
 
-CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run the Neraium engine. Profiling and baseline comparison are deterministic and limited to basic usability checks for cultivation sensor exports. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window; it does not predict failures, crop stress, or root cause.
+CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run the Neraium engine. Profiling, baseline comparison, and operator reports are deterministic and limited to basic usability checks for cultivation sensor exports. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window; reports do not predict failures, crop stress, yield impact, or root cause.
 
 ## Local Integration
 
