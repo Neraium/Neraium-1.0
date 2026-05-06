@@ -4,6 +4,13 @@ Vite React application shell for the customer-facing Neraium product for cannabi
 
 The app shell positions Neraium around environmental drift in controlled grow facilities, with focus areas including HVAC, humidity, airflow, irrigation, lighting, and sensor data.
 
+## Sections
+
+- Overview: product orientation, API status, and facility summary placeholders.
+- Facility Systems: placeholder monitored systems for cultivation operations.
+- Data Upload: CSV ingestion placeholder for historical facility data and sensor exports.
+- Reports: placeholder report list for the first customer-facing report structure.
+
 ## Local Setup
 
 ```powershell

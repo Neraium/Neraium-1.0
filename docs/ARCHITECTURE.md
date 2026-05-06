@@ -6,9 +6,9 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 
 - A FastAPI backend exposes versioned API endpoints under `/api`.
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
-- Automated tests currently cover backend health behavior.
+- Automated tests currently cover backend health behavior and placeholder facility systems.
 
-This scaffold intentionally does not include authentication, a database, cloud deployment, AI assistant features, or legacy data schemas.
+This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
 
 ## Backend
 
@@ -24,6 +24,7 @@ Initial endpoints:
 
 - `GET /api/health` reports API availability.
 - `GET /api/app` returns basic application metadata.
+- `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
 
 The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
 
@@ -38,9 +39,16 @@ frontend/src/App.jsx
 frontend/src/styles.css
 ```
 
-The current interface is a focused customer-facing shell for grow teams. It displays the Neraium product name, the product subtitle, and live API availability from the backend health endpoint.
+The current interface is a focused customer-facing shell for grow teams. It includes Overview, Facility Systems, Data Upload, and Reports sections.
 
 The product direction is to help operators understand environmental drift before it becomes visible crop stress. Future workflows should explain changes across HVAC, humidity, airflow, irrigation, lighting, and sensor data in plain English for growers and facility operators.
+
+Current frontend sections:
+
+- Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
+- Facility Systems lists hardcoded monitored systems for HVAC, humidity control, airflow, irrigation, lighting, and the sensor network.
+- Data Upload reserves space for future CSV ingestion of historical facility data and sensor exports.
+- Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report.
 
 ## Local Integration
 

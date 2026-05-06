@@ -2,7 +2,7 @@
 
 Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes visible crop stress.
 
-This repository is the production-oriented foundation for pilot customer access in controlled environment cannabis grow facilities. It currently contains a FastAPI backend, a Vite React frontend, initial tests, and architecture notes.
+This repository is the production-oriented foundation for pilot customer access in controlled environment cannabis grow facilities. It currently contains a FastAPI backend, a Vite React frontend, initial customer app sections, initial tests, and architecture notes.
 
 The product is focused on controlled environment operations across HVAC, humidity, airflow, irrigation, lighting, and sensor data.
 
@@ -37,6 +37,7 @@ The backend exposes:
 
 - `GET /api/health`
 - `GET /api/app`
+- `GET /api/facility/systems`
 
 ## Frontend Setup
 
@@ -47,6 +48,13 @@ npm run dev
 ```
 
 The frontend runs at `http://127.0.0.1:3010` and calls the local backend at `http://127.0.0.1:8010`.
+
+Current frontend sections:
+
+- Overview
+- Facility Systems
+- Data Upload
+- Reports
 
 ## Tests
 

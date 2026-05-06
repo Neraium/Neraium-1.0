@@ -24,6 +24,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
+- `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
 
 ## Tests
 
