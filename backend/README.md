@@ -1,6 +1,8 @@
 # Neraium Backend
 
-FastAPI application for customer-facing Neraium API endpoints.
+FastAPI application for customer-facing Neraium API endpoints used by cannabis cultivation operators and growers.
+
+The backend currently supports the first app scaffold for controlled environment operations. Product-facing metadata should stay focused on helping grow teams detect and explain environmental drift before it becomes visible crop stress.
 
 ## Local Setup
 

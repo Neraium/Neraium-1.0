@@ -1,6 +1,8 @@
 # Neraium Frontend
 
-Vite React application shell for the customer-facing Neraium product.
+Vite React application shell for the customer-facing Neraium product for cannabis cultivation operators and growers.
+
+The app shell positions Neraium around environmental drift in controlled grow facilities, with focus areas including HVAC, humidity, airflow, irrigation, lighting, and sensor data.
 
 ## Local Setup
 

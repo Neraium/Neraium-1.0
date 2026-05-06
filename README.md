@@ -1,8 +1,10 @@
 # Neraium
 
-Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes crop stress.
+Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes visible crop stress.
 
 This repository is the production-oriented foundation for pilot customer access in controlled environment cannabis grow facilities. It currently contains a FastAPI backend, a Vite React frontend, initial tests, and architecture notes.
+
+The product is focused on controlled environment operations across HVAC, humidity, airflow, irrigation, lighting, and sensor data.
 
 ## Repository Structure
 

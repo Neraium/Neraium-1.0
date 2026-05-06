@@ -58,7 +58,7 @@ function App() {
           </p>
           <p className="intro">
             Neraium helps cultivation teams detect and explain environmental drift
-            before it becomes crop stress.
+            before it becomes visible crop stress.
           </p>
         </div>
 
