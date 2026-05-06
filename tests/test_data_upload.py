@@ -145,6 +145,141 @@ def test_upload_marks_header_only_csv_not_ready() -> None:
     assert "CSV contains headers but no data rows." in payload["warnings"]
 
 
+def test_upload_baseline_window_calculation() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,{70 + index}" for index in range(10)
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("baseline-window.csv", f"timestamp,temperature\n{rows}", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    analysis = response.json()["baseline_analysis"]
+    assert analysis["baseline_window_rows"] == 2
+    assert analysis["recent_window_rows"] == 2
+    assert analysis["columns_analyzed"] == 1
+
+
+def test_upload_detects_upward_baseline_drift() -> None:
+    client = TestClient(create_app())
+    csv_content = (
+        "timestamp,temperature\n"
+        "2026-05-01T08:00:00Z,70\n"
+        "2026-05-01T08:05:00Z,70\n"
+        "2026-05-01T08:10:00Z,72\n"
+        "2026-05-01T08:15:00Z,74\n"
+        "2026-05-01T08:20:00Z,90\n"
+        "2026-05-01T08:25:00Z,90\n"
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("upward-drift.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    drift = response.json()["baseline_analysis"]["column_drift"][0]
+    assert drift["baseline_average"] == 70
+    assert drift["recent_average"] == 90
+    assert drift["direction"] == "up"
+    assert drift["drift_flag"] == "review"
+
+
+def test_upload_detects_downward_baseline_drift() -> None:
+    client = TestClient(create_app())
+    csv_content = (
+        "timestamp,humidity\n"
+        "2026-05-01T08:00:00Z,80\n"
+        "2026-05-01T08:05:00Z,80\n"
+        "2026-05-01T08:10:00Z,76\n"
+        "2026-05-01T08:15:00Z,72\n"
+        "2026-05-01T08:20:00Z,60\n"
+        "2026-05-01T08:25:00Z,60\n"
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("downward-drift.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    drift = response.json()["baseline_analysis"]["column_drift"][0]
+    assert drift["baseline_average"] == 80
+    assert drift["recent_average"] == 60
+    assert drift["direction"] == "down"
+    assert drift["drift_flag"] == "review"
+
+
+def test_upload_marks_flat_baseline_data_normal() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,75" for index in range(6)
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("flat-data.csv", f"timestamp,temperature\n{rows}", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    analysis = response.json()["baseline_analysis"]
+    drift = analysis["column_drift"][0]
+    assert drift["direction"] == "flat"
+    assert drift["drift_flag"] == "normal"
+    assert analysis["overall_assessment"] == "normal"
+
+
+def test_upload_baseline_warns_for_missing_numeric_values() -> None:
+    client = TestClient(create_app())
+    csv_content = (
+        "timestamp,temperature\n"
+        "2026-05-01T08:00:00Z,70\n"
+        "2026-05-01T08:05:00Z,\n"
+        "2026-05-01T08:10:00Z,72\n"
+        "2026-05-01T08:15:00Z,74\n"
+        "2026-05-01T08:20:00Z,\n"
+        "2026-05-01T08:25:00Z,90\n"
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("missing-baseline.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    analysis = response.json()["baseline_analysis"]
+    assert analysis["overall_assessment"] == "needs_review"
+    assert (
+        "temperature has missing values in baseline or recent windows."
+        in analysis["warnings"]
+    )
+
+
+def test_upload_baseline_handles_too_few_rows() -> None:
+    client = TestClient(create_app())
+    csv_content = (
+        "timestamp,temperature\n"
+        "2026-05-01T08:00:00Z,70\n"
+        "2026-05-01T08:05:00Z,71\n"
+        "2026-05-01T08:10:00Z,72\n"
+        "2026-05-01T08:15:00Z,73\n"
+    )
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("too-few-rows.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    analysis = response.json()["baseline_analysis"]
+    assert analysis["columns_analyzed"] == 0
+    assert analysis["overall_assessment"] == "needs_review"
+    assert "At least 5 data rows are needed for baseline comparison." in analysis["warnings"]
+
+
 def test_upload_rejects_invalid_extension() -> None:
     client = TestClient(create_app())
 

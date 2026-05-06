@@ -302,8 +302,9 @@ function DataUploadPage() {
         <h2>Facility data ingestion</h2>
         <p>
           Upload CSV exports from cultivation sensors or facility systems to
-          validate structure, profile numeric readings, and preview the first
-          rows. Files are parsed for this session and are not stored permanently.
+          validate structure, profile numeric readings, compare an initial
+          baseline window, and preview the first rows. Files are parsed for this
+          session and are not stored permanently.
         </p>
       </div>
 
@@ -339,6 +340,7 @@ function DataUploadPage() {
 function UploadResult({ result }) {
   const quality = result.data_quality;
   const timestampProfile = result.timestamp_profile;
+  const baselineAnalysis = result.baseline_analysis;
 
   return (
     <section className="upload-result" aria-label="CSV upload result">
@@ -458,6 +460,82 @@ function UploadResult({ result }) {
         </div>
       )}
 
+      {baselineAnalysis && (
+        <div className="result-section">
+          <h3>Baseline Comparison</h3>
+          <div className={`assessment-banner assessment-banner--${baselineAnalysis.overall_assessment}`}>
+            <span>Overall assessment</span>
+            <strong>{formatAssessment(baselineAnalysis.overall_assessment)}</strong>
+            <p>
+              Uses the first 20% of rows as a simple baseline window and the
+              last 20% as the recent window for descriptive comparison.
+            </p>
+          </div>
+
+          <div className="quality-grid">
+            <div>
+              <span>Baseline rows</span>
+              <strong>{baselineAnalysis.baseline_window_rows}</strong>
+            </div>
+            <div>
+              <span>Recent rows</span>
+              <strong>{baselineAnalysis.recent_window_rows}</strong>
+            </div>
+            <div>
+              <span>Columns analyzed</span>
+              <strong>{baselineAnalysis.columns_analyzed}</strong>
+            </div>
+          </div>
+
+          {baselineAnalysis.column_drift.length > 0 && (
+            <div className="profile-table-wrap">
+              <table className="profile-table">
+                <thead>
+                  <tr>
+                    <th>Column</th>
+                    <th>Baseline avg</th>
+                    <th>Recent avg</th>
+                    <th>Change</th>
+                    <th>Percent</th>
+                    <th>Direction</th>
+                    <th>Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {baselineAnalysis.column_drift.map((drift) => (
+                    <tr key={drift.column}>
+                      <td>{drift.column}</td>
+                      <td>{drift.baseline_average}</td>
+                      <td>{drift.recent_average}</td>
+                      <td>{drift.absolute_change}</td>
+                      <td>
+                        {drift.percent_change === null
+                          ? "Not available"
+                          : `${drift.percent_change}%`}
+                      </td>
+                      <td>{drift.direction}</td>
+                      <td>
+                        <span className={`flag flag--${drift.drift_flag}`}>
+                          {drift.drift_flag}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {baselineAnalysis.warnings.length > 0 && (
+            <ul className="warning-list">
+              {baselineAnalysis.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="result-section">
         <h3>Columns</h3>
         <div className="column-list">
@@ -517,6 +595,10 @@ function formatReadiness(readiness) {
     return "Needs review";
   }
   return "Not ready";
+}
+
+function formatAssessment(assessment) {
+  return assessment === "normal" ? "Normal" : "Needs review";
 }
 
 function ReportsPage() {

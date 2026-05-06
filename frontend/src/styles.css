@@ -415,7 +415,8 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.readiness-banner {
+.readiness-banner,
+.assessment-banner {
   display: grid;
   gap: 8px;
   padding: 18px;
@@ -425,19 +426,22 @@ h3 {
   background: #ffffff;
 }
 
-.readiness-banner span {
+.readiness-banner span,
+.assessment-banner span {
   color: #647068;
   font-size: 0.78rem;
   font-weight: 750;
   text-transform: uppercase;
 }
 
-.readiness-banner strong {
+.readiness-banner strong,
+.assessment-banner strong {
   color: #18221d;
   font-size: 1.25rem;
 }
 
-.readiness-banner p {
+.readiness-banner p,
+.assessment-banner p {
   max-width: 760px;
   margin-bottom: 0;
   color: #5e6a61;
@@ -454,6 +458,14 @@ h3 {
 
 .readiness-banner--not_ready {
   border-left-color: #a33d2f;
+}
+
+.assessment-banner--normal {
+  border-left-color: #28765d;
+}
+
+.assessment-banner--needs_review {
+  border-left-color: #b2792c;
 }
 
 .result-section {
@@ -537,6 +549,16 @@ h3 {
 .flag--normal {
   background: #e2efe7;
   color: #28765d;
+}
+
+.flag--watch {
+  background: #f5eadb;
+  color: #8a551c;
+}
+
+.flag--review {
+  background: #f7dfd9;
+  color: #a33d2f;
 }
 
 .flag--high {
