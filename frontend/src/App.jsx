@@ -3,32 +3,52 @@ import { API_BASE_URL } from "./config";
 import "./styles.css";
 
 const NAV_ITEMS = [
-  "Overview",
-  "Facility Systems",
-  "Data Upload",
-  "Reports",
+  {
+    label: "Overview",
+    eyebrow: "Facility",
+    description: "Workspace status and current operating context.",
+  },
+  {
+    label: "Facility Systems",
+    eyebrow: "Systems",
+    description: "Environmental and control systems in review scope.",
+  },
+  {
+    label: "Data Upload",
+    eyebrow: "Ingestion",
+    description: "CSV intake, profiling, baseline review, and engine results.",
+  },
+  {
+    label: "Reports",
+    eyebrow: "Findings",
+    description: "Session report output for growers and operators.",
+  },
 ];
 
-const OVERVIEW_CARDS = [
+const FOCUS_AREAS = [
   {
-    label: "Facility status",
-    value: "Ready for facility data",
-    detail: "Customer facility context will appear here as onboarding is configured.",
+    name: "HVAC",
+    detail: "Temperature conditioning, runtime shifts, and room balancing.",
   },
   {
-    label: "Environmental drift",
-    value: "Baseline pending",
-    detail: "Drift views will summarize changes across controlled environment data.",
+    name: "Humidity",
+    detail: "Moisture control, dehumidification cycles, and room drift.",
   },
   {
-    label: "Systems monitored",
-    value: "6 focus areas",
-    detail: "HVAC, humidity, airflow, irrigation, lighting, and sensor data.",
+    name: "Airflow",
+    detail: "Circulation behavior, fan interaction, and movement continuity.",
   },
   {
-    label: "Latest report",
-    value: "No reports yet",
-    detail: "Reports will appear after facility data is connected and reviewed.",
+    name: "Irrigation",
+    detail: "Water events, timing windows, and environmental response context.",
+  },
+  {
+    name: "Lighting",
+    detail: "Photoperiod changes, response windows, and fixture-driven patterns.",
+  },
+  {
+    name: "Sensor Network",
+    detail: "Export quality, timestamp continuity, and channel coverage.",
   },
 ];
 
@@ -59,10 +79,19 @@ const FALLBACK_SYSTEMS = [
   },
 ];
 
-const REPORTS = [
-  "Environmental Drift Summary",
-  "System Coupling Review",
-  "Operator Action Report",
+const REPORT_TEMPLATES = [
+  {
+    name: "Environmental Drift Summary",
+    detail: "Session-level change review across uploaded environmental channels.",
+  },
+  {
+    name: "System Coupling Review",
+    detail: "Relationship shifts between paired facility signals and operating windows.",
+  },
+  {
+    name: "Operator Action Report",
+    detail: "Plain-language checks that can be matched against room and shift logs.",
+  },
 ];
 
 function App() {
@@ -73,6 +102,7 @@ function App() {
     detail: "Connecting to the Neraium API.",
   });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
+  const [systemsState, setSystemsState] = useState("loading");
   const [latestUploadResult, setLatestUploadResult] = useState(null);
 
   useEffect(() => {
@@ -86,11 +116,10 @@ function App() {
         }
 
         const payload = await response.json();
-
         if (isActive) {
           setApiStatus({
             state: "online",
-            label: "API online",
+            label: "Backend online",
             detail: `${payload.service} reported ${payload.status}.`,
           });
         }
@@ -98,8 +127,8 @@ function App() {
         if (isActive) {
           setApiStatus({
             state: "offline",
-            label: "API unavailable",
-            detail: "Start the backend service to connect this app shell.",
+            label: "Backend unavailable",
+            detail: "Start the backend service to activate the workspace.",
           });
         }
       }
@@ -123,13 +152,14 @@ function App() {
         }
 
         const payload = await response.json();
-
         if (isActive && Array.isArray(payload.systems)) {
           setSystems(payload.systems);
+          setSystemsState("ready");
         }
       } catch {
         if (isActive) {
           setSystems(FALLBACK_SYSTEMS);
+          setSystemsState("fallback");
         }
       }
     }
@@ -141,124 +171,306 @@ function App() {
     };
   }, []);
 
+  const activeItem = NAV_ITEMS.find((item) => item.label === activePage) ?? NAV_ITEMS[0];
+
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Primary navigation">
-        <div className="brand">
-          <span className="brand-mark">N</span>
-          <div>
+        <div className="sidebar-header">
+          <div className="brand-mark" aria-hidden="true">
+            N
+          </div>
+          <div className="brand-copy">
             <p className="brand-name">Neraium</p>
-            <p className="brand-subtitle">Cultivation operations</p>
+            <p className="brand-subtitle">Cultivation operations console</p>
           </div>
         </div>
 
-        <nav className="nav-list">
-          {NAV_ITEMS.map((item) => (
-            <button
-              className={`nav-button ${activePage === item ? "nav-button--active" : ""}`}
-              key={item}
-              type="button"
-              onClick={() => setActivePage(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </nav>
+        <div className="sidebar-section">
+          <p className="sidebar-label">Workspace</p>
+          <nav className="nav-list">
+            {NAV_ITEMS.map((item) => (
+              <button
+                className={`nav-button ${activePage === item.label ? "nav-button--active" : ""}`}
+                key={item.label}
+                type="button"
+                onClick={() => setActivePage(item.label)}
+              >
+                <span className="nav-button-label">{item.label}</span>
+                <span className="nav-button-detail">{item.description}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="sidebar-panel">
+          <p className="sidebar-label">Current deployment path</p>
+          <strong>Amplify frontend + ECS backend</strong>
+          <span>Frontend API target is controlled by VITE_API_BASE_URL.</span>
+        </div>
 
         <div className="sidebar-footer">
-          <span className={`status-dot status-dot--${apiStatus.state}`} />
+          <div className={`status-indicator status-indicator--${apiStatus.state}`} />
           <div>
             <p>{apiStatus.label}</p>
-            <span>Backend {API_BASE_URL.replace("http://", "")}</span>
+            <span>{formatEndpoint(API_BASE_URL)}</span>
           </div>
         </div>
       </aside>
 
-      <section className="workspace" aria-labelledby="page-title">
-        <PageHeader activePage={activePage} />
-        {activePage === "Overview" && <OverviewPage apiStatus={apiStatus} />}
-        {activePage === "Facility Systems" && <FacilitySystemsPage systems={systems} />}
-        {activePage === "Data Upload" && (
-          <DataUploadPage
-            latestUploadResult={latestUploadResult}
-            onUploadComplete={setLatestUploadResult}
-          />
-        )}
-        {activePage === "Reports" && <ReportsPage latestUploadResult={latestUploadResult} />}
-      </section>
+      <div className="workspace-shell">
+        <TopBar
+          activeItem={activeItem}
+          apiStatus={apiStatus}
+          latestUploadResult={latestUploadResult}
+        />
+
+        <section className="workspace" aria-labelledby="page-title">
+          {activePage === "Overview" && (
+            <OverviewPage
+              apiStatus={apiStatus}
+              latestUploadResult={latestUploadResult}
+              systems={systems}
+              systemsState={systemsState}
+            />
+          )}
+          {activePage === "Facility Systems" && (
+            <FacilitySystemsPage systems={systems} systemsState={systemsState} />
+          )}
+          {activePage === "Data Upload" && (
+            <DataUploadPage
+              latestUploadResult={latestUploadResult}
+              onUploadComplete={setLatestUploadResult}
+            />
+          )}
+          {activePage === "Reports" && (
+            <ReportsPage latestUploadResult={latestUploadResult} />
+          )}
+        </section>
+      </div>
     </main>
   );
 }
 
-function PageHeader({ activePage }) {
+function TopBar({ activeItem, apiStatus, latestUploadResult }) {
+  const readiness = latestUploadResult?.data_quality?.readiness;
+  const analysisAvailable = Boolean(latestUploadResult?.engine_result);
+
   return (
-    <header className="page-header">
-      <p className="eyebrow">Neraium</p>
-      <h1 id="page-title">{activePage}</h1>
-      <p>
-        Environmental drift intelligence for cannabis grow facilities and
-        controlled environment operations.
-      </p>
+    <header className="topbar">
+      <div className="topbar-title">
+        <p className="eyebrow">{activeItem.eyebrow}</p>
+        <h1 id="page-title">{activeItem.label}</h1>
+        <p>{activeItem.description}</p>
+      </div>
+
+      <div className="topbar-meta">
+        <StatusPill label="Backend" value={apiStatus.label} tone={apiStatus.state} />
+        <StatusPill
+          label="Upload readiness"
+          value={readiness ? formatReadiness(readiness) : "Awaiting data"}
+          tone={readiness ?? "muted"}
+        />
+        <StatusPill
+          label="Session analysis"
+          value={analysisAvailable ? "Available" : "Not generated"}
+          tone={analysisAvailable ? "online" : "muted"}
+        />
+      </div>
     </header>
   );
 }
 
-function OverviewPage({ apiStatus }) {
+function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) {
+  const readiness = latestUploadResult?.data_quality?.readiness;
+  const latestReport = latestUploadResult?.operator_report;
+  const engineResult = latestUploadResult?.engine_result;
+  const focusMetrics = [
+    {
+      label: "Backend connection",
+      value: apiStatus.label,
+      detail: apiStatus.detail,
+      tone: apiStatus.state,
+    },
+    {
+      label: "Upload readiness",
+      value: readiness ? formatReadiness(readiness) : "Awaiting first upload",
+      detail: readiness
+        ? "Latest session dataset has been profiled for usability."
+        : "No cultivation dataset has been reviewed in this session.",
+      tone: readiness ?? "muted",
+    },
+    {
+      label: "Latest analysis",
+      value: engineResult ? formatEngineResult(engineResult.overall_result) : "No analysis yet",
+      detail: engineResult
+        ? "Engine output is available in the Data Upload and Reports sections."
+        : "Analysis surfaces will populate after the first CSV validation pass.",
+      tone: engineResult?.overall_result ?? "muted",
+    },
+    {
+      label: "Operational coverage",
+      value: `${systems.length} systems`,
+      detail:
+        systemsState === "ready"
+          ? "Facility scope is loaded from the backend placeholder endpoint."
+          : "Using current scaffold system coverage for workspace orientation.",
+      tone: "muted",
+    },
+  ];
+
   return (
     <div className="page-stack">
-      <section className="intro-band">
-        <div>
-          <h2>Environmental drift before visible crop stress</h2>
+      <section className="hero-panel">
+        <div className="hero-copy">
+          <p className="eyebrow">Operations console</p>
+          <h2>Environmental drift review for controlled cultivation facilities</h2>
           <p>
-            Neraium helps cannabis cultivation teams detect and explain
-            environmental drift before it becomes visible crop stress.
+            Neraium gives growers and facility operators a clear working surface for
+            reviewing uploaded sensor exports, comparing baseline behavior, and
+            turning raw facility data into practical operating checks.
           </p>
         </div>
-        <div className="api-status" aria-live="polite">
-          <span className={`status-dot status-dot--${apiStatus.state}`} />
-          <div>
-            <strong>{apiStatus.label}</strong>
-            <span>{apiStatus.detail}</span>
+
+        <div className="hero-side">
+          <div className="hero-status">
+            <span className={`inline-dot inline-dot--${apiStatus.state}`} />
+            <div>
+              <strong>{apiStatus.label}</strong>
+              <p>{apiStatus.detail}</p>
+            </div>
+          </div>
+
+          <div className="hero-note">
+            <span>Session source</span>
+            <strong>{latestUploadResult?.filename ?? "No active upload"}</strong>
+            <p>
+              {latestReport
+                ? "The latest session report is available in the Reports workspace."
+                : "Upload a cultivation sensor export to populate session findings."}
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="metric-grid" aria-label="Facility overview">
-        {OVERVIEW_CARDS.map((card) => (
-          <article className="metric-card" key={card.label}>
-            <span>{card.label}</span>
-            <strong>{card.value}</strong>
-            <p>{card.detail}</p>
+      <section className="metrics-grid" aria-label="Overview metrics">
+        {focusMetrics.map((metric) => (
+          <article className="metric-panel" key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <p>{metric.detail}</p>
+            <div className={`metric-tone metric-tone--${metric.tone}`} />
           </article>
         ))}
+      </section>
+
+      <section className="overview-layout">
+        <div className="surface-panel">
+          <SectionHeading
+            title="Operational focus areas"
+            description="Primary systems and datasets currently framed for cultivation review."
+          />
+          <div className="focus-list">
+            {FOCUS_AREAS.map((area) => (
+              <article className="focus-row" key={area.name}>
+                <div>
+                  <h3>{area.name}</h3>
+                  <p>{area.detail}</p>
+                </div>
+                <span>In scope</span>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="stack-column">
+          <div className="surface-panel">
+            <SectionHeading
+              title="Latest session snapshot"
+              description="Immediate context from the most recent upload in this browser session."
+            />
+            {latestUploadResult ? (
+              <div className="snapshot-list">
+                <SnapshotItem label="File" value={latestUploadResult.filename} />
+                <SnapshotItem
+                  label="Time coverage"
+                  value={
+                    latestUploadResult.timestamp_profile?.first_timestamp &&
+                    latestUploadResult.timestamp_profile?.last_timestamp
+                      ? `${latestUploadResult.timestamp_profile.first_timestamp} to ${latestUploadResult.timestamp_profile.last_timestamp}`
+                      : "Timestamp range not available"
+                  }
+                />
+                <SnapshotItem
+                  label="Readiness"
+                  value={formatReadiness(latestUploadResult.data_quality.readiness)}
+                />
+                <SnapshotItem
+                  label="Mapped columns"
+                  value={`${latestUploadResult.cultivation_mapping.mapped_column_count} columns`}
+                />
+              </div>
+            ) : (
+              <EmptyPanel
+                title="No session dataset"
+                body="The command surface will summarize file coverage, readiness, and mapped cultivation categories after the first CSV validation pass."
+              />
+            )}
+          </div>
+
+          <div className="surface-panel">
+            <SectionHeading
+              title="Readiness checkpoints"
+              description="What this workspace expects before a session becomes useful to operators."
+            />
+            <ul className="plain-list">
+              <li>Consistent timestamps across historical cultivation exports.</li>
+              <li>Numeric environmental channels such as temperature, humidity, or CO2.</li>
+              <li>Clear column labels that map to facility systems and sensor sources.</li>
+              <li>Enough rows to compare baseline and recent operating windows.</li>
+            </ul>
+          </div>
+        </div>
       </section>
     </div>
   );
 }
 
-function FacilitySystemsPage({ systems }) {
+function FacilitySystemsPage({ systems, systemsState }) {
   return (
-    <section className="list-panel">
-      <div className="section-heading">
-        <h2>Monitored systems</h2>
-        <p>
-          Placeholder cultivation systems are hardcoded until facility data
-          contracts are defined.
-        </p>
-      </div>
+    <div className="page-stack">
+      <section className="surface-panel">
+        <SectionHeading
+          title="Monitored facility systems"
+          description="Current cultivation categories exposed to the frontend workspace. These remain placeholder records until facility-specific contracts are connected."
+        />
 
-      <div className="system-list">
-        {systems.map((system) => (
-          <article className="system-row" key={system.name}>
-            <div>
-              <h3>{system.name}</h3>
-              <p>{system.scope}</p>
-            </div>
-            <span>Placeholder</span>
-          </article>
-        ))}
-      </div>
-    </section>
+        <div className="systems-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>System</th>
+                <th>Current review scope</th>
+                <th>Workspace source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {systems.map((system) => (
+                <tr key={system.name}>
+                  <td>{system.name}</td>
+                  <td>{system.scope}</td>
+                  <td>
+                    {systemsState === "ready"
+                      ? "Backend placeholder endpoint"
+                      : "Local fallback surface"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -303,43 +515,113 @@ function DataUploadPage({ latestUploadResult, onUploadComplete }) {
   }
 
   return (
-    <section className="upload-layout">
-      <div className="section-heading">
-        <h2>Facility data ingestion</h2>
-        <p>
-          Upload CSV exports from cultivation sensors or facility systems to
-          validate structure, profile numeric readings, compare an initial
-          baseline window, and preview the first rows. Files are parsed for this
-          session and are not stored permanently.
-        </p>
-      </div>
+    <div className="page-stack">
+      <section className="upload-console">
+        <div className="surface-panel surface-panel--accent">
+          <SectionHeading
+            title="Facility data ingestion"
+            description="Upload CSV exports from cultivation sensors or facility systems to validate structure, profile numeric readings, compare an initial baseline window, and prepare a session report."
+          />
 
-      <form className="upload-zone" onSubmit={handleUpload}>
-        <label htmlFor="csv-upload">
-          <strong>CSV sensor export</strong>
-          <span>
-            CSV ingestion supports historical facility data and sensor exports
-            for controlled environment review.
-          </span>
-        </label>
-        <input
-          accept=".csv,text/csv"
-          id="csv-upload"
-          type="file"
-          onChange={(event) => {
-            setSelectedFile(event.target.files?.[0] ?? null);
-            setUploadError("");
-          }}
+          <form className="upload-form" onSubmit={handleUpload}>
+            <label className="upload-field" htmlFor="csv-upload">
+              <span className="upload-field-label">CSV sensor export</span>
+              <span className="upload-field-text">
+                Historical room exports, control system extracts, and sensor data can be reviewed here without permanent storage.
+              </span>
+            </label>
+
+            <div className="upload-actions">
+              <input
+                accept=".csv,text/csv"
+                id="csv-upload"
+                type="file"
+                onChange={(event) => {
+                  setSelectedFile(event.target.files?.[0] ?? null);
+                  setUploadError("");
+                }}
+              />
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={uploadState === "uploading"}
+              >
+                {uploadState === "uploading" ? "Validating dataset" : "Validate CSV"}
+              </button>
+            </div>
+
+            <div className="upload-meta">
+              <p className="selected-file">
+                {selectedFile ? selectedFile.name : "No file selected"}
+              </p>
+              <p className={`upload-state upload-state--${uploadState}`}>
+                {uploadStateMessage(uploadState)}
+              </p>
+            </div>
+
+            {uploadError && <p className="form-error">{uploadError}</p>}
+          </form>
+        </div>
+
+        <div className="stack-column">
+          <div className="surface-panel">
+            <SectionHeading
+              title="Expected source data"
+              description="The current ingestion flow is tuned for structured cultivation exports."
+            />
+            <ul className="plain-list">
+              <li>Timestamped historical sensor rows.</li>
+              <li>Numeric channels for environment and equipment behavior.</li>
+              <li>Consistent column naming across room or facility exports.</li>
+              <li>Enough recent rows to compare baseline and current windows.</li>
+            </ul>
+          </div>
+
+          <div className="surface-panel">
+            <SectionHeading
+              title="Current session state"
+              description="The frontend keeps only the latest validated upload in browser state."
+            />
+            {uploadResult ? (
+              <div className="snapshot-list">
+                <SnapshotItem label="Latest file" value={uploadResult.filename} />
+                <SnapshotItem
+                  label="Rows processed"
+                  value={`${uploadResult.row_count} rows`}
+                />
+                <SnapshotItem
+                  label="Readiness"
+                  value={formatReadiness(uploadResult.data_quality.readiness)}
+                />
+              </div>
+            ) : (
+              <EmptyPanel
+                title="No validated upload"
+                body="After a successful CSV validation pass, this area will summarize the active dataset for the current session."
+              />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {uploadState === "uploading" && (
+        <div className="surface-panel surface-panel--muted">
+          <SectionHeading
+            title="Processing upload"
+            description="Neraium is validating the file structure, profiling numeric columns, and preparing review sections for this session."
+          />
+        </div>
+      )}
+
+      {!uploadResult && uploadState !== "uploading" && !uploadError && (
+        <EmptyPanel
+          title="Upload review workspace is empty"
+          body="Validate a cultivation CSV export to populate data quality, baseline comparison, cultivation mapping, engine output, and the latest operator report."
         />
-        <button type="submit" disabled={uploadState === "uploading"}>
-          {uploadState === "uploading" ? "Uploading" : "Validate CSV"}
-        </button>
-        {selectedFile && <p className="selected-file">{selectedFile.name}</p>}
-        {uploadError && <p className="form-error">{uploadError}</p>}
-      </form>
+      )}
 
       {uploadResult && <UploadResult result={uploadResult} />}
-    </section>
+    </div>
   );
 }
 
@@ -353,88 +635,81 @@ function UploadResult({ result }) {
   return (
     <section className="upload-result" aria-label="CSV upload result">
       {quality && (
-        <div className={`readiness-banner readiness-banner--${quality.readiness}`}>
-          <span>Readiness</span>
-          <strong>{formatReadiness(quality.readiness)}</strong>
+        <div className={`status-banner status-banner--${quality.readiness}`}>
+          <div>
+            <span>Upload readiness</span>
+            <strong>{formatReadiness(quality.readiness)}</strong>
+          </div>
           <p>
-            Lightweight data profiling checks whether this cultivation sensor
-            export has usable rows, numeric readings, and timestamp context.
+            This review checks timestamp continuity, numeric channel coverage, and
+            baseline comparison readiness for the uploaded cultivation export.
           </p>
         </div>
       )}
 
       <div className="result-summary">
-        <div>
-          <span>File</span>
-          <strong>{result.filename}</strong>
-        </div>
-        <div>
-          <span>Rows</span>
-          <strong>{result.row_count}</strong>
-        </div>
-        <div>
-          <span>Columns</span>
-          <strong>{result.column_count}</strong>
-        </div>
-        <div>
-          <span>Timestamp</span>
-          <strong>{result.detected_timestamp_column ?? "Not detected"}</strong>
-        </div>
-        <div>
-          <span>Numeric columns</span>
-          <strong>{quality?.numeric_column_count ?? result.numeric_profiles?.length ?? 0}</strong>
-        </div>
+        <SummaryMetric label="File" value={result.filename} />
+        <SummaryMetric label="Rows" value={result.row_count} />
+        <SummaryMetric label="Columns" value={result.column_count} />
+        <SummaryMetric
+          label="Timestamp column"
+          value={result.detected_timestamp_column ?? "Not detected"}
+        />
+        <SummaryMetric
+          label="Numeric channels"
+          value={quality?.numeric_column_count ?? result.numeric_profiles?.length ?? 0}
+        />
       </div>
 
-      {quality && (
-        <div className="result-section">
-          <h3>Data Quality Summary</h3>
-          <div className="quality-grid">
-            <div>
-              <span>Rows</span>
-              <strong>{quality.row_count}</strong>
-            </div>
-            <div>
-              <span>Columns</span>
-              <strong>{quality.column_count}</strong>
-            </div>
-            <div>
-              <span>Numeric columns</span>
-              <strong>{quality.numeric_column_count}</strong>
-            </div>
-            <div>
-              <span>Timestamp detected</span>
-              <strong>{quality.timestamp_detected ? "Yes" : "No"}</strong>
-            </div>
+      <div className="overview-layout">
+        <div className="surface-panel">
+          <SectionHeading
+            title="Data quality summary"
+            description="Usability checks for row coverage, numeric channels, and time context."
+          />
+          <div className="stats-grid stats-grid--compact">
+            <SummaryMetric label="Rows" value={quality.row_count} />
+            <SummaryMetric label="Columns" value={quality.column_count} />
+            <SummaryMetric label="Numeric columns" value={quality.numeric_column_count} />
+            <SummaryMetric
+              label="Timestamp detected"
+              value={quality.timestamp_detected ? "Yes" : "No"}
+            />
           </div>
         </div>
-      )}
 
-      {timestampProfile && (
-        <div className="result-section">
-          <h3>Time range</h3>
-          <div className="time-grid">
-            <div>
-              <span>First timestamp</span>
-              <strong>{timestampProfile.first_timestamp ?? "Not available"}</strong>
-            </div>
-            <div>
-              <span>Last timestamp</span>
-              <strong>{timestampProfile.last_timestamp ?? "Not available"}</strong>
-            </div>
-            <div>
-              <span>Estimated sample interval</span>
-              <strong>{timestampProfile.estimated_sample_interval ?? "Not available"}</strong>
+        {timestampProfile && (
+          <div className="surface-panel">
+            <SectionHeading
+              title="Time coverage"
+              description="Detected timestamp range and approximate sampling interval."
+            />
+            <div className="stats-grid stats-grid--compact">
+              <SummaryMetric
+                label="First timestamp"
+                value={timestampProfile.first_timestamp ?? "Not available"}
+              />
+              <SummaryMetric
+                label="Last timestamp"
+                value={timestampProfile.last_timestamp ?? "Not available"}
+              />
+              <SummaryMetric
+                label="Sample interval"
+                value={timestampProfile.estimated_sample_interval ?? "Not available"}
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {result.numeric_profiles?.length > 0 && (
-        <div className="result-section">
-          <h3>Numeric column profile</h3>
-          <div className="profile-table-wrap">
-            <table className="profile-table">
+        <div className="surface-panel">
+          <SectionHeading
+            title="Numeric profiles"
+            description="Per-column scan of value ranges, missing coverage, and variability."
+          />
+          <div className="table-wrap">
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Column</th>
@@ -456,7 +731,7 @@ function UploadResult({ result }) {
                       {profile.missing_count} ({profile.missing_percent}%)
                     </td>
                     <td>
-                      <span className={`flag flag--${profile.variability}`}>
+                      <span className={`tone-pill tone-pill--${profile.variability}`}>
                         {profile.variability}
                       </span>
                     </td>
@@ -469,35 +744,32 @@ function UploadResult({ result }) {
       )}
 
       {baselineAnalysis && (
-        <div className="result-section">
-          <h3>Baseline Comparison</h3>
-          <div className={`assessment-banner assessment-banner--${baselineAnalysis.overall_assessment}`}>
-            <span>Overall assessment</span>
-            <strong>{formatAssessment(baselineAnalysis.overall_assessment)}</strong>
+        <div className="surface-panel">
+          <SectionHeading
+            title="Baseline comparison"
+            description="Descriptive comparison between the first and most recent operating windows in the uploaded file."
+          />
+
+          <div className={`status-banner status-banner--${baselineAnalysis.overall_assessment}`}>
+            <div>
+              <span>Overall assessment</span>
+              <strong>{formatAssessment(baselineAnalysis.overall_assessment)}</strong>
+            </div>
             <p>
-              Uses the first 20% of rows as a simple baseline window and the
-              last 20% as the recent window for descriptive comparison.
+              The current baseline review uses the first 20% of rows as a baseline
+              window and the last 20% as the recent comparison window.
             </p>
           </div>
 
-          <div className="quality-grid">
-            <div>
-              <span>Baseline rows</span>
-              <strong>{baselineAnalysis.baseline_window_rows}</strong>
-            </div>
-            <div>
-              <span>Recent rows</span>
-              <strong>{baselineAnalysis.recent_window_rows}</strong>
-            </div>
-            <div>
-              <span>Columns analyzed</span>
-              <strong>{baselineAnalysis.columns_analyzed}</strong>
-            </div>
+          <div className="stats-grid stats-grid--compact">
+            <SummaryMetric label="Baseline rows" value={baselineAnalysis.baseline_window_rows} />
+            <SummaryMetric label="Recent rows" value={baselineAnalysis.recent_window_rows} />
+            <SummaryMetric label="Columns analyzed" value={baselineAnalysis.columns_analyzed} />
           </div>
 
           {baselineAnalysis.column_drift.length > 0 && (
-            <div className="profile-table-wrap">
-              <table className="profile-table">
+            <div className="table-wrap">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>Column</th>
@@ -506,7 +778,7 @@ function UploadResult({ result }) {
                     <th>Change</th>
                     <th>Percent</th>
                     <th>Direction</th>
-                    <th>Flag</th>
+                    <th>Review flag</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -523,7 +795,7 @@ function UploadResult({ result }) {
                       </td>
                       <td>{drift.direction}</td>
                       <td>
-                        <span className={`flag flag--${drift.drift_flag}`}>
+                        <span className={`tone-pill tone-pill--${drift.drift_flag}`}>
                           {drift.drift_flag}
                         </span>
                       </td>
@@ -535,67 +807,65 @@ function UploadResult({ result }) {
           )}
 
           {baselineAnalysis.warnings.length > 0 && (
-            <ul className="warning-list">
-              {baselineAnalysis.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
+            <MessageList title="Baseline notes" items={baselineAnalysis.warnings} />
           )}
         </div>
       )}
 
       {cultivationMapping && <CultivationMapping mapping={cultivationMapping} />}
-
       {engineResult && <EngineResult result={engineResult} />}
-
       {result.operator_report && <OperatorReport report={result.operator_report} />}
 
-      <div className="result-section">
-        <h3>Columns</h3>
-        <div className="column-list">
-          {result.columns.map((column) => (
-            <span key={column}>{column || "Unnamed column"}</span>
-          ))}
+      <div className="overview-layout">
+        <div className="surface-panel">
+          <SectionHeading
+            title="Columns detected"
+            description="Uploaded CSV headers available to the current session."
+          />
+          <div className="chip-list">
+            {result.columns.map((column) => (
+              <span key={column}>{column || "Unnamed column"}</span>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="result-section">
-        <h3>Preview rows</h3>
-        {result.preview_rows.length > 0 ? (
-          <div className="preview-table-wrap">
-            <table className="preview-table">
-              <thead>
-                <tr>
-                  {result.columns.map((column) => (
-                    <th key={column}>{column || "Unnamed"}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {result.preview_rows.map((row, rowIndex) => (
-                  <tr key={`${result.filename}-${rowIndex}`}>
+        <div className="surface-panel">
+          <SectionHeading
+            title="Preview rows"
+            description="First parsed rows from the uploaded dataset."
+          />
+          {result.preview_rows.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
                     {result.columns.map((column) => (
-                      <td key={`${column}-${rowIndex}`}>{row[column]}</td>
+                      <th key={column}>{column || "Unnamed"}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="empty-note">No preview rows were found in this CSV.</p>
-        )}
+                </thead>
+                <tbody>
+                  {result.preview_rows.map((row, rowIndex) => (
+                    <tr key={`${result.filename}-${rowIndex}`}>
+                      {result.columns.map((column) => (
+                        <td key={`${column}-${rowIndex}`}>{row[column]}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyPanel
+              title="No preview rows available"
+              body="The file headers were read, but no data rows were available for preview."
+            />
+          )}
+        </div>
       </div>
 
       {result.warnings.length > 0 && (
-        <div className="result-section">
-          <h3>Warnings</h3>
-          <ul className="warning-list">
-            {result.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
+        <MessageList title="Upload warnings" items={result.warnings} />
       )}
     </section>
   );
@@ -609,67 +879,52 @@ function EngineResult({ result }) {
   const corroborationLevel = systemEvidence?.corroboration_level ?? "limited";
 
   return (
-    <section className="engine-result" aria-label="Engine result">
-      <div className={`assessment-banner assessment-banner--${result.overall_result}`}>
-        <span>Engine Result</span>
-        <strong>{formatEngineResult(result.overall_result)}</strong>
+    <section className="surface-panel surface-panel--report" aria-label="Engine result">
+      <SectionHeading
+        title="Neraium SII v1"
+        description="Deterministic system behavior review for the currently uploaded cultivation dataset."
+      />
+
+      <div className={`status-banner status-banner--${result.overall_result}`}>
+        <div>
+          <span>Engine result</span>
+          <strong>{formatEngineResult(result.overall_result)}</strong>
+        </div>
         <p>{result.summary}</p>
       </div>
 
-      <div className="quality-grid">
-        <div>
-          <span>Engine version</span>
-          <strong>{result.engine_version}</strong>
-        </div>
-        <div>
-          <span>Signals</span>
-          <strong>{result.signals.length}</strong>
-        </div>
-        <div>
-          <span>Evidence items</span>
-          <strong>{result.evidence.length}</strong>
-        </div>
-        <div>
-          <span>Corroboration</span>
-          <strong>{formatShortLabel(corroborationLevel)}</strong>
-        </div>
-        <div>
-          <span>Changed categories</span>
-          <strong>{changedCategories}</strong>
-        </div>
-        <div>
-          <span>Changed signals</span>
-          <strong>{changedSignals}</strong>
-        </div>
-        <div>
-          <span>Persistence</span>
-          <strong>{formatShortLabel(persistenceAssessment?.status ?? "limited")}</strong>
-        </div>
-        <div>
-          <span>Audit entries</span>
-          <strong>{result.audit_trace.length}</strong>
-        </div>
+      <div className="stats-grid">
+        <SummaryMetric label="Engine version" value={result.engine_version} />
+        <SummaryMetric label="Signals" value={result.signals.length} />
+        <SummaryMetric label="Evidence items" value={result.evidence.length} />
+        <SummaryMetric label="Corroboration" value={formatShortLabel(corroborationLevel)} />
+        <SummaryMetric label="Changed categories" value={changedCategories} />
+        <SummaryMetric label="Changed signals" value={changedSignals} />
+        <SummaryMetric
+          label="Persistence"
+          value={formatShortLabel(persistenceAssessment?.status ?? "limited")}
+        />
+        <SummaryMetric label="Audit entries" value={result.audit_trace.length} />
       </div>
 
       {systemEvidence && <SystemEvidence evidence={systemEvidence} />}
-
       {persistenceAssessment && <PersistenceAssessment assessment={persistenceAssessment} />}
-
-      {result.signals.length > 0 && (
-        <ReportList title="Signals" items={result.signals.map((signal) => signal.message)} />
-      )}
-
-      {result.recommended_checks.length > 0 && (
-        <ReportList title="Recommended checks" items={result.recommended_checks} />
-      )}
-
-      {result.limitations.length > 0 && (
-        <ReportList title="Limitations" items={result.limitations} />
-      )}
-
-      {result.audit_trace.length > 0 && (
-        <ReportList title="Audit trace" items={result.audit_trace} />
-      )}
+      <SplitMessageGrid
+        leftTitle="Signals"
+        leftItems={result.signals.map((signal) => signal.message)}
+        leftEmpty="No engine signals were recorded for this dataset."
+        rightTitle="Recommended checks"
+        rightItems={result.recommended_checks}
+        rightEmpty="No additional operator checks were added for this pass."
+      />
+      <SplitMessageGrid
+        leftTitle="Limitations"
+        leftItems={result.limitations}
+        leftEmpty="No additional limitations were recorded."
+        rightTitle="Audit trace"
+        rightItems={result.audit_trace}
+        rightEmpty="No audit entries were recorded."
+      />
     </section>
   );
 }
@@ -681,21 +936,24 @@ function SystemEvidence({ evidence }) {
 
   return (
     <div className="result-section">
-      <h3>System Evidence</h3>
+      <SectionHeading
+        title="System evidence"
+        description="Grouped evidence by cultivation category for this uploaded dataset."
+      />
       {categoriesWithEvidence.length > 0 ? (
         <div className="mapping-grid">
           {categoriesWithEvidence.map(([category, categoryEvidence]) => (
             <article className="mapping-card" key={category}>
               <h4>{category}</h4>
               {categoryEvidence.columns.length > 0 && (
-                <div className="column-list">
+                <div className="chip-list">
                   {categoryEvidence.columns.map((column) => (
                     <span key={`${category}-${column}`}>{column}</span>
                   ))}
                 </div>
               )}
               {categoryEvidence.signals.length > 0 && (
-                <ul className="compact-list">
+                <ul className="plain-list plain-list--compact">
                   {categoryEvidence.signals.map((signal) => (
                     <li key={`${category}-${signal.type}-${signal.message}`}>
                       {signal.message}
@@ -704,7 +962,7 @@ function SystemEvidence({ evidence }) {
                 </ul>
               )}
               {categoryEvidence.signals.length === 0 && categoryEvidence.evidence.length > 0 && (
-                <ul className="compact-list">
+                <ul className="plain-list plain-list--compact">
                   {categoryEvidence.evidence.map((item) => (
                     <li key={`${category}-${formatEvidenceKey(item)}`}>
                       {formatEvidenceItem(item)}
@@ -716,9 +974,10 @@ function SystemEvidence({ evidence }) {
           ))}
         </div>
       ) : (
-        <p className="empty-note">
-          No cultivation system categories showed meaningful change in this upload.
-        </p>
+        <EmptyPanel
+          title="No grouped system evidence"
+          body="No cultivation categories showed meaningful change in this uploaded review."
+        />
       )}
     </div>
   );
@@ -727,25 +986,20 @@ function SystemEvidence({ evidence }) {
 function PersistenceAssessment({ assessment }) {
   return (
     <div className="result-section">
-      <h3>Persistence Assessment</h3>
-      <div className="quality-grid">
-        <div>
-          <span>Status</span>
-          <strong>{formatShortLabel(assessment.status)}</strong>
-        </div>
-        <div>
-          <span>Columns assessed</span>
-          <strong>{assessment.columns_assessed}</strong>
-        </div>
-        <div>
-          <span>Persistent columns</span>
-          <strong>{assessment.persistent_columns.length}</strong>
-        </div>
+      <SectionHeading
+        title="Persistence assessment"
+        description="Review of whether recent-window movement remains consistent across the recent rows."
+      />
+
+      <div className="stats-grid stats-grid--compact">
+        <SummaryMetric label="Status" value={formatShortLabel(assessment.status)} />
+        <SummaryMetric label="Columns assessed" value={assessment.columns_assessed} />
+        <SummaryMetric label="Persistent columns" value={assessment.persistent_columns.length} />
       </div>
 
       {assessment.details.length > 0 && (
-        <div className="profile-table-wrap">
-          <table className="profile-table">
+        <div className="table-wrap">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Column</th>
@@ -773,11 +1027,7 @@ function PersistenceAssessment({ assessment }) {
       )}
 
       {assessment.limitations.length > 0 && (
-        <ul className="warning-list">
-          {assessment.limitations.map((limitation) => (
-            <li key={limitation}>{limitation}</li>
-          ))}
-        </ul>
+        <MessageList title="Persistence notes" items={assessment.limitations} />
       )}
     </div>
   );
@@ -787,21 +1037,16 @@ function CultivationMapping({ mapping }) {
   const categoryEntries = Object.entries(mapping.categories);
 
   return (
-    <div className="result-section">
-      <h3>Cultivation Mapping</h3>
-      <div className="quality-grid">
-        <div>
-          <span>Mapped columns</span>
-          <strong>{mapping.mapped_column_count}</strong>
-        </div>
-        <div>
-          <span>Unknown columns</span>
-          <strong>{mapping.unknown_column_count}</strong>
-        </div>
-        <div>
-          <span>Coverage</span>
-          <strong>{mapping.coverage_percent}%</strong>
-        </div>
+    <section className="surface-panel">
+      <SectionHeading
+        title="Cultivation mapping"
+        description="Deterministic keyword mapping of uploaded columns into facility system categories."
+      />
+
+      <div className="stats-grid stats-grid--compact">
+        <SummaryMetric label="Mapped columns" value={mapping.mapped_column_count} />
+        <SummaryMetric label="Unknown columns" value={mapping.unknown_column_count} />
+        <SummaryMetric label="Coverage" value={`${mapping.coverage_percent}%`} />
       </div>
 
       <div className="mapping-grid">
@@ -809,58 +1054,230 @@ function CultivationMapping({ mapping }) {
           <article className="mapping-card" key={category}>
             <h4>{category}</h4>
             {columns.length > 0 ? (
-              <div className="column-list">
+              <div className="chip-list">
                 {columns.map((column) => (
                   <span key={`${category}-${column}`}>{column}</span>
                 ))}
               </div>
             ) : (
-              <p className="empty-note">No columns mapped.</p>
+              <p className="empty-note">No mapped columns.</p>
             )}
           </article>
         ))}
       </div>
 
       {mapping.warnings.length > 0 && (
-        <ul className="warning-list">
-          {mapping.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
-        </ul>
+        <MessageList title="Mapping notes" items={mapping.warnings} />
       )}
-    </div>
+    </section>
   );
 }
 
 function OperatorReport({ report }) {
   return (
-    <section className="operator-report" aria-label="Operator report">
-      <div className="report-header">
-        <span>Operator Report</span>
-        <h3>{report.title}</h3>
-        <p>{report.summary}</p>
+    <section className="surface-panel surface-panel--report" aria-label="Operator report">
+      <div className="report-summary">
+        <div>
+          <p className="eyebrow">Latest operator report</p>
+          <h2>{report.title}</h2>
+          <p>{report.summary}</p>
+        </div>
+        <div className="report-meta">
+          <SummaryMetric label="Readiness" value={formatReadiness(report.data_readiness)} />
+          <SummaryMetric
+            label="Timestamp column"
+            value={report.time_coverage.detected_timestamp_column ?? "Not detected"}
+          />
+          <SummaryMetric
+            label="Sample interval"
+            value={report.time_coverage.estimated_sample_interval ?? "Not available"}
+          />
+        </div>
       </div>
 
-      <div className="report-grid">
-        <ReportList title="Key observations" items={report.key_observations} />
-        <ReportList title="Recommended operator checks" items={report.recommended_operator_checks} />
-        <ReportList title="Limitations" items={report.limitations} />
+      <div className="report-columns">
+        <ReportSection
+          title="Observations"
+          items={report.key_observations}
+          emptyText="No observations were generated for this upload."
+        />
+        <ReportSection
+          title="Operator checks"
+          items={report.recommended_operator_checks}
+          emptyText="No additional operator checks were generated."
+        />
       </div>
+
+      <div className="report-columns">
+        <ReportSection
+          title="Columns requiring review"
+          items={formatColumnsRequiringReview(report.columns_requiring_review)}
+          emptyText="No columns were marked for review."
+        />
+        <ReportSection
+          title="Limitations"
+          items={report.limitations}
+          emptyText="No additional report limitations were recorded."
+        />
+      </div>
+
+      <div className="report-columns">
+        <ReportSection
+          title="Evidence sources"
+          items={report.source_sections_used}
+          emptyText="No evidence sources were listed."
+        />
+        <ReportSection
+          title="Time coverage"
+          items={formatTimeCoverage(report.time_coverage)}
+          emptyText="No time coverage details were available."
+        />
+      </div>
+
+      {report.warnings?.length > 0 && (
+        <MessageList title="Report warnings" items={report.warnings} />
+      )}
     </section>
   );
 }
 
-function ReportList({ title, items }) {
+function ReportsPage({ latestUploadResult }) {
+  const latestReport = latestUploadResult?.operator_report;
+
   return (
-    <div className="report-block">
-      <h4>{title}</h4>
-      <ul>
+    <div className="page-stack">
+      {latestReport ? (
+        <OperatorReport report={latestReport} />
+      ) : (
+        <EmptyPanel
+          title="No operator report in session"
+          body="The Reports workspace will present the latest upload findings after a cultivation CSV file is validated in the Data Upload section."
+        />
+      )}
+
+      <section className="surface-panel">
+        <SectionHeading
+          title="Report workspace"
+          description="Session-driven outputs currently available to growers and facility operators."
+        />
+        <div className="report-template-list">
+          {REPORT_TEMPLATES.map((report) => (
+            <article className="report-template-row" key={report.name}>
+              <div>
+                <h3>{report.name}</h3>
+                <p>{report.detail}</p>
+              </div>
+              <span>{latestReport ? "Available in session" : "Awaiting upload"}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SectionHeading({ title, description }) {
+  return (
+    <div className="section-heading">
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function SummaryMetric({ label, value }) {
+  return (
+    <div className="summary-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function StatusPill({ label, value, tone }) {
+  return (
+    <div className={`status-pill status-pill--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function SnapshotItem({ label, value }) {
+  return (
+    <div className="snapshot-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function EmptyPanel({ title, body }) {
+  return (
+    <section className="empty-panel">
+      <h3>{title}</h3>
+      <p>{body}</p>
+    </section>
+  );
+}
+
+function MessageList({ title, items }) {
+  return (
+    <section className="surface-panel surface-panel--muted">
+      <h3>{title}</h3>
+      <ul className="plain-list">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function SplitMessageGrid({
+  leftTitle,
+  leftItems,
+  leftEmpty,
+  rightTitle,
+  rightItems,
+  rightEmpty,
+}) {
+  return (
+    <div className="report-columns">
+      <ReportSection title={leftTitle} items={leftItems} emptyText={leftEmpty} />
+      <ReportSection title={rightTitle} items={rightItems} emptyText={rightEmpty} />
     </div>
   );
+}
+
+function ReportSection({ title, items, emptyText }) {
+  return (
+    <div className="report-section">
+      <h3>{title}</h3>
+      {items.length > 0 ? (
+        <ul className="plain-list">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="empty-note">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+function uploadStateMessage(uploadState) {
+  if (uploadState === "uploading") {
+    return "Validation in progress";
+  }
+  if (uploadState === "complete") {
+    return "Latest validation complete";
+  }
+  if (uploadState === "error") {
+    return "Validation needs attention";
+  }
+  return "Awaiting file selection";
 }
 
 function formatReadiness(readiness) {
@@ -891,6 +1308,10 @@ function formatShortLabel(value) {
   return value.replaceAll("_", " ").replace(/^\w/, (character) => character.toUpperCase());
 }
 
+function formatEndpoint(endpoint) {
+  return endpoint.replace("http://", "").replace("https://", "");
+}
+
 function formatEvidenceKey(item) {
   if (item.type === "column_drift") {
     return `${item.type}-${item.column}-${item.direction}-${item.drift_flag}`;
@@ -903,7 +1324,7 @@ function formatEvidenceKey(item) {
 
 function formatEvidenceItem(item) {
   if (item.type === "column_drift") {
-    return `${item.column} moved ${item.direction} from ${item.baseline_average} to ${item.recent_average} with a ${item.drift_flag} flag.`;
+    return `${item.column} moved ${item.direction} from ${item.baseline_average} to ${item.recent_average} with a ${item.drift_flag} review flag.`;
   }
   if (item.type === "relationship_change") {
     return `${item.columns.join(" and ")} changed paired behavior by ${item.change}.`;
@@ -911,46 +1332,19 @@ function formatEvidenceItem(item) {
   return "Evidence item recorded for this category.";
 }
 
-function ReportsPage({ latestUploadResult }) {
-  const latestReport = latestUploadResult?.operator_report;
-
-  return (
-    <section className="list-panel">
-      <div className="section-heading">
-        <h2>Reports</h2>
-        <p>
-          Upload reports are generated from the current session only. No report
-          history is stored yet.
-        </p>
-      </div>
-
-      {latestReport && (
-        <article className="latest-report-card">
-          <span>Latest upload report</span>
-          <h3>{latestReport.title}</h3>
-          <p>{latestReport.summary}</p>
-          <div className="latest-report-meta">
-            <strong>{formatReadiness(latestReport.data_readiness)}</strong>
-            <span>{latestUploadResult.filename}</span>
-          </div>
-        </article>
-      )}
-
-      <div className="report-list">
-        {REPORTS.map((report) => (
-          <article className="report-row" key={report}>
-            <div>
-              <h3>{report}</h3>
-              <p>Report template placeholder</p>
-            </div>
-            <button type="button" disabled>
-              Pending
-            </button>
-          </article>
-        ))}
-      </div>
-    </section>
+function formatColumnsRequiringReview(columnsRequiringReview) {
+  return columnsRequiringReview.map(
+    (item) => `${item.column}: ${item.reasons.join(" ")}`,
   );
+}
+
+function formatTimeCoverage(timeCoverage) {
+  return [
+    `Timestamp column: ${timeCoverage.detected_timestamp_column ?? "Not detected"}`,
+    `First timestamp: ${timeCoverage.first_timestamp ?? "Not available"}`,
+    `Last timestamp: ${timeCoverage.last_timestamp ?? "Not available"}`,
+    `Estimated sample interval: ${timeCoverage.estimated_sample_interval ?? "Not available"}`,
+  ];
 }
 
 export default App;
