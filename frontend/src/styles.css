@@ -433,6 +433,10 @@ h4 {
   min-height: 100%;
 }
 
+.workspace-grid--overview-simple {
+  gap: 14px;
+}
+
 .ops-panel {
   position: relative;
   display: grid;
@@ -469,6 +473,14 @@ h4 {
   gap: 6px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(120, 148, 139, 0.08);
+}
+
+.workspace-grid--overview-simple .ops-panel {
+  padding: 16px;
+}
+
+.workspace-grid--overview-simple .ops-panel__header {
+  padding-bottom: 12px;
 }
 
 .span-3 {
@@ -535,6 +547,60 @@ h4 {
   min-height: 84px;
 }
 
+.overview-hero,
+.overview-summary-grid,
+.room-health-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.overview-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.overview-summary-cell {
+  display: grid;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid rgba(120, 148, 139, 0.08);
+  background: rgba(19, 27, 30, 0.78);
+}
+
+.overview-summary-cell--nominal {
+  box-shadow: inset 0 0 0 1px rgba(74, 178, 142, 0.06);
+}
+
+.overview-summary-cell--review {
+  box-shadow: inset 0 0 0 1px rgba(210, 165, 92, 0.09);
+}
+
+.overview-summary-cell--elevated,
+.overview-summary-cell--unstable {
+  box-shadow: inset 0 0 0 1px rgba(212, 111, 98, 0.1);
+}
+
+.overview-summary-cell--info {
+  box-shadow: inset 0 0 0 1px rgba(99, 188, 211, 0.08);
+}
+
+.overview-summary-cell strong,
+.room-health-card strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.overview-summary-cell span,
+.room-health-card span {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .zone-summary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -549,6 +615,50 @@ h4 {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+}
+
+.room-health-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-health-card {
+  display: grid;
+  gap: 10px;
+  min-height: 142px;
+  padding: 14px;
+  border: 1px solid rgba(120, 148, 139, 0.08);
+  background: rgba(17, 24, 28, 0.8);
+}
+
+.room-health-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.room-health-card p {
+  margin-bottom: 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.room-health-card--nominal {
+  box-shadow: inset 0 0 0 1px rgba(74, 178, 142, 0.07);
+}
+
+.room-health-card--review {
+  box-shadow: inset 0 0 0 1px rgba(210, 165, 92, 0.1);
+}
+
+.room-health-card--elevated,
+.room-health-card--unstable {
+  box-shadow: inset 0 0 0 1px rgba(212, 111, 98, 0.11);
+}
+
+.room-health-card--info {
+  box-shadow: inset 0 0 0 1px rgba(99, 188, 211, 0.08);
 }
 
 .zone-summary-card--nominal {
@@ -1049,6 +1159,11 @@ h4 {
     grid-template-columns: repeat(3, minmax(128px, 1fr));
   }
 
+  .overview-summary-grid,
+  .room-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .span-7,
   .span-6,
   .span-5,
@@ -1151,7 +1266,9 @@ h4 {
   .metric-grid,
   .zone-summary-grid,
   .telemetry-grid,
-  .two-column-block {
+  .two-column-block,
+  .overview-summary-grid,
+  .room-health-grid {
     grid-template-columns: 1fr;
   }
 

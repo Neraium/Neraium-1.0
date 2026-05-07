@@ -490,60 +490,66 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
 }
 
 function OverviewWorkspace({ liveOps }) {
-  const alerts = liveOps.alerts.slice(0, 4);
-  const findings = liveOps.findings.slice(0, 4);
-  const timeline = liveOps.timeline.slice(0, 4);
-  const metrics = liveOps.overviewMetrics;
-  const summaryTelemetry = liveOps.summaryTelemetry.slice(0, 4);
+  const findings = liveOps.findings.slice(0, 3);
+  const timeline = liveOps.timeline.slice(0, 5);
+  const roomCards = liveOps.roomCards.slice(0, 6);
+  const roomsUnderReview = roomCards.filter((room) => room.tone !== "nominal").length;
+  const overviewSummary = [
+    { label: "Telemetry", value: liveOps.connectionLabel, tone: liveOps.connectionTone },
+    { label: "Facility state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
+    { label: "Latest ingest", value: liveOps.connectionSummary, tone: "info" },
+    { label: "Rooms monitored", value: `${roomCards.length}`, tone: "nominal" },
+  ];
+  const bannerBody = roomsUnderReview > 0
+    ? `${roomsUnderReview} room${roomsUnderReview === 1 ? "" : "s"} need review. Recent operational changes are contained and visible below.`
+    : "All monitored rooms remain within current operational expectations.";
 
   return (
-    <div className="workspace-grid workspace-grid--overview">
+    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple">
       <Panel
-        title="Operational summary"
-        subtitle="Current facility status for operations leadership and executive-operational review."
-        className="span-6"
+        title="Facility status"
+        subtitle="High-confidence operational summary for immediate facility awareness."
+        className="span-8"
       >
-        <MetricGrid metrics={metrics} />
+        <div className="overview-hero">
+          <StatusBanner
+            title={`Facility ${liveOps.facilityStateLabel.toLowerCase()}`}
+            subtitle={bannerBody}
+            tone={liveOps.facilityTone}
+          />
+          <div className="overview-summary-grid">
+            {overviewSummary.map((item) => (
+              <div className={`overview-summary-cell overview-summary-cell--${item.tone}`} key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
       </Panel>
 
       <Panel
-        title="Active alerts summary"
-        subtitle="Current warnings, checks, and attention items."
-        className="span-3"
-      >
-        <AlertList alerts={alerts} />
-      </Panel>
-
-      <Panel
-        title="Latest ingestion activity"
-        subtitle="Recent timestamped activity for the active or latest batch."
-        className="span-3"
+        title="Recent operational events"
+        subtitle="Only the most recent changes that matter right now."
+        className="span-4"
       >
         <TimelineFeed items={timeline} />
       </Panel>
 
       <Panel
+        title="Room health"
+        subtitle="Rooms requiring review are surfaced first."
+        className="span-8"
+      >
+        <RoomHealthGrid rooms={roomCards} />
+      </Panel>
+
+      <Panel
         title="Top findings"
-        subtitle="Highest-priority findings from the current session."
+        subtitle="The highest-priority observations to carry into deeper review."
         className="span-4"
       >
-        <FeedList items={findings} emptyText="Monitoring active telemetry feed." />
-      </Panel>
-
-      <Panel
-        title="High-level telemetry"
-        subtitle="Primary environmental channels and current operational coverage."
-        className="span-4"
-      >
-        <TelemetryCardGrid cards={summaryTelemetry} compact />
-      </Panel>
-
-      <Panel
-        title="Room and zone summary"
-        subtitle="Live operational room states, transitions, and review context."
-        className="span-4"
-      >
-        <ZoneSummaryGrid items={liveOps.roomCards} />
+        <FeedList items={findings} emptyText="No active findings above baseline." />
       </Panel>
     </div>
   );
@@ -1200,6 +1206,29 @@ function ZoneSummaryGrid({ items }) {
           </div>
           <strong>{item.value}</strong>
           <p>{item.detail}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RoomHealthGrid({ rooms }) {
+  if (!rooms || rooms.length === 0) {
+    return <EmptyState title="No room health available" body="Awaiting active room monitoring." compact />;
+  }
+
+  return (
+    <div className="room-health-grid">
+      {rooms.map((room) => (
+        <div className={`room-health-card room-health-card--${room.tone ?? "info"}`} key={room.label}>
+          <div className="room-health-card__header">
+            <div>
+              <span>{room.label}</span>
+              <strong>{room.value}</strong>
+            </div>
+            <StatusDot tone={room.tone ?? "info"} />
+          </div>
+          <p>{room.detail}</p>
         </div>
       ))}
     </div>
