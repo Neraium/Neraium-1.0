@@ -503,15 +503,25 @@ function OverviewWorkspace({ liveOps }) {
   const bannerBody = roomsUnderReview > 0
     ? `${roomsUnderReview} room${roomsUnderReview === 1 ? "" : "s"} need review. Recent operational changes are contained and visible below.`
     : "All monitored rooms remain within current operational expectations.";
+  const heroTag = roomsUnderReview > 0 ? "Review focus active" : "Facility running nominally";
+  const heroHeadline = roomsUnderReview > 0 ? "Facility health remains controlled." : "Facility health is stable.";
+  const heroSubline = roomsUnderReview > 0
+    ? "Operational review is concentrated in a small number of rooms, with telemetry continuity maintained."
+    : "Telemetry continuity, room health, and recent operational activity remain within expected bounds.";
 
   return (
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple">
       <Panel
         title="Facility status"
         subtitle="High-confidence operational summary for immediate facility awareness."
-        className="span-8"
+        className="span-8 overview-panel overview-panel--hero"
       >
         <div className="overview-hero">
+          <div className="overview-hero__lead">
+            <span className={`overview-pill overview-pill--${liveOps.facilityTone}`}>{heroTag}</span>
+            <h2 className="overview-hero__headline">{heroHeadline}</h2>
+            <p>{heroSubline}</p>
+          </div>
           <StatusBanner
             title={`Facility ${liveOps.facilityStateLabel.toLowerCase()}`}
             subtitle={bannerBody}
@@ -520,7 +530,10 @@ function OverviewWorkspace({ liveOps }) {
           <div className="overview-summary-grid">
             {overviewSummary.map((item) => (
               <div className={`overview-summary-cell overview-summary-cell--${item.tone}`} key={item.label}>
-                <span>{item.label}</span>
+                <div className="overview-summary-cell__header">
+                  <span>{item.label}</span>
+                  <StatusDot tone={item.tone} />
+                </div>
                 <strong>{item.value}</strong>
               </div>
             ))}
@@ -531,7 +544,7 @@ function OverviewWorkspace({ liveOps }) {
       <Panel
         title="Recent operational events"
         subtitle="Only the most recent changes that matter right now."
-        className="span-4"
+        className="span-4 overview-panel overview-panel--events"
       >
         <TimelineFeed items={timeline} />
       </Panel>
@@ -539,7 +552,7 @@ function OverviewWorkspace({ liveOps }) {
       <Panel
         title="Room health"
         subtitle="Rooms requiring review are surfaced first."
-        className="span-8"
+        className="span-8 overview-panel overview-panel--rooms"
       >
         <RoomHealthGrid rooms={roomCards} />
       </Panel>
@@ -547,7 +560,7 @@ function OverviewWorkspace({ liveOps }) {
       <Panel
         title="Top findings"
         subtitle="The highest-priority observations to carry into deeper review."
-        className="span-4"
+        className="span-4 overview-panel overview-panel--findings"
       >
         <FeedList items={findings} emptyText="No active findings above baseline." />
       </Panel>
@@ -1229,6 +1242,10 @@ function RoomHealthGrid({ rooms }) {
             <StatusDot tone={room.tone ?? "info"} />
           </div>
           <p>{room.detail}</p>
+          <div className="room-health-card__footer">
+            <span className={`overview-pill overview-pill--${room.tone ?? "info"}`}>{room.value}</span>
+            <span className="room-health-card__trend">Recent activity monitored</span>
+          </div>
         </div>
       ))}
     </div>
