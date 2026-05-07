@@ -7,7 +7,7 @@ const WORKSPACES = [
     id: "overview",
     label: "Overview",
     eyebrow: "Control",
-    description: "Intervention timing, action priority, facility score, and causal review.",
+    description: "Time remaining, confidence, and next actions.",
   },
   {
     id: "facility-systems",
@@ -470,9 +470,9 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
 
       <div className="status-rack">
         <StatusChip label="Connectivity" value={liveOps.connectionLabel} tone={liveOps.connectionTone} />
-        <StatusChip label="Room or zone" value={roomContext.primary} tone={liveOps.facilityTone} />
+        <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
-          label="Upload batch"
+          label="Upload"
           value={latestUploadResult?.filename ?? "No facility upload connected"}
           tone={latestUploadResult ? "nominal" : "info"}
         />
@@ -487,7 +487,7 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
           tone={timeCoverage.hasCoverage ? "nominal" : "info"}
         />
         <StatusChip
-          label="Operational result"
+          label="State"
           value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : liveOps.facilityStateLabel}
           tone={latestUploadResult?.engine_result?.overall_result ?? liveOps.facilityTone}
         />
@@ -517,7 +517,7 @@ function OverviewWorkspace({ liveOps }) {
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple">
       <Panel
         title="Facility command"
-        subtitle="Time remaining, trust, and the next decision to make."
+        subtitle="Time remaining, confidence, and the next move."
         className="span-8 overview-panel overview-panel--hero"
       >
         <div className="overview-hero">
@@ -554,7 +554,7 @@ function OverviewWorkspace({ liveOps }) {
 
       <Panel
         title="Action queue"
-        subtitle="Ranked by urgency, impact, and trust."
+        subtitle="Urgency, impact, and confidence."
         className="span-4 overview-panel overview-panel--events"
       >
         <ActionQueue
@@ -566,7 +566,7 @@ function OverviewWorkspace({ liveOps }) {
 
       <Panel
         title="Intervention windows"
-        subtitle="How long you have before each monitored room needs attention."
+        subtitle="Time remaining by room."
         className="span-8 overview-panel overview-panel--rooms"
       >
         <InterventionGrid
@@ -578,7 +578,7 @@ function OverviewWorkspace({ liveOps }) {
 
       <Panel
         title="Why this matters"
-        subtitle="Causal chain, confidence, and the recommended next move."
+        subtitle="Cause, confidence, and next move."
         className="span-4 overview-panel overview-panel--findings"
       >
         <WhyPanel item={selectedAction ?? selectedNode} findings={findings} />
@@ -586,7 +586,7 @@ function OverviewWorkspace({ liveOps }) {
 
       <Panel
         title="System topology"
-        subtitle="Facility-wide situational awareness without the dashboard noise."
+        subtitle="Facility state at a glance."
         className="span-8 overview-panel overview-panel--rooms"
       >
         <TopologyMap
@@ -598,7 +598,7 @@ function OverviewWorkspace({ liveOps }) {
 
       <Panel
         title="Recent changes"
-        subtitle="Only the operational shifts that changed decision timing."
+        subtitle="Only shifts that changed timing."
         className="span-4 overview-panel overview-panel--events"
       >
         <TimelineFeed items={liveOps.timeline.slice(0, 5)} />
@@ -1341,8 +1341,8 @@ function ActionQueue({ items, selectedId, onSelect }) {
             <span>{item.rankLabel}</span>
             <StatusDot tone={item.tone} />
           </div>
-          <strong>{item.title}</strong>
-          <p>{item.detail}</p>
+          <strong>{item.shortTitle ?? item.title}</strong>
+          <p>{item.shortDetail ?? item.detail}</p>
           <div className="action-queue__meta">
             <span>{item.window}</span>
             <span>{item.impact}</span>
@@ -2329,12 +2329,14 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       id: "upload-hvac-balance",
       label: roomContext.primary,
       title: `${roomContext.primary} intervention window`,
+      shortTitle: roomContext.primary,
       status: "HVAC balance review",
       window: windowLabelFromTone(facilityTone),
       tone: facilityTone,
       confidence: confidenceFromTone(facilityTone, true),
       summary: engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
       detail: `Current upload places ${roomContext.primary} in the primary review lane.`,
+      shortDetail: engineSignals[0]?.message ?? "Current upload is tightening the review window.",
       whyHeadline: engineSignals[0]?.message ?? "Current drift and readiness signals are tightening the available intervention window.",
       drivers: buildWhyDrivers(result, telemetryCards, roomContext),
       recommendation: recommendationFromTone(facilityTone),
@@ -2348,6 +2350,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       id: "upload-irrigation-recovery",
       label: roomContext.secondary,
       title: `${roomContext.secondary} review horizon`,
+      shortTitle: roomContext.secondary,
       status: "Irrigation recovery",
       window: windowLabelFromTone(irrigationTone),
       tone: irrigationTone,
@@ -2356,6 +2359,9 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         ? `${columnReview[0].column} requires review before the next irrigation cycle change.`
         : "Irrigation variance remains a secondary review lane until more room telemetry is uploaded.",
       detail: roomContext.irrigation,
+      shortDetail: columnReview[0]
+        ? `${columnReview[0].column} should be reviewed before the next cycle change.`
+        : "Irrigation variance remains a scheduled review item.",
       whyHeadline: "Current irrigation behavior is not yet critical, but it is close enough to justify scheduled review.",
       drivers: [
         `Current irrigation context: ${roomContext.irrigation}.`,
@@ -2373,12 +2379,14 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       id: "upload-telemetry-continuity",
       label: "Facility telemetry",
       title: "Telemetry continuity window",
+      shortTitle: "Facility telemetry",
       status: "Upload continuity",
       window: apiStatusWindow(result),
       tone: "info",
       confidence: 68,
       summary: "Uploaded telemetry is connected, but additional room context will improve intervention precision.",
       detail: result?.filename ?? "No facility upload connected",
+      shortDetail: "Additional room coverage will improve decision confidence.",
       whyHeadline: "The facility is connected, but the confidence of longer-range decisions improves as room coverage deepens.",
       drivers: [
         `${result.row_count} rows and ${result.column_count} columns parsed in memory.`,
@@ -2403,12 +2411,14 @@ function buildSimulatedInterventionItems(roomStates) {
       id: `room-${index + 1}`,
       label: room.name,
       title: `${room.name} intervention window`,
+      shortTitle: room.name,
       status: room.cycle,
       window: interventionWindowFromRoom(room),
       tone: room.tone,
       confidence: confidenceFromRoom(room),
       summary: `${room.irrigationState}. HVAC drift is ${room.hvacDrift.toFixed(2)}F and instability is ${room.instability.toFixed(2)} against the current room baseline.`,
       detail: `${room.cycle} in ${room.zone}.`,
+      shortDetail: compactRoomSummary(room),
       whyHeadline: whyHeadlineFromRoom(room),
       drivers: buildDriversFromRoom(room),
       recommendation: recommendationFromTone(room.tone),
@@ -2471,6 +2481,19 @@ function summarizeScoreNarrative(facilityTone, interventionItems) {
     return `${urgentCount} intervention window${urgentCount === 1 ? "" : "s"} shortened enough to warrant immediate operator attention.`;
   }
   return "Most systems remain controllable, with review concentrated in a narrow set of rooms.";
+}
+
+function compactRoomSummary(room) {
+  if (room.tone === "unstable") {
+    return `${room.irrigationState}. Drift and instability are now inside the active decision window.`;
+  }
+  if (room.tone === "elevated") {
+    return `${room.irrigationState}. Maintenance should be scheduled before the next cycle compounds drift.`;
+  }
+  if (room.tone === "review") {
+    return `${room.irrigationState}. Review is recommended before the next environmental transition.`;
+  }
+  return `${room.irrigationState}. The room remains inside a comfortable intervention horizon.`;
 }
 
 function buildWhyDrivers(result, telemetryCards, roomContext) {
