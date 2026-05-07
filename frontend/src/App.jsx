@@ -86,23 +86,41 @@ const REPORT_TEMPLATES = [
   "Operator Action Report",
 ];
 
+const DEMO_ROOMS = [
+  { name: "Flower Room 1", cycle: "Flower week 5", irrigation: "Pulse cycle 04", zone: "North bay" },
+  { name: "Flower Room 2", cycle: "Flower week 7", irrigation: "Pulse cycle 05", zone: "South bay" },
+  { name: "Veg Room A", cycle: "Vegetative day 19", irrigation: "Feed hold", zone: "Propagation lane" },
+];
+
+const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
+
 function App() {
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Checking backend",
     detail: "Establishing API telemetry link.",
+    checkedAt: null,
+    attemptCount: 0,
+    endpoint: formatEndpoint(API_BASE_URL),
+    message: "",
   });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const workspaceRef = useRef(null);
+  const healthCheckAttemptsRef = useRef(0);
 
   useEffect(() => {
     let isActive = true;
 
-    async function checkApiHealth() {
+    async function checkApiHealth(trigger = "scheduled") {
+      const checkTime = new Date();
+      const attemptCount = healthCheckAttemptsRef.current + 1;
+      healthCheckAttemptsRef.current = attemptCount;
+
       try {
         const response = await fetch(`${API_BASE_URL}/api/health`);
         if (!response.ok) {
@@ -113,26 +131,46 @@ function App() {
         if (isActive) {
           setApiStatus({
             state: "online",
-            label: "Backend online",
-            detail: `${payload.service} reported ${payload.status}.`,
+            label: "Telemetry link established",
+            detail: `${payload.service} responded ${payload.status} at ${formatClockTime(checkTime)}.`,
+            checkedAt: checkTime.toISOString(),
+            attemptCount,
+            endpoint: formatEndpoint(API_BASE_URL),
+            message: trigger === "scheduled" ? "Connection monitor active." : `Connection check triggered by ${trigger}.`,
           });
         }
-      } catch {
+      } catch (error) {
         if (isActive) {
           setApiStatus({
             state: "offline",
-            label: "Backend unavailable",
-            detail: "Start the backend service to activate monitoring surfaces.",
+            label: "Backend reconnecting",
+            detail: `No response from ${formatEndpoint(API_BASE_URL)} at ${formatClockTime(checkTime)}.`,
+            checkedAt: checkTime.toISOString(),
+            attemptCount,
+            endpoint: formatEndpoint(API_BASE_URL),
+            message: error instanceof Error ? error.message : "Connection check failed.",
           });
         }
       }
     }
 
-    checkApiHealth();
+    checkApiHealth("startup");
+    const intervalId = window.setInterval(() => {
+      checkApiHealth("interval");
+    }, 20000);
 
     return () => {
       isActive = false;
+      window.clearInterval(intervalId);
     };
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setTelemetryTick((current) => current + 1);
+    }, 4200);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -168,6 +206,16 @@ function App() {
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
   const timeCoverage = deriveTimeCoverage(latestUploadResult);
+  const useDemoTelemetry = apiStatus.state !== "online" || !latestUploadResult;
+  const liveOps = buildOperationalContext({
+    result: latestUploadResult,
+    apiStatus,
+    roomContext,
+    systems,
+    systemsState,
+    tick: telemetryTick,
+    useDemoTelemetry,
+  });
 
   useEffect(() => {
     if (workspaceRef.current) {
@@ -204,6 +252,7 @@ function App() {
           systems={systems}
           systemsState={systemsState}
           roomContext={roomContext}
+          liveOps={liveOps}
         />
       );
     }
@@ -215,6 +264,7 @@ function App() {
           systemsState={systemsState}
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
+          liveOps={liveOps}
         />
       );
     }
@@ -225,6 +275,7 @@ function App() {
           latestUploadResult={latestUploadResult}
           onUploadComplete={setLatestUploadResult}
           roomContext={roomContext}
+          liveOps={liveOps}
         />
       );
     }
@@ -235,6 +286,7 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           setActiveWorkspace={setActiveWorkspace}
+          liveOps={liveOps}
         />
       );
     }
@@ -244,6 +296,7 @@ function App() {
         latestUploadResult={latestUploadResult}
         apiStatus={apiStatus}
         roomContext={roomContext}
+        liveOps={liveOps}
       />
     );
   }
@@ -257,6 +310,7 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
+          liveOps={liveOps}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
@@ -290,6 +344,7 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
+          liveOps={liveOps}
         />
 
         <section
@@ -319,6 +374,7 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
+          liveOps={liveOps}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
@@ -332,6 +388,7 @@ function WorkspaceNavigationContent({
   latestUploadResult,
   roomContext,
   timeCoverage,
+  liveOps,
   onSelectWorkspace,
 }) {
   return (
@@ -367,17 +424,16 @@ function WorkspaceNavigationContent({
         <SidebarTelemetry label="API target" value={formatEndpoint(API_BASE_URL)} />
         <SidebarTelemetry label="Primary room" value={roomContext.primary} />
         <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-        <SidebarTelemetry
-          label="Findings"
-          value={latestUploadResult?.engine_result ? `${latestUploadResult.engine_result.signals.length} active` : "Awaiting batch"}
-        />
+        <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
+        <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
+        <SidebarTelemetry label="Last check" value={liveOps.connectionSummary} />
       </div>
 
       <div className="sidebar-footer">
-        <StatusDot tone={apiStatus.state} />
+        <StatusDot tone={liveOps.connectionTone} />
         <div>
-          <p>{apiStatus.label}</p>
-          <span>{apiStatus.detail}</span>
+          <p>{liveOps.connectionLabel}</p>
+          <span>{liveOps.connectionDetail}</span>
         </div>
       </div>
     </>
@@ -396,7 +452,7 @@ function Panel({ title, subtitle, className = "", children }) {
   );
 }
 
-function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext, timeCoverage }) {
+function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext, timeCoverage, liveOps }) {
   return (
     <header className="top-status">
       <div className="top-status__title">
@@ -406,39 +462,39 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
       </div>
 
       <div className="status-rack">
-        <StatusChip label="Backend" value={apiStatus.label} tone={apiStatus.state} />
-        <StatusChip label="Room or zone" value={roomContext.primary} tone="muted" />
+        <StatusChip label="Connectivity" value={liveOps.connectionLabel} tone={liveOps.connectionTone} />
+        <StatusChip label="Room or zone" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
           label="Upload batch"
-          value={latestUploadResult?.filename ?? "Awaiting ingest"}
-          tone={latestUploadResult ? "online" : "muted"}
+          value={latestUploadResult?.filename ?? "No facility upload connected"}
+          tone={latestUploadResult ? "nominal" : "info"}
         />
         <StatusChip
           label="Readiness"
-          value={latestUploadResult ? formatReadiness(latestUploadResult.data_quality.readiness) : "No active batch"}
-          tone={latestUploadResult?.data_quality?.readiness ?? "muted"}
+          value={latestUploadResult ? formatReadiness(latestUploadResult.data_quality.readiness) : liveOps.readinessLabel}
+          tone={latestUploadResult?.data_quality?.readiness ?? liveOps.facilityTone}
         />
         <StatusChip
           label="Time coverage"
           value={timeCoverage.summary}
-          tone={timeCoverage.hasCoverage ? "online" : "muted"}
+          tone={timeCoverage.hasCoverage ? "nominal" : "info"}
         />
         <StatusChip
           label="Operational result"
-          value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : "Not generated"}
-          tone={latestUploadResult?.engine_result?.overall_result ?? "muted"}
+          value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : liveOps.facilityStateLabel}
+          tone={latestUploadResult?.engine_result?.overall_result ?? liveOps.facilityTone}
         />
       </div>
     </header>
   );
 }
 
-function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsState, roomContext }) {
-  const alerts = buildAlertItems(latestUploadResult, apiStatus).slice(0, 4);
-  const findings = buildFindingsFeed(latestUploadResult).slice(0, 3);
-  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext).slice(0, 4);
-  const metrics = buildOverviewMetrics(latestUploadResult, apiStatus, systems, systemsState);
-  const summaryTelemetry = buildTelemetryCards(latestUploadResult).slice(0, 4);
+function OverviewWorkspace({ liveOps }) {
+  const alerts = liveOps.alerts.slice(0, 4);
+  const findings = liveOps.findings.slice(0, 4);
+  const timeline = liveOps.timeline.slice(0, 4);
+  const metrics = liveOps.overviewMetrics;
+  const summaryTelemetry = liveOps.summaryTelemetry.slice(0, 4);
 
   return (
     <div className="workspace-grid workspace-grid--overview">
@@ -471,7 +527,7 @@ function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsStat
         subtitle="Highest-priority findings from the current session."
         className="span-4"
       >
-        <FeedList items={findings} emptyText="Awaiting uploaded telemetry batch." />
+        <FeedList items={findings} emptyText="Monitoring active telemetry feed." />
       </Panel>
 
       <Panel
@@ -484,20 +540,20 @@ function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsStat
 
       <Panel
         title="Room and zone summary"
-        subtitle="Current room context and placeholder review lanes."
+        subtitle="Live operational room states, transitions, and review context."
         className="span-4"
       >
-        <ZoneSummaryGrid items={buildZoneSummary(roomContext)} />
+        <ZoneSummaryGrid items={liveOps.roomCards} />
       </Panel>
     </div>
   );
 }
 
-function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext }) {
-  const telemetryCards = buildTelemetryCards(latestUploadResult);
-  const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
-  const relationshipRows = buildRelationshipRows(latestUploadResult);
-  const roomTransitions = buildRoomTransitions(latestUploadResult, roomContext);
+function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext, liveOps }) {
+  const telemetryCards = liveOps.telemetryCards;
+  const driftRows = liveOps.driftRows;
+  const relationshipRows = liveOps.relationshipRows;
+  const roomTransitions = liveOps.roomTransitions;
   const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
 
   return (
@@ -512,16 +568,13 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
 
       <Panel
         title="Irrigation review"
-        subtitle="Current irrigation context and batch-derived review surface."
+        subtitle="Cycle state, response variance, and operator review recommendations."
         className="span-4"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
         <CompactList
-          items={[
-            `Irrigation context: ${roomContext.irrigation}.`,
-            "Cycle and event interpretation remain placeholder-driven until facility metadata is connected.",
-          ]}
-          emptyText="Awaiting irrigation context."
+          items={liveOps.irrigationNotes}
+          emptyText="Awaiting additional room telemetry."
         />
       </Panel>
 
@@ -558,13 +611,14 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
           systems={systems}
           systemsState={systemsState}
           roomContext={roomContext}
+          rows={liveOps.systemRows}
         />
       </Panel>
     </div>
   );
 }
 
-function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext }) {
+function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -604,7 +658,9 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     }
   }
 
-  const intakeStages = buildIntakeStages(uploadResult, uploadState, roomContext);
+  const intakeStages = uploadResult
+    ? buildIntakeStages(uploadResult, uploadState, roomContext)
+    : liveOps.intakeStages;
 
   return (
     <div className="workspace-grid workspace-grid--intake">
@@ -688,8 +744,8 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
           <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
         ) : (
           <EmptyState
-            title="No baseline comparison available"
-            body="Validate a telemetry batch to populate baseline movement and operational drift review."
+            title="Baseline established from current telemetry surface"
+            body="No facility upload connected. Demo monitoring remains active until room exports are uploaded."
           />
         )}
       </Panel>
@@ -697,12 +753,12 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   );
 }
 
-function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace }) {
+function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace, liveOps }) {
   const latestReport = latestUploadResult?.operator_report;
-  const findings = buildFindingsFeed(latestUploadResult);
-  const timeline = buildOperationalTimeline(latestUploadResult, null, roomContext);
-  const evidenceLines = buildEvidenceConsole(latestUploadResult);
-  const observations = buildRoomObservations(latestUploadResult, roomContext);
+  const findings = liveOps.findings;
+  const timeline = liveOps.timeline;
+  const evidenceLines = liveOps.evidenceLines;
+  const observations = liveOps.observations;
 
   return (
     <div className="workspace-grid workspace-grid--evidence">
@@ -715,8 +771,8 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
           <OperatorReportPanel report={latestReport} />
         ) : (
           <EmptyState
-            title="No findings report in session"
-            body="Validate a cultivation batch in Data Intake to generate the latest operator report."
+            title="Monitoring active telemetry feed"
+            body="Operational evidence is updating from live demo telemetry until a facility upload is connected."
           />
         )}
       </Panel>
@@ -753,7 +809,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
         {latestReport ? (
           <CompactList items={[...latestReport.limitations, ...REPORT_TEMPLATES]} emptyText="No report output available." />
         ) : (
-          <CompactList items={REPORT_TEMPLATES} emptyText="No report output available." />
+          <CompactList items={liveOps.reportNotes} emptyText="Awaiting additional room telemetry." />
         )}
       </Panel>
 
@@ -763,7 +819,15 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
         className="span-12"
       >
         <div className="evidence-action-row">
-          <CompactList items={findings.slice(0, 6)} emptyText="Awaiting evidence-linked findings." inline />
+          <CompactList
+            items={findings.slice(0, 6).map((item) => `${item.title}: ${item.detail}`)}
+            emptyText="Awaiting evidence-linked findings."
+            inline
+          />
+          <div className="evidence-action-row__meta">
+            <StatusDot tone={liveOps.facilityTone} />
+            <span>{liveOps.connectionSummary}</span>
+          </div>
           <button className="command-button command-button--secondary" type="button" onClick={() => setActiveWorkspace("data-intake")}>
             Open Data Intake
           </button>
@@ -773,13 +837,13 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
   );
 }
 
-function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomContext }) {
-  const telemetryCards = buildTelemetryCards(latestUploadResult);
-  const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
-  const relationshipRows = buildRelationshipRows(latestUploadResult);
-  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext);
-  const findings = buildFindingsFeed(latestUploadResult);
-  const consoleEvents = buildConsoleEvents(latestUploadResult, apiStatus, roomContext);
+function IntelligenceConsoleWorkspace({ liveOps }) {
+  const telemetryCards = liveOps.telemetryCards;
+  const driftRows = liveOps.driftRows;
+  const relationshipRows = liveOps.relationshipRows;
+  const timeline = liveOps.timeline;
+  const findings = liveOps.findings;
+  const consoleEvents = liveOps.consoleEvents;
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -812,7 +876,7 @@ function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomConte
         subtitle="Current findings and monitoring notices."
         className="span-2"
       >
-        <FeedList items={findings.slice(0, 6)} emptyText="Awaiting telemetry findings." />
+        <FeedList items={findings.slice(0, 6)} emptyText="Monitoring active telemetry feed." />
       </Panel>
 
       <Panel
@@ -832,15 +896,11 @@ function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomConte
       </Panel>
 
       <Panel
-        title="Future assistant placement"
-        subtitle="Reserved workspace for future guided operational intelligence."
+        title="Connection diagnostics"
+        subtitle="Backend link state, reconnect cadence, and readable failure detail."
         className="span-3"
       >
-        <EmptyState
-          title="Future assistant surface reserved"
-          body="This console intentionally leaves room for future guided operational assistance without changing the current monitoring workflow."
-          compact
-        />
+        <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
       </Panel>
     </div>
   );
@@ -871,11 +931,11 @@ function SchemaMappingPanel({ result, roomContext }) {
         { label: "Secondary lane", value: roomContext.secondary },
         {
           label: "Mapped columns",
-          value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting batch",
+          value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting facility upload",
         },
         {
           label: "Unknown columns",
-          value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting batch",
+          value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting facility upload",
         },
       ]}
       compact
@@ -889,11 +949,11 @@ function VerificationPanel({ result }) {
       metrics={[
         {
           label: "Readiness",
-          value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting batch",
+          value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting facility upload",
         },
-        { label: "Rows parsed", value: result ? result.row_count : "Pending" },
-        { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Pending" },
-        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "Pending" },
+        { label: "Rows parsed", value: result ? result.row_count : "Monitoring active telemetry feed" },
+        { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Awaiting additional room telemetry" },
+        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "No upload connected" },
       ]}
       compact
     />
@@ -906,21 +966,21 @@ function EvidenceExtractionPanel({ result }) {
       items={[
         {
           title: "Baseline evidence",
-          detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Awaiting batch.",
-          tone: result ? "online" : "muted",
+          detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Monitoring active telemetry feed.",
+          tone: result ? "nominal" : "info",
         },
         {
           title: "Engine evidence",
-          detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting batch.",
-          tone: result?.engine_result ? "online" : "muted",
+          detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting additional room telemetry.",
+          tone: result?.engine_result ? "nominal" : "review",
         },
         {
           title: "Operator report",
-          detail: result?.operator_report ? "Current findings report available." : "Awaiting batch.",
-          tone: result?.operator_report ? "online" : "muted",
+          detail: result?.operator_report ? "Current findings report available." : "No facility upload connected.",
+          tone: result?.operator_report ? "nominal" : "info",
         },
       ]}
-      emptyText="Awaiting evidence extraction."
+      emptyText="Monitoring evidence stream."
     />
   );
 }
@@ -960,7 +1020,7 @@ function FeedList({ items, emptyText, inline = false }) {
 
 function TimelineFeed({ items }) {
   if (!items || items.length === 0) {
-    return <EmptyState title="No timeline events" body="Awaiting timestamped operational activity." compact />;
+    return <EmptyState title="No timeline events" body="Monitoring active telemetry feed." compact />;
   }
 
   return (
@@ -981,7 +1041,7 @@ function TimelineFeed({ items }) {
 
 function TelemetryCardGrid({ cards, compact = false }) {
   if (!cards || cards.length === 0) {
-    return <EmptyState title="No telemetry available" body="Awaiting uploaded telemetry coverage." compact />;
+    return <EmptyState title="No telemetry available" body="Awaiting additional room telemetry." compact />;
   }
 
   return (
@@ -1003,7 +1063,7 @@ function TelemetryCardGrid({ cards, compact = false }) {
 
 function MiniSeries({ values, tone }) {
   if (!values || values.length === 0) {
-    return <div className="mini-series mini-series--empty">No series</div>;
+    return <div className="mini-series mini-series--empty">No live series</div>;
   }
 
   const maxValue = Math.max(...values, 1);
@@ -1023,7 +1083,7 @@ function MiniSeries({ values, tone }) {
 
 function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No drift review available" body="Awaiting telemetry with enough usable rows." compact />;
+    return <EmptyState title="No drift review available" body="Awaiting additional room telemetry." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -1067,7 +1127,7 @@ function DriftMonitor({ rows, detailed = false }) {
 
 function DriftFeed({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No drift feed" body="Awaiting baseline comparison output." compact />;
+    return <EmptyState title="No drift feed" body="Monitoring active telemetry feed." compact />;
   }
 
   return (
@@ -1084,14 +1144,17 @@ function DriftFeed({ rows }) {
 
 function RelationshipMonitor({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No relationship changes" body="Awaiting paired telemetry evidence." compact />;
+    return <EmptyState title="No relationship changes" body="Awaiting paired room telemetry." compact />;
   }
 
   return (
     <div className="relationship-list">
       {rows.map((row, index) => (
         <div className="relationship-row" key={`${row.columns.join("-")}-${index}`}>
-          <span>{row.columns.join(" x ")}</span>
+          <div className="relationship-row__header">
+            <span>{row.columns.join(" x ")}</span>
+            <StatusDot tone={row.tone ?? "info"} />
+          </div>
           <strong>{row.change}</strong>
           <p>
             baseline {row.baseline_correlation} to active {row.recent_correlation}
@@ -1104,22 +1167,24 @@ function RelationshipMonitor({ rows }) {
 
 function AlertList({ alerts }) {
   if (!alerts || alerts.length === 0) {
-    return <EmptyState title="No active alerts" body="Current session does not contain additional alerts." compact />;
+    return <EmptyState title="No active alerts" body="Current rooms remain within monitored thresholds." compact />;
   }
 
   return <FeedList items={alerts} emptyText="No active alerts." />;
 }
 
-function SystemsMatrix({ systems, systemsState, roomContext }) {
+function SystemsMatrix({ systems, systemsState, roomContext, rows }) {
+  const tableRows = rows ?? systems.map((system) => [
+    system.name,
+    system.scope,
+    systemRoomContext(system.name, roomContext),
+    systemsState === "ready" ? "Backend placeholder endpoint" : "Local fallback surface",
+  ]);
+
   return (
     <DataTable
       columns={["System", "Operational review scope", "Room or zone context", "Source state"]}
-      rows={systems.map((system) => [
-        system.name,
-        system.scope,
-        systemRoomContext(system.name, roomContext),
-        systemsState === "ready" ? "Backend placeholder endpoint" : "Local fallback surface",
-      ])}
+      rows={tableRows}
     />
   );
 }
@@ -1128,8 +1193,11 @@ function ZoneSummaryGrid({ items }) {
   return (
     <div className="zone-summary-grid">
       {items.map((item) => (
-        <div className="zone-summary-card" key={item.label}>
-          <span>{item.label}</span>
+        <div className={`zone-summary-card zone-summary-card--${item.tone ?? "info"}`} key={item.label}>
+          <div className="zone-summary-card__header">
+            <span>{item.label}</span>
+            <StatusDot tone={item.tone ?? "info"} />
+          </div>
           <strong>{item.value}</strong>
           <p>{item.detail}</p>
         </div>
@@ -1283,10 +1351,10 @@ function buildTelemetryCards(result) {
   if (!result) {
     return TELEMETRY_CHANNELS.map((channel) => ({
       label: formatCategory(channel),
-      primary: "Awaiting channel",
-      secondary: "No active telemetry batch.",
+      primary: "Monitoring standby",
+      secondary: "No facility upload connected.",
       series: [],
-      tone: "muted",
+      tone: "info",
     }));
   }
 
@@ -1306,13 +1374,13 @@ function buildTelemetryCards(result) {
     if (!profile) {
       return {
         label: formatCategory(channel),
-        primary: mappedColumns.length > 0 ? "Mapped without numeric profile" : "Awaiting channel",
+        primary: mappedColumns.length > 0 ? "Mapped without numeric profile" : "Awaiting additional room telemetry",
         secondary:
           mappedColumns.length > 0
             ? mappedColumns.join(", ")
-            : "No uploaded channel mapped to this system category.",
+            : "No uploaded channel mapped to this system category yet.",
         series: [],
-        tone: "muted",
+        tone: "info",
       };
     }
 
@@ -1321,7 +1389,7 @@ function buildTelemetryCards(result) {
       primary: `${profile.average} avg`,
       secondary: `${profile.column} | ${profile.missing_percent}% missing`,
       series: buildSeries(profile, drift),
-      tone: drift?.drift_flag ?? profile.variability ?? "normal",
+      tone: mapOperationalTone(drift?.drift_flag ?? profile.variability ?? "normal"),
     };
   });
 }
@@ -1352,16 +1420,16 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
 
   if (!result) {
     items.push({
-      time: "Awaiting batch",
-      title: "No active ingest",
-      detail: `Room placeholder: ${roomContext.primary}.`,
-      tone: "muted",
+      time: "Standby",
+      title: "Monitoring active telemetry feed",
+      detail: `No facility upload connected. ${roomContext.primary} remains the primary review lane.`,
+      tone: "info",
     });
     items.push({
-      time: "Awaiting batch",
-      title: "Baseline review pending",
-      detail: "Upload telemetry to populate facility-wide timeline playback.",
-      tone: "muted",
+      time: "Standby",
+      title: "Awaiting additional room telemetry",
+      detail: "Upload room exports to replace simulated operational monitoring with current facility data.",
+      tone: "review",
     });
     return items;
   }
@@ -1387,22 +1455,22 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
   });
   items.push({
     time: "Review",
-    title: "Readiness assessed",
-    detail: formatReadiness(result.data_quality.readiness),
-    tone: result.data_quality.readiness,
-  });
+      title: "Readiness assessed",
+      detail: formatReadiness(result.data_quality.readiness),
+      tone: mapOperationalTone(result.data_quality.readiness),
+    });
   items.push({
     time: "Review",
-    title: "Mapping coverage",
-    detail: `${result.cultivation_mapping.mapped_column_count} mapped columns across cultivation systems.`,
-    tone: result.cultivation_mapping.mapped_column_count > 0 ? "online" : "muted",
-  });
+      title: "Mapping coverage",
+      detail: `${result.cultivation_mapping.mapped_column_count} mapped columns across cultivation systems.`,
+      tone: result.cultivation_mapping.mapped_column_count > 0 ? "nominal" : "info",
+    });
   if (result.engine_result) {
     items.push({
       time: timeCoverage.last ?? "Findings",
       title: "Operational findings generated",
       detail: formatEngineResult(result.engine_result.overall_result),
-      tone: result.engine_result.overall_result,
+      tone: mapOperationalTone(result.engine_result.overall_result),
     });
   }
   return items;
@@ -1422,7 +1490,7 @@ function buildFindingsFeed(result) {
     items.push({
       title: "Engine signal",
       detail: signal.message,
-      tone: signal.level ?? result.engine_result?.overall_result ?? "muted",
+      tone: mapOperationalTone(signal.level ?? result.engine_result?.overall_result ?? "info"),
     });
   });
 
@@ -1430,7 +1498,7 @@ function buildFindingsFeed(result) {
     items.push({
       title: "Observation",
       detail: observation,
-      tone: "muted",
+      tone: "info",
     });
   });
 
@@ -1438,7 +1506,7 @@ function buildFindingsFeed(result) {
     items.push({
       title: "Column review",
       detail: `${item.column}: ${item.reasons.join(" ")}`,
-      tone: "needs_review",
+      tone: "review",
     });
   });
 
@@ -1452,15 +1520,15 @@ function buildAlertItems(result, apiStatus) {
     alerts.push({
       title: "Backend link unavailable",
       detail: apiStatus.detail,
-      tone: "offline",
+      tone: "elevated",
     });
   }
 
   if (!result) {
     alerts.push({
-      title: "Awaiting operational ingest",
-      detail: "No telemetry batch is active in this session.",
-      tone: "muted",
+      title: "No facility upload connected",
+      detail: "Monitoring active telemetry feed until room exports are uploaded.",
+      tone: "info",
     });
     return alerts;
   }
@@ -1469,7 +1537,7 @@ function buildAlertItems(result, apiStatus) {
     alerts.push({
       title: "Batch warning",
       detail: warning,
-      tone: "needs_review",
+      tone: "review",
     });
   });
 
@@ -1477,7 +1545,7 @@ function buildAlertItems(result, apiStatus) {
     alerts.push({
       title: "Review limitation",
       detail: limitation,
-      tone: "muted",
+      tone: "info",
     });
   });
 
@@ -1485,7 +1553,7 @@ function buildAlertItems(result, apiStatus) {
     alerts.push({
       title: "Operator check",
       detail: check,
-      tone: "online",
+      tone: "review",
     });
   });
 
@@ -1494,8 +1562,8 @@ function buildAlertItems(result, apiStatus) {
     : [
         {
           title: "No active operator alerts",
-          detail: "Current batch did not surface additional review alerts.",
-          tone: "online",
+          detail: "Current upload remains within monitored operational baselines.",
+          tone: "nominal",
         },
       ];
 }
@@ -1504,7 +1572,7 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
   return [
     {
       label: "Facility stability",
-      value: result?.engine_result ? deriveFacilityStability(result) : "Awaiting review",
+      value: result?.engine_result ? deriveFacilityStability(result) : "Monitoring active telemetry feed",
     },
     {
       label: "Active alerts",
@@ -1512,7 +1580,7 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
     },
     {
       label: "Ingestion state",
-      value: result ? formatReadiness(result.data_quality.readiness) : "No active batch",
+      value: result ? formatReadiness(result.data_quality.readiness) : "No facility upload connected",
     },
     {
       label: "Systems in scope",
@@ -1527,21 +1595,25 @@ function buildZoneSummary(roomContext) {
       label: "Primary room",
       value: roomContext.primary,
       detail: "Current room or zone inferred from active upload context.",
+      tone: "nominal",
     },
     {
       label: "Secondary lane",
       value: roomContext.secondary,
       detail: "Cross-room review placeholder for facility operations.",
+      tone: "info",
     },
     {
       label: "Grow cycle",
       value: roomContext.cycle,
       detail: "Cycle context remains placeholder until facility metadata is connected.",
+      tone: "review",
     },
     {
       label: "Irrigation review",
       value: roomContext.irrigation,
       detail: "Irrigation context reflects mapped channels when present.",
+      tone: "review",
     },
   ];
 }
@@ -1552,19 +1624,19 @@ function buildRoomTransitions(result, roomContext) {
       time: "Transition",
       title: "Primary room context",
       detail: roomContext.primary,
-      tone: "online",
+      tone: "nominal",
     },
     {
       time: "Transition",
       title: "Secondary review lane",
       detail: roomContext.secondary,
-      tone: "muted",
+      tone: "info",
     },
     {
       time: "Transition",
       title: "Irrigation context",
       detail: roomContext.irrigation,
-      tone: "needs_review",
+      tone: "review",
     },
   ];
 
@@ -1573,7 +1645,7 @@ function buildRoomTransitions(result, roomContext) {
       time: "Timing",
       title: "Sample interval",
       detail: result.timestamp_profile.estimated_sample_interval,
-      tone: "online",
+      tone: "nominal",
     });
   }
 
@@ -1583,9 +1655,9 @@ function buildRoomTransitions(result, roomContext) {
 function buildEvidenceConsole(result) {
   if (!result) {
     return [
-      "evidence.console=awaiting_batch",
-      "schema.mapping=not_available",
-      "operator.report=not_generated",
+      "evidence.console=monitoring_demo_telemetry",
+      "schema.mapping=no_facility_upload_connected",
+      "operator.report=awaiting_room_exports",
     ];
   }
 
@@ -1627,7 +1699,7 @@ function buildConsoleEvents(result, apiStatus, roomContext) {
       lines.push(`signal.event=${signal.message}`);
     });
   } else {
-    lines.push("console.batch=awaiting_ingest");
+    lines.push("console.batch=no_facility_upload_connected");
   }
 
   return [...lines, ...buildEvidenceConsole(result).slice(0, 10)];
@@ -1635,7 +1707,12 @@ function buildConsoleEvents(result, apiStatus, roomContext) {
 
 function buildRelationshipRows(result) {
   const evidence = result?.engine_result?.evidence ?? [];
-  return evidence.filter((item) => item.type === "relationship_change");
+  return evidence
+    .filter((item) => item.type === "relationship_change")
+    .map((item) => ({
+      ...item,
+      tone: mapOperationalTone(item.level ?? "review"),
+    }));
 }
 
 function buildRoomObservations(result, roomContext) {
@@ -1658,10 +1735,10 @@ function buildRoomObservations(result, roomContext) {
 function deriveRoomContext(result) {
   if (!result) {
     return {
-      primary: "Room context pending",
-      secondary: "Secondary lane pending",
-      cycle: "Cycle placeholder",
-      irrigation: "Irrigation context pending",
+      primary: "Flower Room 1",
+      secondary: "Flower Room 2",
+      cycle: "Mixed flowering rooms",
+      irrigation: "Pulse cycle under review",
     };
   }
 
@@ -1684,9 +1761,9 @@ function deriveRoomContext(result) {
 
   return {
     primary: roomValues[0] ?? "Room context not present in upload",
-    secondary: roomValues[1] ?? "Secondary room context pending",
-    cycle: cycleValues[0] ?? "Grow cycle placeholder",
-    irrigation: irrigationMapped > 0 ? "Irrigation channels mapped" : "Irrigation context pending",
+    secondary: roomValues[1] ?? "Awaiting additional room telemetry",
+    cycle: cycleValues[0] ?? "Cycle metadata unavailable",
+    irrigation: irrigationMapped > 0 ? "Irrigation channels mapped" : "Awaiting irrigation telemetry",
   };
 }
 
@@ -1694,7 +1771,7 @@ function deriveTimeCoverage(result) {
   if (!result?.timestamp_profile) {
     return {
       hasCoverage: false,
-      summary: "Awaiting timestamps",
+      summary: "Awaiting room timestamps",
     };
   }
 
@@ -1713,15 +1790,15 @@ function deriveTimeCoverage(result) {
 function deriveFacilityStability(result) {
   const overallResult = result.engine_result?.overall_result;
   if (overallResult === "normal") {
-    return "No elevated drift found";
+    return "Nominal environmental stability";
   }
   if (overallResult === "elevated") {
-    return "Meaningful change requires review";
+    return "Elevated drift requires review";
   }
   if (overallResult === "needs_review") {
-    return "More review context needed";
+    return "Review recommended for irrigation variance";
   }
-  return "Awaiting operational review";
+  return "Monitoring active telemetry feed";
 }
 
 function buildIntakeStages(result, uploadState, roomContext) {
@@ -1731,16 +1808,16 @@ function buildIntakeStages(result, uploadState, roomContext) {
         title: stage,
         detail: index === 0 ? "Batch is being validated." : "Pending upstream stage completion.",
         state: index === 0 ? "active" : "queued",
-        tone: index === 0 ? "checking" : "muted",
+        tone: index === 0 ? "info" : "review",
       };
     }
 
     if (!result) {
       return {
         title: stage,
-        detail: index === 2 ? `Room placeholder: ${roomContext.primary}.` : "Awaiting uploaded telemetry batch.",
-        state: "pending",
-        tone: "muted",
+        detail: index === 2 ? `Baseline established for ${roomContext.primary}.` : "No facility upload connected. Monitoring active telemetry feed.",
+        state: "standby",
+        tone: index === 3 ? "review" : "info",
       };
     }
 
@@ -1755,7 +1832,7 @@ function buildIntakeStages(result, uploadState, roomContext) {
       title: stage,
       detail: details[index],
       state: "complete",
-      tone: index === 3 && !result.engine_result ? "needs_review" : "online",
+      tone: index === 3 && !result.engine_result ? "review" : "nominal",
     };
   });
 }
@@ -1816,6 +1893,498 @@ function formatEngineResult(result) {
 
 function formatEndpoint(endpoint) {
   return endpoint.replace("http://", "").replace("https://", "");
+}
+
+function formatClockTime(input) {
+  const value = input instanceof Date ? input : new Date(input);
+  return value.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function mapOperationalTone(value) {
+  if (!value) {
+    return "info";
+  }
+  if (["normal", "ready", "online", "low", "nominal"].includes(value)) {
+    return "nominal";
+  }
+  if (["needs_review", "review", "watch", "checking"].includes(value)) {
+    return "review";
+  }
+  if (["elevated", "high", "offline"].includes(value)) {
+    return "elevated";
+  }
+  if (["unstable", "critical"].includes(value)) {
+    return "unstable";
+  }
+  if (value === "muted") {
+    return "info";
+  }
+  return value;
+}
+
+function cycleValue(base, tick, range = 6, precision = 1) {
+  const value = base + Math.sin(tick / 2.2 + base / 7) * range + Math.cos(tick / 3.5 + base / 11) * (range / 2);
+  return Number(value.toFixed(precision));
+}
+
+function buildOperationalContext({ result, apiStatus, roomContext, systems, systemsState, tick, useDemoTelemetry }) {
+  const connectionTone = apiStatus.state === "online" ? "nominal" : "elevated";
+  const connectionSummary = apiStatus.checkedAt
+    ? `${formatClockTime(apiStatus.checkedAt)} CT | attempt ${apiStatus.attemptCount}`
+    : "Connection check initializing";
+
+  if (!useDemoTelemetry) {
+    const telemetryCards = buildTelemetryCards(result);
+    const facilityTone = mapOperationalTone(result?.engine_result?.overall_result ?? result?.data_quality?.readiness ?? "nominal");
+    return {
+      useDemoTelemetry: false,
+      facilityTone,
+      facilityStateLabel: formatEngineResult(result?.engine_result?.overall_result ?? "normal"),
+      readinessLabel: formatReadiness(result?.data_quality?.readiness),
+      connectionTone,
+      connectionLabel: apiStatus.label,
+      connectionDetail: apiStatus.detail,
+      connectionSummary,
+      alerts: buildAlertItems(result, apiStatus),
+      findings: buildFindingsFeed(result),
+      timeline: buildOperationalTimeline(result, apiStatus, roomContext),
+      telemetryCards,
+      summaryTelemetry: telemetryCards,
+      overviewMetrics: buildOverviewMetrics(result, apiStatus, systems, systemsState),
+      roomCards: buildZoneSummary(roomContext),
+      roomTransitions: buildRoomTransitions(result, roomContext),
+      driftRows: (result?.baseline_analysis?.column_drift ?? []).map((row) => ({
+        ...row,
+        drift_flag: mapOperationalTone(row.drift_flag),
+      })),
+      relationshipRows: buildRelationshipRows(result),
+      irrigationNotes: [
+        `Irrigation context: ${roomContext.irrigation}.`,
+        "Baseline established from current upload.",
+        "Review recommended for irrigation variance only where drift persists across the active window.",
+      ],
+      systemRows: systems.map((system) => [
+        system.name,
+        system.scope,
+        systemRoomContext(system.name, roomContext),
+        systemsState === "ready" ? "Backend feed active" : "Local fallback surface",
+      ]),
+      intakeStages: buildIntakeStages(result, "complete", roomContext),
+      evidenceLines: buildEvidenceConsole(result),
+      consoleEvents: buildConsoleEvents(result, apiStatus, roomContext),
+      observations: buildRoomObservations(result, roomContext),
+      reportNotes: REPORT_TEMPLATES,
+      connectionEvents: buildConnectionEvents(apiStatus, tick),
+    };
+  }
+
+  const roomStates = DEMO_ROOMS.map((room, index) => {
+    const temperature = cycleValue(72 + index * 2, tick + index, 2.4, 1);
+    const humidity = cycleValue(57 - index * 3, tick + index * 2, 3.2, 1);
+    const co2 = Math.round(cycleValue(905 + index * 65, tick + index * 3, 42, 0));
+    const hvacDrift = Number(cycleValue(0.8 + index * 0.55, tick + index * 4, 0.9, 2));
+    const instability = Number(Math.abs(cycleValue(0.9 + index * 0.4, tick + index * 2, 0.7, 2)));
+    const tone = resolveRoomTone(hvacDrift, instability, index, tick);
+    return {
+      ...room,
+      temperature,
+      humidity,
+      co2,
+      hvacDrift,
+      instability,
+      tone,
+      irrigationState: ["Pulse active", "Cycle settling", "Valve hold", "Recovery window"][(tick + index) % 4],
+    };
+  });
+
+  const telemetryCards = buildSimulatedTelemetryCards(roomStates, tick);
+  const roomTransitions = buildSimulatedRoomTransitions(roomStates, tick);
+  const driftRows = buildSimulatedDriftRows(roomStates, tick);
+  const findings = buildSimulatedFindings(roomStates, tick);
+  const connectionEvents = buildConnectionEvents(apiStatus, tick);
+  const timeline = [
+    ...connectionEvents.slice(0, 2),
+    ...buildSimulatedTimeline(roomStates, tick),
+  ].slice(0, 8);
+  const facilityTone = roomStates.some((room) => room.tone === "unstable")
+    ? "unstable"
+    : roomStates.some((room) => room.tone === "elevated")
+      ? "elevated"
+      : roomStates.some((room) => room.tone === "review")
+        ? "review"
+        : "nominal";
+
+  return {
+    useDemoTelemetry: true,
+    facilityTone,
+    facilityStateLabel: formatOperationalLabel(facilityTone),
+    readinessLabel: "Monitoring active telemetry feed",
+    connectionTone,
+    connectionLabel: apiStatus.state === "online" ? "Telemetry link established" : "Backend reconnecting",
+    connectionDetail: apiStatus.state === "online"
+      ? "Operational demo telemetry will stand down once facility uploads are present."
+      : `Reconnect monitor active for ${apiStatus.endpoint}.`,
+    connectionSummary,
+    alerts: buildSimulatedAlerts(roomStates, apiStatus, tick),
+    findings,
+    timeline,
+    telemetryCards,
+    summaryTelemetry: telemetryCards.slice(0, 4),
+    overviewMetrics: buildSimulatedOverviewMetrics(roomStates, systems, systemsState),
+    roomCards: roomStates.map((room) => ({
+      label: room.name,
+      value: formatOperationalLabel(room.tone),
+      detail: `${room.cycle} | ${room.irrigationState} | HVAC drift ${room.hvacDrift.toFixed(2)}F.`,
+      tone: room.tone,
+    })),
+    roomTransitions,
+    driftRows,
+    relationshipRows: buildSimulatedRelationshipRows(roomStates, tick),
+    irrigationNotes: [
+      `${roomStates[0].name}: ${roomStates[0].irrigationState}.`,
+      "Review recommended for irrigation variance when humidity recovery exceeds the active window.",
+      "Environmental transition detected between flowering rooms during the latest cycle change.",
+    ],
+    systemRows: buildSimulatedSystemRows(systems, roomStates, systemsState, apiStatus),
+    intakeStages: buildSimulatedIntakeStages(apiStatus, tick, roomContext),
+    evidenceLines: buildSimulatedEvidenceLines(roomStates, tick, apiStatus),
+    consoleEvents: buildSimulatedConsoleEvents(roomStates, tick, apiStatus),
+    observations: buildSimulatedObservations(roomStates),
+    reportNotes: [
+      "Monitoring active telemetry feed",
+      "Baseline established from current upload state",
+      "Awaiting additional room telemetry",
+    ],
+    connectionEvents,
+  };
+}
+
+function resolveRoomTone(hvacDrift, instability, index, tick) {
+  if (instability > 1.8 || (index === 1 && tick % 7 === 0)) {
+    return "unstable";
+  }
+  if (hvacDrift > 1.55 || instability > 1.45) {
+    return "elevated";
+  }
+  if (hvacDrift > 0.95 || instability > 1.1) {
+    return "review";
+  }
+  return "nominal";
+}
+
+function buildSimulatedTelemetryCards(roomStates, tick) {
+  const avgTemp = average(roomStates.map((room) => room.temperature));
+  const avgHumidity = average(roomStates.map((room) => room.humidity));
+  const avgCo2 = average(roomStates.map((room) => room.co2));
+  const maxDrift = Math.max(...roomStates.map((room) => room.hvacDrift));
+  const unstableRooms = roomStates.filter((room) => room.tone === "unstable" || room.tone === "elevated").length;
+
+  return [
+    {
+      label: "Temperature",
+      primary: `${avgTemp.toFixed(1)}F`,
+      secondary: `${roomStates[0].name} to ${roomStates[2].name} live spread`,
+      series: roomStates.map((room) => room.temperature),
+      tone: maxDrift > 1.5 ? "elevated" : "nominal",
+    },
+    {
+      label: "Humidity",
+      primary: `${avgHumidity.toFixed(1)}% RH`,
+      secondary: `${unstableRooms > 0 ? "Recovery lag detected" : "Room recovery nominal"}`,
+      series: roomStates.map((room) => room.humidity),
+      tone: unstableRooms > 0 ? "review" : "nominal",
+    },
+    {
+      label: "CO2",
+      primary: `${Math.round(avgCo2)} ppm`,
+      secondary: `${roomStates[1].name} currently carries peak enrichment`,
+      series: roomStates.map((room) => room.co2),
+      tone: "info",
+    },
+    {
+      label: "HVAC",
+      primary: `${maxDrift.toFixed(2)}F drift`,
+      secondary: `${unstableRooms} room${unstableRooms === 1 ? "" : "s"} under review`,
+      series: roomStates.map((room) => room.hvacDrift * 10),
+      tone: maxDrift > 1.7 ? "unstable" : maxDrift > 1.25 ? "elevated" : "review",
+    },
+    {
+      label: "Airflow",
+      primary: `${cycleValue(94, tick, 5, 0).toFixed(0)}% runtime`,
+      secondary: "Transition dampers modulating between flowering zones",
+      series: Array.from({ length: 6 }, (_, index) => 78 + ((tick + index * 7) % 18)),
+      tone: "info",
+    },
+    {
+      label: "Irrigation",
+      primary: roomStates[0].irrigationState,
+      secondary: `${roomStates[0].name} next review in ${12 - (tick % 6)} min`,
+      series: Array.from({ length: 6 }, (_, index) => 24 + ((tick + index * 3) % 22)),
+      tone: roomStates.some((room) => room.tone === "unstable") ? "review" : "nominal",
+    },
+  ];
+}
+
+function buildSimulatedTimeline(roomStates, tick) {
+  const time = new Date(Date.now() - tick * 4200);
+  return [
+    {
+      time: formatClockTime(time),
+      title: "Environmental transition detected",
+      detail: `${roomStates[1].name} humidity recovery slowed after irrigation cycle handoff.`,
+      tone: roomStates[1].tone,
+    },
+    {
+      time: formatClockTime(new Date(time.getTime() + 5 * 60000)),
+      title: "HVAC drift review opened",
+      detail: `${roomStates[0].name} supply temperature drift moved to ${roomStates[0].hvacDrift.toFixed(2)}F.`,
+      tone: roomStates[0].tone,
+    },
+    {
+      time: formatClockTime(new Date(time.getTime() + 11 * 60000)),
+      title: "Ingestion monitor heartbeat",
+      detail: "Telemetry watcher confirmed active room feed continuity across current facility lanes.",
+      tone: "info",
+    },
+    {
+      time: formatClockTime(new Date(time.getTime() + 17 * 60000)),
+      title: "Operator review notice",
+      detail: "Review recommended for irrigation variance before next flowering cycle change.",
+      tone: "review",
+    },
+  ];
+}
+
+function buildSimulatedAlerts(roomStates, apiStatus) {
+  const alertRooms = roomStates.filter((room) => room.tone !== "nominal");
+  const items = [];
+  if (apiStatus.state !== "online") {
+    items.push({
+      title: "No facility upload connected",
+      detail: `Frontend monitoring is active while reconnect attempts continue for ${apiStatus.endpoint}.`,
+      tone: "info",
+    });
+  }
+  alertRooms.slice(0, 2).forEach((room) => {
+    items.push({
+      title: `${room.name} requires review`,
+      detail: `${room.irrigationState}. HVAC drift ${room.hvacDrift.toFixed(2)}F with instability index ${room.instability.toFixed(2)}.`,
+      tone: room.tone,
+    });
+  });
+  items.push({
+    title: "Monitoring active telemetry feed",
+    detail: "Demo telemetry will remain active until uploaded facility exports replace the current surface.",
+    tone: "info",
+  });
+  return items.slice(0, 4);
+}
+
+function buildSimulatedFindings(roomStates) {
+  return roomStates.flatMap((room) => ([
+    {
+      title: `${room.name} telemetry review`,
+      detail: `${room.cycle} with ${room.irrigationState.toLowerCase()} and ${room.hvacDrift.toFixed(2)}F HVAC drift.`,
+      tone: room.tone,
+    },
+    {
+      title: `${room.name} evidence event`,
+      detail: `Environmental instability index ${room.instability.toFixed(2)} recorded against current room baseline.`,
+      tone: room.tone === "nominal" ? "info" : room.tone,
+    },
+  ])).slice(0, 6);
+}
+
+function buildSimulatedDriftRows(roomStates) {
+  return roomStates.flatMap((room) => ([
+    {
+      column: `${room.name} temperature`,
+      percent_change: Number((room.hvacDrift * 2.4).toFixed(1)),
+      absolute_change: room.hvacDrift,
+      drift_flag: room.tone,
+      direction: room.hvacDrift > 1.1 ? "upward drift" : "stable recovery",
+      warnings: room.tone === "nominal" ? [] : [`Review recommended for ${room.name.toLowerCase()} HVAC balancing.`],
+    },
+    {
+      column: `${room.name} humidity`,
+      percent_change: Number((room.instability * 5.8).toFixed(1)),
+      absolute_change: Number((room.instability * 1.6).toFixed(2)),
+      drift_flag: room.tone === "nominal" ? "review" : room.tone,
+      direction: room.instability > 1.1 ? "recovery lag" : "nominal stabilization",
+      warnings: room.instability > 1.1 ? ["Environmental transition detected after latest irrigation cycle."] : [],
+    },
+  ])).slice(0, 6);
+}
+
+function buildSimulatedRelationshipRows(roomStates, tick) {
+  return [
+    {
+      columns: ["humidity", "irrigation"],
+      change: tick % 2 === 0 ? "Recovery slope widening" : "Recovery returning to baseline",
+      baseline_correlation: "0.74",
+      recent_correlation: tick % 2 === 0 ? "0.59" : "0.68",
+      tone: tick % 2 === 0 ? "review" : "nominal",
+    },
+    {
+      columns: ["HVAC", "temperature"],
+      change: roomStates[0].hvacDrift > 1.4 ? "Supply drift elevated" : "Supply tracking nominal",
+      baseline_correlation: "0.81",
+      recent_correlation: roomStates[0].hvacDrift > 1.4 ? "0.63" : "0.77",
+      tone: roomStates[0].hvacDrift > 1.4 ? "elevated" : "nominal",
+    },
+    {
+      columns: ["CO2", "airflow"],
+      change: "Relationship change observed during room transition",
+      baseline_correlation: "0.66",
+      recent_correlation: "0.52",
+      tone: "info",
+    },
+  ];
+}
+
+function buildSimulatedOverviewMetrics(roomStates, systems, systemsState) {
+  const roomsUnderReview = roomStates.filter((room) => room.tone !== "nominal").length;
+  return [
+    {
+      label: "Facility stability",
+      value: roomsUnderReview > 1 ? "Environmental transition detected" : "Monitoring active telemetry feed",
+    },
+    {
+      label: "Rooms under review",
+      value: roomsUnderReview,
+    },
+    {
+      label: "Telemetry cadence",
+      value: "4.2 second refresh",
+    },
+    {
+      label: "Systems in scope",
+      value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} local surfaces`,
+    },
+  ];
+}
+
+function buildSimulatedSystemRows(systems, roomStates, systemsState, apiStatus) {
+  return systems.map((system, index) => {
+    const room = roomStates[index % roomStates.length];
+    const stateLabel = room.tone === "nominal" ? "Monitoring active telemetry feed" : `${formatOperationalLabel(room.tone)} in ${room.name}`;
+    return [
+      system.name,
+      system.scope,
+      `${room.name} | ${room.zone}`,
+      apiStatus.state === "online" && systemsState === "ready" ? "Backend feed active" : stateLabel,
+    ];
+  });
+}
+
+function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
+  return [
+    {
+      title: "Batch receipt",
+      detail: "No facility upload connected. Frontend telemetry simulation is maintaining live workspace state.",
+      state: "standby",
+      tone: "info",
+    },
+    {
+      title: "Header and schema detection",
+      detail: `Connection monitor last checked ${formatClockTime(apiStatus.checkedAt ?? new Date())} for ${apiStatus.endpoint}.`,
+      state: "monitoring",
+      tone: apiStatus.state === "online" ? "nominal" : "review",
+    },
+    {
+      title: "Timestamp and room context review",
+      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live demo cadence ${tick}.`,
+      state: "active",
+      tone: "info",
+    },
+    {
+      title: "Baseline and evidence extraction",
+      detail: "Awaiting uploaded room exports to replace simulated evidence and drift relationships.",
+      state: "standby",
+      tone: "review",
+    },
+  ];
+}
+
+function buildSimulatedEvidenceLines(roomStates, tick, apiStatus) {
+  return [
+    `console.mode=frontend_simulation`,
+    `connection.endpoint=${apiStatus.endpoint}`,
+    `connection.last_check=${formatClockTime(apiStatus.checkedAt ?? new Date())}`,
+    `room.primary=${roomStates[0].name}`,
+    `room.transition=${roomStates[1].name}:humidity_recovery_review`,
+    `hvac.review=${roomStates[0].hvacDrift.toFixed(2)}F_drift`,
+    `irrigation.state=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
+    `evidence.sequence=${tick}`,
+    `operator.notice=review_recommended_for_irrigation_variance`,
+  ];
+}
+
+function buildSimulatedConsoleEvents(roomStates, tick, apiStatus) {
+  return [
+    `telemetry.link=${apiStatus.state}`,
+    `telemetry.sequence=${tick}`,
+    `event.room_transition=${roomStates[1].name.replace(/ /g, "_").toLowerCase()}`,
+    `event.hvac_drift=${roomStates[0].hvacDrift.toFixed(2)}`,
+    `event.environmental_instability=${roomStates[1].instability.toFixed(2)}`,
+    `event.irrigation_cycle=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
+    `event.review_notice=operator_review_open`,
+    ...buildSimulatedEvidenceLines(roomStates, tick, apiStatus),
+  ];
+}
+
+function buildSimulatedObservations(roomStates) {
+  return roomStates.map((room) => (
+    `${room.name} in ${room.zone} is ${formatOperationalLabel(room.tone).toLowerCase()} with ${room.irrigationState.toLowerCase()}.`
+  ));
+}
+
+function buildSimulatedRoomTransitions(roomStates, tick) {
+  return roomStates.map((room, index) => ({
+    time: formatClockTime(new Date(Date.now() - (index + 1) * 7 * 60000 - tick * 500)),
+    title: `${room.name} transition`,
+    detail: `${room.irrigationState} | ${room.zone} | ${room.temperature.toFixed(1)}F / ${room.humidity.toFixed(1)}% RH`,
+    tone: room.tone,
+  }));
+}
+
+function buildConnectionEvents(apiStatus, tick) {
+  const checkedAt = apiStatus.checkedAt ?? new Date().toISOString();
+  return [
+    {
+      title: apiStatus.state === "online" ? "Backend monitoring active" : "Reconnect attempt queued",
+      detail: `${apiStatus.endpoint} checked ${formatClockTime(checkedAt)} CT.`,
+      tone: apiStatus.state === "online" ? "nominal" : "elevated",
+    },
+    {
+      title: "Connection diagnostics",
+      detail: `${apiStatus.message || "Connection monitor active."} Attempt ${apiStatus.attemptCount || tick + 1}.`,
+      tone: apiStatus.state === "online" ? "info" : "review",
+    },
+  ];
+}
+
+function formatOperationalLabel(tone) {
+  if (tone === "nominal") {
+    return "Nominal";
+  }
+  if (tone === "review") {
+    return "Review";
+  }
+  if (tone === "elevated") {
+    return "Elevated";
+  }
+  if (tone === "unstable") {
+    return "Unstable";
+  }
+  return "Monitoring";
+}
+
+function average(values) {
+  return values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
 }
 
 function formatColumnsRequiringReview(columnsRequiringReview) {
