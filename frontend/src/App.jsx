@@ -613,20 +613,53 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
   const relationshipRows = liveOps.relationshipRows;
   const roomTransitions = liveOps.roomTransitions;
   const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
+  const systemsFocus = liveOps.interventionItems[0] ?? null;
 
   return (
     <div className="workspace-grid workspace-grid--systems">
       <Panel
-        title="HVAC and environmental telemetry"
-        subtitle="Current telemetry strips and time-series placeholders across monitored environmental channels."
+        title="Intervention drivers"
+        subtitle="Signals that are compressing or extending the current maintenance window."
         className="span-8"
       >
         <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
       </Panel>
 
       <Panel
-        title="Irrigation review"
-        subtitle="Cycle state, response variance, and operator review recommendations."
+        title="Why this system is moving"
+        subtitle="Causal chain and recommended next move."
+        className="span-4"
+      >
+        <WhyPanel item={systemsFocus} findings={liveOps.findings.slice(0, 3)} />
+      </Panel>
+
+      <Panel
+        title="Room transitions"
+        subtitle="Changes that alter intervention timing."
+        className="span-3"
+      >
+        <TimelineFeed items={roomTransitions} />
+      </Panel>
+
+      <Panel
+        title="Drift by channel"
+        subtitle="Baseline movement ranked by operational significance."
+        className="span-6"
+      >
+        <DriftMonitor rows={driftRows} />
+      </Panel>
+
+      <Panel
+        title="Relationship shifts"
+        subtitle="Paired changes most likely to change confidence."
+        className="span-3"
+      >
+        <RelationshipMonitor rows={relationshipRows} />
+      </Panel>
+
+      <Panel
+        title="Irrigation context"
+        subtitle="Current cycle state and operator review notes."
         className="span-4"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
@@ -637,32 +670,8 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
       </Panel>
 
       <Panel
-        title="Room and zone telemetry"
-        subtitle="Current room-level context and transition surface."
-        className="span-3"
-      >
-        <TimelineFeed items={roomTransitions} />
-      </Panel>
-
-      <Panel
-        title="Operational drift"
-        subtitle="Baseline versus active-window movement across room telemetry."
-        className="span-6"
-      >
-        <DriftMonitor rows={driftRows} />
-      </Panel>
-
-      <Panel
-        title="Sensor relationships"
-        subtitle="Paired signal changes and relational stability review."
-        className="span-3"
-      >
-        <RelationshipMonitor rows={relationshipRows} />
-      </Panel>
-
-      <Panel
-        title="Systems table"
-        subtitle="Operational systems, room context, and source-state coverage."
+        title="Systems in scope"
+        subtitle="Source coverage and room context behind each active decision."
         className="span-12"
       >
         <SystemsMatrix
@@ -719,12 +728,13 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   const intakeStages = uploadResult
     ? buildIntakeStages(uploadResult, uploadState, roomContext)
     : liveOps.intakeStages;
+  const intakeFocus = liveOps.interventionItems[0] ?? null;
 
   return (
     <div className="workspace-grid workspace-grid--intake">
       <Panel
-        title="CSV intake workflow"
-        subtitle="Procedural intake for telemetry exports, parsing, validation, and evidence extraction."
+        title="Decision intake"
+        subtitle="Connect facility data so intervention timing becomes more precise."
         className="span-7"
       >
         <form className="intake-flow" onSubmit={handleUpload}>
@@ -732,8 +742,8 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
             <p className="section-token">Batch source</p>
             <h3>Cultivation telemetry export</h3>
             <p>
-              Upload room, irrigation, HVAC, or sensor-network CSV batches for deterministic parsing,
-              baseline review, and operational evidence extraction.
+              Upload room, irrigation, HVAC, or sensor-network CSV batches to improve confidence,
+              shorten ambiguity, and replace simulated monitoring with live facility data.
             </p>
           </div>
 
@@ -762,41 +772,49 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       </Panel>
 
       <Panel
-        title="Validation stages"
-        subtitle="Traceable intake stages for schema, parsing, and evidence readiness."
+        title="Decision readiness"
+        subtitle="What has to be true before Neraium can tighten the intervention window."
         className="span-5"
       >
         <WorkflowStages items={intakeStages} />
       </Panel>
 
       <Panel
-        title="Schema detection and room mapping"
-        subtitle="Detected room context, mapped columns, and schema output from the active batch."
+        title="Room mapping"
+        subtitle="Which facility context is already connected."
         className="span-4"
       >
         <SchemaMappingPanel result={uploadResult} roomContext={roomContext} />
       </Panel>
 
       <Panel
-        title="Validation checks"
-        subtitle="Current batch verification summary and procedural checkpoints."
+        title="Confidence inputs"
+        subtitle="The checks that govern how much Neraium should trust the upload."
         className="span-4"
       >
         <VerificationPanel result={uploadResult} />
       </Panel>
 
       <Panel
-        title="Evidence extraction state"
-        subtitle="Current extraction status for baseline evidence, findings, and report generation."
+        title="Evidence readiness"
+        subtitle="What is already usable for explanations and recommended action."
         className="span-4"
       >
         <EvidenceExtractionPanel result={uploadResult} />
       </Panel>
 
       <Panel
+        title="Expected impact"
+        subtitle="How the current upload changes time remaining and confidence."
+        className="span-4"
+      >
+        <WhyPanel item={intakeFocus} findings={liveOps.findings.slice(0, 3)} />
+      </Panel>
+
+      <Panel
         title="Baseline comparison"
-        subtitle="Current baseline review and operational drift extraction from the active batch."
-        className="span-12"
+        subtitle="Current drift extracted from the uploaded batch."
+        className="span-8"
       >
         {uploadResult ? (
           <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
@@ -817,12 +835,13 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
   const timeline = liveOps.timeline;
   const evidenceLines = liveOps.evidenceLines;
   const observations = liveOps.observations;
+  const reportFocus = liveOps.actionQueue[0] ?? liveOps.interventionItems[0] ?? null;
 
   return (
     <div className="workspace-grid workspace-grid--evidence">
       <Panel
-        title="Findings report"
-        subtitle="Analytical review surface for findings, checks, and evidence-backed observations."
+        title="Decision memo"
+        subtitle="What is happening, why it matters, and what to do next."
         className="span-7"
       >
         {latestReport ? (
@@ -836,32 +855,32 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
       </Panel>
 
       <Panel
-        title="Evidence review"
-        subtitle="Audit-ready evidence references, source sections, and extraction traces."
+        title="Why and confidence"
+        subtitle="The reasoning layer behind the current recommendation."
         className="span-5"
+      >
+        <WhyPanel item={reportFocus} findings={findings.slice(0, 3)} />
+      </Panel>
+
+      <Panel
+        title="Evidence terminal"
+        subtitle="Audit-ready traces and source references."
+        className="span-4"
       >
         <EvidenceConsole lines={evidenceLines} />
       </Panel>
 
       <Panel
-        title="Timeline playback"
-        subtitle="Timestamp-heavy playback for ingest, readiness, and findings progression."
-        className="span-4"
-      >
-        <TimelineFeed items={timeline} />
-      </Panel>
-
-      <Panel
         title="Room observations"
-        subtitle="Current room and zone observations grounded in the active batch."
+        subtitle="Operational notes grounded in the active batch."
         className="span-4"
       >
         <CompactList items={observations} emptyText="No room observations available." />
       </Panel>
 
       <Panel
-        title="Limitations and exported reports"
-        subtitle="Current limitations and exported report surface for the active session."
+        title="Report outputs"
+        subtitle="Limitations and exported decision surfaces."
         className="span-4"
       >
         {latestReport ? (
@@ -872,8 +891,8 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
       </Panel>
 
       <Panel
-        title="Operational notes"
-        subtitle="Current findings and navigation back to intake review."
+        title="Supporting findings"
+        subtitle="Evidence-backed notes and a path back to intake."
         className="span-12"
       >
         <div className="evidence-action-row">
@@ -902,44 +921,53 @@ function IntelligenceConsoleWorkspace({ liveOps }) {
   const timeline = liveOps.timeline;
   const findings = liveOps.findings;
   const consoleEvents = liveOps.consoleEvents;
+  const queueItems = liveOps.actionQueue.slice(0, 4);
 
   return (
     <div className="workspace-grid workspace-grid--console">
       <Panel
-        title="Live telemetry"
-        subtitle="Current channel strips and environmental monitoring surface."
+        title="Live decision stream"
+        subtitle="The monitored channels currently driving intervention timing."
         className="span-6"
       >
         <TelemetryCardGrid cards={telemetryCards} />
       </Panel>
 
       <Panel
+        title="Action queue"
+        subtitle="Priority-ranked operator actions."
+        className="span-3"
+      >
+        <ActionQueue items={queueItems} selectedId={queueItems[0]?.id ?? null} onSelect={() => {}} />
+      </Panel>
+
+      <Panel
         title="Drift feed"
-        subtitle="Current drift transitions and baseline movement across telemetry channels."
-        className="span-2"
+        subtitle="Changes that are shortening the current window."
+        className="span-3"
       >
         <DriftFeed rows={driftRows} />
       </Panel>
 
       <Panel
-        title="Relationship changes"
-        subtitle="Current paired-sensor changes and relational events."
-        className="span-2"
+        title="Relationship shifts"
+        subtitle="Paired changes affecting confidence."
+        className="span-3"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
 
       <Panel
         title="Operational notices"
-        subtitle="Current findings and monitoring notices."
-        className="span-2"
+        subtitle="Short-form findings and review notices."
+        className="span-3"
       >
         <FeedList items={findings.slice(0, 6)} emptyText="Monitoring active telemetry feed." />
       </Panel>
 
       <Panel
-        title="Live event stream"
-        subtitle="Session-wide operational events, ingest progression, and room transitions."
+        title="Recent changes"
+        subtitle="Events that changed decision timing."
         className="span-4"
       >
         <TimelineFeed items={timeline} />
@@ -947,7 +975,7 @@ function IntelligenceConsoleWorkspace({ liveOps }) {
 
       <Panel
         title="Evidence terminal"
-        subtitle="Streaming evidence and operational terminal output."
+        subtitle="Streaming traces behind the current action surface."
         className="span-5"
       >
         <EvidenceConsole lines={consoleEvents} animated />
@@ -955,7 +983,7 @@ function IntelligenceConsoleWorkspace({ liveOps }) {
 
       <Panel
         title="Connection diagnostics"
-        subtitle="Backend link state, reconnect cadence, and readable failure detail."
+        subtitle="Link state, reconnect cadence, and readable failure detail."
         className="span-3"
       >
         <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
