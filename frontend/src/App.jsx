@@ -2560,18 +2560,18 @@ function primaryActionFromTone(tone) {
     return "Escalate";
   }
   if (tone === "elevated") {
-    return "Schedule Maintenance";
+    return "Schedule";
   }
   if (tone === "review") {
     return "Acknowledge";
   }
-  return "Ignore Pattern";
+  return "Ignore";
 }
 
 function actionSetFromTone(tone) {
-  const actions = ["Acknowledge", "Schedule Maintenance", "Escalate", "Ignore Pattern"];
+  const actions = ["Acknowledge", "Schedule", "Escalate", "Ignore"];
   if (tone === "unstable") {
-    return ["Escalate", "Schedule Maintenance", "Acknowledge", "Ignore Pattern"];
+    return ["Escalate", "Schedule", "Acknowledge", "Ignore"];
   }
   return actions;
 }

@@ -1998,6 +1998,23 @@ h4 {
     font-size: 0.84rem;
   }
 
+  .overview-hero__headline {
+    font-size: 1.85rem;
+    line-height: 0.96;
+    max-width: 9ch;
+  }
+
+  .countdown-hero__score,
+  .countdown-hero__window {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .countdown-hero__score strong,
+  .countdown-hero__window strong {
+    font-size: 1.85rem;
+  }
+
   .status-chip strong,
   .overview-summary-cell strong,
   .room-health-card strong,
@@ -2009,6 +2026,29 @@ h4 {
   .intervention-card p,
   .top-status__title p:last-child {
     font-size: 0.78rem;
+  }
+
+  .intervention-card__footer {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .confidence-dial {
+    width: 54px;
+  }
+
+  .confidence-dial--large {
+    width: 76px;
+  }
+
+  .queue-action-pill {
+    min-height: 26px;
+    padding: 0 8px;
+    font-size: 0.64rem;
+  }
+
+  .action-queue__item {
+    padding: 12px;
   }
 
   .evidence-console {
@@ -2111,6 +2151,23 @@ h4 {
     padding: 10px;
   }
 
+  .overview-hero__headline {
+    font-size: 1.58rem;
+    max-width: 8ch;
+  }
+
+  .countdown-hero__score,
+  .countdown-hero__window,
+  .action-queue__item,
+  .topology-node {
+    padding: 10px;
+  }
+
+  .countdown-hero__score strong,
+  .countdown-hero__window strong {
+    font-size: 1.55rem;
+  }
+
   .top-status__title p:last-child,
   .room-health-card p,
   .intervention-card p,
@@ -2118,6 +2175,29 @@ h4 {
   .feed-item p {
     font-size: 0.76rem;
     line-height: 1.45;
+  }
+
+  .action-queue__item strong,
+  .why-panel__headline,
+  .topology-node strong {
+    font-size: 0.82rem;
+  }
+
+  .action-queue__meta {
+    gap: 6px;
+    font-size: 0.62rem;
+  }
+
+  .queue-action-pill {
+    font-size: 0.6rem;
+  }
+
+  .confidence-dial {
+    width: 50px;
+  }
+
+  .confidence-dial--large {
+    width: 70px;
   }
 
   .timeline-item {
