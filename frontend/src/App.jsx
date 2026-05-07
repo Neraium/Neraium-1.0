@@ -13,25 +13,25 @@ const WORKSPACES = [
     id: "facility-systems",
     label: "Facility Systems",
     eyebrow: "Systems",
-    description: "Environmental systems review, room telemetry, drift, and sensor relationships.",
+    description: "Signals, drift, and room relationships behind each intervention window.",
   },
   {
     id: "data-intake",
     label: "Data Intake",
     eyebrow: "Intake",
-    description: "Procedural CSV intake, validation, schema review, baseline comparison, and evidence state.",
+    description: "Upload facility data to improve confidence and tighten decision timing.",
   },
   {
     id: "evidence-reports",
     label: "Evidence & Reports",
     eyebrow: "Evidence",
-    description: "Findings review, evidence analysis, timeline playback, room observations, and report output.",
+    description: "Decision memos, causal evidence, and operator-ready support.",
   },
   {
     id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
-    description: "Live monitoring, drift feed, relationship changes, event stream, and evidence terminal.",
+    description: "Live decision stream, action priority, and connection diagnostics.",
   },
 ];
 
@@ -608,35 +608,57 @@ function OverviewWorkspace({ liveOps }) {
 }
 
 function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext, liveOps }) {
+  const [selectedSystemId, setSelectedSystemId] = useState(liveOps.interventionItems[0]?.id ?? null);
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
   const relationshipRows = liveOps.relationshipRows;
   const roomTransitions = liveOps.roomTransitions;
   const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
-  const systemsFocus = liveOps.interventionItems[0] ?? null;
+  const systemsFocus = liveOps.interventionItems.find((item) => item.id === selectedSystemId) ?? liveOps.interventionItems[0] ?? null;
+  const fleetSummary = buildFleetSummary(liveOps.interventionItems, liveOps.neraiumScore, liveOps.facilityTone);
 
   return (
     <div className="workspace-grid workspace-grid--systems">
       <Panel
-        title="Intervention drivers"
-        subtitle="Signals that are compressing or extending the current maintenance window."
+        title="Fleet overview"
+        subtitle="Start at the system fleet level, then drill into the intervention target that matters most."
         className="span-8"
       >
-        <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
+        <FleetSummary summary={fleetSummary} />
       </Panel>
 
       <Panel
-        title="Why this system is moving"
-        subtitle="Causal chain and recommended next move."
+        title="Intervention targets"
+        subtitle="Rooms and systems ranked by time remaining."
+        className="span-4"
+      >
+        <TargetSelector
+          items={liveOps.interventionItems}
+          selectedId={systemsFocus?.id ?? null}
+          onSelect={setSelectedSystemId}
+        />
+      </Panel>
+
+      <Panel
+        title="Selected target"
+        subtitle="Why the current intervention target is moving."
         className="span-4"
       >
         <WhyPanel item={systemsFocus} findings={liveOps.findings.slice(0, 3)} />
       </Panel>
 
       <Panel
+        title="Intervention drivers"
+        subtitle="Signals that are compressing or extending the current maintenance window."
+        className="span-6"
+      >
+        <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
+      </Panel>
+
+      <Panel
         title="Room transitions"
         subtitle="Changes that alter intervention timing."
-        className="span-3"
+        className="span-2"
       >
         <TimelineFeed items={roomTransitions} />
       </Panel>
@@ -652,7 +674,7 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
       <Panel
         title="Relationship shifts"
         subtitle="Paired changes most likely to change confidence."
-        className="span-3"
+        className="span-2"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
@@ -832,7 +854,6 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace, liveOps }) {
   const latestReport = latestUploadResult?.operator_report;
   const findings = liveOps.findings;
-  const timeline = liveOps.timeline;
   const evidenceLines = liveOps.evidenceLines;
   const observations = liveOps.observations;
   const reportFocus = liveOps.actionQueue[0] ?? liveOps.interventionItems[0] ?? null;
@@ -840,18 +861,17 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
   return (
     <div className="workspace-grid workspace-grid--evidence">
       <Panel
-        title="Decision memo"
+        title="Executive brief"
         subtitle="What is happening, why it matters, and what to do next."
         className="span-7"
       >
-        {latestReport ? (
-          <OperatorReportPanel report={latestReport} />
-        ) : (
-          <EmptyState
-            title="Monitoring active telemetry feed"
-            body="Operational evidence is updating from live demo telemetry until a facility upload is connected."
-          />
-        )}
+        <ExecutiveBrief
+          focus={reportFocus}
+          report={latestReport}
+          observations={observations}
+          roomContext={roomContext}
+          facilityTone={liveOps.facilityTone}
+        />
       </Panel>
 
       <Panel
@@ -863,19 +883,16 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
       </Panel>
 
       <Panel
-        title="Evidence terminal"
-        subtitle="Audit-ready traces and source references."
+        title="Technical evidence"
+        subtitle="Expandable traces, observations, and source detail underneath the brief."
         className="span-4"
       >
-        <EvidenceConsole lines={evidenceLines} />
-      </Panel>
-
-      <Panel
-        title="Room observations"
-        subtitle="Operational notes grounded in the active batch."
-        className="span-4"
-      >
-        <CompactList items={observations} emptyText="No room observations available." />
+        <TechnicalEvidencePanel
+          evidenceLines={evidenceLines}
+          observations={observations}
+          report={latestReport}
+          timeline={liveOps.timeline}
+        />
       </Panel>
 
       <Panel
@@ -1507,6 +1524,110 @@ function OperatorReportPanel({ report }) {
           title="Operator checks"
         />
       </div>
+    </div>
+  );
+}
+
+function FleetSummary({ summary }) {
+  return (
+    <div className="fleet-summary">
+      <div className={`fleet-summary__hero fleet-summary__hero--${summary.tone}`}>
+        <span className="section-token">Fleet score</span>
+        <strong>{summary.score}</strong>
+        <p>{summary.summary}</p>
+      </div>
+      <div className="fleet-summary__grid">
+        {summary.metrics.map((metric) => (
+          <div className={`overview-summary-cell overview-summary-cell--${metric.tone}`} key={metric.label}>
+            <div className="overview-summary-cell__header">
+              <span>{metric.label}</span>
+              <StatusDot tone={metric.tone} />
+            </div>
+            <strong>{metric.value}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TargetSelector({ items, selectedId, onSelect }) {
+  return (
+    <div className="target-selector">
+      {items.slice(0, 5).map((item) => (
+        <button
+          className={`target-selector__item target-selector__item--${item.tone} ${selectedId === item.id ? "target-selector__item--selected" : ""}`}
+          key={item.id}
+          type="button"
+          onClick={() => onSelect(item.id)}
+        >
+          <div className="target-selector__header">
+            <span>{item.label}</span>
+            <StatusDot tone={item.tone} />
+          </div>
+          <strong>{item.window}</strong>
+          <p>{item.recommendation}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ExecutiveBrief({ focus, report, observations, roomContext, facilityTone }) {
+  if (!focus) {
+    return <EmptyState title="No executive brief available" body="Monitoring active telemetry feed." />;
+  }
+
+  const briefPoints = report?.recommended_operator_checks?.slice(0, 3)
+    ?? observations.slice(0, 3);
+
+  return (
+    <div className="panel-stack">
+      <StatusBanner
+        title={focus.title}
+        subtitle={focus.whyHeadline ?? focus.summary}
+        tone={focus.tone ?? facilityTone}
+      />
+      <MetricGrid
+        metrics={[
+          { label: "Time remaining", value: focus.window },
+          { label: "Confidence", value: `${focus.confidence}%` },
+          { label: "Primary room", value: roomContext.primary },
+          { label: "Next move", value: focus.recommendation },
+        ]}
+        compact
+      />
+      <CompactList
+        items={briefPoints}
+        emptyText="No executive observations available."
+        title="Executive takeaways"
+      />
+    </div>
+  );
+}
+
+function TechnicalEvidencePanel({ evidenceLines, observations, report, timeline }) {
+  return (
+    <div className="technical-evidence">
+      <details className="technical-evidence__section" open>
+        <summary>Evidence terminal</summary>
+        <EvidenceConsole lines={evidenceLines} />
+      </details>
+      <details className="technical-evidence__section">
+        <summary>Room observations</summary>
+        <CompactList items={observations} emptyText="No room observations available." />
+      </details>
+      <details className="technical-evidence__section">
+        <summary>Timeline detail</summary>
+        <TimelineFeed items={timeline.slice(0, 6)} />
+      </details>
+      <details className="technical-evidence__section">
+        <summary>Report limitations</summary>
+        <CompactList
+          items={report?.limitations ?? REPORT_TEMPLATES}
+          emptyText="No report limitations available."
+        />
+      </details>
     </div>
   );
 }
@@ -2522,6 +2643,28 @@ function compactRoomSummary(room) {
     return `${room.irrigationState}. Review is recommended before the next environmental transition.`;
   }
   return `${room.irrigationState}. The room remains inside a comfortable intervention horizon.`;
+}
+
+function buildFleetSummary(interventionItems, score, tone) {
+  const unstable = interventionItems.filter((item) => item.tone === "unstable").length;
+  const elevated = interventionItems.filter((item) => item.tone === "elevated").length;
+  const review = interventionItems.filter((item) => item.tone === "review").length;
+
+  return {
+    score,
+    tone,
+    summary: unstable > 0
+      ? `${unstable} immediate intervention target${unstable === 1 ? "" : "s"} are driving fleet risk right now.`
+      : elevated > 0
+        ? `${elevated} target${elevated === 1 ? "" : "s"} are compressing the current maintenance horizon.`
+        : "The system fleet remains inside a comfortable intervention horizon.",
+    metrics: [
+      { label: "Immediate", value: unstable || 0, tone: unstable > 0 ? "unstable" : "nominal" },
+      { label: "Scheduled", value: elevated || 0, tone: elevated > 0 ? "elevated" : "nominal" },
+      { label: "Review", value: review || 0, tone: review > 0 ? "review" : "nominal" },
+      { label: "Targets", value: interventionItems.length, tone: "info" },
+    ],
+  };
 }
 
 function buildWhyDrivers(result, telemetryCards, roomContext) {
