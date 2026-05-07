@@ -2055,7 +2055,7 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     observations: buildSimulatedObservations(roomStates),
     reportNotes: [
       "Monitoring active telemetry feed",
-      "Baseline established from current upload state",
+      "Baseline established from current facility state",
       "Awaiting additional room telemetry",
     ],
     connectionEvents,
