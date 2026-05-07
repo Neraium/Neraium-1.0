@@ -6,8 +6,8 @@ const WORKSPACES = [
   {
     id: "overview",
     label: "Overview",
-    eyebrow: "Summary",
-    description: "Facility-wide operational awareness, alerts, ingest activity, and top findings.",
+    eyebrow: "Control",
+    description: "Intervention timing, action priority, facility score, and causal review.",
   },
   {
     id: "facility-systems",
@@ -503,8 +503,8 @@ function OverviewWorkspace({ liveOps }) {
   const findings = liveOps.findings.slice(0, 3);
   const selectedAction = liveOps.actionQueue.find((item) => item.id === selectedActionId) ?? liveOps.actionQueue[0];
   const selectedNode = liveOps.topologyNodes.find((item) => item.id === selectedNodeId) ?? liveOps.topologyNodes[0];
-  const heroHeadline = liveOps.primaryWindow?.headline ?? "Intervention timing is stable.";
-  const heroSubline = liveOps.primaryWindow?.subline ?? "Neraium is monitoring the current facility state.";
+  const heroHeadline = liveOps.heroHeadline ?? "Intervention timing is stable.";
+  const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.topologyNodes.length;
   const overviewSummary = [
     { label: "Telemetry", value: liveOps.connectionLabel, tone: liveOps.connectionTone },
@@ -2180,6 +2180,8 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
       facilityTone,
       facilityStateLabel: formatEngineResult(result?.engine_result?.overall_result ?? "normal"),
       heroTag: facilityTone === "nominal" ? "Control window established" : "Decision window tightening",
+      heroHeadline: heroHeadlineFromTone(facilityTone),
+      heroSubline: heroSublineFromTone(facilityTone, roomContext.primary),
       readinessLabel: formatReadiness(result?.data_quality?.readiness),
       connectionTone,
       connectionLabel: apiStatus.label,
@@ -2268,6 +2270,8 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     facilityTone,
     facilityStateLabel: formatOperationalLabel(facilityTone),
     heroTag: facilityTone === "nominal" ? "Intervention horizon open" : "Priority review active",
+    heroHeadline: heroHeadlineFromTone(facilityTone),
+    heroSubline: heroSublineFromTone(facilityTone, primaryWindow?.label ?? roomStates[0]?.name ?? "the facility"),
     readinessLabel: "Monitoring active telemetry feed",
     connectionTone,
     connectionLabel: apiStatus.state === "online" ? "Telemetry link established" : "Backend reconnecting",
@@ -2480,15 +2484,15 @@ function buildWhyDrivers(result, telemetryCards, roomContext) {
 
 function interventionWindowFromRoom(room) {
   if (room.tone === "unstable") {
-    return `${Math.max(4, Math.round(14 - room.instability * 3))} hours`;
+    return "8 hours";
   }
   if (room.tone === "elevated") {
-    return `${Math.max(1, Math.round(3 + room.hvacDrift * 2))} days`;
+    return "5 days";
   }
   if (room.tone === "review") {
-    return `${Math.max(4, Math.round(8 + room.hvacDrift * 4))} days`;
+    return "12 days";
   }
-  return `${Math.max(2, Math.round(3 + room.instability * 2))} weeks`;
+  return "5 weeks";
 }
 
 function whyHeadlineFromRoom(room) {
@@ -2599,6 +2603,32 @@ function windowLabelFromTone(tone) {
     return "3 weeks";
   }
   return "Monitoring";
+}
+
+function heroHeadlineFromTone(tone) {
+  if (tone === "unstable") {
+    return "Immediate intervention planning is required.";
+  }
+  if (tone === "elevated") {
+    return "Intervention windows are tightening.";
+  }
+  if (tone === "review") {
+    return "Facility health remains controlled.";
+  }
+  return "The facility is operating with time to spare.";
+}
+
+function heroSublineFromTone(tone, focusLabel) {
+  if (tone === "unstable") {
+    return `${focusLabel} is now inside an immediate decision window, but the rest of the facility remains visible and controllable.`;
+  }
+  if (tone === "elevated") {
+    return `${focusLabel} is compressing the current maintenance horizon, giving operators time to act before the issue becomes disruptive.`;
+  }
+  if (tone === "review") {
+    return `${focusLabel} needs planned attention, while the broader facility stays inside a manageable operating envelope.`;
+  }
+  return "Current telemetry indicates a comfortable intervention horizon across the monitored facility.";
 }
 
 function apiStatusWindow(result) {
