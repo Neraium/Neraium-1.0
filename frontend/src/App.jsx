@@ -393,12 +393,15 @@ function WorkspaceNavigationContent({
 }) {
   return (
     <>
-      <div className="sidebar-brand">
-        <div className="brand-mark">N</div>
-        <div>
-          <p className="brand-name">Neraium</p>
-          <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+      <div className="sidebar-brand-shell">
+        <div className="sidebar-brand">
+          <div className="brand-mark">N</div>
+          <div>
+            <p className="brand-name">Neraium</p>
+            <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+          </div>
         </div>
+        <span className="brand-edition">Operations Edition</span>
       </div>
 
       <div className="sidebar-section">
@@ -459,6 +462,10 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
         <p className="eyebrow">{activeConfig.eyebrow}</p>
         <h1 id="page-title">{activeConfig.label}</h1>
         <p>{activeConfig.description}</p>
+        <div className="top-status__meta">
+          <span className={`overview-pill overview-pill--${liveOps.connectionTone}`}>{liveOps.connectionLabel}</span>
+          <span className="top-status__meta-copy">{liveOps.connectionSummary}</span>
+        </div>
       </div>
 
       <div className="status-rack">
