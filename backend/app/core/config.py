@@ -5,8 +5,7 @@ DEFAULT_APP_ENV = "development"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
 DEFAULT_BACKEND_PORT = 8010
 DEFAULT_CORS_ORIGINS = [
-    "http://127.0.0.1:3010",
-    "http://localhost:3010",
+    "https://app.neraium.com",
 ]
 
 

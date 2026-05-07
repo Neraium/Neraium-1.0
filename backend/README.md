@@ -31,7 +31,7 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `APP_ENV` defaults to `development`.
 - `BACKEND_HOST` defaults to `127.0.0.1`.
 - `BACKEND_PORT` defaults to `8010`.
-- `CORS_ORIGINS` defaults to `http://127.0.0.1:3010,http://localhost:3010`.
+- `CORS_ORIGINS` defaults to `https://app.neraium.com`.
 
 For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, and `CORS_ORIGINS` to the deployed Amplify frontend origin.
 

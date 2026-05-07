@@ -41,3 +41,7 @@ def test_parse_cors_origins_ignores_empty_values() -> None:
         "https://app.example.com",
         "https://ops.example.com",
     ]
+
+
+def test_default_cors_origin_is_production_frontend_only() -> None:
+    assert DEFAULT_CORS_ORIGINS == ["https://app.neraium.com"]

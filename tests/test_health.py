@@ -27,3 +27,33 @@ def test_facility_systems_endpoint_returns_placeholder_systems() -> None:
         "Lighting",
         "Sensor network",
     ]
+
+
+def test_health_endpoint_returns_cors_header_for_production_frontend() -> None:
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/health",
+        headers={
+            "Origin": "https://app.neraium.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
+
+
+def test_facility_systems_endpoint_returns_cors_header_for_production_frontend() -> None:
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/facility/systems",
+        headers={
+            "Origin": "https://app.neraium.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
