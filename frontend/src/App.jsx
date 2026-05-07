@@ -298,6 +298,18 @@ function App() {
   );
 }
 
+function Panel({ title, subtitle, className = "", children }) {
+  return (
+    <section className={`ops-panel ${className}`.trim()}>
+      <div className="ops-panel__header">
+        <p className="section-token">{title}</p>
+        <h2>{subtitle}</h2>
+      </div>
+      <div className="ops-panel__body">{children}</div>
+    </section>
+  );
+}
+
 function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext, timeCoverage }) {
   return (
     <header className="top-status">
