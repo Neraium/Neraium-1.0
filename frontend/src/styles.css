@@ -1171,6 +1171,12 @@ h4 {
   .span-3 {
     grid-column: span 6;
   }
+
+  .workspace-grid--overview-simple > .span-8,
+  .workspace-grid--overview-simple > .span-4,
+  .workspace-grid--overview-simple > .span-3 {
+    grid-column: span 12;
+  }
 }
 
 @media (max-width: 1280px) {
@@ -1210,6 +1216,12 @@ h4 {
   .status-rack {
     width: 100%;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-grid--overview-simple > .span-8,
+  .workspace-grid--overview-simple > .span-4,
+  .workspace-grid--overview-simple > .span-3 {
+    grid-column: span 12;
   }
 
   .workspace-drawer-backdrop {
@@ -1266,6 +1278,12 @@ h4 {
   .span-5,
   .span-4,
   .span-3 {
+    grid-column: span 1;
+  }
+
+  .workspace-grid--overview-simple > .span-8,
+  .workspace-grid--overview-simple > .span-4,
+  .workspace-grid--overview-simple > .span-3 {
     grid-column: span 1;
   }
 
