@@ -94,6 +94,31 @@ const REPORT_TEMPLATES = [
   },
 ];
 
+const ROOM_CONTEXT_PLACEHOLDERS = [
+  {
+    label: "Room context",
+    value: "Zone context pending upload",
+    detail: "Room or zone labels will be inferred from uploaded export columns when available.",
+  },
+  {
+    label: "Grow cycle",
+    value: "Cycle context placeholder",
+    detail: "Cycle stage placeholders remain manual until facility-specific metadata is connected.",
+  },
+  {
+    label: "Irrigation review",
+    value: "Awaiting batch review",
+    detail: "Irrigation timing checks will appear when uploaded columns provide relevant channels.",
+  },
+];
+
+const READINESS_WORKFLOW = [
+  "Upload a cultivation batch export from a room or facility system.",
+  "Confirm timestamp continuity and sensor coverage.",
+  "Review baseline movement across environment and control channels.",
+  "Translate findings into room-level operator checks and report context.",
+];
+
 function App() {
   const [activePage, setActivePage] = useState("Overview");
   const [apiStatus, setApiStatus] = useState({
@@ -204,9 +229,11 @@ function App() {
         </div>
 
         <div className="sidebar-panel">
-          <p className="sidebar-label">Current deployment path</p>
-          <strong>Amplify frontend + ECS backend</strong>
-          <span>Frontend API target is controlled by VITE_API_BASE_URL.</span>
+          <p className="sidebar-label">Facility context</p>
+          <strong>Premium cultivation operations workspace</strong>
+          <span>
+            Room, zone, batch, and findings context will expand from uploaded facility data.
+          </span>
         </div>
 
         <div className="sidebar-footer">
@@ -255,6 +282,10 @@ function App() {
 function TopBar({ activeItem, apiStatus, latestUploadResult }) {
   const readiness = latestUploadResult?.data_quality?.readiness;
   const analysisAvailable = Boolean(latestUploadResult?.engine_result);
+  const roomContext = latestUploadResult
+    ? deriveRoomContext(latestUploadResult)
+    : "Room context pending";
+  const uploadBatch = latestUploadResult?.filename ?? "No upload batch";
 
   return (
     <header className="topbar">
@@ -266,13 +297,19 @@ function TopBar({ activeItem, apiStatus, latestUploadResult }) {
 
       <div className="topbar-meta">
         <StatusPill label="Backend" value={apiStatus.label} tone={apiStatus.state} />
+        <StatusPill label="Room or zone" value={roomContext} tone="muted" />
         <StatusPill
-          label="Upload readiness"
+          label="Upload batch"
+          value={uploadBatch}
+          tone={latestUploadResult ? "online" : "muted"}
+        />
+        <StatusPill
+          label="Data readiness"
           value={readiness ? formatReadiness(readiness) : "Awaiting data"}
           tone={readiness ?? "muted"}
         />
         <StatusPill
-          label="Session analysis"
+          label="Operational findings"
           value={analysisAvailable ? "Available" : "Not generated"}
           tone={analysisAvailable ? "online" : "muted"}
         />
@@ -285,7 +322,21 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
   const readiness = latestUploadResult?.data_quality?.readiness;
   const latestReport = latestUploadResult?.operator_report;
   const engineResult = latestUploadResult?.engine_result;
+  const roomContext = latestUploadResult
+    ? deriveRoomContext(latestUploadResult)
+    : "Room and zone context pending";
+  const facilityStability = latestUploadResult
+    ? deriveFacilityStability(latestUploadResult)
+    : "No operational review yet";
   const focusMetrics = [
+    {
+      label: "Facility stability",
+      value: facilityStability,
+      detail: latestUploadResult
+        ? "Current session view based on uploaded baseline comparison and operator findings."
+        : "Upload a facility batch to establish a first session-level stability review.",
+      tone: latestUploadResult?.engine_result?.overall_result ?? "muted",
+    },
     {
       label: "Backend connection",
       value: apiStatus.label,
@@ -301,7 +352,7 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
       tone: readiness ?? "muted",
     },
     {
-      label: "Latest analysis",
+      label: "Operational findings",
       value: engineResult ? formatEngineResult(engineResult.overall_result) : "No analysis yet",
       detail: engineResult
         ? "Engine output is available in the Data Upload and Reports sections."
@@ -309,8 +360,8 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
       tone: engineResult?.overall_result ?? "muted",
     },
     {
-      label: "Operational coverage",
-      value: `${systems.length} systems`,
+      label: "Sensor coverage",
+      value: `${systems.length} systems in scope`,
       detail:
         systemsState === "ready"
           ? "Facility scope is loaded from the backend placeholder endpoint."
@@ -323,12 +374,12 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
     <div className="page-stack">
       <section className="hero-panel">
         <div className="hero-copy">
-          <p className="eyebrow">Operations console</p>
-          <h2>Environmental drift review for controlled cultivation facilities</h2>
+          <p className="eyebrow">Cultivation operations center</p>
+          <h2>Environmental intelligence for rooms, zones, and operating batches</h2>
           <p>
-            Neraium gives growers and facility operators a clear working surface for
-            reviewing uploaded sensor exports, comparing baseline behavior, and
-            turning raw facility data into practical operating checks.
+            Neraium gives cultivation operators a serious review surface for
+            understanding environmental drift, facility stability, irrigation context,
+            HVAC behavior, and room-level findings from uploaded operational exports.
           </p>
         </div>
 
@@ -342,12 +393,12 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
           </div>
 
           <div className="hero-note">
-            <span>Session source</span>
-            <strong>{latestUploadResult?.filename ?? "No active upload"}</strong>
+            <span>Latest upload batch</span>
+            <strong>{latestUploadResult?.filename ?? "No active batch"}</strong>
             <p>
               {latestReport
-                ? "The latest session report is available in the Reports workspace."
-                : "Upload a cultivation sensor export to populate session findings."}
+                ? "The latest operational report is available in the Findings workspace."
+                : "Upload a cultivation batch export to populate room-level findings."}
             </p>
           </div>
         </div>
@@ -368,7 +419,7 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
         <div className="surface-panel">
           <SectionHeading
             title="Operational focus areas"
-            description="Primary systems and datasets currently framed for cultivation review."
+            description="Primary systems and review lanes currently framed for cultivation operations."
           />
           <div className="focus-list">
             {FOCUS_AREAS.map((area) => (
@@ -386,12 +437,30 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
         <div className="stack-column">
           <div className="surface-panel">
             <SectionHeading
+              title="Room and cycle context"
+              description="Current placeholders for room-level operations context in the active session."
+            />
+            <div className="context-grid">
+              <SnapshotItem label="Room or zone" value={roomContext} />
+              {ROOM_CONTEXT_PLACEHOLDERS.map((item) => (
+                <ContextCard
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  detail={item.detail}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="surface-panel">
+            <SectionHeading
               title="Latest session snapshot"
-              description="Immediate context from the most recent upload in this browser session."
+              description="Immediate operational context from the most recent upload batch in this browser session."
             />
             {latestUploadResult ? (
               <div className="snapshot-list">
-                <SnapshotItem label="File" value={latestUploadResult.filename} />
+                <SnapshotItem label="Upload batch" value={latestUploadResult.filename} />
                 <SnapshotItem
                   label="Time coverage"
                   value={
@@ -406,7 +475,7 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
                   value={formatReadiness(latestUploadResult.data_quality.readiness)}
                 />
                 <SnapshotItem
-                  label="Mapped columns"
+                  label="Mapped channels"
                   value={`${latestUploadResult.cultivation_mapping.mapped_column_count} columns`}
                 />
               </div>
@@ -420,14 +489,13 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState }) 
 
           <div className="surface-panel">
             <SectionHeading
-              title="Readiness checkpoints"
-              description="What this workspace expects before a session becomes useful to operators."
+              title="Operational workflow"
+              description="Current review sequence for uploaded cultivation exports."
             />
             <ul className="plain-list">
-              <li>Consistent timestamps across historical cultivation exports.</li>
-              <li>Numeric environmental channels such as temperature, humidity, or CO2.</li>
-              <li>Clear column labels that map to facility systems and sensor sources.</li>
-              <li>Enough rows to compare baseline and recent operating windows.</li>
+              {READINESS_WORKFLOW.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
           </div>
         </div>
@@ -442,7 +510,7 @@ function FacilitySystemsPage({ systems, systemsState }) {
       <section className="surface-panel">
         <SectionHeading
           title="Monitored facility systems"
-          description="Current cultivation categories exposed to the frontend workspace. These remain placeholder records until facility-specific contracts are connected."
+          description="Current cultivation systems exposed to the workspace, with room-level operational review placeholders."
         />
 
         <div className="systems-table-wrap">
@@ -450,7 +518,8 @@ function FacilitySystemsPage({ systems, systemsState }) {
             <thead>
               <tr>
                 <th>System</th>
-                <th>Current review scope</th>
+                <th>Operational review scope</th>
+                <th>Room or zone context</th>
                 <th>Workspace source</th>
               </tr>
             </thead>
@@ -459,6 +528,7 @@ function FacilitySystemsPage({ systems, systemsState }) {
                 <tr key={system.name}>
                   <td>{system.name}</td>
                   <td>{system.scope}</td>
+                  <td>{systemRoomContext(system.name)}</td>
                   <td>
                     {systemsState === "ready"
                       ? "Backend placeholder endpoint"
@@ -468,6 +538,30 @@ function FacilitySystemsPage({ systems, systemsState }) {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="surface-panel">
+        <SectionHeading
+          title="Room-level review placeholders"
+          description="These placeholders frame how cultivation teams can organize future facility context without changing the current API contract."
+        />
+        <div className="context-grid context-grid--three">
+          <ContextCard
+            label="Flower rooms"
+            value="Room group placeholder"
+            detail="Future facility onboarding can define room groups, zone labels, and environmental review boundaries."
+          />
+          <ContextCard
+            label="Vegetative zones"
+            value="Zone placeholder"
+            detail="Zone-specific workflows can be layered in later without changing current ingestion behavior."
+          />
+          <ContextCard
+            label="Cycle stage"
+            value="Cycle context placeholder"
+            detail="Grow cycle references remain intentionally unbound until customer facility metadata is connected."
+          />
         </div>
       </section>
     </div>
@@ -519,15 +613,15 @@ function DataUploadPage({ latestUploadResult, onUploadComplete }) {
       <section className="upload-console">
         <div className="surface-panel surface-panel--accent">
           <SectionHeading
-            title="Facility data ingestion"
-            description="Upload CSV exports from cultivation sensors or facility systems to validate structure, profile numeric readings, compare an initial baseline window, and prepare a session report."
+            title="Operational batch ingestion"
+            description="Upload CSV batches from cultivation rooms, sensor networks, irrigation logs, or facility controls to validate structure, compare environmental behavior, and prepare operator-facing findings."
           />
 
           <form className="upload-form" onSubmit={handleUpload}>
             <label className="upload-field" htmlFor="csv-upload">
-              <span className="upload-field-label">CSV sensor export</span>
+              <span className="upload-field-label">Cultivation upload batch</span>
               <span className="upload-field-text">
-                Historical room exports, control system extracts, and sensor data can be reviewed here without permanent storage.
+                Historical room exports, environmental logs, and control system extracts can be reviewed here without permanent storage.
               </span>
             </label>
 
@@ -566,21 +660,21 @@ function DataUploadPage({ latestUploadResult, onUploadComplete }) {
         <div className="stack-column">
           <div className="surface-panel">
             <SectionHeading
-              title="Expected source data"
-              description="The current ingestion flow is tuned for structured cultivation exports."
+              title="Expected operational source data"
+              description="The current ingestion flow is tuned for structured cultivation exports from room and facility systems."
             />
             <ul className="plain-list">
-              <li>Timestamped historical sensor rows.</li>
-              <li>Numeric channels for environment and equipment behavior.</li>
-              <li>Consistent column naming across room or facility exports.</li>
-              <li>Enough recent rows to compare baseline and current windows.</li>
+              <li>Timestamped room or zone exports.</li>
+              <li>Numeric channels for environment, irrigation, or equipment behavior.</li>
+              <li>Consistent naming across cultivation rooms or batches.</li>
+              <li>Enough recent rows to compare baseline and current operating windows.</li>
             </ul>
           </div>
 
           <div className="surface-panel">
             <SectionHeading
               title="Current session state"
-              description="The frontend keeps only the latest validated upload in browser state."
+              description="The frontend keeps only the latest validated upload batch in browser state."
             />
             {uploadResult ? (
               <div className="snapshot-list">
@@ -637,12 +731,12 @@ function UploadResult({ result }) {
       {quality && (
         <div className={`status-banner status-banner--${quality.readiness}`}>
           <div>
-            <span>Upload readiness</span>
+            <span>Batch readiness</span>
             <strong>{formatReadiness(quality.readiness)}</strong>
           </div>
           <p>
-            This review checks timestamp continuity, numeric channel coverage, and
-            baseline comparison readiness for the uploaded cultivation export.
+            This review checks timestamp continuity, sensor coverage, and
+            baseline comparison readiness for the uploaded cultivation batch.
           </p>
         </div>
       )}
@@ -656,7 +750,7 @@ function UploadResult({ result }) {
           value={result.detected_timestamp_column ?? "Not detected"}
         />
         <SummaryMetric
-          label="Numeric channels"
+          label="Sensor channels"
           value={quality?.numeric_column_count ?? result.numeric_profiles?.length ?? 0}
         />
       </div>
@@ -665,7 +759,7 @@ function UploadResult({ result }) {
         <div className="surface-panel">
           <SectionHeading
             title="Data quality summary"
-            description="Usability checks for row coverage, numeric channels, and time context."
+            description="Usability checks for batch coverage, sensor channels, and room-level time context."
           />
           <div className="stats-grid stats-grid--compact">
             <SummaryMetric label="Rows" value={quality.row_count} />
@@ -680,10 +774,10 @@ function UploadResult({ result }) {
 
         {timestampProfile && (
           <div className="surface-panel">
-            <SectionHeading
-              title="Time coverage"
-              description="Detected timestamp range and approximate sampling interval."
-            />
+          <SectionHeading
+            title="Time coverage"
+            description="Detected room or facility time range and approximate sampling interval."
+          />
             <div className="stats-grid stats-grid--compact">
               <SummaryMetric
                 label="First timestamp"
@@ -706,7 +800,7 @@ function UploadResult({ result }) {
         <div className="surface-panel">
           <SectionHeading
             title="Numeric profiles"
-            description="Per-column scan of value ranges, missing coverage, and variability."
+            description="Per-channel scan of value ranges, missing coverage, and environmental variability."
           />
           <div className="table-wrap">
             <table className="data-table">
@@ -747,7 +841,7 @@ function UploadResult({ result }) {
         <div className="surface-panel">
           <SectionHeading
             title="Baseline comparison"
-            description="Descriptive comparison between the first and most recent operating windows in the uploaded file."
+            description="Descriptive comparison between the first and most recent operating windows in the uploaded batch."
           />
 
           <div className={`status-banner status-banner--${baselineAnalysis.overall_assessment}`}>
@@ -778,7 +872,7 @@ function UploadResult({ result }) {
                     <th>Change</th>
                     <th>Percent</th>
                     <th>Direction</th>
-                    <th>Review flag</th>
+                    <th>Operational flag</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -820,7 +914,7 @@ function UploadResult({ result }) {
         <div className="surface-panel">
           <SectionHeading
             title="Columns detected"
-            description="Uploaded CSV headers available to the current session."
+            description="Uploaded CSV headers available to the current cultivation batch review."
           />
           <div className="chip-list">
             {result.columns.map((column) => (
@@ -832,7 +926,7 @@ function UploadResult({ result }) {
         <div className="surface-panel">
           <SectionHeading
             title="Preview rows"
-            description="First parsed rows from the uploaded dataset."
+            description="First parsed rows from the uploaded batch."
           />
           {result.preview_rows.length > 0 ? (
             <div className="table-wrap">
@@ -865,7 +959,7 @@ function UploadResult({ result }) {
       </div>
 
       {result.warnings.length > 0 && (
-        <MessageList title="Upload warnings" items={result.warnings} />
+        <MessageList title="Batch warnings" items={result.warnings} />
       )}
     </section>
   );
@@ -882,7 +976,7 @@ function EngineResult({ result }) {
     <section className="surface-panel surface-panel--report" aria-label="Engine result">
       <SectionHeading
         title="Neraium SII v1"
-        description="Deterministic system behavior review for the currently uploaded cultivation dataset."
+        description="Deterministic environmental intelligence review for the currently uploaded cultivation batch."
       />
 
       <div className={`status-banner status-banner--${result.overall_result}`}>
@@ -912,10 +1006,10 @@ function EngineResult({ result }) {
       <SplitMessageGrid
         leftTitle="Signals"
         leftItems={result.signals.map((signal) => signal.message)}
-        leftEmpty="No engine signals were recorded for this dataset."
+        leftEmpty="No engine signals were recorded for this batch."
         rightTitle="Recommended checks"
         rightItems={result.recommended_checks}
-        rightEmpty="No additional operator checks were added for this pass."
+        rightEmpty="No additional operator checks were added for this batch review."
       />
       <SplitMessageGrid
         leftTitle="Limitations"
@@ -938,7 +1032,7 @@ function SystemEvidence({ evidence }) {
     <div className="result-section">
       <SectionHeading
         title="System evidence"
-        description="Grouped evidence by cultivation category for this uploaded dataset."
+        description="Grouped evidence by cultivation category for this uploaded operational batch."
       />
       {categoriesWithEvidence.length > 0 ? (
         <div className="mapping-grid">
@@ -1040,7 +1134,7 @@ function CultivationMapping({ mapping }) {
     <section className="surface-panel">
       <SectionHeading
         title="Cultivation mapping"
-        description="Deterministic keyword mapping of uploaded columns into facility system categories."
+        description="Deterministic keyword mapping of uploaded columns into facility systems, room context, and cultivation review lanes."
       />
 
       <div className="stats-grid stats-grid--compact">
@@ -1078,7 +1172,7 @@ function OperatorReport({ report }) {
     <section className="surface-panel surface-panel--report" aria-label="Operator report">
       <div className="report-summary">
         <div>
-          <p className="eyebrow">Latest operator report</p>
+          <p className="eyebrow">Operational findings report</p>
           <h2>{report.title}</h2>
           <p>{report.summary}</p>
         </div>
@@ -1097,7 +1191,7 @@ function OperatorReport({ report }) {
 
       <div className="report-columns">
         <ReportSection
-          title="Observations"
+          title="Operational observations"
           items={report.key_observations}
           emptyText="No observations were generated for this upload."
         />
@@ -1143,6 +1237,9 @@ function OperatorReport({ report }) {
 
 function ReportsPage({ latestUploadResult }) {
   const latestReport = latestUploadResult?.operator_report;
+  const roomContext = latestUploadResult
+    ? deriveRoomContext(latestUploadResult)
+    : "Room context pending";
 
   return (
     <div className="page-stack">
@@ -1157,9 +1254,26 @@ function ReportsPage({ latestUploadResult }) {
 
       <section className="surface-panel">
         <SectionHeading
-          title="Report workspace"
-          description="Session-driven outputs currently available to growers and facility operators."
+          title="Findings workspace"
+          description="Session-driven outputs for growers, irrigation leads, and environmental operations teams."
         />
+        <div className="context-grid context-grid--three">
+          <ContextCard
+            label="Room or zone"
+            value={roomContext}
+            detail="Room-level context is inferred from the active upload batch when labels are available."
+          />
+          <ContextCard
+            label="Operational findings"
+            value={latestReport ? "Current report available" : "Awaiting first report"}
+            detail="Latest findings remain session-scoped until persistent storage is introduced."
+          />
+          <ContextCard
+            label="Facility review scope"
+            value="Environmental and irrigation review"
+            detail="Reports are currently centered on uploaded environmental and system behavior context."
+          />
+        </div>
         <div className="report-template-list">
           {REPORT_TEMPLATES.map((report) => (
             <article className="report-template-row" key={report.name}>
@@ -1209,6 +1323,16 @@ function SnapshotItem({ label, value }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function ContextCard({ label, value, detail }) {
+  return (
+    <article className="context-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
   );
 }
 
@@ -1345,6 +1469,55 @@ function formatTimeCoverage(timeCoverage) {
     `Last timestamp: ${timeCoverage.last_timestamp ?? "Not available"}`,
     `Estimated sample interval: ${timeCoverage.estimated_sample_interval ?? "Not available"}`,
   ];
+}
+
+function deriveRoomContext(uploadResult) {
+  const roomColumn = uploadResult.columns.find((column) => {
+    const normalized = column.toLowerCase();
+    return normalized.includes("room") || normalized.includes("zone");
+  });
+
+  if (!roomColumn || uploadResult.preview_rows.length === 0) {
+    return "Room context not present in upload";
+  }
+
+  const values = uploadResult.preview_rows
+    .map((row) => row[roomColumn])
+    .filter(Boolean);
+
+  if (values.length === 0) {
+    return "Room context not present in upload";
+  }
+
+  return values[0];
+}
+
+function deriveFacilityStability(uploadResult) {
+  const overallResult = uploadResult.engine_result?.overall_result;
+  if (overallResult === "normal") {
+    return "No elevated drift found";
+  }
+  if (overallResult === "elevated") {
+    return "Meaningful change requires review";
+  }
+  if (overallResult === "needs_review") {
+    return "More review context needed";
+  }
+  return "No operational review yet";
+}
+
+function systemRoomContext(systemName) {
+  const normalized = systemName.toLowerCase();
+  if (normalized.includes("irrigation")) {
+    return "Irrigation zone review";
+  }
+  if (normalized.includes("lighting")) {
+    return "Canopy and fixture zones";
+  }
+  if (normalized.includes("sensor")) {
+    return "Room network coverage";
+  }
+  return "Room environmental scope";
 }
 
 export default App;
