@@ -30,3 +30,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
+@app.get("/health")
+def health_check_alias():
+    return {"status": "ok", "service": "neraium-api"}

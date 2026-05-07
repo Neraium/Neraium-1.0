@@ -11,6 +11,6 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 COPY app ./app
 
-EXPOSE 8080
+EXPOSE 80
 
-CMD ["sh", "-c", "python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8080}"]
+CMD ["sh", "-c", "python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-80}"]
