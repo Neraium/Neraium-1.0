@@ -68,7 +68,8 @@ p {
 .platform-shell {
   display: grid;
   grid-template-columns: 292px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .platform-sidebar {
@@ -229,7 +230,9 @@ p {
 .platform-main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
   min-width: 0;
+  overflow: hidden;
 }
 
 .top-status {
@@ -357,13 +360,17 @@ h4 {
 }
 
 .platform-workspace {
+  min-height: 0;
   padding: 16px 18px 24px;
+  overflow: auto;
 }
 
 .workspace-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-content: start;
   gap: 10px;
+  min-height: 100%;
 }
 
 .ops-panel {
@@ -909,6 +916,8 @@ h4 {
 @media (max-width: 1080px) {
   .platform-shell {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
   }
 
   .platform-sidebar {
@@ -920,6 +929,15 @@ h4 {
     position: static;
     flex-direction: column;
     align-items: start;
+  }
+
+  .platform-main {
+    height: auto;
+    overflow: visible;
+  }
+
+  .platform-workspace {
+    overflow: visible;
   }
 
   .status-rack {

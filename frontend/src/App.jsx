@@ -1,32 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_BASE_URL } from "./config";
 import "./styles.css";
 
-const NAV_ITEMS = [
+const WORKSPACES = [
   {
+    id: "overview",
     label: "Overview",
     eyebrow: "Summary",
-    description: "Facility-wide operational awareness, active alerts, and current findings.",
+    description: "Facility-wide operational awareness, alerts, ingest activity, and top findings.",
   },
   {
+    id: "facility-systems",
     label: "Facility Systems",
     eyebrow: "Systems",
-    description: "HVAC, irrigation, environmental telemetry, and room-level drift review.",
+    description: "Environmental systems review, room telemetry, drift, and sensor relationships.",
   },
   {
+    id: "data-intake",
     label: "Data Intake",
     eyebrow: "Intake",
-    description: "Procedural ingest workflow, validation, schema review, and evidence extraction.",
+    description: "Procedural CSV intake, validation, schema review, baseline comparison, and evidence state.",
   },
   {
+    id: "evidence-reports",
     label: "Evidence & Reports",
     eyebrow: "Evidence",
-    description: "Findings review, timeline playback, audit surfaces, and report output.",
+    description: "Findings review, evidence analysis, timeline playback, room observations, and report output.",
   },
   {
+    id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
-    description: "Live monitoring, relationship changes, event stream, and evidence terminal.",
+    description: "Live monitoring, drift feed, relationship changes, event stream, and evidence terminal.",
   },
 ];
 
@@ -57,12 +62,6 @@ const FALLBACK_SYSTEMS = [
   },
 ];
 
-const REPORT_TEMPLATES = [
-  "Environmental Drift Summary",
-  "System Coupling Review",
-  "Operator Action Report",
-];
-
 const TELEMETRY_CHANNELS = [
   "temperature",
   "humidity",
@@ -81,8 +80,14 @@ const INTAKE_STAGES = [
   "Baseline and evidence extraction",
 ];
 
+const REPORT_TEMPLATES = [
+  "Environmental Drift Summary",
+  "System Coupling Review",
+  "Operator Action Report",
+];
+
 function App() {
-  const [activePage, setActivePage] = useState("Overview");
+  const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Checking backend",
@@ -91,6 +96,7 @@ function App() {
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [latestUploadResult, setLatestUploadResult] = useState(null);
+  const workspaceRef = useRef(null);
 
   useEffect(() => {
     let isActive = true;
@@ -158,10 +164,68 @@ function App() {
     };
   }, []);
 
-  const activeItem = NAV_ITEMS.find((item) => item.label === activePage) ?? NAV_ITEMS[0];
+  const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
   const timeCoverage = deriveTimeCoverage(latestUploadResult);
-  const findingsFeed = buildFindingsFeed(latestUploadResult);
+
+  useEffect(() => {
+    if (workspaceRef.current) {
+      workspaceRef.current.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }, [activeWorkspace]);
+
+  function renderActiveWorkspace() {
+    if (activeWorkspace === "overview") {
+      return (
+        <OverviewWorkspace
+          apiStatus={apiStatus}
+          latestUploadResult={latestUploadResult}
+          systems={systems}
+          systemsState={systemsState}
+          roomContext={roomContext}
+        />
+      );
+    }
+
+    if (activeWorkspace === "facility-systems") {
+      return (
+        <FacilitySystemsWorkspace
+          systems={systems}
+          systemsState={systemsState}
+          latestUploadResult={latestUploadResult}
+          roomContext={roomContext}
+        />
+      );
+    }
+
+    if (activeWorkspace === "data-intake") {
+      return (
+        <DataIntakeWorkspace
+          latestUploadResult={latestUploadResult}
+          onUploadComplete={setLatestUploadResult}
+          roomContext={roomContext}
+        />
+      );
+    }
+
+    if (activeWorkspace === "evidence-reports") {
+      return (
+        <EvidenceReportsWorkspace
+          latestUploadResult={latestUploadResult}
+          roomContext={roomContext}
+          setActiveWorkspace={setActiveWorkspace}
+        />
+      );
+    }
+
+    return (
+      <IntelligenceConsoleWorkspace
+        latestUploadResult={latestUploadResult}
+        apiStatus={apiStatus}
+        roomContext={roomContext}
+      />
+    );
+  }
 
   return (
     <main className="platform-shell">
@@ -177,15 +241,16 @@ function App() {
         <div className="sidebar-section">
           <p className="sidebar-kicker">Workspaces</p>
           <nav className="workspace-nav">
-            {NAV_ITEMS.map((item) => (
+            {WORKSPACES.map((workspace) => (
               <button
-                className={`workspace-nav__item ${activePage === item.label ? "workspace-nav__item--active" : ""}`}
-                key={item.label}
+                className={`workspace-nav__item ${activeWorkspace === workspace.id ? "workspace-nav__item--active" : ""}`}
+                key={workspace.id}
                 type="button"
-                onClick={() => setActivePage(item.label)}
+                aria-current={activeWorkspace === workspace.id ? "page" : undefined}
+                onClick={() => setActiveWorkspace(workspace.id)}
               >
-                <span className="workspace-nav__label">{item.label}</span>
-                <span className="workspace-nav__detail">{item.description}</span>
+                <span className="workspace-nav__label">{workspace.label}</span>
+                <span className="workspace-nav__detail">{workspace.description}</span>
               </button>
             ))}
           </nav>
@@ -198,7 +263,7 @@ function App() {
           <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
           <SidebarTelemetry
             label="Findings"
-            value={findingsFeed.length > 0 ? `${findingsFeed.length} active` : "Awaiting batch"}
+            value={latestUploadResult?.engine_result ? `${latestUploadResult.engine_result.signals.length} active` : "Awaiting batch"}
           />
         </div>
 
@@ -213,64 +278,33 @@ function App() {
 
       <div className="platform-main">
         <TopStatusBar
-          activeItem={activeItem}
+          activeConfig={activeConfig}
           apiStatus={apiStatus}
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
         />
 
-        <section className="platform-workspace" aria-labelledby="page-title">
-          {activePage === "Overview" && (
-            <OverviewWorkspace
-              apiStatus={apiStatus}
-              latestUploadResult={latestUploadResult}
-              systems={systems}
-              systemsState={systemsState}
-              roomContext={roomContext}
-            />
-          )}
-          {activePage === "Facility Systems" && (
-            <FacilitySystemsWorkspace
-              systems={systems}
-              systemsState={systemsState}
-              latestUploadResult={latestUploadResult}
-              roomContext={roomContext}
-            />
-          )}
-          {activePage === "Data Intake" && (
-            <DataIntakeWorkspace
-              latestUploadResult={latestUploadResult}
-              onUploadComplete={setLatestUploadResult}
-              roomContext={roomContext}
-            />
-          )}
-          {activePage === "Evidence & Reports" && (
-            <EvidenceReportsWorkspace
-              latestUploadResult={latestUploadResult}
-              roomContext={roomContext}
-            />
-          )}
-          {activePage === "Intelligence Console" && (
-            <IntelligenceConsoleWorkspace
-              latestUploadResult={latestUploadResult}
-              apiStatus={apiStatus}
-              roomContext={roomContext}
-            />
-          )}
+        <section
+          key={activeWorkspace}
+          ref={workspaceRef}
+          className="platform-workspace"
+          aria-labelledby="page-title"
+        >
+          {renderActiveWorkspace()}
         </section>
       </div>
     </main>
   );
 }
 
-function TopStatusBar({ activeItem, apiStatus, latestUploadResult, roomContext, timeCoverage }) {
+function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext, timeCoverage }) {
   return (
     <header className="top-status">
       <div className="top-status__title">
-        <p className="eyebrow">{activeItem.eyebrow}</p>
-        <h1 id="page-title">{activeItem.label}</h1>
-        <p>{activeItem.description}</p>
+        <p className="eyebrow">{activeConfig.eyebrow}</p>
+        <h1 id="page-title">{activeConfig.label}</h1>
+        <p>{activeConfig.description}</p>
       </div>
 
       <div className="status-rack">
@@ -283,11 +317,7 @@ function TopStatusBar({ activeItem, apiStatus, latestUploadResult, roomContext, 
         />
         <StatusChip
           label="Readiness"
-          value={
-            latestUploadResult
-              ? formatReadiness(latestUploadResult.data_quality.readiness)
-              : "No active batch"
-          }
+          value={latestUploadResult ? formatReadiness(latestUploadResult.data_quality.readiness) : "No active batch"}
           tone={latestUploadResult?.data_quality?.readiness ?? "muted"}
         />
         <StatusChip
@@ -297,11 +327,7 @@ function TopStatusBar({ activeItem, apiStatus, latestUploadResult, roomContext, 
         />
         <StatusChip
           label="Operational result"
-          value={
-            latestUploadResult?.engine_result
-              ? formatEngineResult(latestUploadResult.engine_result.overall_result)
-              : "Not generated"
-          }
+          value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : "Not generated"}
           tone={latestUploadResult?.engine_result?.overall_result ?? "muted"}
         />
       </div>
@@ -310,34 +336,33 @@ function TopStatusBar({ activeItem, apiStatus, latestUploadResult, roomContext, 
 }
 
 function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsState, roomContext }) {
-  const alerts = buildAlertItems(latestUploadResult, apiStatus);
-  const findingsFeed = buildFindingsFeed(latestUploadResult).slice(0, 5);
-  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext).slice(0, 6);
-  const overviewMetrics = buildOverviewMetrics(latestUploadResult, apiStatus, systems, systemsState);
+  const alerts = buildAlertItems(latestUploadResult, apiStatus).slice(0, 4);
+  const findings = buildFindingsFeed(latestUploadResult).slice(0, 3);
+  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext).slice(0, 4);
+  const metrics = buildOverviewMetrics(latestUploadResult, apiStatus, systems, systemsState);
   const summaryTelemetry = buildTelemetryCards(latestUploadResult).slice(0, 4);
-  const zoneSummary = buildZoneSummary(roomContext);
 
   return (
-    <div className="workspace-grid">
+    <div className="workspace-grid workspace-grid--overview">
       <Panel
         title="Operational summary"
-        subtitle="Concise facility-wide status for operational leadership and executive review."
+        subtitle="Current facility status for operations leadership and executive-operational review."
         className="span-6"
       >
-        <MetricGrid metrics={overviewMetrics} />
+        <MetricGrid metrics={metrics} />
       </Panel>
 
       <Panel
-        title="Active alerts"
-        subtitle="Current warnings, checks, and review items requiring attention."
+        title="Active alerts summary"
+        subtitle="Current warnings, checks, and attention items."
         className="span-3"
       >
         <AlertList alerts={alerts} />
       </Panel>
 
       <Panel
-        title="Ingestion activity"
-        subtitle="Most recent batch activity and timestamped operational events."
+        title="Latest ingestion activity"
+        subtitle="Recent timestamped activity for the active or latest batch."
         className="span-3"
       >
         <TimelineFeed items={timeline} />
@@ -345,15 +370,15 @@ function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsStat
 
       <Panel
         title="Top findings"
-        subtitle="Highest-priority observations from the current session."
+        subtitle="Highest-priority findings from the current session."
         className="span-4"
       >
-        <FeedList items={findingsFeed} emptyText="Awaiting uploaded telemetry batch." />
+        <FeedList items={findings} emptyText="Awaiting uploaded telemetry batch." />
       </Panel>
 
       <Panel
         title="High-level telemetry"
-        subtitle="Primary environmental and infrastructure channels in current view."
+        subtitle="Primary environmental channels and current operational coverage."
         className="span-4"
       >
         <TelemetryCardGrid cards={summaryTelemetry} compact />
@@ -361,24 +386,24 @@ function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsStat
 
       <Panel
         title="Room and zone summary"
-        subtitle="Current room context and placeholder review lanes for cultivation operations."
+        subtitle="Current room context and placeholder review lanes."
         className="span-4"
       >
-        <ZoneSummaryGrid items={zoneSummary} />
+        <ZoneSummaryGrid items={buildZoneSummary(roomContext)} />
       </Panel>
     </div>
   );
 }
 
 function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext }) {
+  const telemetryCards = buildTelemetryCards(latestUploadResult);
   const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
   const relationshipRows = buildRelationshipRows(latestUploadResult);
-  const telemetryCards = buildTelemetryCards(latestUploadResult);
   const roomTransitions = buildRoomTransitions(latestUploadResult, roomContext);
-  const equipmentPanels = buildEquipmentPanels(systems, latestUploadResult, roomContext);
+  const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
 
   return (
-    <div className="workspace-grid">
+    <div className="workspace-grid workspace-grid--systems">
       <Panel
         title="HVAC and environmental telemetry"
         subtitle="Current telemetry strips and time-series placeholders across monitored environmental channels."
@@ -388,40 +413,47 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
       </Panel>
 
       <Panel
-        title="Live state indicators"
-        subtitle="Compact room and equipment state review for the current session."
+        title="Irrigation review"
+        subtitle="Current irrigation context and batch-derived review surface."
         className="span-4"
       >
-        <SystemStateStrip items={equipmentPanels.slice(0, 6)} />
+        <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
+        <CompactList
+          items={[
+            `Irrigation context: ${roomContext.irrigation}.`,
+            "Cycle and event interpretation remain placeholder-driven until facility metadata is connected.",
+          ]}
+          emptyText="Awaiting irrigation context."
+        />
       </Panel>
 
       <Panel
-        title="Operational drift"
-        subtitle="Baseline versus current-window movement across room-level telemetry channels."
-        className="span-6"
-      >
-        <DriftMonitor rows={driftRows} />
-      </Panel>
-
-      <Panel
-        title="Relational stability"
-        subtitle="Sensor relationship changes and coupling review."
-        className="span-3"
-      >
-        <RelationshipMonitor rows={relationshipRows} />
-      </Panel>
-
-      <Panel
-        title="Room state transitions"
-        subtitle="Timestamped room and zone transitions grounded in the active batch."
+        title="Room and zone telemetry"
+        subtitle="Current room-level context and transition surface."
         className="span-3"
       >
         <TimelineFeed items={roomTransitions} />
       </Panel>
 
       <Panel
-        title="Operational systems table"
-        subtitle="Environmental systems, room context, and current source-state coverage."
+        title="Operational drift"
+        subtitle="Baseline versus active-window movement across room telemetry."
+        className="span-6"
+      >
+        <DriftMonitor rows={driftRows} />
+      </Panel>
+
+      <Panel
+        title="Sensor relationships"
+        subtitle="Paired signal changes and relational stability review."
+        className="span-3"
+      >
+        <RelationshipMonitor rows={relationshipRows} />
+      </Panel>
+
+      <Panel
+        title="Systems table"
+        subtitle="Operational systems, room context, and source-state coverage."
         className="span-12"
       >
         <SystemsMatrix
@@ -477,10 +509,10 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   const intakeStages = buildIntakeStages(uploadResult, uploadState, roomContext);
 
   return (
-    <div className="workspace-grid">
+    <div className="workspace-grid workspace-grid--intake">
       <Panel
-        title="Operational batch intake"
-        subtitle="Procedural intake for telemetry exports, validation, mapping, and evidence extraction."
+        title="CSV intake workflow"
+        subtitle="Procedural intake for telemetry exports, parsing, validation, and evidence extraction."
         className="span-7"
       >
         <form className="intake-flow" onSubmit={handleUpload}>
@@ -488,8 +520,8 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
             <p className="section-token">Batch source</p>
             <h3>Cultivation telemetry export</h3>
             <p>
-              Upload room, irrigation, HVAC, or sensor-network CSV batches for deterministic
-              parsing, baseline review, and evidence generation.
+              Upload room, irrigation, HVAC, or sensor-network CSV batches for deterministic parsing,
+              baseline review, and operational evidence extraction.
             </p>
           </div>
 
@@ -519,82 +551,66 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Validation stages"
-        subtitle="Traceable procedural intake stages for schema, parsing, and evidence review."
+        subtitle="Traceable intake stages for schema, parsing, and evidence readiness."
         className="span-5"
       >
         <WorkflowStages items={intakeStages} />
       </Panel>
 
       <Panel
-        title="Schema and room mapping"
-        subtitle="Detected room context, mapped columns, and sensor coverage from the active batch."
+        title="Schema detection and room mapping"
+        subtitle="Detected room context, mapped columns, and schema output from the active batch."
         className="span-4"
       >
         <SchemaMappingPanel result={uploadResult} roomContext={roomContext} />
       </Panel>
 
       <Panel
-        title="Operational verification"
-        subtitle="Current batch validation summary and procedural checkpoints."
+        title="Validation checks"
+        subtitle="Current batch verification summary and procedural checkpoints."
         className="span-4"
       >
         <VerificationPanel result={uploadResult} />
       </Panel>
 
       <Panel
-        title="Evidence extraction"
-        subtitle="Evidence-ready outputs available from the current intake flow."
+        title="Evidence extraction state"
+        subtitle="Current extraction status for baseline evidence, findings, and report generation."
         className="span-4"
       >
         <EvidenceExtractionPanel result={uploadResult} />
       </Panel>
 
-      {uploadResult ? (
-        <>
-          <Panel
-            title="Baseline comparison"
-            subtitle="Current baseline review and operational drift extraction from the active batch."
-            className="span-8"
-          >
-            <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
-          </Panel>
-
-          <Panel
-            title="Batch evidence console"
-            subtitle="Current ingest audit output and extraction traces."
-            className="span-4"
-          >
-            <EvidenceConsole lines={buildEvidenceConsole(uploadResult)} />
-          </Panel>
-        </>
-      ) : (
-        <Panel
-          title="Awaiting operational batch"
-          subtitle="The intake workspace will populate after the first validated upload."
-          className="span-12"
-        >
+      <Panel
+        title="Baseline comparison"
+        subtitle="Current baseline review and operational drift extraction from the active batch."
+        className="span-12"
+      >
+        {uploadResult ? (
+          <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
+        ) : (
           <EmptyState
-            title="No active cultivation batch"
-            body="Validate a telemetry export to populate schema detection, verification stages, baseline comparison, and evidence extraction."
+            title="No baseline comparison available"
+            body="Validate a telemetry batch to populate baseline movement and operational drift review."
           />
-        </Panel>
-      )}
+        )}
+      </Panel>
     </div>
   );
 }
 
-function EvidenceReportsWorkspace({ latestUploadResult, roomContext }) {
+function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace }) {
   const latestReport = latestUploadResult?.operator_report;
-  const findingsFeed = buildFindingsFeed(latestUploadResult);
-  const evidenceConsole = buildEvidenceConsole(latestUploadResult);
+  const findings = buildFindingsFeed(latestUploadResult);
   const timeline = buildOperationalTimeline(latestUploadResult, null, roomContext);
+  const evidenceLines = buildEvidenceConsole(latestUploadResult);
   const observations = buildRoomObservations(latestUploadResult, roomContext);
 
   return (
-    <div className="workspace-grid">
+    <div className="workspace-grid workspace-grid--evidence">
       <Panel
-        title="Operator findings"
-        subtitle="Analytical review surface for findings, checks, limitations, and report output."
+        title="Findings report"
+        subtitle="Analytical review surface for findings, checks, and evidence-backed observations."
         className="span-7"
       >
         {latestReport ? (
@@ -609,15 +625,15 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext }) {
 
       <Panel
         title="Evidence review"
-        subtitle="Audit-capable evidence references, source sections, and extraction traces."
+        subtitle="Audit-ready evidence references, source sections, and extraction traces."
         className="span-5"
       >
-        <EvidenceConsole lines={evidenceConsole} />
+        <EvidenceConsole lines={evidenceLines} />
       </Panel>
 
       <Panel
         title="Timeline playback"
-        subtitle="Timestamped playback for ingest, readiness, and findings progression."
+        subtitle="Timestamp-heavy playback for ingest, readiness, and findings progression."
         className="span-4"
       >
         <TimelineFeed items={timeline} />
@@ -625,26 +641,35 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext }) {
 
       <Panel
         title="Room observations"
-        subtitle="Room-level and zone-level observations grounded in the active batch."
+        subtitle="Current room and zone observations grounded in the active batch."
         className="span-4"
       >
-        <CompactList items={observations} emptyText="No room-level observations available." />
+        <CompactList items={observations} emptyText="No room observations available." />
+      </Panel>
+
+      <Panel
+        title="Limitations and exported reports"
+        subtitle="Current limitations and exported report surface for the active session."
+        className="span-4"
+      >
+        {latestReport ? (
+          <CompactList items={[...latestReport.limitations, ...REPORT_TEMPLATES]} emptyText="No report output available." />
+        ) : (
+          <CompactList items={REPORT_TEMPLATES} emptyText="No report output available." />
+        )}
       </Panel>
 
       <Panel
         title="Operational notes"
-        subtitle="Current findings feed and evidence-linked review items."
-        className="span-4"
-      >
-        <FeedList items={findingsFeed} emptyText="Awaiting findings output." />
-      </Panel>
-
-      <Panel
-        title="Exported reports"
-        subtitle="Current report outputs available from the workspace."
+        subtitle="Current findings and navigation back to intake review."
         className="span-12"
       >
-        <CompactList items={REPORT_TEMPLATES} emptyText="No report templates listed." inline />
+        <div className="evidence-action-row">
+          <CompactList items={findings.slice(0, 6)} emptyText="Awaiting evidence-linked findings." inline />
+          <button className="command-button command-button--secondary" type="button" onClick={() => setActiveWorkspace("data-intake")}>
+            Open Data Intake
+          </button>
+        </div>
       </Panel>
     </div>
   );
@@ -655,11 +680,11 @@ function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomConte
   const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
   const relationshipRows = buildRelationshipRows(latestUploadResult);
   const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext);
-  const findingsFeed = buildFindingsFeed(latestUploadResult);
+  const findings = buildFindingsFeed(latestUploadResult);
   const consoleEvents = buildConsoleEvents(latestUploadResult, apiStatus, roomContext);
 
   return (
-    <div className="workspace-grid">
+    <div className="workspace-grid workspace-grid--console">
       <Panel
         title="Live telemetry"
         subtitle="Current channel strips and environmental monitoring surface."
@@ -669,57 +694,57 @@ function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomConte
       </Panel>
 
       <Panel
-        title="Active drift feed"
-        subtitle="Scrolling drift transitions and baseline movement across channels."
-        className="span-3"
+        title="Drift feed"
+        subtitle="Current drift transitions and baseline movement across telemetry channels."
+        className="span-2"
       >
         <DriftFeed rows={driftRows} />
       </Panel>
 
       <Panel
         title="Relationship changes"
-        subtitle="Current paired-sensor changes and relational stability events."
-        className="span-3"
+        subtitle="Current paired-sensor changes and relational events."
+        className="span-2"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
 
       <Panel
-        title="Operational event stream"
-        subtitle="Session-wide monitoring events, ingest activity, and room transitions."
+        title="Operational notices"
+        subtitle="Current findings and monitoring notices."
+        className="span-2"
+      >
+        <FeedList items={findings.slice(0, 6)} emptyText="Awaiting telemetry findings." />
+      </Panel>
+
+      <Panel
+        title="Live event stream"
+        subtitle="Session-wide operational events, ingest progression, and room transitions."
         className="span-4"
       >
         <TimelineFeed items={timeline} />
       </Panel>
 
       <Panel
-        title="Operational notices"
-        subtitle="Current findings feed and active monitoring notices."
-        className="span-4"
-      >
-        <FeedList items={findingsFeed} emptyText="Awaiting telemetry findings." />
-      </Panel>
-
-      <Panel
         title="Evidence terminal"
         subtitle="Streaming evidence and operational terminal output."
-        className="span-4"
+        className="span-5"
       >
         <EvidenceConsole lines={consoleEvents} animated />
       </Panel>
-    </div>
-  );
-}
 
-function Panel({ title, subtitle, className = "", children }) {
-  return (
-    <section className={`ops-panel ${className}`.trim()}>
-      <div className="ops-panel__header">
-        <p className="section-token">{title}</p>
-        <h2>{subtitle}</h2>
-      </div>
-      <div className="ops-panel__body">{children}</div>
-    </section>
+      <Panel
+        title="Future assistant placement"
+        subtitle="Reserved workspace for future guided operational intelligence."
+        className="span-3"
+      >
+        <EmptyState
+          title="Future assistant surface reserved"
+          body="This console intentionally leaves room for future guided operational assistance without changing the current monitoring workflow."
+          compact
+        />
+      </Panel>
+    </div>
   );
 }
 
@@ -728,7 +753,7 @@ function WorkflowStages({ items }) {
     <div className="workflow-list">
       {items.map((item) => (
         <div className="workflow-step" key={item.title}>
-          <div className={`workflow-step__dot workflow-step__dot--${item.tone}`} />
+          <StatusDot tone={item.tone} />
           <div>
             <strong>{item.title}</strong>
             <p>{item.detail}</p>
@@ -741,62 +766,65 @@ function WorkflowStages({ items }) {
 }
 
 function SchemaMappingPanel({ result, roomContext }) {
-  const items = [
-    { label: "Primary room", value: roomContext.primary },
-    { label: "Secondary lane", value: roomContext.secondary },
-    {
-      label: "Mapped columns",
-      value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting batch",
-    },
-    {
-      label: "Unknown columns",
-      value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting batch",
-    },
-  ];
-
-  return <MetricGrid metrics={items} compact />;
+  return (
+    <MetricGrid
+      metrics={[
+        { label: "Primary room", value: roomContext.primary },
+        { label: "Secondary lane", value: roomContext.secondary },
+        {
+          label: "Mapped columns",
+          value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting batch",
+        },
+        {
+          label: "Unknown columns",
+          value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting batch",
+        },
+      ]}
+      compact
+    />
+  );
 }
 
 function VerificationPanel({ result }) {
-  const items = [
-    {
-      label: "Readiness",
-      value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting batch",
-    },
-    {
-      label: "Rows parsed",
-      value: result ? result.row_count : "Pending",
-    },
-    {
-      label: "Timestamp context",
-      value: result?.detected_timestamp_column ?? "Pending",
-    },
-    {
-      label: "Numeric channels",
-      value: result ? result.data_quality.numeric_column_count : "Pending",
-    },
-  ];
-
-  return <MetricGrid metrics={items} compact />;
+  return (
+    <MetricGrid
+      metrics={[
+        {
+          label: "Readiness",
+          value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting batch",
+        },
+        { label: "Rows parsed", value: result ? result.row_count : "Pending" },
+        { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Pending" },
+        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "Pending" },
+      ]}
+      compact
+    />
+  );
 }
 
 function EvidenceExtractionPanel({ result }) {
-  const items = [
-    {
-      title: "Baseline evidence",
-      detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Awaiting batch.",
-    },
-    {
-      title: "Engine evidence",
-      detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting batch.",
-    },
-    {
-      title: "Operator report",
-      detail: result?.operator_report ? "Current findings report available." : "Awaiting batch.",
-    },
-  ];
-
-  return <FeedList items={items} emptyText="Awaiting evidence extraction." />;
+  return (
+    <FeedList
+      items={[
+        {
+          title: "Baseline evidence",
+          detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Awaiting batch.",
+          tone: result ? "online" : "muted",
+        },
+        {
+          title: "Engine evidence",
+          detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting batch.",
+          tone: result?.engine_result ? "online" : "muted",
+        },
+        {
+          title: "Operator report",
+          detail: result?.operator_report ? "Current findings report available." : "Awaiting batch.",
+          tone: result?.operator_report ? "online" : "muted",
+        },
+      ]}
+      emptyText="Awaiting evidence extraction."
+    />
+  );
 }
 
 function MetricGrid({ metrics, compact = false }) {
@@ -812,13 +840,13 @@ function MetricGrid({ metrics, compact = false }) {
   );
 }
 
-function FeedList({ items, emptyText }) {
+function FeedList({ items, emptyText, inline = false }) {
   if (!items || items.length === 0) {
     return <EmptyState title="No active items" body={emptyText} compact />;
   }
 
   return (
-    <div className="feed-list">
+    <div className={`feed-list ${inline ? "feed-list--inline" : ""}`}>
       {items.map((item, index) => (
         <div className="feed-item" key={`${item.title ?? item}-${index}`}>
           <StatusDot tone={item.tone ?? "muted"} />
@@ -854,6 +882,10 @@ function TimelineFeed({ items }) {
 }
 
 function TelemetryCardGrid({ cards, compact = false }) {
+  if (!cards || cards.length === 0) {
+    return <EmptyState title="No telemetry available" body="Awaiting uploaded telemetry coverage." compact />;
+  }
+
   return (
     <div className={`telemetry-grid ${compact ? "telemetry-grid--compact" : ""}`}>
       {cards.map((card) => (
@@ -937,24 +969,18 @@ function DriftMonitor({ rows, detailed = false }) {
 
 function DriftFeed({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No active drift feed" body="Awaiting baseline comparison output." compact />;
+    return <EmptyState title="No drift feed" body="Awaiting baseline comparison output." compact />;
   }
 
   return (
-    <div className="feed-list">
-      {rows.map((row) => (
-        <div className="feed-item" key={row.column}>
-          <StatusDot tone={row.drift_flag} />
-          <div>
-            <strong>{row.column}</strong>
-            <p>
-              {row.direction} movement with{" "}
-              {row.percent_change === null ? row.absolute_change : `${row.percent_change}%`} change.
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
+    <FeedList
+      items={rows.map((row) => ({
+        title: row.column,
+        detail: `${row.direction} movement with ${row.percent_change === null ? row.absolute_change : `${row.percent_change}%`} change.`,
+        tone: row.drift_flag,
+      }))}
+      emptyText="Awaiting drift output."
+    />
   );
 }
 
@@ -983,19 +1009,7 @@ function AlertList({ alerts }) {
     return <EmptyState title="No active alerts" body="Current session does not contain additional alerts." compact />;
   }
 
-  return (
-    <div className="feed-list">
-      {alerts.map((alert, index) => (
-        <div className="feed-item" key={`${alert.title}-${index}`}>
-          <StatusDot tone={alert.tone} />
-          <div>
-            <strong>{alert.title}</strong>
-            <p>{alert.detail}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <FeedList items={alerts} emptyText="No active alerts." />;
 }
 
 function SystemsMatrix({ systems, systemsState, roomContext }) {
@@ -1055,20 +1069,15 @@ function OperatorReportPanel({ report }) {
       />
 
       <div className="two-column-block">
-        <CompactList items={report.key_observations} emptyText="No observations were generated." title="Observations" />
-        <CompactList items={report.recommended_operator_checks} emptyText="No operator checks were generated." title="Operator checks" />
-      </div>
-
-      <div className="two-column-block">
         <CompactList
-          items={formatColumnsRequiringReview(report.columns_requiring_review)}
-          emptyText="No columns were marked for review."
-          title="Columns requiring review"
+          items={report.key_observations}
+          emptyText="No observations were generated."
+          title="Observations"
         />
         <CompactList
-          items={report.limitations}
-          emptyText="No additional limitations were recorded."
-          title="Limitations"
+          items={report.recommended_operator_checks}
+          emptyText="No operator checks were generated."
+          title="Operator checks"
         />
       </div>
     </div>
@@ -1473,18 +1482,6 @@ function buildRoomTransitions(result, roomContext) {
   return items;
 }
 
-function buildEquipmentPanels(systems, result, roomContext) {
-  return systems.map((system, index) => ({
-    label: system.name,
-    value: systemRoomContext(system.name, roomContext),
-    tone: index % 3 === 0
-      ? result?.engine_result?.overall_result ?? "muted"
-      : index % 3 === 1
-        ? "online"
-        : "needs_review",
-  }));
-}
-
 function buildEvidenceConsole(result) {
   if (!result) {
     return [
@@ -1539,8 +1536,7 @@ function buildConsoleEvents(result, apiStatus, roomContext) {
 }
 
 function buildRelationshipRows(result) {
-  const source = result?.engine_result ? result.engine_result : result?.engine_result === undefined ? result?.engine_result : null;
-  const evidence = source?.evidence ?? result?.engine_result?.evidence ?? [];
+  const evidence = result?.engine_result?.evidence ?? [];
   return evidence.filter((item) => item.type === "relationship_change");
 }
 
@@ -1600,8 +1596,6 @@ function deriveTimeCoverage(result) {
   if (!result?.timestamp_profile) {
     return {
       hasCoverage: false,
-      first: null,
-      last: null,
       summary: "Awaiting timestamps",
     };
   }
@@ -1611,8 +1605,6 @@ function deriveTimeCoverage(result) {
 
   return {
     hasCoverage: Boolean(first || last),
-    first,
-    last,
     summary:
       first && last
         ? `${first} to ${last}`
@@ -1639,10 +1631,7 @@ function buildIntakeStages(result, uploadState, roomContext) {
     if (uploadState === "uploading") {
       return {
         title: stage,
-        detail:
-          index === 0
-            ? "Batch is being validated."
-            : "Pending upstream intake stage completion.",
+        detail: index === 0 ? "Batch is being validated." : "Pending upstream stage completion.",
         state: index === 0 ? "active" : "queued",
         tone: index === 0 ? "checking" : "muted",
       };
@@ -1651,10 +1640,7 @@ function buildIntakeStages(result, uploadState, roomContext) {
     if (!result) {
       return {
         title: stage,
-        detail:
-          index === 2
-            ? `Room placeholder: ${roomContext.primary}.`
-            : "Awaiting uploaded telemetry batch.",
+        detail: index === 2 ? `Room placeholder: ${roomContext.primary}.` : "Awaiting uploaded telemetry batch.",
         state: "pending",
         tone: "muted",
       };
