@@ -497,43 +497,47 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
 }
 
 function OverviewWorkspace({ liveOps }) {
+  const [selectedActionId, setSelectedActionId] = useState(liveOps.actionQueue[0]?.id ?? null);
+  const [selectedNodeId, setSelectedNodeId] = useState(liveOps.topologyNodes[0]?.id ?? null);
+
   const findings = liveOps.findings.slice(0, 3);
-  const timeline = liveOps.timeline.slice(0, 5);
-  const roomCards = liveOps.roomCards.slice(0, 6);
-  const roomsUnderReview = roomCards.filter((room) => room.tone !== "nominal").length;
+  const selectedAction = liveOps.actionQueue.find((item) => item.id === selectedActionId) ?? liveOps.actionQueue[0];
+  const selectedNode = liveOps.topologyNodes.find((item) => item.id === selectedNodeId) ?? liveOps.topologyNodes[0];
+  const heroHeadline = liveOps.primaryWindow?.headline ?? "Intervention timing is stable.";
+  const heroSubline = liveOps.primaryWindow?.subline ?? "Neraium is monitoring the current facility state.";
+  const roomCount = liveOps.topologyNodes.length;
   const overviewSummary = [
     { label: "Telemetry", value: liveOps.connectionLabel, tone: liveOps.connectionTone },
-    { label: "Facility state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
+    { label: "Operational state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
     { label: "Latest ingest", value: liveOps.connectionSummary, tone: "info" },
-    { label: "Rooms monitored", value: `${roomCards.length}`, tone: "nominal" },
+    { label: "Rooms monitored", value: `${roomCount}`, tone: "nominal" },
   ];
-  const bannerBody = roomsUnderReview > 0
-    ? `${roomsUnderReview} room${roomsUnderReview === 1 ? "" : "s"} need review. Recent operational changes are contained and visible below.`
-    : "All monitored rooms remain within current operational expectations.";
-  const heroTag = roomsUnderReview > 0 ? "Review focus active" : "Facility running nominally";
-  const heroHeadline = roomsUnderReview > 0 ? "Facility health remains controlled." : "Facility health is stable.";
-  const heroSubline = roomsUnderReview > 0
-    ? "Operational review is concentrated in a small number of rooms, with telemetry continuity maintained."
-    : "Telemetry continuity, room health, and recent operational activity remain within expected bounds.";
 
   return (
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple">
       <Panel
-        title="Facility status"
-        subtitle="High-confidence operational summary for immediate facility awareness."
+        title="Facility command"
+        subtitle="Time remaining, trust, and the next decision to make."
         className="span-8 overview-panel overview-panel--hero"
       >
         <div className="overview-hero">
           <div className="overview-hero__lead">
-            <span className={`overview-pill overview-pill--${liveOps.facilityTone}`}>{heroTag}</span>
+            <span className={`overview-pill overview-pill--${liveOps.facilityTone}`}>{liveOps.heroTag}</span>
             <h2 className="overview-hero__headline">{heroHeadline}</h2>
             <p>{heroSubline}</p>
           </div>
-          <StatusBanner
-            title={`Facility ${liveOps.facilityStateLabel.toLowerCase()}`}
-            subtitle={bannerBody}
-            tone={liveOps.facilityTone}
-          />
+          <div className="countdown-hero">
+            <div className="countdown-hero__score">
+              <span>Neraium score</span>
+              <strong>{liveOps.neraiumScore}</strong>
+              <p>{liveOps.scoreNarrative}</p>
+            </div>
+            <div className="countdown-hero__window">
+              <span>Primary intervention window</span>
+              <strong>{liveOps.primaryWindow?.window ?? "Monitoring active telemetry feed"}</strong>
+              <p>{liveOps.primaryWindow?.detail ?? liveOps.connectionDetail}</p>
+            </div>
+          </div>
           <div className="overview-summary-grid">
             {overviewSummary.map((item) => (
               <div className={`overview-summary-cell overview-summary-cell--${item.tone}`} key={item.label}>
@@ -549,27 +553,55 @@ function OverviewWorkspace({ liveOps }) {
       </Panel>
 
       <Panel
-        title="Recent operational events"
-        subtitle="Only the most recent changes that matter right now."
+        title="Action queue"
+        subtitle="Ranked by urgency, impact, and trust."
         className="span-4 overview-panel overview-panel--events"
       >
-        <TimelineFeed items={timeline} />
+        <ActionQueue
+          items={liveOps.actionQueue}
+          selectedId={selectedAction?.id ?? null}
+          onSelect={setSelectedActionId}
+        />
       </Panel>
 
       <Panel
-        title="Room health"
-        subtitle="Rooms requiring review are surfaced first."
+        title="Intervention windows"
+        subtitle="How long you have before each monitored room needs attention."
         className="span-8 overview-panel overview-panel--rooms"
       >
-        <RoomHealthGrid rooms={roomCards} />
+        <InterventionGrid
+          items={liveOps.interventionItems}
+          selectedId={selectedNode?.id ?? null}
+          onSelect={setSelectedNodeId}
+        />
       </Panel>
 
       <Panel
-        title="Top findings"
-        subtitle="The highest-priority observations to carry into deeper review."
+        title="Why this matters"
+        subtitle="Causal chain, confidence, and the recommended next move."
         className="span-4 overview-panel overview-panel--findings"
       >
-        <FeedList items={findings} emptyText="No active findings above baseline." />
+        <WhyPanel item={selectedAction ?? selectedNode} findings={findings} />
+      </Panel>
+
+      <Panel
+        title="System topology"
+        subtitle="Facility-wide situational awareness without the dashboard noise."
+        className="span-8 overview-panel overview-panel--rooms"
+      >
+        <TopologyMap
+          nodes={liveOps.topologyNodes}
+          selectedId={selectedNode?.id ?? null}
+          onSelect={setSelectedNodeId}
+        />
+      </Panel>
+
+      <Panel
+        title="Recent changes"
+        subtitle="Only the operational shifts that changed decision timing."
+        className="span-4 overview-panel overview-panel--events"
+      >
+        <TimelineFeed items={liveOps.timeline.slice(0, 5)} />
       </Panel>
     </div>
   );
@@ -1255,6 +1287,154 @@ function RoomHealthGrid({ rooms }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function InterventionGrid({ items, selectedId, onSelect }) {
+  if (!items || items.length === 0) {
+    return <EmptyState title="No intervention windows available" body="Monitoring active telemetry feed." compact />;
+  }
+
+  return (
+    <div className="intervention-grid">
+      {items.slice(0, 6).map((item) => (
+        <button
+          className={`intervention-card intervention-card--${item.tone} ${selectedId === item.id ? "intervention-card--selected" : ""}`}
+          key={item.id}
+          type="button"
+          onClick={() => onSelect(item.id)}
+        >
+          <div className="intervention-card__header">
+            <div>
+              <span>{item.label}</span>
+              <strong>{item.window}</strong>
+            </div>
+            <ConfidenceDial score={item.confidence} tone={item.tone} />
+          </div>
+          <p>{item.summary}</p>
+          <div className="intervention-card__footer">
+            <span className={`overview-pill overview-pill--${item.tone}`}>{item.recommendation}</span>
+            <span className="room-health-card__trend">{item.change}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ActionQueue({ items, selectedId, onSelect }) {
+  if (!items || items.length === 0) {
+    return <EmptyState title="No queued actions" body="Current rooms remain within monitored thresholds." compact />;
+  }
+
+  return (
+    <div className="action-queue">
+      {items.slice(0, 5).map((item) => (
+        <button
+          className={`action-queue__item action-queue__item--${item.tone} ${selectedId === item.id ? "action-queue__item--selected" : ""}`}
+          key={item.id}
+          type="button"
+          onClick={() => onSelect(item.id)}
+        >
+          <div className="action-queue__header">
+            <span>{item.rankLabel}</span>
+            <StatusDot tone={item.tone} />
+          </div>
+          <strong>{item.title}</strong>
+          <p>{item.detail}</p>
+          <div className="action-queue__meta">
+            <span>{item.window}</span>
+            <span>{item.impact}</span>
+            <span>{item.confidence}% confidence</span>
+          </div>
+          <div className="action-queue__actions">
+            {item.actions.map((action) => (
+              <span
+                className={`queue-action-pill ${action === item.primaryAction ? "queue-action-pill--primary" : ""}`}
+                key={action}
+              >
+                {action}
+              </span>
+            ))}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function WhyPanel({ item, findings }) {
+  if (!item) {
+    return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
+  }
+
+  return (
+    <div className="why-panel">
+      <div className="why-panel__summary">
+        <div>
+          <span className="section-token">Primary explanation</span>
+          <h3>{item.title ?? item.label}</h3>
+        </div>
+        <ConfidenceDial score={item.confidence ?? 72} tone={item.tone ?? "info"} large />
+      </div>
+      <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
+      <div className="why-panel__chain">
+        {(item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3)).map((driver) => (
+          <div className="why-panel__driver" key={driver}>
+            <StatusDot tone={item.tone ?? "info"} />
+            <span>{driver}</span>
+          </div>
+        ))}
+      </div>
+      <div className="why-panel__recommendation">
+        <span>Recommended next move</span>
+        <strong>{item.recommendation ?? item.primaryAction ?? "Continue monitoring"}</strong>
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceDial({ score, tone, large = false }) {
+  const normalized = Math.max(0, Math.min(score ?? 0, 100));
+  return (
+    <div
+      className={`confidence-dial confidence-dial--${tone} ${large ? "confidence-dial--large" : ""}`}
+      style={{ "--confidence-value": `${normalized}%` }}
+    >
+      <div className="confidence-dial__inner">
+        <strong>{normalized}%</strong>
+        <span>confidence</span>
+      </div>
+    </div>
+  );
+}
+
+function TopologyMap({ nodes, selectedId, onSelect }) {
+  if (!nodes || nodes.length === 0) {
+    return <EmptyState title="No system topology available" body="Awaiting active room monitoring." compact />;
+  }
+
+  return (
+    <div className="topology-map">
+      <div className="topology-map__hub">
+        <span>Facility</span>
+        <strong>Neraium control surface</strong>
+      </div>
+      <div className="topology-map__nodes">
+        {nodes.map((node) => (
+          <button
+            className={`topology-node topology-node--${node.tone} ${selectedId === node.id ? "topology-node--selected" : ""}`}
+            key={node.id}
+            type="button"
+            onClick={() => onSelect(node.id)}
+          >
+            <span>{node.label}</span>
+            <strong>{node.window}</strong>
+            <p>{node.status}</p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1992,15 +2172,25 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
   if (!useDemoTelemetry) {
     const telemetryCards = buildTelemetryCards(result);
     const facilityTone = mapOperationalTone(result?.engine_result?.overall_result ?? result?.data_quality?.readiness ?? "nominal");
+    const interventionItems = buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone);
+    const actionQueue = buildActionQueue(interventionItems);
+    const primaryWindow = interventionItems[0] ?? null;
     return {
       useDemoTelemetry: false,
       facilityTone,
       facilityStateLabel: formatEngineResult(result?.engine_result?.overall_result ?? "normal"),
+      heroTag: facilityTone === "nominal" ? "Control window established" : "Decision window tightening",
       readinessLabel: formatReadiness(result?.data_quality?.readiness),
       connectionTone,
       connectionLabel: apiStatus.label,
       connectionDetail: apiStatus.detail,
       connectionSummary,
+      neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, true),
+      scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
+      primaryWindow,
+      interventionItems,
+      actionQueue,
+      topologyNodes: buildTopologyNodes(interventionItems),
       alerts: buildAlertItems(result, apiStatus),
       findings: buildFindingsFeed(result),
       timeline: buildOperationalTimeline(result, apiStatus, roomContext),
@@ -2066,14 +2256,18 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     ? "unstable"
     : roomStates.some((room) => room.tone === "elevated")
       ? "elevated"
-      : roomStates.some((room) => room.tone === "review")
+    : roomStates.some((room) => room.tone === "review")
         ? "review"
         : "nominal";
+  const interventionItems = buildSimulatedInterventionItems(roomStates);
+  const actionQueue = buildActionQueue(interventionItems);
+  const primaryWindow = interventionItems[0] ?? null;
 
   return {
     useDemoTelemetry: true,
     facilityTone,
     facilityStateLabel: formatOperationalLabel(facilityTone),
+    heroTag: facilityTone === "nominal" ? "Intervention horizon open" : "Priority review active",
     readinessLabel: "Monitoring active telemetry feed",
     connectionTone,
     connectionLabel: apiStatus.state === "online" ? "Telemetry link established" : "Backend reconnecting",
@@ -2081,6 +2275,12 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
       ? "Operational demo telemetry will stand down once facility uploads are present."
       : `Reconnect monitor active for ${apiStatus.endpoint}.`,
     connectionSummary,
+    neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, false),
+    scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
+    primaryWindow,
+    interventionItems,
+    actionQueue,
+    topologyNodes: buildTopologyNodes(interventionItems),
     alerts: buildSimulatedAlerts(roomStates, apiStatus, tick),
     findings,
     timeline,
@@ -2113,6 +2313,315 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     ],
     connectionEvents,
   };
+}
+
+function buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone) {
+  const engineSignals = result?.engine_result?.signals ?? [];
+  const columnReview = result?.operator_report?.columns_requiring_review ?? [];
+  const irrigationTone = result?.cultivation_mapping?.categories?.irrigation?.length ? "review" : "info";
+
+  const items = [
+    {
+      id: "upload-hvac-balance",
+      label: roomContext.primary,
+      title: `${roomContext.primary} intervention window`,
+      status: "HVAC balance review",
+      window: windowLabelFromTone(facilityTone),
+      tone: facilityTone,
+      confidence: confidenceFromTone(facilityTone, true),
+      summary: engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
+      detail: `Current upload places ${roomContext.primary} in the primary review lane.`,
+      whyHeadline: engineSignals[0]?.message ?? "Current drift and readiness signals are tightening the available intervention window.",
+      drivers: buildWhyDrivers(result, telemetryCards, roomContext),
+      recommendation: recommendationFromTone(facilityTone),
+      primaryAction: primaryActionFromTone(facilityTone),
+      actions: actionSetFromTone(facilityTone),
+      impact: impactFromTone(facilityTone),
+      change: "Updated from active upload",
+      rankLabel: "Priority 01",
+    },
+    {
+      id: "upload-irrigation-recovery",
+      label: roomContext.secondary,
+      title: `${roomContext.secondary} review horizon`,
+      status: "Irrigation recovery",
+      window: windowLabelFromTone(irrigationTone),
+      tone: irrigationTone,
+      confidence: confidenceFromTone(irrigationTone, true),
+      summary: columnReview[0]
+        ? `${columnReview[0].column} requires review before the next irrigation cycle change.`
+        : "Irrigation variance remains a secondary review lane until more room telemetry is uploaded.",
+      detail: roomContext.irrigation,
+      whyHeadline: "Current irrigation behavior is not yet critical, but it is close enough to justify scheduled review.",
+      drivers: [
+        `Current irrigation context: ${roomContext.irrigation}.`,
+        "Baseline established from current upload.",
+        "Review is being prioritized over passive monitoring.",
+      ],
+      recommendation: recommendationFromTone(irrigationTone),
+      primaryAction: primaryActionFromTone(irrigationTone),
+      actions: actionSetFromTone(irrigationTone),
+      impact: impactFromTone(irrigationTone),
+      change: "Review horizon opened",
+      rankLabel: "Priority 02",
+    },
+    {
+      id: "upload-telemetry-continuity",
+      label: "Facility telemetry",
+      title: "Telemetry continuity window",
+      status: "Upload continuity",
+      window: apiStatusWindow(result),
+      tone: "info",
+      confidence: 68,
+      summary: "Uploaded telemetry is connected, but additional room context will improve intervention precision.",
+      detail: result?.filename ?? "No facility upload connected",
+      whyHeadline: "The facility is connected, but the confidence of longer-range decisions improves as room coverage deepens.",
+      drivers: [
+        `${result.row_count} rows and ${result.column_count} columns parsed in memory.`,
+        `${result.cultivation_mapping?.mapped_column_count ?? 0} mapped columns currently in scope.`,
+        "Awaiting additional room telemetry where facility context is partial.",
+      ],
+      recommendation: "Continue monitoring",
+      primaryAction: "Acknowledge",
+      actions: ["Acknowledge", "Schedule Maintenance", "Escalate", "Ignore Pattern"],
+      impact: "Facility-wide confidence",
+      change: "Latest ingest synchronized",
+      rankLabel: "Priority 03",
+    },
+  ];
+
+  return items;
+}
+
+function buildSimulatedInterventionItems(roomStates) {
+  return roomStates
+    .map((room, index) => ({
+      id: `room-${index + 1}`,
+      label: room.name,
+      title: `${room.name} intervention window`,
+      status: room.cycle,
+      window: interventionWindowFromRoom(room),
+      tone: room.tone,
+      confidence: confidenceFromRoom(room),
+      summary: `${room.irrigationState}. HVAC drift is ${room.hvacDrift.toFixed(2)}F and instability is ${room.instability.toFixed(2)} against the current room baseline.`,
+      detail: `${room.cycle} in ${room.zone}.`,
+      whyHeadline: whyHeadlineFromRoom(room),
+      drivers: buildDriversFromRoom(room),
+      recommendation: recommendationFromTone(room.tone),
+      primaryAction: primaryActionFromTone(room.tone),
+      actions: actionSetFromTone(room.tone),
+      impact: impactFromTone(room.tone),
+      change: room.tone === "nominal" ? "Stable over the last cycle" : "Decision window shortened this cycle",
+      rankLabel: `Priority 0${index + 1}`,
+    }))
+    .sort((a, b) => tonePriority(a.tone) - tonePriority(b.tone));
+}
+
+function buildActionQueue(interventionItems) {
+  return interventionItems
+    .map((item, index) => ({
+      ...item,
+      id: `action-${item.id}`,
+      rankLabel: `Priority ${String(index + 1).padStart(2, "0")}`,
+      title: item.title,
+      detail: item.summary,
+    }))
+    .sort((a, b) => tonePriority(a.tone) - tonePriority(b.tone));
+}
+
+function buildTopologyNodes(interventionItems) {
+  return interventionItems.slice(0, 6).map((item) => ({
+    id: item.id,
+    label: item.label,
+    window: item.window,
+    status: item.status,
+    tone: item.tone,
+    confidence: item.confidence,
+    summary: item.summary,
+    whyHeadline: item.whyHeadline,
+    drivers: item.drivers,
+    recommendation: item.recommendation,
+    change: item.change,
+  }));
+}
+
+function calculateNeraiumScore(facilityTone, interventionItems, hasUpload) {
+  const base = facilityTone === "nominal"
+    ? 92
+    : facilityTone === "review"
+      ? 78
+      : facilityTone === "elevated"
+        ? 63
+        : 49;
+  const confidenceLift = Math.round(average(interventionItems.map((item) => item.confidence)) / 12);
+  const uploadLift = hasUpload ? 4 : 0;
+  return Math.max(0, Math.min(base + confidenceLift + uploadLift, 100));
+}
+
+function summarizeScoreNarrative(facilityTone, interventionItems) {
+  const urgentCount = interventionItems.filter((item) => item.tone === "elevated" || item.tone === "unstable").length;
+  if (facilityTone === "nominal") {
+    return "The facility remains inside a comfortable intervention horizon.";
+  }
+  if (urgentCount > 0) {
+    return `${urgentCount} intervention window${urgentCount === 1 ? "" : "s"} shortened enough to warrant immediate operator attention.`;
+  }
+  return "Most systems remain controllable, with review concentrated in a narrow set of rooms.";
+}
+
+function buildWhyDrivers(result, telemetryCards, roomContext) {
+  const firstCards = telemetryCards.slice(0, 2);
+  return [
+    firstCards[0] ? `${firstCards[0].label} currently reading ${firstCards[0].primary}.` : `Primary room context: ${roomContext.primary}.`,
+    firstCards[1] ? `${firstCards[1].label} currently reading ${firstCards[1].primary}.` : `Secondary room context: ${roomContext.secondary}.`,
+    result?.operator_report?.recommended_operator_checks?.[0] ?? "Recommended next move is based on the current upload readiness and drift pattern.",
+  ];
+}
+
+function interventionWindowFromRoom(room) {
+  if (room.tone === "unstable") {
+    return `${Math.max(4, Math.round(14 - room.instability * 3))} hours`;
+  }
+  if (room.tone === "elevated") {
+    return `${Math.max(1, Math.round(3 + room.hvacDrift * 2))} days`;
+  }
+  if (room.tone === "review") {
+    return `${Math.max(4, Math.round(8 + room.hvacDrift * 4))} days`;
+  }
+  return `${Math.max(2, Math.round(3 + room.instability * 2))} weeks`;
+}
+
+function whyHeadlineFromRoom(room) {
+  if (room.tone === "unstable") {
+    return `${room.name} has hours, not days, before environmental instability becomes an operator problem.`;
+  }
+  if (room.tone === "elevated") {
+    return `${room.name} is trending toward intervention and should be scheduled before the next cycle compounds the drift.`;
+  }
+  if (room.tone === "review") {
+    return `${room.name} is still controllable, but the next decision window is now close enough to plan around.`;
+  }
+  return `${room.name} is healthy and currently operating with a comfortable intervention horizon.`;
+}
+
+function buildDriversFromRoom(room) {
+  return [
+    `Bearing room temperature equivalent drift is ${room.hvacDrift.toFixed(2)}F over the current review window.`,
+    `Environmental instability is ${room.instability.toFixed(2)} relative to this room's recent baseline.`,
+    `${room.irrigationState} is the current operating state for ${room.name}.`,
+  ];
+}
+
+function confidenceFromRoom(room) {
+  if (room.tone === "unstable") {
+    return 95;
+  }
+  if (room.tone === "elevated") {
+    return 86;
+  }
+  if (room.tone === "review") {
+    return 74;
+  }
+  return 64;
+}
+
+function confidenceFromTone(tone, hasUpload = false) {
+  const base = tone === "unstable"
+    ? 93
+    : tone === "elevated"
+      ? 84
+      : tone === "review"
+        ? 72
+        : tone === "nominal"
+          ? 66
+          : 61;
+  return hasUpload ? Math.min(base + 5, 98) : base;
+}
+
+function recommendationFromTone(tone) {
+  if (tone === "unstable") {
+    return "Immediate attention required";
+  }
+  if (tone === "elevated") {
+    return "Schedule maintenance window";
+  }
+  if (tone === "review") {
+    return "Review recommended";
+  }
+  return "No action needed";
+}
+
+function primaryActionFromTone(tone) {
+  if (tone === "unstable") {
+    return "Escalate";
+  }
+  if (tone === "elevated") {
+    return "Schedule Maintenance";
+  }
+  if (tone === "review") {
+    return "Acknowledge";
+  }
+  return "Ignore Pattern";
+}
+
+function actionSetFromTone(tone) {
+  const actions = ["Acknowledge", "Schedule Maintenance", "Escalate", "Ignore Pattern"];
+  if (tone === "unstable") {
+    return ["Escalate", "Schedule Maintenance", "Acknowledge", "Ignore Pattern"];
+  }
+  return actions;
+}
+
+function impactFromTone(tone) {
+  if (tone === "unstable") {
+    return "High business impact";
+  }
+  if (tone === "elevated") {
+    return "Material business impact";
+  }
+  if (tone === "review") {
+    return "Moderate business impact";
+  }
+  return "Low business impact";
+}
+
+function windowLabelFromTone(tone) {
+  if (tone === "unstable") {
+    return "8 hours";
+  }
+  if (tone === "elevated") {
+    return "2 days";
+  }
+  if (tone === "review") {
+    return "6 days";
+  }
+  if (tone === "nominal") {
+    return "3 weeks";
+  }
+  return "Monitoring";
+}
+
+function apiStatusWindow(result) {
+  if (!result) {
+    return "Monitoring";
+  }
+  return result.data_quality?.readiness === "ready" ? "2 weeks" : "5 days";
+}
+
+function tonePriority(tone) {
+  if (tone === "unstable") {
+    return 0;
+  }
+  if (tone === "elevated") {
+    return 1;
+  }
+  if (tone === "review") {
+    return 2;
+  }
+  if (tone === "nominal") {
+    return 3;
+  }
+  return 4;
 }
 
 function resolveRoomTone(hvacDrift, instability, index, tick) {
