@@ -1302,6 +1302,10 @@ h4 {
   align-items: start;
 }
 
+.timeline-item > div {
+  min-width: 0;
+}
+
 .overview-panel .timeline-item,
 .overview-panel .feed-item {
   padding: 10px 0;
@@ -1937,8 +1941,12 @@ h4 {
   }
 
   .timeline-item__time,
-  .timeline-item > :nth-child(2) {
+  .timeline-item > div {
     grid-column: 2;
+  }
+
+  .timeline-item__time {
+    white-space: nowrap;
   }
 
   .workflow-step {
@@ -2009,6 +2017,19 @@ h4 {
 
   .evidence-action-row {
     grid-template-columns: 1fr;
+  }
+
+  .action-queue__meta,
+  .action-queue__actions,
+  .why-panel__summary,
+  .why-panel__recommendation {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .why-panel__recommendation strong {
+    max-width: none;
+    text-align: left;
   }
 
   .data-table {
