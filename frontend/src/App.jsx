@@ -98,6 +98,7 @@ function App() {
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
+  const [selectedInterventionId, setSelectedInterventionId] = useState(null);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Checking backend",
@@ -218,6 +219,21 @@ function App() {
   });
 
   useEffect(() => {
+    const nextId = liveOps.interventionItems[0]?.id ?? null;
+    if (!nextId) {
+      if (selectedInterventionId !== null) {
+        setSelectedInterventionId(null);
+      }
+      return;
+    }
+
+    const stillExists = liveOps.interventionItems.some((item) => item.id === selectedInterventionId);
+    if (!stillExists) {
+      setSelectedInterventionId(nextId);
+    }
+  }, [liveOps.interventionItems, selectedInterventionId]);
+
+  useEffect(() => {
     if (workspaceRef.current) {
       workspaceRef.current.scrollTo({ top: 0, behavior: "auto" });
     }
@@ -253,6 +269,8 @@ function App() {
           systemsState={systemsState}
           roomContext={roomContext}
           liveOps={liveOps}
+          selectedInterventionId={selectedInterventionId}
+          onSelectIntervention={setSelectedInterventionId}
         />
       );
     }
@@ -265,6 +283,8 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           liveOps={liveOps}
+          selectedInterventionId={selectedInterventionId}
+          onSelectIntervention={setSelectedInterventionId}
         />
       );
     }
@@ -276,6 +296,7 @@ function App() {
           onUploadComplete={setLatestUploadResult}
           roomContext={roomContext}
           liveOps={liveOps}
+          selectedInterventionId={selectedInterventionId}
         />
       );
     }
@@ -287,6 +308,7 @@ function App() {
           roomContext={roomContext}
           setActiveWorkspace={setActiveWorkspace}
           liveOps={liveOps}
+          selectedInterventionId={selectedInterventionId}
         />
       );
     }
@@ -297,6 +319,8 @@ function App() {
         apiStatus={apiStatus}
         roomContext={roomContext}
         liveOps={liveOps}
+        selectedInterventionId={selectedInterventionId}
+        onSelectIntervention={setSelectedInterventionId}
       />
     );
   }
@@ -496,13 +520,22 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
   );
 }
 
-function OverviewWorkspace({ liveOps }) {
-  const [selectedActionId, setSelectedActionId] = useState(liveOps.actionQueue[0]?.id ?? null);
-  const [selectedNodeId, setSelectedNodeId] = useState(liveOps.topologyNodes[0]?.id ?? null);
+function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectIntervention }) {
+  const [selectedActionId, setSelectedActionId] = useState(selectedInterventionId ?? liveOps.actionQueue[0]?.id ?? null);
+
+  useEffect(() => {
+    if (!selectedInterventionId) {
+      return;
+    }
+    const hasSelectedAction = liveOps.actionQueue.some((item) => item.id === selectedInterventionId);
+    if (hasSelectedAction && selectedActionId !== selectedInterventionId) {
+      setSelectedActionId(selectedInterventionId);
+    }
+  }, [liveOps.actionQueue, selectedActionId, selectedInterventionId]);
 
   const findings = liveOps.findings.slice(0, 3);
   const selectedAction = liveOps.actionQueue.find((item) => item.id === selectedActionId) ?? liveOps.actionQueue[0];
-  const selectedNode = liveOps.topologyNodes.find((item) => item.id === selectedNodeId) ?? liveOps.topologyNodes[0];
+  const selectedNode = liveOps.topologyNodes.find((item) => item.id === selectedInterventionId) ?? liveOps.topologyNodes[0];
   const heroHeadline = liveOps.heroHeadline ?? "Intervention timing is stable.";
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.topologyNodes.length;
@@ -560,7 +593,10 @@ function OverviewWorkspace({ liveOps }) {
         <ActionQueue
           items={liveOps.actionQueue}
           selectedId={selectedAction?.id ?? null}
-          onSelect={setSelectedActionId}
+          onSelect={(id) => {
+            setSelectedActionId(id);
+            onSelectIntervention(id);
+          }}
         />
       </Panel>
 
@@ -572,7 +608,7 @@ function OverviewWorkspace({ liveOps }) {
         <InterventionGrid
           items={liveOps.interventionItems}
           selectedId={selectedNode?.id ?? null}
-          onSelect={setSelectedNodeId}
+          onSelect={onSelectIntervention}
         />
       </Panel>
 
@@ -592,7 +628,7 @@ function OverviewWorkspace({ liveOps }) {
         <TopologyMap
           nodes={liveOps.topologyNodes}
           selectedId={selectedNode?.id ?? null}
-          onSelect={setSelectedNodeId}
+          onSelect={onSelectIntervention}
         />
       </Panel>
 
@@ -607,14 +643,21 @@ function OverviewWorkspace({ liveOps }) {
   );
 }
 
-function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext, liveOps }) {
-  const [selectedSystemId, setSelectedSystemId] = useState(liveOps.interventionItems[0]?.id ?? null);
+function FacilitySystemsWorkspace({
+  systems,
+  systemsState,
+  latestUploadResult,
+  roomContext,
+  liveOps,
+  selectedInterventionId,
+  onSelectIntervention,
+}) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
   const relationshipRows = liveOps.relationshipRows;
   const roomTransitions = liveOps.roomTransitions;
   const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
-  const systemsFocus = liveOps.interventionItems.find((item) => item.id === selectedSystemId) ?? liveOps.interventionItems[0] ?? null;
+  const systemsFocus = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0] ?? null;
   const fleetSummary = buildFleetSummary(liveOps.interventionItems, liveOps.neraiumScore, liveOps.facilityTone);
 
   return (
@@ -635,7 +678,7 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
         <TargetSelector
           items={liveOps.interventionItems}
           selectedId={systemsFocus?.id ?? null}
-          onSelect={setSelectedSystemId}
+          onSelect={onSelectIntervention}
         />
       </Panel>
 
@@ -707,7 +750,7 @@ function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, r
   );
 }
 
-function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps }) {
+function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps, selectedInterventionId }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -750,7 +793,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   const intakeStages = uploadResult
     ? buildIntakeStages(uploadResult, uploadState, roomContext)
     : liveOps.intakeStages;
-  const intakeFocus = liveOps.interventionItems[0] ?? null;
+  const intakeFocus = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0] ?? null;
 
   return (
     <div className="workspace-grid workspace-grid--intake">
@@ -851,12 +894,17 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   );
 }
 
-function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace, liveOps }) {
+function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace, liveOps, selectedInterventionId }) {
   const latestReport = latestUploadResult?.operator_report;
   const findings = liveOps.findings;
   const evidenceLines = liveOps.evidenceLines;
   const observations = liveOps.observations;
-  const reportFocus = liveOps.actionQueue[0] ?? liveOps.interventionItems[0] ?? null;
+  const reportFocus =
+    liveOps.actionQueue.find((item) => item.id === selectedInterventionId)
+    ?? liveOps.interventionItems.find((item) => item.id === selectedInterventionId)
+    ?? liveOps.actionQueue[0]
+    ?? liveOps.interventionItems[0]
+    ?? null;
 
   return (
     <div className="workspace-grid workspace-grid--evidence">
@@ -931,7 +979,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
   );
 }
 
-function IntelligenceConsoleWorkspace({ liveOps }) {
+function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelectIntervention }) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
   const relationshipRows = liveOps.relationshipRows;
@@ -955,7 +1003,11 @@ function IntelligenceConsoleWorkspace({ liveOps }) {
         subtitle="Priority-ranked operator actions."
         className="span-3"
       >
-        <ActionQueue items={queueItems} selectedId={queueItems[0]?.id ?? null} onSelect={() => {}} />
+        <ActionQueue
+          items={queueItems}
+          selectedId={selectedInterventionId ?? queueItems[0]?.id ?? null}
+          onSelect={onSelectIntervention}
+        />
       </Panel>
 
       <Panel
