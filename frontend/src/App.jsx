@@ -88,6 +88,7 @@ const REPORT_TEMPLATES = [
 
 function App() {
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Checking backend",
@@ -174,6 +175,26 @@ function App() {
     }
   }, [activeWorkspace]);
 
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsWorkspaceMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isWorkspaceMenuOpen]);
+
+  function handleWorkspaceSelect(workspaceId) {
+    setActiveWorkspace(workspaceId);
+    setIsWorkspaceMenuOpen(false);
+  }
+
   function renderActiveWorkspace() {
     if (activeWorkspace === "overview") {
       return (
@@ -230,53 +251,39 @@ function App() {
   return (
     <main className="platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
-        <div className="sidebar-brand">
-          <div className="brand-mark">N</div>
-          <div>
-            <p className="brand-name">Neraium</p>
-            <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
-          </div>
-        </div>
-
-        <div className="sidebar-section">
-          <p className="sidebar-kicker">Workspaces</p>
-          <nav className="workspace-nav">
-            {WORKSPACES.map((workspace) => (
-              <button
-                className={`workspace-nav__item ${activeWorkspace === workspace.id ? "workspace-nav__item--active" : ""}`}
-                key={workspace.id}
-                type="button"
-                aria-current={activeWorkspace === workspace.id ? "page" : undefined}
-                onClick={() => setActiveWorkspace(workspace.id)}
-              >
-                <span className="workspace-nav__label">{workspace.label}</span>
-                <span className="workspace-nav__detail">{workspace.description}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="sidebar-section sidebar-section--terminal">
-          <p className="sidebar-kicker">Persistent telemetry</p>
-          <SidebarTelemetry label="API target" value={formatEndpoint(API_BASE_URL)} />
-          <SidebarTelemetry label="Primary room" value={roomContext.primary} />
-          <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-          <SidebarTelemetry
-            label="Findings"
-            value={latestUploadResult?.engine_result ? `${latestUploadResult.engine_result.signals.length} active` : "Awaiting batch"}
-          />
-        </div>
-
-        <div className="sidebar-footer">
-          <StatusDot tone={apiStatus.state} />
-          <div>
-            <p>{apiStatus.label}</p>
-            <span>{apiStatus.detail}</span>
-          </div>
-        </div>
+        <WorkspaceNavigationContent
+          activeWorkspace={activeWorkspace}
+          apiStatus={apiStatus}
+          latestUploadResult={latestUploadResult}
+          roomContext={roomContext}
+          timeCoverage={timeCoverage}
+          onSelectWorkspace={handleWorkspaceSelect}
+        />
       </aside>
 
       <div className="platform-main">
+        <header className="mobile-status-bar">
+          <div className="mobile-status-bar__brand">
+            <div className="brand-mark">N</div>
+            <div>
+              <p className="brand-name">Neraium</p>
+              <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+            </div>
+          </div>
+          <button
+            className="workspace-menu-button"
+            type="button"
+            aria-expanded={isWorkspaceMenuOpen}
+            aria-controls="mobile-workspace-drawer"
+            onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
+          >
+            <span className="workspace-menu-button__icon" aria-hidden="true">
+              |||
+            </span>
+            <span>Workspaces</span>
+          </button>
+        </header>
+
         <TopStatusBar
           activeConfig={activeConfig}
           apiStatus={apiStatus}
@@ -294,7 +301,86 @@ function App() {
           {renderActiveWorkspace()}
         </section>
       </div>
+
+      <div
+        className={`workspace-drawer-backdrop ${isWorkspaceMenuOpen ? "workspace-drawer-backdrop--open" : ""}`}
+        hidden={!isWorkspaceMenuOpen}
+        onClick={() => setIsWorkspaceMenuOpen(false)}
+      />
+      <aside
+        className={`workspace-drawer ${isWorkspaceMenuOpen ? "workspace-drawer--open" : ""}`}
+        id="mobile-workspace-drawer"
+        aria-label="Workspace drawer"
+        aria-hidden={!isWorkspaceMenuOpen}
+      >
+        <WorkspaceNavigationContent
+          activeWorkspace={activeWorkspace}
+          apiStatus={apiStatus}
+          latestUploadResult={latestUploadResult}
+          roomContext={roomContext}
+          timeCoverage={timeCoverage}
+          onSelectWorkspace={handleWorkspaceSelect}
+        />
+      </aside>
     </main>
+  );
+}
+
+function WorkspaceNavigationContent({
+  activeWorkspace,
+  apiStatus,
+  latestUploadResult,
+  roomContext,
+  timeCoverage,
+  onSelectWorkspace,
+}) {
+  return (
+    <>
+      <div className="sidebar-brand">
+        <div className="brand-mark">N</div>
+        <div>
+          <p className="brand-name">Neraium</p>
+          <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+        </div>
+      </div>
+
+      <div className="sidebar-section">
+        <p className="sidebar-kicker">Workspaces</p>
+        <nav className="workspace-nav">
+          {WORKSPACES.map((workspace) => (
+            <button
+              className={`workspace-nav__item ${activeWorkspace === workspace.id ? "workspace-nav__item--active" : ""}`}
+              key={workspace.id}
+              type="button"
+              aria-current={activeWorkspace === workspace.id ? "page" : undefined}
+              onClick={() => onSelectWorkspace(workspace.id)}
+            >
+              <span className="workspace-nav__label">{workspace.label}</span>
+              <span className="workspace-nav__detail">{workspace.description}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <div className="sidebar-section sidebar-section--terminal">
+        <p className="sidebar-kicker">Persistent telemetry</p>
+        <SidebarTelemetry label="API target" value={formatEndpoint(API_BASE_URL)} />
+        <SidebarTelemetry label="Primary room" value={roomContext.primary} />
+        <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
+        <SidebarTelemetry
+          label="Findings"
+          value={latestUploadResult?.engine_result ? `${latestUploadResult.engine_result.signals.length} active` : "Awaiting batch"}
+        />
+      </div>
+
+      <div className="sidebar-footer">
+        <StatusDot tone={apiStatus.state} />
+        <div>
+          <p>{apiStatus.label}</p>
+          <span>{apiStatus.detail}</span>
+        </div>
+      </div>
+    </>
   );
 }
 
