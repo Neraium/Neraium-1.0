@@ -1193,6 +1193,7 @@ h4 {
     flex-direction: column;
     align-items: start;
     padding-top: 14px;
+    gap: 12px;
   }
 
   .platform-main {
@@ -1250,6 +1251,11 @@ h4 {
 }
 
 @media (max-width: 768px) {
+  .mobile-status-bar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-bottom: 10px;
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -1308,12 +1314,44 @@ h4 {
     max-width: none;
   }
 
+  .top-status {
+    padding-bottom: 12px;
+  }
+
+  .status-rack {
+    grid-template-columns: 1fr;
+  }
+
+  .status-chip,
+  .overview-summary-cell,
+  .room-health-card {
+    min-height: 0;
+  }
+
+  .overview-summary-cell,
+  .room-health-card,
+  .ops-panel {
+    padding: 12px;
+  }
+
   h1 {
     font-size: 1.18rem;
+    line-height: 1.12;
   }
 
   h2 {
     font-size: 0.84rem;
+  }
+
+  .status-chip strong,
+  .overview-summary-cell strong,
+  .room-health-card strong {
+    font-size: 0.84rem;
+  }
+
+  .room-health-card p,
+  .top-status__title p:last-child {
+    font-size: 0.78rem;
   }
 
   .evidence-console {
@@ -1363,8 +1401,18 @@ h4 {
     justify-content: space-between;
   }
 
+  .sidebar-telemetry {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .sidebar-telemetry strong {
+    text-align: left;
+  }
+
   .status-chip {
     min-height: 60px;
+    padding: 9px;
   }
 
   .feed-item {
@@ -1375,7 +1423,36 @@ h4 {
     padding-left: 14px;
   }
 
+  .workspace-nav__item {
+    padding: 10px;
+  }
+
+  .workspace-nav__detail,
+  .brand-subtitle,
+  .sidebar-footer span,
+  .sidebar-telemetry span {
+    font-size: 0.72rem;
+  }
+
+  .ops-panel,
+  .overview-summary-cell,
+  .room-health-card {
+    padding: 10px;
+  }
+
+  .top-status__title p:last-child,
+  .room-health-card p,
+  .timeline-item p,
+  .feed-item p {
+    font-size: 0.76rem;
+    line-height: 1.45;
+  }
+
+  .timeline-item {
+    gap: 6px;
+  }
+
   .data-table {
-    min-width: 420px;
+    min-width: 360px;
   }
 }
