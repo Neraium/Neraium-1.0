@@ -5,58 +5,56 @@ import "./styles.css";
 const NAV_ITEMS = [
   {
     label: "Overview",
-    eyebrow: "Monitoring",
-    description: "Facility telemetry, drift monitoring, and current operational context.",
+    eyebrow: "Summary",
+    description: "Facility-wide operational awareness, active alerts, and current findings.",
   },
   {
     label: "Facility Systems",
     eyebrow: "Systems",
-    description: "Environmental systems, room review surfaces, and control scope.",
+    description: "HVAC, irrigation, environmental telemetry, and room-level drift review.",
   },
   {
-    label: "Data Upload",
-    eyebrow: "Ingest",
-    description: "Operational batch intake, profiling, baseline review, and evidence output.",
+    label: "Data Intake",
+    eyebrow: "Intake",
+    description: "Procedural ingest workflow, validation, schema review, and evidence extraction.",
   },
   {
-    label: "Reports",
-    eyebrow: "Findings",
-    description: "Operator findings, evidence sources, and room-level review notes.",
+    label: "Evidence & Reports",
+    eyebrow: "Evidence",
+    description: "Findings review, timeline playback, audit surfaces, and report output.",
+  },
+  {
+    label: "Intelligence Console",
+    eyebrow: "Console",
+    description: "Live monitoring, relationship changes, event stream, and evidence terminal.",
   },
 ];
 
 const FALLBACK_SYSTEMS = [
   {
     name: "HVAC",
-    scope: "Temperature conditioning, equipment runtime behavior, and room balancing.",
+    scope: "Temperature conditioning, runtime behavior, and room balancing.",
   },
   {
     name: "Humidity control",
-    scope: "Dehumidification, humidification, and room moisture balance.",
+    scope: "Dehumidification, humidification, and moisture stability.",
   },
   {
     name: "Airflow",
-    scope: "Air movement patterns, circulation behavior, and room exchange signals.",
+    scope: "Circulation, pressure movement, and room exchange behavior.",
   },
   {
     name: "Irrigation",
-    scope: "Irrigation events, timing windows, and environmental response context.",
+    scope: "Irrigation timing, cycle review, and environmental response context.",
   },
   {
     name: "Lighting",
-    scope: "Lighting schedules, photoperiod windows, and fixture response context.",
+    scope: "Photoperiod windows, fixture response, and environmental coupling.",
   },
   {
     name: "Sensor network",
-    scope: "Room sensors, gateway exports, and historical telemetry continuity.",
+    scope: "Room sensors, gateway exports, and telemetry continuity.",
   },
-];
-
-const FACILITY_MAP_PLACEHOLDERS = [
-  "North flower zone",
-  "South flower zone",
-  "Propagation zone",
-  "Dry and cure support",
 ];
 
 const REPORT_TEMPLATES = [
@@ -65,7 +63,7 @@ const REPORT_TEMPLATES = [
   "Operator Action Report",
 ];
 
-const TELEMETRY_CATEGORIES = [
+const TELEMETRY_CHANNELS = [
   "temperature",
   "humidity",
   "CO2",
@@ -74,6 +72,13 @@ const TELEMETRY_CATEGORIES = [
   "irrigation",
   "lighting",
   "sensor network",
+];
+
+const INTAKE_STAGES = [
+  "Batch receipt",
+  "Header and schema detection",
+  "Timestamp and room context review",
+  "Baseline and evidence extraction",
 ];
 
 function App() {
@@ -156,51 +161,49 @@ function App() {
   const activeItem = NAV_ITEMS.find((item) => item.label === activePage) ?? NAV_ITEMS[0];
   const roomContext = deriveRoomContext(latestUploadResult);
   const timeCoverage = deriveTimeCoverage(latestUploadResult);
-  const findingsCount = buildFindingsFeed(latestUploadResult).length;
+  const findingsFeed = buildFindingsFeed(latestUploadResult);
 
   return (
-    <main className="mission-app">
-      <aside className="mission-sidebar" aria-label="Primary navigation">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
-            N
-          </div>
+    <main className="platform-shell">
+      <aside className="platform-sidebar" aria-label="Workspace navigation">
+        <div className="sidebar-brand">
+          <div className="brand-mark">N</div>
           <div>
             <p className="brand-name">Neraium</p>
             <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
           </div>
         </div>
 
-        <div className="sidebar-block">
-          <p className="sidebar-label">Workspace</p>
-          <nav className="nav-stack">
+        <div className="sidebar-section">
+          <p className="sidebar-kicker">Workspaces</p>
+          <nav className="workspace-nav">
             {NAV_ITEMS.map((item) => (
               <button
-                className={`nav-tile ${activePage === item.label ? "nav-tile--active" : ""}`}
+                className={`workspace-nav__item ${activePage === item.label ? "workspace-nav__item--active" : ""}`}
                 key={item.label}
                 type="button"
                 onClick={() => setActivePage(item.label)}
               >
-                <span className="nav-tile-label">{item.label}</span>
-                <span className="nav-tile-detail">{item.description}</span>
+                <span className="workspace-nav__label">{item.label}</span>
+                <span className="workspace-nav__detail">{item.description}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="sidebar-block sidebar-block--terminal">
-          <p className="sidebar-label">Persistent telemetry</p>
-          <TelemetryLine label="API target" value={formatEndpoint(API_BASE_URL)} />
-          <TelemetryLine label="Room context" value={roomContext.primary} />
-          <TelemetryLine label="Time coverage" value={timeCoverage.summary} />
-          <TelemetryLine
-            label="Findings in queue"
-            value={findingsCount > 0 ? `${findingsCount} active` : "Awaiting batch"}
+        <div className="sidebar-section sidebar-section--terminal">
+          <p className="sidebar-kicker">Persistent telemetry</p>
+          <SidebarTelemetry label="API target" value={formatEndpoint(API_BASE_URL)} />
+          <SidebarTelemetry label="Primary room" value={roomContext.primary} />
+          <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
+          <SidebarTelemetry
+            label="Findings"
+            value={findingsFeed.length > 0 ? `${findingsFeed.length} active` : "Awaiting batch"}
           />
         </div>
 
         <div className="sidebar-footer">
-          <div className={`system-dot system-dot--${apiStatus.state}`} />
+          <StatusDot tone={apiStatus.state} />
           <div>
             <p>{apiStatus.label}</p>
             <span>{apiStatus.detail}</span>
@@ -208,8 +211,8 @@ function App() {
         </div>
       </aside>
 
-      <div className="mission-main">
-        <TopTelemetryBar
+      <div className="platform-main">
+        <TopStatusBar
           activeItem={activeItem}
           apiStatus={apiStatus}
           latestUploadResult={latestUploadResult}
@@ -217,9 +220,9 @@ function App() {
           timeCoverage={timeCoverage}
         />
 
-        <section className="mission-workspace" aria-labelledby="page-title">
+        <section className="platform-workspace" aria-labelledby="page-title">
           {activePage === "Overview" && (
-            <OverviewPage
+            <OverviewWorkspace
               apiStatus={apiStatus}
               latestUploadResult={latestUploadResult}
               systems={systems}
@@ -228,23 +231,30 @@ function App() {
             />
           )}
           {activePage === "Facility Systems" && (
-            <FacilitySystemsPage
+            <FacilitySystemsWorkspace
               systems={systems}
               systemsState={systemsState}
               latestUploadResult={latestUploadResult}
               roomContext={roomContext}
             />
           )}
-          {activePage === "Data Upload" && (
-            <DataUploadPage
+          {activePage === "Data Intake" && (
+            <DataIntakeWorkspace
               latestUploadResult={latestUploadResult}
               onUploadComplete={setLatestUploadResult}
               roomContext={roomContext}
             />
           )}
-          {activePage === "Reports" && (
-            <ReportsPage
+          {activePage === "Evidence & Reports" && (
+            <EvidenceReportsWorkspace
               latestUploadResult={latestUploadResult}
+              roomContext={roomContext}
+            />
+          )}
+          {activePage === "Intelligence Console" && (
+            <IntelligenceConsoleWorkspace
+              latestUploadResult={latestUploadResult}
+              apiStatus={apiStatus}
               roomContext={roomContext}
             />
           )}
@@ -254,107 +264,140 @@ function App() {
   );
 }
 
-function TopTelemetryBar({
-  activeItem,
-  apiStatus,
-  latestUploadResult,
-  roomContext,
-  timeCoverage,
-}) {
-  const readiness = latestUploadResult?.data_quality?.readiness;
-  const analysisResult = latestUploadResult?.engine_result?.overall_result;
-
+function TopStatusBar({ activeItem, apiStatus, latestUploadResult, roomContext, timeCoverage }) {
   return (
-    <header className="top-telemetry">
-      <div className="top-telemetry__title">
+    <header className="top-status">
+      <div className="top-status__title">
         <p className="eyebrow">{activeItem.eyebrow}</p>
         <h1 id="page-title">{activeItem.label}</h1>
         <p>{activeItem.description}</p>
       </div>
 
-      <div className="telemetry-strip">
-        <TelemetryBadge label="Backend" value={apiStatus.label} tone={apiStatus.state} />
-        <TelemetryBadge label="Room or zone" value={roomContext.primary} tone="muted" />
-        <TelemetryBadge
+      <div className="status-rack">
+        <StatusChip label="Backend" value={apiStatus.label} tone={apiStatus.state} />
+        <StatusChip label="Room or zone" value={roomContext.primary} tone="muted" />
+        <StatusChip
           label="Upload batch"
           value={latestUploadResult?.filename ?? "Awaiting ingest"}
           tone={latestUploadResult ? "online" : "muted"}
         />
-        <TelemetryBadge
+        <StatusChip
           label="Readiness"
-          value={readiness ? formatReadiness(readiness) : "No active batch"}
-          tone={readiness ?? "muted"}
+          value={
+            latestUploadResult
+              ? formatReadiness(latestUploadResult.data_quality.readiness)
+              : "No active batch"
+          }
+          tone={latestUploadResult?.data_quality?.readiness ?? "muted"}
         />
-        <TelemetryBadge
+        <StatusChip
           label="Time coverage"
           value={timeCoverage.summary}
           tone={timeCoverage.hasCoverage ? "online" : "muted"}
         />
-        <TelemetryBadge
+        <StatusChip
           label="Operational result"
-          value={analysisResult ? formatEngineResult(analysisResult) : "Not generated"}
-          tone={analysisResult ?? "muted"}
+          value={
+            latestUploadResult?.engine_result
+              ? formatEngineResult(latestUploadResult.engine_result.overall_result)
+              : "Not generated"
+          }
+          tone={latestUploadResult?.engine_result?.overall_result ?? "muted"}
         />
       </div>
     </header>
   );
 }
 
-function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState, roomContext }) {
-  const telemetryCards = buildTelemetryCards(latestUploadResult);
-  const findingsFeed = buildFindingsFeed(latestUploadResult);
+function OverviewWorkspace({ apiStatus, latestUploadResult, systems, systemsState, roomContext }) {
   const alerts = buildAlertItems(latestUploadResult, apiStatus);
-  const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
-  const relationshipRows = buildRelationshipRows(latestUploadResult);
-  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext);
-  const facilityMapZones = buildFacilityMapZones(roomContext);
-  const evidenceConsole = buildEvidenceConsole(latestUploadResult);
+  const findingsFeed = buildFindingsFeed(latestUploadResult).slice(0, 5);
+  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext).slice(0, 6);
+  const overviewMetrics = buildOverviewMetrics(latestUploadResult, apiStatus, systems, systemsState);
+  const summaryTelemetry = buildTelemetryCards(latestUploadResult).slice(0, 4);
+  const zoneSummary = buildZoneSummary(roomContext);
 
   return (
-    <div className="workspace-grid workspace-grid--overview">
+    <div className="workspace-grid">
       <Panel
-        title="Operational timeline"
-        subtitle="Timestamped facility and ingest events for the current session."
-        className="span-7"
+        title="Operational summary"
+        subtitle="Concise facility-wide status for operational leadership and executive review."
+        className="span-6"
+      >
+        <MetricGrid metrics={overviewMetrics} />
+      </Panel>
+
+      <Panel
+        title="Active alerts"
+        subtitle="Current warnings, checks, and review items requiring attention."
+        className="span-3"
+      >
+        <AlertList alerts={alerts} />
+      </Panel>
+
+      <Panel
+        title="Ingestion activity"
+        subtitle="Most recent batch activity and timestamped operational events."
+        className="span-3"
       >
         <TimelineFeed items={timeline} />
       </Panel>
 
       <Panel
-        title="Active findings feed"
-        subtitle="Signals, observations, and review items extracted from the latest batch."
-        className="span-5"
-      >
-        <FindingsFeed items={findingsFeed} emptyText="Awaiting uploaded telemetry batch." />
-      </Panel>
-
-      <Panel
-        title="Facility map placeholder"
-        subtitle="Room and zone review surface grounded in current upload context."
+        title="Top findings"
+        subtitle="Highest-priority observations from the current session."
         className="span-4"
       >
-        <FacilityMapPlaceholder zones={facilityMapZones} />
+        <FeedList items={findingsFeed} emptyText="Awaiting uploaded telemetry batch." />
       </Panel>
 
       <Panel
-        title="Room and zone state"
-        subtitle="Operational placeholders for room-level review context."
+        title="High-level telemetry"
+        subtitle="Primary environmental and infrastructure channels in current view."
         className="span-4"
       >
-        <RoomStateGrid roomContext={roomContext} />
+        <TelemetryCardGrid cards={summaryTelemetry} compact />
       </Panel>
 
       <Panel
-        title="Environmental telemetry"
-        subtitle="Current telemetry channels mapped from uploaded cultivation data."
+        title="Room and zone summary"
+        subtitle="Current room context and placeholder review lanes for cultivation operations."
         className="span-4"
       >
-        <TelemetryCardGrid cards={telemetryCards} />
+        <ZoneSummaryGrid items={zoneSummary} />
+      </Panel>
+    </div>
+  );
+}
+
+function FacilitySystemsWorkspace({ systems, systemsState, latestUploadResult, roomContext }) {
+  const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
+  const relationshipRows = buildRelationshipRows(latestUploadResult);
+  const telemetryCards = buildTelemetryCards(latestUploadResult);
+  const roomTransitions = buildRoomTransitions(latestUploadResult, roomContext);
+  const equipmentPanels = buildEquipmentPanels(systems, latestUploadResult, roomContext);
+
+  return (
+    <div className="workspace-grid">
+      <Panel
+        title="HVAC and environmental telemetry"
+        subtitle="Current telemetry strips and time-series placeholders across monitored environmental channels."
+        className="span-8"
+      >
+        <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
       </Panel>
 
       <Panel
-        title="Drift monitoring"
-        subtitle="Baseline versus recent movement across environmental channels."
+        title="Live state indicators"
+        subtitle="Compact room and equipment state review for the current session."
+        className="span-4"
+      >
+        <SystemStateStrip items={equipmentPanels.slice(0, 6)} />
+      </Panel>
+
+      <Panel
+        title="Operational drift"
+        subtitle="Baseline versus current-window movement across room-level telemetry channels."
         className="span-6"
       >
         <DriftMonitor rows={driftRows} />
@@ -362,39 +405,23 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState, ro
 
       <Panel
         title="Relational stability"
-        subtitle="Paired signal behavior and coupling shifts across the active batch."
+        subtitle="Sensor relationship changes and coupling review."
         className="span-3"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
 
       <Panel
-        title="Operator alerts"
-        subtitle="Warnings, limitations, and operational checks requiring review."
+        title="Room state transitions"
+        subtitle="Timestamped room and zone transitions grounded in the active batch."
         className="span-3"
       >
-        <AlertList alerts={alerts} />
+        <TimelineFeed items={roomTransitions} />
       </Panel>
 
       <Panel
-        title="Ingest activity"
-        subtitle="Batch intake, readiness state, and source coverage progression."
-        className="span-6"
-      >
-        <IngestConsole result={latestUploadResult} roomContext={roomContext} />
-      </Panel>
-
-      <Panel
-        title="Evidence console"
-        subtitle="Evidence-first record of sources, audit trace, and review columns."
-        className="span-6"
-      >
-        <EvidenceConsole lines={evidenceConsole} />
-      </Panel>
-
-      <Panel
-        title="Facility systems"
-        subtitle="Current environmental systems and backend source state."
+        title="Operational systems table"
+        subtitle="Environmental systems, room context, and current source-state coverage."
         className="span-12"
       >
         <SystemsMatrix
@@ -407,43 +434,7 @@ function OverviewPage({ apiStatus, latestUploadResult, systems, systemsState, ro
   );
 }
 
-function FacilitySystemsPage({ systems, systemsState, latestUploadResult, roomContext }) {
-  const telemetryCards = buildTelemetryCards(latestUploadResult);
-
-  return (
-    <div className="workspace-grid workspace-grid--systems">
-      <Panel
-        title="Systems matrix"
-        subtitle="Operational scope across environmental control surfaces and review lanes."
-        className="span-8"
-      >
-        <SystemsMatrix
-          systems={systems}
-          systemsState={systemsState}
-          roomContext={roomContext}
-        />
-      </Panel>
-
-      <Panel
-        title="Telemetry coverage"
-        subtitle="Mapped channel coverage across facility systems."
-        className="span-4"
-      >
-        <TelemetryCardGrid cards={telemetryCards} />
-      </Panel>
-
-      <Panel
-        title="Zone review context"
-        subtitle="Room-level operational placeholders for premium cultivation facilities."
-        className="span-12"
-      >
-        <ZoneContextTable roomContext={roomContext} />
-      </Panel>
-    </div>
-  );
-}
-
-function DataUploadPage({ latestUploadResult, onUploadComplete, roomContext }) {
+function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -483,27 +474,26 @@ function DataUploadPage({ latestUploadResult, onUploadComplete, roomContext }) {
     }
   }
 
-  const telemetryCards = buildTelemetryCards(uploadResult);
-  const batchTimeline = buildOperationalTimeline(uploadResult, null, roomContext);
+  const intakeStages = buildIntakeStages(uploadResult, uploadState, roomContext);
 
   return (
-    <div className="workspace-grid workspace-grid--ingest">
+    <div className="workspace-grid">
       <Panel
         title="Operational batch intake"
-        subtitle="CSV ingestion for room telemetry, facility controls, irrigation review, and evidence generation."
+        subtitle="Procedural intake for telemetry exports, validation, mapping, and evidence extraction."
         className="span-7"
       >
-        <form className="ingest-form" onSubmit={handleUpload}>
-          <div className="ingest-copy">
-            <span className="section-token">Batch source</span>
-            <strong>Cultivation telemetry export</strong>
+        <form className="intake-flow" onSubmit={handleUpload}>
+          <div className="intake-flow__header">
+            <p className="section-token">Batch source</p>
+            <h3>Cultivation telemetry export</h3>
             <p>
-              Upload historical room, zone, irrigation, HVAC, or sensor-network exports
-              for deterministic profiling, baseline review, and operator findings.
+              Upload room, irrigation, HVAC, or sensor-network CSV batches for deterministic
+              parsing, baseline review, and evidence generation.
             </p>
           </div>
 
-          <div className="ingest-actions">
+          <div className="intake-flow__controls">
             <input
               accept=".csv,text/csv"
               id="csv-upload"
@@ -518,7 +508,7 @@ function DataUploadPage({ latestUploadResult, onUploadComplete, roomContext }) {
             </button>
           </div>
 
-          <div className="ingest-status-row">
+          <div className="intake-flow__status">
             <span>{selectedFile ? selectedFile.name : "No file selected"}</span>
             <span>{uploadStateMessage(uploadState)}</span>
           </div>
@@ -528,299 +518,194 @@ function DataUploadPage({ latestUploadResult, onUploadComplete, roomContext }) {
       </Panel>
 
       <Panel
-        title="Ingest activity"
-        subtitle="Live batch progression, room context, and readiness steps."
+        title="Validation stages"
+        subtitle="Traceable procedural intake stages for schema, parsing, and evidence review."
         className="span-5"
       >
-        <TimelineFeed items={batchTimeline} />
+        <WorkflowStages items={intakeStages} />
       </Panel>
 
       <Panel
-        title="Environmental telemetry"
-        subtitle="Channel coverage available from the active or latest batch."
+        title="Schema and room mapping"
+        subtitle="Detected room context, mapped columns, and sensor coverage from the active batch."
         className="span-4"
       >
-        <TelemetryCardGrid cards={telemetryCards} />
+        <SchemaMappingPanel result={uploadResult} roomContext={roomContext} />
       </Panel>
 
       <Panel
-        title="Expected source structure"
-        subtitle="Current ingest assumptions for cultivation infrastructure exports."
+        title="Operational verification"
+        subtitle="Current batch validation summary and procedural checkpoints."
         className="span-4"
       >
-        <CompactList
-          items={[
-            "Timestamped room or zone telemetry rows.",
-            "Environmental and equipment channels with numeric values.",
-            "Consistent export labels across HVAC, irrigation, and sensor systems.",
-            "Enough recent rows to compare baseline and active windows.",
-          ]}
-          emptyText="No source structure guidance available."
-        />
+        <VerificationPanel result={uploadResult} />
       </Panel>
 
       <Panel
-        title="Session batch state"
-        subtitle="Current browser-session ingest context."
+        title="Evidence extraction"
+        subtitle="Evidence-ready outputs available from the current intake flow."
         className="span-4"
       >
-        <SessionStatePanel result={uploadResult} roomContext={roomContext} />
+        <EvidenceExtractionPanel result={uploadResult} />
       </Panel>
 
-      {!uploadResult && uploadState !== "uploading" && !uploadError && (
+      {uploadResult ? (
+        <>
+          <Panel
+            title="Baseline comparison"
+            subtitle="Current baseline review and operational drift extraction from the active batch."
+            className="span-8"
+          >
+            <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
+          </Panel>
+
+          <Panel
+            title="Batch evidence console"
+            subtitle="Current ingest audit output and extraction traces."
+            className="span-4"
+          >
+            <EvidenceConsole lines={buildEvidenceConsole(uploadResult)} />
+          </Panel>
+        </>
+      ) : (
         <Panel
           title="Awaiting operational batch"
-          subtitle="The ingest workspace will populate after the first validated upload."
+          subtitle="The intake workspace will populate after the first validated upload."
           className="span-12"
         >
           <EmptyState
             title="No active cultivation batch"
-            body="Validate a CSV export to populate telemetry coverage, baseline drift, room context, operator findings, and evidence consoles."
+            body="Validate a telemetry export to populate schema detection, verification stages, baseline comparison, and evidence extraction."
           />
         </Panel>
-      )}
-
-      {uploadState === "uploading" && (
-        <Panel
-          title="Validation in progress"
-          subtitle="Profiling telemetry structure, baseline windows, and operator evidence."
-          className="span-12"
-        >
-          <EmptyState
-            title="Processing uploaded telemetry"
-            body="Neraium is preparing the batch for deterministic review across environmental channels and room-level findings."
-          />
-        </Panel>
-      )}
-
-      {uploadResult && (
-        <UploadResult result={uploadResult} />
       )}
     </div>
   );
 }
 
-function UploadResult({ result }) {
-  const quality = result.data_quality;
-  const timestampProfile = result.timestamp_profile;
-  const baselineAnalysis = result.baseline_analysis;
-  const cultivationMapping = result.cultivation_mapping;
-  const engineResult = result.engine_result;
-
-  return (
-    <>
-      <Panel
-        title="Batch readiness"
-        subtitle="Current usability state for the uploaded operational batch."
-        className="span-12"
-      >
-        <StatusBanner
-          title={formatReadiness(quality.readiness)}
-          subtitle="Timestamp continuity, sensor coverage, and baseline-comparison readiness for the current cultivation export."
-          tone={quality.readiness}
-        />
-        <MetricRow
-          metrics={[
-            { label: "Batch", value: result.filename },
-            { label: "Rows", value: result.row_count },
-            { label: "Columns", value: result.column_count },
-            { label: "Timestamp column", value: result.detected_timestamp_column ?? "Not detected" },
-            {
-              label: "Sensor channels",
-              value: quality?.numeric_column_count ?? result.numeric_profiles?.length ?? 0,
-            },
-          ]}
-        />
-      </Panel>
-
-      <Panel
-        title="Data quality"
-        subtitle="Usability summary for row count, column coverage, and timestamp context."
-        className="span-4"
-      >
-        <MetricGrid
-          metrics={[
-            { label: "Rows", value: quality.row_count },
-            { label: "Columns", value: quality.column_count },
-            { label: "Numeric columns", value: quality.numeric_column_count },
-            { label: "Timestamp detected", value: quality.timestamp_detected ? "Yes" : "No" },
-          ]}
-        />
-      </Panel>
-
-      <Panel
-        title="Time coverage"
-        subtitle="Detected time range and estimated sample interval."
-        className="span-4"
-      >
-        <MetricGrid
-          metrics={[
-            { label: "First timestamp", value: timestampProfile.first_timestamp ?? "Not available" },
-            { label: "Last timestamp", value: timestampProfile.last_timestamp ?? "Not available" },
-            {
-              label: "Sample interval",
-              value: timestampProfile.estimated_sample_interval ?? "Not available",
-            },
-          ]}
-        />
-      </Panel>
-
-      <Panel
-        title="Cultivation mapping"
-        subtitle="Mapped systems and sensor coverage from uploaded columns."
-        className="span-4"
-      >
-        <MetricGrid
-          metrics={[
-            { label: "Mapped columns", value: cultivationMapping.mapped_column_count },
-            { label: "Unknown columns", value: cultivationMapping.unknown_column_count },
-            { label: "Coverage", value: `${cultivationMapping.coverage_percent}%` },
-          ]}
-        />
-      </Panel>
-
-      <Panel
-        title="Numeric profiles"
-        subtitle="Per-channel ranges, averages, missing values, and variability."
-        className="span-6"
-      >
-        <DataTable
-          columns={["Column", "Min", "Max", "Average", "Missing", "Variability"]}
-          rows={result.numeric_profiles.map((profile) => [
-            profile.column,
-            profile.min,
-            profile.max,
-            profile.average,
-            `${profile.missing_count} (${profile.missing_percent}%)`,
-            <span className={`status-chip status-chip--${profile.variability}`} key={profile.column}>
-              {profile.variability}
-            </span>,
-          ])}
-        />
-      </Panel>
-
-      <Panel
-        title="Baseline drift"
-        subtitle="First-window versus recent-window movement across telemetry channels."
-        className="span-6"
-      >
-        <StatusBanner
-          title={formatAssessment(baselineAnalysis.overall_assessment)}
-          subtitle="The first 20% of rows define the baseline window and the last 20% define the active comparison window."
-          tone={baselineAnalysis.overall_assessment}
-        />
-        <DriftMonitor rows={baselineAnalysis.column_drift} />
-      </Panel>
-
-      <Panel
-        title="Mapped system categories"
-        subtitle="Grouped cultivation categories and uploaded channel assignments."
-        className="span-4"
-      >
-        <MappingGrid mapping={cultivationMapping} />
-      </Panel>
-
-      {engineResult && (
-        <Panel
-          title="Engine result"
-          subtitle="Deterministic system behavior evidence for the uploaded batch."
-          className="span-8"
-        >
-          <EngineResultPanel result={engineResult} />
-        </Panel>
-      )}
-
-      {result.operator_report && (
-        <Panel
-          title="Operator findings report"
-          subtitle="Plain-language findings, checks, limitations, and evidence sections."
-          className="span-8"
-        >
-          <OperatorReportPanel report={result.operator_report} />
-        </Panel>
-      )}
-
-      <Panel
-        title="Preview rows"
-        subtitle="First parsed rows from the current operational batch."
-        className="span-4"
-      >
-        {result.preview_rows.length > 0 ? (
-          <PreviewTable columns={result.columns} rows={result.preview_rows} />
-        ) : (
-          <EmptyState
-            title="No preview rows available"
-            body="The file headers were read, but no data rows were available for preview."
-          />
-        )}
-      </Panel>
-
-      <Panel
-        title="Evidence console"
-        subtitle="Warnings, audit trace, and batch review notes."
-        className="span-12"
-      >
-        <EvidenceConsole lines={buildEvidenceConsole(result)} />
-      </Panel>
-    </>
-  );
-}
-
-function ReportsPage({ latestUploadResult, roomContext }) {
+function EvidenceReportsWorkspace({ latestUploadResult, roomContext }) {
   const latestReport = latestUploadResult?.operator_report;
   const findingsFeed = buildFindingsFeed(latestUploadResult);
   const evidenceConsole = buildEvidenceConsole(latestUploadResult);
+  const timeline = buildOperationalTimeline(latestUploadResult, null, roomContext);
+  const observations = buildRoomObservations(latestUploadResult, roomContext);
 
   return (
-    <div className="workspace-grid workspace-grid--reports">
+    <div className="workspace-grid">
       <Panel
-        title="Operational findings"
-        subtitle="Session-driven findings report for growers, environmental operators, and infrastructure teams."
-        className="span-8"
+        title="Operator findings"
+        subtitle="Analytical review surface for findings, checks, limitations, and report output."
+        className="span-7"
       >
         {latestReport ? (
           <OperatorReportPanel report={latestReport} />
         ) : (
           <EmptyState
             title="No findings report in session"
-            body="Validate a cultivation CSV batch in the ingest workspace to generate the latest operator report."
+            body="Validate a cultivation batch in Data Intake to generate the latest operator report."
           />
         )}
       </Panel>
 
       <Panel
-        title="Findings feed"
-        subtitle="Signals, observations, and evidence summaries from the latest batch."
-        className="span-4"
-      >
-        <FindingsFeed items={findingsFeed} emptyText="Awaiting first batch findings." />
-      </Panel>
-
-      <Panel
-        title="Report catalog"
-        subtitle="Current report types surfaced in the workspace."
-        className="span-4"
-      >
-        <CompactList
-          items={REPORT_TEMPLATES}
-          emptyText="No report templates listed."
-        />
-      </Panel>
-
-      <Panel
-        title="Room review context"
-        subtitle="Current room, zone, and grow-cycle placeholders for the active batch."
-        className="span-4"
-      >
-        <RoomStateGrid roomContext={roomContext} />
-      </Panel>
-
-      <Panel
-        title="Evidence console"
-        subtitle="Evidence sources, audit trace lines, and columns requiring review."
-        className="span-4"
+        title="Evidence review"
+        subtitle="Audit-capable evidence references, source sections, and extraction traces."
+        className="span-5"
       >
         <EvidenceConsole lines={evidenceConsole} />
+      </Panel>
+
+      <Panel
+        title="Timeline playback"
+        subtitle="Timestamped playback for ingest, readiness, and findings progression."
+        className="span-4"
+      >
+        <TimelineFeed items={timeline} />
+      </Panel>
+
+      <Panel
+        title="Room observations"
+        subtitle="Room-level and zone-level observations grounded in the active batch."
+        className="span-4"
+      >
+        <CompactList items={observations} emptyText="No room-level observations available." />
+      </Panel>
+
+      <Panel
+        title="Operational notes"
+        subtitle="Current findings feed and evidence-linked review items."
+        className="span-4"
+      >
+        <FeedList items={findingsFeed} emptyText="Awaiting findings output." />
+      </Panel>
+
+      <Panel
+        title="Exported reports"
+        subtitle="Current report outputs available from the workspace."
+        className="span-12"
+      >
+        <CompactList items={REPORT_TEMPLATES} emptyText="No report templates listed." inline />
+      </Panel>
+    </div>
+  );
+}
+
+function IntelligenceConsoleWorkspace({ latestUploadResult, apiStatus, roomContext }) {
+  const telemetryCards = buildTelemetryCards(latestUploadResult);
+  const driftRows = latestUploadResult?.baseline_analysis?.column_drift ?? [];
+  const relationshipRows = buildRelationshipRows(latestUploadResult);
+  const timeline = buildOperationalTimeline(latestUploadResult, apiStatus, roomContext);
+  const findingsFeed = buildFindingsFeed(latestUploadResult);
+  const consoleEvents = buildConsoleEvents(latestUploadResult, apiStatus, roomContext);
+
+  return (
+    <div className="workspace-grid">
+      <Panel
+        title="Live telemetry"
+        subtitle="Current channel strips and environmental monitoring surface."
+        className="span-6"
+      >
+        <TelemetryCardGrid cards={telemetryCards} />
+      </Panel>
+
+      <Panel
+        title="Active drift feed"
+        subtitle="Scrolling drift transitions and baseline movement across channels."
+        className="span-3"
+      >
+        <DriftFeed rows={driftRows} />
+      </Panel>
+
+      <Panel
+        title="Relationship changes"
+        subtitle="Current paired-sensor changes and relational stability events."
+        className="span-3"
+      >
+        <RelationshipMonitor rows={relationshipRows} />
+      </Panel>
+
+      <Panel
+        title="Operational event stream"
+        subtitle="Session-wide monitoring events, ingest activity, and room transitions."
+        className="span-4"
+      >
+        <TimelineFeed items={timeline} />
+      </Panel>
+
+      <Panel
+        title="Operational notices"
+        subtitle="Current findings feed and active monitoring notices."
+        className="span-4"
+      >
+        <FeedList items={findingsFeed} emptyText="Awaiting telemetry findings." />
+      </Panel>
+
+      <Panel
+        title="Evidence terminal"
+        subtitle="Streaming evidence and operational terminal output."
+        className="span-4"
+      >
+        <EvidenceConsole lines={consoleEvents} animated />
       </Panel>
     </div>
   );
@@ -830,26 +715,116 @@ function Panel({ title, subtitle, className = "", children }) {
   return (
     <section className={`ops-panel ${className}`.trim()}>
       <div className="ops-panel__header">
-        <div>
-          <p className="section-token">{title}</p>
-          <h2>{subtitle}</h2>
-        </div>
+        <p className="section-token">{title}</p>
+        <h2>{subtitle}</h2>
       </div>
       <div className="ops-panel__body">{children}</div>
     </section>
   );
 }
 
-function TimelineFeed({ items }) {
+function WorkflowStages({ items }) {
   return (
-    <div className="timeline-feed">
+    <div className="workflow-list">
       {items.map((item) => (
-        <div className="timeline-row" key={`${item.time}-${item.title}-${item.detail}`}>
-          <div className={`timeline-dot timeline-dot--${item.tone}`} />
-          <div className="timeline-time">{item.time}</div>
-          <div className="timeline-copy">
+        <div className="workflow-step" key={item.title}>
+          <div className={`workflow-step__dot workflow-step__dot--${item.tone}`} />
+          <div>
             <strong>{item.title}</strong>
             <p>{item.detail}</p>
+          </div>
+          <span>{item.state}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SchemaMappingPanel({ result, roomContext }) {
+  const items = [
+    { label: "Primary room", value: roomContext.primary },
+    { label: "Secondary lane", value: roomContext.secondary },
+    {
+      label: "Mapped columns",
+      value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting batch",
+    },
+    {
+      label: "Unknown columns",
+      value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting batch",
+    },
+  ];
+
+  return <MetricGrid metrics={items} compact />;
+}
+
+function VerificationPanel({ result }) {
+  const items = [
+    {
+      label: "Readiness",
+      value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting batch",
+    },
+    {
+      label: "Rows parsed",
+      value: result ? result.row_count : "Pending",
+    },
+    {
+      label: "Timestamp context",
+      value: result?.detected_timestamp_column ?? "Pending",
+    },
+    {
+      label: "Numeric channels",
+      value: result ? result.data_quality.numeric_column_count : "Pending",
+    },
+  ];
+
+  return <MetricGrid metrics={items} compact />;
+}
+
+function EvidenceExtractionPanel({ result }) {
+  const items = [
+    {
+      title: "Baseline evidence",
+      detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Awaiting batch.",
+    },
+    {
+      title: "Engine evidence",
+      detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting batch.",
+    },
+    {
+      title: "Operator report",
+      detail: result?.operator_report ? "Current findings report available." : "Awaiting batch.",
+    },
+  ];
+
+  return <FeedList items={items} emptyText="Awaiting evidence extraction." />;
+}
+
+function MetricGrid({ metrics, compact = false }) {
+  return (
+    <div className={`metric-grid ${compact ? "metric-grid--compact" : ""}`}>
+      {metrics.map((metric) => (
+        <div className="metric-cell" key={metric.label}>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FeedList({ items, emptyText }) {
+  if (!items || items.length === 0) {
+    return <EmptyState title="No active items" body={emptyText} compact />;
+  }
+
+  return (
+    <div className="feed-list">
+      {items.map((item, index) => (
+        <div className="feed-item" key={`${item.title ?? item}-${index}`}>
+          <StatusDot tone={item.tone ?? "muted"} />
+          <div>
+            <strong>{item.title ?? item}</strong>
+            {item.detail && <p>{item.detail}</p>}
           </div>
         </div>
       ))}
@@ -857,16 +832,17 @@ function TimelineFeed({ items }) {
   );
 }
 
-function FindingsFeed({ items, emptyText }) {
-  if (items.length === 0) {
-    return <EmptyState title="No active findings" body={emptyText} compact />;
+function TimelineFeed({ items }) {
+  if (!items || items.length === 0) {
+    return <EmptyState title="No timeline events" body="Awaiting timestamped operational activity." compact />;
   }
 
   return (
-    <div className="findings-feed">
-      {items.map((item) => (
-        <div className="finding-row" key={`${item.title}-${item.detail}`}>
-          <div className={`system-dot system-dot--${item.tone}`} />
+    <div className="timeline-list">
+      {items.map((item, index) => (
+        <div className="timeline-item" key={`${item.time}-${item.title}-${index}`}>
+          <StatusDot tone={item.tone} />
+          <span className="timeline-item__time">{item.time}</span>
           <div>
             <strong>{item.title}</strong>
             <p>{item.detail}</p>
@@ -877,104 +853,47 @@ function FindingsFeed({ items, emptyText }) {
   );
 }
 
-function FacilityMapPlaceholder({ zones }) {
+function TelemetryCardGrid({ cards, compact = false }) {
   return (
-    <div className="facility-map">
-      {zones.map((zone) => (
-        <div className={`facility-zone facility-zone--${zone.tone}`} key={zone.label}>
-          <span>{zone.label}</span>
-          <strong>{zone.value}</strong>
-          <p>{zone.detail}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RoomStateGrid({ roomContext }) {
-  const cards = [
-    {
-      label: "Primary room",
-      value: roomContext.primary,
-      detail: "Current room or zone inferred from the active batch when available.",
-    },
-    {
-      label: "Secondary review lane",
-      value: roomContext.secondary,
-      detail: "Placeholder lane for multi-zone review and operator cross-checks.",
-    },
-    {
-      label: "Grow cycle",
-      value: roomContext.cycle,
-      detail: "Cycle context remains placeholder until facility-specific metadata is connected.",
-    },
-    {
-      label: "Irrigation review",
-      value: roomContext.irrigation,
-      detail: "Irrigation review context reflects uploaded channel coverage when present.",
-    },
-  ];
-
-  return (
-    <div className="state-grid">
-      {cards.map((card) => (
-        <div className="state-card" key={card.label}>
-          <span>{card.label}</span>
-          <strong>{card.value}</strong>
-          <p>{card.detail}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TelemetryCardGrid({ cards }) {
-  return (
-    <div className="telemetry-grid">
+    <div className={`telemetry-grid ${compact ? "telemetry-grid--compact" : ""}`}>
       {cards.map((card) => (
         <div className="telemetry-card" key={card.label}>
           <div className="telemetry-card__header">
             <span>{card.label}</span>
-            <div className={`system-dot system-dot--${card.tone}`} />
+            <StatusDot tone={card.tone} />
           </div>
           <strong>{card.primary}</strong>
           <p>{card.secondary}</p>
-          <MiniBars values={card.series} />
+          <MiniSeries values={card.series} tone={card.tone} />
         </div>
       ))}
     </div>
   );
 }
 
-function MiniBars({ values }) {
+function MiniSeries({ values, tone }) {
   if (!values || values.length === 0) {
-    return <div className="mini-bars mini-bars--empty">No live series</div>;
+    return <div className="mini-series mini-series--empty">No series</div>;
   }
 
   const maxValue = Math.max(...values, 1);
 
   return (
-    <div className="mini-bars">
+    <div className="mini-series">
       {values.map((value, index) => (
         <span
-          className="mini-bars__bar"
+          className={`mini-series__bar mini-series__bar--${tone}`}
           key={`${value}-${index}`}
-          style={{ height: `${Math.max((value / maxValue) * 100, 18)}%` }}
+          style={{ height: `${Math.max((value / maxValue) * 100, 16)}%` }}
         />
       ))}
     </div>
   );
 }
 
-function DriftMonitor({ rows }) {
+function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return (
-      <EmptyState
-        title="No drift monitor data"
-        body="Upload telemetry with enough usable rows to compare baseline and active windows."
-        compact
-      />
-    );
+    return <EmptyState title="No drift review available" body="Awaiting telemetry with enough usable rows." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -983,29 +902,32 @@ function DriftMonitor({ rows }) {
   );
 
   return (
-    <div className="drift-monitor">
+    <div className="drift-list">
       {rows.map((row) => {
         const magnitude = Math.abs(row.percent_change ?? row.absolute_change ?? 0);
-        const width = Math.max((magnitude / maxMagnitude) * 100, 4);
+        const width = Math.max((magnitude / maxMagnitude) * 100, 6);
 
         return (
           <div className="drift-row" key={row.column}>
-            <div className="drift-row__label">
+            <div className="drift-row__meta">
               <span>{row.column}</span>
               <strong>
                 {row.percent_change === null ? row.absolute_change : `${row.percent_change}%`}
               </strong>
             </div>
-            <div className="drift-row__bar">
+            <div className="drift-row__track">
               <span
                 className={`drift-row__fill drift-row__fill--${row.drift_flag}`}
                 style={{ width: `${width}%` }}
               />
             </div>
-            <div className="drift-row__meta">
+            <div className="drift-row__status">
               <span>{row.direction}</span>
               <span>{row.drift_flag}</span>
             </div>
+            {detailed && row.warnings?.length > 0 && (
+              <p className="drift-row__detail">{row.warnings.join(" ")}</p>
+            )}
           </div>
         );
       })}
@@ -1013,27 +935,42 @@ function DriftMonitor({ rows }) {
   );
 }
 
+function DriftFeed({ rows }) {
+  if (!rows || rows.length === 0) {
+    return <EmptyState title="No active drift feed" body="Awaiting baseline comparison output." compact />;
+  }
+
+  return (
+    <div className="feed-list">
+      {rows.map((row) => (
+        <div className="feed-item" key={row.column}>
+          <StatusDot tone={row.drift_flag} />
+          <div>
+            <strong>{row.column}</strong>
+            <p>
+              {row.direction} movement with{" "}
+              {row.percent_change === null ? row.absolute_change : `${row.percent_change}%`} change.
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RelationshipMonitor({ rows }) {
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        title="No relational evidence"
-        body="Relationship monitoring will populate when paired numeric channels are available."
-        compact
-      />
-    );
+  if (!rows || rows.length === 0) {
+    return <EmptyState title="No relationship changes" body="Awaiting paired telemetry evidence." compact />;
   }
 
   return (
     <div className="relationship-list">
-      {rows.map((row) => (
-        <div className="relationship-row" key={`${row.columns.join("-")}-${row.change}`}>
-          <div>
-            <span>{row.columns.join(" x ")}</span>
-            <strong>{row.change}</strong>
-          </div>
+      {rows.map((row, index) => (
+        <div className="relationship-row" key={`${row.columns.join("-")}-${index}`}>
+          <span>{row.columns.join(" x ")}</span>
+          <strong>{row.change}</strong>
           <p>
-            Baseline {row.baseline_correlation} to active {row.recent_correlation}
+            baseline {row.baseline_correlation} to active {row.recent_correlation}
           </p>
         </div>
       ))}
@@ -1042,49 +979,19 @@ function RelationshipMonitor({ rows }) {
 }
 
 function AlertList({ alerts }) {
+  if (!alerts || alerts.length === 0) {
+    return <EmptyState title="No active alerts" body="Current session does not contain additional alerts." compact />;
+  }
+
   return (
-    <div className="alert-list">
-      {alerts.map((alert) => (
-        <div className="alert-row" key={`${alert.title}-${alert.detail}`}>
-          <div className={`system-dot system-dot--${alert.tone}`} />
+    <div className="feed-list">
+      {alerts.map((alert, index) => (
+        <div className="feed-item" key={`${alert.title}-${index}`}>
+          <StatusDot tone={alert.tone} />
           <div>
             <strong>{alert.title}</strong>
             <p>{alert.detail}</p>
           </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function IngestConsole({ result, roomContext }) {
-  const lines = [
-    `batch.source=${result?.filename ?? "pending"}`,
-    `room.context=${roomContext.primary}`,
-    `rows=${result?.row_count ?? "pending"}`,
-    `columns=${result?.column_count ?? "pending"}`,
-    `readiness=${result?.data_quality?.readiness ?? "pending"}`,
-    `mapped_columns=${result?.cultivation_mapping?.mapped_column_count ?? "pending"}`,
-    `engine_result=${result?.engine_result?.overall_result ?? "pending"}`,
-  ];
-
-  return (
-    <div className="console-lines">
-      {lines.map((line) => (
-        <div className="console-line" key={line}>
-          <span>{line}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EvidenceConsole({ lines }) {
-  return (
-    <div className="console-lines console-lines--scroll">
-      {lines.map((line) => (
-        <div className="console-line" key={line}>
-          <span>{line}</span>
         </div>
       ))}
     </div>
@@ -1105,100 +1012,16 @@ function SystemsMatrix({ systems, systemsState, roomContext }) {
   );
 }
 
-function ZoneContextTable({ roomContext }) {
-  const rows = [
-    ["Primary room", roomContext.primary, "Active review placeholder"],
-    ["Secondary lane", roomContext.secondary, "Cross-room comparison placeholder"],
-    ["Irrigation zone", roomContext.irrigation, "Irrigation review placeholder"],
-    ["Grow cycle", roomContext.cycle, "Cycle-stage placeholder"],
-  ];
-
+function ZoneSummaryGrid({ items }) {
   return (
-    <DataTable
-      columns={["Context lane", "Current value", "Operational role"]}
-      rows={rows}
-    />
-  );
-}
-
-function SessionStatePanel({ result, roomContext }) {
-  const items = [
-    ["Room or zone", roomContext.primary],
-    ["Latest batch", result?.filename ?? "No active batch"],
-    ["Readiness", result ? formatReadiness(result.data_quality.readiness) : "Pending"],
-    [
-      "Findings state",
-      result?.engine_result ? formatEngineResult(result.engine_result.overall_result) : "Pending",
-    ],
-  ];
-
-  return (
-    <div className="metric-grid metric-grid--single">
-      {items.map(([label, value]) => (
-        <MetricCell key={label} label={label} value={value} />
-      ))}
-    </div>
-  );
-}
-
-function MappingGrid({ mapping }) {
-  return (
-    <div className="mapping-grid">
-      {Object.entries(mapping.categories).map(([category, columns]) => (
-        <div className="mapping-card" key={category}>
-          <span>{category}</span>
-          <strong>{columns.length > 0 ? columns.join(", ") : "No mapped columns"}</strong>
+    <div className="zone-summary-grid">
+      {items.map((item) => (
+        <div className="zone-summary-card" key={item.label}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+          <p>{item.detail}</p>
         </div>
       ))}
-    </div>
-  );
-}
-
-function EngineResultPanel({ result }) {
-  const relationshipRows = buildRelationshipRows({ engine_result: result });
-  const findings = result.signals.map((signal) => signal.message);
-  const checks = result.recommended_checks;
-
-  return (
-    <div className="panel-stack">
-      <StatusBanner
-        title={formatEngineResult(result.overall_result)}
-        subtitle={result.summary}
-        tone={result.overall_result}
-      />
-      <MetricGrid
-        metrics={[
-          { label: "Corroboration", value: formatShortLabel(result.system_evidence?.corroboration_level ?? "limited") },
-          {
-            label: "Changed categories",
-            value: result.system_evidence?.categories_showing_meaningful_change ?? 0,
-          },
-          {
-            label: "Changed signals",
-            value: result.system_evidence?.numeric_signals_showing_meaningful_change ?? 0,
-          },
-          {
-            label: "Persistence",
-            value: formatShortLabel(result.persistence_assessment?.status ?? "limited"),
-          },
-        ]}
-      />
-      <div className="dual-column">
-        <CompactList items={findings} emptyText="No engine findings were recorded." title="Findings" />
-        <CompactList items={checks} emptyText="No operator checks were generated." title="Checks" />
-      </div>
-      <div className="dual-column">
-        <CompactList
-          items={result.limitations}
-          emptyText="No additional limitations were recorded."
-          title="Limitations"
-        />
-        <CompactList
-          items={relationshipRows.map((row) => `${row.columns.join(" x ")}: ${row.change}`)}
-          emptyText="No relational stability changes were recorded."
-          title="Relational stability"
-        />
-      </div>
     </div>
   );
 }
@@ -1211,6 +1034,7 @@ function OperatorReportPanel({ report }) {
         subtitle={report.summary}
         tone={report.data_readiness}
       />
+
       <MetricGrid
         metrics={[
           { label: "Readiness", value: formatReadiness(report.data_readiness) },
@@ -1227,20 +1051,15 @@ function OperatorReportPanel({ report }) {
             value: report.source_sections_used.length,
           },
         ]}
+        compact
       />
-      <div className="dual-column">
-        <CompactList
-          items={report.key_observations}
-          emptyText="No observations were generated."
-          title="Observations"
-        />
-        <CompactList
-          items={report.recommended_operator_checks}
-          emptyText="No operator checks were generated."
-          title="Operator checks"
-        />
+
+      <div className="two-column-block">
+        <CompactList items={report.key_observations} emptyText="No observations were generated." title="Observations" />
+        <CompactList items={report.recommended_operator_checks} emptyText="No operator checks were generated." title="Operator checks" />
       </div>
-      <div className="dual-column">
+
+      <div className="two-column-block">
         <CompactList
           items={formatColumnsRequiringReview(report.columns_requiring_review)}
           emptyText="No columns were marked for review."
@@ -1256,19 +1075,38 @@ function OperatorReportPanel({ report }) {
   );
 }
 
-function PreviewTable({ columns, rows }) {
+function CompactList({ items, emptyText, title, inline = false }) {
   return (
-    <DataTable
-      columns={columns}
-      rows={rows.map((row) => columns.map((column) => row[column]))}
-      compact
-    />
+    <div className={`compact-list-block ${inline ? "compact-list-block--inline" : ""}`}>
+      {title && <p className="section-token">{title}</p>}
+      {items && items.length > 0 ? (
+        <ul className={`compact-list ${inline ? "compact-list--inline" : ""}`}>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="empty-copy">{emptyText}</p>
+      )}
+    </div>
   );
 }
 
-function DataTable({ columns, rows, compact = false }) {
+function EvidenceConsole({ lines, animated = false }) {
   return (
-    <div className={`table-shell ${compact ? "table-shell--compact" : ""}`}>
+    <div className={`evidence-console ${animated ? "evidence-console--animated" : ""}`}>
+      {lines.map((line, index) => (
+        <div className="evidence-console__line" key={`${line}-${index}`}>
+          <span>{line}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DataTable({ columns, rows }) {
+  return (
+    <div className="table-shell">
       <table className="data-table">
         <thead>
           <tr>
@@ -1291,82 +1129,6 @@ function DataTable({ columns, rows, compact = false }) {
   );
 }
 
-function CompactList({ items, emptyText, title }) {
-  return (
-    <div className="list-block">
-      {title && <p className="list-block__title">{title}</p>}
-      {items.length > 0 ? (
-        <ul className="compact-list">
-          {items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="empty-copy">{emptyText}</p>
-      )}
-    </div>
-  );
-}
-
-function MetricRow({ metrics }) {
-  return (
-    <div className="metric-row">
-      {metrics.map((metric) => (
-        <MetricCell key={metric.label} label={metric.label} value={metric.value} />
-      ))}
-    </div>
-  );
-}
-
-function MetricGrid({ metrics }) {
-  return (
-    <div className="metric-grid">
-      {metrics.map((metric) => (
-        <MetricCell key={metric.label} label={metric.label} value={metric.value} />
-      ))}
-    </div>
-  );
-}
-
-function MetricCell({ label, value }) {
-  return (
-    <div className="metric-cell">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function TelemetryBadge({ label, value, tone }) {
-  return (
-    <div className={`telemetry-badge telemetry-badge--${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function TelemetryLine({ label, value }) {
-  return (
-    <div className="telemetry-line">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function StatusBanner({ title, subtitle, tone }) {
-  return (
-    <div className={`status-banner status-banner--${tone}`}>
-      <div className={`system-dot system-dot--${tone}`} />
-      <div>
-        <strong>{title}</strong>
-        <p>{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
 function EmptyState({ title, body, compact = false }) {
   return (
     <div className={`empty-state ${compact ? "empty-state--compact" : ""}`}>
@@ -1376,11 +1138,45 @@ function EmptyState({ title, body, compact = false }) {
   );
 }
 
+function StatusBanner({ title, subtitle, tone }) {
+  return (
+    <div className={`status-banner status-banner--${tone}`}>
+      <StatusDot tone={tone} />
+      <div>
+        <strong>{title}</strong>
+        <p>{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusChip({ label, value, tone }) {
+  return (
+    <div className={`status-chip status-chip--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function SidebarTelemetry({ label, value }) {
+  return (
+    <div className="sidebar-telemetry">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function StatusDot({ tone }) {
+  return <span className={`status-dot status-dot--${tone}`} />;
+}
+
 function buildTelemetryCards(result) {
   if (!result) {
-    return TELEMETRY_CATEGORIES.map((category) => ({
-      label: formatCategory(category),
-      primary: "Awaiting channel coverage",
+    return TELEMETRY_CHANNELS.map((channel) => ({
+      label: formatCategory(channel),
+      primary: "Awaiting channel",
       secondary: "No active telemetry batch.",
       series: [],
       tone: "muted",
@@ -1395,44 +1191,35 @@ function buildTelemetryCards(result) {
     (result.baseline_analysis?.column_drift ?? []).map((row) => [row.column, row]),
   );
 
-  return TELEMETRY_CATEGORIES.map((category) => {
-    const mappedColumns = mapping[category] ?? [];
-    const matchingProfile = mappedColumns.map((column) => profilesByColumn.get(column)).find(Boolean);
-    const matchingDrift = mappedColumns.map((column) => driftByColumn.get(column)).find(Boolean);
-    const series = buildSeriesFromProfile(matchingProfile, matchingDrift);
+  return TELEMETRY_CHANNELS.map((channel) => {
+    const mappedColumns = mapping[channel] ?? [];
+    const profile = mappedColumns.map((column) => profilesByColumn.get(column)).find(Boolean);
+    const drift = mappedColumns.map((column) => driftByColumn.get(column)).find(Boolean);
 
-    if (!matchingProfile) {
+    if (!profile) {
       return {
-        label: formatCategory(category),
+        label: formatCategory(channel),
         primary: mappedColumns.length > 0 ? "Mapped without numeric profile" : "Awaiting channel",
         secondary:
           mappedColumns.length > 0
             ? mappedColumns.join(", ")
             : "No uploaded channel mapped to this system category.",
-        series,
+        series: [],
         tone: "muted",
       };
     }
 
-    const coverage = matchingProfile.missing_percent === 0
-      ? "full coverage"
-      : `${matchingProfile.missing_percent}% missing`;
-
     return {
-      label: formatCategory(category),
-      primary: `${matchingProfile.average} avg`,
-      secondary: `${matchingProfile.column} | ${coverage}`,
-      series,
-      tone: matchingDrift?.drift_flag ?? matchingProfile.variability ?? "normal",
+      label: formatCategory(channel),
+      primary: `${profile.average} avg`,
+      secondary: `${profile.column} | ${profile.missing_percent}% missing`,
+      series: buildSeries(profile, drift),
+      tone: drift?.drift_flag ?? profile.variability ?? "normal",
     };
   });
 }
 
-function buildSeriesFromProfile(profile, drift) {
-  if (!profile) {
-    return [];
-  }
-
+function buildSeries(profile, drift) {
   const values = [profile.min, profile.average, profile.max]
     .filter((value) => typeof value === "number")
     .map((value) => Math.abs(value));
@@ -1441,7 +1228,7 @@ function buildSeriesFromProfile(profile, drift) {
     values.push(Math.abs(drift.absolute_change));
   }
 
-  return values.length > 0 ? values : [];
+  return values;
 }
 
 function buildOperationalTimeline(result, apiStatus, roomContext) {
@@ -1459,14 +1246,14 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
   if (!result) {
     items.push({
       time: "Awaiting batch",
-      title: "No operational ingest",
-      detail: `Room context placeholder: ${roomContext.primary}.`,
+      title: "No active ingest",
+      detail: `Room placeholder: ${roomContext.primary}.`,
       tone: "muted",
     });
     items.push({
       time: "Awaiting batch",
       title: "Baseline review pending",
-      detail: "Upload a cultivation telemetry export to populate monitoring surfaces.",
+      detail: "Upload telemetry to populate facility-wide timeline playback.",
       tone: "muted",
     });
     return items;
@@ -1474,15 +1261,15 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
 
   const timeCoverage = deriveTimeCoverage(result);
   items.push({
-    time: timeCoverage.first ?? "Start",
+    time: timeCoverage.first ?? "Batch start",
     title: "Time coverage opened",
-    detail: `Detected ${result.detected_timestamp_column ?? "row-order"} context for the uploaded batch.`,
+    detail: `Detected ${result.detected_timestamp_column ?? "row-order"} timeline context.`,
     tone: "online",
   });
   items.push({
     time: "Batch",
     title: "Ingest validated",
-    detail: `${result.row_count} rows and ${result.column_count} columns were parsed in memory.`,
+    detail: `${result.row_count} rows and ${result.column_count} columns parsed in memory.`,
     tone: "online",
   });
   items.push({
@@ -1505,7 +1292,7 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
   });
   if (result.engine_result) {
     items.push({
-      time: timeCoverage.last ?? "Review",
+      time: timeCoverage.last ?? "Findings",
       title: "Operational findings generated",
       detail: formatEngineResult(result.engine_result.overall_result),
       tone: result.engine_result.overall_result,
@@ -1571,11 +1358,7 @@ function buildAlertItems(result, apiStatus) {
     return alerts;
   }
 
-  const warnings = result.warnings ?? [];
-  const limitations = result.engine_result?.limitations ?? [];
-  const checks = result.operator_report?.recommended_operator_checks ?? [];
-
-  warnings.slice(0, 2).forEach((warning) => {
+  (result.warnings ?? []).slice(0, 2).forEach((warning) => {
     alerts.push({
       title: "Batch warning",
       detail: warning,
@@ -1583,7 +1366,7 @@ function buildAlertItems(result, apiStatus) {
     });
   });
 
-  limitations.slice(0, 2).forEach((limitation) => {
+  (result.engine_result?.limitations ?? []).slice(0, 2).forEach((limitation) => {
     alerts.push({
       title: "Review limitation",
       detail: limitation,
@@ -1591,7 +1374,7 @@ function buildAlertItems(result, apiStatus) {
     });
   });
 
-  checks.slice(0, 2).forEach((check) => {
+  (result.operator_report?.recommended_operator_checks ?? []).slice(0, 2).forEach((check) => {
     alerts.push({
       title: "Operator check",
       detail: check,
@@ -1610,11 +1393,103 @@ function buildAlertItems(result, apiStatus) {
       ];
 }
 
+function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
+  return [
+    {
+      label: "Facility stability",
+      value: result?.engine_result ? deriveFacilityStability(result) : "Awaiting review",
+    },
+    {
+      label: "Active alerts",
+      value: buildAlertItems(result, apiStatus).length,
+    },
+    {
+      label: "Ingestion state",
+      value: result ? formatReadiness(result.data_quality.readiness) : "No active batch",
+    },
+    {
+      label: "Systems in scope",
+      value: systemsState === "ready" ? `${systems.length} live` : `${systems.length} placeholder`,
+    },
+  ];
+}
+
+function buildZoneSummary(roomContext) {
+  return [
+    {
+      label: "Primary room",
+      value: roomContext.primary,
+      detail: "Current room or zone inferred from active upload context.",
+    },
+    {
+      label: "Secondary lane",
+      value: roomContext.secondary,
+      detail: "Cross-room review placeholder for facility operations.",
+    },
+    {
+      label: "Grow cycle",
+      value: roomContext.cycle,
+      detail: "Cycle context remains placeholder until facility metadata is connected.",
+    },
+    {
+      label: "Irrigation review",
+      value: roomContext.irrigation,
+      detail: "Irrigation context reflects mapped channels when present.",
+    },
+  ];
+}
+
+function buildRoomTransitions(result, roomContext) {
+  const items = [
+    {
+      time: "Transition",
+      title: "Primary room context",
+      detail: roomContext.primary,
+      tone: "online",
+    },
+    {
+      time: "Transition",
+      title: "Secondary review lane",
+      detail: roomContext.secondary,
+      tone: "muted",
+    },
+    {
+      time: "Transition",
+      title: "Irrigation context",
+      detail: roomContext.irrigation,
+      tone: "needs_review",
+    },
+  ];
+
+  if (result?.timestamp_profile?.estimated_sample_interval) {
+    items.push({
+      time: "Timing",
+      title: "Sample interval",
+      detail: result.timestamp_profile.estimated_sample_interval,
+      tone: "online",
+    });
+  }
+
+  return items;
+}
+
+function buildEquipmentPanels(systems, result, roomContext) {
+  return systems.map((system, index) => ({
+    label: system.name,
+    value: systemRoomContext(system.name, roomContext),
+    tone: index % 3 === 0
+      ? result?.engine_result?.overall_result ?? "muted"
+      : index % 3 === 1
+        ? "online"
+        : "needs_review",
+  }));
+}
+
 function buildEvidenceConsole(result) {
   if (!result) {
     return [
       "evidence.console=awaiting_batch",
-      "engine.audit=not_available",
+      "schema.mapping=not_available",
       "operator.report=not_generated",
     ];
   }
@@ -1622,8 +1497,8 @@ function buildEvidenceConsole(result) {
   const lines = [
     `batch.file=${result.filename}`,
     `data.readiness=${result.data_quality.readiness}`,
-    `batch.rows=${result.row_count}`,
-    `batch.columns=${result.column_count}`,
+    `rows=${result.row_count}`,
+    `columns=${result.column_count}`,
     `mapping.coverage=${result.cultivation_mapping.coverage_percent}%`,
   ];
 
@@ -1642,26 +1517,48 @@ function buildEvidenceConsole(result) {
   return lines;
 }
 
+function buildConsoleEvents(result, apiStatus, roomContext) {
+  const lines = [
+    `console.link=${apiStatus.label}`,
+    `console.room=${roomContext.primary}`,
+    `console.secondary=${roomContext.secondary}`,
+    `console.irrigation=${roomContext.irrigation}`,
+  ];
+
+  if (result) {
+    lines.push(`console.batch=${result.filename}`);
+    lines.push(`console.readiness=${result.data_quality.readiness}`);
+    (result.engine_result?.signals ?? []).slice(0, 6).forEach((signal) => {
+      lines.push(`signal.event=${signal.message}`);
+    });
+  } else {
+    lines.push("console.batch=awaiting_ingest");
+  }
+
+  return [...lines, ...buildEvidenceConsole(result).slice(0, 10)];
+}
+
 function buildRelationshipRows(result) {
-  const evidence = result?.engine_result?.evidence ?? [];
+  const source = result?.engine_result ? result.engine_result : result?.engine_result === undefined ? result?.engine_result : null;
+  const evidence = source?.evidence ?? result?.engine_result?.evidence ?? [];
   return evidence.filter((item) => item.type === "relationship_change");
 }
 
-function buildFacilityMapZones(roomContext) {
-  return FACILITY_MAP_PLACEHOLDERS.map((label, index) => {
-    const current = index === 0 ? roomContext.primary : index === 1 ? roomContext.secondary : "Context placeholder";
-    return {
-      label,
-      value: current,
-      detail:
-        index === 2
-          ? "Propagation and transition review lane placeholder."
-          : index === 3
-            ? "Support environment review placeholder."
-            : "Operational room context placeholder.",
-      tone: index === 0 ? "online" : "muted",
-    };
-  });
+function buildRoomObservations(result, roomContext) {
+  const observations = [
+    `Primary room or zone context: ${roomContext.primary}.`,
+    `Secondary review lane: ${roomContext.secondary}.`,
+    `Grow cycle placeholder: ${roomContext.cycle}.`,
+    `Irrigation context: ${roomContext.irrigation}.`,
+  ];
+
+  if (result?.operator_report?.time_coverage?.first_timestamp && result?.operator_report?.time_coverage?.last_timestamp) {
+    observations.push(
+      `Observed time coverage runs from ${result.operator_report.time_coverage.first_timestamp} to ${result.operator_report.time_coverage.last_timestamp}.`,
+    );
+  }
+
+  return observations;
 }
 
 function deriveRoomContext(result) {
@@ -1723,6 +1620,62 @@ function deriveTimeCoverage(result) {
   };
 }
 
+function deriveFacilityStability(result) {
+  const overallResult = result.engine_result?.overall_result;
+  if (overallResult === "normal") {
+    return "No elevated drift found";
+  }
+  if (overallResult === "elevated") {
+    return "Meaningful change requires review";
+  }
+  if (overallResult === "needs_review") {
+    return "More review context needed";
+  }
+  return "Awaiting operational review";
+}
+
+function buildIntakeStages(result, uploadState, roomContext) {
+  return INTAKE_STAGES.map((stage, index) => {
+    if (uploadState === "uploading") {
+      return {
+        title: stage,
+        detail:
+          index === 0
+            ? "Batch is being validated."
+            : "Pending upstream intake stage completion.",
+        state: index === 0 ? "active" : "queued",
+        tone: index === 0 ? "checking" : "muted",
+      };
+    }
+
+    if (!result) {
+      return {
+        title: stage,
+        detail:
+          index === 2
+            ? `Room placeholder: ${roomContext.primary}.`
+            : "Awaiting uploaded telemetry batch.",
+        state: "pending",
+        tone: "muted",
+      };
+    }
+
+    const details = [
+      `${result.filename} received for in-memory parsing.`,
+      `${result.columns.length} headers detected across the uploaded batch.`,
+      `Room context resolved as ${roomContext.primary}.`,
+      `${result.engine_result ? "Evidence extracted and findings generated." : "Evidence generation pending."}`,
+    ];
+
+    return {
+      title: stage,
+      detail: details[index],
+      state: "complete",
+      tone: index === 3 && !result.engine_result ? "needs_review" : "online",
+    };
+  });
+}
+
 function systemRoomContext(systemName, roomContext) {
   const normalized = systemName.toLowerCase();
   if (normalized.includes("irrigation")) {
@@ -1767,10 +1720,6 @@ function formatReadiness(readiness) {
   return "Not ready";
 }
 
-function formatAssessment(assessment) {
-  return assessment === "normal" ? "Normal" : "Needs review";
-}
-
 function formatEngineResult(result) {
   if (result === "elevated") {
     return "Elevated";
@@ -1779,10 +1728,6 @@ function formatEngineResult(result) {
     return "Needs review";
   }
   return "Normal";
-}
-
-function formatShortLabel(value) {
-  return value.replaceAll("_", " ").replace(/^\w/, (character) => character.toUpperCase());
 }
 
 function formatEndpoint(endpoint) {
