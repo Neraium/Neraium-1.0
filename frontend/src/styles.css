@@ -543,6 +543,7 @@ h4 {
     linear-gradient(180deg, rgba(20, 27, 31, 0.98), rgba(12, 17, 20, 0.98));
   box-shadow: var(--shadow-panel);
   overflow: hidden;
+  border-radius: 6px;
 }
 
 .ops-panel::before {
@@ -553,6 +554,15 @@ h4 {
     linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 18%),
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.018), transparent 26%);
   pointer-events: none;
+}
+
+.ops-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.018);
+  opacity: 0.8;
 }
 
 .ops-panel__header,
@@ -622,6 +632,9 @@ h4 {
 .workspace-grid--console .ops-panel {
   gap: 10px;
   padding: 11px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.02), transparent 30%),
+    linear-gradient(180deg, rgba(20, 27, 31, 0.985), rgba(12, 17, 20, 0.985));
 }
 
 .workspace-grid--systems .ops-panel__header,
@@ -630,6 +643,10 @@ h4 {
 .workspace-grid--console .ops-panel__header {
   gap: 4px;
   padding-bottom: 6px;
+}
+
+.ops-panel__header h2 {
+  max-width: 34ch;
 }
 
 .workspace-grid--systems .ops-panel__body,
@@ -847,6 +864,7 @@ h4 {
     transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  border-radius: 6px;
 }
 
 .intervention-card:hover {
@@ -921,6 +939,7 @@ h4 {
     transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  border-radius: 6px;
 }
 
 .room-health-card__header {
@@ -1046,6 +1065,7 @@ h4 {
     transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  border-radius: 6px;
 }
 
 .action-queue__item:hover {
@@ -1256,6 +1276,7 @@ h4 {
     transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  border-radius: 6px;
 }
 
 .topology-node:hover {
@@ -1343,6 +1364,7 @@ h4 {
     transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  border-radius: 6px;
 }
 
 .target-selector__item:hover {
@@ -1395,6 +1417,8 @@ h4 {
   background:
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.02), transparent 28%),
     linear-gradient(180deg, rgba(20, 27, 31, 0.92), rgba(12, 17, 20, 0.88));
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .technical-evidence__section[open] {
@@ -1739,6 +1763,11 @@ h4 {
   box-shadow: none;
 }
 
+.command-button--secondary:hover:enabled {
+  border-color: rgba(120, 148, 139, 0.28);
+  background: linear-gradient(180deg, rgba(22, 31, 35, 0.98), rgba(15, 22, 25, 0.98));
+}
+
 .command-button:disabled {
   cursor: progress;
   opacity: 0.72;
@@ -1783,6 +1812,7 @@ h4 {
   padding: 10px;
   border: 1px solid rgba(120, 148, 139, 0.08);
   background: var(--bg-panel-soft);
+  border-radius: 6px;
 }
 
 .evidence-action-row {

@@ -13,25 +13,25 @@ const WORKSPACES = [
     id: "facility-systems",
     label: "Facility Systems",
     eyebrow: "Systems",
-    description: "Signals, drift, and room relationships behind each intervention window.",
+    description: "Fleet signals and intervention pressure across the facility.",
   },
   {
     id: "data-intake",
     label: "Data Intake",
     eyebrow: "Intake",
-    description: "Upload facility data to improve confidence and tighten decision timing.",
+    description: "Connect facility data to sharpen confidence and timing.",
   },
   {
     id: "evidence-reports",
     label: "Evidence & Reports",
     eyebrow: "Evidence",
-    description: "Decision memos, causal evidence, and operator-ready support.",
+    description: "Executive briefs, causal evidence, and operator support.",
   },
   {
     id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
-    description: "Live decision stream, action priority, and connection diagnostics.",
+    description: "Live decisions, action priority, and connection diagnostics.",
   },
 ];
 
@@ -664,7 +664,7 @@ function FacilitySystemsWorkspace({
     <div className="workspace-grid workspace-grid--systems">
       <Panel
         title="Fleet overview"
-        subtitle="Start at the system fleet level, then drill into the intervention target that matters most."
+        subtitle="Start at fleet level, then move into the target that needs attention."
         className="span-8"
       >
         <FleetSummary summary={fleetSummary} />
@@ -672,7 +672,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Intervention targets"
-        subtitle="Rooms and systems ranked by time remaining."
+        subtitle="Ranked by time remaining."
         className="span-4"
       >
         <TargetSelector
@@ -684,7 +684,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Selected target"
-        subtitle="Why the current intervention target is moving."
+        subtitle="Why this intervention window is moving."
         className="span-3"
       >
         <WhyPanel item={systemsFocus} findings={liveOps.findings.slice(0, 3)} />
@@ -692,7 +692,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Intervention drivers"
-        subtitle="Signals that are compressing or extending the current maintenance window."
+        subtitle="Signals compressing or extending the current window."
         className="span-6"
       >
         <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
@@ -700,7 +700,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Room transitions"
-        subtitle="Changes that alter intervention timing."
+        subtitle="Changes affecting timing."
         className="span-3"
       >
         <TimelineFeed items={roomTransitions} />
@@ -708,7 +708,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Drift by channel"
-        subtitle="Baseline movement ranked by operational significance."
+        subtitle="Baseline movement by operational significance."
         className="span-5"
       >
         <DriftMonitor rows={driftRows} />
@@ -716,7 +716,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Relationship shifts"
-        subtitle="Paired changes most likely to change confidence."
+        subtitle="Paired changes most likely to shift confidence."
         className="span-3"
       >
         <RelationshipMonitor rows={relationshipRows} />
@@ -724,7 +724,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Irrigation context"
-        subtitle="Current cycle state and operator review notes."
+        subtitle="Cycle state and operator review notes."
         className="span-4"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
@@ -736,7 +736,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Systems in scope"
-        subtitle="Source coverage and room context behind each active decision."
+        subtitle="Source coverage and room context behind active decisions."
         className="span-12"
       >
         <SystemsMatrix
@@ -799,7 +799,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     <div className="workspace-grid workspace-grid--intake">
       <Panel
         title="Decision intake"
-        subtitle="Connect facility data so intervention timing becomes more precise."
+        subtitle="Connect facility data so timing becomes more precise."
         className="span-7"
       >
         <form className="intake-flow" onSubmit={handleUpload}>
@@ -838,7 +838,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Decision readiness"
-        subtitle="What has to be true before Neraium can tighten the intervention window."
+        subtitle="What must be true before Neraium can tighten the window."
         className="span-5"
       >
         <WorkflowStages items={intakeStages} />
@@ -846,7 +846,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Room mapping"
-        subtitle="Which facility context is already connected."
+        subtitle="Facility context already connected."
         className="span-4"
       >
         <SchemaMappingPanel result={uploadResult} roomContext={roomContext} />
@@ -854,7 +854,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Confidence inputs"
-        subtitle="The checks that govern how much Neraium should trust the upload."
+        subtitle="Checks that govern how much Neraium should trust the upload."
         className="span-4"
       >
         <VerificationPanel result={uploadResult} />
@@ -862,7 +862,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Evidence readiness"
-        subtitle="What is already usable for explanations and recommended action."
+        subtitle="What is usable for explanation and action."
         className="span-4"
       >
         <EvidenceExtractionPanel result={uploadResult} />
@@ -870,7 +870,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Expected impact"
-        subtitle="How the current upload changes time remaining and confidence."
+        subtitle="How the current upload changes timing and confidence."
         className="span-5"
       >
         <WhyPanel item={intakeFocus} findings={liveOps.findings.slice(0, 3)} />
@@ -878,7 +878,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Baseline comparison"
-        subtitle="Current drift extracted from the uploaded batch."
+        subtitle="Current drift extracted from the batch."
         className="span-7"
       >
         {uploadResult ? (
@@ -911,7 +911,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
     <div className="workspace-grid workspace-grid--evidence">
       <Panel
         title="Executive brief"
-        subtitle="What is happening, why it matters, and what to do next."
+        subtitle="What is happening, why it matters, and the next move."
         className="span-7"
       >
         <ExecutiveBrief
@@ -925,7 +925,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
 
       <Panel
         title="Why and confidence"
-        subtitle="The reasoning layer behind the current recommendation."
+        subtitle="The reasoning behind the current recommendation."
         className="span-5"
       >
         <WhyPanel item={reportFocus} findings={findings.slice(0, 3)} />
@@ -933,7 +933,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
 
       <Panel
         title="Technical evidence"
-        subtitle="Expandable traces, observations, and source detail underneath the brief."
+        subtitle="Expandable traces, observations, and source detail beneath the brief."
         className="span-5"
       >
         <TechnicalEvidencePanel
@@ -946,7 +946,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
 
       <Panel
         title="Report outputs"
-        subtitle="Limitations and exported decision surfaces."
+        subtitle="Limitations and exported brief surfaces."
         className="span-3"
       >
         {latestReport ? (
@@ -958,7 +958,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
 
       <Panel
         title="Supporting findings"
-        subtitle="Evidence-backed notes and a path back to intake."
+        subtitle="Evidence-backed notes and a direct path back to intake."
         className="span-12"
       >
         <div className="evidence-action-row">
@@ -972,7 +972,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
             <span>{liveOps.connectionSummary}</span>
           </div>
           <button className="command-button command-button--secondary" type="button" onClick={() => setActiveWorkspace("data-intake")}>
-            Open Data Intake
+            Refine Intake
           </button>
         </div>
       </Panel>
@@ -993,7 +993,7 @@ function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelec
     <div className="workspace-grid workspace-grid--console">
       <Panel
         title="Live decision stream"
-        subtitle="The monitored channels currently driving intervention timing."
+        subtitle="The channels currently driving intervention timing."
         className="span-6"
       >
         <TelemetryCardGrid cards={telemetryCards} />
@@ -1013,7 +1013,7 @@ function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelec
 
       <Panel
         title="Drift feed"
-        subtitle="Changes that are shortening the current window."
+        subtitle="Changes shortening the current window."
         className="span-3"
       >
         <DriftFeed rows={driftRows} />
