@@ -3588,69 +3588,39 @@ select {
 }
 
 /* =========================================================
-   Room-first overview v2
-   Uses existing stable components, removes lower dashboard clutter
+   Clean operator flow
+   JSX order controls layout: command, rooms, selected detail
+   No grid-area override required
    ========================================================= */
 
-.workspace-grid--room-first {
-  grid-template-areas:
-    "command command command command command command command command action action action action"
-    "rooms rooms rooms rooms rooms rooms rooms rooms detail detail detail detail";
+.workspace-grid--operator-flow {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 18px;
   align-items: start;
 }
 
-.workspace-grid--room-first > .overview-panel--command {
-  grid-area: command;
+.workspace-grid--operator-flow > .overview-panel--command {
+  grid-column: span 12;
 }
 
-.workspace-grid--room-first > .overview-panel--action {
-  grid-area: action;
+.workspace-grid--operator-flow > .overview-panel--room-first {
+  grid-column: span 8;
 }
 
-.workspace-grid--room-first > .overview-panel--room-first {
-  grid-area: rooms;
+.workspace-grid--operator-flow > .overview-panel--detail {
+  grid-column: span 4;
+  position: sticky;
+  top: 118px;
 }
 
-.workspace-grid--room-first > .overview-panel--detail {
-  grid-area: detail;
-}
-
-.workspace-grid--room-first .overview-panel--room-first,
-.workspace-grid--room-first .overview-panel--detail {
-  min-height: 100%;
-}
-
-.workspace-grid--room-first .overview-panel--room-first .ops-panel__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.workspace-grid--room-first .overview-panel--room-first .ops-panel__header h2 {
-  max-width: 46ch;
-  font-size: 1.35rem;
-  letter-spacing: -0.035em;
-}
-
-.workspace-grid--room-first .intervention-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.workspace-grid--room-first .intervention-card {
-  min-height: 245px;
-  padding: 18px;
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-card {
+  min-height: 250px;
   border-radius: 20px;
-}
-
-.workspace-grid--room-first .intervention-card strong {
-  font-size: 1rem;
-}
-
-.workspace-grid--room-first .overview-panel--detail {
-  position: sticky;
-  top: 118px;
 }
 
 .room-first-actions {
@@ -3683,31 +3653,325 @@ select {
 }
 
 @media (max-width: 1280px) {
-  .workspace-grid--room-first {
-    grid-template-areas:
-      "command command command command command command command command command command command command"
-      "action action action action action action action action action action action action"
-      "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
-      "detail detail detail detail detail detail detail detail detail detail detail detail";
+  .workspace-grid--operator-flow > .overview-panel--room-first,
+  .workspace-grid--operator-flow > .overview-panel--detail {
+    grid-column: span 12;
   }
 
-  .workspace-grid--room-first .overview-panel--detail {
+  .workspace-grid--operator-flow > .overview-panel--detail {
     position: relative;
     top: auto;
   }
+}
 
-  .workspace-grid--room-first .intervention-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 820px) {
+  .workspace-grid--operator-flow .overview-panel--room-first .intervention-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   Facility Command refinement
+   Grower-simple operating state, room cards, and attached detail
+   ========================================================= */
+
+.workspace-grid--operator-flow {
+  gap: 20px;
+}
+
+.workspace-grid--operator-flow .overview-panel--command .ops-panel__header h2 {
+  max-width: 44ch;
+}
+
+.workspace-grid--operator-flow .overview-panel--command .ops-panel__body {
+  display: grid;
+  gap: 18px;
+}
+
+.workspace-grid--operator-flow .overview-panel--command {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(74, 178, 142, 0.09), transparent 28%),
+    linear-gradient(180deg, rgba(22, 30, 33, 0.99), rgba(10, 15, 18, 0.99));
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first,
+.workspace-grid--operator-flow .overview-panel--detail {
+  background:
+    linear-gradient(180deg, rgba(20, 28, 31, 0.99), rgba(11, 16, 19, 0.98));
+}
+
+.workspace-grid--operator-flow .overview-hero {
+  gap: 18px;
+}
+
+.workspace-grid--operator-flow .overview-hero__lead {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: 24px;
+}
+
+.workspace-grid--operator-flow .overview-hero__lead .overview-pill,
+.workspace-grid--operator-flow .overview-hero__lead h2,
+.workspace-grid--operator-flow .overview-hero__lead p {
+  grid-column: 1;
+}
+
+.workspace-grid--operator-flow .overview-hero__headline {
+  max-width: 18ch;
+  font-size: clamp(2rem, 3.4vw, 3.8rem);
+  line-height: 0.98;
+}
+
+.workspace-grid--operator-flow .overview-hero__lead p {
+  max-width: 64ch;
+  font-size: 0.95rem;
+}
+
+.workspace-grid--operator-flow .countdown-hero {
+  grid-template-columns: minmax(190px, 0.42fr) minmax(320px, 0.58fr);
+  gap: 16px;
+}
+
+.workspace-grid--operator-flow .countdown-hero__score,
+.workspace-grid--operator-flow .countdown-hero__window,
+.operating-state-next {
+  border-color: rgba(177, 211, 206, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(28, 37, 41, 0.86), rgba(13, 19, 22, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.workspace-grid--operator-flow .countdown-hero__score {
+  min-height: 190px;
+  align-content: center;
+}
+
+.workspace-grid--operator-flow .countdown-hero__score strong {
+  font-size: clamp(4rem, 8vw, 7.25rem);
+  letter-spacing: 0;
+}
+
+.workspace-grid--operator-flow .countdown-hero__window {
+  min-height: 190px;
+  align-content: center;
+}
+
+.workspace-grid--operator-flow .countdown-hero__window strong {
+  font-size: clamp(2.6rem, 5vw, 5.35rem);
+}
+
+.workspace-grid--operator-flow .countdown-hero__score span,
+.workspace-grid--operator-flow .countdown-hero__window span,
+.operating-state-next span {
+  color: rgba(191, 213, 215, 0.7);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.operating-state-next {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.operating-state-next strong {
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.operating-state-next p {
+  max-width: 82ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.workspace-grid--operator-flow .overview-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace-grid--operator-flow .overview-summary-cell {
+  min-height: 74px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(17, 25, 28, 0.72);
+}
+
+.workspace-grid--operator-flow .overview-summary-cell strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .ops-panel__header {
+  gap: 5px;
+  padding-bottom: 14px;
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .ops-panel__header h2,
+.workspace-grid--operator-flow .overview-panel--detail .ops-panel__header h2 {
+  max-width: 32ch;
+  font-size: 1.15rem;
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .ops-panel__header p,
+.workspace-grid--operator-flow .overview-panel--detail .ops-panel__header p {
+  max-width: 58ch;
+  color: rgba(190, 207, 210, 0.72);
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-grid {
+  gap: 14px;
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-card {
+  min-height: 250px;
+  padding: 18px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(25, 34, 37, 0.92), rgba(13, 19, 22, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(177, 211, 206, 0.05);
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(177, 211, 206, 0.18);
+}
+
+.workspace-grid--operator-flow .overview-panel--room-first .intervention-card--selected {
+  border-color: rgba(237, 246, 242, 0.24);
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.24),
+    inset 3px 0 0 rgba(74, 178, 142, 0.78);
+}
+
+.workspace-grid--operator-flow .intervention-card__header strong {
+  margin-top: 8px;
+  font-size: clamp(1.55rem, 2.4vw, 2.25rem);
+  line-height: 1;
+}
+
+.intervention-card__window {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(177, 211, 206, 0.08);
+  border-bottom: 1px solid rgba(177, 211, 206, 0.08);
+}
+
+.intervention-card__window span {
+  color: rgba(191, 213, 215, 0.64);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.intervention-card__window strong {
+  color: var(--text-primary);
+  font-size: clamp(1.65rem, 2.8vw, 2.6rem);
+  line-height: 0.98;
+}
+
+.workspace-grid--operator-flow .intervention-card p {
+  color: rgba(206, 223, 228, 0.82);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.workspace-grid--operator-flow .intervention-card__footer {
+  align-items: end;
+}
+
+.workspace-grid--operator-flow .overview-panel--detail {
+  border-color: rgba(237, 246, 242, 0.14);
+  box-shadow:
+    0 22px 50px rgba(0, 0, 0, 0.28),
+    inset 3px 0 0 rgba(74, 178, 142, 0.46);
+}
+
+.workspace-grid--operator-flow .overview-panel--detail .ops-panel__body {
+  gap: 16px;
+}
+
+.workspace-grid--operator-flow .why-panel {
+  gap: 14px;
+}
+
+.workspace-grid--operator-flow .why-panel__summary {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(177, 211, 206, 0.1);
+}
+
+.workspace-grid--operator-flow .why-panel__summary h3 {
+  max-width: 20ch;
+  font-size: 1.35rem;
+  line-height: 1.08;
+}
+
+.workspace-grid--operator-flow .why-panel__headline {
+  color: rgba(237, 246, 242, 0.94);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.workspace-grid--operator-flow .why-panel__driver span:last-child,
+.workspace-grid--operator-flow .why-panel__baseline p {
+  color: rgba(206, 223, 228, 0.78);
+  font-size: 0.82rem;
+}
+
+.workspace-grid--operator-flow .why-panel__recommendation {
+  display: grid;
+  gap: 6px;
+  align-items: start;
+  padding: 13px;
+  border: 1px solid rgba(177, 211, 206, 0.1);
+  border-radius: 8px;
+  background: rgba(17, 25, 28, 0.72);
+}
+
+.workspace-grid--operator-flow .why-panel__recommendation strong {
+  max-width: none;
+  text-align: left;
+  font-size: 1.05rem;
+}
+
+.workspace-grid--operator-flow .why-panel__actions {
+  display: none;
+}
+
+.workspace-grid--operator-flow .room-first-actions {
+  padding-top: 14px;
+}
+
+.workspace-grid--operator-flow .secondary-command-button {
+  min-height: 46px;
+  border-radius: 8px;
+  background: rgba(22, 31, 35, 0.88);
+  box-shadow: none;
+}
+
+@media (max-width: 1280px) {
+  .workspace-grid--operator-flow .countdown-hero {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 760px) {
-  .workspace-grid--room-first .intervention-grid {
+  .workspace-grid--operator-flow .overview-hero__lead,
+  .workspace-grid--operator-flow .countdown-hero,
+  .workspace-grid--operator-flow .overview-summary-grid {
     grid-template-columns: 1fr;
   }
 
-  .workspace-grid--room-first .overview-panel--room-first .ops-panel__header {
-    align-items: start;
-    flex-direction: column;
+  .workspace-grid--operator-flow .countdown-hero__score,
+  .workspace-grid--operator-flow .countdown-hero__window {
+    min-height: 150px;
   }
 }

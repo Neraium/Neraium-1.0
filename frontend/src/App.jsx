@@ -5,9 +5,9 @@ import "./styles.css";
 const WORKSPACES = [
   {
     id: "overview",
-    label: "Overview",
-    eyebrow: "Control",
-    description: "Time remaining, confidence, and next actions.",
+    label: "Facility Command",
+    eyebrow: "Command",
+    description: "System status, room priority, and the next move.",
   },
   {
     id: "facility-systems",
@@ -557,37 +557,25 @@ function OverviewWorkspace({
   operatorActions,
   onOperatorAction,
 }) {
-  const [selectedActionId, setSelectedActionId] = useState(selectedInterventionId ?? liveOps.actionQueue[0]?.id ?? null);
-
-  useEffect(() => {
-    if (!selectedInterventionId) {
-      return;
-    }
-    const hasSelectedAction = liveOps.actionQueue.some((item) => item.id === selectedInterventionId);
-    if (hasSelectedAction && selectedActionId !== selectedInterventionId) {
-      setSelectedActionId(selectedInterventionId);
-    }
-  }, [liveOps.actionQueue, selectedActionId, selectedInterventionId]);
-
   const findings = liveOps.findings.slice(0, 3);
-  const selectedAction = liveOps.actionQueue.find((item) => item.id === selectedActionId) ?? liveOps.actionQueue[0];
-  const selectedNode = liveOps.topologyNodes.find((item) => item.id === selectedInterventionId) ?? liveOps.topologyNodes[0];
-  const heroHeadline = liveOps.heroHeadline ?? "Intervention timing is stable.";
+  const selectedRoom = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0];
+  const primaryRoom = liveOps.primaryWindow ?? selectedRoom;
+  const heroHeadline = liveOps.facilityStateLabel ?? "Facility stable";
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
-  const roomCount = liveOps.topologyNodes.length;
+  const roomCount = liveOps.interventionItems.length;
   const overviewSummary = [
-    { label: "Data source", value: liveOps.dataSourceLabel, tone: "info" },
-    { label: "Operational state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
+    { label: "Primary room", value: primaryRoom?.label ?? "Monitoring", tone: primaryRoom?.tone ?? liveOps.facilityTone },
+    { label: "System state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
+    { label: "Next action", value: primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring", tone: primaryRoom?.tone ?? "nominal" },
     { label: "Last sync", value: liveOps.connectionSummary, tone: liveOps.connectionTone },
-    { label: "Rooms monitored", value: `${roomCount}`, tone: "nominal" },
   ];
 
   return (
-    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--room-first">
+    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
       <Panel
-        title="Facility command"
-        subtitle="System status, intervention timing, and the next move."
-        className="span-8 overview-panel overview-panel--hero overview-panel--command"
+        title="Operating State"
+        subtitle="Facility readiness, primary room, time available, and the next operator move."
+        className="span-12 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
           <div className="overview-hero__lead">
@@ -595,6 +583,7 @@ function OverviewWorkspace({
             <h2 className="overview-hero__headline">{heroHeadline}</h2>
             <p>{heroSubline}</p>
           </div>
+
           <div className="countdown-hero">
             <div className="countdown-hero__score">
               <span>Neraium score</span>
@@ -603,12 +592,13 @@ function OverviewWorkspace({
               <p className="countdown-hero__context">{liveOps.scoreContext}</p>
             </div>
             <div className="countdown-hero__window">
-              <span>Primary intervention window</span>
-              <strong>{liveOps.primaryWindow?.window ?? "Monitoring active telemetry feed"}</strong>
-              <p>{liveOps.primaryWindow?.detail ?? liveOps.connectionDetail}</p>
-              <p className="countdown-hero__context">{liveOps.primaryWindow?.baselineContext ?? liveOps.windowContext}</p>
+              <span>Hours to intervention</span>
+              <strong>{primaryRoom?.window ?? "Monitoring"}</strong>
+              <p>{primaryRoom?.label ?? "Facility"}: {primaryRoom?.detail ?? liveOps.connectionDetail}</p>
+              <p className="countdown-hero__context">{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</p>
             </div>
           </div>
+
           <div className="overview-summary-grid">
             {overviewSummary.map((item) => (
               <div className={`overview-summary-cell overview-summary-cell--${item.tone}`} key={item.label}>
@@ -620,32 +610,23 @@ function OverviewWorkspace({
               </div>
             ))}
           </div>
+
+          <div className="operating-state-next">
+            <span>Next operator move</span>
+            <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
+            <p>{primaryRoom?.whyHeadline ?? liveOps.windowContext}</p>
+          </div>
         </div>
       </Panel>
 
       <Panel
-        title="Action queue"
-        subtitle="What needs attention first."
-        className="span-4 overview-panel overview-panel--events overview-panel--action"
-      >
-        <ActionQueue
-          items={liveOps.actionQueue}
-          selectedId={selectedAction?.id ?? null}
-          onSelect={(id) => {
-            setSelectedActionId(id);
-            onSelectIntervention(id);
-          }}
-        />
-      </Panel>
-
-      <Panel
         title="Rooms"
-        subtitle="Click a room to inspect timing, cause, confidence, and evidence."
+        subtitle={`${roomCount} rooms monitored. Select a room only when detail is needed.`}
         className="span-8 overview-panel overview-panel--rooms overview-panel--room-first"
       >
         <InterventionGrid
           items={liveOps.interventionItems}
-          selectedId={selectedNode?.id ?? null}
+          selectedId={selectedRoom?.id ?? null}
           onSelect={onSelectIntervention}
         />
       </Panel>
@@ -656,13 +637,14 @@ function OverviewWorkspace({
         className="span-4 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
-          item={selectedAction ?? selectedNode}
+          item={selectedRoom}
           findings={findings}
-          actionStatus={operatorActions[(selectedAction ?? selectedNode)?.targetId ?? (selectedAction ?? selectedNode)?.id]}
+          actionStatus={operatorActions[selectedRoom?.targetId ?? selectedRoom?.id]}
           onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
           onLogIntervention={(id) => onOperatorAction(id, "log")}
           onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
         />
+
         <div className="room-first-actions">
           <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>
             Open system detail
@@ -1484,15 +1466,18 @@ function InterventionGrid({ items, selectedId, onSelect }) {
           <div className="intervention-card__header">
             <div>
               <span>{item.label}</span>
-              <strong>{item.window}</strong>
+              <strong>{formatRoomDecisionState(item.tone)}</strong>
             </div>
             <ConfidenceDial score={item.confidence} tone={item.tone} />
           </div>
-          <p>{item.summary}</p>
-          <p className="intervention-card__baseline">{item.baselineContext ?? item.change}</p>
+          <div className="intervention-card__window">
+            <span>Intervention window</span>
+            <strong>{item.window}</strong>
+          </div>
+          <p>{item.shortDetail ?? item.summary}</p>
           <div className="intervention-card__footer">
-            <span className={`overview-pill overview-pill--${item.tone}`}>{item.recommendation}</span>
-            <span className="room-health-card__trend">{item.change}</span>
+            <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
+            <span className="room-health-card__trend">{item.confidence}% confidence</span>
           </div>
         </button>
       ))}
@@ -2903,7 +2888,7 @@ function compactRoomSummary(room) {
     return `${room.irrigationState}. Drift and instability are now inside the active decision window.`;
   }
   if (room.tone === "elevated") {
-    return `${room.irrigationState}. Maintenance should be scheduled before the next cycle compounds drift.`;
+    return `${room.irrigationState}. Plan the room review before the next cycle compounds drift.`;
   }
   if (room.tone === "review") {
     return `${room.irrigationState}. Review is recommended before the next environmental transition.`;
@@ -2922,7 +2907,7 @@ function buildFleetSummary(interventionItems, score, tone) {
     summary: unstable > 0
       ? `${unstable} immediate intervention target${unstable === 1 ? "" : "s"} are driving fleet risk right now.`
       : elevated > 0
-        ? `${elevated} target${elevated === 1 ? "" : "s"} are compressing the current maintenance horizon.`
+        ? `${elevated} target${elevated === 1 ? "" : "s"} are compressing the current intervention horizon.`
         : "The system fleet remains inside a comfortable intervention horizon.",
     metrics: [
       { label: "Immediate", value: unstable || 0, tone: unstable > 0 ? "unstable" : "nominal" },
@@ -3004,28 +2989,28 @@ function confidenceFromTone(tone, hasUpload = false) {
 
 function recommendationFromTone(tone) {
   if (tone === "unstable") {
-    return "Immediate attention required";
+    return "Act now";
   }
   if (tone === "elevated") {
-    return "Schedule maintenance window";
+    return "Schedule room review";
   }
   if (tone === "review") {
-    return "Review recommended";
+    return "Review room";
   }
-  return "No action needed";
+  return "Room is fine";
 }
 
 function primaryActionFromTone(tone) {
   if (tone === "unstable") {
-    return "Escalate";
+    return "Stabilize room";
   }
   if (tone === "elevated") {
-    return "Schedule";
+    return "Plan intervention";
   }
   if (tone === "review") {
-    return "Acknowledge";
+    return "Review conditions";
   }
-  return "Ignore";
+  return "Continue monitoring";
 }
 
 function actionSetFromTone(tone) {
@@ -3083,7 +3068,7 @@ function heroSublineFromTone(tone, focusLabel) {
     return `${focusLabel} is now inside an immediate decision window, but the rest of the facility remains visible and controllable.`;
   }
   if (tone === "elevated") {
-    return `${focusLabel} is compressing the current maintenance horizon, giving operators time to act before the issue becomes disruptive.`;
+    return `${focusLabel} is compressing the current intervention horizon, giving operators time to act before the issue becomes disruptive.`;
   }
   if (tone === "review") {
     return `${focusLabel} needs planned attention, while the broader facility stays inside a manageable operating envelope.`;
@@ -3437,6 +3422,16 @@ function formatOperationalLabel(tone) {
     return "Unstable";
   }
   return "Monitoring";
+}
+
+function formatRoomDecisionState(tone) {
+  if (tone === "unstable") {
+    return "Needs action";
+  }
+  if (tone === "elevated" || tone === "review") {
+    return "Needs review";
+  }
+  return "Fine";
 }
 
 function average(values) {
