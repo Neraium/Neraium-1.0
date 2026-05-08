@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { API_BASE_URL } from "./config";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { API_BASE_URL, API_CONFIG_WARNING } from "./config";
 import "./styles.css";
 
 const WORKSPACES = [
@@ -111,61 +111,93 @@ function App() {
   });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
+  const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
 
-  useEffect(() => {
-    let isActive = true;
+  const checkApiHealth = useCallback(async (trigger = "scheduled") => {
+    const checkTime = new Date();
+    const attemptCount = healthCheckAttemptsRef.current + 1;
+    healthCheckAttemptsRef.current = attemptCount;
 
-    async function checkApiHealth(trigger = "scheduled") {
-      const checkTime = new Date();
-      const attemptCount = healthCheckAttemptsRef.current + 1;
-      healthCheckAttemptsRef.current = attemptCount;
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/health`);
-        if (!response.ok) {
-          throw new Error(`Unexpected response: ${response.status}`);
-        }
-
-        const payload = await response.json();
-        if (isActive) {
-          setApiStatus({
-            state: "online",
-            label: "Sync current",
-            detail: `Last sync ${formatClockTime(checkTime)} CT.`,
-            checkedAt: checkTime.toISOString(),
-            attemptCount,
-            endpoint: formatEndpoint(API_BASE_URL),
-            message: trigger === "scheduled" ? "Live telemetry feed current." : "Facility sync refreshed.",
-          });
-        }
-      } catch (error) {
-        if (isActive) {
-          setApiStatus({
-            state: "offline",
-            label: "Sync delayed",
-            detail: `Using last confirmed facility state. Check facility WiFi if updates stop syncing.`,
-            checkedAt: checkTime.toISOString(),
-            attemptCount,
-            endpoint: formatEndpoint(API_BASE_URL),
-            message: error instanceof Error ? error.message : "Facility sync delayed.",
-          });
-        }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/health`);
+      if (!response.ok) {
+        throw new Error(`Unexpected response: ${response.status}`);
       }
-    }
 
+      const payload = await response.json();
+      if (payload.status !== "ok") {
+        throw new Error("Health response was not ok.");
+      }
+
+      setApiStatus({
+        state: "online",
+        label: "API Connected",
+        detail: `Last sync ${formatClockTime(checkTime)} CT.`,
+        checkedAt: checkTime.toISOString(),
+        attemptCount,
+        endpoint: formatEndpoint(API_BASE_URL),
+        message: trigger === "scheduled" ? "Live telemetry feed current." : "Facility sync refreshed.",
+      });
+      setBackendError(API_CONFIG_WARNING);
+      return true;
+    } catch {
+      setApiStatus({
+        state: "offline",
+        label: "API Offline",
+        detail: "Backend connection unavailable. System data could not be loaded.",
+        checkedAt: checkTime.toISOString(),
+        attemptCount,
+        endpoint: formatEndpoint(API_BASE_URL),
+        message: "Backend connection unavailable. System data could not be loaded.",
+      });
+      setBackendError("Backend connection unavailable. System data could not be loaded.");
+      return false;
+    }
+  }, []);
+
+  const loadFacilitySystems = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/facility/systems`);
+      if (!response.ok) {
+        throw new Error(`Unexpected response: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      if (Array.isArray(payload.systems)) {
+        setSystems(payload.systems);
+        setSystemsState("ready");
+        setBackendError(API_CONFIG_WARNING);
+        return true;
+      }
+      throw new Error("Facility systems payload was incomplete.");
+    } catch {
+      setSystems(FALLBACK_SYSTEMS);
+      setSystemsState("fallback");
+      setBackendError("Backend connection unavailable. System data could not be loaded.");
+      return false;
+    }
+  }, []);
+
+  const retryBackendConnection = useCallback(async () => {
+    const isHealthy = await checkApiHealth("retry");
+    if (isHealthy) {
+      await loadFacilitySystems();
+    }
+  }, [checkApiHealth, loadFacilitySystems]);
+
+  useEffect(() => {
     checkApiHealth("startup");
     const intervalId = window.setInterval(() => {
       checkApiHealth("interval");
     }, 20000);
 
     return () => {
-      isActive = false;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [checkApiHealth]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -176,34 +208,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let isActive = true;
-
-    async function loadFacilitySystems() {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/facility/systems`);
-        if (!response.ok) {
-          throw new Error(`Unexpected response: ${response.status}`);
-        }
-
-        const payload = await response.json();
-        if (isActive && Array.isArray(payload.systems)) {
-          setSystems(payload.systems);
-          setSystemsState("ready");
-        }
-      } catch {
-        if (isActive) {
-          setSystems(FALLBACK_SYSTEMS);
-          setSystemsState("fallback");
-        }
-      }
-    }
-
     loadFacilitySystems();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
+  }, [loadFacilitySystems]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
@@ -394,6 +400,14 @@ function App() {
           liveOps={liveOps}
         />
 
+        {backendError && (
+          <BackendErrorPanel
+            message={backendError}
+            isConfigWarning={backendError === API_CONFIG_WARNING}
+            onRetry={retryBackendConnection}
+          />
+        )}
+
         <section
           key={activeWorkspace}
           ref={workspaceRef}
@@ -518,6 +532,11 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
       </div>
 
       <div className="status-rack">
+        <StatusChip
+          label="Backend"
+          value={apiStatus.state === "online" ? "API Connected" : "API Offline"}
+          tone={apiStatus.state === "online" ? "nominal" : "offline"}
+        />
         <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
           label="Data source"
@@ -805,7 +824,11 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       onUploadComplete(payload);
       setUploadState("complete");
     } catch (error) {
-      setUploadError(error.message);
+      setUploadError(
+        error instanceof TypeError
+          ? "Backend connection unavailable. System data could not be loaded."
+          : error.message,
+      );
       setUploadState("error");
     }
   }
@@ -1910,6 +1933,20 @@ function StatusBanner({ title, subtitle, tone }) {
   );
 }
 
+function BackendErrorPanel({ message, isConfigWarning, onRetry }) {
+  return (
+    <section className={`backend-error-panel ${isConfigWarning ? "backend-error-panel--warning" : ""}`} aria-live="polite">
+      <div>
+        <span>{isConfigWarning ? "Configuration warning" : "Backend connection"}</span>
+        <strong>{message}</strong>
+      </div>
+      <button className="command-button command-button--compact" type="button" onClick={onRetry}>
+        Retry
+      </button>
+    </section>
+  );
+}
+
 function StatusChip({ label, value, tone }) {
   return (
     <div className={`status-chip status-chip--${tone}`}>
@@ -2477,6 +2514,9 @@ function formatEngineResult(result) {
 }
 
 function formatEndpoint(endpoint) {
+  if (!endpoint) {
+    return "API base URL missing";
+  }
   return endpoint.replace("http://", "").replace("https://", "");
 }
 

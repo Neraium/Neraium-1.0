@@ -26,6 +26,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
 
+    @app.get("/")
+    def read_root():
+        return {
+            "service": "neraium-api",
+            "status": "ok",
+            "docs": "/docs",
+            "health": "/health",
+        }
+
     return app
 
 

@@ -3,6 +3,20 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+def test_root_endpoint_returns_service_metadata() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "service": "neraium-api",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 def test_health_endpoint_returns_ok() -> None:
     client = TestClient(create_app())
 
