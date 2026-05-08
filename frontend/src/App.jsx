@@ -13,7 +13,7 @@ const WORKSPACES = [
     id: "facility-systems",
     label: "Facility Systems",
     eyebrow: "Systems",
-    description: "Fleet signals and intervention pressure across the facility.",
+    description: "Room climate, irrigation, and crop-cycle pressure across the facility.",
   },
   {
     id: "data-intake",
@@ -25,7 +25,7 @@ const WORKSPACES = [
     id: "evidence-reports",
     label: "Evidence & Reports",
     eyebrow: "Evidence",
-    description: "Executive briefs, causal evidence, and operator support.",
+    description: "Grower briefs, room evidence, and action support.",
   },
   {
     id: "intelligence-console",
@@ -38,7 +38,7 @@ const WORKSPACES = [
 const FALLBACK_SYSTEMS = [
   {
     name: "HVAC",
-    scope: "Temperature conditioning, runtime behavior, and room balancing.",
+    scope: "Room temperature control, equipment activity, and zone balancing.",
   },
   {
     name: "Humidity control",
@@ -81,9 +81,9 @@ const INTAKE_STAGES = [
 ];
 
 const REPORT_TEMPLATES = [
-  "Environmental Drift Summary",
+  "Room Climate Trend Summary",
   "System Coupling Review",
-  "Operator Action Report",
+  "Grower Action Report",
 ];
 
 const DEMO_ROOMS = [
@@ -574,7 +574,7 @@ function OverviewWorkspace({
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
       <Panel
         title="Operating State"
-        subtitle="Facility readiness, primary room, time available, and the next operator move."
+        subtitle="Facility readiness, primary room, time available, and the next grower move."
         className="span-12 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
@@ -612,7 +612,7 @@ function OverviewWorkspace({
           </div>
 
           <div className="operating-state-next">
-            <span>Next operator move</span>
+            <span>Next grower move</span>
             <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
             <p>{primaryRoom?.whyHeadline ?? liveOps.windowContext}</p>
           </div>
@@ -676,15 +676,15 @@ function FacilitySystemsWorkspace({
   return (
     <div className="workspace-grid workspace-grid--systems">
       <Panel
-        title="Fleet overview"
-        subtitle="Start at fleet level, then move into the target that needs attention."
+        title="Facility overview"
+        subtitle="Start with the full grow, then move into the room that needs attention."
         className="span-8"
       >
         <FleetSummary summary={fleetSummary} />
       </Panel>
 
       <Panel
-        title="Intervention targets"
+        title="Rooms to review"
         subtitle="Ranked by time remaining."
         className="span-4"
       >
@@ -696,7 +696,7 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Selected target"
+        title="Selected room"
         subtitle="Why this intervention window is moving."
         className="span-3"
       >
@@ -711,8 +711,8 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Intervention drivers"
-        subtitle="Signals compressing or extending the current window."
+        title="Room drivers"
+        subtitle="Climate, irrigation, and cycle signals affecting the current window."
         className="span-6"
       >
         <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
@@ -727,8 +727,8 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Drift by channel"
-        subtitle="Baseline movement by operational significance."
+        title="Room trend by channel"
+        subtitle="Baseline movement by grow-room significance."
         className="span-5"
       >
         <DriftMonitor rows={driftRows} />
@@ -744,7 +744,7 @@ function FacilitySystemsWorkspace({
 
       <Panel
         title="Irrigation context"
-        subtitle="Cycle state and operator review notes."
+        subtitle="Cycle state and grower review notes."
         className="span-4"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
@@ -898,7 +898,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
       <Panel
         title="Baseline comparison"
-        subtitle="Current drift extracted from the batch."
+        subtitle="Current room trend extracted from the batch."
         className="span-7"
       >
         {uploadResult ? (
@@ -1043,7 +1043,7 @@ function IntelligenceConsoleWorkspace({
 
       <Panel
         title="Action queue"
-        subtitle="Priority-ranked operator actions."
+        subtitle="Priority-ranked grower actions."
         className="span-3"
       >
         <ActionQueue
@@ -1054,7 +1054,7 @@ function IntelligenceConsoleWorkspace({
       </Panel>
 
       <Panel
-        title="Drift feed"
+        title="Room trend feed"
         subtitle="Changes shortening the current window."
         className="span-3"
       >
@@ -1070,7 +1070,7 @@ function IntelligenceConsoleWorkspace({
       </Panel>
 
       <Panel
-        title="Operational notices"
+        title="Grower notices"
         subtitle="Short-form findings and review notices."
         className="span-3"
       >
@@ -1079,7 +1079,7 @@ function IntelligenceConsoleWorkspace({
 
       <Panel
         title="Selected action"
-        subtitle="Next action with evidence and operator controls."
+        subtitle="Next grower action with evidence."
         className="span-3"
       >
         <WhyPanel
@@ -1110,7 +1110,7 @@ function IntelligenceConsoleWorkspace({
 
       <Panel
         title="Connection diagnostics"
-        subtitle="Sync state, last confirmed update, and operator guidance."
+        subtitle="Sync state, last confirmed update, and grower guidance."
         className="span-3"
       >
         <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
@@ -1188,7 +1188,7 @@ function EvidenceExtractionPanel({ result }) {
           tone: result?.engine_result ? "nominal" : "review",
         },
         {
-          title: "Operator report",
+          title: "Grower report",
           detail: result?.operator_report ? "Current findings report available." : "Manual upload remains optional.",
           tone: result?.operator_report ? "nominal" : "info",
         },
@@ -1296,7 +1296,7 @@ function MiniSeries({ values, tone }) {
 
 function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No drift review available" body="Awaiting additional room telemetry." compact />;
+    return <EmptyState title="No room trend review available" body="Awaiting additional room telemetry." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -1340,7 +1340,7 @@ function DriftMonitor({ rows, detailed = false }) {
 
 function DriftFeed({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No drift feed" body="Monitoring active telemetry feed." compact />;
+    return <EmptyState title="No room trend feed" body="Monitoring active telemetry feed." compact />;
   }
 
   return (
@@ -1350,7 +1350,7 @@ function DriftFeed({ rows }) {
         detail: `${row.direction} movement with ${row.percent_change === null ? row.absolute_change : `${row.percent_change}%`} change.`,
         tone: row.drift_flag,
       }))}
-      emptyText="Awaiting drift output."
+      emptyText="Awaiting room trend output."
     />
   );
 }
@@ -1644,14 +1644,14 @@ function ConfidenceDial({ score, tone, large = false }) {
 
 function TopologyMap({ nodes, selectedId, onSelect }) {
   if (!nodes || nodes.length === 0) {
-    return <EmptyState title="No system topology available" body="Awaiting active room monitoring." compact />;
+    return <EmptyState title="No system map available" body="Awaiting active room monitoring." compact />;
   }
 
   return (
     <div className="topology-map">
       <div className="topology-map__hub">
         <span>Facility</span>
-        <strong>Neraium control surface</strong>
+        <strong>Neraium room map</strong>
       </div>
       <div className="topology-map__nodes">
         {nodes.map((node) => (
@@ -1707,8 +1707,8 @@ function OperatorReportPanel({ report }) {
         />
         <CompactList
           items={report.recommended_operator_checks}
-          emptyText="No operator checks were generated."
-          title="Operator checks"
+          emptyText="No grower checks were generated."
+          title="Grower checks"
         />
       </div>
     </div>
@@ -1719,7 +1719,7 @@ function FleetSummary({ summary }) {
   return (
     <div className="fleet-summary">
       <div className={`fleet-summary__hero fleet-summary__hero--${summary.tone}`}>
-        <span className="section-token">Fleet score</span>
+        <span className="section-token">Facility score</span>
         <strong>{summary.score}</strong>
         <p>{summary.summary}</p>
       </div>
@@ -2120,7 +2120,7 @@ function buildAlertItems(result, apiStatus) {
 
   (result.operator_report?.recommended_operator_checks ?? []).slice(0, 2).forEach((check) => {
     alerts.push({
-      title: "Operator check",
+      title: "Grower check",
       detail: check,
       tone: "review",
     });
@@ -2130,7 +2130,7 @@ function buildAlertItems(result, apiStatus) {
     ? alerts
     : [
         {
-          title: "No active operator alerts",
+          title: "No active grower alerts",
           detail: "Current upload remains within monitored operational baselines.",
           tone: "nominal",
         },
@@ -2226,7 +2226,7 @@ function buildEvidenceConsole(result) {
     return [
       "evidence.console=monitoring_demo_telemetry",
       "schema.mapping=no_facility_upload_connected",
-      "operator.report=awaiting_room_exports",
+      "grower.report=awaiting_room_exports",
     ];
   }
 
@@ -2362,7 +2362,7 @@ function deriveFacilityStability(result) {
     return "Nominal environmental stability";
   }
   if (overallResult === "elevated") {
-    return "Elevated drift requires review";
+    return "Elevated room trend requires review";
   }
   if (overallResult === "needs_review") {
     return "Review recommended for irrigation variance";
@@ -2556,7 +2556,7 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
       irrigationNotes: [
         `Irrigation context: ${roomContext.irrigation}.`,
         "Baseline established from current upload.",
-        "Review recommended for irrigation variance only where drift persists across the active window.",
+        "Review recommended for irrigation variance only where the room trend persists across the active window.",
       ],
       systemRows: systems.map((system) => [
         system.name,
@@ -2646,7 +2646,7 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     roomCards: roomStates.map((room) => ({
       label: room.name,
       value: formatOperationalLabel(room.tone),
-      detail: `${room.cycle} | ${room.irrigationState} | HVAC drift ${room.hvacDrift.toFixed(2)}F.`,
+      detail: `${room.cycle} | ${room.irrigationState} | room temperature ${room.hvacDrift.toFixed(2)}F off baseline.`,
       tone: room.tone,
     })),
     roomTransitions,
@@ -2689,7 +2689,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       summary: engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
       detail: `Current upload places ${roomContext.primary} in the primary review lane.`,
       shortDetail: engineSignals[0]?.message ?? "Current upload is tightening the review window.",
-      whyHeadline: engineSignals[0]?.message ?? "Current drift and readiness signals are tightening the available intervention window.",
+      whyHeadline: engineSignals[0]?.message ?? "Current room trend and readiness signals are tightening the available intervention window.",
       drivers: buildWhyDrivers(result, telemetryCards, roomContext),
       baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
@@ -2771,7 +2771,7 @@ function buildSimulatedInterventionItems(roomStates) {
       window: interventionWindowFromRoom(room),
       tone: room.tone,
       confidence: confidenceFromRoom(room),
-      summary: `${room.irrigationState}. HVAC drift is ${room.hvacDrift.toFixed(2)}F and instability is ${room.instability.toFixed(2)} against the current room baseline.`,
+      summary: `${room.irrigationState}. Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline and climate stability is ${room.instability.toFixed(2)} against the current room baseline.`,
       detail: `${room.cycle} in ${room.zone}.`,
       shortDetail: compactRoomSummary(room),
       whyHeadline: whyHeadlineFromRoom(room),
@@ -2835,16 +2835,16 @@ function summarizeScoreNarrative(facilityTone, interventionItems) {
     return "The facility remains inside a comfortable intervention horizon.";
   }
   if (urgentCount > 0) {
-    return `${urgentCount} intervention window${urgentCount === 1 ? "" : "s"} shortened enough to warrant immediate operator attention.`;
+    return `${urgentCount} room window${urgentCount === 1 ? "" : "s"} shortened enough to warrant immediate grower attention.`;
   }
-  return "Most systems remain controllable, with review concentrated in a narrow set of rooms.";
+  return "Most rooms remain controllable, with review concentrated in a narrow set of rooms.";
 }
 
 function buildScoreContext(score, facilityTone, interventionItems) {
   const facilityAverage = facilityTone === "nominal" ? 74 : facilityTone === "review" ? 68 : facilityTone === "elevated" ? 62 : 58;
   const trendDelta = facilityTone === "nominal" ? 2 : facilityTone === "review" ? -1 : facilityTone === "elevated" ? -4 : -7;
   const trendArrow = trendDelta >= 0 ? "+" : "";
-  return `Facility avg ${facilityAverage} | Target 80+ | Trend ${trendArrow}${trendDelta} pts since yesterday`;
+  return `Facility confidence ${facilityAverage} | Goal 80+ | Trend ${trendArrow}${trendDelta} pts since yesterday`;
 }
 
 function latestManualSourceLabel(result) {
@@ -2880,10 +2880,10 @@ function buildWindowContext(item, roomContext) {
 
 function compactRoomSummary(room) {
   if (room.tone === "unstable") {
-    return `${room.irrigationState}. Drift and instability are now inside the active decision window.`;
+    return `${room.irrigationState}. Room climate is now inside the active decision window.`;
   }
   if (room.tone === "elevated") {
-    return `${room.irrigationState}. Plan the room review before the next cycle compounds drift.`;
+    return `${room.irrigationState}. Plan the room review before the next cycle compounds the room trend.`;
   }
   if (room.tone === "review") {
     return `${room.irrigationState}. Review is recommended before the next environmental transition.`;
@@ -2900,15 +2900,15 @@ function buildFleetSummary(interventionItems, score, tone) {
     score,
     tone,
     summary: unstable > 0
-      ? `${unstable} immediate intervention target${unstable === 1 ? "" : "s"} are driving fleet risk right now.`
+      ? `${unstable} room${unstable === 1 ? "" : "s"} need immediate attention right now.`
       : elevated > 0
-        ? `${elevated} target${elevated === 1 ? "" : "s"} are compressing the current intervention horizon.`
-        : "The system fleet remains inside a comfortable intervention horizon.",
+        ? `${elevated} room${elevated === 1 ? "" : "s"} are shortening the current intervention horizon.`
+        : "The facility remains inside a comfortable intervention horizon.",
     metrics: [
       { label: "Immediate", value: unstable || 0, tone: unstable > 0 ? "unstable" : "nominal" },
       { label: "Scheduled", value: elevated || 0, tone: elevated > 0 ? "elevated" : "nominal" },
       { label: "Review", value: review || 0, tone: review > 0 ? "review" : "nominal" },
-      { label: "Targets", value: interventionItems.length, tone: "info" },
+      { label: "Rooms", value: interventionItems.length, tone: "info" },
     ],
   };
 }
@@ -2918,7 +2918,7 @@ function buildWhyDrivers(result, telemetryCards, roomContext) {
   return [
     firstCards[0] ? `${firstCards[0].label} currently reading ${firstCards[0].primary}.` : `Primary room context: ${roomContext.primary}.`,
     firstCards[1] ? `${firstCards[1].label} currently reading ${firstCards[1].primary}.` : `Secondary room context: ${roomContext.secondary}.`,
-    result?.operator_report?.recommended_operator_checks?.[0] ?? "Recommended next move is based on the current upload readiness and drift pattern.",
+    result?.operator_report?.recommended_operator_checks?.[0] ?? "Recommended next move is based on the current room readiness and trend pattern.",
   ];
 }
 
@@ -2937,10 +2937,10 @@ function interventionWindowFromRoom(room) {
 
 function whyHeadlineFromRoom(room) {
   if (room.tone === "unstable") {
-    return `${room.name} has hours, not days, before environmental instability becomes an operator problem.`;
+    return `${room.name} has hours, not days, before the room environment needs grower action.`;
   }
   if (room.tone === "elevated") {
-    return `${room.name} is trending toward intervention and should be scheduled before the next cycle compounds the drift.`;
+    return `${room.name} is trending toward intervention and should be checked before the next cycle compounds the room trend.`;
   }
   if (room.tone === "review") {
     return `${room.name} is still controllable, but the next decision window is now close enough to plan around.`;
@@ -2950,8 +2950,8 @@ function whyHeadlineFromRoom(room) {
 
 function buildDriversFromRoom(room) {
   return [
-    `Bearing room temperature equivalent drift is ${room.hvacDrift.toFixed(2)}F over the current review window.`,
-    `Environmental instability is ${room.instability.toFixed(2)} relative to this room's recent baseline.`,
+    `Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline over the current review window.`,
+    `Climate stability is ${room.instability.toFixed(2)} relative to this room's recent baseline.`,
     `${room.irrigationState} is the current operating state for ${room.name}.`,
   ];
 }
@@ -3018,15 +3018,15 @@ function actionSetFromTone(tone) {
 
 function impactFromTone(tone) {
   if (tone === "unstable") {
-    return "High business impact";
+    return "High crop impact";
   }
   if (tone === "elevated") {
-    return "Material business impact";
+    return "Material crop impact";
   }
   if (tone === "review") {
-    return "Moderate business impact";
+    return "Moderate crop impact";
   }
-  return "Low business impact";
+  return "Low crop impact";
 }
 
 function windowLabelFromTone(tone) {
@@ -3063,7 +3063,7 @@ function heroSublineFromTone(tone, focusLabel) {
     return `${focusLabel} is now inside an immediate decision window, but the rest of the facility remains visible and controllable.`;
   }
   if (tone === "elevated") {
-    return `${focusLabel} is compressing the current intervention horizon, giving operators time to act before the issue becomes disruptive.`;
+    return `${focusLabel} is shortening the current intervention horizon, giving growers time to act before the room becomes disruptive.`;
   }
   if (tone === "review") {
     return `${focusLabel} needs planned attention, while the broader facility stays inside a manageable operating envelope.`;
@@ -3138,14 +3138,14 @@ function buildSimulatedTelemetryCards(roomStates, tick) {
     },
     {
       label: "HVAC",
-      primary: `${maxDrift.toFixed(2)}F drift`,
+      primary: `${maxDrift.toFixed(2)}F off baseline`,
       secondary: `${unstableRooms} room${unstableRooms === 1 ? "" : "s"} under review`,
       series: roomStates.map((room) => room.hvacDrift * 10),
       tone: maxDrift > 1.7 ? "unstable" : maxDrift > 1.25 ? "elevated" : "review",
     },
     {
       label: "Airflow",
-      primary: `${cycleValue(94, tick, 5, 0).toFixed(0)}% runtime`,
+      primary: `${cycleValue(94, tick, 5, 0).toFixed(0)}% equipment activity`,
       secondary: "Transition dampers modulating between flowering zones",
       series: Array.from({ length: 6 }, (_, index) => 78 + ((tick + index * 7) % 18)),
       tone: "info",
@@ -3171,8 +3171,8 @@ function buildSimulatedTimeline(roomStates, tick) {
     },
     {
       time: formatClockTime(new Date(time.getTime() + 5 * 60000)),
-      title: "HVAC drift review opened",
-      detail: `${roomStates[0].name} supply temperature drift moved to ${roomStates[0].hvacDrift.toFixed(2)}F.`,
+      title: "Room climate review opened",
+      detail: `${roomStates[0].name} supply temperature moved ${roomStates[0].hvacDrift.toFixed(2)}F off baseline.`,
       tone: roomStates[0].tone,
     },
     {
@@ -3183,7 +3183,7 @@ function buildSimulatedTimeline(roomStates, tick) {
     },
     {
       time: formatClockTime(new Date(time.getTime() + 17 * 60000)),
-      title: "Operator review notice",
+      title: "Grower review notice",
       detail: "Review recommended for irrigation variance before next flowering cycle change.",
       tone: "review",
     },
@@ -3203,7 +3203,7 @@ function buildSimulatedAlerts(roomStates, apiStatus) {
   alertRooms.slice(0, 2).forEach((room) => {
     items.push({
       title: `${room.name} requires review`,
-      detail: `${room.irrigationState}. HVAC drift ${room.hvacDrift.toFixed(2)}F with instability index ${room.instability.toFixed(2)}.`,
+      detail: `${room.irrigationState}. Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline with climate stability at ${room.instability.toFixed(2)}.`,
       tone: room.tone,
     });
   });
@@ -3219,12 +3219,12 @@ function buildSimulatedFindings(roomStates) {
   return roomStates.flatMap((room) => ([
     {
       title: `${room.name} telemetry review`,
-      detail: `${room.cycle} with ${room.irrigationState.toLowerCase()} and ${room.hvacDrift.toFixed(2)}F HVAC drift.`,
+      detail: `${room.cycle} with ${room.irrigationState.toLowerCase()} and room temperature ${room.hvacDrift.toFixed(2)}F off baseline.`,
       tone: room.tone,
     },
     {
       title: `${room.name} evidence event`,
-      detail: `Environmental instability index ${room.instability.toFixed(2)} recorded against current room baseline.`,
+      detail: `Climate stability ${room.instability.toFixed(2)} recorded against current room baseline.`,
       tone: room.tone === "nominal" ? "info" : room.tone,
     },
   ])).slice(0, 6);
@@ -3237,7 +3237,7 @@ function buildSimulatedDriftRows(roomStates) {
       percent_change: Number((room.hvacDrift * 2.4).toFixed(1)),
       absolute_change: room.hvacDrift,
       drift_flag: room.tone,
-      direction: room.hvacDrift > 1.1 ? "upward drift" : "stable recovery",
+      direction: room.hvacDrift > 1.1 ? "temperature rising" : "stable recovery",
       warnings: room.tone === "nominal" ? [] : [`Review recommended for ${room.name.toLowerCase()} HVAC balancing.`],
     },
     {
@@ -3262,7 +3262,7 @@ function buildSimulatedRelationshipRows(roomStates, tick) {
     },
     {
       columns: ["HVAC", "temperature"],
-      change: roomStates[0].hvacDrift > 1.4 ? "Supply drift elevated" : "Supply tracking nominal",
+      change: roomStates[0].hvacDrift > 1.4 ? "Supply temperature elevated" : "Supply tracking nominal",
       baseline_correlation: "0.81",
       recent_correlation: roomStates[0].hvacDrift > 1.4 ? "0.63" : "0.77",
       tone: roomStates[0].hvacDrift > 1.4 ? "elevated" : "nominal",
@@ -3334,7 +3334,7 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
     },
     {
       title: "Baseline and evidence extraction",
-      detail: "Awaiting uploaded room exports to replace simulated evidence and drift relationships.",
+      detail: "Awaiting uploaded room exports to replace simulated evidence and room trend relationships.",
       state: "standby",
       tone: "review",
     },
@@ -3348,10 +3348,10 @@ function buildSimulatedEvidenceLines(roomStates, tick, apiStatus) {
     `connection.last_check=${formatClockTime(apiStatus.checkedAt ?? new Date())}`,
     `room.primary=${roomStates[0].name}`,
     `room.transition=${roomStates[1].name}:humidity_recovery_review`,
-    `hvac.review=${roomStates[0].hvacDrift.toFixed(2)}F_drift`,
+    `room.temperature_review=${roomStates[0].hvacDrift.toFixed(2)}F_off_baseline`,
     `irrigation.state=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
     `evidence.sequence=${tick}`,
-    `operator.notice=review_recommended_for_irrigation_variance`,
+    `grower.notice=review_recommended_for_irrigation_variance`,
   ];
 }
 
@@ -3360,10 +3360,10 @@ function buildSimulatedConsoleEvents(roomStates, tick, apiStatus) {
     `telemetry.link=${apiStatus.state}`,
     `telemetry.sequence=${tick}`,
     `event.room_transition=${roomStates[1].name.replace(/ /g, "_").toLowerCase()}`,
-    `event.hvac_drift=${roomStates[0].hvacDrift.toFixed(2)}`,
-    `event.environmental_instability=${roomStates[1].instability.toFixed(2)}`,
+    `event.room_temperature_delta=${roomStates[0].hvacDrift.toFixed(2)}`,
+    `event.climate_stability=${roomStates[1].instability.toFixed(2)}`,
     `event.irrigation_cycle=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
-    `event.review_notice=operator_review_open`,
+    `event.review_notice=grower_review_open`,
     ...buildSimulatedEvidenceLines(roomStates, tick, apiStatus),
   ];
 }
@@ -3394,7 +3394,7 @@ function buildConnectionEvents(apiStatus, tick) {
       tone: apiStatus.state === "online" ? "nominal" : "elevated",
     },
     {
-      title: apiStatus.state === "online" ? "Telemetry monitor" : "Operator action",
+      title: apiStatus.state === "online" ? "Telemetry monitor" : "Grower action",
       detail: apiStatus.state === "online"
         ? "Live telemetry feed is current."
         : "Check facility WiFi if room changes stop syncing.",
@@ -3470,7 +3470,7 @@ function buildConfidenceBasis(item, findings) {
   if (drivers.length === 1) {
     return `Based on ${drivers[0].toLowerCase()}.`;
   }
-  return "Based on current room drift, sync recency, and baseline behavior.";
+  return "Based on current room climate trend, sync recency, and baseline behavior.";
 }
 
 function average(values) {
