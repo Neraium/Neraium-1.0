@@ -583,11 +583,11 @@ function OverviewWorkspace({
   ];
 
   return (
-    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple">
+    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--room-first">
       <Panel
         title="Facility command"
-        subtitle="Time remaining, confidence, and the next move."
-        className="span-8 overview-panel overview-panel--hero"
+        subtitle="System status, intervention timing, and the next move."
+        className="span-8 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
           <div className="overview-hero__lead">
@@ -625,8 +625,8 @@ function OverviewWorkspace({
 
       <Panel
         title="Action queue"
-        subtitle="Urgency, impact, and confidence."
-        className="span-4 overview-panel overview-panel--events"
+        subtitle="What needs attention first."
+        className="span-4 overview-panel overview-panel--events overview-panel--action"
       >
         <ActionQueue
           items={liveOps.actionQueue}
@@ -639,9 +639,9 @@ function OverviewWorkspace({
       </Panel>
 
       <Panel
-        title="Intervention windows"
-        subtitle="Time remaining by room."
-        className="span-8 overview-panel overview-panel--rooms"
+        title="Rooms"
+        subtitle="Click a room to inspect timing, cause, confidence, and evidence."
+        className="span-8 overview-panel overview-panel--rooms overview-panel--room-first"
       >
         <InterventionGrid
           items={liveOps.interventionItems}
@@ -651,9 +651,9 @@ function OverviewWorkspace({
       </Panel>
 
       <Panel
-        title="Why this matters"
+        title="Selected room detail"
         subtitle="Cause, confidence, and next move."
-        className="span-4 overview-panel overview-panel--findings"
+        className="span-4 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
           item={selectedAction ?? selectedNode}
@@ -663,44 +663,18 @@ function OverviewWorkspace({
           onLogIntervention={(id) => onOperatorAction(id, "log")}
           onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
         />
-      </Panel>
-
-      <Panel
-        title="System topology"
-        subtitle="Facility state at a glance."
-        className="span-8 overview-panel overview-panel--rooms"
-      >
-        <TopologyMap
-          nodes={liveOps.topologyNodes}
-          selectedId={selectedNode?.id ?? null}
-          onSelect={onSelectIntervention}
-        />
-      </Panel>
-
-      <Panel
-        title="Recent changes"
-        subtitle="Only shifts that changed timing."
-        className="span-4 overview-panel overview-panel--events"
-      >
-        <TimelineFeed items={liveOps.timeline.slice(0, 5)} />
-      </Panel>
-
-      <Panel
-        title="Morning check"
-        subtitle="Quick room pass for the daily walkthrough."
-        className="span-12 overview-panel overview-panel--events"
-      >
-        <MorningCheck
-          items={liveOps.interventionItems}
-          operatorActions={operatorActions}
-          onSelect={onSelectIntervention}
-          onLogCondition={(id) => onOperatorAction(id, "log")}
-        />
+        <div className="room-first-actions">
+          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>
+            Open system detail
+          </button>
+          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("evidence-reports")}>
+            View evidence
+          </button>
+        </div>
       </Panel>
     </div>
   );
 }
-
 function FacilitySystemsWorkspace({
   systems,
   systemsState,

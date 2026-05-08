@@ -3088,3 +3088,626 @@ select {
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   Room-first operating view
+   Simplifies Overview into global status + room cards + drilldown
+   ========================================================= */
+
+.room-command-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.room-command-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid rgba(177, 211, 206, 0.16);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(115, 216, 242, 0.18), transparent 36%),
+    radial-gradient(circle at 10% 100%, rgba(88, 212, 164, 0.11), transparent 34%),
+    linear-gradient(135deg, rgba(22, 37, 45, 0.98), rgba(6, 10, 14, 0.98));
+  box-shadow:
+    0 38px 100px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.room-command-hero--nominal {
+  border-color: rgba(88, 212, 164, 0.22);
+}
+
+.room-command-hero--review,
+.room-command-hero--info {
+  border-color: rgba(115, 216, 242, 0.22);
+}
+
+.room-command-hero--elevated,
+.room-command-hero--unstable {
+  border-color: rgba(255, 126, 115, 0.25);
+}
+
+.room-command-hero__main,
+.room-command-hero__action {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.room-command-hero__main h2 {
+  max-width: 13ch;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(2.4rem, 5vw, 4.8rem);
+  font-weight: 780;
+  line-height: 0.94;
+  letter-spacing: -0.075em;
+}
+
+.room-command-hero__main p {
+  max-width: 66ch;
+  margin: 0;
+  color: rgba(223, 237, 233, 0.82);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.room-command-hero__action {
+  padding: 18px;
+  border: 1px solid rgba(177, 211, 206, 0.14);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.065), transparent 36%),
+    linear-gradient(180deg, rgba(28, 43, 51, 0.9), rgba(11, 18, 23, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+.room-command-hero__action span,
+.facility-summary-strip__item span,
+.room-card span,
+.room-section-header p {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.room-command-hero__action strong {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 740;
+  line-height: 1.2;
+}
+
+.room-command-hero__action p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.facility-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.facility-summary-strip__item {
+  display: grid;
+  gap: 8px;
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid rgba(177, 211, 206, 0.13);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.055), transparent 34%),
+    linear-gradient(180deg, rgba(28, 43, 51, 0.88), rgba(11, 18, 23, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.facility-summary-strip__item strong {
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.facility-summary-strip__item--nominal,
+.facility-summary-strip__item--online {
+  border-color: rgba(88, 212, 164, 0.22);
+  box-shadow: var(--glow-green), 0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.facility-summary-strip__item--info,
+.facility-summary-strip__item--checking {
+  border-color: rgba(115, 216, 242, 0.22);
+  box-shadow: var(--glow-cyan), 0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.facility-summary-strip__item--review {
+  border-color: rgba(240, 189, 103, 0.22);
+  box-shadow: var(--glow-amber), 0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.facility-summary-strip__item--elevated,
+.facility-summary-strip__item--unstable,
+.facility-summary-strip__item--offline {
+  border-color: rgba(255, 126, 115, 0.25);
+  box-shadow: var(--glow-red), 0 18px 44px rgba(0, 0, 0, 0.26);
+}
+
+.room-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.42fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.room-command-grid__main,
+.room-detail-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(177, 211, 206, 0.14);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(115, 216, 242, 0.07), transparent 32%),
+    linear-gradient(180deg, rgba(18, 29, 35, 0.96), rgba(8, 13, 17, 0.94));
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.room-detail-panel {
+  position: sticky;
+  top: 118px;
+}
+
+.room-section-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(177, 211, 206, 0.1);
+}
+
+.room-section-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.24rem;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+}
+
+.room-section-header > p {
+  max-width: 42ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.room-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.room-card-grid--empty {
+  grid-template-columns: 1fr;
+}
+
+.room-card {
+  display: grid;
+  gap: 14px;
+  min-height: 248px;
+  padding: 18px;
+  border: 1px solid rgba(177, 211, 206, 0.13);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(28, 43, 51, 0.88), rgba(11, 18, 23, 0.84));
+  color: inherit;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 44px rgba(0, 0, 0, 0.22);
+  transition:
+    transform var(--motion-quiet),
+    border-color var(--motion-quiet),
+    box-shadow var(--motion-quiet),
+    background var(--motion-quiet);
+}
+
+.room-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(115, 216, 242, 0.28);
+  box-shadow:
+    0 30px 78px rgba(0, 0, 0, 0.42),
+    0 0 34px rgba(115, 216, 242, 0.09);
+}
+
+.room-card--selected {
+  border-color: rgba(115, 216, 242, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(115, 216, 242, 0.18),
+    0 34px 88px rgba(0, 0, 0, 0.48),
+    0 0 42px rgba(115, 216, 242, 0.13);
+}
+
+.room-card--nominal {
+  border-color: rgba(88, 212, 164, 0.2);
+}
+
+.room-card--review,
+.room-card--info {
+  border-color: rgba(115, 216, 242, 0.2);
+}
+
+.room-card--elevated,
+.room-card--unstable {
+  border-color: rgba(255, 126, 115, 0.25);
+}
+
+.room-card__top,
+.room-card__metrics,
+.room-card__footer {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.room-card__top strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-primary);
+  font-size: 1.18rem;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+}
+
+.room-card__state,
+.room-card__driver {
+  display: grid;
+  gap: 6px;
+}
+
+.room-card__state strong,
+.room-card__metrics strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.room-card__metrics > div {
+  display: grid;
+  gap: 5px;
+}
+
+.room-card__driver p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.room-card__footer {
+  padding-top: 12px;
+  border-top: 1px solid rgba(177, 211, 206, 0.1);
+}
+
+.room-card__footer span:last-child {
+  max-width: 24ch;
+  color: rgba(239, 248, 246, 0.92);
+  text-align: right;
+}
+
+.room-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.secondary-command-button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(177, 211, 206, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(25, 39, 46, 0.92), rgba(10, 17, 21, 0.88));
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+.secondary-command-button:hover {
+  border-color: rgba(115, 216, 242, 0.3);
+  box-shadow:
+    0 22px 52px rgba(0, 0, 0, 0.34),
+    0 0 26px rgba(115, 216, 242, 0.08);
+}
+
+@media (max-width: 1320px) {
+  .room-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .room-command-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-detail-panel {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .room-command-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .facility-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .room-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .room-section-header {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 620px) {
+  .facility-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .room-command-hero,
+  .room-command-grid__main,
+  .room-detail-panel {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .room-command-hero__main h2 {
+    font-size: clamp(2rem, 12vw, 3.2rem);
+  }
+
+  .room-detail-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   Room-first overview simplification
+   Keeps existing stable React components
+   ========================================================= */
+
+.workspace-grid--overview-simple {
+  grid-template-areas:
+    "hero hero hero hero hero hero hero hero action action action action"
+    "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
+    "detail detail detail detail detail detail detail detail detail detail detail detail";
+}
+
+.workspace-grid--overview-simple > .overview-panel--hero {
+  grid-area: hero;
+}
+
+.workspace-grid--overview-simple > .overview-panel--action {
+  grid-area: action;
+}
+
+.workspace-grid--overview-simple > .overview-panel--room-first {
+  grid-area: rooms;
+}
+
+.workspace-grid--overview-simple > .overview-panel--detail {
+  grid-area: detail;
+}
+
+.overview-panel--room-first .ops-panel__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.overview-panel--room-first .ops-panel__header h2 {
+  max-width: none;
+  font-size: 1.35rem;
+  letter-spacing: -0.035em;
+}
+
+.overview-panel--room-first .intervention-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-panel--room-first .intervention-card {
+  min-height: 230px;
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.overview-panel--room-first .intervention-card strong {
+  font-size: 1rem;
+}
+
+.overview-panel--detail .ops-panel__body {
+  max-width: 980px;
+}
+
+.overview-panel--detail {
+  background:
+    radial-gradient(circle at top right, rgba(115, 216, 242, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(18, 29, 35, 0.98), rgba(8, 13, 17, 0.96));
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid--overview-simple {
+    grid-template-areas:
+      "hero hero hero hero hero hero hero hero hero hero hero hero"
+      "action action action action action action action action action action action action"
+      "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
+      "detail detail detail detail detail detail detail detail detail detail detail detail";
+  }
+
+  .overview-panel--room-first .intervention-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .overview-panel--room-first .intervention-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-panel--room-first .ops-panel__header {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+
+/* =========================================================
+   Room-first overview v2
+   Uses existing stable components, removes lower dashboard clutter
+   ========================================================= */
+
+.workspace-grid--room-first {
+  grid-template-areas:
+    "command command command command command command command command action action action action"
+    "rooms rooms rooms rooms rooms rooms rooms rooms detail detail detail detail";
+  align-items: start;
+}
+
+.workspace-grid--room-first > .overview-panel--command {
+  grid-area: command;
+}
+
+.workspace-grid--room-first > .overview-panel--action {
+  grid-area: action;
+}
+
+.workspace-grid--room-first > .overview-panel--room-first {
+  grid-area: rooms;
+}
+
+.workspace-grid--room-first > .overview-panel--detail {
+  grid-area: detail;
+}
+
+.workspace-grid--room-first .overview-panel--room-first,
+.workspace-grid--room-first .overview-panel--detail {
+  min-height: 100%;
+}
+
+.workspace-grid--room-first .overview-panel--room-first .ops-panel__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.workspace-grid--room-first .overview-panel--room-first .ops-panel__header h2 {
+  max-width: 46ch;
+  font-size: 1.35rem;
+  letter-spacing: -0.035em;
+}
+
+.workspace-grid--room-first .intervention-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.workspace-grid--room-first .intervention-card {
+  min-height: 245px;
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.workspace-grid--room-first .intervention-card strong {
+  font-size: 1rem;
+}
+
+.workspace-grid--room-first .overview-panel--detail {
+  position: sticky;
+  top: 118px;
+}
+
+.room-first-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(177, 211, 206, 0.1);
+}
+
+.secondary-command-button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(177, 211, 206, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(25, 39, 46, 0.92), rgba(10, 17, 21, 0.88));
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+.secondary-command-button:hover {
+  border-color: rgba(115, 216, 242, 0.3);
+  box-shadow:
+    0 22px 52px rgba(0, 0, 0, 0.34),
+    0 0 26px rgba(115, 216, 242, 0.08);
+}
+
+@media (max-width: 1280px) {
+  .workspace-grid--room-first {
+    grid-template-areas:
+      "command command command command command command command command command command command command"
+      "action action action action action action action action action action action action"
+      "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
+      "detail detail detail detail detail detail detail detail detail detail detail detail";
+  }
+
+  .workspace-grid--room-first .overview-panel--detail {
+    position: relative;
+    top: auto;
+  }
+
+  .workspace-grid--room-first .intervention-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-grid--room-first .intervention-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-grid--room-first .overview-panel--room-first .ops-panel__header {
+    align-items: start;
+    flex-direction: column;
+  }
+}
