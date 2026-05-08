@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE_URL, API_CONFIG_WARNING } from "./config";
+import {
+  API_BASE_URL,
+  API_CONFIG_WARNING,
+  APP_ACCESS_CODE,
+  APP_ACCESS_CONFIG_WARNING,
+  HAS_APP_ACCESS_CODE,
+} from "./config";
 import "./styles.css";
 
 const WORKSPACES = [
@@ -93,8 +99,12 @@ const DEMO_ROOMS = [
 ];
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
+const ACCESS_SESSION_KEY = "neraium_access_granted";
 
 function App() {
+  const [hasAccess, setHasAccess] = useState(() => (
+    HAS_APP_ACCESS_CODE && window.sessionStorage.getItem(ACCESS_SESSION_KEY) === "true"
+  ));
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
@@ -117,6 +127,10 @@ function App() {
   const healthCheckAttemptsRef = useRef(0);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
+    if (!hasAccess) {
+      return false;
+    }
+
     const checkTime = new Date();
     const attemptCount = healthCheckAttemptsRef.current + 1;
     healthCheckAttemptsRef.current = attemptCount;
@@ -156,9 +170,13 @@ function App() {
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;
     }
-  }, []);
+  }, [hasAccess]);
 
   const loadFacilitySystems = useCallback(async () => {
+    if (!hasAccess) {
+      return false;
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/facility/systems`);
       if (!response.ok) {
@@ -179,7 +197,7 @@ function App() {
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;
     }
-  }, []);
+  }, [hasAccess]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
@@ -189,6 +207,10 @@ function App() {
   }, [checkApiHealth, loadFacilitySystems]);
 
   useEffect(() => {
+    if (!hasAccess) {
+      return undefined;
+    }
+
     checkApiHealth("startup");
     const intervalId = window.setInterval(() => {
       checkApiHealth("interval");
@@ -197,19 +219,27 @@ function App() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [checkApiHealth]);
+  }, [checkApiHealth, hasAccess]);
 
   useEffect(() => {
+    if (!hasAccess) {
+      return undefined;
+    }
+
     const intervalId = window.setInterval(() => {
       setTelemetryTick((current) => current + 1);
     }, 4200);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [hasAccess]);
 
   useEffect(() => {
+    if (!hasAccess) {
+      return;
+    }
+
     loadFacilitySystems();
-  }, [loadFacilitySystems]);
+  }, [hasAccess, loadFacilitySystems]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
@@ -274,6 +304,17 @@ function App() {
         at: new Date().toISOString(),
       },
     }));
+  }
+
+  function handleAccessGranted() {
+    window.sessionStorage.setItem(ACCESS_SESSION_KEY, "true");
+    setHasAccess(true);
+  }
+
+  function handleLockApp() {
+    window.sessionStorage.removeItem(ACCESS_SESSION_KEY);
+    setHasAccess(false);
+    setIsWorkspaceMenuOpen(false);
   }
 
   function renderActiveWorkspace() {
@@ -354,6 +395,15 @@ function App() {
     );
   }
 
+  if (!hasAccess) {
+    return (
+      <AccessGate
+        onAccessGranted={handleAccessGranted}
+        configWarning={APP_ACCESS_CONFIG_WARNING}
+      />
+    );
+  }
+
   return (
     <main className="platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
@@ -364,6 +414,7 @@ function App() {
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
+          onLockApp={handleLockApp}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
@@ -436,9 +487,65 @@ function App() {
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
+          onLockApp={handleLockApp}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
+    </main>
+  );
+}
+
+function AccessGate({ onAccessGranted, configWarning }) {
+  const [accessCode, setAccessCode] = useState("");
+  const [accessError, setAccessError] = useState("");
+  const isLockedByConfig = !HAS_APP_ACCESS_CODE;
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (isLockedByConfig || accessCode.trim() !== APP_ACCESS_CODE) {
+      setAccessError("Access code not recognized.");
+      return;
+    }
+
+    setAccessError("");
+    onAccessGranted();
+  }
+
+  return (
+    <main className="access-shell">
+      <section className="access-panel" aria-labelledby="access-title">
+        <div className="access-brand">
+          <div className="brand-mark">N</div>
+          <span>Private operations access</span>
+        </div>
+        <div className="access-copy">
+          <p className="eyebrow">Neraium Access</p>
+          <h1 id="access-title">Systemic Infrastructure Intelligence</h1>
+          <p>Enter access code to continue.</p>
+        </div>
+
+        <form className="access-form" onSubmit={handleSubmit}>
+          <label htmlFor="access-code">Access code</label>
+          <input
+            id="access-code"
+            type="password"
+            value={accessCode}
+            onChange={(event) => {
+              setAccessCode(event.target.value);
+              setAccessError("");
+            }}
+            disabled={isLockedByConfig}
+            autoComplete="current-password"
+          />
+          <button className="command-button" type="submit" disabled={isLockedByConfig}>
+            Continue
+          </button>
+        </form>
+
+        {(accessError || configWarning) && (
+          <p className="access-error">{isLockedByConfig ? configWarning : accessError}</p>
+        )}
+      </section>
     </main>
   );
 }
@@ -448,6 +555,7 @@ function WorkspaceNavigationContent({
   roomContext,
   timeCoverage,
   liveOps,
+  onLockApp,
   onSelectWorkspace,
 }) {
   return (
@@ -497,6 +605,9 @@ function WorkspaceNavigationContent({
           <p>{liveOps.connectionStatusLine}</p>
           <span>{liveOps.connectionActionHint}</span>
         </div>
+        <button className="lock-app-button" type="button" onClick={onLockApp}>
+          Lock app
+        </button>
       </div>
     </>
   );
@@ -2277,7 +2388,7 @@ function buildRoomTransitions(result, roomContext) {
 function buildEvidenceConsole(result) {
   if (!result) {
     return [
-      "evidence.console=monitoring_demo_telemetry",
+      "evidence.console=monitoring_sample_telemetry",
       "schema.mapping=no_facility_upload_connected",
       "grower.report=awaiting_room_exports",
     ];
@@ -3303,7 +3414,7 @@ function buildSimulatedAlerts(roomStates, apiStatus) {
   });
   items.push({
     title: "Monitoring active telemetry feed",
-    detail: "Demo telemetry will remain active until uploaded facility exports replace the current surface.",
+    detail: "Sample telemetry will remain active until uploaded facility exports replace the current surface.",
     tone: "info",
   });
   return items.slice(0, 4);
@@ -3422,7 +3533,7 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
     },
     {
       title: "Timestamp and room context review",
-      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live demo cadence ${tick}.`,
+      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live sample cadence ${tick}.`,
       state: "active",
       tone: "info",
     },

@@ -55,6 +55,94 @@ body {
   overflow-x: hidden;
 }
 
+.access-shell {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100svh;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 72% 18%, rgba(74, 178, 142, 0.12), transparent 28%),
+    radial-gradient(circle at 18% 78%, rgba(99, 188, 211, 0.08), transparent 30%),
+    linear-gradient(180deg, #0c1012 0%, #080c0e 100%);
+}
+
+.access-panel {
+  display: grid;
+  gap: 24px;
+  width: min(100%, 480px);
+  padding: 28px;
+  border: 1px solid rgba(120, 148, 139, 0.16);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at top right, rgba(99, 188, 211, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(17, 25, 28, 0.96), rgba(10, 15, 17, 0.96));
+  box-shadow: var(--shadow-lux);
+}
+
+.access-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.access-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.access-copy h1 {
+  font-size: clamp(2rem, 6vw, 3.45rem);
+  line-height: 0.98;
+}
+
+.access-copy p:last-child {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.access-form {
+  display: grid;
+  gap: 12px;
+}
+
+.access-form label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.access-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(120, 148, 139, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 12, 14, 0.92);
+  color: var(--text-primary);
+  padding: 0 14px;
+  outline: none;
+}
+
+.access-form input:focus {
+  border-color: rgba(99, 188, 211, 0.34);
+  box-shadow: var(--glow-cyan);
+}
+
+.access-error {
+  margin: 0;
+  color: #f0b8ae;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 button,
 input,
 textarea,
@@ -287,6 +375,22 @@ p {
   align-items: start;
   padding-top: 12px;
   border-top: 1px solid var(--border-soft);
+}
+
+.lock-app-button {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.lock-app-button:hover {
+  color: var(--text-primary);
 }
 
 .platform-main {
