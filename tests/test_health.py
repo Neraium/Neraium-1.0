@@ -80,6 +80,30 @@ def test_intelligence_status_endpoint_returns_sii_mode() -> None:
     assert "primary_driver" in payload["evidence_fields_present"]
 
 
+def test_engine_identity_endpoint_returns_actual_engine_metadata() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/intelligence/engine-identity")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["engine_name"] == "Neraium SII"
+    assert payload["engine_version"] == "neraium-cultivation-v1"
+    assert payload["engine_module"] == "app.engine.analysis"
+    assert payload["engine_class_or_function"] == "run_engine_analysis"
+    assert payload["git_commit"]
+    assert payload["deployment_mode"] == "production"
+    assert payload["validation_engine_path_present"] is True
+    assert payload["cmapss_validation_supported"] is False
+    assert payload["driver_attribution_supported"] is True
+    assert payload["sii_pipeline_supported"] is True
+    assert payload["actual_imports"]["upload_processing"]["module"] == "app.engine.analysis"
+    assert payload["actual_imports"]["driver_attribution"]["callable"] == "build_driver_attribution"
+    assert payload["actual_imports"]["validation_runner"] is None
+    assert payload["validation_provenance"]["same_engine_family"] is True
+    assert payload["validation_provenance"]["same_exact_validation_runner"] is False
+
+
 def test_health_endpoint_returns_cors_header_for_production_frontend() -> None:
     client = TestClient(create_app())
 

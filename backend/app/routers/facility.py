@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter
+from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import build_intelligence_status, build_sample_intelligence
 
 router = APIRouter(tags=["facility"])
@@ -53,3 +54,8 @@ def read_facility_systems() -> dict[str, Any]:
 @router.get("/intelligence/status")
 def read_intelligence_status() -> dict[str, Any]:
     return build_intelligence_status(build_sample_intelligence())
+
+
+@router.get("/intelligence/engine-identity")
+def read_engine_identity() -> dict[str, Any]:
+    return build_engine_identity()

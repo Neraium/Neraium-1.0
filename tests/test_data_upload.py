@@ -38,6 +38,16 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
     assert payload["sii_intelligence"]["primary_driver"]
     assert payload["sii_intelligence"]["what_to_check"]
     assert payload["sii_intelligence"]["rooms"][0]["intervention_window"]
+    assert payload["processing_trace"]["sii_pipeline_ran"] is True
+    assert payload["processing_trace"]["engine_module"] == "app.engine.analysis"
+    assert payload["processing_trace"]["engine_version"] == "neraium-cultivation-v1"
+    assert payload["processing_trace"]["driver_attribution_ran"] is True
+    assert payload["processing_trace"]["rows_processed"] == 2
+    assert payload["processing_trace"]["columns_analyzed"] == 0
+    assert payload["processing_trace"]["evidence_count"] == len(payload["engine_result"]["evidence"])
+    assert payload["processing_trace"]["git_commit"]
+    assert payload["validation_provenance"]["same_engine_family"] is True
+    assert payload["validation_provenance"]["same_exact_validation_runner"] is False
     assert payload["preview_rows"][0] == {
         "timestamp": "2026-05-01T08:00:00Z",
         "room": "Flower 1",

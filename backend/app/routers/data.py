@@ -15,6 +15,7 @@ from app.services.data_quality import (
     profile_timestamps,
 )
 from app.services.driver_attribution import build_driver_attribution
+from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
 
@@ -105,6 +106,12 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         operator_report=operator_report,
         timestamp_profile=timestamp_profile,
     )
+    processing_trace = build_processing_trace(
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        rows_processed=len(data_rows),
+        columns_analyzed=baseline_analysis["columns_analyzed"],
+    )
 
     return {
         "filename": filename,
@@ -123,6 +130,8 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "engine_result": engine_result,
         "driver_attribution": driver_attribution,
         "sii_intelligence": sii_intelligence,
+        "processing_trace": processing_trace,
+        "validation_provenance": VALIDATION_PROVENANCE,
     }
 
 

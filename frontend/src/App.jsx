@@ -131,6 +131,7 @@ function App() {
     evidence_fields_present: [],
     mode: "fallback",
   });
+  const [engineIdentity, setEngineIdentity] = useState(null);
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const workspaceRef = useRef(null);
@@ -213,12 +214,32 @@ function App() {
     }
   }, [hasAccess]);
 
+  const loadEngineIdentity = useCallback(async () => {
+    if (!hasAccess) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/intelligence/engine-identity`);
+      if (!response.ok) {
+        throw new Error(`Unexpected response: ${response.status}`);
+      }
+
+      setEngineIdentity(await response.json());
+      return true;
+    } catch {
+      setEngineIdentity(null);
+      return false;
+    }
+  }, [hasAccess]);
+
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
       await loadFacilitySystems();
+      await loadEngineIdentity();
     }
-  }, [checkApiHealth, loadFacilitySystems]);
+  }, [checkApiHealth, loadEngineIdentity, loadFacilitySystems]);
 
   useEffect(() => {
     if (!hasAccess) {
@@ -253,7 +274,8 @@ function App() {
     }
 
     loadFacilitySystems();
-  }, [hasAccess, loadFacilitySystems]);
+    loadEngineIdentity();
+  }, [hasAccess, loadEngineIdentity, loadFacilitySystems]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
@@ -407,6 +429,7 @@ function App() {
         onNavigateWorkspace={setActiveWorkspace}
         operatorActions={operatorActions}
         onOperatorAction={handleOperatorAction}
+        engineIdentity={engineIdentity}
       />
     );
   }
@@ -1165,12 +1188,14 @@ function EvidenceReportsWorkspace({
 }
 
 function IntelligenceConsoleWorkspace({
+  latestUploadResult,
   liveOps,
   selectedInterventionId,
   onSelectIntervention,
   onNavigateWorkspace,
   operatorActions,
   onOperatorAction,
+  engineIdentity,
 }) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
@@ -1264,7 +1289,46 @@ function IntelligenceConsoleWorkspace({
       >
         <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
       </Panel>
+
+      <Panel
+        title="Engine identity"
+        subtitle="Production SII pipeline provenance."
+        className="span-12"
+      >
+        <EngineIdentityPanel identity={engineIdentity} latestUploadResult={latestUploadResult} />
+      </Panel>
     </div>
+  );
+}
+
+function EngineIdentityPanel({ identity, latestUploadResult }) {
+  const trace = latestUploadResult?.processing_trace ?? null;
+  const version = identity?.engine_version ?? trace?.engine_version ?? "Awaiting backend identity";
+  const modulePath = identity?.engine_module ?? trace?.engine_module ?? "Awaiting backend identity";
+
+  return (
+    <details className="engine-identity-panel">
+      <summary>
+        <span>
+          <strong>{identity?.engine_name ?? "Neraium SII"}</strong>
+          <small>Source: production SII pipeline</small>
+        </span>
+        <span>{version}</span>
+      </summary>
+      <MetricGrid
+        metrics={[
+          { label: "Engine version", value: version },
+          { label: "Engine module", value: modulePath },
+          { label: "Callable", value: identity?.engine_class_or_function ?? "Awaiting backend identity" },
+          { label: "Git commit", value: identity?.git_commit ?? trace?.git_commit ?? "Awaiting backend identity" },
+        ]}
+      />
+      <div className="evidence-console evidence-console--static">
+        {(trace ? processingTraceLines(trace) : ["processing_trace=awaiting_upload"]).map((line) => (
+          <div className="evidence-console__line" key={line}>{line}</div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -4314,6 +4378,19 @@ function buildSimulatedEvidenceLines(roomStates, tick, apiStatus) {
     `irrigation.state=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
     `evidence.sequence=${tick}`,
     `grower.notice=review_recommended_for_irrigation_variance`,
+  ];
+}
+
+function processingTraceLines(trace) {
+  return [
+    `sii_pipeline_ran=${Boolean(trace.sii_pipeline_ran)}`,
+    `driver_attribution_ran=${Boolean(trace.driver_attribution_ran)}`,
+    `engine_module=${trace.engine_module ?? "unknown"}`,
+    `engine_version=${trace.engine_version ?? "unknown"}`,
+    `rows_processed=${trace.rows_processed ?? 0}`,
+    `columns_analyzed=${trace.columns_analyzed ?? 0}`,
+    `evidence_count=${trace.evidence_count ?? 0}`,
+    `git_commit=${trace.git_commit ?? "unknown"}`,
   ];
 }
 
