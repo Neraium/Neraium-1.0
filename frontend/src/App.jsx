@@ -685,7 +685,7 @@ function FacilitySystemsWorkspace({
       <Panel
         title="Selected target"
         subtitle="Why the current intervention target is moving."
-        className="span-4"
+        className="span-3"
       >
         <WhyPanel item={systemsFocus} findings={liveOps.findings.slice(0, 3)} />
       </Panel>
@@ -701,7 +701,7 @@ function FacilitySystemsWorkspace({
       <Panel
         title="Room transitions"
         subtitle="Changes that alter intervention timing."
-        className="span-2"
+        className="span-3"
       >
         <TimelineFeed items={roomTransitions} />
       </Panel>
@@ -709,7 +709,7 @@ function FacilitySystemsWorkspace({
       <Panel
         title="Drift by channel"
         subtitle="Baseline movement ranked by operational significance."
-        className="span-6"
+        className="span-5"
       >
         <DriftMonitor rows={driftRows} />
       </Panel>
@@ -717,7 +717,7 @@ function FacilitySystemsWorkspace({
       <Panel
         title="Relationship shifts"
         subtitle="Paired changes most likely to change confidence."
-        className="span-2"
+        className="span-3"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
@@ -871,7 +871,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       <Panel
         title="Expected impact"
         subtitle="How the current upload changes time remaining and confidence."
-        className="span-4"
+        className="span-5"
       >
         <WhyPanel item={intakeFocus} findings={liveOps.findings.slice(0, 3)} />
       </Panel>
@@ -879,12 +879,13 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       <Panel
         title="Baseline comparison"
         subtitle="Current drift extracted from the uploaded batch."
-        className="span-8"
+        className="span-7"
       >
         {uploadResult ? (
           <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
         ) : (
           <EmptyState
+            compact
             title="Baseline established from current telemetry surface"
             body="No facility upload connected. Demo monitoring remains active until room exports are uploaded."
           />
@@ -933,7 +934,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
       <Panel
         title="Technical evidence"
         subtitle="Expandable traces, observations, and source detail underneath the brief."
-        className="span-4"
+        className="span-5"
       >
         <TechnicalEvidencePanel
           evidenceLines={evidenceLines}
@@ -946,7 +947,7 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
       <Panel
         title="Report outputs"
         subtitle="Limitations and exported decision surfaces."
-        className="span-4"
+        className="span-3"
       >
         {latestReport ? (
           <CompactList items={[...latestReport.limitations, ...REPORT_TEMPLATES]} emptyText="No report output available." />
