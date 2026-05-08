@@ -1298,6 +1298,17 @@ h4 {
   line-height: 1.45;
 }
 
+.action-queue__driver {
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 148, 139, 0.08);
+}
+
+.target-selector__driver {
+  color: rgba(206, 223, 228, 0.72);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
 .action-queue__header,
 .action-queue__meta,
 .action-queue__actions,
@@ -3856,6 +3867,43 @@ select {
   line-height: 1.55;
 }
 
+.operator-guidance-brief {
+  display: grid;
+  gap: 8px;
+}
+
+.operator-guidance-brief p {
+  max-width: 54ch;
+}
+
+.operator-guidance-brief b {
+  color: rgba(237, 246, 242, 0.92);
+  font-weight: 760;
+}
+
+.operator-guidance-brief ul,
+.guidance-checks ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(206, 223, 228, 0.82);
+}
+
+.operator-guidance-brief li,
+.guidance-checks li {
+  padding-left: 2px;
+  line-height: 1.45;
+}
+
+.guidance-driver,
+.guidance-flag {
+  padding: 11px;
+  border: 1px solid rgba(177, 211, 206, 0.09);
+  border-radius: 8px;
+  background: rgba(13, 20, 22, 0.54);
+}
+
 .workspace-grid--operator-flow .overview-panel--room-first .ops-panel__header {
   gap: 5px;
   padding-bottom: 14px;
@@ -4443,6 +4491,23 @@ select {
     max-width: 31ch;
     font-size: 0.95rem;
     line-height: 1.5;
+  }
+
+  .operator-guidance-brief {
+    gap: 9px;
+  }
+
+  .operator-guidance-brief ul,
+  .guidance-checks ul {
+    gap: 7px;
+    padding-left: 20px;
+    font-size: 0.94rem;
+  }
+
+  .guidance-driver,
+  .guidance-flag {
+    padding: 13px;
+    border-radius: 12px;
   }
 
   .workspace-grid--operator-flow .overview-panel--room-first .intervention-grid {

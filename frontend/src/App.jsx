@@ -691,6 +691,7 @@ function OverviewWorkspace({
   const findings = liveOps.findings.slice(0, 3);
   const selectedRoom = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0];
   const primaryRoom = liveOps.primaryWindow ?? selectedRoom;
+  const primaryGuidance = buildGuidanceForItem(primaryRoom);
   const heroHeadline = formatFacilityPlainState(liveOps.facilityTone, primaryRoom);
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.interventionItems.length;
@@ -727,7 +728,15 @@ function OverviewWorkspace({
           <div className="operating-state-next">
             <span>Next operator move</span>
             <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
-            <p>{primaryRoom?.whyHeadline ?? liveOps.windowContext}</p>
+            <div className="operator-guidance-brief">
+              <p><b>Primary driver:</b> {primaryGuidance.primaryDriver}</p>
+              <p><b>Why Neraium flagged this:</b> {primaryGuidance.whyFlagged}</p>
+              <ul>
+                {primaryGuidance.whatToCheck.slice(0, 3).map((check) => (
+                  <li key={check}>{check}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </Panel>
@@ -1574,32 +1583,35 @@ function InterventionGrid({ items, selectedId, onSelect, compact = false, limit 
 
   return (
     <div className={`intervention-grid ${compact ? "intervention-grid--compact-command" : ""}`}>
-      {items.slice(0, limit).map((item, index) => (
-        <button
-          className={`intervention-card intervention-card--${item.tone} ${selectedId === item.id ? "intervention-card--selected" : ""}`}
-          key={item.id}
-          type="button"
-          onClick={() => onSelect(item.id)}
-        >
-          <div className="intervention-card__header">
-            <div>
-              <span>{item.label}</span>
-              <strong>{item.decisionLabel ?? formatRoomDecisionState(item.tone, index)}</strong>
+      {items.slice(0, limit).map((item, index) => {
+        const guidance = buildGuidanceForItem(item);
+        return (
+          <button
+            className={`intervention-card intervention-card--${item.tone} ${selectedId === item.id ? "intervention-card--selected" : ""}`}
+            key={item.id}
+            type="button"
+            onClick={() => onSelect(item.id)}
+          >
+            <div className="intervention-card__header">
+              <div>
+                <span>{item.label}</span>
+                <strong>{item.decisionLabel ?? formatRoomDecisionState(item.tone, index)}</strong>
+              </div>
+              <StatusDot tone={item.tone ?? "info"} />
             </div>
-            <StatusDot tone={item.tone ?? "info"} />
-          </div>
-          <div className="intervention-card__window">
-            <span>Time</span>
-            <strong>{item.window}</strong>
-          </div>
-          <p>{compact ? item.primaryAction ?? item.recommendation : item.shortDetail ?? item.summary}</p>
-          {!compact && (
-            <div className="intervention-card__footer">
-              <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
+            <div className="intervention-card__window">
+              <span>Time</span>
+              <strong>{item.window}</strong>
             </div>
-          )}
-        </button>
-      ))}
+            <p>{compact ? item.primaryAction ?? item.recommendation : guidance.primaryDriver}</p>
+            {!compact && (
+              <div className="intervention-card__footer">
+                <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
+              </div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1611,19 +1623,22 @@ function ActionQueue({ items, selectedId, onSelect }) {
 
   return (
     <div className="action-queue">
-      {items.slice(0, 5).map((item) => (
-        <button
-          className={`action-queue__item action-queue__item--${item.tone} ${selectedId === item.id ? "action-queue__item--selected" : ""}`}
-          key={item.id}
-          type="button"
-          onClick={() => onSelect(item.id)}
-        >
+      {items.slice(0, 5).map((item) => {
+        const guidance = buildGuidanceForItem(item);
+        return (
+          <button
+            className={`action-queue__item action-queue__item--${item.tone} ${selectedId === item.id ? "action-queue__item--selected" : ""}`}
+            key={item.id}
+            type="button"
+            onClick={() => onSelect(item.id)}
+          >
           <div className="action-queue__header">
             <span>{item.rankLabel}</span>
             <StatusDot tone={item.tone} />
           </div>
           <strong>{item.shortTitle ?? item.title}</strong>
-          <p>{item.shortDetail ?? item.detail}</p>
+          <p>{item.primaryAction ?? item.recommendation}</p>
+          <p className="action-queue__driver">{guidance.primaryDriver}</p>
           <div className="action-queue__meta">
             <span>{item.window}</span>
             <span>{item.impact}</span>
@@ -1639,8 +1654,9 @@ function ActionQueue({ items, selectedId, onSelect }) {
               </span>
             ))}
           </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1665,7 +1681,7 @@ function MorningCheck({ items, operatorActions, onSelect, onLogCondition }) {
                 </div>
               </div>
               <div className="morning-check__meta">
-                <span className={`overview-pill overview-pill--${item.tone}`}>{item.recommendation}</span>
+                <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
                 <p>{item.baselineContext ?? item.change}</p>
               </div>
             </button>
@@ -1704,6 +1720,7 @@ function WhyPanel({
   const supportingEvidence = item.supportingEvidence ?? item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3);
   const contributingSignals = item.contributingSignals ?? [];
   const structuralExplanation = item.structuralExplanation ?? buildStructuralExplanation(item);
+  const guidance = buildGuidanceForItem(item);
 
   return (
     <div className={`why-panel ${compact ? "why-panel--compact" : ""}`}>
@@ -1719,6 +1736,16 @@ function WhyPanel({
       <div className="why-panel__section">
         <span className="section-token">Why it matters</span>
         <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
+      </div>
+
+      <div className="why-panel__section guidance-driver">
+        <span className="section-token">Primary driver</span>
+        <p>{guidance.primaryDriver}</p>
+      </div>
+
+      <div className="why-panel__section guidance-flag">
+        <span className="section-token">Why Neraium flagged this</span>
+        <p>{guidance.whyFlagged}</p>
       </div>
 
       <ProgressionStrip tone={item.tone ?? "info"} compact={compact} />
@@ -1765,6 +1792,15 @@ function WhyPanel({
       <div className="why-panel__recommendation">
         <span>Next move</span>
         <strong>{item.primaryAction ?? item.recommendation ?? "Continue monitoring"}</strong>
+      </div>
+
+      <div className="why-panel__section guidance-checks">
+        <span className="section-token">What to check</span>
+        <ul>
+          {guidance.whatToCheck.slice(0, compact ? 3 : 4).map((check) => (
+            <li key={check}>{check}</li>
+          ))}
+        </ul>
       </div>
 
       {onOperatorAction && (
@@ -1965,7 +2001,8 @@ function TargetSelector({ items, selectedId, onSelect }) {
             <StatusDot tone={item.tone} />
           </div>
           <strong>{item.window}</strong>
-          <p>{item.recommendation}</p>
+          <p>{item.primaryAction ?? item.recommendation}</p>
+          <p className="target-selector__driver">{buildGuidanceForItem(item).primaryDriver}</p>
         </button>
       ))}
     </div>
@@ -1979,6 +2016,7 @@ function ExecutiveBrief({ focus, report, observations, roomContext, facilityTone
 
   const briefPoints = report?.recommended_operator_checks?.slice(0, 3)
     ?? observations.slice(0, 3);
+  const guidance = buildGuidanceForItem(focus);
 
   return (
     <div className="panel-stack">
@@ -1992,12 +2030,17 @@ function ExecutiveBrief({ focus, report, observations, roomContext, facilityTone
           { label: "Time remaining", value: focus.window },
           { label: "Confidence", value: `${focus.confidence}%` },
           { label: "Primary room", value: roomContext.primary },
-          { label: "Next move", value: focus.recommendation },
+          { label: "Next move", value: focus.primaryAction ?? focus.recommendation },
         ]}
         compact
       />
       <CompactList
-        items={briefPoints}
+        items={[
+          `Primary driver: ${guidance.primaryDriver}`,
+          `Why Neraium flagged this: ${guidance.whyFlagged}`,
+          ...guidance.whatToCheck.slice(0, 3),
+          ...briefPoints,
+        ].slice(0, 6)}
         emptyText="No executive observations available."
         title="Executive takeaways"
       />
@@ -2933,10 +2976,11 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       confidenceBasis: attribution?.confidence_basis,
       supportingEvidence: attribution?.supporting_evidence,
       structuralExplanation: buildUploadedStructuralExplanation(attribution, engineSignals),
+      guidance: buildGuidanceFromAttribution(attribution, facilityTone),
       decisionLabel: decisionLabelFromTone(facilityTone, 0),
       baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
-      primaryAction: attribution?.next_operator_move ?? primaryActionFromTone(facilityTone),
+      primaryAction: operatorMoveFromGuidance(buildGuidanceFromAttribution(attribution, facilityTone)),
       actions: actionSetFromTone(facilityTone),
       impact: impactFromTone(facilityTone),
       change: "Updated from active upload",
@@ -2969,10 +3013,11 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         "Cycle settling remains the current operating state.",
         "Room behavior is moving earlier than its recent baseline.",
       ],
+      guidance: buildGuidanceFromCategory("irrigation_balance"),
       decisionLabel: "Validate irrigation balance",
       baselineContext: `${roomContext.secondary} typically holds a longer recovery window. Current irrigation recovery is shortening.`,
       recommendation: recommendationFromTone(irrigationTone),
-      primaryAction: primaryActionFromTone(irrigationTone),
+      primaryAction: operatorMoveFromGuidance(buildGuidanceFromCategory("irrigation_balance")),
       actions: actionSetFromTone(irrigationTone),
       impact: impactFromTone(irrigationTone),
       change: "Review horizon opened",
@@ -3001,10 +3046,11 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         "Relationship evidence is limited until more facility telemetry is connected.",
         "Infrastructure movement remains under observation.",
       ],
+      guidance: buildGuidanceFromCategory("telemetry_continuity"),
       decisionLabel: "Continue monitoring",
       baselineContext: "Facility-level confidence improves as room coverage deepens and more week-specific context is connected.",
       recommendation: "Continue monitoring",
-      primaryAction: "Acknowledge",
+      primaryAction: operatorMoveFromGuidance(buildGuidanceFromCategory("telemetry_continuity")),
       actions: ["Acknowledge", "Schedule", "Escalate", "Ignore"],
       impact: "Facility-wide confidence",
       change: "Latest ingest synchronized",
@@ -3032,9 +3078,10 @@ function buildSimulatedInterventionItems(roomStates) {
       whyHeadline: whyHeadlineFromRoom(room),
       drivers: buildDriversFromRoom(room),
       structuralExplanation: buildStructuralExplanationFromRoom(room, index),
+      guidance: buildGuidanceFromRoom(room, index),
       baselineContext: baselineContextFromRoom(room),
       recommendation: recommendationFromTone(room.tone),
-      primaryAction: primaryActionFromRoom(room, index),
+      primaryAction: operatorMoveFromGuidance(buildGuidanceFromRoom(room, index)),
       decisionLabel: decisionLabelFromTone(room.tone, index),
       actions: actionSetFromTone(room.tone),
       impact: impactFromTone(room.tone),
@@ -3367,44 +3414,218 @@ function attributionTone(attribution, fallbackTone) {
 
 function recommendationFromTone(tone) {
   if (tone === "unstable") {
-    return "Act now";
+    return "Investigate delayed environmental recovery";
   }
   if (tone === "elevated") {
-    return "Schedule room review";
+    return "Review environmental coupling";
   }
   if (tone === "review") {
-    return "Review room";
+    return "Observe drift against baseline";
   }
-  return "Room is fine";
+  return "Continue monitoring";
 }
 
 function primaryActionFromTone(tone) {
   if (tone === "unstable") {
-    return "Stabilize environment";
+    return "Investigate delayed environmental recovery";
   }
   if (tone === "elevated") {
-    return "Adjust before next cycle";
+    return "Review environmental coupling";
   }
   if (tone === "review") {
-    return "Check room conditions";
+    return "Observe drift against baseline";
   }
   return "Continue monitoring";
 }
 
 function primaryActionFromRoom(room, index = 0) {
+  return operatorMoveFromGuidance(buildGuidanceFromRoom(room, index));
+}
+
+function operatorMoveFromGuidance(guidance) {
+  return guidance?.nextMove ?? "Continue monitoring";
+}
+
+function buildGuidanceForItem(item) {
+  if (item?.guidance) {
+    return item.guidance;
+  }
+  if (item?.driverAttribution) {
+    return buildGuidanceFromAttribution(item.driverAttribution, item.tone);
+  }
+  if (item?.likelyDriver) {
+    return buildGuidanceFromLikelyDriver(item.likelyDriver);
+  }
+  if (item?.label?.toLowerCase().includes("irrigation") || item?.status?.toLowerCase().includes("irrigation")) {
+    return buildGuidanceFromCategory("irrigation_balance");
+  }
+  if (item?.tone === "unstable") {
+    return buildGuidanceFromCategory("humidity_recovery");
+  }
+  if (item?.tone === "elevated") {
+    return buildGuidanceFromCategory("airflow_response");
+  }
+  if (item?.tone === "review") {
+    return buildGuidanceFromCategory("environmental_coupling");
+  }
+  return buildGuidanceFromCategory("stable_monitoring");
+}
+
+function buildGuidanceFromRoom(room, index = 0) {
+  if (room.irrigationState.toLowerCase().includes("feed")) {
+    return buildGuidanceFromCategory("irrigation_balance");
+  }
   if (room.tone === "unstable") {
-    return "Stabilize environment";
+    return buildGuidanceFromCategory(room.instability > 1.12 ? "humidity_recovery" : "thermal_consistency");
   }
   if (room.tone === "elevated") {
-    return index % 2 === 0 ? "Investigate airflow response" : "Review environmental coupling";
+    return buildGuidanceFromCategory(index % 2 === 0 ? "airflow_response" : "environmental_coupling");
   }
   if (room.tone === "review") {
-    return index % 2 === 0 ? "Observe drift" : "Monitor transition stability";
+    return buildGuidanceFromCategory(index % 2 === 0 ? "environmental_coupling" : "room_pressure");
   }
-  if (room.irrigationState.toLowerCase().includes("feed")) {
-    return "Validate irrigation balance";
+  return buildGuidanceFromCategory("stable_monitoring");
+}
+
+function buildGuidanceFromAttribution(attribution, fallbackTone) {
+  if (!attribution) {
+    return buildGuidanceFromCategory(fallbackTone === "unstable" ? "humidity_recovery" : "environmental_coupling");
   }
-  return "Continue monitoring";
+  const category = attribution.driver_category === "humidity_control"
+    ? "humidity_recovery"
+    : attribution.driver_category === "hvac_instability"
+      ? "thermal_consistency"
+      : attribution.driver_category === "airflow_restriction"
+        ? "airflow_response"
+        : attribution.driver_category === "irrigation_timing"
+          ? "irrigation_balance"
+          : attribution.driver_category === "sensor_network"
+            ? "telemetry_continuity"
+            : "environmental_coupling";
+  const guidance = buildGuidanceFromCategory(category);
+  return {
+    ...guidance,
+    primaryDriver: attribution.likely_driver
+      ? `${attribution.likely_driver} appears to be contributing to the current room behavior.`
+      : guidance.primaryDriver,
+    whyFlagged: attribution.supporting_evidence?.[0] ?? guidance.whyFlagged,
+    nextMove: attribution.next_operator_move && !isGenericOperatorMove(attribution.next_operator_move)
+      ? attribution.next_operator_move
+      : guidance.nextMove,
+  };
+}
+
+function buildGuidanceFromLikelyDriver(likelyDriver) {
+  const normalized = likelyDriver.toLowerCase();
+  if (normalized.includes("humid") || normalized.includes("moisture")) {
+    return buildGuidanceFromCategory("humidity_recovery");
+  }
+  if (normalized.includes("airflow") || normalized.includes("pressure")) {
+    return buildGuidanceFromCategory("airflow_response");
+  }
+  if (normalized.includes("temperature") || normalized.includes("hvac") || normalized.includes("thermal")) {
+    return buildGuidanceFromCategory("thermal_consistency");
+  }
+  if (normalized.includes("irrigation") || normalized.includes("feed")) {
+    return buildGuidanceFromCategory("irrigation_balance");
+  }
+  return buildGuidanceFromCategory("environmental_coupling");
+}
+
+function buildGuidanceFromCategory(category) {
+  const guidance = {
+    humidity_recovery: {
+      nextMove: "Review humidity recovery behavior",
+      primaryDriver: "Humidity recovery is lagging behind recent room behavior.",
+      whyFlagged: "Humidity recovery has remained slower than recent room behavior across recent monitoring windows.",
+      whatToCheck: [
+        "Review dehumidification response",
+        "Check room moisture load",
+        "Compare recent recovery time to normal room behavior",
+      ],
+    },
+    airflow_response: {
+      nextMove: "Inspect airflow response",
+      primaryDriver: "Airflow response appears to be recovering slower than recent baseline.",
+      whyFlagged: "Room recovery suggests airflow response is not matching recent environmental behavior.",
+      whatToCheck: [
+        "Inspect airflow path",
+        "Check fan response consistency",
+        "Review room exchange behavior",
+      ],
+    },
+    thermal_consistency: {
+      nextMove: "Review thermal consistency",
+      primaryDriver: "Temperature recovery is no longer matching humidity stabilization.",
+      whyFlagged: "Temperature and humidity are no longer recovering together the way this room normally does.",
+      whatToCheck: [
+        "Review temperature recovery",
+        "Check cooling response stability",
+        "Compare hot spots against recent room behavior",
+      ],
+    },
+    irrigation_balance: {
+      nextMove: "Check irrigation balance",
+      primaryDriver: "Irrigation balance is changing during the recovery window.",
+      whyFlagged: "Recovery behavior after feed events is shifting compared to recent room baseline.",
+      whatToCheck: [
+        "Review irrigation timing",
+        "Check runoff or substrate response if available",
+        "Compare recovery behavior after feed events",
+      ],
+    },
+    environmental_coupling: {
+      nextMove: "Review environmental coupling",
+      primaryDriver: "Environmental relationships are becoming less consistent.",
+      whyFlagged: "Temperature and humidity relationships appear less consistent across recent monitoring windows.",
+      whatToCheck: [
+        "Compare temperature and humidity recovery together",
+        "Review room transition behavior",
+        "Check whether recovery timing is moving earlier than normal",
+      ],
+    },
+    room_pressure: {
+      nextMove: "Inspect room pressure stability",
+      primaryDriver: "Room pressure stability appears to be affecting recovery behavior.",
+      whyFlagged: "Room behavior is moving earlier than its recent operating baseline.",
+      whatToCheck: [
+        "Inspect room pressure stability",
+        "Review door and room sealing behavior",
+        "Compare room exchange behavior to recent baseline",
+      ],
+    },
+    telemetry_continuity: {
+      nextMove: "Review telemetry continuity",
+      primaryDriver: "Telemetry coverage is limiting confidence in the current room explanation.",
+      whyFlagged: "Connected signals suggest more room coverage is needed before confidence tightens.",
+      whatToCheck: [
+        "Confirm room telemetry coverage",
+        "Review missing or stale readings",
+        "Compare connected signals against expected room sources",
+      ],
+    },
+    stable_monitoring: {
+      nextMove: "Continue monitoring",
+      primaryDriver: "Environmental relationships remain consistent compared to recent baseline.",
+      whyFlagged: "Room behavior remains visible and controllable across recent monitoring windows.",
+      whatToCheck: [
+        "Continue routine room walk",
+        "Watch recovery timing after the next transition",
+        "Review changes only if the window shortens",
+      ],
+    },
+  };
+  return guidance[category] ?? guidance.environmental_coupling;
+}
+
+function isGenericOperatorMove(move) {
+  const normalized = move.toLowerCase();
+  return normalized.includes("stabilize environment")
+    || normalized.includes("needs review")
+    || normalized.includes("check room")
+    || normalized.includes("fix environment")
+    || normalized.includes("optimize conditions")
+    || normalized.includes("adjust before next cycle");
 }
 
 function decisionLabelFromTone(tone, index = 0) {
