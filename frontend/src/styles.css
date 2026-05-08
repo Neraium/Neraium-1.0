@@ -514,6 +514,36 @@ p {
   color: rgba(227, 236, 239, 0.9);
 }
 
+.sii-source-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(177, 211, 206, 0.14);
+  border-radius: 999px;
+  background: rgba(12, 18, 20, 0.82);
+  color: rgba(223, 244, 248, 0.86);
+  font-size: 0.68rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sii-source-chip--live {
+  border-color: rgba(74, 178, 142, 0.28);
+  box-shadow: var(--glow-green);
+}
+
+.sii-source-chip--sample {
+  border-color: rgba(99, 188, 211, 0.24);
+  box-shadow: var(--glow-cyan);
+}
+
+.sii-source-chip--fallback {
+  border-color: rgba(210, 165, 92, 0.24);
+  box-shadow: var(--glow-amber);
+}
+
 .backend-error-panel {
   display: flex;
   align-items: center;

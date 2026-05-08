@@ -1,0 +1,326 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+
+REQUIRED_INTELLIGENCE_FIELDS = [
+    "facility_state",
+    "room_state",
+    "urgency",
+    "intervention_window",
+    "neraium_score",
+    "primary_driver",
+    "supporting_evidence",
+    "relationship_evidence",
+    "structural_explanation",
+    "confidence_basis",
+    "recommended_operator_review",
+    "what_to_check",
+    "why_flagged",
+    "baseline_comparison",
+    "observed_persistence",
+    "last_updated",
+]
+
+
+def now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def build_sample_intelligence() -> dict[str, Any]:
+    """Return backend-provided SII sample intelligence for no-upload sessions."""
+
+    last_updated = now_iso()
+    rooms = [
+        {
+            "room": "Flower Room 2",
+            "room_state": "Drift observed",
+            "urgency": "review",
+            "intervention_window": "8 hours",
+            "primary_driver": "Humidity recovery is lagging behind recent room behavior.",
+            "supporting_evidence": [
+                "Humidity recovery remained slower than recent room behavior.",
+                "Temperature and humidity recovery are less synchronized than baseline.",
+                "Pattern persisted across recent monitoring windows.",
+            ],
+            "relationship_evidence": [
+                "Temperature recovery is decoupling from humidity stabilization.",
+                "Environmental relationships are becoming less consistent.",
+            ],
+            "structural_explanation": [
+                "Temperature recovery is decoupling from humidity stabilization.",
+                "Relationship persistence observed across 3 monitoring windows.",
+                "Room behavior is moving earlier than its recent baseline.",
+            ],
+            "confidence_basis": "Persistent multi-signal drift compared to recent baseline.",
+            "recommended_operator_review": "Review humidity recovery behavior",
+            "what_to_check": [
+                "Review dehumidification response",
+                "Check room moisture load",
+                "Compare recent recovery time to normal room behavior",
+            ],
+            "why_flagged": "Humidity recovery has remained slower than recent room behavior across recent monitoring windows.",
+            "baseline_comparison": "Recovery behavior is shorter than this room's recent operating baseline.",
+            "observed_persistence": "Observed across 3 monitoring windows",
+            "last_updated": last_updated,
+            "confidence": 86,
+        },
+        {
+            "room": "Veg Room 1",
+            "room_state": "Stable",
+            "urgency": "nominal",
+            "intervention_window": "5 weeks",
+            "primary_driver": "Environmental relationships remain consistent compared to recent baseline.",
+            "supporting_evidence": [
+                "Temperature response remains inside recent room behavior.",
+                "Humidity recovery remains visible and controlled.",
+            ],
+            "relationship_evidence": [
+                "Environmental relationships remain stable.",
+            ],
+            "structural_explanation": [
+                "Room temperature response remains within expected behavior.",
+                "Environmental relationships remain stable.",
+                "Cycle settling remains the current operating state.",
+            ],
+            "confidence_basis": "Stable relationship behavior across recent monitoring windows.",
+            "recommended_operator_review": "Continue monitoring",
+            "what_to_check": [
+                "Continue routine room walk",
+                "Watch recovery timing after the next transition",
+                "Review changes only if the window shortens",
+            ],
+            "why_flagged": "Room behavior remains visible and controllable across recent monitoring windows.",
+            "baseline_comparison": "Room behavior is inside recent operating baseline.",
+            "observed_persistence": "Stable across recent monitoring windows",
+            "last_updated": last_updated,
+            "confidence": 74,
+        },
+    ]
+    return {
+        "source": "sii_engine",
+        "mode": "sample",
+        "facility_state": "Drift observed",
+        "room_state": rooms[0]["room_state"],
+        "urgency": "review",
+        "intervention_window": rooms[0]["intervention_window"],
+        "neraium_score": 82,
+        "primary_room": rooms[0]["room"],
+        "primary_driver": rooms[0]["primary_driver"],
+        "supporting_evidence": rooms[0]["supporting_evidence"],
+        "relationship_evidence": rooms[0]["relationship_evidence"],
+        "structural_explanation": rooms[0]["structural_explanation"],
+        "confidence_basis": rooms[0]["confidence_basis"],
+        "recommended_operator_review": rooms[0]["recommended_operator_review"],
+        "what_to_check": rooms[0]["what_to_check"],
+        "why_flagged": rooms[0]["why_flagged"],
+        "baseline_comparison": rooms[0]["baseline_comparison"],
+        "observed_persistence": rooms[0]["observed_persistence"],
+        "last_updated": last_updated,
+        "rooms": rooms,
+    }
+
+
+def build_upload_intelligence(
+    *,
+    filename: str,
+    row_count: int,
+    data_quality: dict[str, Any],
+    baseline_analysis: dict[str, Any],
+    engine_result: dict[str, Any],
+    driver_attribution: dict[str, Any],
+    operator_report: dict[str, Any],
+    timestamp_profile: dict[str, Any],
+) -> dict[str, Any]:
+    last_updated = now_iso()
+    severity = driver_attribution.get("severity", "info")
+    urgency = "unstable" if severity == "action" else "review" if severity == "review" else "nominal"
+    score = score_from_upload(data_quality, engine_result, driver_attribution)
+    primary_driver = driver_attribution.get("likely_driver") or "Available telemetry suggests a room behavior change."
+    supporting_evidence = driver_attribution.get("supporting_evidence") or operator_report.get("key_observations", [])
+    relationship_evidence = relationship_evidence_from_engine(engine_result)
+    structural_explanation = structural_explanation_from_attribution(driver_attribution, relationship_evidence)
+    why_flagged = supporting_evidence[0] if supporting_evidence else "Telemetry changed compared to recent baseline."
+    what_to_check = checks_from_attribution(driver_attribution, operator_report)
+    intervention_window = window_from_urgency(urgency)
+    room = driver_attribution.get("room") or "Current room"
+    room_state = driver_attribution.get("state") or state_from_urgency(urgency)
+
+    room_record = {
+        "room": room,
+        "room_state": room_state,
+        "urgency": urgency,
+        "intervention_window": intervention_window,
+        "primary_driver": primary_driver,
+        "supporting_evidence": supporting_evidence,
+        "relationship_evidence": relationship_evidence,
+        "structural_explanation": structural_explanation,
+        "confidence_basis": driver_attribution.get("confidence_basis") or "Evidence is being compared across uploaded room signals.",
+        "recommended_operator_review": driver_attribution.get("next_operator_move") or (what_to_check[0] if what_to_check else "Continue monitoring"),
+        "what_to_check": what_to_check,
+        "why_flagged": why_flagged,
+        "baseline_comparison": baseline_comparison_from_analysis(baseline_analysis),
+        "observed_persistence": observed_persistence_from_engine(engine_result),
+        "last_updated": last_updated,
+        "confidence": confidence_number(driver_attribution),
+    }
+    return {
+        "source": "sii_engine",
+        "mode": "live",
+        "facility_state": room_state,
+        "room_state": room_state,
+        "urgency": urgency,
+        "intervention_window": intervention_window,
+        "neraium_score": score,
+        "primary_room": room,
+        "primary_driver": primary_driver,
+        "supporting_evidence": supporting_evidence,
+        "relationship_evidence": relationship_evidence,
+        "structural_explanation": structural_explanation,
+        "confidence_basis": room_record["confidence_basis"],
+        "recommended_operator_review": room_record["recommended_operator_review"],
+        "what_to_check": what_to_check,
+        "why_flagged": why_flagged,
+        "baseline_comparison": room_record["baseline_comparison"],
+        "observed_persistence": room_record["observed_persistence"],
+        "last_updated": last_updated,
+        "filename": filename,
+        "row_count": row_count,
+        "timestamp_coverage": timestamp_profile,
+        "rooms": [room_record],
+    }
+
+
+def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dict[str, Any]:
+    intelligence = intelligence or build_sample_intelligence()
+    fields = set(REQUIRED_INTELLIGENCE_FIELDS)
+    return {
+        "engine_loaded": True,
+        "source": intelligence.get("source", "sii_engine"),
+        "last_processed_at": intelligence.get("last_updated"),
+        "active_rooms_count": len(intelligence.get("rooms", [])),
+        "evidence_fields_present": sorted(field for field in fields if field in intelligence),
+        "mode": intelligence.get("mode", "sample"),
+    }
+
+
+def score_from_upload(data_quality: dict[str, Any], engine_result: dict[str, Any], attribution: dict[str, Any]) -> int:
+    readiness = data_quality.get("readiness")
+    severity = attribution.get("severity")
+    score = 86 if readiness == "ready" else 74 if readiness == "needs_review" else 58
+    if engine_result.get("overall_result") == "needs_review":
+        score -= 8
+    if severity == "action":
+        score -= 12
+    elif severity == "review":
+        score -= 6
+    return max(0, min(100, score))
+
+
+def relationship_evidence_from_engine(engine_result: dict[str, Any]) -> list[str]:
+    evidence = []
+    for item in engine_result.get("evidence", []):
+        if item.get("type") == "relationship_change":
+            columns = item.get("columns", [])
+            if len(columns) >= 2:
+                evidence.append(f"{columns[0]} and {columns[1]} relationship changed compared to baseline")
+    return evidence[:4] or ["Relationship evidence is limited in the current telemetry."]
+
+
+def structural_explanation_from_attribution(attribution: dict[str, Any], relationship_evidence: list[str]) -> list[str]:
+    category = attribution.get("driver_category")
+    if category == "humidity_control":
+        return [
+            "Humidity recovery appears slower than recent room behavior.",
+            "Temperature recovery is decoupling from humidity stabilization.",
+            "Relationship persistence was observed across recent monitoring windows.",
+        ]
+    if category == "hvac_instability":
+        return [
+            "Room temperature recovery appears less consistent than baseline.",
+            "Temperature and humidity recovery are not moving together as expected.",
+            "Relationship evidence is being held as supporting context.",
+        ]
+    if category == "airflow_restriction":
+        return [
+            "Airflow response appears slower than recent baseline.",
+            "Room exchange behavior may be affecting environmental recovery.",
+            "Relationship evidence is being held as supporting context.",
+        ]
+    return relationship_evidence[:3] or ["Room behavior is being compared against recent operating baseline."]
+
+
+def checks_from_attribution(attribution: dict[str, Any], operator_report: dict[str, Any]) -> list[str]:
+    category = attribution.get("driver_category")
+    checks = {
+        "humidity_control": [
+            "Review dehumidification response",
+            "Check room moisture load",
+            "Compare recent recovery time to normal room behavior",
+        ],
+        "hvac_instability": [
+            "Review temperature recovery",
+            "Check cooling response stability",
+            "Compare hot spots against recent room behavior",
+        ],
+        "airflow_restriction": [
+            "Inspect airflow path",
+            "Check fan response consistency",
+            "Review room exchange behavior",
+        ],
+        "irrigation_timing": [
+            "Review irrigation timing",
+            "Check runoff or substrate response if available",
+            "Compare recovery behavior after feed events",
+        ],
+        "sensor_network": [
+            "Confirm room telemetry coverage",
+            "Review missing or stale readings",
+            "Compare connected signals against expected room sources",
+        ],
+    }.get(category)
+    if checks:
+        return checks
+    report_checks = operator_report.get("recommended_operator_checks", [])
+    return report_checks[:3] or ["Continue monitoring", "Review telemetry coverage", "Compare room behavior to recent baseline"]
+
+
+def baseline_comparison_from_analysis(baseline_analysis: dict[str, Any]) -> str:
+    drift = baseline_analysis.get("column_drift", [])
+    review_columns = [item.get("column") for item in drift if item.get("drift_flag") == "review"]
+    if review_columns:
+        return f"{review_columns[0]} moved away from recent baseline."
+    return "Current telemetry remains within available baseline comparison."
+
+
+def observed_persistence_from_engine(engine_result: dict[str, Any]) -> str:
+    persistent = engine_result.get("persistence_assessment", {}).get("persistent_columns", [])
+    if persistent:
+        return f"Observed across persistent readings for {persistent[0]}"
+    return "Persistence evidence is limited in the current telemetry."
+
+
+def confidence_number(attribution: dict[str, Any]) -> int:
+    confidence = attribution.get("attribution_confidence")
+    if confidence == "high":
+        return 88
+    if confidence == "medium":
+        return 74
+    return 58
+
+
+def window_from_urgency(urgency: str) -> str:
+    return {
+        "unstable": "8 hours",
+        "review": "2 days",
+        "nominal": "3 weeks",
+    }.get(urgency, "Monitoring")
+
+
+def state_from_urgency(urgency: str) -> str:
+    return {
+        "unstable": "Needs action",
+        "review": "Drift observed",
+        "nominal": "Stable",
+    }.get(urgency, "Monitoring")

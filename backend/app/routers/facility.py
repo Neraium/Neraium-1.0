@@ -1,12 +1,14 @@
 from typing import Any
 
 from fastapi import APIRouter
+from app.services.sii_intelligence import build_intelligence_status, build_sample_intelligence
 
 router = APIRouter(tags=["facility"])
 
 
 @router.get("/facility/systems")
 def read_facility_systems() -> dict[str, Any]:
+    intelligence = build_sample_intelligence()
     return {
         "systems": [
             {
@@ -43,4 +45,11 @@ def read_facility_systems() -> dict[str, Any]:
             "sensor_network",
             "unknown_system_drift",
         ],
+        "intelligence": intelligence,
+        "intelligence_status": build_intelligence_status(intelligence),
     }
+
+
+@router.get("/intelligence/status")
+def read_intelligence_status() -> dict[str, Any]:
+    return build_intelligence_status(build_sample_intelligence())

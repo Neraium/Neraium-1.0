@@ -33,6 +33,11 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
     assert payload["engine_result"]["audit_trace"]
     assert payload["driver_attribution"]["driver_category"]
     assert payload["driver_attribution"]["supporting_evidence"]
+    assert payload["sii_intelligence"]["source"] == "sii_engine"
+    assert payload["sii_intelligence"]["mode"] == "live"
+    assert payload["sii_intelligence"]["primary_driver"]
+    assert payload["sii_intelligence"]["what_to_check"]
+    assert payload["sii_intelligence"]["rooms"][0]["intervention_window"]
     assert payload["preview_rows"][0] == {
         "timestamp": "2026-05-01T08:00:00Z",
         "room": "Flower 1",

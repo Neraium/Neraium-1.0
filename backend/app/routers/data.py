@@ -16,6 +16,7 @@ from app.services.data_quality import (
 )
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
+from app.services.sii_intelligence import build_upload_intelligence
 
 router = APIRouter(tags=["data"])
 
@@ -94,6 +95,16 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         },
         engine_result=engine_result,
     )
+    sii_intelligence = build_upload_intelligence(
+        filename=filename,
+        row_count=len(data_rows),
+        data_quality=data_quality,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        operator_report=operator_report,
+        timestamp_profile=timestamp_profile,
+    )
 
     return {
         "filename": filename,
@@ -111,6 +122,7 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "operator_report": operator_report,
         "engine_result": engine_result,
         "driver_attribution": driver_attribution,
+        "sii_intelligence": sii_intelligence,
     }
 
 
