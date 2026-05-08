@@ -592,7 +592,7 @@ function OverviewWorkspace({
               <p className="countdown-hero__context">{liveOps.scoreContext}</p>
             </div>
             <div className="countdown-hero__window">
-              <span>Hours to intervention</span>
+              <span>Time</span>
               <strong>{primaryRoom?.window ?? "Monitoring"}</strong>
               <p>{primaryRoom?.label ?? "Facility"}: {primaryRoom?.detail ?? liveOps.connectionDetail}</p>
               <p className="countdown-hero__context">{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</p>
