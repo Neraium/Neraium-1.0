@@ -755,6 +755,7 @@ function OverviewWorkspace({
           item={selectedRoom}
           findings={findings}
           actionStatus={operatorActions[selectedRoom?.targetId ?? selectedRoom?.id]}
+          onOperatorAction={onOperatorAction}
           compact
         />
 
@@ -1692,6 +1693,7 @@ function WhyPanel({
   item,
   findings,
   actionStatus,
+  onOperatorAction,
   compact = false,
 }) {
   if (!item) {
@@ -1765,17 +1767,53 @@ function WhyPanel({
         <strong>{item.primaryAction ?? item.recommendation ?? "Continue monitoring"}</strong>
       </div>
 
+      {onOperatorAction && (
+        <OperatorActionControls
+          actionStatus={actionStatus}
+          targetId={item.targetId ?? item.id}
+          onOperatorAction={onOperatorAction}
+        />
+      )}
+
       {!compact && (
         <div className="why-panel__baseline">
           <span className="section-token">Baseline</span>
           <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
         </div>
       )}
-      {actionStatus && (
+      {actionStatus && !onOperatorAction && (
         <p className="why-panel__action-status">
           {actionStatus.action === "log"
             ? `Intervention logged at ${formatClockTime(actionStatus.at)} CT.`
             : "Pattern ignored for the current walkthrough."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OperatorActionControls({ actionStatus, targetId, onOperatorAction }) {
+  const actions = [
+    { id: "acknowledge", label: "Acknowledge" },
+    { id: "review", label: "Under review" },
+    { id: "taken", label: "Action taken" },
+  ];
+
+  return (
+    <div className="operator-action-controls" aria-label="Operator action status">
+      {actions.map((action) => (
+        <button
+          className={`operator-action-button ${actionStatus?.action === action.id ? "operator-action-button--active" : ""}`}
+          key={action.id}
+          type="button"
+          onClick={() => onOperatorAction(targetId, action.id)}
+        >
+          {action.label}
+        </button>
+      ))}
+      {actionStatus && (
+        <p className="operator-action-status">
+          {formatOperatorActionLabel(actionStatus.action)} at {formatClockTime(actionStatus.at)} CT.
         </p>
       )}
     </div>
@@ -3824,6 +3862,22 @@ function formatRoomDecisionState(tone, index = 0) {
     return decisionLabelFromTone(tone, index);
   }
   return "Fine";
+}
+
+function formatOperatorActionLabel(action) {
+  if (action === "acknowledge") {
+    return "Acknowledged";
+  }
+  if (action === "review") {
+    return "Under review";
+  }
+  if (action === "taken") {
+    return "Action taken";
+  }
+  if (action === "log") {
+    return "Intervention logged";
+  }
+  return "Status updated";
 }
 
 function formatConfidenceLabel(score) {
