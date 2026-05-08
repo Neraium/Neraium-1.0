@@ -13,7 +13,7 @@ const WORKSPACES = [
     id: "overview",
     label: "Facility Command",
     eyebrow: "Command",
-    description: "System status, room priority, and the next move.",
+    description: "System status, room priority, and the next operator move.",
   },
   {
     id: "facility-systems",
@@ -23,21 +23,21 @@ const WORKSPACES = [
   },
   {
     id: "data-intake",
-    label: "Data Intake",
+    label: "Telemetry Intake",
     eyebrow: "Intake",
-    description: "Connect facility data to sharpen confidence and timing.",
+    description: "Connect facility telemetry to improve confidence, timing, and traceability.",
   },
   {
     id: "evidence-reports",
     label: "Evidence & Reports",
     eyebrow: "Evidence",
-    description: "Grower briefs, room evidence, and action support.",
+    description: "Room evidence, operator briefs, and action support.",
   },
   {
     id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
-    description: "Live decisions, action priority, and connection diagnostics.",
+    description: "Structural diagnostics, relationship evidence, and confidence basis.",
   },
 ];
 
@@ -100,6 +100,7 @@ const DEMO_ROOMS = [
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
 const ACCESS_SESSION_KEY = "neraium_access_granted";
+const OPERATIONAL_CADENCE_MS = 30000;
 
 function App() {
   const [hasAccess, setHasAccess] = useState(() => (
@@ -228,7 +229,7 @@ function App() {
 
     const intervalId = window.setInterval(() => {
       setTelemetryTick((current) => current + 1);
-    }, 4200);
+    }, OPERATIONAL_CADENCE_MS);
 
     return () => window.clearInterval(intervalId);
   }, [hasAccess]);
@@ -704,7 +705,7 @@ function OverviewWorkspace({
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
       <Panel
         title="Operating State"
-        subtitle="Facility readiness, primary room, time available, and the next grower move."
+        subtitle="Facility readiness, primary room, time available, and the next operator move."
         className="span-12 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
@@ -742,7 +743,7 @@ function OverviewWorkspace({
           </div>
 
           <div className="operating-state-next">
-            <span>Next grower move</span>
+            <span>Next operator move</span>
             <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
             <p>{primaryRoom?.whyHeadline ?? liveOps.windowContext}</p>
           </div>
@@ -952,7 +953,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   return (
     <div className="workspace-grid workspace-grid--intake">
       <Panel
-        title="Decision intake"
+        title="Telemetry intake"
         subtitle="Connect facility data so timing becomes more precise."
         className="span-7"
       >
@@ -1587,7 +1588,7 @@ function InterventionGrid({ items, selectedId, onSelect }) {
 
   return (
     <div className="intervention-grid">
-      {items.slice(0, 6).map((item) => (
+      {items.slice(0, 6).map((item, index) => (
         <button
           className={`intervention-card intervention-card--${item.tone} ${selectedId === item.id ? "intervention-card--selected" : ""}`}
           key={item.id}
@@ -1597,7 +1598,7 @@ function InterventionGrid({ items, selectedId, onSelect }) {
           <div className="intervention-card__header">
             <div>
               <span>{item.label}</span>
-              <strong>{formatRoomDecisionState(item.tone)}</strong>
+              <strong>{item.decisionLabel ?? formatRoomDecisionState(item.tone, index)}</strong>
             </div>
             <StatusDot tone={item.tone ?? "info"} />
           </div>
@@ -1712,6 +1713,7 @@ function WhyPanel({
   const confidenceBasis = item.confidenceBasis ?? buildConfidenceBasis(item, findings);
   const supportingEvidence = item.supportingEvidence ?? item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3);
   const contributingSignals = item.contributingSignals ?? [];
+  const structuralExplanation = item.structuralExplanation ?? buildStructuralExplanation(item);
 
   return (
     <div className="why-panel">
@@ -1719,7 +1721,7 @@ function WhyPanel({
         <div>
           <span className="section-token">Selected room</span>
           <h3>{item.label ?? item.shortTitle ?? item.title}</h3>
-          <p>{formatRoomDecisionState(item.tone)}. {item.window}</p>
+          <p>{item.decisionLabel ?? formatRoomDecisionState(item.tone)}. {item.window}</p>
         </div>
         <span className={`overview-pill overview-pill--${item.tone ?? "info"}`}>{item.primaryAction ?? item.recommendation}</span>
       </div>
@@ -1727,6 +1729,15 @@ function WhyPanel({
       <div className="why-panel__section">
         <span className="section-token">Why it matters</span>
         <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
+      </div>
+
+      <ProgressionStrip tone={item.tone ?? "info"} />
+
+      <div className="why-panel__section structural-explanation">
+        <span className="section-token">Structural explanation</span>
+        {structuralExplanation.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
       </div>
 
       {item.likelyDriver && (
@@ -1773,6 +1784,25 @@ function WhyPanel({
             : "Pattern ignored for the current walkthrough."}
         </p>
       )}
+    </div>
+  );
+}
+
+function ProgressionStrip({ tone }) {
+  const stages = ["Stable", "Drift observed", "Decision window", "Intervention horizon"];
+  const activeIndex = tone === "unstable" ? 3 : tone === "elevated" ? 2 : tone === "review" ? 1 : 0;
+
+  return (
+    <div className="progression-strip" aria-label="Room movement progression">
+      {stages.map((stage, index) => (
+        <div
+          className={`progression-strip__stage ${index <= activeIndex ? "progression-strip__stage--active" : ""}`}
+          key={stage}
+        >
+          <span />
+          <strong>{stage}</strong>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2609,7 +2639,7 @@ function formatReadiness(readiness) {
     return "Ready";
   }
   if (readiness === "needs_review") {
-    return "Needs review";
+    return "Review needed";
   }
   return "Not ready";
 }
@@ -2619,7 +2649,7 @@ function formatEngineResult(result) {
     return "Elevated";
   }
   if (result === "needs_review") {
-    return "Needs review";
+    return "Review needed";
   }
   return "Normal";
 }
@@ -2870,6 +2900,8 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       contributingSignals: attribution?.contributing_signals,
       confidenceBasis: attribution?.confidence_basis,
       supportingEvidence: attribution?.supporting_evidence,
+      structuralExplanation: buildUploadedStructuralExplanation(attribution, engineSignals),
+      decisionLabel: decisionLabelFromTone(facilityTone, 0),
       baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
       primaryAction: attribution?.next_operator_move ?? primaryActionFromTone(facilityTone),
@@ -2892,14 +2924,20 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         : "Irrigation variance remains a secondary review lane until more room telemetry is uploaded.",
       detail: roomContext.irrigation,
       shortDetail: columnReview[0]
-        ? `${columnReview[0].column} should be reviewed before the next cycle change.`
-        : "Irrigation variance remains a scheduled review item.",
+        ? `${columnReview[0].column} should be validated before the next cycle change.`
+        : "Irrigation balance remains a scheduled review item.",
       whyHeadline: "Current irrigation behavior is not yet critical, but it is close enough to justify scheduled review.",
       drivers: [
         `Current irrigation context: ${roomContext.irrigation}.`,
         "Baseline established from current upload.",
         "Review is being prioritized over passive monitoring.",
       ],
+      structuralExplanation: [
+        "Irrigation response is being compared against recent room behavior.",
+        "Cycle settling remains the current operating state.",
+        "Room behavior is moving earlier than its recent baseline.",
+      ],
+      decisionLabel: "Validate irrigation balance",
       baselineContext: `${roomContext.secondary} typically holds a longer recovery window. Current irrigation recovery is shortening.`,
       recommendation: recommendationFromTone(irrigationTone),
       primaryAction: primaryActionFromTone(irrigationTone),
@@ -2926,6 +2964,12 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         `${result.cultivation_mapping?.mapped_column_count ?? 0} mapped columns currently in scope.`,
         "Awaiting additional room telemetry where facility context is partial.",
       ],
+      structuralExplanation: [
+        "Traceability is improving as room coverage deepens.",
+        "Relationship evidence is limited until more facility telemetry is connected.",
+        "Infrastructure movement remains under observation.",
+      ],
+      decisionLabel: "Continue monitoring",
       baselineContext: "Facility-level confidence improves as room coverage deepens and more week-specific context is connected.",
       recommendation: "Continue monitoring",
       primaryAction: "Acknowledge",
@@ -2950,14 +2994,16 @@ function buildSimulatedInterventionItems(roomStates) {
       window: interventionWindowFromRoom(room),
       tone: room.tone,
       confidence: confidenceFromRoom(room),
-      summary: `${room.irrigationState}. Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline and climate stability is ${room.instability.toFixed(2)} against the current room baseline.`,
+      summary: `${room.irrigationState}. Room behavior is shortening against its recent baseline while room temperature response remains visible.`,
       detail: `${room.cycle} in ${room.zone}.`,
       shortDetail: compactRoomSummary(room),
       whyHeadline: whyHeadlineFromRoom(room),
       drivers: buildDriversFromRoom(room),
+      structuralExplanation: buildStructuralExplanationFromRoom(room, index),
       baselineContext: baselineContextFromRoom(room),
       recommendation: recommendationFromTone(room.tone),
-      primaryAction: primaryActionFromTone(room.tone),
+      primaryAction: primaryActionFromRoom(room, index),
+      decisionLabel: decisionLabelFromTone(room.tone, index),
       actions: actionSetFromTone(room.tone),
       impact: impactFromTone(room.tone),
       change: room.tone === "nominal" ? "Stable over the last cycle" : "Decision window shortened this cycle",
@@ -3059,13 +3105,13 @@ function buildWindowContext(item, roomContext) {
 
 function compactRoomSummary(room) {
   if (room.tone === "unstable") {
-    return `${room.irrigationState}. Room climate is now inside the active decision window.`;
+    return `${room.irrigationState}. Room behavior is shortening against its recent baseline.`;
   }
   if (room.tone === "elevated") {
-    return `${room.irrigationState}. Plan the room review before the next cycle compounds the room trend.`;
+    return `${room.irrigationState}. Humidity recovery is slowing relative to baseline.`;
   }
   if (room.tone === "review") {
-    return `${room.irrigationState}. Review is recommended before the next environmental transition.`;
+    return `${room.irrigationState}. Monitor transition stability through the next room check.`;
   }
   return `${room.irrigationState}. The room remains inside a comfortable intervention horizon.`;
 }
@@ -3116,10 +3162,10 @@ function interventionWindowFromRoom(room) {
 
 function whyHeadlineFromRoom(room) {
   if (room.tone === "unstable") {
-    return `${room.name} has hours, not days, before the room environment needs grower action.`;
+    return `${room.name} has limited time before the room environment needs operator action.`;
   }
   if (room.tone === "elevated") {
-    return `${room.name} is trending toward intervention and should be checked before the next cycle compounds the room trend.`;
+    return `${room.name} is trending toward intervention as humidity recovery slows against baseline.`;
   }
   if (room.tone === "review") {
     return `${room.name} is still controllable, but the next decision window is now close enough to plan around.`;
@@ -3129,9 +3175,109 @@ function whyHeadlineFromRoom(room) {
 
 function buildDriversFromRoom(room) {
   return [
-    `Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline over the current review window.`,
-    `Climate stability is ${room.instability.toFixed(2)} relative to this room's recent baseline.`,
-    `${room.irrigationState} is the current operating state for ${room.name}.`,
+    room.hvacDrift > 1.25
+      ? `Room temperature response is ${room.hvacDrift.toFixed(2)}F off baseline and needs comparison against HVAC activity.`
+      : "Room temperature response remains within expected behavior.",
+    room.instability > 1.1
+      ? `Humidity recovery is slowing relative to baseline, with stability reading ${room.instability.toFixed(2)}.`
+      : "Environmental relationships remain stable.",
+    `${room.irrigationState}. Cycle settling remains the current operating state.`,
+  ];
+}
+
+function buildUploadedStructuralExplanation(attribution, engineSignals) {
+  if (attribution?.driver_category === "humidity_control") {
+    return [
+      "Temperature recovery is decoupling from humidity stabilization.",
+      "Relationship persistence observed across recent monitoring windows.",
+      "Room behavior is moving earlier than its recent baseline.",
+    ];
+  }
+  if (attribution?.driver_category === "sensor_network") {
+    return [
+      "Telemetry continuity is limiting structural confidence.",
+      "Room relationships need cleaner source coverage before attribution tightens.",
+      "Traceability is the next operating constraint.",
+    ];
+  }
+  if (engineSignals?.length) {
+    return [
+      "Room behavior is moving against its recent baseline.",
+      "Relationship evidence is being held as supporting context.",
+      "Infrastructure does not fail suddenly. It moves.",
+    ];
+  }
+  return [
+    "Environmental relationships remain stable.",
+    "Room behavior is staying within its recent baseline.",
+    "Infrastructure does not fail suddenly. It moves.",
+  ];
+}
+
+function buildStructuralExplanation(item) {
+  if (item?.likelyDriver) {
+    return [
+      `${item.likelyDriver} is being treated as the likely driver to check first.`,
+      item.confidenceBasis ?? "Supporting evidence is being compared across room signals.",
+      "Infrastructure does not fail suddenly. It moves.",
+    ];
+  }
+  if (item?.tone === "unstable") {
+    return [
+      "Temperature recovery is decoupling from humidity stabilization.",
+      "Relationship persistence observed across 3 monitoring windows.",
+      "Room behavior is moving earlier than its recent baseline.",
+    ];
+  }
+  if (item?.tone === "elevated") {
+    return [
+      "Airflow response is lagging behind room temperature recovery.",
+      "Relationship persistence observed across 2 monitoring windows.",
+      "Room behavior is shortening against its recent baseline.",
+    ];
+  }
+  if (item?.tone === "review") {
+    return [
+      "Drift is visible, but the room remains controllable.",
+      "Transition stability should be watched through the next operating window.",
+      "Environmental relationships remain mostly stable.",
+    ];
+  }
+  return [
+    "Room temperature response remains within expected behavior.",
+    "Environmental relationships remain stable.",
+    "Cycle settling remains the current operating state.",
+  ];
+}
+
+function buildStructuralExplanationFromRoom(room, index = 0) {
+  if (room.tone === "unstable") {
+    return [
+      "Temperature recovery is decoupling from humidity stabilization.",
+      "Relationship persistence observed across 3 monitoring windows.",
+      "Room behavior is moving earlier than its recent baseline.",
+    ];
+  }
+  if (room.tone === "elevated") {
+    return [
+      index % 2 === 0
+        ? "Airflow response is lagging behind room temperature recovery."
+        : "Environmental coupling is shifting across the current room cycle.",
+      "Relationship persistence observed across 2 monitoring windows.",
+      "Room behavior is shortening against its recent baseline.",
+    ];
+  }
+  if (room.tone === "review") {
+    return [
+      "Drift is visible, but the room remains controllable.",
+      "Transition stability should be watched through the next operating window.",
+      "Environmental relationships remain mostly stable.",
+    ];
+  }
+  return [
+    "Room temperature response remains within expected behavior.",
+    "Environmental relationships remain stable.",
+    "Cycle settling remains the current operating state.",
   ];
 }
 
@@ -3211,6 +3357,35 @@ function primaryActionFromTone(tone) {
     return "Check room conditions";
   }
   return "Continue monitoring";
+}
+
+function primaryActionFromRoom(room, index = 0) {
+  if (room.tone === "unstable") {
+    return "Stabilize environment";
+  }
+  if (room.tone === "elevated") {
+    return index % 2 === 0 ? "Investigate airflow response" : "Review environmental coupling";
+  }
+  if (room.tone === "review") {
+    return index % 2 === 0 ? "Observe drift" : "Monitor transition stability";
+  }
+  if (room.irrigationState.toLowerCase().includes("feed")) {
+    return "Validate irrigation balance";
+  }
+  return "Continue monitoring";
+}
+
+function decisionLabelFromTone(tone, index = 0) {
+  if (tone === "unstable") {
+    return "Decision window";
+  }
+  if (tone === "elevated") {
+    return index % 2 === 0 ? "Airflow response" : "Coupling review";
+  }
+  if (tone === "review") {
+    return index % 2 === 0 ? "Drift observed" : "Transition watch";
+  }
+  return "Stable";
 }
 
 function actionSetFromTone(tone) {
@@ -3366,7 +3541,7 @@ function buildSimulatedTelemetryCards(roomStates, tick) {
 }
 
 function buildSimulatedTimeline(roomStates, tick) {
-  const time = new Date(Date.now() - tick * 4200);
+  const time = new Date(Date.now() - tick * OPERATIONAL_CADENCE_MS);
   return [
     {
       time: formatClockTime(time),
@@ -3629,7 +3804,7 @@ function formatFacilityPlainState(tone, primaryRoom) {
     return `${primaryRoom?.label ?? "One room"} needs action`;
   }
   if (tone === "elevated" || tone === "review") {
-    return `${primaryRoom?.label ?? "One room"} needs review`;
+    return `${primaryRoom?.label ?? "One room"} has drift observed`;
   }
   return "Facility is stable";
 }
@@ -3647,12 +3822,12 @@ function formatScoreReadiness(score) {
   return "Operating readiness needs attention.";
 }
 
-function formatRoomDecisionState(tone) {
+function formatRoomDecisionState(tone, index = 0) {
   if (tone === "unstable") {
-    return "Needs action";
+    return "Decision window";
   }
   if (tone === "elevated" || tone === "review") {
-    return "Needs review";
+    return decisionLabelFromTone(tone, index);
   }
   return "Fine";
 }
