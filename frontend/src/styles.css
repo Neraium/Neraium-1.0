@@ -3752,6 +3752,13 @@ select {
   letter-spacing: 0;
 }
 
+.workspace-grid--operator-flow .countdown-hero__readiness {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .workspace-grid--operator-flow .countdown-hero__window {
   min-height: 190px;
   align-content: center;
@@ -3856,6 +3863,10 @@ select {
   line-height: 1;
 }
 
+.workspace-grid--operator-flow .intervention-card__header .status-dot {
+  margin-top: 3px;
+}
+
 .intervention-card__window {
   display: grid;
   gap: 5px;
@@ -3885,7 +3896,8 @@ select {
 }
 
 .workspace-grid--operator-flow .intervention-card__footer {
-  align-items: end;
+  align-items: start;
+  justify-content: start;
 }
 
 .workspace-grid--operator-flow .overview-panel--detail {
@@ -3904,6 +3916,9 @@ select {
 }
 
 .workspace-grid--operator-flow .why-panel__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(177, 211, 206, 0.1);
 }
@@ -3914,10 +3929,36 @@ select {
   line-height: 1.08;
 }
 
+.workspace-grid--operator-flow .why-panel__summary p {
+  margin: 8px 0 0;
+  color: rgba(206, 223, 228, 0.78);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.workspace-grid--operator-flow .why-panel__section {
+  display: grid;
+  gap: 7px;
+}
+
+.workspace-grid--operator-flow .why-panel__section p {
+  margin: 0;
+  color: rgba(206, 223, 228, 0.8);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
 .workspace-grid--operator-flow .why-panel__headline {
   color: rgba(237, 246, 242, 0.94);
   font-size: 1rem;
   line-height: 1.5;
+}
+
+.workspace-grid--operator-flow .why-panel__chain {
+  gap: 7px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(177, 211, 206, 0.08);
+  border-bottom: 1px solid rgba(177, 211, 206, 0.08);
 }
 
 .workspace-grid--operator-flow .why-panel__driver span:last-child,

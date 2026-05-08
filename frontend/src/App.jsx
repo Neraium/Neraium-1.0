@@ -560,7 +560,7 @@ function OverviewWorkspace({
   const findings = liveOps.findings.slice(0, 3);
   const selectedRoom = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0];
   const primaryRoom = liveOps.primaryWindow ?? selectedRoom;
-  const heroHeadline = liveOps.facilityStateLabel ?? "Facility stable";
+  const heroHeadline = formatFacilityPlainState(liveOps.facilityTone, primaryRoom);
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.interventionItems.length;
   const overviewSummary = [
@@ -588,13 +588,13 @@ function OverviewWorkspace({
             <div className="countdown-hero__score">
               <span>Neraium score</span>
               <strong>{liveOps.neraiumScore}</strong>
-              <p>{liveOps.scoreNarrative}</p>
+              <p className="countdown-hero__readiness">{formatScoreReadiness(liveOps.neraiumScore)}</p>
               <p className="countdown-hero__context">{liveOps.scoreContext}</p>
             </div>
             <div className="countdown-hero__window">
               <span>Time</span>
               <strong>{primaryRoom?.window ?? "Monitoring"}</strong>
-              <p>{primaryRoom?.label ?? "Facility"}: {primaryRoom?.detail ?? liveOps.connectionDetail}</p>
+              <p>Before {primaryRoom?.label ?? "the facility"} needs intervention.</p>
               <p className="countdown-hero__context">{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</p>
             </div>
           </div>
@@ -633,16 +633,13 @@ function OverviewWorkspace({
 
       <Panel
         title="Selected room detail"
-        subtitle="Cause, confidence, and next move."
+        subtitle="Why it matters, confidence basis, and next move."
         className="span-4 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
           item={selectedRoom}
           findings={findings}
           actionStatus={operatorActions[selectedRoom?.targetId ?? selectedRoom?.id]}
-          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
-          onLogIntervention={(id) => onOperatorAction(id, "log")}
-          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
         />
 
         <div className="room-first-actions">
@@ -1468,16 +1465,15 @@ function InterventionGrid({ items, selectedId, onSelect }) {
               <span>{item.label}</span>
               <strong>{formatRoomDecisionState(item.tone)}</strong>
             </div>
-            <ConfidenceDial score={item.confidence} tone={item.tone} />
+            <StatusDot tone={item.tone ?? "info"} />
           </div>
           <div className="intervention-card__window">
-            <span>Intervention window</span>
+            <span>Time</span>
             <strong>{item.window}</strong>
           </div>
           <p>{item.shortDetail ?? item.summary}</p>
           <div className="intervention-card__footer">
             <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
-            <span className="room-health-card__trend">{item.confidence}% confidence</span>
           </div>
         </button>
       ))}
@@ -1574,26 +1570,34 @@ function WhyPanel({
   item,
   findings,
   actionStatus,
-  onSeeWhatsWrong,
-  onLogIntervention,
-  onIgnorePattern,
 }) {
   if (!item) {
     return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
   }
 
-  const actionKey = item.targetId ?? item.id;
+  const confidenceBasis = buildConfidenceBasis(item, findings);
 
   return (
     <div className="why-panel">
       <div className="why-panel__summary">
         <div>
-          <span className="section-token">Primary explanation</span>
-          <h3>{item.title ?? item.label}</h3>
+          <span className="section-token">Selected room</span>
+          <h3>{item.label ?? item.shortTitle ?? item.title}</h3>
+          <p>{formatRoomDecisionState(item.tone)}. {item.window}</p>
         </div>
-        <ConfidenceDial score={item.confidence ?? 72} tone={item.tone ?? "info"} large />
+        <span className={`overview-pill overview-pill--${item.tone ?? "info"}`}>{item.primaryAction ?? item.recommendation}</span>
       </div>
-      <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
+
+      <div className="why-panel__section">
+        <span className="section-token">Why it matters</span>
+        <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
+      </div>
+
+      <div className="why-panel__section">
+        <span className="section-token">Confidence basis</span>
+        <p>{formatConfidenceLabel(item.confidence)} confidence. {confidenceBasis}</p>
+      </div>
+
       <div className="why-panel__chain">
         {(item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3)).map((driver) => (
           <div className="why-panel__driver" key={driver}>
@@ -1602,24 +1606,15 @@ function WhyPanel({
           </div>
         ))}
       </div>
+
       <div className="why-panel__recommendation">
-        <span>Recommended next move</span>
-        <strong>{item.recommendation ?? item.primaryAction ?? "Continue monitoring"}</strong>
+        <span>Next move</span>
+        <strong>{item.primaryAction ?? item.recommendation ?? "Continue monitoring"}</strong>
       </div>
+
       <div className="why-panel__baseline">
         <span className="section-token">Baseline</span>
         <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
-      </div>
-      <div className="why-panel__actions">
-        <button className="command-button command-button--compact" type="button" onClick={() => onSeeWhatsWrong?.(actionKey)}>
-          See what's wrong
-        </button>
-        <button className="command-button command-button--secondary command-button--compact" type="button" onClick={() => onLogIntervention?.(actionKey)}>
-          Log intervention
-        </button>
-        <button className="link-action" type="button" onClick={() => onIgnorePattern?.(actionKey)}>
-          Ignore this pattern
-        </button>
       </div>
       {actionStatus && (
         <p className="why-panel__action-status">
@@ -3002,13 +2997,13 @@ function recommendationFromTone(tone) {
 
 function primaryActionFromTone(tone) {
   if (tone === "unstable") {
-    return "Stabilize room";
+    return "Stabilize environment";
   }
   if (tone === "elevated") {
-    return "Plan intervention";
+    return "Adjust before next cycle";
   }
   if (tone === "review") {
-    return "Review conditions";
+    return "Check room conditions";
   }
   return "Continue monitoring";
 }
@@ -3424,6 +3419,29 @@ function formatOperationalLabel(tone) {
   return "Monitoring";
 }
 
+function formatFacilityPlainState(tone, primaryRoom) {
+  if (tone === "unstable") {
+    return `${primaryRoom?.label ?? "One room"} needs action`;
+  }
+  if (tone === "elevated" || tone === "review") {
+    return `${primaryRoom?.label ?? "One room"} needs review`;
+  }
+  return "Facility is stable";
+}
+
+function formatScoreReadiness(score) {
+  if (score >= 86) {
+    return "Operating readiness is strong.";
+  }
+  if (score >= 72) {
+    return "Operating readiness is good, with one room to watch.";
+  }
+  if (score >= 58) {
+    return "Operating readiness is tightening.";
+  }
+  return "Operating readiness needs attention.";
+}
+
 function formatRoomDecisionState(tone) {
   if (tone === "unstable") {
     return "Needs action";
@@ -3432,6 +3450,27 @@ function formatRoomDecisionState(tone) {
     return "Needs review";
   }
   return "Fine";
+}
+
+function formatConfidenceLabel(score) {
+  if ((score ?? 0) >= 82) {
+    return "High";
+  }
+  if ((score ?? 0) >= 68) {
+    return "Medium";
+  }
+  return "Developing";
+}
+
+function buildConfidenceBasis(item, findings) {
+  const drivers = item?.drivers ?? findings.map((entry) => entry.detail).slice(0, 3);
+  if (drivers.length >= 2) {
+    return `Based on ${drivers[0].toLowerCase()} and ${drivers[1].toLowerCase()}.`;
+  }
+  if (drivers.length === 1) {
+    return `Based on ${drivers[0].toLowerCase()}.`;
+  }
+  return "Based on current room drift, sync recency, and baseline behavior.";
 }
 
 function average(values) {
