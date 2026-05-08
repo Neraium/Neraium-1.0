@@ -3948,6 +3948,25 @@ select {
   line-height: 1.55;
 }
 
+.signal-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.signal-chip {
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid rgba(177, 211, 206, 0.12);
+  border-radius: 999px;
+  color: rgba(223, 244, 248, 0.84);
+  background: rgba(17, 25, 28, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .workspace-grid--operator-flow .why-panel__headline {
   color: rgba(237, 246, 242, 0.94);
   font-size: 1rem;

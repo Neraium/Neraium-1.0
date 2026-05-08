@@ -1,10 +1,12 @@
+from typing import Any
+
 from fastapi import APIRouter
 
 router = APIRouter(tags=["facility"])
 
 
 @router.get("/facility/systems")
-def read_facility_systems() -> dict[str, list[dict[str, str]]]:
+def read_facility_systems() -> dict[str, Any]:
     return {
         "systems": [
             {
@@ -31,5 +33,14 @@ def read_facility_systems() -> dict[str, list[dict[str, str]]]:
                 "name": "Sensor network",
                 "scope": "Room sensors, facility exports, and historical readings",
             },
-        ]
+        ],
+        "driver_categories": [
+            "humidity_control",
+            "hvac_instability",
+            "airflow_restriction",
+            "irrigation_timing",
+            "lighting_schedule",
+            "sensor_network",
+            "unknown_system_drift",
+        ],
     }

@@ -31,6 +31,8 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
     assert payload["cultivation_mapping"]["categories"]["humidity"] == ["humidity"]
     assert payload["engine_result"]["engine_version"] == "neraium-cultivation-v1"
     assert payload["engine_result"]["audit_trace"]
+    assert payload["driver_attribution"]["driver_category"]
+    assert payload["driver_attribution"]["supporting_evidence"]
     assert payload["preview_rows"][0] == {
         "timestamp": "2026-05-01T08:00:00Z",
         "room": "Flower 1",

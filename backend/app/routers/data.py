@@ -14,6 +14,7 @@ from app.services.data_quality import (
     profile_numeric_columns,
     profile_timestamps,
 )
+from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 
 router = APIRouter(tags=["data"])
@@ -73,6 +74,26 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         cultivation_mapping=cultivation_mapping,
         numeric_profiles=numeric_profiles,
     )
+    driver_attribution = build_driver_attribution(
+        room_state={
+            "room": primary_room_from_upload(columns, data_rows),
+            "state": state_from_assessment(baseline_analysis["overall_assessment"]),
+            "severity": severity_from_assessment(baseline_analysis["overall_assessment"]),
+        },
+        telemetry_context={
+            "columns": columns,
+            "rows": data_rows,
+            "numeric_profiles": numeric_profiles,
+            "timestamp_profile": timestamp_profile,
+            "data_quality": data_quality,
+            "cultivation_mapping": cultivation_mapping,
+        },
+        baseline_context={
+            "baseline_analysis": baseline_analysis,
+            "cultivation_mapping": cultivation_mapping,
+        },
+        engine_result=engine_result,
+    )
 
     return {
         "filename": filename,
@@ -89,4 +110,28 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
         "engine_result": engine_result,
+        "driver_attribution": driver_attribution,
     }
+
+
+def primary_room_from_upload(columns: list[str], rows: list[list[str]]) -> str:
+    room_columns = [
+        index
+        for index, column in enumerate(columns)
+        if any(token in column.lower() for token in ("room", "zone", "bay"))
+    ]
+    if not room_columns:
+        return "Current room"
+    room_index = room_columns[0]
+    for row in rows:
+        if room_index < len(row) and row[room_index].strip():
+            return row[room_index].strip()
+    return "Current room"
+
+
+def state_from_assessment(assessment: str) -> str:
+    return "Needs review" if assessment == "needs_review" else "Monitoring"
+
+
+def severity_from_assessment(assessment: str) -> str:
+    return "review" if assessment == "needs_review" else "info"

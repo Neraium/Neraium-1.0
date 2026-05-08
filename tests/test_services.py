@@ -9,6 +9,7 @@ from app.services.data_quality import (
     profile_numeric_columns,
     profile_timestamps,
 )
+from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 
 
@@ -234,3 +235,106 @@ def test_operator_report_omits_mapping_source_when_no_categories_mapped() -> Non
 
     assert "cultivation_mapping" not in report["source_sections_used"]
     assert not any("Cultivation mapping identified" in item for item in report["key_observations"])
+
+
+def test_driver_attribution_ranks_humidity_control_with_persistent_relationship_evidence() -> None:
+    attribution = build_driver_attribution(
+        room_state={"room": "Flower Room 2", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "numeric_profiles": [],
+            "timestamp_profile": {"detected_timestamp_column": "timestamp", "warnings": []},
+            "data_quality": {"warnings": [], "readiness": "ready"},
+            "cultivation_mapping": map_cultivation_columns(["humidity", "hvac_runtime"]),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(["humidity", "hvac_runtime"]),
+            "baseline_analysis": {
+                "column_drift": [
+                    {
+                        "column": "humidity",
+                        "drift_flag": "review",
+                        "direction": "up",
+                        "warnings": [],
+                    }
+                ]
+            },
+        },
+        engine_result={
+            "persistence_assessment": {"persistent_columns": ["humidity"]},
+            "evidence": [
+                {
+                    "type": "relationship_change",
+                    "columns": ["humidity", "hvac_runtime"],
+                    "change": -0.72,
+                }
+            ],
+        },
+    )
+
+    assert attribution["driver_category"] == "humidity_control"
+    assert attribution["likely_driver"] == "Humidity control instability"
+    assert attribution["attribution_confidence"] in {"medium", "high"}
+    assert "Humidity behavior moved away from baseline" in attribution["supporting_evidence"][0]
+    assert "root cause" not in str(attribution).lower()
+
+
+def test_driver_attribution_ranks_sensor_network_for_missing_and_timestamp_evidence() -> None:
+    attribution = build_driver_attribution(
+        room_state={"room": "Veg Room A", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "numeric_profiles": [
+                {"column": "sensor_node_1", "missing_count": 4},
+            ],
+            "timestamp_profile": {
+                "detected_timestamp_column": None,
+                "warnings": ["Timestamp column contains values that could not be parsed."],
+            },
+            "data_quality": {
+                "warnings": ["sensor_node_1 contains missing numeric values."],
+                "readiness": "needs_review",
+            },
+            "cultivation_mapping": map_cultivation_columns(["sensor_node_1"]),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(["sensor_node_1"]),
+            "baseline_analysis": {
+                "column_drift": [],
+                "warnings": ["sensor_node_1 has missing values in baseline or recent windows."],
+            },
+        },
+        engine_result={"persistence_assessment": {"persistent_columns": []}, "evidence": []},
+    )
+
+    assert attribution["driver_category"] == "sensor_network"
+    assert attribution["likely_driver"] == "Sensor network continuity"
+    assert attribution["next_operator_move"] == "Check sensor sync, gateway status, and stale room readings"
+
+
+def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
+    attribution = build_driver_attribution(
+        room_state={"room": "Flower Room 1", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "numeric_profiles": [],
+            "timestamp_profile": {"detected_timestamp_column": "timestamp", "warnings": []},
+            "data_quality": {"warnings": [], "readiness": "ready"},
+            "cultivation_mapping": map_cultivation_columns(["temperature"]),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(["temperature"]),
+            "baseline_analysis": {
+                "column_drift": [
+                    {
+                        "column": "temperature",
+                        "drift_flag": "watch",
+                        "direction": "up",
+                        "warnings": [],
+                    }
+                ]
+            },
+        },
+        engine_result={"persistence_assessment": {"persistent_columns": []}, "evidence": []},
+    )
+
+    assert attribution["driver_category"] == "unknown_system_drift"
+    assert attribution["attribution_confidence"] == "low"
+    assert attribution["next_operator_move"] == "Collect more room telemetry before assigning a likely driver"

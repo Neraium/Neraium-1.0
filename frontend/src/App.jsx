@@ -1575,7 +1575,9 @@ function WhyPanel({
     return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
   }
 
-  const confidenceBasis = buildConfidenceBasis(item, findings);
+  const confidenceBasis = item.confidenceBasis ?? buildConfidenceBasis(item, findings);
+  const supportingEvidence = item.supportingEvidence ?? item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3);
+  const contributingSignals = item.contributingSignals ?? [];
 
   return (
     <div className="why-panel">
@@ -1593,13 +1595,27 @@ function WhyPanel({
         <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
       </div>
 
+      {item.likelyDriver && (
+        <div className="why-panel__section">
+          <span className="section-token">Likely driver</span>
+          <p>{item.likelyDriver}</p>
+          {contributingSignals.length > 0 && (
+            <div className="signal-chip-row">
+              {contributingSignals.map((signal) => (
+                <span className="signal-chip" key={signal}>{signal}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="why-panel__section">
         <span className="section-token">Confidence basis</span>
         <p>{formatConfidenceLabel(item.confidence)} confidence. {confidenceBasis}</p>
       </div>
 
       <div className="why-panel__chain">
-        {(item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3)).map((driver) => (
+        {supportingEvidence.map((driver) => (
           <div className="why-panel__driver" key={driver}>
             <StatusDot tone={item.tone ?? "info"} />
             <span>{driver}</span>
@@ -2674,26 +2690,38 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
 function buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone) {
   const engineSignals = result?.engine_result?.signals ?? [];
   const columnReview = result?.operator_report?.columns_requiring_review ?? [];
+  const attribution = result?.driver_attribution;
   const irrigationTone = result?.cultivation_mapping?.categories?.irrigation?.length ? "review" : "info";
 
   const items = [
     {
       id: "upload-hvac-balance",
-      label: roomContext.primary,
-      title: `${roomContext.primary} intervention window`,
-      shortTitle: roomContext.primary,
+      label: attribution?.room ?? roomContext.primary,
+      title: `${attribution?.room ?? roomContext.primary} intervention window`,
+      shortTitle: attribution?.room ?? roomContext.primary,
       status: "HVAC balance review",
       window: windowLabelFromTone(facilityTone),
-      tone: facilityTone,
-      confidence: confidenceFromTone(facilityTone, true),
-      summary: engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
-      detail: `Current upload places ${roomContext.primary} in the primary review lane.`,
-      shortDetail: engineSignals[0]?.message ?? "Current upload is tightening the review window.",
-      whyHeadline: engineSignals[0]?.message ?? "Current room trend and readiness signals are tightening the available intervention window.",
-      drivers: buildWhyDrivers(result, telemetryCards, roomContext),
+      tone: attributionTone(attribution, facilityTone),
+      confidence: confidenceFromAttribution(attribution, facilityTone),
+      summary: attribution?.likely_driver
+        ? `${attribution.likely_driver} is the likely driver based on available telemetry.`
+        : engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
+      detail: `Current upload places ${attribution?.room ?? roomContext.primary} in the primary review lane.`,
+      shortDetail: attribution?.likely_driver
+        ? `Likely driver: ${attribution.likely_driver}.`
+        : engineSignals[0]?.message ?? "Current upload is tightening the review window.",
+      whyHeadline: attribution?.supporting_evidence?.[0]
+        ?? engineSignals[0]?.message
+        ?? "Current room trend and readiness signals are tightening the available intervention window.",
+      drivers: attribution?.supporting_evidence ?? buildWhyDrivers(result, telemetryCards, roomContext),
+      driverAttribution: attribution,
+      likelyDriver: attribution?.likely_driver,
+      contributingSignals: attribution?.contributing_signals,
+      confidenceBasis: attribution?.confidence_basis,
+      supportingEvidence: attribution?.supporting_evidence,
       baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
-      primaryAction: primaryActionFromTone(facilityTone),
+      primaryAction: attribution?.next_operator_move ?? primaryActionFromTone(facilityTone),
       actions: actionSetFromTone(facilityTone),
       impact: impactFromTone(facilityTone),
       change: "Updated from active upload",
@@ -2980,6 +3008,32 @@ function confidenceFromTone(tone, hasUpload = false) {
           ? 66
           : 61;
   return hasUpload ? Math.min(base + 5, 98) : base;
+}
+
+function confidenceFromAttribution(attribution, fallbackTone) {
+  if (!attribution) {
+    return confidenceFromTone(fallbackTone, true);
+  }
+  if (attribution.attribution_confidence === "high") {
+    return 88;
+  }
+  if (attribution.attribution_confidence === "medium") {
+    return 74;
+  }
+  return 58;
+}
+
+function attributionTone(attribution, fallbackTone) {
+  if (!attribution) {
+    return fallbackTone;
+  }
+  if (attribution.severity === "action") {
+    return "unstable";
+  }
+  if (attribution.severity === "review") {
+    return "review";
+  }
+  return "info";
 }
 
 function recommendationFromTone(tone) {
