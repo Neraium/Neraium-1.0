@@ -3,6 +3,15 @@ name: Deploy backend to ECS
 on:
   push:
     branches: [main]
+    paths:
+      - "backend/**"
+      - "backend/Dockerfile"
+      - ".aws/task-definition.json"
+      - ".github/workflows/deploy-backend.yml"
+
+concurrency:
+  group: backend-deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -23,16 +32,23 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push backend image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: neraium-api
-          IMAGE_TAG: latest
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/neraium-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export image URI
+        id: image
+        run: echo "image=${{ steps.login-ecr.outputs.registry }}/neraium-api:latest" >> $GITHUB_OUTPUT
 
       - name: Render ECS task definition
         id: task-def
@@ -40,7 +56,7 @@ jobs:
         with:
           task-definition: .aws/task-definition.json
           container-name: Main
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ steps.image.outputs.image }}
 
       - name: Deploy ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
