@@ -694,18 +694,12 @@ function OverviewWorkspace({
   const heroHeadline = formatFacilityPlainState(liveOps.facilityTone, primaryRoom);
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.interventionItems.length;
-  const overviewSummary = [
-    { label: "Primary room", value: primaryRoom?.label ?? "Monitoring", tone: primaryRoom?.tone ?? liveOps.facilityTone },
-    { label: "System state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
-    { label: "Next action", value: primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring", tone: primaryRoom?.tone ?? "nominal" },
-    { label: "Last sync", value: liveOps.connectionSummary, tone: liveOps.connectionTone },
-  ];
 
   return (
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
       <Panel
         title="Operating State"
-        subtitle="Facility readiness, primary room, time available, and the next operator move."
+        subtitle="Facility state, priority room, time, and next operator move."
         className="span-12 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
@@ -730,18 +724,6 @@ function OverviewWorkspace({
             </div>
           </div>
 
-          <div className="overview-summary-grid">
-            {overviewSummary.map((item) => (
-              <div className={`overview-summary-cell overview-summary-cell--${item.tone}`} key={item.label}>
-                <div className="overview-summary-cell__header">
-                  <span>{item.label}</span>
-                  <StatusDot tone={item.tone} />
-                </div>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-          </div>
-
           <div className="operating-state-next">
             <span>Next operator move</span>
             <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
@@ -752,25 +734,28 @@ function OverviewWorkspace({
 
       <Panel
         title="Rooms"
-        subtitle={`${roomCount} rooms monitored. Select a room only when detail is needed.`}
+        subtitle={`${roomCount} rooms monitored. Priority rooms shown first.`}
         className="span-8 overview-panel overview-panel--rooms overview-panel--room-first"
       >
         <InterventionGrid
           items={liveOps.interventionItems}
           selectedId={selectedRoom?.id ?? null}
           onSelect={onSelectIntervention}
+          compact
+          limit={4}
         />
       </Panel>
 
       <Panel
         title="Selected room detail"
-        subtitle="Why it matters, confidence basis, and next move."
+        subtitle="Why it matters and what to do next."
         className="span-4 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
           item={selectedRoom}
           findings={findings}
           actionStatus={operatorActions[selectedRoom?.targetId ?? selectedRoom?.id]}
+          compact
         />
 
         <div className="room-first-actions">
@@ -1581,14 +1566,14 @@ function RoomHealthGrid({ rooms }) {
   );
 }
 
-function InterventionGrid({ items, selectedId, onSelect }) {
+function InterventionGrid({ items, selectedId, onSelect, compact = false, limit = 6 }) {
   if (!items || items.length === 0) {
     return <EmptyState title="No intervention windows available" body="Monitoring active telemetry feed." compact />;
   }
 
   return (
-    <div className="intervention-grid">
-      {items.slice(0, 6).map((item, index) => (
+    <div className={`intervention-grid ${compact ? "intervention-grid--compact-command" : ""}`}>
+      {items.slice(0, limit).map((item, index) => (
         <button
           className={`intervention-card intervention-card--${item.tone} ${selectedId === item.id ? "intervention-card--selected" : ""}`}
           key={item.id}
@@ -1606,10 +1591,12 @@ function InterventionGrid({ items, selectedId, onSelect }) {
             <span>Time</span>
             <strong>{item.window}</strong>
           </div>
-          <p>{item.shortDetail ?? item.summary}</p>
-          <div className="intervention-card__footer">
-            <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
-          </div>
+          <p>{compact ? item.primaryAction ?? item.recommendation : item.shortDetail ?? item.summary}</p>
+          {!compact && (
+            <div className="intervention-card__footer">
+              <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
+            </div>
+          )}
         </button>
       ))}
     </div>
@@ -1705,6 +1692,7 @@ function WhyPanel({
   item,
   findings,
   actionStatus,
+  compact = false,
 }) {
   if (!item) {
     return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
@@ -1716,7 +1704,7 @@ function WhyPanel({
   const structuralExplanation = item.structuralExplanation ?? buildStructuralExplanation(item);
 
   return (
-    <div className="why-panel">
+    <div className={`why-panel ${compact ? "why-panel--compact" : ""}`}>
       <div className="why-panel__summary">
         <div>
           <span className="section-token">Selected room</span>
@@ -1731,16 +1719,18 @@ function WhyPanel({
         <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
       </div>
 
-      <ProgressionStrip tone={item.tone ?? "info"} />
+      <ProgressionStrip tone={item.tone ?? "info"} compact={compact} />
 
-      <div className="why-panel__section structural-explanation">
-        <span className="section-token">Structural explanation</span>
-        {structuralExplanation.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
+      {!compact && (
+        <div className="why-panel__section structural-explanation">
+          <span className="section-token">Structural explanation</span>
+          {structuralExplanation.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
 
-      {item.likelyDriver && (
+      {!compact && item.likelyDriver && (
         <div className="why-panel__section">
           <span className="section-token">Likely driver</span>
           <p>{item.likelyDriver}</p>
@@ -1759,24 +1749,28 @@ function WhyPanel({
         <p>{formatConfidenceLabel(item.confidence)} confidence. {confidenceBasis}</p>
       </div>
 
-      <div className="why-panel__chain">
-        {supportingEvidence.map((driver) => (
-          <div className="why-panel__driver" key={driver}>
-            <StatusDot tone={item.tone ?? "info"} />
-            <span>{driver}</span>
-          </div>
-        ))}
-      </div>
+      {!compact && (
+        <div className="why-panel__chain">
+          {supportingEvidence.map((driver) => (
+            <div className="why-panel__driver" key={driver}>
+              <StatusDot tone={item.tone ?? "info"} />
+              <span>{driver}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="why-panel__recommendation">
         <span>Next move</span>
         <strong>{item.primaryAction ?? item.recommendation ?? "Continue monitoring"}</strong>
       </div>
 
-      <div className="why-panel__baseline">
-        <span className="section-token">Baseline</span>
-        <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
-      </div>
+      {!compact && (
+        <div className="why-panel__baseline">
+          <span className="section-token">Baseline</span>
+          <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
+        </div>
+      )}
       {actionStatus && (
         <p className="why-panel__action-status">
           {actionStatus.action === "log"
@@ -1788,12 +1782,12 @@ function WhyPanel({
   );
 }
 
-function ProgressionStrip({ tone }) {
+function ProgressionStrip({ tone, compact = false }) {
   const stages = ["Stable", "Drift observed", "Decision window", "Intervention horizon"];
   const activeIndex = tone === "unstable" ? 3 : tone === "elevated" ? 2 : tone === "review" ? 1 : 0;
 
   return (
-    <div className="progression-strip" aria-label="Room movement progression">
+    <div className={`progression-strip ${compact ? "progression-strip--compact" : ""}`} aria-label="Room movement progression">
       {stages.map((stage, index) => (
         <div
           className={`progression-strip__stage ${index <= activeIndex ? "progression-strip__stage--active" : ""}`}

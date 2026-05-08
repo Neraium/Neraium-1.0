@@ -3645,97 +3645,6 @@ select {
 }
 
 /* =========================================================
-   Room-first overview simplification
-   Keeps existing stable React components
-   ========================================================= */
-
-.workspace-grid--overview-simple {
-  grid-template-areas:
-    "hero hero hero hero hero hero hero hero action action action action"
-    "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
-    "detail detail detail detail detail detail detail detail detail detail detail detail";
-}
-
-.workspace-grid--overview-simple > .overview-panel--hero {
-  grid-area: hero;
-}
-
-.workspace-grid--overview-simple > .overview-panel--action {
-  grid-area: action;
-}
-
-.workspace-grid--overview-simple > .overview-panel--room-first {
-  grid-area: rooms;
-}
-
-.workspace-grid--overview-simple > .overview-panel--detail {
-  grid-area: detail;
-}
-
-.overview-panel--room-first .ops-panel__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.overview-panel--room-first .ops-panel__header h2 {
-  max-width: none;
-  font-size: 1.35rem;
-  letter-spacing: -0.035em;
-}
-
-.overview-panel--room-first .intervention-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.overview-panel--room-first .intervention-card {
-  min-height: 230px;
-  padding: 18px;
-  border-radius: 20px;
-}
-
-.overview-panel--room-first .intervention-card strong {
-  font-size: 1rem;
-}
-
-.overview-panel--detail .ops-panel__body {
-  max-width: 980px;
-}
-
-.overview-panel--detail {
-  background:
-    radial-gradient(circle at top right, rgba(115, 216, 242, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(18, 29, 35, 0.98), rgba(8, 13, 17, 0.96));
-}
-
-@media (max-width: 1180px) {
-  .workspace-grid--overview-simple {
-    grid-template-areas:
-      "hero hero hero hero hero hero hero hero hero hero hero hero"
-      "action action action action action action action action action action action action"
-      "rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms rooms"
-      "detail detail detail detail detail detail detail detail detail detail detail detail";
-  }
-
-  .overview-panel--room-first .intervention-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .overview-panel--room-first .intervention-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .overview-panel--room-first .ops-panel__header {
-    align-items: start;
-    flex-direction: column;
-  }
-}
-
-/* =========================================================
    Clean operator flow
    JSX order controls layout: command, rooms, selected detail
    No grid-area override required
@@ -3833,7 +3742,7 @@ select {
 
 .workspace-grid--operator-flow .overview-panel--command .ops-panel__body {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .workspace-grid--operator-flow .overview-panel--command {
@@ -3849,13 +3758,14 @@ select {
 }
 
 .workspace-grid--operator-flow .overview-hero {
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 1fr) minmax(260px, 0.8fr);
+  align-items: stretch;
+  gap: 14px;
 }
 
 .workspace-grid--operator-flow .overview-hero__lead {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  column-gap: 24px;
+  align-content: center;
+  gap: 10px;
 }
 
 .workspace-grid--operator-flow .overview-hero__lead .overview-pill,
@@ -3876,8 +3786,8 @@ select {
 }
 
 .workspace-grid--operator-flow .countdown-hero {
-  grid-template-columns: minmax(190px, 0.42fr) minmax(320px, 0.58fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
 }
 
 .workspace-grid--operator-flow .countdown-hero__score,
@@ -3891,7 +3801,7 @@ select {
 }
 
 .workspace-grid--operator-flow .countdown-hero__score {
-  min-height: 190px;
+  min-height: 180px;
   align-content: center;
 }
 
@@ -3908,7 +3818,7 @@ select {
 }
 
 .workspace-grid--operator-flow .countdown-hero__window {
-  min-height: 190px;
+  min-height: 180px;
   align-content: center;
 }
 
@@ -3946,23 +3856,6 @@ select {
   line-height: 1.55;
 }
 
-.workspace-grid--operator-flow .overview-summary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.workspace-grid--operator-flow .overview-summary-cell {
-  min-height: 74px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(17, 25, 28, 0.72);
-}
-
-.workspace-grid--operator-flow .overview-summary-cell strong {
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
-
 .workspace-grid--operator-flow .overview-panel--room-first .ops-panel__header {
   gap: 5px;
   padding-bottom: 14px;
@@ -3981,12 +3874,12 @@ select {
 }
 
 .workspace-grid--operator-flow .overview-panel--room-first .intervention-grid {
-  gap: 14px;
+  gap: 12px;
 }
 
 .workspace-grid--operator-flow .overview-panel--room-first .intervention-card {
-  min-height: 250px;
-  padding: 18px;
+  min-height: 174px;
+  padding: 16px;
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(25, 34, 37, 0.92), rgba(13, 19, 22, 0.9));
@@ -3994,7 +3887,7 @@ select {
 }
 
 .workspace-grid--operator-flow .overview-panel--room-first .intervention-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   border-color: rgba(177, 211, 206, 0.18);
 }
 
@@ -4007,7 +3900,7 @@ select {
 
 .workspace-grid--operator-flow .intervention-card__header strong {
   margin-top: 8px;
-  font-size: clamp(1.55rem, 2.4vw, 2.25rem);
+  font-size: clamp(1.1rem, 1.7vw, 1.55rem);
   line-height: 1;
 }
 
@@ -4018,7 +3911,7 @@ select {
 .intervention-card__window {
   display: grid;
   gap: 5px;
-  padding: 12px 0;
+  padding: 9px 0;
   border-top: 1px solid rgba(177, 211, 206, 0.08);
   border-bottom: 1px solid rgba(177, 211, 206, 0.08);
 }
@@ -4033,7 +3926,7 @@ select {
 
 .intervention-card__window strong {
   color: var(--text-primary);
-  font-size: clamp(1.65rem, 2.8vw, 2.6rem);
+  font-size: clamp(1.35rem, 2.1vw, 2rem);
   line-height: 0.98;
 }
 
@@ -4060,7 +3953,11 @@ select {
 }
 
 .workspace-grid--operator-flow .why-panel {
-  gap: 14px;
+  gap: 12px;
+}
+
+.workspace-grid--operator-flow .why-panel--compact {
+  gap: 11px;
 }
 
 .workspace-grid--operator-flow .why-panel__summary {
@@ -4135,6 +4032,11 @@ select {
   padding: 10px 0;
 }
 
+.progression-strip--compact {
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+
 .progression-strip__stage {
   display: grid;
   gap: 7px;
@@ -4156,6 +4058,10 @@ select {
   letter-spacing: 0.06em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.progression-strip--compact .progression-strip__stage strong {
+  font-size: 0.58rem;
 }
 
 .progression-strip__stage--active span {
@@ -4190,7 +4096,7 @@ select {
   display: grid;
   gap: 6px;
   align-items: start;
-  padding: 13px;
+  padding: 12px;
   border: 1px solid rgba(177, 211, 206, 0.1);
   border-radius: 8px;
   background: rgba(17, 25, 28, 0.72);
@@ -4218,6 +4124,10 @@ select {
 }
 
 @media (max-width: 1280px) {
+  .workspace-grid--operator-flow .overview-hero {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-grid--operator-flow .countdown-hero {
     grid-template-columns: 1fr 1fr;
   }
@@ -4225,8 +4135,7 @@ select {
 
 @media (max-width: 760px) {
   .workspace-grid--operator-flow .overview-hero__lead,
-  .workspace-grid--operator-flow .countdown-hero,
-  .workspace-grid--operator-flow .overview-summary-grid {
+  .workspace-grid--operator-flow .countdown-hero {
     grid-template-columns: 1fr;
   }
 
