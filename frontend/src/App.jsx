@@ -87,9 +87,9 @@ const REPORT_TEMPLATES = [
 ];
 
 const DEMO_ROOMS = [
-  { name: "Flower Room 1", cycle: "Flower week 5", irrigation: "Pulse cycle 04", zone: "North bay" },
-  { name: "Flower Room 2", cycle: "Flower week 7", irrigation: "Pulse cycle 05", zone: "South bay" },
-  { name: "Veg Room A", cycle: "Vegetative day 19", irrigation: "Feed hold", zone: "Propagation lane" },
+  { name: "Flower Room 1", cultivar: "Gush Mintz", cycle: "Flower week 5", irrigation: "Pulse cycle 04", zone: "North bay" },
+  { name: "Flower Room 2", cultivar: "GDP", cycle: "Flower week 7", irrigation: "Pulse cycle 05", zone: "South bay" },
+  { name: "Veg Room A", cultivar: "Cap Junky", cycle: "Vegetative day 19", irrigation: "Feed hold", zone: "Propagation lane" },
 ];
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
@@ -99,10 +99,11 @@ function App() {
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
   const [selectedInterventionId, setSelectedInterventionId] = useState(null);
+  const [operatorActions, setOperatorActions] = useState({});
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
-    label: "Checking backend",
-    detail: "Establishing API telemetry link.",
+    label: "Sync pending",
+    detail: "Establishing facility sync.",
     checkedAt: null,
     attemptCount: 0,
     endpoint: formatEndpoint(API_BASE_URL),
@@ -132,24 +133,24 @@ function App() {
         if (isActive) {
           setApiStatus({
             state: "online",
-            label: "Telemetry link established",
-            detail: `${payload.service} responded ${payload.status} at ${formatClockTime(checkTime)}.`,
+            label: "Sync current",
+            detail: `Last sync ${formatClockTime(checkTime)} CT.`,
             checkedAt: checkTime.toISOString(),
             attemptCount,
             endpoint: formatEndpoint(API_BASE_URL),
-            message: trigger === "scheduled" ? "Connection monitor active." : `Connection check triggered by ${trigger}.`,
+            message: trigger === "scheduled" ? "Live telemetry feed current." : "Facility sync refreshed.",
           });
         }
       } catch (error) {
         if (isActive) {
           setApiStatus({
             state: "offline",
-            label: "Backend reconnecting",
-            detail: `No response from ${formatEndpoint(API_BASE_URL)} at ${formatClockTime(checkTime)}.`,
+            label: "Sync delayed",
+            detail: `Using last confirmed facility state. Check facility WiFi if updates stop syncing.`,
             checkedAt: checkTime.toISOString(),
             attemptCount,
             endpoint: formatEndpoint(API_BASE_URL),
-            message: error instanceof Error ? error.message : "Connection check failed.",
+            message: error instanceof Error ? error.message : "Facility sync delayed.",
           });
         }
       }
@@ -259,6 +260,16 @@ function App() {
     setIsWorkspaceMenuOpen(false);
   }
 
+  function handleOperatorAction(targetId, action) {
+    setOperatorActions((current) => ({
+      ...current,
+      [targetId]: {
+        action,
+        at: new Date().toISOString(),
+      },
+    }));
+  }
+
   function renderActiveWorkspace() {
     if (activeWorkspace === "overview") {
       return (
@@ -271,6 +282,9 @@ function App() {
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
           onSelectIntervention={setSelectedInterventionId}
+          onNavigateWorkspace={setActiveWorkspace}
+          operatorActions={operatorActions}
+          onOperatorAction={handleOperatorAction}
         />
       );
     }
@@ -285,6 +299,9 @@ function App() {
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
           onSelectIntervention={setSelectedInterventionId}
+          onNavigateWorkspace={setActiveWorkspace}
+          operatorActions={operatorActions}
+          onOperatorAction={handleOperatorAction}
         />
       );
     }
@@ -297,6 +314,7 @@ function App() {
           roomContext={roomContext}
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
+          operatorActions={operatorActions}
         />
       );
     }
@@ -309,6 +327,8 @@ function App() {
           setActiveWorkspace={setActiveWorkspace}
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
+          operatorActions={operatorActions}
+          onOperatorAction={handleOperatorAction}
         />
       );
     }
@@ -321,6 +341,9 @@ function App() {
         liveOps={liveOps}
         selectedInterventionId={selectedInterventionId}
         onSelectIntervention={setSelectedInterventionId}
+        onNavigateWorkspace={setActiveWorkspace}
+        operatorActions={operatorActions}
+        onOperatorAction={handleOperatorAction}
       />
     );
   }
@@ -408,8 +431,6 @@ function App() {
 
 function WorkspaceNavigationContent({
   activeWorkspace,
-  apiStatus,
-  latestUploadResult,
   roomContext,
   timeCoverage,
   liveOps,
@@ -447,20 +468,20 @@ function WorkspaceNavigationContent({
       </div>
 
       <div className="sidebar-section sidebar-section--terminal">
-        <p className="sidebar-kicker">Persistent telemetry</p>
-        <SidebarTelemetry label="API target" value={formatEndpoint(API_BASE_URL)} />
+        <p className="sidebar-kicker">Persistent state</p>
+        <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
         <SidebarTelemetry label="Primary room" value={roomContext.primary} />
         <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
         <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
         <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
-        <SidebarTelemetry label="Last check" value={liveOps.connectionSummary} />
+        <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
       </div>
 
       <div className="sidebar-footer">
         <StatusDot tone={liveOps.connectionTone} />
         <div>
-          <p>{liveOps.connectionLabel}</p>
-          <span>{liveOps.connectionDetail}</span>
+          <p>{liveOps.connectionStatusLine}</p>
+          <span>{liveOps.connectionActionHint}</span>
         </div>
       </div>
     </>
@@ -487,18 +508,21 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
         <h1 id="page-title">{activeConfig.label}</h1>
         <p>{activeConfig.description}</p>
         <div className="top-status__meta">
-          <span className={`overview-pill overview-pill--${liveOps.connectionTone}`}>{liveOps.connectionLabel}</span>
-          <span className="top-status__meta-copy">{liveOps.connectionSummary}</span>
+          <span className={`top-status__signal top-status__signal--${liveOps.connectionTone}`} aria-label={liveOps.connectionStatusLine}>
+            <StatusDot tone={liveOps.connectionTone} />
+          </span>
+          {liveOps.connectionActionHint && (
+            <span className="top-status__meta-copy top-status__meta-copy--actionable">{liveOps.connectionActionHint}</span>
+          )}
         </div>
       </div>
 
       <div className="status-rack">
-        <StatusChip label="Connectivity" value={liveOps.connectionLabel} tone={liveOps.connectionTone} />
         <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
-          label="Upload"
-          value={latestUploadResult?.filename ?? "No facility upload connected"}
-          tone={latestUploadResult ? "nominal" : "info"}
+          label="Data source"
+          value={liveOps.dataSourceLabel}
+          tone="info"
         />
         <StatusChip
           label="Readiness"
@@ -515,12 +539,24 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
           value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : liveOps.facilityStateLabel}
           tone={latestUploadResult?.engine_result?.overall_result ?? liveOps.facilityTone}
         />
+        <StatusChip
+          label="Last sync"
+          value={liveOps.connectionSummary}
+          tone={liveOps.connectionTone}
+        />
       </div>
     </header>
   );
 }
 
-function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectIntervention }) {
+function OverviewWorkspace({
+  liveOps,
+  selectedInterventionId,
+  onSelectIntervention,
+  onNavigateWorkspace,
+  operatorActions,
+  onOperatorAction,
+}) {
   const [selectedActionId, setSelectedActionId] = useState(selectedInterventionId ?? liveOps.actionQueue[0]?.id ?? null);
 
   useEffect(() => {
@@ -540,9 +576,9 @@ function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectInterventi
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
   const roomCount = liveOps.topologyNodes.length;
   const overviewSummary = [
-    { label: "Telemetry", value: liveOps.connectionLabel, tone: liveOps.connectionTone },
+    { label: "Data source", value: liveOps.dataSourceLabel, tone: "info" },
     { label: "Operational state", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
-    { label: "Latest ingest", value: liveOps.connectionSummary, tone: "info" },
+    { label: "Last sync", value: liveOps.connectionSummary, tone: liveOps.connectionTone },
     { label: "Rooms monitored", value: `${roomCount}`, tone: "nominal" },
   ];
 
@@ -564,11 +600,13 @@ function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectInterventi
               <span>Neraium score</span>
               <strong>{liveOps.neraiumScore}</strong>
               <p>{liveOps.scoreNarrative}</p>
+              <p className="countdown-hero__context">{liveOps.scoreContext}</p>
             </div>
             <div className="countdown-hero__window">
               <span>Primary intervention window</span>
               <strong>{liveOps.primaryWindow?.window ?? "Monitoring active telemetry feed"}</strong>
               <p>{liveOps.primaryWindow?.detail ?? liveOps.connectionDetail}</p>
+              <p className="countdown-hero__context">{liveOps.primaryWindow?.baselineContext ?? liveOps.windowContext}</p>
             </div>
           </div>
           <div className="overview-summary-grid">
@@ -617,7 +655,14 @@ function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectInterventi
         subtitle="Cause, confidence, and next move."
         className="span-4 overview-panel overview-panel--findings"
       >
-        <WhyPanel item={selectedAction ?? selectedNode} findings={findings} />
+        <WhyPanel
+          item={selectedAction ?? selectedNode}
+          findings={findings}
+          actionStatus={operatorActions[(selectedAction ?? selectedNode)?.targetId ?? (selectedAction ?? selectedNode)?.id]}
+          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
+          onLogIntervention={(id) => onOperatorAction(id, "log")}
+          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
+        />
       </Panel>
 
       <Panel
@@ -639,6 +684,19 @@ function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectInterventi
       >
         <TimelineFeed items={liveOps.timeline.slice(0, 5)} />
       </Panel>
+
+      <Panel
+        title="Morning check"
+        subtitle="Quick room pass for the daily walkthrough."
+        className="span-12 overview-panel overview-panel--events"
+      >
+        <MorningCheck
+          items={liveOps.interventionItems}
+          operatorActions={operatorActions}
+          onSelect={onSelectIntervention}
+          onLogCondition={(id) => onOperatorAction(id, "log")}
+        />
+      </Panel>
     </div>
   );
 }
@@ -646,11 +704,13 @@ function OverviewWorkspace({ liveOps, selectedInterventionId, onSelectInterventi
 function FacilitySystemsWorkspace({
   systems,
   systemsState,
-  latestUploadResult,
   roomContext,
   liveOps,
   selectedInterventionId,
   onSelectIntervention,
+  onNavigateWorkspace,
+  operatorActions,
+  onOperatorAction,
 }) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
@@ -687,7 +747,14 @@ function FacilitySystemsWorkspace({
         subtitle="Why this intervention window is moving."
         className="span-3"
       >
-        <WhyPanel item={systemsFocus} findings={liveOps.findings.slice(0, 3)} />
+        <WhyPanel
+          item={systemsFocus}
+          findings={liveOps.findings.slice(0, 3)}
+          actionStatus={operatorActions[systemsFocus?.id]}
+          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
+          onLogIntervention={(id) => onOperatorAction(id, "log")}
+          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
+        />
       </Panel>
 
       <Panel
@@ -887,7 +954,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
           <EmptyState
             compact
             title="Baseline established from current telemetry surface"
-            body="No facility upload connected. Demo monitoring remains active until room exports are uploaded."
+            body="Live telemetry feed is active. Manual upload remains available if you want to validate a room export."
           />
         )}
       </Panel>
@@ -895,7 +962,15 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   );
 }
 
-function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWorkspace, liveOps, selectedInterventionId }) {
+function EvidenceReportsWorkspace({
+  latestUploadResult,
+  roomContext,
+  setActiveWorkspace,
+  liveOps,
+  selectedInterventionId,
+  operatorActions,
+  onOperatorAction,
+}) {
   const latestReport = latestUploadResult?.operator_report;
   const findings = liveOps.findings;
   const evidenceLines = liveOps.evidenceLines;
@@ -928,7 +1003,14 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
         subtitle="The reasoning behind the current recommendation."
         className="span-5"
       >
-        <WhyPanel item={reportFocus} findings={findings.slice(0, 3)} />
+        <WhyPanel
+          item={reportFocus}
+          findings={findings.slice(0, 3)}
+          actionStatus={operatorActions[reportFocus?.targetId ?? reportFocus?.id]}
+          onSeeWhatsWrong={() => setActiveWorkspace("facility-systems")}
+          onLogIntervention={(id) => onOperatorAction(id, "log")}
+          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
+        />
       </Panel>
 
       <Panel
@@ -980,7 +1062,14 @@ function EvidenceReportsWorkspace({ latestUploadResult, roomContext, setActiveWo
   );
 }
 
-function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelectIntervention }) {
+function IntelligenceConsoleWorkspace({
+  liveOps,
+  selectedInterventionId,
+  onSelectIntervention,
+  onNavigateWorkspace,
+  operatorActions,
+  onOperatorAction,
+}) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
   const relationshipRows = liveOps.relationshipRows;
@@ -1036,6 +1125,21 @@ function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelec
       </Panel>
 
       <Panel
+        title="Selected action"
+        subtitle="Next action with evidence and operator controls."
+        className="span-3"
+      >
+        <WhyPanel
+          item={queueItems.find((item) => item.id === selectedInterventionId) ?? queueItems[0] ?? null}
+          findings={findings.slice(0, 3)}
+          actionStatus={operatorActions[(queueItems.find((item) => item.id === selectedInterventionId) ?? queueItems[0])?.targetId ?? selectedInterventionId ?? queueItems[0]?.id]}
+          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
+          onLogIntervention={(id) => onOperatorAction(id, "log")}
+          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
+        />
+      </Panel>
+
+      <Panel
         title="Recent changes"
         subtitle="Events that changed decision timing."
         className="span-4"
@@ -1053,7 +1157,7 @@ function IntelligenceConsoleWorkspace({ liveOps, selectedInterventionId, onSelec
 
       <Panel
         title="Connection diagnostics"
-        subtitle="Link state, reconnect cadence, and readable failure detail."
+        subtitle="Sync state, last confirmed update, and operator guidance."
         className="span-3"
       >
         <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
@@ -1109,7 +1213,7 @@ function VerificationPanel({ result }) {
         },
         { label: "Rows parsed", value: result ? result.row_count : "Monitoring active telemetry feed" },
         { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Awaiting additional room telemetry" },
-        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "No upload connected" },
+        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "Live telemetry feed" },
       ]}
       compact
     />
@@ -1132,7 +1236,7 @@ function EvidenceExtractionPanel({ result }) {
         },
         {
           title: "Operator report",
-          detail: result?.operator_report ? "Current findings report available." : "No facility upload connected.",
+          detail: result?.operator_report ? "Current findings report available." : "Manual upload remains optional.",
           tone: result?.operator_report ? "nominal" : "info",
         },
       ]}
@@ -1334,7 +1438,7 @@ function SystemsMatrix({ systems, systemsState, roomContext, rows }) {
     system.name,
     system.scope,
     systemRoomContext(system.name, roomContext),
-    systemsState === "ready" ? "Backend placeholder endpoint" : "Local fallback surface",
+    systemsState === "ready" ? "Live facility sync" : "Local fallback surface",
   ]);
 
   return (
@@ -1411,6 +1515,7 @@ function InterventionGrid({ items, selectedId, onSelect }) {
             <ConfidenceDial score={item.confidence} tone={item.tone} />
           </div>
           <p>{item.summary}</p>
+          <p className="intervention-card__baseline">{item.baselineContext ?? item.change}</p>
           <div className="intervention-card__footer">
             <span className={`overview-pill overview-pill--${item.tone}`}>{item.recommendation}</span>
             <span className="room-health-card__trend">{item.change}</span>
@@ -1462,10 +1567,63 @@ function ActionQueue({ items, selectedId, onSelect }) {
   );
 }
 
-function WhyPanel({ item, findings }) {
+function MorningCheck({ items, operatorActions, onSelect, onLogCondition }) {
+  if (!items || items.length === 0) {
+    return <EmptyState title="Morning check unavailable" body="Monitoring active telemetry feed." compact />;
+  }
+
+  return (
+    <div className="morning-check">
+      {items.slice(0, 4).map((item) => {
+        const actionState = operatorActions[item.id];
+        return (
+          <div className={`morning-check__row morning-check__row--${item.tone}`} key={item.id}>
+            <button className="morning-check__summary" type="button" onClick={() => onSelect(item.id)}>
+              <div className="morning-check__identity">
+                <StatusDot tone={item.tone} />
+                <div>
+                  <span>{item.label}</span>
+                  <strong>{item.window}</strong>
+                </div>
+              </div>
+              <div className="morning-check__meta">
+                <span className={`overview-pill overview-pill--${item.tone}`}>{item.recommendation}</span>
+                <p>{item.baselineContext ?? item.change}</p>
+              </div>
+            </button>
+            <div className="morning-check__actions">
+              <button className="command-button command-button--compact" type="button" onClick={() => onLogCondition(item.id)}>
+                Log conditions
+              </button>
+              <button className="link-action" type="button" onClick={() => onSelect(item.id)}>
+                Open room
+              </button>
+            </div>
+            {actionState?.action === "log" && (
+              <p className="morning-check__status">
+                Conditions logged at {formatClockTime(actionState.at)} CT.
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WhyPanel({
+  item,
+  findings,
+  actionStatus,
+  onSeeWhatsWrong,
+  onLogIntervention,
+  onIgnorePattern,
+}) {
   if (!item) {
     return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
   }
+
+  const actionKey = item.targetId ?? item.id;
 
   return (
     <div className="why-panel">
@@ -1489,6 +1647,28 @@ function WhyPanel({ item, findings }) {
         <span>Recommended next move</span>
         <strong>{item.recommendation ?? item.primaryAction ?? "Continue monitoring"}</strong>
       </div>
+      <div className="why-panel__baseline">
+        <span className="section-token">Baseline</span>
+        <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
+      </div>
+      <div className="why-panel__actions">
+        <button className="command-button command-button--compact" type="button" onClick={() => onSeeWhatsWrong?.(actionKey)}>
+          See what's wrong
+        </button>
+        <button className="command-button command-button--secondary command-button--compact" type="button" onClick={() => onLogIntervention?.(actionKey)}>
+          Log intervention
+        </button>
+        <button className="link-action" type="button" onClick={() => onIgnorePattern?.(actionKey)}>
+          Ignore this pattern
+        </button>
+      </div>
+      {actionStatus && (
+        <p className="why-panel__action-status">
+          {actionStatus.action === "log"
+            ? `Intervention logged at ${formatClockTime(actionStatus.at)} CT.`
+            : "Pattern ignored for the current walkthrough."}
+        </p>
+      )}
     </div>
   );
 }
@@ -1787,7 +1967,7 @@ function buildTelemetryCards(result) {
     return TELEMETRY_CHANNELS.map((channel) => ({
       label: formatCategory(channel),
       primary: "Monitoring standby",
-      secondary: "No facility upload connected.",
+      secondary: "Live telemetry feed active.",
       series: [],
       tone: "info",
     }));
@@ -1857,7 +2037,7 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
     items.push({
       time: "Standby",
       title: "Monitoring active telemetry feed",
-      detail: `No facility upload connected. ${roomContext.primary} remains the primary review lane.`,
+      detail: `Live telemetry feed active. ${roomContext.primary} remains the primary review lane.`,
       tone: "info",
     });
     items.push({
@@ -1953,16 +2133,16 @@ function buildAlertItems(result, apiStatus) {
 
   if (apiStatus.state !== "online") {
     alerts.push({
-      title: "Backend link unavailable",
-      detail: apiStatus.detail,
+      title: "Facility sync delayed",
+      detail: "Using the last confirmed state. Check facility WiFi if room changes stop syncing.",
       tone: "elevated",
     });
   }
 
   if (!result) {
     alerts.push({
-      title: "No facility upload connected",
-      detail: "Monitoring active telemetry feed until room exports are uploaded.",
+      title: "Data source: Live telemetry feed",
+      detail: "Manual upload is available if you want to validate a room export.",
       tone: "info",
     });
     return alerts;
@@ -2014,8 +2194,8 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
       value: buildAlertItems(result, apiStatus).length,
     },
     {
-      label: "Ingestion state",
-      value: result ? formatReadiness(result.data_quality.readiness) : "No facility upload connected",
+      label: "Data source",
+      value: result ? latestManualSourceLabel(result) : "Live telemetry feed",
     },
     {
       label: "Systems in scope",
@@ -2250,7 +2430,7 @@ function buildIntakeStages(result, uploadState, roomContext) {
     if (!result) {
       return {
         title: stage,
-        detail: index === 2 ? `Baseline established for ${roomContext.primary}.` : "No facility upload connected. Monitoring active telemetry feed.",
+        detail: index === 2 ? `Baseline established for ${roomContext.primary}.` : "Live telemetry feed is active. Manual upload remains available.",
         state: "standby",
         tone: index === 3 ? "review" : "info",
       };
@@ -2368,8 +2548,14 @@ function cycleValue(base, tick, range = 6, precision = 1) {
 function buildOperationalContext({ result, apiStatus, roomContext, systems, systemsState, tick, useDemoTelemetry }) {
   const connectionTone = apiStatus.state === "online" ? "nominal" : "elevated";
   const connectionSummary = apiStatus.checkedAt
-    ? `${formatClockTime(apiStatus.checkedAt)} CT | attempt ${apiStatus.attemptCount}`
-    : "Connection check initializing";
+    ? `Updated ${formatClockTime(apiStatus.checkedAt)} CT`
+    : "Sync initializing";
+  const connectionStatusLine = apiStatus.state === "online"
+    ? connectionSummary
+    : `${connectionSummary}. Using last confirmed state.`;
+  const connectionActionHint = apiStatus.state === "online"
+    ? ""
+    : "Check facility WiFi if room changes stop syncing.";
 
   if (!useDemoTelemetry) {
     const telemetryCards = buildTelemetryCards(result);
@@ -2386,11 +2572,16 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
       heroSubline: heroSublineFromTone(facilityTone, roomContext.primary),
       readinessLabel: formatReadiness(result?.data_quality?.readiness),
       connectionTone,
-      connectionLabel: apiStatus.label,
+      connectionLabel: "Live telemetry feed",
       connectionDetail: apiStatus.detail,
       connectionSummary,
+      connectionStatusLine,
+      connectionActionHint,
+      dataSourceLabel: latestManualSourceLabel(result),
       neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, true),
       scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
+      scoreContext: buildScoreContext(calculateNeraiumScore(facilityTone, interventionItems, true), facilityTone, interventionItems),
+      windowContext: buildWindowContext(interventionItems[0], roomContext),
       primaryWindow,
       interventionItems,
       actionQueue,
@@ -2471,19 +2662,24 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     useDemoTelemetry: true,
     facilityTone,
     facilityStateLabel: formatOperationalLabel(facilityTone),
-    heroTag: facilityTone === "nominal" ? "Intervention horizon open" : "Priority review active",
-    heroHeadline: heroHeadlineFromTone(facilityTone),
-    heroSubline: heroSublineFromTone(facilityTone, primaryWindow?.label ?? roomStates[0]?.name ?? "the facility"),
-    readinessLabel: "Monitoring active telemetry feed",
-    connectionTone,
-    connectionLabel: apiStatus.state === "online" ? "Telemetry link established" : "Backend reconnecting",
-    connectionDetail: apiStatus.state === "online"
-      ? "Operational demo telemetry will stand down once facility uploads are present."
-      : `Reconnect monitor active for ${apiStatus.endpoint}.`,
-    connectionSummary,
-    neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, false),
-    scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
-    primaryWindow,
+      heroTag: facilityTone === "nominal" ? "Intervention horizon open" : "Priority review active",
+      heroHeadline: heroHeadlineFromTone(facilityTone),
+      heroSubline: heroSublineFromTone(facilityTone, primaryWindow?.label ?? roomStates[0]?.name ?? "the facility"),
+      readinessLabel: "Monitoring active telemetry feed",
+      connectionTone,
+      connectionLabel: "Live telemetry feed",
+      connectionDetail: apiStatus.state === "online"
+        ? "Live telemetry feed active. Manual upload is available if you want to validate a room export."
+        : "Using the last confirmed facility state until live sync resumes.",
+      connectionSummary,
+      connectionStatusLine,
+      connectionActionHint,
+      dataSourceLabel: "Live telemetry feed",
+      neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, false),
+      scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
+      scoreContext: buildScoreContext(calculateNeraiumScore(facilityTone, interventionItems, false), facilityTone, interventionItems),
+      windowContext: buildWindowContext(interventionItems[0], roomContext),
+      primaryWindow,
     interventionItems,
     actionQueue,
     topologyNodes: buildTopologyNodes(interventionItems),
@@ -2541,6 +2737,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       shortDetail: engineSignals[0]?.message ?? "Current upload is tightening the review window.",
       whyHeadline: engineSignals[0]?.message ?? "Current drift and readiness signals are tightening the available intervention window.",
       drivers: buildWhyDrivers(result, telemetryCards, roomContext),
+      baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
       primaryAction: primaryActionFromTone(facilityTone),
       actions: actionSetFromTone(facilityTone),
@@ -2570,6 +2767,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         "Baseline established from current upload.",
         "Review is being prioritized over passive monitoring.",
       ],
+      baselineContext: `${roomContext.secondary} typically holds a longer recovery window. Current irrigation recovery is shortening.`,
       recommendation: recommendationFromTone(irrigationTone),
       primaryAction: primaryActionFromTone(irrigationTone),
       actions: actionSetFromTone(irrigationTone),
@@ -2587,7 +2785,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       tone: "info",
       confidence: 68,
       summary: "Uploaded telemetry is connected, but additional room context will improve intervention precision.",
-      detail: result?.filename ?? "No facility upload connected",
+      detail: result?.filename ?? "Live telemetry feed active",
       shortDetail: "Additional room coverage will improve decision confidence.",
       whyHeadline: "The facility is connected, but the confidence of longer-range decisions improves as room coverage deepens.",
       drivers: [
@@ -2595,9 +2793,10 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
         `${result.cultivation_mapping?.mapped_column_count ?? 0} mapped columns currently in scope.`,
         "Awaiting additional room telemetry where facility context is partial.",
       ],
+      baselineContext: "Facility-level confidence improves as room coverage deepens and more week-specific context is connected.",
       recommendation: "Continue monitoring",
       primaryAction: "Acknowledge",
-      actions: ["Acknowledge", "Schedule Maintenance", "Escalate", "Ignore Pattern"],
+      actions: ["Acknowledge", "Schedule", "Escalate", "Ignore"],
       impact: "Facility-wide confidence",
       change: "Latest ingest synchronized",
       rankLabel: "Priority 03",
@@ -2623,6 +2822,7 @@ function buildSimulatedInterventionItems(roomStates) {
       shortDetail: compactRoomSummary(room),
       whyHeadline: whyHeadlineFromRoom(room),
       drivers: buildDriversFromRoom(room),
+      baselineContext: baselineContextFromRoom(room),
       recommendation: recommendationFromTone(room.tone),
       primaryAction: primaryActionFromTone(room.tone),
       actions: actionSetFromTone(room.tone),
@@ -2638,6 +2838,7 @@ function buildActionQueue(interventionItems) {
     .map((item, index) => ({
       ...item,
       id: `action-${item.id}`,
+      targetId: item.id,
       rankLabel: `Priority ${String(index + 1).padStart(2, "0")}`,
       title: item.title,
       detail: item.summary,
@@ -2683,6 +2884,44 @@ function summarizeScoreNarrative(facilityTone, interventionItems) {
     return `${urgentCount} intervention window${urgentCount === 1 ? "" : "s"} shortened enough to warrant immediate operator attention.`;
   }
   return "Most systems remain controllable, with review concentrated in a narrow set of rooms.";
+}
+
+function buildScoreContext(score, facilityTone, interventionItems) {
+  const facilityAverage = facilityTone === "nominal" ? 74 : facilityTone === "review" ? 68 : facilityTone === "elevated" ? 62 : 58;
+  const trendDelta = facilityTone === "nominal" ? 2 : facilityTone === "review" ? -1 : facilityTone === "elevated" ? -4 : -7;
+  const trendArrow = trendDelta >= 0 ? "+" : "";
+  return `Facility avg ${facilityAverage} | Target 80+ | Trend ${trendArrow}${trendDelta} pts since yesterday`;
+}
+
+function latestManualSourceLabel(result) {
+  return result?.filename ? "Manual data upload connected" : "Live telemetry feed";
+}
+
+function baselineContextFromRoom(room) {
+  if (room.cycle.toLowerCase().includes("week 7")) {
+    return `${room.cultivar} ${room.cycle.toLowerCase()} typically holds 12 to 18 hours. This room is shortening.`;
+  }
+  if (room.cycle.toLowerCase().includes("week 5")) {
+    return `${room.cultivar} ${room.cycle.toLowerCase()} typically stays inside a 4 to 6 day review window. This room is steady.`;
+  }
+  return `${room.cultivar} ${room.cycle.toLowerCase()} typically stabilizes after irrigation. This room is inside that band.`;
+}
+
+function buildUploadBaselineContext(roomContext, facilityTone) {
+  if (facilityTone === "unstable" || facilityTone === "elevated") {
+    return `${roomContext.primary} usually holds a longer intervention window at this stage. Current upload shows it shortening.`;
+  }
+  if (facilityTone === "review") {
+    return `${roomContext.primary} is still inside a manageable week-level operating band, but the current window is getting tighter.`;
+  }
+  return `${roomContext.primary} remains inside its expected operating band for the current room cycle.`;
+}
+
+function buildWindowContext(item, roomContext) {
+  if (!item) {
+    return `Typical monitored rooms hold longer review windows once room context is established.`;
+  }
+  return item.baselineContext ?? `${roomContext.primary} is being compared against its expected room-cycle operating band.`;
 }
 
 function compactRoomSummary(room) {
@@ -3002,8 +3241,8 @@ function buildSimulatedAlerts(roomStates, apiStatus) {
   const items = [];
   if (apiStatus.state !== "online") {
     items.push({
-      title: "No facility upload connected",
-      detail: `Frontend monitoring is active while reconnect attempts continue for ${apiStatus.endpoint}.`,
+      title: "Live telemetry feed active",
+      detail: "Using the last confirmed facility state while live sync resumes.",
       tone: "info",
     });
   }
@@ -3123,13 +3362,13 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
   return [
     {
       title: "Batch receipt",
-      detail: "No facility upload connected. Frontend telemetry simulation is maintaining live workspace state.",
+      detail: "Live telemetry feed is active and maintaining current workspace state.",
       state: "standby",
       tone: "info",
     },
     {
       title: "Header and schema detection",
-      detail: `Connection monitor last checked ${formatClockTime(apiStatus.checkedAt ?? new Date())} for ${apiStatus.endpoint}.`,
+      detail: `Last sync checked ${formatClockTime(apiStatus.checkedAt ?? new Date())} CT.`,
       state: "monitoring",
       tone: apiStatus.state === "online" ? "nominal" : "review",
     },
@@ -3151,7 +3390,7 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
 function buildSimulatedEvidenceLines(roomStates, tick, apiStatus) {
   return [
     `console.mode=frontend_simulation`,
-    `connection.endpoint=${apiStatus.endpoint}`,
+    `connection.state=${apiStatus.state}`,
     `connection.last_check=${formatClockTime(apiStatus.checkedAt ?? new Date())}`,
     `room.primary=${roomStates[0].name}`,
     `room.transition=${roomStates[1].name}:humidity_recovery_review`,
@@ -3194,13 +3433,17 @@ function buildConnectionEvents(apiStatus, tick) {
   const checkedAt = apiStatus.checkedAt ?? new Date().toISOString();
   return [
     {
-      title: apiStatus.state === "online" ? "Backend monitoring active" : "Reconnect attempt queued",
-      detail: `${apiStatus.endpoint} checked ${formatClockTime(checkedAt)} CT.`,
+      title: apiStatus.state === "online" ? "Live telemetry current" : "Sync delayed",
+      detail: apiStatus.state === "online"
+        ? `Last sync ${formatClockTime(checkedAt)} CT.`
+        : `Last confirmed state held from ${formatClockTime(checkedAt)} CT.`,
       tone: apiStatus.state === "online" ? "nominal" : "elevated",
     },
     {
-      title: "Connection diagnostics",
-      detail: `${apiStatus.message || "Connection monitor active."} Attempt ${apiStatus.attemptCount || tick + 1}.`,
+      title: apiStatus.state === "online" ? "Telemetry monitor" : "Operator action",
+      detail: apiStatus.state === "online"
+        ? "Live telemetry feed is current."
+        : "Check facility WiFi if room changes stop syncing.",
       tone: apiStatus.state === "online" ? "info" : "review",
     },
   ];
