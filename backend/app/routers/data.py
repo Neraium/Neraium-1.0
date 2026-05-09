@@ -1,170 +1,93 @@
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 
-from app.engine import run_engine_analysis
-from app.services.baseline_analysis import build_baseline_analysis
-from app.services.csv_parser import parse_csv_content, preview_rows
-from app.services.cultivation_mapping import map_cultivation_columns
-from app.services.data_quality import (
-    build_data_quality,
-    build_warnings,
-    detect_timestamp_column,
-    profile_numeric_columns,
-    profile_timestamps,
+from app.services.sii_runner import read_latest_sii_state
+from app.services.upload_jobs import (
+    create_upload_job,
+    latest_completed_job_summary,
+    process_upload_job,
+    read_job,
 )
-from app.services.driver_attribution import build_driver_attribution
-from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
-from app.services.operator_report import build_operator_report
-from app.services.sii_intelligence import build_upload_intelligence
-from app.services.sii_runner import run_sii_runner
 
 router = APIRouter(tags=["data"])
 
 
-@router.post("/data/upload")
-async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
+@router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED)
+async def upload_csv(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
     filename = file.filename or ""
     if Path(filename).suffix.lower() != ".csv":
         raise HTTPException(status_code=400, detail="Only .csv files are supported.")
 
-    content = await file.read()
-    try:
-        columns, data_rows = parse_csv_content(content)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    metadata = await create_upload_job(file)
+    if metadata["file_size_bytes"] == 0:
+        raise HTTPException(status_code=400, detail="CSV file is empty.")
 
-    warnings = build_warnings(columns, data_rows)
-    detected_timestamp_column = detect_timestamp_column(columns)
-    if detected_timestamp_column is None:
-        warnings.append("No obvious timestamp column detected.")
-
-    numeric_profiles = profile_numeric_columns(columns, data_rows)
-    warnings.extend(
-        f"{profile['column']} contains {profile['missing_count']} missing numeric values."
-        for profile in numeric_profiles
-        if profile["missing_count"] > 0
-    )
-    timestamp_profile = profile_timestamps(columns, data_rows, detected_timestamp_column)
-    warnings.extend(timestamp_profile["warnings"])
-    warnings.extend(
-        profile["range_warning"]
-        for profile in numeric_profiles
-        if profile["range_warning"] is not None
-    )
-    data_quality = build_data_quality(
-        row_count=len(data_rows),
-        column_count=len(columns),
-        numeric_column_count=len(numeric_profiles),
-        timestamp_detected=detected_timestamp_column is not None,
-        warnings=warnings,
-    )
-    baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
-    cultivation_mapping = map_cultivation_columns(columns)
-    operator_report = build_operator_report(
-        data_quality=data_quality,
-        timestamp_profile=timestamp_profile,
-        numeric_profiles=numeric_profiles,
-        baseline_analysis=baseline_analysis,
-        cultivation_mapping=cultivation_mapping,
-    )
-    engine_result = run_engine_analysis(
-        columns=columns,
-        rows=data_rows,
-        data_quality=data_quality,
-        baseline_analysis=baseline_analysis,
-        cultivation_mapping=cultivation_mapping,
-        numeric_profiles=numeric_profiles,
-    )
-    driver_attribution = build_driver_attribution(
-        room_state={
-            "room": primary_room_from_upload(columns, data_rows),
-            "state": state_from_assessment(baseline_analysis["overall_assessment"]),
-            "severity": severity_from_assessment(baseline_analysis["overall_assessment"]),
-        },
-        telemetry_context={
-            "columns": columns,
-            "rows": data_rows,
-            "numeric_profiles": numeric_profiles,
-            "timestamp_profile": timestamp_profile,
-            "data_quality": data_quality,
-            "cultivation_mapping": cultivation_mapping,
-        },
-        baseline_context={
-            "baseline_analysis": baseline_analysis,
-            "cultivation_mapping": cultivation_mapping,
-        },
-        engine_result=engine_result,
-    )
-    sii_intelligence = build_upload_intelligence(
-        filename=filename,
-        row_count=len(data_rows),
-        data_quality=data_quality,
-        baseline_analysis=baseline_analysis,
-        engine_result=engine_result,
-        driver_attribution=driver_attribution,
-        operator_report=operator_report,
-        timestamp_profile=timestamp_profile,
-    )
-    processing_trace = build_processing_trace(
-        engine_result=engine_result,
-        driver_attribution=driver_attribution,
-        rows_processed=len(data_rows),
-        columns_analyzed=baseline_analysis["columns_analyzed"],
-    )
-    sii_runner_result = run_sii_runner(
-        columns=columns,
-        rows=data_rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=detected_timestamp_column,
-        primary_room=primary_room_from_upload(columns, data_rows),
-        driver_attribution=driver_attribution,
-        engine_result=engine_result,
-        processing_trace=processing_trace,
-    )
-
+    background_tasks.add_task(process_upload_job, metadata["job_id"])
     return {
-        "filename": filename,
-        "row_count": len(data_rows),
-        "column_count": len(columns),
-        "columns": columns,
-        "preview_rows": preview_rows(columns, data_rows),
-        "detected_timestamp_column": detected_timestamp_column,
-        "warnings": warnings,
-        "numeric_profiles": numeric_profiles,
-        "timestamp_profile": timestamp_profile,
-        "data_quality": data_quality,
-        "baseline_analysis": baseline_analysis,
-        "cultivation_mapping": cultivation_mapping,
-        "operator_report": operator_report,
-        "engine_result": engine_result,
-        "driver_attribution": driver_attribution,
-        "sii_intelligence": sii_intelligence,
-        "sii_runner_result": sii_runner_result,
-        "processing_trace": processing_trace,
-        "validation_provenance": VALIDATION_PROVENANCE,
+        "job_id": metadata["job_id"],
+        "status": "queued",
+        "filename": metadata["filename"],
+        "message": "Telemetry batch received. Processing started.",
+        "status_url": f"/api/data/upload-status/{metadata['job_id']}",
+        "file_size_bytes": metadata["file_size_bytes"],
     }
 
 
-def primary_room_from_upload(columns: list[str], rows: list[list[str]]) -> str:
-    room_columns = [
-        index
-        for index, column in enumerate(columns)
-        if any(token in column.lower() for token in ("room", "zone", "bay"))
-    ]
-    if not room_columns:
-        return "Current room"
-    room_index = room_columns[0]
-    for row in rows:
-        if room_index < len(row) and row[room_index].strip():
-            return row[room_index].strip()
-    return "Current room"
+@router.get("/data/upload-status/{job_id}")
+def read_upload_status(job_id: str) -> dict[str, Any]:
+    metadata = read_job(job_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Upload job was not found.")
+    return {
+        "job_id": metadata["job_id"],
+        "status": metadata.get("status", "queued"),
+        "progress_label": metadata.get("progress_label"),
+        "filename": metadata.get("filename"),
+        "file_size_bytes": metadata.get("file_size_bytes", 0),
+        "rows_processed": metadata.get("rows_processed", 0),
+        "columns_detected": metadata.get("columns_detected", 0),
+        "runner_used": metadata.get("runner_used", False),
+        "runner_module": metadata.get("runner_module"),
+        "core_engine": metadata.get("core_engine"),
+        "started_at": metadata.get("started_at"),
+        "completed_at": metadata.get("completed_at"),
+        "error": metadata.get("error"),
+        "result_summary": metadata.get("result_summary"),
+    }
 
 
-def state_from_assessment(assessment: str) -> str:
-    return "Needs review" if assessment == "needs_review" else "Monitoring"
-
-
-def severity_from_assessment(assessment: str) -> str:
-    return "review" if assessment == "needs_review" else "info"
+@router.get("/data/latest-upload")
+def read_latest_upload() -> dict[str, Any]:
+    summary = latest_completed_job_summary()
+    latest_state = read_latest_sii_state()
+    if summary is None and latest_state is None:
+        return {
+            "source": "sample",
+            "last_filename": None,
+            "rows_processed": 0,
+            "columns_detected": 0,
+            "last_processed_at": None,
+            "runner_module": None,
+            "core_engine": None,
+            "state_available": False,
+        }
+    summary = summary or {}
+    last_processed_at = summary.get("last_processed_at")
+    if last_processed_at is None and latest_state:
+        last_processed_at = latest_state.get("last_processed_at")
+    return {
+        "source": "uploaded",
+        "last_filename": summary.get("filename"),
+        "rows_processed": summary.get("rows_processed", 0),
+        "columns_detected": summary.get("columns_detected", 0),
+        "last_processed_at": last_processed_at,
+        "runner_module": summary.get("runner_module") or (latest_state or {}).get("runner_module"),
+        "core_engine": summary.get("core_engine") or (latest_state or {}).get("core_engine"),
+        "state_available": latest_state is not None,
+        "runner_used": summary.get("runner_used", False),
+    }

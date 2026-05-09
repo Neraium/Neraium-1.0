@@ -83,7 +83,9 @@ const INTAKE_STAGES = [
   "Batch receipt",
   "Header and schema detection",
   "Timestamp and room context review",
-  "Baseline and evidence extraction",
+  "SII engine processing",
+  "Evidence and state write",
+  "Complete",
 ];
 
 const REPORT_TEMPLATES = [
@@ -395,7 +397,11 @@ function App() {
       return (
         <DataIntakeWorkspace
           latestUploadResult={latestUploadResult}
-          onUploadComplete={setLatestUploadResult}
+          onUploadComplete={async (payload) => {
+            setLatestUploadResult(payload);
+            await loadFacilitySystems();
+            await loadEngineIdentity();
+          }}
           roomContext={roomContext}
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
@@ -700,7 +706,7 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
         />
         <StatusChip
           label="Readiness"
-          value={latestUploadResult ? formatReadiness(latestUploadResult.data_quality.readiness) : liveOps.readinessLabel}
+          value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.facilityTone}
         />
         <StatusChip
@@ -944,6 +950,14 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
+  const [uploadJob, setUploadJob] = useState(null);
+  const pollTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (pollTimerRef.current) {
+      window.clearTimeout(pollTimerRef.current);
+    }
+  }, []);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -958,6 +972,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     setUploadState("uploading");
     setUploadError("");
     setUploadResult(null);
+    setUploadJob(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/data/upload`, {
@@ -970,9 +985,9 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
         throw new Error(payload.detail ?? "CSV upload could not be validated.");
       }
 
-      setUploadResult(payload);
-      onUploadComplete(payload);
-      setUploadState("complete");
+      setUploadJob(payload);
+      setUploadState("queued");
+      pollUploadStatus(payload.job_id);
     } catch (error) {
       setUploadError(
         error instanceof TypeError
@@ -983,8 +998,49 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     }
   }
 
-  const intakeStages = uploadResult
-    ? buildIntakeStages(uploadResult, uploadState, roomContext)
+  async function pollUploadStatus(jobId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/data/upload-status/${jobId}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "Upload status could not be loaded.");
+      }
+
+      setUploadJob(payload);
+      setUploadState(payload.status);
+
+      if (payload.status === "complete") {
+        const latestResponse = await fetch(`${API_BASE_URL}/api/data/latest-upload`);
+        const latestPayload = latestResponse.ok ? await latestResponse.json() : payload.result_summary;
+        const completedPayload = {
+          ...(latestPayload ?? {}),
+          filename: latestPayload?.last_filename ?? payload.filename,
+          row_count: latestPayload?.rows_processed ?? payload.rows_processed,
+          column_count: latestPayload?.columns_detected ?? payload.columns_detected,
+          job_status: payload,
+        };
+        setUploadResult(completedPayload);
+        await onUploadComplete(completedPayload);
+        return;
+      }
+
+      if (payload.status === "failed") {
+        setUploadError(payload.error ?? "Telemetry processing failed.");
+        return;
+      }
+
+      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(jobId), 1400);
+    } catch (error) {
+      setUploadError(error instanceof TypeError ? "Upload status is temporarily unavailable." : error.message);
+      setUploadState("error");
+    }
+  }
+
+  const intakeStages = uploadJob
+    ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
+    : uploadResult
+      ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
     : liveOps.intakeStages;
   const intakeFocus = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0] ?? null;
 
@@ -1015,14 +1071,14 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
                 setUploadError("");
               }}
             />
-            <button className="command-button" type="submit" disabled={uploadState === "uploading"}>
-              {uploadState === "uploading" ? "Validating batch" : "Validate batch"}
+            <button className="command-button" type="submit" disabled={["uploading", "queued", "parsing", "running_sii", "writing_state"].includes(uploadState)}>
+              {["uploading", "queued", "parsing", "running_sii", "writing_state"].includes(uploadState) ? "Processing batch" : "Validate batch"}
             </button>
           </div>
 
           <div className="intake-flow__status">
             <span>{selectedFile ? selectedFile.name : "No file selected"}</span>
-            <span>{uploadStateMessage(uploadState)}</span>
+            <span>{uploadJob?.progress_label ?? uploadStateMessage(uploadState)}</span>
           </div>
 
           {uploadError && <p className="form-error">{uploadError}</p>}
@@ -1075,7 +1131,15 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
         className="span-7"
       >
         {uploadResult ? (
-          <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
+          uploadResult.baseline_analysis ? (
+            <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
+          ) : (
+            <EmptyState
+              compact
+              title="Latest upload processed"
+              body={`${uploadResult.row_count ?? uploadResult.rows_processed ?? 0} rows processed. Facility Command has been refreshed.`}
+            />
+          )
         ) : (
           <EmptyState
             compact
@@ -1372,11 +1436,13 @@ function SchemaMappingPanel({ result, roomContext }) {
         { label: "Secondary lane", value: roomContext.secondary },
         {
           label: "Mapped columns",
-          value: result ? result.cultivation_mapping.mapped_column_count : "Awaiting facility upload",
+          value: result?.cultivation_mapping
+            ? result.cultivation_mapping.mapped_column_count
+            : result?.columns_detected ?? result?.column_count ?? "Awaiting facility upload",
         },
         {
           label: "Unknown columns",
-          value: result ? result.cultivation_mapping.unknown_column_count : "Awaiting facility upload",
+          value: result?.cultivation_mapping ? result.cultivation_mapping.unknown_column_count : "Awaiting facility upload",
         },
       ]}
       compact
@@ -1390,11 +1456,11 @@ function VerificationPanel({ result }) {
       metrics={[
         {
           label: "Readiness",
-          value: result ? formatReadiness(result.data_quality.readiness) : "Awaiting facility upload",
+          value: result?.data_quality ? formatReadiness(result.data_quality.readiness) : result ? "Processed" : "Awaiting facility upload",
         },
-        { label: "Rows parsed", value: result ? result.row_count : "Monitoring active telemetry feed" },
+        { label: "Rows parsed", value: result ? result.row_count ?? result.rows_processed : "Monitoring active telemetry feed" },
         { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Awaiting additional room telemetry" },
-        { label: "Numeric channels", value: result ? result.data_quality.numeric_column_count : "Live telemetry feed" },
+        { label: "Numeric channels", value: result?.data_quality ? result.data_quality.numeric_column_count : "Live telemetry feed" },
       ]}
       compact
     />
@@ -1407,7 +1473,11 @@ function EvidenceExtractionPanel({ result }) {
       items={[
         {
           title: "Baseline evidence",
-          detail: result ? `${result.baseline_analysis.columns_analyzed} columns analyzed.` : "Monitoring active telemetry feed.",
+          detail: result?.baseline_analysis
+            ? `${result.baseline_analysis.columns_analyzed} columns analyzed.`
+            : result
+              ? `${result.rows_processed ?? result.row_count ?? 0} rows processed.`
+              : "Monitoring active telemetry feed.",
           tone: result ? "nominal" : "info",
         },
         {
@@ -2758,7 +2828,7 @@ function buildRoomObservations(result, roomContext) {
 }
 
 function deriveRoomContext(result) {
-  if (!result) {
+  if (!result || !Array.isArray(result.columns)) {
     return {
       primary: "Flower Room 1",
       secondary: "Flower Room 2",
@@ -2826,14 +2896,17 @@ function deriveFacilityStability(result) {
   return "Monitoring active telemetry feed";
 }
 
-function buildIntakeStages(result, uploadState, roomContext) {
+function buildIntakeStages(result, uploadState, roomContext, job = null) {
+  const activeIndex = uploadStageIndex(uploadState);
   return INTAKE_STAGES.map((stage, index) => {
-    if (uploadState === "uploading") {
+    if (job || ["uploading", "queued", "parsing", "running_sii", "writing_state", "failed"].includes(uploadState)) {
       return {
         title: stage,
-        detail: index === 0 ? "Batch is being validated." : "Pending upstream stage completion.",
-        state: index === 0 ? "active" : "queued",
-        tone: index === 0 ? "info" : "review",
+        detail: uploadStageDetail(stage, index, job, roomContext),
+        state: uploadState === "failed"
+          ? index <= activeIndex ? "failed" : "queued"
+          : index < activeIndex ? "complete" : index === activeIndex ? "active" : "queued",
+        tone: uploadState === "failed" && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
       };
     }
 
@@ -2847,10 +2920,12 @@ function buildIntakeStages(result, uploadState, roomContext) {
     }
 
     const details = [
-      `${result.filename} received for in-memory parsing.`,
-      `${result.columns.length} headers detected across the uploaded batch.`,
+      `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
+      `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
       `Room context resolved as ${roomContext.primary}.`,
-      `${result.engine_result ? "Evidence extracted and findings generated." : "Evidence generation pending."}`,
+      "SII engine processing complete.",
+      "Evidence and facility state were written.",
+      "Facility Command refreshed from latest uploaded state.",
     ];
 
     return {
@@ -2860,6 +2935,38 @@ function buildIntakeStages(result, uploadState, roomContext) {
       tone: index === 3 && !result.engine_result ? "review" : "nominal",
     };
   });
+}
+
+function uploadStageIndex(uploadState) {
+  return {
+    uploading: 0,
+    queued: 0,
+    parsing: 1,
+    running_sii: 3,
+    writing_state: 4,
+    complete: 5,
+    failed: 4,
+  }[uploadState] ?? 0;
+}
+
+function uploadStageDetail(stage, index, job, roomContext) {
+  if (job?.status === "failed" && index === uploadStageIndex("failed")) {
+    return job.error ?? "Telemetry processing failed.";
+  }
+  if (job?.status === "complete") {
+    return index === 5
+      ? "Facility Command is using the latest uploaded runner state."
+      : "Stage complete.";
+  }
+  const details = [
+    job?.message ?? "Telemetry batch received.",
+    job?.status === "parsing" ? job.progress_label : "Waiting for header and schema detection.",
+    `Room context will resolve against ${roomContext.primary}.`,
+    job?.status === "running_sii" ? job.progress_label : "SII engine processing will start after parsing.",
+    job?.status === "writing_state" ? job.progress_label : "Evidence and runner state will be written after SII processing.",
+    "Completion will refresh Facility Command.",
+  ];
+  return details[index] ?? stage;
 }
 
 function systemRoomContext(systemName, roomContext) {
@@ -2885,10 +2992,22 @@ function formatCategory(category) {
 
 function uploadStateMessage(uploadState) {
   if (uploadState === "uploading") {
-    return "Validation in progress";
+    return "Telemetry batch received";
+  }
+  if (uploadState === "queued") {
+    return "Processing queued";
+  }
+  if (uploadState === "parsing") {
+    return "Header and schema detection";
+  }
+  if (uploadState === "running_sii") {
+    return "SII engine processing";
+  }
+  if (uploadState === "writing_state") {
+    return "Writing evidence state";
   }
   if (uploadState === "complete") {
-    return "Batch validation complete";
+    return "Batch processing complete";
   }
   if (uploadState === "error") {
     return "Validation needs attention";

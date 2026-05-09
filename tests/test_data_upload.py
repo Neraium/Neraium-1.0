@@ -1,9 +1,18 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.services.sii_runner import STATE_PATH
+from app.services.upload_jobs import process_csv_content, read_job
 
 
-def test_upload_valid_csv_returns_preview_metadata() -> None:
+def post_csv(client: TestClient, filename: str, content: str):
+    return client.post(
+        "/api/data/upload",
+        files={"file": (filename, content, "text/csv")},
+    )
+
+
+def test_upload_returns_accepted_job_id() -> None:
     client = TestClient(create_app())
     csv_content = (
         "timestamp,room,temperature,humidity\n"
@@ -11,403 +20,126 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
         "2026-05-01T08:05:00Z,Flower 1,75.6,59\n"
     )
 
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("sensor-export.csv", csv_content, "text/csv")},
-    )
+    response = post_csv(client, "sensor-export.csv", csv_content)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
+    assert payload["job_id"]
+    assert payload["status"] == "queued"
     assert payload["filename"] == "sensor-export.csv"
-    assert payload["row_count"] == 2
-    assert payload["column_count"] == 4
-    assert payload["columns"] == ["timestamp", "room", "temperature", "humidity"]
-    assert payload["detected_timestamp_column"] == "timestamp"
-    assert payload["warnings"] == []
-    assert payload["data_quality"]["readiness"] == "ready"
-    assert payload["data_quality"]["numeric_column_count"] == 2
-    assert payload["timestamp_profile"]["estimated_sample_interval"] == "5 minutes"
-    assert payload["cultivation_mapping"]["categories"]["temperature"] == ["temperature"]
-    assert payload["cultivation_mapping"]["categories"]["humidity"] == ["humidity"]
-    assert payload["engine_result"]["engine_version"] == "neraium-cultivation-v1"
-    assert payload["engine_result"]["audit_trace"]
-    assert payload["driver_attribution"]["driver_category"]
-    assert payload["driver_attribution"]["supporting_evidence"]
-    assert payload["sii_intelligence"]["source"] == "sii_engine"
-    assert payload["sii_intelligence"]["mode"] == "live"
-    assert payload["sii_intelligence"]["primary_driver"]
-    assert payload["sii_intelligence"]["what_to_check"]
-    assert payload["sii_intelligence"]["rooms"][0]["intervention_window"]
-    assert payload["sii_runner_result"]["runner_used"] is True
-    assert payload["sii_runner_result"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
-    assert payload["sii_runner_result"]["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
-    assert payload["sii_runner_result"]["rows_processed"] == 2
-    assert payload["sii_runner_result"]["columns_used"] == ["temperature", "humidity"]
-    assert payload["sii_runner_result"]["sensor_vector_count"] == 2
-    assert payload["sii_runner_result"]["latest_state"]["regime"]
-    assert payload["sii_runner_result"]["evidence"]
-    assert payload["sii_runner_result"]["errors"] == []
-    assert payload["processing_trace"]["sii_pipeline_ran"] is True
-    assert payload["processing_trace"]["engine_module"] == "app.engine.analysis"
-    assert payload["processing_trace"]["engine_version"] == "neraium-cultivation-v1"
-    assert payload["processing_trace"]["driver_attribution_ran"] is True
-    assert payload["processing_trace"]["rows_processed"] == 2
-    assert payload["processing_trace"]["columns_analyzed"] == 0
-    assert payload["processing_trace"]["evidence_count"] == len(payload["engine_result"]["evidence"])
-    assert payload["processing_trace"]["git_commit"]
-    assert payload["validation_provenance"]["same_engine_family"] is True
-    assert payload["validation_provenance"]["same_exact_validation_runner"] is False
-    assert payload["preview_rows"][0] == {
-        "timestamp": "2026-05-01T08:00:00Z",
-        "room": "Flower 1",
-        "temperature": "75.2",
-        "humidity": "58",
-    }
+    assert payload["message"] == "Telemetry batch received. Processing started."
+    assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
+    assert payload["file_size_bytes"] > 0
 
 
-def test_upload_profiles_numeric_columns() -> None:
+def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     client = TestClient(create_app())
-    csv_content = (
-        "timestamp,temperature,humidity\n"
-        "2026-05-01T08:00:00Z,74,55\n"
-        "2026-05-01T08:05:00Z,76,60\n"
-        "2026-05-01T08:10:00Z,80,65\n"
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.1:.1f},{58 + index * 0.2:.1f}"
+        for index in range(8)
     )
 
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("numeric-profile.csv", csv_content, "text/csv")},
+    upload = post_csv(client, "ready-report.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    job_id = upload.json()["job_id"]
+    status = client.get(f"/api/data/upload-status/{job_id}")
+
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["job_id"] == job_id
+    assert payload["status"] == "complete"
+    assert payload["progress_label"] == "Telemetry processing complete."
+    assert payload["rows_processed"] == 8
+    assert payload["columns_detected"] == 4
+    assert payload["runner_used"] is True
+    assert payload["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
+    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
+    assert payload["error"] is None
+    assert payload["result_summary"]["filename"] == "ready-report.csv"
+    assert STATE_PATH.exists()
+
+
+def test_upload_status_can_return_queued_state() -> None:
+    client = TestClient(create_app())
+    response = post_csv(client, "queued.csv", "timestamp,temperature,humidity\n2026-05-01T08:00:00Z,74,55\n")
+    job = read_job(response.json()["job_id"])
+
+    assert job is not None
+    job["status"] = "queued"
+    from app.services.upload_jobs import write_job
+
+    write_job(job)
+    status = client.get(f"/api/data/upload-status/{job['job_id']}")
+
+    assert status.status_code == 200
+    assert status.json()["status"] == "queued"
+
+
+def test_upload_status_can_return_failed_state() -> None:
+    client = TestClient(create_app())
+    response = post_csv(client, "failed.csv", "timestamp,temperature\n2026-05-01T08:00:00Z,74\n")
+    job = read_job(response.json()["job_id"])
+
+    assert job is not None
+    job["status"] = "failed"
+    job["error"] = "Example failure"
+    from app.services.upload_jobs import write_job
+
+    write_job(job)
+    status = client.get(f"/api/data/upload-status/{job['job_id']}")
+
+    assert status.status_code == 200
+    assert status.json()["status"] == "failed"
+    assert status.json()["error"] == "Example failure"
+
+
+def test_latest_upload_endpoint_returns_completed_summary() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,{75 + index},{58 + index}"
+        for index in range(6)
     )
+    post_csv(client, "latest.csv", f"timestamp,temperature,humidity\n{rows}")
+
+    response = client.get("/api/data/latest-upload")
 
     assert response.status_code == 200
     payload = response.json()
-    profiles = {profile["column"]: profile for profile in payload["numeric_profiles"]}
-    assert profiles["temperature"]["min"] == 74
-    assert profiles["temperature"]["max"] == 80
-    assert profiles["temperature"]["average"] == 76.6667
-    assert profiles["temperature"]["missing_count"] == 0
-    assert profiles["temperature"]["missing_percent"] == 0
-    assert profiles["temperature"]["variability"] == "normal"
+    assert payload["source"] == "uploaded"
+    assert payload["last_filename"] == "latest.csv"
+    assert payload["rows_processed"] == 6
+    assert payload["columns_detected"] == 3
+    assert payload["state_available"] is True
 
 
-def test_upload_profiles_missing_values() -> None:
+def test_facility_systems_uses_latest_state_after_upload() -> None:
     client = TestClient(create_app())
-    csv_content = (
-        "timestamp,temperature,humidity\n"
-        "2026-05-01T08:00:00Z,74,55\n"
-        "2026-05-01T08:05:00Z,,\n"
-        "2026-05-01T08:10:00Z,80,65\n"
-        "2026-05-01T08:15:00Z,,70\n"
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index},{58 + index}"
+        for index in range(6)
     )
+    post_csv(client, "facility-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
 
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("missing-values.csv", csv_content, "text/csv")},
-    )
+    response = client.get("/api/facility/systems")
 
     assert response.status_code == 200
     payload = response.json()
-    profiles = {profile["column"]: profile for profile in payload["numeric_profiles"]}
-    assert profiles["temperature"]["missing_count"] == 2
-    assert profiles["temperature"]["missing_percent"] == 50
-    assert profiles["humidity"]["missing_count"] == 1
-    assert profiles["humidity"]["missing_percent"] == 25
+    assert payload["intelligence"]["source"] == "uploaded"
+    assert payload["intelligence"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
 
 
-def test_upload_detects_timestamp_profile() -> None:
+def test_one_column_csv_reports_runner_error_without_failed_job() -> None:
     client = TestClient(create_app())
-    csv_content = (
-        "recorded_at,temperature\n"
-        "2026-05-01T08:00:00Z,74\n"
-        "2026-05-01T08:15:00Z,75\n"
-        "2026-05-01T08:30:00Z,76\n"
-    )
+    rows = "\n".join(f"2026-05-01T08:{index:02d}:00Z,{75 + index}" for index in range(6))
 
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("timestamps.csv", csv_content, "text/csv")},
-    )
+    upload = post_csv(client, "one-column.csv", f"timestamp,temperature\n{rows}")
+    status = client.get(upload.json()["status_url"])
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["detected_timestamp_column"] == "recorded_at"
-    assert payload["timestamp_profile"]["first_timestamp"] == "2026-05-01T08:00:00"
-    assert payload["timestamp_profile"]["last_timestamp"] == "2026-05-01T08:30:00"
-    assert payload["timestamp_profile"]["estimated_sample_interval"] == "15 minutes"
-    assert payload["timestamp_profile"]["warnings"] == []
-
-
-def test_upload_marks_readiness_needs_review_for_warnings() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,humidity\n"
-        "2026-05-01T08:00:00Z,55\n"
-        "not-a-time,110\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("needs-review.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["data_quality"]["readiness"] == "needs_review"
-    assert "Timestamp column contains values that could not be parsed." in payload["warnings"]
-    assert (
-        "humidity contains values outside the expected 0-100 humidity range."
-        in payload["warnings"]
-    )
-
-
-def test_upload_marks_header_only_csv_not_ready() -> None:
-    client = TestClient(create_app())
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("header-only.csv", "timestamp,temperature\n", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["row_count"] == 0
-    assert payload["data_quality"]["readiness"] == "not_ready"
-    assert "CSV contains headers but no data rows." in payload["warnings"]
-
-
-def test_upload_baseline_window_calculation() -> None:
-    client = TestClient(create_app())
-    rows = "\n".join(
-        f"2026-05-01T08:{index:02d}:00Z,{70 + index}" for index in range(10)
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("baseline-window.csv", f"timestamp,temperature\n{rows}", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    analysis = response.json()["baseline_analysis"]
-    assert analysis["baseline_window_rows"] == 2
-    assert analysis["recent_window_rows"] == 2
-    assert analysis["columns_analyzed"] == 1
-
-
-def test_upload_detects_upward_baseline_drift() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,temperature\n"
-        "2026-05-01T08:00:00Z,70\n"
-        "2026-05-01T08:05:00Z,70\n"
-        "2026-05-01T08:10:00Z,72\n"
-        "2026-05-01T08:15:00Z,74\n"
-        "2026-05-01T08:20:00Z,90\n"
-        "2026-05-01T08:25:00Z,90\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("upward-drift.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    drift = response.json()["baseline_analysis"]["column_drift"][0]
-    assert drift["baseline_average"] == 70
-    assert drift["recent_average"] == 90
-    assert drift["direction"] == "up"
-    assert drift["drift_flag"] == "review"
-
-
-def test_upload_detects_downward_baseline_drift() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,humidity\n"
-        "2026-05-01T08:00:00Z,80\n"
-        "2026-05-01T08:05:00Z,80\n"
-        "2026-05-01T08:10:00Z,76\n"
-        "2026-05-01T08:15:00Z,72\n"
-        "2026-05-01T08:20:00Z,60\n"
-        "2026-05-01T08:25:00Z,60\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("downward-drift.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    drift = response.json()["baseline_analysis"]["column_drift"][0]
-    assert drift["baseline_average"] == 80
-    assert drift["recent_average"] == 60
-    assert drift["direction"] == "down"
-    assert drift["drift_flag"] == "review"
-
-
-def test_upload_marks_flat_baseline_data_normal() -> None:
-    client = TestClient(create_app())
-    rows = "\n".join(
-        f"2026-05-01T08:{index:02d}:00Z,75" for index in range(6)
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("flat-data.csv", f"timestamp,temperature\n{rows}", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    analysis = response.json()["baseline_analysis"]
-    drift = analysis["column_drift"][0]
-    assert drift["direction"] == "flat"
-    assert drift["drift_flag"] == "normal"
-    assert analysis["overall_assessment"] == "normal"
-
-
-def test_upload_baseline_warns_for_missing_numeric_values() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,temperature\n"
-        "2026-05-01T08:00:00Z,70\n"
-        "2026-05-01T08:05:00Z,\n"
-        "2026-05-01T08:10:00Z,72\n"
-        "2026-05-01T08:15:00Z,74\n"
-        "2026-05-01T08:20:00Z,\n"
-        "2026-05-01T08:25:00Z,90\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("missing-baseline.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    analysis = response.json()["baseline_analysis"]
-    assert analysis["overall_assessment"] == "needs_review"
-    assert (
-        "temperature has missing values in baseline or recent windows."
-        in analysis["warnings"]
-    )
-
-
-def test_upload_baseline_handles_too_few_rows() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,temperature\n"
-        "2026-05-01T08:00:00Z,70\n"
-        "2026-05-01T08:05:00Z,71\n"
-        "2026-05-01T08:10:00Z,72\n"
-        "2026-05-01T08:15:00Z,73\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("too-few-rows.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    analysis = response.json()["baseline_analysis"]
-    assert analysis["columns_analyzed"] == 0
-    assert analysis["overall_assessment"] == "needs_review"
-    assert "At least 5 data rows are needed for baseline comparison." in analysis["warnings"]
-
-
-def test_upload_generates_operator_report_from_ready_data() -> None:
-    client = TestClient(create_app())
-    rows = "\n".join(
-        f"2026-05-01T08:{index:02d}:00Z,75,58" for index in range(10)
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("ready-report.csv", f"timestamp,temperature,humidity\n{rows}", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    report = response.json()["operator_report"]
-    assert report["title"] == "Cultivation Data Upload Report"
-    assert report["data_readiness"] == "ready"
-    assert "usable for initial review" in report["summary"]
-    assert report["time_coverage"]["detected_timestamp_column"] == "timestamp"
-    assert report["key_observations"]
-    assert report["recommended_operator_checks"]
-
-
-def test_upload_report_includes_limitations_when_data_needs_review() -> None:
-    client = TestClient(create_app())
-    csv_content = (
-        "timestamp,humidity\n"
-        "2026-05-01T08:00:00Z,55\n"
-        "not-a-time,110\n"
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("limited-report.csv", csv_content, "text/csv")},
-    )
-
-    assert response.status_code == 200
-    report = response.json()["operator_report"]
-    assert report["data_readiness"] == "needs_review"
-    assert any("Evidence is limited" in limitation for limitation in report["limitations"])
-
-
-def test_upload_report_does_not_invent_causes() -> None:
-    client = TestClient(create_app())
-    rows = "\n".join(
-        f"2026-05-01T08:{index:02d}:00Z,{70 + index}" for index in range(10)
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("cause-check.csv", f"timestamp,temperature\n{rows}", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    report_text = str(response.json()["operator_report"]).lower()
-    assert "root cause is" not in report_text
-    assert "caused by" not in report_text
-    assert "will fail" not in report_text
-    assert "yield impact is" not in report_text
-
-
-def test_upload_report_references_only_available_sections() -> None:
-    client = TestClient(create_app())
-    rows = "\n".join(
-        f"2026-05-01T08:{index:02d}:00Z,75" for index in range(6)
-    )
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("sections-used.csv", f"timestamp,temperature\n{rows}", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    source_sections = response.json()["operator_report"]["source_sections_used"]
-    assert source_sections[:4] == [
-        "data_quality",
-        "timestamp_profile",
-        "numeric_profiles",
-        "baseline_analysis",
-    ]
-    assert "cultivation_mapping" in source_sections
-
-
-def test_upload_report_for_empty_profile_does_not_make_unsupported_claims() -> None:
-    client = TestClient(create_app())
-
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("header-only-report.csv", "timestamp,temperature\n", "text/csv")},
-    )
-
-    assert response.status_code == 200
-    report = response.json()["operator_report"]
-    report_text = str(report).lower()
-    assert report["data_readiness"] == "not_ready"
-    assert "does not yet have enough usable structure" in report["summary"]
-    assert "root cause" in report_text
-    assert "predict" in report_text
-    assert "root cause is" not in report_text
-    assert "crop stress prediction" not in report_text
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["status"] == "complete"
+    assert payload["runner_used"] is False
+    assert payload["error"] is None
+    assert payload["result_summary"]["runner_errors"]
 
 
 def test_upload_rejects_invalid_extension() -> None:
@@ -425,10 +157,46 @@ def test_upload_rejects_invalid_extension() -> None:
 def test_upload_rejects_empty_csv() -> None:
     client = TestClient(create_app())
 
-    response = client.post(
-        "/api/data/upload",
-        files={"file": ("empty.csv", "", "text/csv")},
-    )
+    response = post_csv(client, "empty.csv", "")
 
     assert response.status_code == 400
     assert response.json()["detail"] == "CSV file is empty."
+
+
+def test_processing_helper_preserves_profile_metadata() -> None:
+    result = process_csv_content(
+        filename="numeric-profile.csv",
+        content=(
+            "timestamp,temperature,humidity\n"
+            "2026-05-01T08:00:00Z,74,55\n"
+            "2026-05-01T08:05:00Z,76,60\n"
+            "2026-05-01T08:10:00Z,80,65\n"
+        ).encode(),
+    )
+
+    profiles = {profile["column"]: profile for profile in result["numeric_profiles"]}
+    assert result["filename"] == "numeric-profile.csv"
+    assert result["row_count"] == 3
+    assert result["detected_timestamp_column"] == "timestamp"
+    assert profiles["temperature"]["average"] == 76.6667
+    assert result["data_quality"]["readiness"] == "ready"
+    assert result["sii_runner_result"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
+
+
+def test_processing_helper_rejects_empty_csv() -> None:
+    try:
+        process_csv_content(filename="empty.csv", content=b"")
+    except ValueError as exc:
+        assert str(exc) == "CSV file is empty."
+    else:
+        raise AssertionError("Expected empty CSV to raise ValueError.")
+
+
+def test_health_endpoint_still_responds_after_upload_job() -> None:
+    client = TestClient(create_app())
+    post_csv(client, "health.csv", "timestamp,temperature,humidity\n2026-05-01T08:00:00Z,74,55\n")
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
