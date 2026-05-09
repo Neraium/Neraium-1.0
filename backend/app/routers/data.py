@@ -18,6 +18,7 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
+from app.services.sii_runner import run_sii_runner
 
 router = APIRouter(tags=["data"])
 
@@ -112,6 +113,16 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         rows_processed=len(data_rows),
         columns_analyzed=baseline_analysis["columns_analyzed"],
     )
+    sii_runner_result = run_sii_runner(
+        columns=columns,
+        rows=data_rows,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=detected_timestamp_column,
+        primary_room=primary_room_from_upload(columns, data_rows),
+        driver_attribution=driver_attribution,
+        engine_result=engine_result,
+        processing_trace=processing_trace,
+    )
 
     return {
         "filename": filename,
@@ -130,6 +141,7 @@ async def upload_csv(file: UploadFile = File(...)) -> dict[str, Any]:
         "engine_result": engine_result,
         "driver_attribution": driver_attribution,
         "sii_intelligence": sii_intelligence,
+        "sii_runner_result": sii_runner_result,
         "processing_trace": processing_trace,
         "validation_provenance": VALIDATION_PROVENANCE,
     }

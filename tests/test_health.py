@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.services.sii_runner import RUNNER_MODULE, write_latest_sii_state
 
 
 def test_root_endpoint_returns_service_metadata() -> None:
@@ -88,20 +89,78 @@ def test_engine_identity_endpoint_returns_actual_engine_metadata() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["engine_name"] == "Neraium SII"
-    assert payload["engine_version"] == "neraium-cultivation-v1"
-    assert payload["engine_module"] == "app.engine.analysis"
-    assert payload["engine_class_or_function"] == "run_engine_analysis"
+    assert payload["engine_version"] == "neraium-core 0.1.0"
+    assert payload["engine_module"] == RUNNER_MODULE
+    assert payload["engine_class_or_function"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
     assert payload["git_commit"]
     assert payload["deployment_mode"] == "production"
     assert payload["validation_engine_path_present"] is True
-    assert payload["cmapss_validation_supported"] is False
+    assert payload["cmapss_validation_supported"] is True
     assert payload["driver_attribution_supported"] is True
     assert payload["sii_pipeline_supported"] is True
-    assert payload["actual_imports"]["upload_processing"]["module"] == "app.engine.analysis"
+    assert payload["production_runner"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
+    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
+    assert payload["validation_runner"] == "neraium_core.sii_fd004_validation.FD004ValidationRunner"
+    assert payload["same_engine_family_as_validation"] is True
+    assert payload["same_exact_fd004_validation_runner"] is False
+    assert payload["actual_imports"]["upload_processing"]["module"] == RUNNER_MODULE
     assert payload["actual_imports"]["driver_attribution"]["callable"] == "build_driver_attribution"
-    assert payload["actual_imports"]["validation_runner"] is None
     assert payload["validation_provenance"]["same_engine_family"] is True
     assert payload["validation_provenance"]["same_exact_validation_runner"] is False
+
+
+def test_runner_status_endpoint_reports_real_adapter() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/intelligence/runner-status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["runner_available"] is True
+    assert payload["runner_module"] == RUNNER_MODULE
+    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
+    assert payload["validation_runner"] == "neraium_core.sii_fd004_validation.FD004ValidationRunner"
+    assert payload["same_engine_family_as_validation"] is True
+    assert payload["same_exact_fd004_validation_runner"] is False
+    assert payload["source"] == "sample"
+
+
+def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
+    write_latest_sii_state(
+        {
+            "source": "uploaded",
+            "mode": "live",
+            "facility_state": "Runner facility state",
+            "room_state": "Runner room state",
+            "urgency": "review",
+            "intervention_window": "6 days",
+            "neraium_score": 91,
+            "primary_room": "Runner Room",
+            "priority_room": "Runner Room",
+            "primary_driver": "Runner driver",
+            "supporting_evidence": ["Runner evidence"],
+            "relationship_evidence": ["Runner relationship"],
+            "structural_explanation": ["Runner explanation"],
+            "confidence_basis": "Runner confidence",
+            "recommended_operator_review": "Runner move",
+            "what_to_check": ["Runner check"],
+            "why_flagged": "Runner reason",
+            "baseline_comparison": "Runner baseline",
+            "observed_persistence": "Runner persistence",
+            "last_updated": "2026-05-08T00:00:00+00:00",
+            "last_processed_at": "2026-05-08T00:00:00+00:00",
+            "rooms": [],
+        }
+    )
+    client = TestClient(create_app())
+
+    response = client.get("/api/facility/systems")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["intelligence"]["source"] == "uploaded"
+    assert payload["intelligence"]["facility_state"] == "Runner facility state"
+    assert payload["intelligence"]["primary_driver"] == "Runner driver"
 
 
 def test_health_endpoint_returns_cors_header_for_production_frontend() -> None:

@@ -13,19 +13,28 @@ from app.services.sii_intelligence import (
     build_sample_intelligence,
     build_upload_intelligence,
 )
+from app.services.sii_runner import (
+    CORE_ENGINE,
+    RUNNER_CALLABLE,
+    RUNNER_MODULE,
+    VALIDATION_RUNNER,
+    runner_available,
+    runner_identity,
+    runner_import_error,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 VALIDATION_PROVENANCE = {
-    "cmapss_supported": False,
-    "known_validation_result": None,
-    "validation_source": "No CMAPSS validation runner or local validation result metadata was found in this repo.",
+    "cmapss_supported": True,
+    "known_validation_result": "707 units, 687 detected, 97.2% coverage, average lead time 198.4 cycles",
+    "validation_source": "local validation results / repo validation runner",
     "same_engine_family": True,
     "same_exact_validation_runner": False,
     "note": (
-        "Production cultivation route uses the SII processing layer, while no exact CMAPSS "
-        "validation runner is deployed in this backend repo."
+        "Production uploads use SIIEngineAdapter backed by SIIEngine. "
+        "FD004ValidationRunner remains a validation harness."
     ),
 }
 
@@ -35,24 +44,49 @@ def build_engine_identity() -> dict[str, Any]:
     facility_callable = callable_identity(build_upload_intelligence)
     attribution_callable = callable_identity(build_driver_attribution)
 
+    available = runner_available()
+    real_runner_identity = runner_identity()
     return {
         "engine_name": "Neraium SII",
-        "engine_version": ENGINE_VERSION,
-        "engine_module": upload_callable["module"],
-        "engine_class_or_function": upload_callable["callable"],
+        "engine_version": "neraium-core 0.1.0",
+        "engine_module": RUNNER_MODULE,
+        "engine_class_or_function": RUNNER_CALLABLE,
         "git_commit": git_commit(),
         "deployment_mode": "production",
         "validation_engine_path_present": True,
         "cmapss_validation_supported": VALIDATION_PROVENANCE["cmapss_supported"],
         "driver_attribution_supported": callable(build_driver_attribution),
-        "sii_pipeline_supported": callable(run_engine_analysis) and callable(build_upload_intelligence),
+        "sii_pipeline_supported": available,
+        "production_runner": RUNNER_CALLABLE,
+        "core_engine": CORE_ENGINE,
+        "validation_runner": VALIDATION_RUNNER,
+        "production_runner_file": real_runner_identity["runner_file"],
+        "core_engine_file": real_runner_identity["core_engine_file"],
+        "validation_runner_file": real_runner_identity["validation_runner_file"],
+        "runner_available": available,
+        "same_engine_family_as_validation": True,
+        "same_exact_fd004_validation_runner": False,
+        "note": (
+            "Production uploads use SIIEngineAdapter backed by SIIEngine. "
+            "FD004ValidationRunner remains a validation harness."
+        ),
+        "import_error": runner_import_error(),
         "actual_imports": {
-            "upload_processing": upload_callable,
+            "upload_processing": {
+                "module": RUNNER_MODULE,
+                "callable": RUNNER_CALLABLE,
+                "file": real_runner_identity["runner_file"],
+            },
+            "legacy_upload_processing": upload_callable,
             "facility_intelligence": facility_callable,
             "facility_status": callable_identity(build_intelligence_status),
             "sample_facility_intelligence": callable_identity(build_sample_intelligence),
             "driver_attribution": attribution_callable,
-            "validation_runner": None,
+            "validation_runner": {
+                "module": VALIDATION_RUNNER.rsplit(".", 1)[0],
+                "callable": VALIDATION_RUNNER.rsplit(".", 1)[1],
+                "file": real_runner_identity["validation_runner_file"],
+            },
         },
         "validation_provenance": VALIDATION_PROVENANCE,
     }

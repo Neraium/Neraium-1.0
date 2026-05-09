@@ -38,6 +38,15 @@ def test_upload_valid_csv_returns_preview_metadata() -> None:
     assert payload["sii_intelligence"]["primary_driver"]
     assert payload["sii_intelligence"]["what_to_check"]
     assert payload["sii_intelligence"]["rooms"][0]["intervention_window"]
+    assert payload["sii_runner_result"]["runner_used"] is True
+    assert payload["sii_runner_result"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
+    assert payload["sii_runner_result"]["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
+    assert payload["sii_runner_result"]["rows_processed"] == 2
+    assert payload["sii_runner_result"]["columns_used"] == ["temperature", "humidity"]
+    assert payload["sii_runner_result"]["sensor_vector_count"] == 2
+    assert payload["sii_runner_result"]["latest_state"]["regime"]
+    assert payload["sii_runner_result"]["evidence"]
+    assert payload["sii_runner_result"]["errors"] == []
     assert payload["processing_trace"]["sii_pipeline_ran"] is True
     assert payload["processing_trace"]["engine_module"] == "app.engine.analysis"
     assert payload["processing_trace"]["engine_version"] == "neraium-cultivation-v1"

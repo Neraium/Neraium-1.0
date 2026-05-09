@@ -430,6 +430,7 @@ function App() {
         operatorActions={operatorActions}
         onOperatorAction={handleOperatorAction}
         engineIdentity={engineIdentity}
+        intelligenceStatus={intelligenceStatus}
       />
     );
   }
@@ -1196,6 +1197,7 @@ function IntelligenceConsoleWorkspace({
   operatorActions,
   onOperatorAction,
   engineIdentity,
+  intelligenceStatus,
 }) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
@@ -1295,36 +1297,49 @@ function IntelligenceConsoleWorkspace({
         subtitle="Production SII pipeline provenance."
         className="span-12"
       >
-        <EngineIdentityPanel identity={engineIdentity} latestUploadResult={latestUploadResult} />
+        <EngineIdentityPanel
+          identity={engineIdentity}
+          latestUploadResult={latestUploadResult}
+          intelligenceStatus={intelligenceStatus}
+        />
       </Panel>
     </div>
   );
 }
 
-function EngineIdentityPanel({ identity, latestUploadResult }) {
+function EngineIdentityPanel({ identity, latestUploadResult, intelligenceStatus }) {
   const trace = latestUploadResult?.processing_trace ?? null;
+  const runnerResult = latestUploadResult?.sii_runner_result ?? null;
   const version = identity?.engine_version ?? trace?.engine_version ?? "Awaiting backend identity";
-  const modulePath = identity?.engine_module ?? trace?.engine_module ?? "Awaiting backend identity";
+  const modulePath = identity?.production_runner ?? identity?.engine_module ?? runnerResult?.runner_module ?? "Awaiting backend identity";
+  const source = intelligenceStatus?.source ?? "fallback";
+  const lastProcessed = intelligenceStatus?.last_processed_at ?? "Awaiting upload";
+  const runnerAvailable = identity?.runner_available ?? runnerResult?.runner_used ?? false;
 
   return (
     <details className="engine-identity-panel">
       <summary>
         <span>
           <strong>{identity?.engine_name ?? "Neraium SII"}</strong>
-          <small>Source: production SII pipeline</small>
+          <small>{runnerAvailable ? "Production SII runner available" : "Production SII runner pending"}</small>
         </span>
-        <span>{version}</span>
+        <span>{source}</span>
       </summary>
       <MetricGrid
         metrics={[
           { label: "Engine version", value: version },
-          { label: "Engine module", value: modulePath },
-          { label: "Callable", value: identity?.engine_class_or_function ?? "Awaiting backend identity" },
-          { label: "Git commit", value: identity?.git_commit ?? trace?.git_commit ?? "Awaiting backend identity" },
+          { label: "Core engine", value: identity?.core_engine ?? runnerResult?.core_engine ?? "SIIEngine" },
+          { label: "Production runner", value: modulePath },
+          { label: "Source", value: source },
+          { label: "Last processed", value: lastProcessed },
+          {
+            label: "Validation family",
+            value: identity?.same_engine_family_as_validation ? "Yes" : "Pending",
+          },
         ]}
       />
       <div className="evidence-console evidence-console--static">
-        {(trace ? processingTraceLines(trace) : ["processing_trace=awaiting_upload"]).map((line) => (
+        {(runnerResult ? runnerTraceLines(runnerResult) : trace ? processingTraceLines(trace) : ["processing_trace=awaiting_upload"]).map((line) => (
           <div className="evidence-console__line" key={line}>{line}</div>
         ))}
       </div>
@@ -4391,6 +4406,19 @@ function processingTraceLines(trace) {
     `columns_analyzed=${trace.columns_analyzed ?? 0}`,
     `evidence_count=${trace.evidence_count ?? 0}`,
     `git_commit=${trace.git_commit ?? "unknown"}`,
+  ];
+}
+
+function runnerTraceLines(result) {
+  return [
+    `runner_used=${Boolean(result.runner_used)}`,
+    `runner_module=${result.runner_module ?? "unknown"}`,
+    `core_engine=${result.core_engine ?? "unknown"}`,
+    `rows_processed=${result.rows_processed ?? 0}`,
+    `columns_used=${Array.isArray(result.columns_used) ? result.columns_used.length : 0}`,
+    `sensor_vector_count=${result.sensor_vector_count ?? 0}`,
+    `latest_regime=${result.latest_state?.regime ?? result.output_summary?.latest_regime ?? "unknown"}`,
+    `same_exact_fd004_validation_runner=false`,
   ];
 }
 

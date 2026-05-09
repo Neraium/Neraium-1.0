@@ -3,13 +3,14 @@ from typing import Any
 from fastapi import APIRouter
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import build_intelligence_status, build_sample_intelligence
+from app.services.sii_runner import build_runner_status, read_latest_sii_state
 
 router = APIRouter(tags=["facility"])
 
 
 @router.get("/facility/systems")
 def read_facility_systems() -> dict[str, Any]:
-    intelligence = build_sample_intelligence()
+    intelligence = read_latest_sii_state() or build_sample_intelligence()
     return {
         "systems": [
             {
@@ -53,9 +54,14 @@ def read_facility_systems() -> dict[str, Any]:
 
 @router.get("/intelligence/status")
 def read_intelligence_status() -> dict[str, Any]:
-    return build_intelligence_status(build_sample_intelligence())
+    return build_intelligence_status(read_latest_sii_state() or build_sample_intelligence())
 
 
 @router.get("/intelligence/engine-identity")
 def read_engine_identity() -> dict[str, Any]:
     return build_engine_identity()
+
+
+@router.get("/intelligence/runner-status")
+def read_runner_status() -> dict[str, Any]:
+    return build_runner_status()

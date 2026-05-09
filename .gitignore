@@ -37,3 +37,4 @@ results/
 uploads/
 *.csv
 *.jsonl
+backend/app/runtime/latest_sii_state.json

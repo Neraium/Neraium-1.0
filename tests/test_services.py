@@ -11,6 +11,25 @@ from app.services.data_quality import (
 )
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
+from app.services.sii_runner import (
+    CORE_ENGINE,
+    RUNNER_MODULE,
+    VALIDATION_RUNNER,
+    build_runner_status,
+    runner_available,
+)
+
+
+def test_sii_runner_import_status_reports_real_modules() -> None:
+    status = build_runner_status()
+
+    assert runner_available() is True
+    assert status["runner_available"] is True
+    assert status["runner_module"] == RUNNER_MODULE
+    assert status["core_engine"] == CORE_ENGINE
+    assert status["validation_runner"] == VALIDATION_RUNNER
+    assert status["same_engine_family_as_validation"] is True
+    assert status["same_exact_fd004_validation_runner"] is False
 
 
 def test_csv_parser_returns_columns_rows_and_preview() -> None:
