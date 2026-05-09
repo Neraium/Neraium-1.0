@@ -1,17 +1,19 @@
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 
+from app.core.security import require_api_access
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
     create_upload_job,
+    delete_upload_file,
     latest_completed_job_summary,
     process_upload_job,
     read_job,
 )
 
-router = APIRouter(tags=["data"])
+router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
 
 
 @router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED)
@@ -25,6 +27,7 @@ async def upload_csv(
 
     metadata = await create_upload_job(file)
     if metadata["file_size_bytes"] == 0:
+        delete_upload_file(metadata)
         raise HTTPException(status_code=400, detail="CSV file is empty.")
 
     background_tasks.add_task(process_upload_job, metadata["job_id"])

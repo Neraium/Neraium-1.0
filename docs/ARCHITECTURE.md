@@ -8,7 +8,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
 - Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, deterministic Neraium SII v1 engine output, and deterministic operator report generation.
 
-This scaffold intentionally does not include authentication, a database, cloud deployment, assistant features, or legacy data schemas.
+This scaffold intentionally does not include user accounts, a database, cloud deployment automation, assistant features, or legacy data schemas. It does include a backend-enforced shared access code for private pilot gating.
 
 ## Backend
 
@@ -27,7 +27,7 @@ Initial endpoints:
 - `GET /api/health` reports API availability.
 - `GET /api/app` returns basic application metadata.
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, engine result, operator report, data quality, warnings, and readiness without permanent storage.
+- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, engine result, operator report, data quality, warnings, and readiness. Uploaded CSV files are deleted after processing; job metadata and latest SII state are retained under the configured runtime directory.
 
 The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
 
@@ -53,7 +53,7 @@ Current frontend sections:
 - Data Upload validates CSV exports from historical facility data and sensor systems, then displays cultivation mapping, data quality, time range, numeric column profiles, baseline comparison, Neraium SII v1 engine result, operator report, columns, warnings, readiness, and preview rows.
 - Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report, and shows the latest generated upload report for the current frontend session when one exists.
 
-CSV ingestion currently parses uploaded files in memory only. It does not persist data, create facility records, or run non-deterministic analysis. Cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, and operator reports are deterministic and limited to uploaded cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window.
+CSV ingestion streams uploaded files into a transient runtime upload file, processes representative windows for large batches, and deletes the uploaded CSV after completion or failure. It persists only job metadata and latest SII state in the configured runtime directory. It does not create facility records or run non-deterministic analysis. Cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, and operator reports are deterministic and limited to uploaded cultivation sensor exports. Cultivation mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window.
 
 Neraium SII v1 treats the upload as cultivation system behavior rather than generic anomaly detection. It groups evidence by cultivation category, counts corroborating numeric signals, evaluates whether recent-window drift appears persistent within the uploaded rows, and returns an audit trace with baseline/recent windows, columns analyzed, columns skipped, relationship checks attempted, and relationship checks skipped with reasons. Engine output and reports do not predict failures, crop stress, yield impact, or root cause.
 
@@ -72,7 +72,7 @@ Runtime configuration is centralized in `backend/app/core/config.py` for backend
 
 Future work should add capabilities in small, explicit layers:
 
-- Authentication when pilot access requirements are defined.
+- User identity and role-based authorization when pilot access grows beyond a shared private access code.
 - Persistence when the first durable customer data model is defined.
 - Deployment configuration when the target environment is selected.
 - Controlled environment operations workflows once the API contracts are clear.

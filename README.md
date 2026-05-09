@@ -45,7 +45,9 @@ Backend configuration is read from environment variables with local defaults:
 - `APP_ENV=development`
 - `BACKEND_HOST=127.0.0.1`
 - `BACKEND_PORT=8010`
-- `CORS_ORIGINS=https://app.neraium.com`
+- `CORS_ORIGINS=http://127.0.0.1:3010,http://localhost:3010,https://app.neraium.com`
+- `NERAIUM_API_ACCESS_CODE=neraium-dev`
+- `NERAIUM_RUNTIME_DIR=backend/app/runtime`
 
 ## Frontend Setup
 
@@ -64,7 +66,7 @@ Current frontend sections:
 - Data Upload with CSV validation, cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, operator report, and preview
 - Reports
 
-CSV uploads are parsed in memory for validation, preview, cultivation column mapping, lightweight data profiling, simple baseline comparison, a deterministic Neraium SII v1 engine result, and a plain-English operator report only. The upload response includes data quality, timestamp range, cultivation mapping, numeric column profiles, baseline versus recent averages, `engine_result`, warnings, readiness, and `operator_report`. `engine_result` includes system-level evidence, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details. Files are not stored permanently, and no non-deterministic analysis is run at this stage.
+CSV uploads are parsed for validation, preview, cultivation column mapping, lightweight data profiling, simple baseline comparison, a deterministic Neraium SII v1 engine result, and a plain-English operator report only. Uploaded CSV files are deleted after the job completes or fails; job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. The upload response includes data quality, timestamp range, cultivation mapping, numeric column profiles, baseline versus recent averages, `engine_result`, warnings, readiness, and `operator_report`. `engine_result` includes system-level evidence, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details. No non-deterministic analysis is run at this stage.
 
 ## Tests
 

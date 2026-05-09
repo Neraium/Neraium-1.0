@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import UploadFile
 
+from app.core.config import get_settings
 from app.engine import run_engine_analysis
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
@@ -30,7 +31,7 @@ from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner
 
 
-RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
+RUNTIME_DIR = get_settings().runtime_dir
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
@@ -54,6 +55,20 @@ PROGRESS_LABELS = {
 def ensure_runtime_dirs() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     JOB_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def delete_upload_file(metadata: dict[str, Any] | None) -> None:
+    if not metadata:
+        return
+    raw_path = metadata.get("file_path")
+    if not raw_path:
+        return
+    try:
+        path = Path(raw_path)
+        if path.exists() and path.is_file():
+            path.unlink()
+    except OSError:
+        logger.warning("upload_file_cleanup_failed job_id=%s", metadata.get("job_id"))
 
 
 def now_iso() -> str:
@@ -222,6 +237,8 @@ def process_upload_job(job_id: str) -> None:
             processing_duration_seconds=round(time.perf_counter() - started, 4),
             error=f"{type(exc).__name__}: {exc}",
         )
+    finally:
+        delete_upload_file(metadata)
 
 
 def process_csv_content(

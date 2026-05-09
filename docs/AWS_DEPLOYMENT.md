@@ -45,9 +45,13 @@ APP_ENV=production
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8080
 CORS_ORIGINS=https://<amplify-frontend-domain>
+NERAIUM_API_ACCESS_CODE=<private-pilot-access-code>
+NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime
 ```
 
-Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, or AI/LLM configuration.
+Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, or AI/LLM configuration. The backend enforces `X-Neraium-Access-Code` on protected app endpoints. `/api/health` remains public for service health checks. The shared access code is acceptable only for a private pilot; replace it with user identity and server-side sessions before broader customer access.
+
+For production ECS, mount `NERAIUM_RUNTIME_DIR` to durable shared storage such as EFS if upload job status and latest SII state must survive task replacement or multiple replicas. A single ephemeral container filesystem is acceptable only for local development and throwaway demos.
 
 ## Frontend: AWS Amplify Hosting
 
@@ -68,12 +72,13 @@ Amplify setup notes:
 3. Use `npm install` for dependency installation.
 4. Use `npm run build` as the build command.
 5. Publish the `frontend/dist` directory.
-6. Set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL.
+6. Set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL and `VITE_APP_ACCESS_CODE` to the private pilot access code.
 
 Required frontend environment variable:
 
 ```text
 VITE_API_BASE_URL=https://<ecs-backend-url>
+VITE_APP_ACCESS_CODE=<private-pilot-access-code>
 ```
 
 The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_URL` is not set.
@@ -85,8 +90,8 @@ The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_U
 3. Deploy the backend through Amazon ECS Express Mode / ECS Fargate.
 4. Confirm `https://<ecs-backend-url>/api/health` works.
 5. Deploy the frontend through AWS Amplify Hosting.
-6. Set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify.
-7. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
+6. Set `VITE_API_BASE_URL=https://<ecs-backend-url>` and `VITE_APP_ACCESS_CODE=<private-pilot-access-code>` in Amplify.
+7. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` and `NERAIUM_API_ACCESS_CODE=<private-pilot-access-code>` in ECS.
 8. Test the CSV upload flow from the live frontend.
 
 ## Local Validation Commands
@@ -123,4 +128,4 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health
 
 ## Deployment Boundaries
 
-This preparation intentionally does not add authentication, database persistence, object storage, deployment automation, AWS infrastructure templates, or changes to API response shapes.
+This preparation intentionally does not add user accounts, database persistence, object storage, deployment automation, AWS infrastructure templates, or changes to API response shapes.

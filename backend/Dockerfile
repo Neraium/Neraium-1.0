@@ -12,6 +12,6 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY app ./app
 COPY neraium_core ./neraium_core
 
-EXPOSE 80
+EXPOSE 8080
 
-CMD ["sh", "-c", "python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-80}"]
+CMD ["sh", "-c", "python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-8080}"]

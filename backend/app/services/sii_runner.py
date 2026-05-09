@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
+
 import numpy as np
 
 
@@ -16,7 +18,7 @@ RUNNER_MODULE = "neraium_core.sii_engine_adapter.SIIEngineAdapter"
 RUNNER_CALLABLE = "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
 CORE_ENGINE = "neraium_core.sii_engine_unified.SIIEngine"
 VALIDATION_RUNNER = "neraium_core.sii_fd004_validation.FD004ValidationRunner"
-STATE_PATH = Path(__file__).resolve().parents[1] / "runtime" / "latest_sii_state.json"
+STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
 STATE_REQUIRED_FIELDS = {
     "facility_state",
     "rooms",

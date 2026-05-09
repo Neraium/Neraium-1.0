@@ -5,6 +5,7 @@ import {
   APP_ACCESS_CODE,
   APP_ACCESS_CONFIG_WARNING,
   HAS_APP_ACCESS_CODE,
+  apiFetch,
 } from "./config";
 import "./styles.css";
 
@@ -96,11 +97,15 @@ const DEMO_ROOMS = [
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
 const ACCESS_SESSION_KEY = "neraium_access_granted";
+const ACCESS_CODE_SESSION_KEY = "neraium_access_code";
 const OPERATIONAL_CADENCE_MS = 30000;
 
 function App() {
   const [hasAccess, setHasAccess] = useState(() => (
     HAS_APP_ACCESS_CODE && window.sessionStorage.getItem(ACCESS_SESSION_KEY) === "true"
+  ));
+  const [apiAccessCode, setApiAccessCode] = useState(() => (
+    window.sessionStorage.getItem(ACCESS_CODE_SESSION_KEY) || APP_ACCESS_CODE
   ));
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
@@ -185,7 +190,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/facility/systems`);
+      const response = await apiFetch("/api/facility/systems", { accessCode: apiAccessCode });
       if (!response.ok) {
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -208,7 +213,7 @@ function App() {
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;
     }
-  }, [hasAccess]);
+  }, [apiAccessCode, hasAccess]);
 
   const loadEngineIdentity = useCallback(async () => {
     if (!hasAccess) {
@@ -216,7 +221,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/intelligence/engine-identity`);
+      const response = await apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode });
       if (!response.ok) {
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -227,7 +232,7 @@ function App() {
       setEngineIdentity(null);
       return false;
     }
-  }, [hasAccess]);
+  }, [apiAccessCode, hasAccess]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
@@ -340,13 +345,18 @@ function App() {
     }));
   }
 
-  function handleAccessGranted() {
+  function handleAccessGranted(accessCode) {
+    const normalizedAccessCode = accessCode.trim();
     window.sessionStorage.setItem(ACCESS_SESSION_KEY, "true");
+    window.sessionStorage.setItem(ACCESS_CODE_SESSION_KEY, normalizedAccessCode);
+    setApiAccessCode(normalizedAccessCode);
     setHasAccess(true);
   }
 
   function handleLockApp() {
     window.sessionStorage.removeItem(ACCESS_SESSION_KEY);
+    window.sessionStorage.removeItem(ACCESS_CODE_SESSION_KEY);
+    setApiAccessCode(APP_ACCESS_CODE);
     setHasAccess(false);
     setIsWorkspaceMenuOpen(false);
   }
@@ -388,6 +398,7 @@ function App() {
       return (
         <DataIntakeWorkspace
           latestUploadResult={latestUploadResult}
+          accessCode={apiAccessCode}
           onUploadComplete={async (payload) => {
             if (hasFullUploadResult(payload)) {
               setLatestUploadResult(payload);
@@ -569,7 +580,7 @@ function AccessGate({ onAccessGranted, configWarning }) {
     }
 
     setAccessError("");
-    onAccessGranted();
+    onAccessGranted(accessCode);
   }
 
   return (
@@ -909,7 +920,7 @@ function FacilitySystemsWorkspace({
   );
 }
 
-function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps }) {
+function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete, roomContext, liveOps }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -939,7 +950,8 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     setUploadJob(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/data/upload`, {
+      const response = await apiFetch("/api/data/upload", {
+        accessCode,
         method: "POST",
         body: formData,
       });
@@ -964,7 +976,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
 
   async function pollUploadStatus(jobId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/data/upload-status/${jobId}`);
+      const response = await apiFetch(`/api/data/upload-status/${jobId}`, { accessCode });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -976,7 +988,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       setUploadState(nextStatus);
 
       if (nextStatus === "complete") {
-        const latestResponse = await fetch(`${API_BASE_URL}/api/data/latest-upload`);
+        const latestResponse = await apiFetch("/api/data/latest-upload", { accessCode });
         const latestPayload = latestResponse.ok ? await latestResponse.json() : payload.result_summary;
         const completedPayload = {
           ...(latestPayload ?? {}),

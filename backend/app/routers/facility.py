@@ -1,11 +1,12 @@
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.core.security import require_api_access
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import build_intelligence_status, build_sample_intelligence
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 
-router = APIRouter(tags=["facility"])
+router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 
 
 @router.get("/facility/systems")

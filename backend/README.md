@@ -31,9 +31,11 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `APP_ENV` defaults to `development`.
 - `BACKEND_HOST` defaults to `127.0.0.1`.
 - `BACKEND_PORT` defaults to `8010`.
-- `CORS_ORIGINS` defaults to `https://app.neraium.com`.
+- `CORS_ORIGINS` defaults to local frontend origins and `https://app.neraium.com`.
+- `NERAIUM_API_ACCESS_CODE` defaults to `neraium-dev` outside production and is required in production.
+- `NERAIUM_RUNTIME_DIR` defaults to `backend/app/runtime`.
 
-For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, and `CORS_ORIGINS` to the deployed Amplify frontend origin.
+For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `NERAIUM_API_ACCESS_CODE` to the same private access code configured in the frontend, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path.
 
 ## Container Build
 
@@ -51,7 +53,7 @@ docker run --rm -p 8080:8080 neraium-backend:local
 - `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
 - `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, deterministic Neraium SII v1 engine result, warnings, data readiness, and a plain-English operator report.
 
-CSV uploads are parsed in memory only. The backend does not save uploaded files permanently. Cultivation mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. Neraium SII v1 is deterministic and returns signals, system-level evidence, corroboration level, persistence assessment, recommended checks, limitations, and audit trace without prediction or root-cause claims.
+Uploaded CSV files are deleted after processing completes or fails. Job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. Cultivation mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. Neraium SII v1 is deterministic and returns signals, system-level evidence, corroboration level, persistence assessment, recommended checks, limitations, and audit trace without prediction or root-cause claims.
 
 ## Tests
 
