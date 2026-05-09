@@ -1268,6 +1268,16 @@ function TelemetryCardGrid({ cards, compact = false }) {
           <strong>{card.primary}</strong>
           <p>{card.secondary}</p>
           <MiniSeries values={card.series} tone={card.tone} />
+          {Array.isArray(card.technicalDetails) && card.technicalDetails.length > 0 && (
+            <details className="technical-detail-panel technical-detail-panel--card">
+              <summary>View evidence</summary>
+              <div className="technical-detail-panel__lines">
+                {card.technicalDetails.slice(0, 5).map((line, index) => (
+                  <code key={`${line}-${index}`}>{line}</code>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       ))}
     </div>
@@ -1372,6 +1382,16 @@ function RelationshipMonitor({ rows }) {
             </div>
             <strong>{relationshipDetail(row)}</strong>
             <p>{relationshipConsistencyLabel(row)}</p>
+            {Array.isArray(row.technicalDetails) && row.technicalDetails.length > 0 && (
+              <details className="technical-detail-panel technical-detail-panel--compact">
+                <summary>Technical detail</summary>
+                <div className="technical-detail-panel__lines">
+                  {row.technicalDetails.slice(0, 4).map((line, detailIndex) => (
+                    <code key={`${line}-${detailIndex}`}>{line}</code>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         );
       })}
@@ -1588,10 +1608,17 @@ function WhyPanel({
   }
 
   const confidenceBasis = item.confidenceBasis ?? buildConfidenceBasis(item, findings);
-  const supportingEvidence = item.supportingEvidence ?? item.drivers ?? findings.map((entry) => entry.detail).slice(0, 3);
+  const supportingEvidence = Array.isArray(item.supportingEvidence)
+    ? item.supportingEvidence
+    : Array.isArray(item.drivers)
+      ? item.drivers
+      : (findings ?? []).map((entry) => entry.detail).filter(Boolean).slice(0, 3);
   const contributingSignals = item.contributingSignals ?? [];
-  const structuralExplanation = item.structuralExplanation ?? buildStructuralExplanation(item);
+  const structuralExplanation = Array.isArray(item.structuralExplanation) && item.structuralExplanation.length > 0
+    ? item.structuralExplanation
+    : buildStructuralExplanation(item);
   const guidance = buildGuidanceForItem(item);
+  const technicalDetails = Array.isArray(item.technicalDetails) ? item.technicalDetails : [];
 
   return (
     <div className={`why-panel ${compact ? "why-panel--compact" : ""}`}>
@@ -1675,11 +1702,22 @@ function WhyPanel({
       <div className="why-panel__section guidance-checks">
         <span className="section-token">What to check</span>
         <ul>
-          {guidance.whatToCheck.slice(0, compact ? 3 : 4).map((check) => (
+          {(guidance.whatToCheck ?? ["Continue monitoring"]).slice(0, compact ? 3 : 4).map((check) => (
             <li key={check}>{check}</li>
           ))}
         </ul>
       </div>
+
+      {technicalDetails.length > 0 && (
+        <details className="technical-detail-panel">
+          <summary>Technical detail</summary>
+          <div className="technical-detail-panel__lines">
+            {technicalDetails.slice(0, compact ? 5 : 10).map((line, index) => (
+              <code key={`${line}-${index}`}>{line}</code>
+            ))}
+          </div>
+        </details>
+      )}
 
       {onOperatorAction && (
         <OperatorActionControls
@@ -2328,8 +2366,14 @@ function buildRelationshipRows(result) {
     .filter((item) => item.type === "relationship_change")
     .map((item) => ({
       ...item,
-      detail: relationshipDetail(item),
+      detail: translateEvidenceLine(relationshipDetail(item), inferOperationalCategory(item.columns?.join(" "), item.detail)),
       tone: mapOperationalTone(item.level ?? "review"),
+      technicalDetails: [
+        item.detail && `detail=${item.detail}`,
+        item.baseline_correlation !== undefined && `baseline_correlation=${item.baseline_correlation}`,
+        item.recent_correlation !== undefined && `recent_correlation=${item.recent_correlation}`,
+        item.columns && `columns=${item.columns.join(",")}`,
+      ].filter(Boolean),
     }));
 }
 
@@ -2401,6 +2445,175 @@ function polishEvidenceLanguage(text) {
     .replace(/changed with room conditions/gi, "became less consistent during changing room conditions")
     .replace(/relationship changed compared to baseline/gi, "relationship consistency became less consistent than the room's recent baseline")
     .replace(/changed relationship strength between the baseline and recent windows/gi, "showed less consistent recovery between the baseline and active windows");
+}
+
+function isTechnicalEvidenceText(value) {
+  const text = String(value ?? "").toLowerCase();
+  return [
+    "siiengineadapter",
+    "unified sii",
+    "sii core",
+    "structural_drift",
+    "structural drift score",
+    "relational_stability",
+    "transition_pressure",
+    "instability score",
+    "telemetry history depth",
+    "numeric telemetry channels",
+    "covariance",
+    "adapter",
+    "core engine",
+    "baseline_window",
+    "recent_window",
+  ].some((pattern) => text.includes(pattern));
+}
+
+function humanizeDriverCategory(value) {
+  const normalized = String(value ?? "")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+  const labels = {
+    airflow_restriction: "Airflow restriction",
+    airflow_response: "Airflow restriction",
+    humidity_control: "Humidity recovery instability",
+    humidity_coupling_shift: "Humidity recovery instability",
+    humidity_recovery: "Humidity recovery instability",
+    hvac_instability: "Temperature recovery instability",
+    thermal_consistency: "Temperature recovery instability",
+    irrigation_timing: "Irrigation timing shift",
+    irrigation_balance: "Irrigation recovery shift",
+    lighting_schedule: "Lighting schedule influence",
+    sensor_network: "Telemetry continuity gap",
+    telemetry_continuity: "Telemetry continuity gap",
+    environmental_coupling: "Environmental coupling shift",
+    room_pressure: "Room pressure imbalance",
+    unknown_system_drift: "Environmental behavior shift",
+  };
+  if (labels[normalized]) {
+    return labels[normalized];
+  }
+  return String(value ?? "Environmental behavior shift")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function inferOperationalCategory(...values) {
+  const text = values.filter(Boolean).join(" ").toLowerCase();
+  if (text.includes("airflow") || text.includes("air movement") || text.includes("pressure") || text.includes("fan") || text.includes("vent")) {
+    return "airflow_restriction";
+  }
+  if (text.includes("humid") || text.includes("moisture") || text.includes("dehumid")) {
+    return "humidity_coupling_shift";
+  }
+  if (text.includes("temperature") || text.includes("thermal") || text.includes("hvac")) {
+    return "hvac_instability";
+  }
+  if (text.includes("irrigation") || text.includes("feed") || text.includes("substrate")) {
+    return "irrigation_timing";
+  }
+  if (text.includes("sensor") || text.includes("telemetry") || text.includes("coverage")) {
+    return "sensor_network";
+  }
+  return "environmental_coupling";
+}
+
+function translateEvidenceLine(value, fallbackCategory = "environmental_coupling") {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "Evidence is still being assembled from room telemetry.";
+  }
+  const category = inferOperationalCategory(fallbackCategory, text);
+  const lower = text.toLowerCase();
+  if (lower.includes("siiengineadapter") && lower.includes("numeric telemetry channels")) {
+    return "Telemetry coverage is sufficient to compare room behavior against recent operating patterns.";
+  }
+  if (lower.includes("unified sii core") || lower.includes("regime") || lower.includes("urgency")) {
+    return "Environmental behavior is moving away from recent baseline patterns.";
+  }
+  if (lower.includes("instability score") || lower.includes("structural drift")) {
+    return "Instability and structural drift are visible enough to guide inspection.";
+  }
+  if (lower.includes("confidence") && lower.includes("telemetry history depth")) {
+    return "The available history is strong enough to support an operator review.";
+  }
+  if (lower.includes("latest structural drift")) {
+    return "Structural drift is visible against the recent baseline.";
+  }
+  if (lower.includes("transition pressure")) {
+    return "The room is moving through a transition with less recovery margin than normal.";
+  }
+  if (lower.includes("environmental coupling")) {
+    return "Environmental recovery behavior is no longer stabilizing at its normal rate.";
+  }
+  if (lower.includes("baseline")) {
+    return polishEvidenceLanguage(text);
+  }
+  return buildGuidanceFromCategory(category).whyFlagged;
+}
+
+function buildOperationalTranslation({
+  driver,
+  driverCategory,
+  why,
+  evidence = [],
+  relationships = [],
+  confidenceBasis,
+  baselineContext,
+  urgency,
+  window,
+}) {
+  const category = driverCategory ?? inferOperationalCategory(driver, why, evidence.join(" "), relationships.join(" "));
+  const baseGuidance = buildGuidanceFromCategory(
+    category === "airflow_restriction" ? "airflow_response"
+      : category === "humidity_coupling_shift" ? "humidity_recovery"
+        : category === "hvac_instability" ? "thermal_consistency"
+          : category === "irrigation_timing" ? "irrigation_balance"
+            : category === "sensor_network" ? "telemetry_continuity"
+              : "environmental_coupling",
+  );
+  const technicalDetails = [
+    driver && `primary_driver=${driver}`,
+    driverCategory && `driver_category=${driverCategory}`,
+    why && `why_flagged=${why}`,
+    confidenceBasis && `confidence_basis=${confidenceBasis}`,
+    baselineContext && `baseline_context=${baselineContext}`,
+    urgency && `urgency=${urgency}`,
+    window && `intervention_window=${window}`,
+    ...evidence.map((line, index) => `supporting_evidence_${index + 1}=${line}`),
+    ...relationships.map((line, index) => `relationship_evidence_${index + 1}=${line}`),
+  ].filter(Boolean);
+  const operatorEvidence = evidence
+    .filter(Boolean)
+    .map((line) => translateEvidenceLine(line, category))
+    .filter((line, index, list) => list.indexOf(line) === index);
+  const operatorRelationships = relationships
+    .filter(Boolean)
+    .map((line) => translateEvidenceLine(line, category))
+    .filter((line, index, list) => list.indexOf(line) === index);
+
+  return {
+    category,
+    primaryDriver: humanizeDriverCategory(category),
+    whyFlagged: isTechnicalEvidenceText(why)
+      ? translateEvidenceLine(why, category)
+      : (why || baseGuidance.whyFlagged),
+    nextMove: baseGuidance.nextMove,
+    whatToCheck: baseGuidance.whatToCheck,
+    confidenceBasis: isTechnicalEvidenceText(confidenceBasis)
+      ? "Telemetry evidence is strong enough to prioritize an operator inspection."
+      : (confidenceBasis || "Evidence is being compared against recent room behavior."),
+    baselineContext: isTechnicalEvidenceText(baselineContext)
+      ? "Current room behavior is moving away from recent operating patterns."
+      : (baselineContext || "Current room behavior is being compared against recent baseline patterns."),
+    supportingEvidence: operatorEvidence.length > 0
+      ? operatorEvidence
+      : [baseGuidance.whyFlagged],
+    relationshipEvidence: operatorRelationships.length > 0
+      ? operatorRelationships
+      : ["Airflow-to-humidity coupling is being compared against recent baseline behavior."],
+    technicalDetails,
+  };
 }
 
 function buildRoomObservations(result, roomContext) {
@@ -2821,10 +3034,12 @@ function buildSiiOperationalContext({
     connectionSummary,
     connectionStatusLine,
     connectionActionHint,
-    dataSourceLabel: fullResult ? latestManualSourceLabel(fullResult) : "Backend SII sample",
+    dataSourceLabel: fullResult ? latestManualSourceLabel(fullResult) : "Sample facility intelligence",
     neraiumScore: score,
     scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
-    scoreContext: `SII ${formatIntelligenceSourceLabel(safeIntelligence.mode ?? intelligenceStatus?.mode)} | ${safeIntelligence.observed_persistence ?? "Evidence fields present"}`,
+    scoreContext: safeIntelligence.observed_persistence && !isTechnicalEvidenceText(safeIntelligence.observed_persistence)
+      ? safeIntelligence.observed_persistence
+      : "Room behavior is being compared against recent operating patterns.",
     windowContext: safeIntelligence.baseline_comparison ?? buildWindowContext(primaryWindow, roomContext),
     primaryWindow,
     interventionItems,
@@ -2850,7 +3065,7 @@ function buildSiiOperationalContext({
       system.name,
       system.scope,
       systemRoomContext(system.name, roomContext),
-      systemsState === "ready" ? "Backend SII fields active" : "Local fallback surface",
+      systemsState === "ready" ? "Facility feed active" : "Local fallback surface",
     ]),
     intakeStages: fullResult ? buildIntakeStages(fullResult, "complete", roomContext) : buildSimulatedIntakeStages(apiStatus, tick, roomContext),
     evidenceLines: fullResult ? buildEvidenceConsole(fullResult) : buildSiiEvidenceLines(safeIntelligence),
@@ -2861,7 +3076,7 @@ function buildSiiOperationalContext({
       safeIntelligence.confidence_basis,
     ].filter(Boolean),
     reportNotes: [
-      "SII fields are being read from the backend intelligence contract",
+      "Operational intelligence is active",
       `Mode: ${safeIntelligence.mode ?? "sample"}`,
       `Evidence fields: ${(intelligenceStatus?.evidence_fields_present ?? []).length}`,
     ],
@@ -3067,6 +3282,15 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
   const columnReview = result?.operator_report?.columns_requiring_review ?? [];
   const attribution = result?.driver_attribution;
   const irrigationTone = result?.cultivation_mapping?.categories?.irrigation?.length ? "review" : "info";
+  const attributionGuidance = buildGuidanceFromAttribution(attribution, facilityTone);
+  const attributionTechnicalDetails = [
+    attribution?.driver_category && `driver_category=${attribution.driver_category}`,
+    attribution?.likely_driver && `likely_driver=${attribution.likely_driver}`,
+    attribution?.confidence_basis && `confidence_basis=${attribution.confidence_basis}`,
+    attribution?.attribution_confidence && `attribution_confidence=${attribution.attribution_confidence}`,
+    ...(attribution?.supporting_evidence ?? []).map((line, index) => `supporting_evidence_${index + 1}=${line}`),
+    ...(engineSignals ?? []).slice(0, 4).map((signal, index) => `engine_signal_${index + 1}=${signal.message}`),
+  ].filter(Boolean);
 
   const items = [
     {
@@ -3078,28 +3302,30 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       window: windowLabelFromTone(facilityTone),
       tone: attributionTone(attribution, facilityTone),
       confidence: confidenceFromAttribution(attribution, facilityTone),
-      summary: attribution?.likely_driver
-        ? `${attribution.likely_driver} is the likely driver based on available telemetry.`
-        : engineSignals[0]?.message ?? "Uploaded telemetry indicates the current room should remain within an active review window.",
+      summary: attributionGuidance.primaryDriver,
       detail: `Current upload places ${attribution?.room ?? roomContext.primary} in the primary review lane.`,
-      shortDetail: attribution?.likely_driver
-        ? `Likely driver: ${attribution.likely_driver}.`
-        : engineSignals[0]?.message ?? "Current upload is tightening the review window.",
+      shortDetail: attributionGuidance.primaryDriver,
       whyHeadline: attribution?.supporting_evidence?.[0]
-        ?? engineSignals[0]?.message
-        ?? "Current room trend and readiness signals are tightening the available intervention window.",
-      drivers: attribution?.supporting_evidence ?? buildWhyDrivers(result, telemetryCards, roomContext),
+        ? translateEvidenceLine(attribution.supporting_evidence[0], attribution?.driver_category)
+        : engineSignals[0]?.message
+          ? translateEvidenceLine(engineSignals[0].message, attribution?.driver_category)
+          : "Current room trend and readiness signals are tightening the available intervention window.",
+      drivers: (attribution?.supporting_evidence ?? buildWhyDrivers(result, telemetryCards, roomContext))
+        .map((line) => translateEvidenceLine(line, attribution?.driver_category)),
       driverAttribution: attribution,
       likelyDriver: attribution?.likely_driver,
       contributingSignals: attribution?.contributing_signals,
-      confidenceBasis: attribution?.confidence_basis,
-      supportingEvidence: attribution?.supporting_evidence,
-      structuralExplanation: buildUploadedStructuralExplanation(attribution, engineSignals),
-      guidance: buildGuidanceFromAttribution(attribution, facilityTone),
+      confidenceBasis: attribution?.confidence_basis && isTechnicalEvidenceText(attribution.confidence_basis)
+        ? "Telemetry evidence is strong enough to prioritize an operator inspection."
+        : attribution?.confidence_basis,
+      supportingEvidence: (attribution?.supporting_evidence ?? []).map((line) => translateEvidenceLine(line, attribution?.driver_category)),
+      structuralExplanation: buildUploadedStructuralExplanation(attribution, engineSignals).map((line) => translateEvidenceLine(line, attribution?.driver_category)),
+      technicalDetails: attributionTechnicalDetails,
+      guidance: attributionGuidance,
       decisionLabel: decisionLabelFromTone(facilityTone, 0),
       baselineContext: buildUploadBaselineContext(roomContext, facilityTone),
       recommendation: recommendationFromTone(facilityTone),
-      primaryAction: operatorMoveFromGuidance(buildGuidanceFromAttribution(attribution, facilityTone)),
+      primaryAction: operatorMoveFromGuidance(attributionGuidance),
       actions: actionSetFromTone(facilityTone),
       impact: impactFromTone(facilityTone),
       change: "Updated from active upload",
@@ -3186,11 +3412,24 @@ function buildSiiInterventionItems(intelligence) {
     : [intelligence];
   return rooms.map((room, index) => {
     const tone = mapSiiUrgency(room.urgency ?? intelligence.urgency);
+    const rawSupportingEvidence = room.supporting_evidence ?? intelligence.supporting_evidence ?? [];
+    const rawRelationshipEvidence = room.relationship_evidence ?? intelligence.relationship_evidence ?? [];
+    const translation = buildOperationalTranslation({
+      driver: room.primary_driver ?? intelligence.primary_driver,
+      driverCategory: room.driver_category ?? intelligence.driver_category,
+      why: room.why_flagged ?? intelligence.why_flagged,
+      evidence: rawSupportingEvidence,
+      relationships: rawRelationshipEvidence,
+      confidenceBasis: room.confidence_basis ?? intelligence.confidence_basis,
+      baselineContext: room.baseline_comparison ?? intelligence.baseline_comparison,
+      urgency: room.urgency ?? intelligence.urgency,
+      window: room.intervention_window ?? intelligence.intervention_window,
+    });
     const guidance = {
       nextMove: room.recommended_operator_review ?? intelligence.recommended_operator_review ?? "Continue monitoring",
-      primaryDriver: room.primary_driver ?? intelligence.primary_driver ?? "Backend SII did not provide a primary driver.",
-      whyFlagged: room.why_flagged ?? intelligence.why_flagged ?? "Backend SII did not provide a flag explanation.",
-      whatToCheck: room.what_to_check ?? intelligence.what_to_check ?? ["Review backend SII fields"],
+      primaryDriver: translation.primaryDriver,
+      whyFlagged: translation.whyFlagged,
+      whatToCheck: room.what_to_check ?? intelligence.what_to_check ?? translation.whatToCheck,
     };
     return {
       id: `sii-room-${index + 1}`,
@@ -3202,22 +3441,26 @@ function buildSiiInterventionItems(intelligence) {
       tone,
       confidence: room.confidence ?? confidenceFromTone(tone, intelligence.mode === "live"),
       summary: guidance.primaryDriver,
-      detail: room.baseline_comparison ?? intelligence.baseline_comparison ?? guidance.whyFlagged,
+      detail: translation.baselineContext,
       shortDetail: guidance.primaryDriver,
       whyHeadline: guidance.whyFlagged,
-      drivers: room.supporting_evidence ?? intelligence.supporting_evidence ?? [],
-      supportingEvidence: room.supporting_evidence ?? intelligence.supporting_evidence ?? [],
-      relationshipEvidence: room.relationship_evidence ?? intelligence.relationship_evidence ?? [],
-      structuralExplanation: room.structural_explanation ?? intelligence.structural_explanation ?? [],
-      confidenceBasis: room.confidence_basis ?? intelligence.confidence_basis,
+      drivers: translation.supportingEvidence,
+      supportingEvidence: translation.supportingEvidence,
+      relationshipEvidence: translation.relationshipEvidence,
+      structuralExplanation: (room.structural_explanation ?? intelligence.structural_explanation ?? [])
+        .map((line) => translateEvidenceLine(line, translation.category)),
+      confidenceBasis: translation.confidenceBasis,
+      technicalDetails: translation.technicalDetails,
       guidance,
-      baselineContext: room.baseline_comparison ?? intelligence.baseline_comparison,
+      baselineContext: translation.baselineContext,
       recommendation: guidance.nextMove,
       primaryAction: guidance.nextMove,
       decisionLabel: room.room_state ?? intelligence.facility_state ?? decisionLabelFromTone(tone, index),
       actions: actionSetFromTone(tone),
       impact: impactFromTone(tone),
-      change: room.observed_persistence ?? intelligence.observed_persistence ?? "SII evidence active",
+      change: isTechnicalEvidenceText(room.observed_persistence ?? intelligence.observed_persistence)
+        ? translateEvidenceLine(room.observed_persistence ?? intelligence.observed_persistence, translation.category)
+        : (room.observed_persistence ?? intelligence.observed_persistence ?? "Evidence active"),
       rankLabel: `Priority ${String(index + 1).padStart(2, "0")}`,
     };
   }).sort((a, b) => tonePriority(a.tone) - tonePriority(b.tone));
@@ -3283,27 +3526,41 @@ function buildTopologyNodes(interventionItems) {
 }
 
 function buildSiiTelemetryCards(intelligence) {
+  const translation = buildOperationalTranslation({
+    driver: intelligence.primary_driver,
+    driverCategory: intelligence.driver_category,
+    why: intelligence.why_flagged,
+    evidence: intelligence.supporting_evidence ?? [],
+    relationships: intelligence.relationship_evidence ?? [],
+    confidenceBasis: intelligence.confidence_basis,
+    baselineContext: intelligence.baseline_comparison,
+    urgency: intelligence.urgency,
+    window: intelligence.intervention_window,
+  });
   return [
     {
       label: "Primary driver",
-      primary: intelligence.primary_driver ?? "SII driver unavailable",
-      secondary: intelligence.why_flagged ?? "Backend SII did not provide flag context.",
+      primary: translation.primaryDriver,
+      secondary: translation.whyFlagged,
       series: [72, 74, 76, 75, 78, 80],
       tone: mapSiiUrgency(intelligence.urgency),
+      technicalDetails: translation.technicalDetails,
     },
     {
       label: "Relationship evidence",
-      primary: intelligence.relationship_evidence?.[0] ?? "Relationship evidence limited",
-      secondary: intelligence.confidence_basis ?? "Confidence basis unavailable.",
+      primary: translation.relationshipEvidence[0] ?? "Relationship evidence limited",
+      secondary: translation.confidenceBasis,
       series: [60, 61, 63, 62, 64, 66],
       tone: "info",
+      technicalDetails: translation.technicalDetails,
     },
     {
       label: "Intervention window",
       primary: intelligence.intervention_window ?? "Monitoring",
-      secondary: intelligence.baseline_comparison ?? "Baseline comparison unavailable.",
+      secondary: translation.baselineContext,
       series: [80, 78, 76, 73, 71, 69],
       tone: mapSiiUrgency(intelligence.urgency),
+      technicalDetails: translation.technicalDetails,
     },
   ];
 }
@@ -3312,31 +3569,50 @@ function buildSiiRoomCards(intelligence) {
   return (intelligence.rooms ?? [intelligence]).map((room) => ({
     label: room.room ?? intelligence.primary_room ?? "Current room",
     value: room.room_state ?? intelligence.facility_state ?? "Monitoring",
-    detail: room.primary_driver ?? intelligence.primary_driver ?? "SII driver unavailable.",
+    detail: buildOperationalTranslation({
+      driver: room.primary_driver ?? intelligence.primary_driver,
+      why: room.why_flagged ?? intelligence.why_flagged,
+      evidence: room.supporting_evidence ?? intelligence.supporting_evidence ?? [],
+      relationships: room.relationship_evidence ?? intelligence.relationship_evidence ?? [],
+    }).primaryDriver,
     tone: mapSiiUrgency(room.urgency ?? intelligence.urgency),
   }));
 }
 
 function buildSiiAlerts(intelligence) {
+  const translation = buildOperationalTranslation({
+    driver: intelligence.primary_driver,
+    why: intelligence.why_flagged,
+    evidence: intelligence.supporting_evidence ?? [],
+    relationships: intelligence.relationship_evidence ?? [],
+  });
   return [
     {
       title: intelligence.facility_state ?? "SII state active",
-      detail: intelligence.why_flagged ?? "Backend SII intelligence is active.",
+      detail: translation.whyFlagged,
       tone: mapSiiUrgency(intelligence.urgency),
     },
   ];
 }
 
 function buildSiiFindings(intelligence) {
+  const translation = buildOperationalTranslation({
+    driver: intelligence.primary_driver,
+    driverCategory: intelligence.driver_category,
+    why: intelligence.why_flagged,
+    evidence: intelligence.supporting_evidence ?? [],
+    relationships: intelligence.relationship_evidence ?? [],
+    confidenceBasis: intelligence.confidence_basis,
+  });
   return [
     {
       title: "Primary driver",
-      detail: intelligence.primary_driver ?? "SII driver unavailable.",
+      detail: translation.primaryDriver,
       tone: mapSiiUrgency(intelligence.urgency),
     },
     {
       title: "Why flagged",
-      detail: intelligence.why_flagged ?? "SII flag explanation unavailable.",
+      detail: translation.whyFlagged,
       tone: "info",
     },
     ...(intelligence.what_to_check ?? []).slice(0, 2).map((check) => ({
@@ -3348,11 +3624,19 @@ function buildSiiFindings(intelligence) {
 }
 
 function buildSiiTimeline(intelligence, apiStatus, tick) {
+  const translation = buildOperationalTranslation({
+    driver: intelligence.primary_driver,
+    why: intelligence.why_flagged,
+    evidence: intelligence.supporting_evidence ?? [],
+    relationships: intelligence.relationship_evidence ?? [],
+  });
   return [
     {
       time: formatClockTime(intelligence.last_updated ?? apiStatus.checkedAt ?? new Date(Date.now() - tick * OPERATIONAL_CADENCE_MS).toISOString()),
-      title: "SII intelligence updated",
-      detail: intelligence.observed_persistence ?? "Backend SII evidence fields active.",
+      title: "Operational intelligence updated",
+      detail: isTechnicalEvidenceText(intelligence.observed_persistence)
+        ? translateEvidenceLine(intelligence.observed_persistence, translation.category)
+        : (intelligence.observed_persistence ?? translation.whyFlagged),
       tone: mapSiiUrgency(intelligence.urgency),
     },
   ];
@@ -3360,8 +3644,8 @@ function buildSiiTimeline(intelligence, apiStatus, tick) {
 
 function buildSiiRoomTransitions(intelligence) {
   return (intelligence.structural_explanation ?? []).slice(0, 3).map((detail, index) => ({
-    title: index === 0 ? "Structural explanation" : "Relationship movement",
-    detail,
+    title: index === 0 ? "Operational explanation" : "Relationship movement",
+    detail: translateEvidenceLine(detail, inferOperationalCategory(intelligence.primary_driver, intelligence.why_flagged)),
     tone: mapSiiUrgency(intelligence.urgency),
   }));
 }
@@ -3374,7 +3658,11 @@ function buildSiiDriftRows(intelligence) {
       drift_flag: mapSiiUrgency(intelligence.urgency),
       baseline_average: 0,
       recent_average: 0,
-      detail: intelligence.baseline_comparison ?? "Baseline comparison unavailable.",
+      detail: buildOperationalTranslation({
+        driver: intelligence.primary_driver,
+        baselineContext: intelligence.baseline_comparison,
+        why: intelligence.why_flagged,
+      }).baselineContext,
     },
   ];
 }
@@ -3384,7 +3672,8 @@ function buildSiiRelationshipRows(intelligence) {
     columns: ["environmental coupling", "recent baseline"],
     change: relationshipDetail({ detail }),
     tone: mapSiiUrgency(intelligence.urgency),
-    detail: polishEvidenceLanguage(detail),
+    detail: translateEvidenceLine(detail, inferOperationalCategory(intelligence.primary_driver, intelligence.why_flagged)),
+    technicalDetails: [`relationship_evidence_${index + 1}=${detail}`],
   }));
 }
 
@@ -3792,10 +4081,10 @@ function buildGuidanceFromAttribution(attribution, fallbackTone) {
   const guidance = buildGuidanceFromCategory(category);
   return {
     ...guidance,
-    primaryDriver: attribution.likely_driver
-      ? `${attribution.likely_driver} appears to be contributing to the current room behavior.`
-      : guidance.primaryDriver,
-    whyFlagged: attribution.supporting_evidence?.[0] ?? guidance.whyFlagged,
+    primaryDriver: humanizeDriverCategory(attribution.driver_category ?? category),
+    whyFlagged: attribution.supporting_evidence?.[0]
+      ? translateEvidenceLine(attribution.supporting_evidence[0], category)
+      : guidance.whyFlagged,
     nextMove: attribution.next_operator_move && !isGenericOperatorMove(attribution.next_operator_move)
       ? attribution.next_operator_move
       : guidance.nextMove,

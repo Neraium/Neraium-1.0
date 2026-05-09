@@ -1456,6 +1456,44 @@ h4 {
   line-height: 1.5;
 }
 
+.technical-detail-panel {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 148, 139, 0.08);
+}
+
+.technical-detail-panel summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.technical-detail-panel__lines {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.technical-detail-panel__lines code {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 7px 8px;
+  border: 1px solid rgba(120, 148, 139, 0.08);
+  background: rgba(4, 9, 11, 0.42);
+  color: rgba(206, 223, 228, 0.74);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.technical-detail-panel--card,
+.technical-detail-panel--compact {
+  margin-top: 8px;
+}
+
 .confidence-dial {
   --confidence-color: rgba(99, 188, 211, 0.88);
   position: relative;
