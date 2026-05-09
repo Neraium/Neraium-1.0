@@ -1,7 +1,9 @@
 import secrets
 import logging
 
-from fastapi import Cookie, Header, HTTPException, Request, status
+from typing import Any
+
+from fastapi import Cookie, Header, HTTPException, Request, Response, status
 
 from app.core.config import get_settings
 
@@ -12,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 def require_api_access(
     request: Request,
+    response: Response,
     x_neraium_access_code: str | None = Header(default=None),
     neraium_access_code: str | None = Cookie(default=None),
     authorization: str | None = Header(default=None),
@@ -58,6 +61,7 @@ def require_api_access(
                 "message": "Telemetry processing session could not be validated.",
             },
         )
+    refresh_access_cookie(response, settings=settings, access_code=supplied_access_code)
 
 
 def parse_authorization_access_code(authorization: str | None) -> tuple[str | None, str | None]:
@@ -82,6 +86,20 @@ def auth_source_name(
     if cookie_access_code:
         return "access_cookie"
     return "none"
+
+
+def refresh_access_cookie(response: Response, *, settings: Any, access_code: str | None) -> None:
+    if not access_code or settings.app_env != "production":
+        return
+    response.set_cookie(
+        key=ACCESS_CODE_COOKIE,
+        value=access_code,
+        max_age=86400,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="none",
+    )
 
 
 def log_auth_debug(

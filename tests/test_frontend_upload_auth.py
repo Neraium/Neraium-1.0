@@ -18,6 +18,8 @@ def test_shared_api_helper_forces_credentials_include() -> None:
     assert "return fetch(`${API_BASE_URL}${path}`" in source
     assert "const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;" in source
     assert "...(headers ?? {})" in source
+    assert 'export const ACCESS_CODE_SESSION_KEY = "neraium_access_code";' in source
+    assert "window.sessionStorage.getItem(ACCESS_CODE_SESSION_KEY)" in source
 
 
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
@@ -85,3 +87,13 @@ def test_protected_route_unauthorized_copy_is_session_expired() -> None:
     assert "[object Object]" not in source
     assert "Upload processing interrupted." in source
     assert "Upload state unavailable." in source
+
+
+def test_upload_failure_console_log_uses_readable_fields() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert "telemetry_upload_failure" in source
+    assert "`message=${classified.message}`" in source
+    assert "`status=${classified.status ?? \"n/a\"}`" in source
+    assert "`error_type=${classified.errorType ?? \"n/a\"}`" in source
+    assert 'console.warn("telemetry_upload_failure", classified)' not in source

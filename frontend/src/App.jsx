@@ -995,7 +995,12 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
       const classified = classifyUploadError(error, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
-      console.warn("telemetry_upload_failure", classified);
+      console.warn(
+        "telemetry_upload_failure",
+        `message=${classified.message}`,
+        `status=${classified.status ?? "n/a"}`,
+        `error_type=${classified.errorType ?? "n/a"}`,
+      );
     }
   }
 
@@ -2946,6 +2951,8 @@ function classifyUploadError(error, phase) {
     return {
       state: isAuthDuringPolling || (phase === "poll" && error.retryable) ? "running_sii" : "error",
       retryable: phase === "poll" && error.retryable,
+      status: error.status,
+      errorType: error.errorType,
       message: operatorUploadMessage({
         status: error.status,
         errorType: error.errorType,
@@ -2958,6 +2965,8 @@ function classifyUploadError(error, phase) {
     return {
       state: phase === "poll" ? "running_sii" : "error",
       retryable: phase === "poll",
+      status: null,
+      errorType: "network",
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
         : "Secure telemetry ingestion unavailable.",
@@ -2966,6 +2975,8 @@ function classifyUploadError(error, phase) {
   return {
     state: "error",
     retryable: false,
+    status: null,
+    errorType: null,
     message: operatorUploadMessage({
       status: null,
       errorType: null,

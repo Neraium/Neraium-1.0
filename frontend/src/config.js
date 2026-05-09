@@ -6,9 +6,21 @@ export const API_BASE_URL = configuredApiBaseUrl || (isProductionBuild ? "" : "h
 export const APP_ACCESS_CODE = configuredAppAccessCode || (isProductionBuild ? "" : "neraium-dev");
 export const HAS_APP_ACCESS_CODE = Boolean(APP_ACCESS_CODE);
 export const ACCESS_CODE_HEADER = "X-Neraium-Access-Code";
+export const ACCESS_CODE_SESSION_KEY = "neraium_access_code";
+
+export function resolveAccessCode(accessCode = APP_ACCESS_CODE) {
+  if (accessCode) {
+    return accessCode;
+  }
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.sessionStorage.getItem(ACCESS_CODE_SESSION_KEY) || "";
+}
 
 export function buildAccessHeaders(accessCode = APP_ACCESS_CODE) {
-  return accessCode ? { [ACCESS_CODE_HEADER]: accessCode } : {};
+  const resolvedAccessCode = resolveAccessCode(accessCode);
+  return resolvedAccessCode ? { [ACCESS_CODE_HEADER]: resolvedAccessCode } : {};
 }
 
 export function apiFetch(path, options = {}) {

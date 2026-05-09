@@ -335,6 +335,30 @@ def test_protected_endpoint_accepts_bearer_access_code_in_production(tmp_path) -
     assert response.json()["systems"]
 
 
+def test_valid_production_auth_refreshes_secure_httponly_cookie(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get(
+        "/api/facility/systems",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
+
+    assert response.status_code == 200
+    set_cookie = response.headers["set-cookie"]
+    assert "neraium_access_code=" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=none" in set_cookie
+
+
 def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
