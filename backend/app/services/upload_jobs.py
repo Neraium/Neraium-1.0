@@ -67,6 +67,7 @@ def delete_upload_file(metadata: dict[str, Any] | None) -> None:
         path = Path(raw_path)
         if path.exists() and path.is_file():
             path.unlink()
+            logger.info("upload_file_deleted job_id=%s path=%s", metadata.get("job_id"), path.name)
     except OSError:
         logger.warning("upload_file_cleanup_failed job_id=%s", metadata.get("job_id"))
 
@@ -111,6 +112,12 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
         "result_summary": None,
     }
     write_job(metadata)
+    logger.info(
+        "upload_job_created job_id=%s filename=%s size_bytes=%s",
+        job_id,
+        filename,
+        size_bytes,
+    )
     return metadata
 
 

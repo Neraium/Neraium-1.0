@@ -12,9 +12,10 @@ export function buildAccessHeaders(accessCode = APP_ACCESS_CODE) {
 }
 
 export function apiFetch(path, options = {}) {
-  const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;
+  const { accessCode = APP_ACCESS_CODE, credentials = "include", headers, ...rest } = options;
   return fetch(`${API_BASE_URL}${path}`, {
     ...rest,
+    credentials,
     headers: {
       ...buildAccessHeaders(accessCode),
       ...(headers ?? {}),

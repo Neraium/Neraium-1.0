@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Any
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
 from app.services.sii_runner import read_latest_sii_state
@@ -14,6 +16,80 @@ from app.services.upload_jobs import (
 )
 
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
+logger = logging.getLogger(__name__)
+
+
+def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = None) -> dict[str, Any]:
+    if metadata is None:
+        return {
+            "job_id": job_id,
+            "status": "NOT_FOUND",
+            "progress": 0,
+            "processing_state": "not_found",
+            "progress_label": "Upload job was not found.",
+            "message": "Telemetry upload interrupted.",
+            "error_type": "job_not_found",
+            "filename": None,
+            "file_size_bytes": 0,
+            "rows_processed": 0,
+            "columns_detected": 0,
+            "chunk_count": 0,
+            "memory_estimate_bytes": 0,
+            "processing_duration_seconds": None,
+            "engine_runtime_seconds": None,
+            "runner_used": False,
+            "runner_module": None,
+            "core_engine": None,
+            "started_at": None,
+            "completed_at": None,
+            "error": "Upload job was not found.",
+            "result_summary": None,
+        }
+
+    normalized_status = str(metadata.get("status", "PENDING")).upper()
+    progress_map = {
+        "PENDING": 8,
+        "PARSING": 22,
+        "BASELINE_MODELING": 42,
+        "RUNNING_SII": 68,
+        "GENERATING_EVIDENCE": 86,
+        "COMPLETE": 100,
+        "FAILED": 100,
+    }
+    message_map = {
+        "PENDING": "Telemetry processing in progress.",
+        "PARSING": "Telemetry processing in progress.",
+        "BASELINE_MODELING": "Large telemetry batches may require additional processing time.",
+        "RUNNING_SII": "Telemetry processing in progress.",
+        "GENERATING_EVIDENCE": "Telemetry processing in progress.",
+        "COMPLETE": "Telemetry processing complete.",
+        "FAILED": "Telemetry processing failed.",
+    }
+    error_type = "sii_processing_failure" if normalized_status == "FAILED" else None
+    return {
+        "job_id": metadata.get("job_id"),
+        "status": normalized_status,
+        "progress": progress_map.get(normalized_status, 0),
+        "processing_state": normalized_status.lower(),
+        "progress_label": metadata.get("progress_label"),
+        "message": message_map.get(normalized_status, "Telemetry processing in progress."),
+        "error_type": error_type,
+        "filename": metadata.get("filename"),
+        "file_size_bytes": metadata.get("file_size_bytes", 0),
+        "rows_processed": metadata.get("rows_processed", 0),
+        "columns_detected": metadata.get("columns_detected", 0),
+        "chunk_count": metadata.get("chunk_count", 0),
+        "memory_estimate_bytes": metadata.get("memory_estimate_bytes", 0),
+        "processing_duration_seconds": metadata.get("processing_duration_seconds"),
+        "engine_runtime_seconds": metadata.get("engine_runtime_seconds"),
+        "runner_used": metadata.get("runner_used", False),
+        "runner_module": metadata.get("runner_module"),
+        "core_engine": metadata.get("core_engine"),
+        "started_at": metadata.get("started_at"),
+        "completed_at": metadata.get("completed_at"),
+        "error": metadata.get("error"),
+        "result_summary": metadata.get("result_summary"),
+    }
 
 
 @router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED)
@@ -31,9 +107,18 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="CSV file is empty.")
 
     background_tasks.add_task(process_upload_job, metadata["job_id"])
+    logger.info(
+        "upload_job_accepted job_id=%s filename=%s size_bytes=%s",
+        metadata["job_id"],
+        metadata["filename"],
+        metadata["file_size_bytes"],
+    )
     return {
         "job_id": metadata["job_id"],
         "status": metadata["status"],
+        "progress": 8,
+        "processing_state": "pending",
+        "error_type": None,
         "filename": metadata["filename"],
         "message": "Telemetry batch received. Processing started.",
         "status_url": f"/api/data/upload-status/{metadata['job_id']}",
@@ -45,27 +130,17 @@ async def upload_csv(
 def read_upload_status(job_id: str) -> dict[str, Any]:
     metadata = read_job(job_id)
     if metadata is None:
-        raise HTTPException(status_code=404, detail="Upload job was not found.")
-    return {
-        "job_id": metadata["job_id"],
-        "status": metadata.get("status", "queued"),
-        "progress_label": metadata.get("progress_label"),
-        "filename": metadata.get("filename"),
-        "file_size_bytes": metadata.get("file_size_bytes", 0),
-        "rows_processed": metadata.get("rows_processed", 0),
-        "columns_detected": metadata.get("columns_detected", 0),
-        "chunk_count": metadata.get("chunk_count", 0),
-        "memory_estimate_bytes": metadata.get("memory_estimate_bytes", 0),
-        "processing_duration_seconds": metadata.get("processing_duration_seconds"),
-        "engine_runtime_seconds": metadata.get("engine_runtime_seconds"),
-        "runner_used": metadata.get("runner_used", False),
-        "runner_module": metadata.get("runner_module"),
-        "core_engine": metadata.get("core_engine"),
-        "started_at": metadata.get("started_at"),
-        "completed_at": metadata.get("completed_at"),
-        "error": metadata.get("error"),
-        "result_summary": metadata.get("result_summary"),
-    }
+        logger.warning("upload_status_not_found job_id=%s", job_id)
+        return JSONResponse(status_code=404, content=upload_status_payload(None, job_id))
+    payload = upload_status_payload(metadata, job_id)
+    logger.info(
+        "upload_status_polled job_id=%s status=%s rows=%s chunks=%s",
+        payload["job_id"],
+        payload["status"],
+        payload["rows_processed"],
+        payload["chunk_count"],
+    )
+    return payload
 
 
 @router.get("/data/latest-upload")

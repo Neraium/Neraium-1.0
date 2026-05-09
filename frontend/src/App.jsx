@@ -98,6 +98,7 @@ const DEMO_ROOMS = [
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
 const ACCESS_SESSION_KEY = "neraium_access_granted";
 const ACCESS_CODE_SESSION_KEY = "neraium_access_code";
+const ACCESS_CODE_COOKIE = "neraium_access_code";
 const OPERATIONAL_CADENCE_MS = 30000;
 
 function App() {
@@ -137,6 +138,12 @@ function App() {
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
+
+  useEffect(() => {
+    if (hasAccess && apiAccessCode) {
+      writeAccessCookie(apiAccessCode);
+    }
+  }, [apiAccessCode, hasAccess]);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) {
@@ -349,6 +356,7 @@ function App() {
     const normalizedAccessCode = accessCode.trim();
     window.sessionStorage.setItem(ACCESS_SESSION_KEY, "true");
     window.sessionStorage.setItem(ACCESS_CODE_SESSION_KEY, normalizedAccessCode);
+    writeAccessCookie(normalizedAccessCode);
     setApiAccessCode(normalizedAccessCode);
     setHasAccess(true);
   }
@@ -356,6 +364,7 @@ function App() {
   function handleLockApp() {
     window.sessionStorage.removeItem(ACCESS_SESSION_KEY);
     window.sessionStorage.removeItem(ACCESS_CODE_SESSION_KEY);
+    clearAccessCookie();
     setApiAccessCode(APP_ACCESS_CODE);
     setHasAccess(false);
     setIsWorkspaceMenuOpen(false);
@@ -927,6 +936,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const pollTimerRef = useRef(null);
+  const pollFailureCountRef = useRef(0);
 
   useEffect(() => () => {
     if (pollTimerRef.current) {
@@ -948,6 +958,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
     setUploadError("");
     setUploadResult(null);
     setUploadJob(null);
+    pollFailureCountRef.current = 0;
 
     try {
       const response = await apiFetch("/api/data/upload", {
@@ -955,41 +966,43 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         method: "POST",
         body: formData,
       });
-      const payload = await response.json();
+      const payload = await readJsonPayload(response);
 
       if (!response.ok) {
-        throw new Error(payload.detail ?? "CSV upload could not be validated.");
+        throw buildUploadRequestError(response, payload, "upload");
       }
 
       setUploadJob(payload);
       setUploadState(normalizeUploadStatus(payload.status));
       pollUploadStatus(payload.job_id);
     } catch (error) {
-      setUploadError(
-        error instanceof TypeError
-          ? "Backend connection unavailable. System data could not be loaded."
-          : error.message,
-      );
-      setUploadState("error");
+      const classified = classifyUploadError(error, "upload");
+      setUploadError(classified.message);
+      setUploadState(classified.state);
+      console.warn("telemetry_upload_failure", classified);
     }
   }
 
   async function pollUploadStatus(jobId) {
     try {
       const response = await apiFetch(`/api/data/upload-status/${jobId}`, { accessCode });
-      const payload = await response.json();
+      const payload = await readJsonPayload(response);
 
       if (!response.ok) {
-        throw new Error(payload.detail ?? "Upload status could not be loaded.");
+        throw buildUploadRequestError(response, payload, "poll");
       }
 
+      pollFailureCountRef.current = 0;
       setUploadJob(payload);
       const nextStatus = normalizeUploadStatus(payload.status);
       setUploadState(nextStatus);
+      if (isUploadProcessing(nextStatus)) {
+        setUploadError("");
+      }
 
       if (nextStatus === "complete") {
         const latestResponse = await apiFetch("/api/data/latest-upload", { accessCode });
-        const latestPayload = latestResponse.ok ? await latestResponse.json() : payload.result_summary;
+        const latestPayload = latestResponse.ok ? await readJsonPayload(latestResponse) : payload.result_summary;
         const completedPayload = {
           ...(latestPayload ?? {}),
           filename: latestPayload?.last_filename ?? payload.filename,
@@ -1003,14 +1016,31 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
       }
 
       if (nextStatus === "failed") {
-        setUploadError(payload.error ?? "Telemetry processing failed.");
+        setUploadError(operatorUploadMessage({
+          status: response.status,
+          errorType: payload.error_type ?? "sii_processing_failure",
+          detail: payload.error,
+          phase: "poll",
+        }));
         return;
       }
 
       pollTimerRef.current = window.setTimeout(() => pollUploadStatus(jobId), 2000);
     } catch (error) {
-      setUploadError(error instanceof TypeError ? "Upload status is temporarily unavailable." : error.message);
-      setUploadState("error");
+      const classified = classifyUploadError(error, "poll");
+      console.warn("telemetry_polling_failure", { ...classified, jobId, attempts: pollFailureCountRef.current + 1 });
+      if (classified.retryable && pollFailureCountRef.current < 8) {
+        pollFailureCountRef.current += 1;
+        setUploadState((current) => isUploadProcessing(current) ? current : "running_sii");
+        setUploadError(classified.message);
+        pollTimerRef.current = window.setTimeout(
+          () => pollUploadStatus(jobId),
+          Math.min(2000 + pollFailureCountRef.current * 1500, 12000),
+        );
+        return;
+      }
+      setUploadError(classified.message);
+      setUploadState(classified.state);
     }
   }
 
@@ -1055,7 +1085,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
             <span>{selectedFile ? selectedFile.name : "No file selected"}</span>
             <span className="intake-flow__progress">
               {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
-              {uploadJob?.progress_label ?? uploadStateMessage(uploadState)}
+              {uploadJob?.message ?? uploadJob?.progress_label ?? uploadStateMessage(uploadState)}
             </span>
           </div>
 
@@ -2819,8 +2849,8 @@ function uploadStageDetail(stage, index, job, roomContext) {
     job?.message ?? "Telemetry batch received.",
     jobStatus === "parsing" ? job.progress_label : "Waiting for header and schema detection.",
     jobStatus === "baseline_modeling" ? job.progress_label : `Room context will resolve against ${roomContext.primary}.`,
-    jobStatus === "running_sii" ? job.progress_label : "SII engine processing will start after baseline modeling.",
-    jobStatus === "writing_state" ? job.progress_label : "Evidence and runner state will be written after SII processing.",
+    jobStatus === "running_sii" ? job.progress_label : "Telemetry processing will continue after baseline modeling.",
+    jobStatus === "writing_state" ? job.progress_label : "Facility state will be written after telemetry processing.",
     "Completion will refresh Facility Command.",
   ];
   return details[index] ?? stage;
@@ -2838,12 +2868,107 @@ function normalizeUploadStatus(status) {
     writing_state: "writing_state",
     complete: "complete",
     failed: "failed",
+    not_found: "error",
   };
   return aliases[normalized] ?? normalized;
 }
 
 function isUploadProcessing(status) {
   return ["uploading", "queued", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalizeUploadStatus(status));
+}
+
+async function readJsonPayload(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function buildUploadRequestError(response, payload, phase) {
+  return {
+    name: "UploadRequestError",
+    status: response.status,
+    phase,
+    errorType: payload?.error_type ?? payload?.detail?.error_type ?? null,
+    detail: payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? "",
+    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500,
+  };
+}
+
+function classifyUploadError(error, phase) {
+  if (error?.name === "UploadRequestError") {
+    return {
+      state: error.status === 401 || error.status === 403 ? "error" : phase === "poll" && error.retryable ? "running_sii" : "error",
+      retryable: phase === "poll" && error.retryable,
+      message: operatorUploadMessage({
+        status: error.status,
+        errorType: error.errorType,
+        detail: error.detail,
+        phase,
+      }),
+    };
+  }
+  if (error instanceof TypeError) {
+    return {
+      state: phase === "poll" ? "running_sii" : "error",
+      retryable: phase === "poll",
+      message: phase === "poll"
+        ? "Processing connection lost. Large telemetry batch still processing."
+        : "Secure telemetry ingestion unavailable.",
+    };
+  }
+  return {
+    state: "error",
+    retryable: false,
+    message: operatorUploadMessage({
+      status: null,
+      errorType: null,
+      detail: error?.message,
+      phase,
+    }),
+  };
+}
+
+function operatorUploadMessage({ status, errorType, detail, phase }) {
+  if (errorType === "auth_session_expired" || status === 401 || status === 403) {
+    return phase === "poll"
+      ? "Telemetry processing session expired."
+      : "Secure telemetry ingestion unavailable.";
+  }
+  if (errorType === "job_not_found" || status === 404) {
+    return "Telemetry upload interrupted.";
+  }
+  if (errorType === "sii_processing_failure") {
+    return detail ? `SII processing failure: ${detail}` : "SII processing failure.";
+  }
+  if (status === 408 || status === 425 || status === 429 || status >= 500) {
+    return "Large telemetry batch still processing.";
+  }
+  if (phase === "poll") {
+    return "Telemetry processing in progress. Large telemetry batches may require additional processing time.";
+  }
+  return typeof detail === "string" && detail.trim()
+    ? detail
+    : "Telemetry upload interrupted.";
+}
+
+function writeAccessCookie(accessCode) {
+  if (!accessCode || typeof document === "undefined") {
+    return;
+  }
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
+  document.cookie = `${ACCESS_CODE_COOKIE}=${encodeURIComponent(accessCode)}; Path=/; SameSite=Lax; Max-Age=86400${secure}${domain}`;
+}
+
+function clearAccessCookie() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
+  document.cookie = `${ACCESS_CODE_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0${secure}${domain}`;
 }
 
 function systemRoomContext(systemName, roomContext) {
@@ -2882,10 +3007,10 @@ function uploadStateMessage(uploadState) {
     return "Baseline modeling";
   }
   if (normalized === "running_sii") {
-    return "SII engine processing";
+    return "Telemetry processing in progress";
   }
   if (normalized === "writing_state") {
-    return "Writing evidence state";
+    return "Writing facility state";
   }
   if (normalized === "complete") {
     return "Batch processing complete";
