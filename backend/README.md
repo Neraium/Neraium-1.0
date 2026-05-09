@@ -35,15 +35,15 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `NERAIUM_API_ACCESS_CODE` defaults to `neraium-dev` outside production and is required in production.
 - `NERAIUM_RUNTIME_DIR` defaults to `backend/app/runtime`.
 
-For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `NERAIUM_API_ACCESS_CODE` to the same private access code configured in the frontend, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path.
+For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=80`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `NERAIUM_API_ACCESS_CODE` to the same private access code configured in the frontend, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path.
 
 ## Container Build
 
-The backend includes a Dockerfile for Amazon ECS Express Mode / ECS Fargate preparation. The container serves `app.main:app` with uvicorn and defaults to port `8080`.
+The backend includes a Dockerfile for Amazon ECS Express Mode / ECS Fargate preparation. The container serves `app.main:app` with uvicorn and defaults to port `80`.
 
 ```powershell
 docker build -t neraium-backend:local .\backend
-docker run --rm -p 8080:8080 neraium-backend:local
+docker run --rm -p 8080:80 neraium-backend:local
 ```
 
 ## Endpoints
