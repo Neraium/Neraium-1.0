@@ -82,13 +82,13 @@ def evaluate_relationships(
                     "level": "elevated",
                     "columns": [first_column, second_column],
                     "message": (
-                        f"{first_column} and {second_column} changed relationship strength "
-                        "between the baseline and recent windows."
+                        f"{display_column(first_column)} and {display_column(second_column)} relationship consistency "
+                        "became less stable between the baseline and active windows."
                     ),
                 }
             )
             recommended_checks.append(
-                f"Compare {first_column} and {second_column} source readings against room activity logs."
+                f"Compare {display_column(first_column)} and {display_column(second_column)} timing against room activity logs."
             )
 
     if not evidence:
@@ -135,3 +135,13 @@ def correlation_for_pair(rows: list[list[str]], first_index: int, second_index: 
 def is_timestamp_like(column: str) -> bool:
     normalized = column.lower().replace(" ", "_")
     return normalized in {"timestamp", "time", "datetime", "date", "recorded_at", "created_at"}
+
+
+def display_column(column: str) -> str:
+    normalized = column.lower().replace("_", " ")
+    aliases = {
+        "intervention window hours": "intervention window",
+        "hvac runtime": "HVAC runtime",
+        "co2": "CO2",
+    }
+    return aliases.get(normalized, normalized)

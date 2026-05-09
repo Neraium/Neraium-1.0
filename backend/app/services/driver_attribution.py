@@ -189,14 +189,14 @@ def score_relationship_pair(
     evidence: str,
 ) -> None:
     if {"humidity_control", "hvac_instability"} <= categories:
-        scores["humidity_control"].add(2, "Humidity and HVAC response relationship changed", "humidity", relationship_change=True)
+        scores["humidity_control"].add(2, "Humidity recovery is becoming less stable after environmental transitions", "humidity", relationship_change=True)
         scores["hvac_instability"].add(1, evidence, "HVAC", relationship_change=True)
     if {"airflow_restriction", "hvac_instability"} <= categories or {"airflow_restriction", "humidity_control"} <= categories:
-        scores["airflow_restriction"].add(2, "Air movement relationship changed with room conditions", "airflow", relationship_change=True)
+        scores["airflow_restriction"].add(2, "Air movement behavior became less consistent during changing room conditions", "airflow", relationship_change=True)
     if "irrigation_timing" in categories and ("humidity_control" in categories or "hvac_instability" in categories):
-        scores["irrigation_timing"].add(2, "Room response changed around irrigation-related signals", "irrigation", relationship_change=True)
+        scores["irrigation_timing"].add(2, "Room recovery behavior is changing around irrigation-related signals", "irrigation", relationship_change=True)
     if {"lighting_schedule", "hvac_instability"} <= categories:
-        scores["lighting_schedule"].add(2, "Lighting and room temperature relationship changed", "lighting", relationship_change=True)
+        scores["lighting_schedule"].add(2, "Lighting and room temperature response became less consistent", "lighting", relationship_change=True)
 
 
 def score_sensor_network(
@@ -307,8 +307,33 @@ def evidence_for_drift(category: str, column: str, persistent: bool) -> str:
 
 def relationship_evidence(columns: list[str]) -> str:
     if len(columns) >= 2:
-        return f"{columns[0]} and {columns[1]} changed relationship strength"
-    return "Relationship strength changed between baseline and recent readings"
+        return relationship_evidence_sentence(columns[0], columns[1])
+    return "Environmental coupling is less consistent than the room's recent baseline"
+
+
+def relationship_evidence_sentence(first_column: str, second_column: str) -> str:
+    first = display_column(first_column)
+    second = display_column(second_column)
+    normalized = f"{first} {second}".lower()
+    if "intervention window" in normalized:
+        return "Intervention windows are shortening as environmental recovery slows"
+    if "humidity" in normalized and ("airflow" in normalized or "air movement" in normalized):
+        return "Airflow response consistency weakened during active climate periods"
+    if "humidity" in normalized:
+        return "Humidity recovery is becoming less stable after environmental transitions"
+    if "airflow" in normalized or "air movement" in normalized:
+        return "Air movement behavior is diverging from this room's recent operating pattern"
+    return "Environmental coupling is less consistent than the room's recent baseline"
+
+
+def display_column(column: str) -> str:
+    normalized = str(column).lower().replace("_", " ")
+    aliases = {
+        "intervention window hours": "intervention window",
+        "hvac runtime": "HVAC runtime",
+        "co2": "CO2",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def confidence_basis(score: DriverScore) -> str:

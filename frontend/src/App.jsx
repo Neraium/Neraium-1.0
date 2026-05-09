@@ -1585,23 +1585,24 @@ function DriftFeed({ rows }) {
 
 function RelationshipMonitor({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No relationship changes" body="Awaiting paired room telemetry." compact />;
+    return <EmptyState title="No consistency shifts" body="Awaiting paired room telemetry." compact />;
   }
 
   return (
     <div className="relationship-list">
-      {rows.map((row, index) => (
-        <div className="relationship-row" key={`${row.columns.join("-")}-${index}`}>
-          <div className="relationship-row__header">
-            <span>{row.columns.join(" x ")}</span>
-            <StatusDot tone={row.tone ?? "info"} />
+      {rows.map((row, index) => {
+        const columns = row.columns ?? [];
+        return (
+          <div className="relationship-row" key={`${columns.join("-")}-${index}`}>
+            <div className="relationship-row__header">
+              <span>{formatRelationshipPair(columns, index)}</span>
+              <StatusDot tone={row.tone ?? "info"} />
+            </div>
+            <strong>{relationshipDetail(row)}</strong>
+            <p>{relationshipConsistencyLabel(row)}</p>
           </div>
-          <strong>{row.change}</strong>
-          <p>
-            baseline {row.baseline_correlation} to active {row.recent_correlation}
-          </p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1846,7 +1847,14 @@ function WhyPanel({
         <p>{guidance.whyFlagged}</p>
       </div>
 
-      <ProgressionStrip tone={item.tone ?? "info"} compact={compact} />
+      {compact ? (
+        <ProgressionStrip tone={item.tone ?? "info"} compact />
+      ) : (
+        <div className="why-panel__section observed-progression">
+          <span className="section-token">Observed progression</span>
+          <ProgressionStrip tone={item.tone ?? "info"} detailed />
+        </div>
+      )}
 
       {!compact && (
         <div className="why-panel__section structural-explanation">
@@ -1954,12 +1962,22 @@ function OperatorActionControls({ actionStatus, targetId, onOperatorAction }) {
   );
 }
 
-function ProgressionStrip({ tone, compact = false }) {
-  const stages = ["Stable", "Drift observed", "Decision window", "Intervention horizon"];
+function ProgressionStrip({ tone, compact = false, detailed = false }) {
+  const stages = detailed
+    ? [
+        "Stable environmental recovery",
+        "Early airflow inconsistency",
+        "Slower humidity stabilization",
+        "Compressed intervention horizon",
+      ]
+    : ["Stable recovery", "Airflow watch", "Humidity recovery", "Window tightening"];
   const activeIndex = tone === "unstable" ? 3 : tone === "elevated" ? 2 : tone === "review" ? 1 : 0;
 
   return (
-    <div className={`progression-strip ${compact ? "progression-strip--compact" : ""}`} aria-label="Room movement progression">
+    <div
+      className={`progression-strip ${compact ? "progression-strip--compact" : ""} ${detailed ? "progression-strip--detailed" : ""}`}
+      aria-label="Room movement progression"
+    >
       {stages.map((stage, index) => (
         <div
           className={`progression-strip__stage ${index <= activeIndex ? "progression-strip__stage--active" : ""}`}
@@ -2647,8 +2665,79 @@ function buildRelationshipRows(result) {
     .filter((item) => item.type === "relationship_change")
     .map((item) => ({
       ...item,
+      detail: relationshipDetail(item),
       tone: mapOperationalTone(item.level ?? "review"),
     }));
+}
+
+function formatRelationshipPair(columns = [], index = 0) {
+  const labels = columns.map(displayFieldName).filter(Boolean);
+  if (labels.length >= 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+  if (labels.length === 1) {
+    return labels[0];
+  }
+  return `Environmental coupling ${index + 1}`;
+}
+
+function relationshipDetail(row) {
+  if (row.detail) {
+    return polishEvidenceLanguage(row.detail);
+  }
+  const labels = (row.columns ?? []).map((column) => displayFieldName(column).toLowerCase());
+  const joined = labels.join(" ");
+  if (joined.includes("intervention window")) {
+    return "Intervention windows are shortening as environmental recovery slows.";
+  }
+  if (joined.includes("humidity") && (joined.includes("airflow") || joined.includes("air movement"))) {
+    return "Airflow response consistency weakened during active climate periods.";
+  }
+  if (joined.includes("humidity")) {
+    return "Humidity recovery is becoming less stable after environmental transitions.";
+  }
+  if (joined.includes("airflow") || joined.includes("air movement")) {
+    return "Air movement behavior is diverging from this room's recent operating pattern.";
+  }
+  return "Environmental coupling is less consistent than the room's recent baseline.";
+}
+
+function relationshipConsistencyLabel(row) {
+  const baseline = row.baseline_correlation ?? row.baselineConsistency;
+  const recent = row.recent_correlation ?? row.activeConsistency;
+  if (baseline === undefined || recent === undefined) {
+    return "Relationship consistency is being compared against recent room behavior.";
+  }
+  return `Relationship consistency moved from ${baseline} baseline to ${recent} active.`;
+}
+
+function displayFieldName(field) {
+  const normalized = String(field ?? "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const aliases = {
+    intervention_window_hours: "intervention window",
+    "intervention window hours": "intervention window",
+    airflow: "airflow",
+    hvac_runtime: "HVAC runtime",
+    co2: "CO2",
+    recent_baseline: "recent baseline",
+  };
+  if (aliases[normalized]) {
+    return aliases[normalized];
+  }
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function polishEvidenceLanguage(text) {
+  return String(text ?? "")
+    .replace(/relationship strength/gi, "relationship consistency")
+    .replace(/intervention_window_hours/gi, "intervention window")
+    .replace(/changed with room conditions/gi, "became less consistent during changing room conditions")
+    .replace(/relationship changed compared to baseline/gi, "relationship consistency became less consistent than the room's recent baseline")
+    .replace(/changed relationship strength between the baseline and recent windows/gi, "showed less consistent recovery between the baseline and active windows");
 }
 
 function buildRoomObservations(result, roomContext) {
@@ -3502,10 +3591,10 @@ function buildSiiDriftRows(intelligence) {
 
 function buildSiiRelationshipRows(intelligence) {
   return (intelligence.relationship_evidence ?? []).map((detail, index) => ({
-    columns: [`relationship_${index + 1}`, "recent_baseline"],
-    change: 1,
+    columns: ["environmental coupling", "recent baseline"],
+    change: relationshipDetail({ detail }),
     tone: mapSiiUrgency(intelligence.urgency),
-    detail,
+    detail: polishEvidenceLanguage(detail),
   }));
 }
 
@@ -3667,7 +3756,7 @@ function buildDriversFromRoom(room) {
       : "Room temperature response remains within expected behavior.",
     room.instability > 1.1
       ? `Humidity recovery is slowing relative to baseline, with stability reading ${room.instability.toFixed(2)}.`
-      : "Environmental relationships remain stable.",
+      : "Environmental coupling remains stable.",
     `${room.irrigationState}. Cycle settling remains the current operating state.`,
   ];
 }
@@ -3676,8 +3765,8 @@ function buildUploadedStructuralExplanation(attribution, engineSignals) {
   if (attribution?.driver_category === "humidity_control") {
     return [
       "Temperature recovery is decoupling from humidity stabilization.",
-      "Relationship persistence observed across recent monitoring windows.",
-      "Room behavior is moving earlier than its recent baseline.",
+      "Environmental coupling is less consistent than the room's recent baseline.",
+      "Room recovery behavior is compressing the intervention horizon.",
     ];
   }
   if (attribution?.driver_category === "sensor_network") {
@@ -3695,7 +3784,7 @@ function buildUploadedStructuralExplanation(attribution, engineSignals) {
     ];
   }
   return [
-    "Environmental relationships remain stable.",
+    "Environmental coupling remains stable.",
     "Room behavior is staying within its recent baseline.",
     "Infrastructure does not fail suddenly. It moves.",
   ];
@@ -3712,27 +3801,27 @@ function buildStructuralExplanation(item) {
   if (item?.tone === "unstable") {
     return [
       "Temperature recovery is decoupling from humidity stabilization.",
-      "Relationship persistence observed across 3 monitoring windows.",
-      "Room behavior is moving earlier than its recent baseline.",
+      "Environmental coupling is less consistent than the room's recent baseline.",
+      "Room recovery behavior is compressing the intervention horizon.",
     ];
   }
   if (item?.tone === "elevated") {
     return [
-      "Airflow response is lagging behind room temperature recovery.",
-      "Relationship persistence observed across 2 monitoring windows.",
-      "Room behavior is shortening against its recent baseline.",
+      "Airflow response consistency weakened during active climate periods.",
+      "Humidity recovery is becoming less stable after environmental transitions.",
+      "Room recovery behavior is compressing the intervention horizon.",
     ];
   }
   if (item?.tone === "review") {
     return [
       "Drift is visible, but the room remains controllable.",
       "Transition stability should be watched through the next operating window.",
-      "Environmental relationships remain mostly stable.",
+      "Environmental coupling remains mostly consistent.",
     ];
   }
   return [
     "Room temperature response remains within expected behavior.",
-    "Environmental relationships remain stable.",
+    "Environmental coupling remains stable.",
     "Cycle settling remains the current operating state.",
   ];
 }
@@ -3741,29 +3830,29 @@ function buildStructuralExplanationFromRoom(room, index = 0) {
   if (room.tone === "unstable") {
     return [
       "Temperature recovery is decoupling from humidity stabilization.",
-      "Relationship persistence observed across 3 monitoring windows.",
-      "Room behavior is moving earlier than its recent baseline.",
+      "Environmental coupling is less consistent than the room's recent baseline.",
+      "Room recovery behavior is compressing the intervention horizon.",
     ];
   }
   if (room.tone === "elevated") {
     return [
       index % 2 === 0
-        ? "Airflow response is lagging behind room temperature recovery."
+        ? "Airflow response consistency weakened during active climate periods."
         : "Environmental coupling is shifting across the current room cycle.",
-      "Relationship persistence observed across 2 monitoring windows.",
-      "Room behavior is shortening against its recent baseline.",
+      "Humidity recovery is becoming less stable after environmental transitions.",
+      "Room recovery behavior is compressing the intervention horizon.",
     ];
   }
   if (room.tone === "review") {
     return [
       "Drift is visible, but the room remains controllable.",
       "Transition stability should be watched through the next operating window.",
-      "Environmental relationships remain mostly stable.",
+      "Environmental coupling remains mostly consistent.",
     ];
   }
   return [
     "Room temperature response remains within expected behavior.",
-    "Environmental relationships remain stable.",
+    "Environmental coupling remains stable.",
     "Cycle settling remains the current operating state.",
   ];
 }
@@ -3984,8 +4073,8 @@ function buildGuidanceFromCategory(category) {
     },
     environmental_coupling: {
       nextMove: "Review environmental coupling",
-      primaryDriver: "Environmental relationships are becoming less consistent.",
-      whyFlagged: "Temperature and humidity relationships appear less consistent across recent monitoring windows.",
+      primaryDriver: "Environmental coupling is becoming less consistent.",
+      whyFlagged: "Temperature and humidity recovery appear less consistent across recent monitoring windows.",
       whatToCheck: [
         "Compare temperature and humidity recovery together",
         "Review room transition behavior",
@@ -4014,7 +4103,7 @@ function buildGuidanceFromCategory(category) {
     },
     stable_monitoring: {
       nextMove: "Continue monitoring",
-      primaryDriver: "Environmental relationships remain consistent compared to recent baseline.",
+      primaryDriver: "Environmental coupling remains consistent compared to recent baseline.",
       whyFlagged: "Room behavior remains visible and controllable across recent monitoring windows.",
       whatToCheck: [
         "Continue routine room walk",
@@ -4296,21 +4385,25 @@ function buildSimulatedRelationshipRows(roomStates, tick) {
   return [
     {
       columns: ["humidity", "irrigation"],
-      change: tick % 2 === 0 ? "Recovery slope widening" : "Recovery returning to baseline",
+      change: tick % 2 === 0
+        ? "Humidity recovery is becoming less stable after environmental transitions."
+        : "Humidity recovery is returning toward the room baseline.",
       baseline_correlation: "0.74",
       recent_correlation: tick % 2 === 0 ? "0.59" : "0.68",
       tone: tick % 2 === 0 ? "review" : "nominal",
     },
     {
       columns: ["HVAC", "temperature"],
-      change: roomStates[0].hvacDrift > 1.4 ? "Supply temperature elevated" : "Supply tracking nominal",
+      change: roomStates[0].hvacDrift > 1.4
+        ? "Environmental coupling is less consistent than the room's recent baseline."
+        : "Temperature response remains consistent with recent room behavior.",
       baseline_correlation: "0.81",
       recent_correlation: roomStates[0].hvacDrift > 1.4 ? "0.63" : "0.77",
       tone: roomStates[0].hvacDrift > 1.4 ? "elevated" : "nominal",
     },
     {
       columns: ["CO2", "airflow"],
-      change: "Relationship change observed during room transition",
+      change: "Air movement behavior became less consistent during changing room conditions.",
       baseline_correlation: "0.66",
       recent_correlation: "0.52",
       tone: "info",

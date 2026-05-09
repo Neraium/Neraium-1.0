@@ -1399,6 +1399,10 @@ h4 {
   gap: 8px;
 }
 
+.observed-progression {
+  gap: 10px;
+}
+
 .why-panel__driver {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr);
@@ -4160,10 +4164,34 @@ select {
   padding: 4px 0 2px;
 }
 
+.progression-strip--detailed {
+  grid-template-columns: 1fr;
+  gap: 0;
+  padding: 2px 0;
+}
+
 .progression-strip__stage {
   display: grid;
   gap: 7px;
   min-width: 0;
+}
+
+.progression-strip--detailed .progression-strip__stage {
+  position: relative;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 34px;
+  align-items: start;
+}
+
+.progression-strip--detailed .progression-strip__stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 16px;
+  bottom: 3px;
+  width: 1px;
+  background: rgba(177, 211, 206, 0.16);
 }
 
 .progression-strip__stage span {
@@ -4174,6 +4202,12 @@ select {
   transition: background var(--motion-stable), box-shadow var(--motion-stable);
 }
 
+.progression-strip--detailed .progression-strip__stage span {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+
 .progression-strip__stage strong {
   color: var(--text-muted);
   font-size: 0.64rem;
@@ -4181,6 +4215,13 @@ select {
   letter-spacing: 0.06em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.progression-strip--detailed .progression-strip__stage strong {
+  padding-bottom: 12px;
+  font-size: 0.76rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .progression-strip--compact .progression-strip__stage strong {

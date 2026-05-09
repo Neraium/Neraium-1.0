@@ -46,12 +46,12 @@ def build_sample_intelligence() -> dict[str, Any]:
             ],
             "relationship_evidence": [
                 "Temperature recovery is decoupling from humidity stabilization.",
-                "Environmental relationships are becoming less consistent.",
+                "Environmental coupling is becoming less consistent.",
             ],
             "structural_explanation": [
                 "Temperature recovery is decoupling from humidity stabilization.",
-                "Relationship persistence observed across 3 monitoring windows.",
-                "Room behavior is moving earlier than its recent baseline.",
+                "Environmental coupling is less consistent than the room's recent baseline.",
+                "Room recovery behavior is compressing the intervention horizon.",
             ],
             "confidence_basis": "Persistent multi-signal drift compared to recent baseline.",
             "recommended_operator_review": "Review humidity recovery behavior",
@@ -71,17 +71,17 @@ def build_sample_intelligence() -> dict[str, Any]:
             "room_state": "Stable",
             "urgency": "nominal",
             "intervention_window": "5 weeks",
-            "primary_driver": "Environmental relationships remain consistent compared to recent baseline.",
+            "primary_driver": "Environmental coupling remains consistent compared to recent baseline.",
             "supporting_evidence": [
                 "Temperature response remains inside recent room behavior.",
                 "Humidity recovery remains visible and controlled.",
             ],
             "relationship_evidence": [
-                "Environmental relationships remain stable.",
+                "Environmental coupling remains stable.",
             ],
             "structural_explanation": [
                 "Room temperature response remains within expected behavior.",
-                "Environmental relationships remain stable.",
+                "Environmental coupling remains stable.",
                 "Cycle settling remains the current operating state.",
             ],
             "confidence_basis": "Stable relationship behavior across recent monitoring windows.",
@@ -224,8 +224,33 @@ def relationship_evidence_from_engine(engine_result: dict[str, Any]) -> list[str
         if item.get("type") == "relationship_change":
             columns = item.get("columns", [])
             if len(columns) >= 2:
-                evidence.append(f"{columns[0]} and {columns[1]} relationship changed compared to baseline")
-    return evidence[:4] or ["Relationship evidence is limited in the current telemetry."]
+                evidence.append(relationship_evidence_sentence(columns[0], columns[1]))
+    return evidence[:4] or ["Environmental coupling evidence is limited in the current telemetry."]
+
+
+def relationship_evidence_sentence(first_column: str, second_column: str) -> str:
+    first = display_column(first_column)
+    second = display_column(second_column)
+    normalized = f"{first} {second}".lower()
+    if "intervention window" in normalized:
+        return "Intervention windows are shortening as environmental recovery slows."
+    if "humidity" in normalized and ("airflow" in normalized or "air movement" in normalized):
+        return "Airflow response consistency weakened during active climate periods."
+    if "humidity" in normalized:
+        return "Humidity recovery is becoming less stable after environmental transitions."
+    if "airflow" in normalized or "air movement" in normalized:
+        return "Air movement behavior is diverging from this room's recent operating pattern."
+    return "Environmental coupling is less consistent than the room's recent baseline."
+
+
+def display_column(column: str) -> str:
+    normalized = str(column).lower().replace("_", " ")
+    aliases = {
+        "intervention window hours": "intervention window",
+        "hvac runtime": "HVAC runtime",
+        "co2": "CO2",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def structural_explanation_from_attribution(attribution: dict[str, Any], relationship_evidence: list[str]) -> list[str]:
@@ -234,21 +259,21 @@ def structural_explanation_from_attribution(attribution: dict[str, Any], relatio
         return [
             "Humidity recovery appears slower than recent room behavior.",
             "Temperature recovery is decoupling from humidity stabilization.",
-            "Relationship persistence was observed across recent monitoring windows.",
+            "Environmental coupling is less consistent than the room's recent baseline.",
         ]
     if category == "hvac_instability":
         return [
             "Room temperature recovery appears less consistent than baseline.",
             "Temperature and humidity recovery are not moving together as expected.",
-            "Relationship evidence is being held as supporting context.",
+            "Environmental coupling is less consistent than the room's recent baseline.",
         ]
     if category == "airflow_restriction":
         return [
-            "Airflow response appears slower than recent baseline.",
+            "Airflow response consistency weakened during active climate periods.",
             "Room exchange behavior may be affecting environmental recovery.",
-            "Relationship evidence is being held as supporting context.",
+            "Air movement behavior is diverging from this room's recent operating pattern.",
         ]
-    return relationship_evidence[:3] or ["Room behavior is being compared against recent operating baseline."]
+    return relationship_evidence[:3] or ["Room recovery behavior is being compared against recent operating baseline."]
 
 
 def checks_from_attribution(attribution: dict[str, Any], operator_report: dict[str, Any]) -> list[str]:

@@ -334,7 +334,7 @@ def build_runner_evidence(
         evidence.append(f"Driver attribution category: {driver_attribution['driver_category']}.")
     for item in engine_result.get("evidence", [])[:2]:
         if item.get("type"):
-            evidence.append(f"Existing upload engine evidence: {item['type']}.")
+            evidence.append("Environmental coupling is less consistent than the room's recent baseline.")
     return evidence
 
 
