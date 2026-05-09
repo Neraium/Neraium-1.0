@@ -32,6 +32,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        if exc.status_code in {401, 403}:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=auth_error_payload(),
+                headers=exc.headers,
+            )
         if not request.url.path.startswith("/api/data/upload"):
             detail = exc.detail
             return JSONResponse(status_code=exc.status_code, content={"detail": detail}, headers=exc.headers)
@@ -65,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
     error_type = "upload_request_error"
-    message = "Telemetry upload interrupted."
+    message = "Upload interrupted. Refresh your workspace and try again."
     if isinstance(detail, dict):
         error_type = str(detail.get("error_type") or error_type)
         message = normalize_error_message(detail.get("message") or detail.get("detail") or detail.get("error") or message)
@@ -73,8 +79,7 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
         message = normalize_error_message(detail)
 
     if status_code in {401, 403}:
-        error_type = "auth_session_expired"
-        message = "Telemetry processing session expired."
+        return auth_error_payload()
 
     return {
         "job_id": None,
@@ -83,6 +88,19 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
         "processing_state": "failed",
         "message": message,
         "error_type": error_type,
+        "error": message,
+    }
+
+
+def auth_error_payload() -> dict[str, Any]:
+    message = "Telemetry processing session could not be validated."
+    return {
+        "job_id": None,
+        "status": "unauthorized",
+        "progress": 0,
+        "processing_state": "unauthorized",
+        "message": message,
+        "error_type": "auth",
         "error": message,
     }
 

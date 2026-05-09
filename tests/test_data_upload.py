@@ -51,11 +51,11 @@ def test_upload_auth_failure_returns_upload_json_contract(tmp_path) -> None:
 
     assert response.status_code == 401
     payload = response.json()
-    assert payload["status"] == "FAILED"
-    assert payload["message"] == "Telemetry processing session expired."
-    assert payload["processing_state"] == "failed"
+    assert payload["status"] == "unauthorized"
+    assert payload["message"] == "Telemetry processing session could not be validated."
+    assert payload["processing_state"] == "unauthorized"
     assert payload["progress"] == 0
-    assert payload["error_type"] == "auth_session_expired"
+    assert payload["error_type"] == "auth"
     assert payload["job_id"] is None
 
 

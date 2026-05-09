@@ -40,7 +40,10 @@ def test_settings_read_environment_values(monkeypatch) -> None:
         "https://app.example.com",
         "https://admin.example.com",
         "http://127.0.0.1:3010",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
         "http://localhost:3010",
+        "http://localhost:5173",
         "https://app.neraium.com",
     ]
     assert settings.app_access_code == "pilot-secret"
@@ -51,7 +54,10 @@ def test_parse_cors_origins_ignores_empty_values() -> None:
         "https://app.example.com",
         "https://ops.example.com",
         "http://127.0.0.1:3010",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
         "http://localhost:3010",
+        "http://localhost:5173",
         "https://app.neraium.com",
     ]
 
@@ -59,7 +65,10 @@ def test_parse_cors_origins_ignores_empty_values() -> None:
 def test_default_cors_origins_include_local_and_production_frontends() -> None:
     assert DEFAULT_CORS_ORIGINS == [
         "http://127.0.0.1:3010",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
         "http://localhost:3010",
+        "http://localhost:5173",
         "https://app.neraium.com",
     ]
 

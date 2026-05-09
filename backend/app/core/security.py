@@ -32,7 +32,8 @@ def require_api_access(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
-                "error_type": "auth_session_expired",
-                "message": "Telemetry processing session expired.",
+                "status": "unauthorized",
+                "error_type": "auth",
+                "message": "Telemetry processing session could not be validated.",
             },
         )

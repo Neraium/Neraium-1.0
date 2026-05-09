@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import RUNNER_MODULE, STATE_PATH, write_latest_sii_state
 
@@ -237,3 +238,78 @@ def test_facility_systems_endpoint_returns_cors_header_for_production_frontend()
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
+
+
+def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.options(
+        "/api/data/upload",
+        headers={
+            "Origin": "https://app.neraium.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-neraium-access-code",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_upload_status_preflight_succeeds_without_auth_for_local_vite(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["http://127.0.0.1:5173"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.options(
+        "/api/data/upload-status/example-job",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "x-neraium-access-code",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_protected_endpoint_unauthorized_response_is_structured_json(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get("/api/facility/systems")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "job_id": None,
+        "status": "unauthorized",
+        "progress": 0,
+        "processing_state": "unauthorized",
+        "message": "Telemetry processing session could not be validated.",
+        "error_type": "auth",
+        "error": "Telemetry processing session could not be validated.",
+    }

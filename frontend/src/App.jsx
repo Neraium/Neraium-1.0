@@ -155,7 +155,7 @@ function App() {
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/health`, { credentials: "include" });
+      const response = await apiFetch("/api/health", { accessCode: apiAccessCode });
       if (!response.ok) {
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -189,7 +189,7 @@ function App() {
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;
     }
-  }, [hasAccess]);
+  }, [apiAccessCode, hasAccess]);
 
   const loadFacilitySystems = useCallback(async () => {
     if (!hasAccess) {
@@ -2952,13 +2952,13 @@ function classifyUploadError(error, phase) {
 }
 
 function operatorUploadMessage({ status, errorType, detail, phase }) {
-  if (errorType === "auth_session_expired" || status === 401 || status === 403) {
+  if (errorType === "auth" || errorType === "auth_session_expired" || status === 401 || status === 403) {
     return phase === "poll"
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-      : "Secure telemetry ingestion unavailable.";
+      : "Telemetry processing session could not be validated.";
   }
   if (errorType === "job_not_found" || status === 404) {
-    return "Telemetry upload interrupted.";
+    return "Upload interrupted. Refresh your workspace and try again.";
   }
   if (errorType === "sii_processing_failure") {
     return detail ? `SII processing failure: ${normalizeErrorMessage(detail)}` : "SII processing failure.";
@@ -2971,7 +2971,7 @@ function operatorUploadMessage({ status, errorType, detail, phase }) {
   }
   return typeof detail === "string" && detail.trim()
     ? detail
-    : "Telemetry upload interrupted.";
+    : "Upload interrupted. Refresh your workspace and try again.";
 }
 
 function writeAccessCookie(accessCode) {
