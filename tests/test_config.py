@@ -39,6 +39,9 @@ def test_settings_read_environment_values(monkeypatch) -> None:
     assert settings.cors_origins == [
         "https://app.example.com",
         "https://admin.example.com",
+        "http://127.0.0.1:3010",
+        "http://localhost:3010",
+        "https://app.neraium.com",
     ]
     assert settings.app_access_code == "pilot-secret"
 
@@ -47,6 +50,9 @@ def test_parse_cors_origins_ignores_empty_values() -> None:
     assert parse_cors_origins("https://app.example.com, ,https://ops.example.com") == [
         "https://app.example.com",
         "https://ops.example.com",
+        "http://127.0.0.1:3010",
+        "http://localhost:3010",
+        "https://app.neraium.com",
     ]
 
 

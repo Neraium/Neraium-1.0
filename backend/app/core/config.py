@@ -44,7 +44,11 @@ def parse_port(raw_value: str | None, default: int) -> int:
 def parse_cors_origins(raw_value: str | None) -> list[str]:
     if raw_value is None or raw_value.strip() == "":
         return DEFAULT_CORS_ORIGINS.copy()
-    return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    origins = [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    for required_origin in DEFAULT_CORS_ORIGINS:
+        if required_origin not in origins:
+            origins.append(required_origin)
+    return origins
 
 
 def parse_access_code(raw_value: str | None, app_env: str) -> str:

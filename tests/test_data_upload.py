@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
 from app.services.upload_jobs import JOB_DIR, process_csv_content, process_csv_file, read_job, write_job
@@ -30,6 +31,65 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["message"] == "Telemetry batch received. Processing started."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
     assert payload["file_size_bytes"] > 0
+
+
+def test_upload_auth_failure_returns_upload_json_contract(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
+    )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["status"] == "FAILED"
+    assert payload["message"] == "Telemetry processing session expired."
+    assert payload["processing_state"] == "failed"
+    assert payload["progress"] == 0
+    assert payload["error_type"] == "auth_session_expired"
+    assert payload["job_id"] is None
+
+
+def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+    job = {
+        "job_id": "session-job",
+        "filename": "session.csv",
+        "status": "RUNNING_SII",
+        "progress_label": "Running SII engine against uploaded telemetry.",
+        "rows_processed": 500_000,
+        "columns_detected": 26,
+        "started_at": "2026-05-08T00:00:00+00:00",
+        "completed_at": None,
+        "error": None,
+    }
+    write_job(job)
+    client.cookies.set("neraium_access_code", "expected-secret")
+
+    response = client.get("/api/data/upload-status/session-job")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "RUNNING_SII"
+    assert payload["message"] == "Telemetry batch processing in progress."
+    assert payload["rows_processed"] == 500_000
 
 
 def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
@@ -147,7 +207,10 @@ def test_upload_rejects_invalid_extension() -> None:
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Only .csv files are supported."
+    payload = response.json()
+    assert payload["message"] == "Only .csv files are supported."
+    assert payload["status"] == "FAILED"
+    assert payload["processing_state"] == "failed"
 
 
 def test_upload_rejects_empty_csv() -> None:
@@ -156,7 +219,10 @@ def test_upload_rejects_empty_csv() -> None:
     response = post_csv(client, "empty.csv", "")
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "CSV file is empty."
+    payload = response.json()
+    assert payload["message"] == "CSV file is empty."
+    assert payload["status"] == "FAILED"
+    assert payload["processing_state"] == "failed"
 
 
 def test_processing_helper_preserves_profile_metadata() -> None:
@@ -229,6 +295,25 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
     assert result["processing_stats"]["chunk_count"] == 30
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 300_000
+
+
+def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
+    csv_path = tmp_path / "telemetry-500k.csv"
+    with csv_path.open("w", encoding="utf-8") as output:
+        output.write("timestamp,room,temperature,humidity,airflow\n")
+        for index in range(500_000):
+            output.write(
+                f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 13) * 0.1:.1f},{58 + (index % 17) * 0.2:.1f},{1.2 + (index % 7) * 0.01:.2f}\n"
+            )
+
+    result = process_csv_file(file_path=csv_path, filename="telemetry-500k.csv")
+
+    assert result["row_count"] == 500_000
+    assert result["processing_stats"]["sampled_rows"] == 50_000
+    assert result["processing_stats"]["chunk_count"] == 50
+    assert result["processing_stats"]["memory_estimate_bytes"] > 0
+    assert result["processing_trace"]["rows_processed"] == 500_000
 
 
 def test_upload_polling_reads_persisted_job_state() -> None:

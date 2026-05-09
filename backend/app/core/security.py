@@ -15,7 +15,7 @@ def require_api_access(
     x_neraium_access_code: str | None = Header(default=None),
     neraium_access_code: str | None = Cookie(default=None),
 ) -> None:
-    settings = get_settings()
+    settings = getattr(request.app.state, "settings", None) or get_settings()
     supplied_access_code = x_neraium_access_code or neraium_access_code
     if settings.app_env != "production" and supplied_access_code is None:
         return

@@ -57,11 +57,11 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "FAILED": 100,
     }
     message_map = {
-        "PENDING": "Telemetry processing in progress.",
-        "PARSING": "Telemetry processing in progress.",
-        "BASELINE_MODELING": "Large telemetry batches may require additional processing time.",
-        "RUNNING_SII": "Telemetry processing in progress.",
-        "GENERATING_EVIDENCE": "Telemetry processing in progress.",
+        "PENDING": "Telemetry batch processing in progress.",
+        "PARSING": "Telemetry batch processing in progress.",
+        "BASELINE_MODELING": "Large telemetry uploads may require additional processing time.",
+        "RUNNING_SII": "Telemetry batch processing in progress.",
+        "GENERATING_EVIDENCE": "Telemetry batch processing in progress.",
         "COMPLETE": "Telemetry processing complete.",
         "FAILED": "Telemetry processing failed.",
     }

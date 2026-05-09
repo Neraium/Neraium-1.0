@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
 from app.routers import app_info, data, facility, health
@@ -12,6 +15,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         description="Customer-facing API for the Neraium application.",
     )
+    app.state.settings = settings
 
     app.add_middleware(
         CORSMiddleware,
@@ -26,6 +30,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
 
+    @app.exception_handler(HTTPException)
+    async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        if not request.url.path.startswith("/api/data/upload"):
+            detail = exc.detail
+            return JSONResponse(status_code=exc.status_code, content={"detail": detail}, headers=exc.headers)
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=upload_error_payload(exc.detail, status_code=exc.status_code),
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(Exception)
+    async def upload_unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        if not request.url.path.startswith("/api/data/upload"):
+            raise exc
+        return JSONResponse(
+            status_code=500,
+            content=upload_error_payload("Unexpected processing error", status_code=500),
+        )
+
     @app.get("/")
     def read_root():
         return {
@@ -36,6 +61,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     return app
+
+
+def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
+    error_type = "upload_request_error"
+    message = "Telemetry upload interrupted."
+    if isinstance(detail, dict):
+        error_type = str(detail.get("error_type") or error_type)
+        message = normalize_error_message(detail.get("message") or detail.get("detail") or detail.get("error") or message)
+    else:
+        message = normalize_error_message(detail)
+
+    if status_code in {401, 403}:
+        error_type = "auth_session_expired"
+        message = "Telemetry processing session expired."
+
+    return {
+        "job_id": None,
+        "status": "FAILED",
+        "progress": 0,
+        "processing_state": "failed",
+        "message": message,
+        "error_type": error_type,
+        "error": message,
+    }
+
+
+def normalize_error_message(error: Any) -> str:
+    if not error:
+        return "Unknown error"
+    if isinstance(error, str):
+        return error
+    if isinstance(error, dict):
+        for key in ("message", "detail", "error"):
+            if error.get(key):
+                return normalize_error_message(error[key])
+        return str(error)
+    message = getattr(error, "message", None)
+    if message:
+        return normalize_error_message(message)
+    return str(error) or "Unexpected processing error"
 
 
 app = create_app()

@@ -155,7 +155,7 @@ function App() {
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/health`);
+      const response = await fetch(`${API_BASE_URL}/api/health`, { credentials: "include" });
       if (!response.ok) {
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -494,7 +494,7 @@ function App() {
 
         {backendError && (
           <BackendErrorPanel
-            message={backendError}
+            message={normalizeErrorMessage(backendError)}
             isConfigWarning={backendError === API_CONFIG_WARNING}
             onRetry={retryBackendConnection}
           />
@@ -624,7 +624,7 @@ function AccessGate({ onAccessGranted, configWarning }) {
         </form>
 
         {(accessError || configWarning) && (
-          <p className="access-error">{isLockedByConfig ? configWarning : accessError}</p>
+          <p className="access-error">{normalizeErrorMessage(isLockedByConfig ? configWarning : accessError)}</p>
         )}
       </section>
     </main>
@@ -1085,11 +1085,11 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
             <span>{selectedFile ? selectedFile.name : "No file selected"}</span>
             <span className="intake-flow__progress">
               {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
-              {uploadJob?.message ?? uploadJob?.progress_label ?? uploadStateMessage(uploadState)}
+              {normalizeErrorMessage(uploadJob?.message ?? uploadJob?.progress_label ?? uploadStateMessage(uploadState))}
             </span>
           </div>
 
-          {uploadError && <p className="form-error">{uploadError}</p>}
+          {uploadError && <p className="form-error">{normalizeErrorMessage(uploadError)}</p>}
         </form>
       </Panel>
 
@@ -1997,11 +1997,12 @@ function StatusBanner({ title, subtitle, tone }) {
 }
 
 function BackendErrorPanel({ message, isConfigWarning, onRetry }) {
+  const safeMessage = normalizeErrorMessage(message);
   return (
     <section className={`backend-error-panel ${isConfigWarning ? "backend-error-panel--warning" : ""}`} aria-live="polite">
       <div>
         <span>{isConfigWarning ? "Configuration warning" : "Backend connection"}</span>
-        <strong>{message}</strong>
+        <strong>{safeMessage}</strong>
       </div>
       <button className="command-button command-button--compact" type="button" onClick={onRetry}>
         Retry
@@ -2885,21 +2886,41 @@ async function readJsonPayload(response) {
   }
 }
 
+function normalizeErrorMessage(error) {
+  if (!error) {
+    return "Unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error.message) {
+    return normalizeErrorMessage(error.message);
+  }
+  if (error.detail) {
+    return normalizeErrorMessage(error.detail);
+  }
+  if (typeof error === "object") {
+    return JSON.stringify(error);
+  }
+  return "Unexpected processing error";
+}
+
 function buildUploadRequestError(response, payload, phase) {
   return {
     name: "UploadRequestError",
     status: response.status,
     phase,
     errorType: payload?.error_type ?? payload?.detail?.error_type ?? null,
-    detail: payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? "",
-    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500,
+    detail: normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
+    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)),
   };
 }
 
 function classifyUploadError(error, phase) {
   if (error?.name === "UploadRequestError") {
+    const isAuthDuringPolling = phase === "poll" && (error.status === 401 || error.status === 403);
     return {
-      state: error.status === 401 || error.status === 403 ? "error" : phase === "poll" && error.retryable ? "running_sii" : "error",
+      state: isAuthDuringPolling || (phase === "poll" && error.retryable) ? "running_sii" : "error",
       retryable: phase === "poll" && error.retryable,
       message: operatorUploadMessage({
         status: error.status,
@@ -2914,7 +2935,7 @@ function classifyUploadError(error, phase) {
       state: phase === "poll" ? "running_sii" : "error",
       retryable: phase === "poll",
       message: phase === "poll"
-        ? "Processing connection lost. Large telemetry batch still processing."
+        ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
         : "Secure telemetry ingestion unavailable.",
     };
   }
@@ -2933,20 +2954,20 @@ function classifyUploadError(error, phase) {
 function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "auth_session_expired" || status === 401 || status === 403) {
     return phase === "poll"
-      ? "Telemetry processing session expired."
+      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : "Secure telemetry ingestion unavailable.";
   }
   if (errorType === "job_not_found" || status === 404) {
     return "Telemetry upload interrupted.";
   }
   if (errorType === "sii_processing_failure") {
-    return detail ? `SII processing failure: ${detail}` : "SII processing failure.";
+    return detail ? `SII processing failure: ${normalizeErrorMessage(detail)}` : "SII processing failure.";
   }
   if (status === 408 || status === 425 || status === 429 || status >= 500) {
-    return "Large telemetry batch still processing.";
+    return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";
   }
   if (phase === "poll") {
-    return "Telemetry processing in progress. Large telemetry batches may require additional processing time.";
+    return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";
   }
   return typeof detail === "string" && detail.trim()
     ? detail
@@ -3007,7 +3028,7 @@ function uploadStateMessage(uploadState) {
     return "Baseline modeling";
   }
   if (normalized === "running_sii") {
-    return "Telemetry processing in progress";
+    return "Telemetry batch processing in progress";
   }
   if (normalized === "writing_state") {
     return "Writing facility state";
