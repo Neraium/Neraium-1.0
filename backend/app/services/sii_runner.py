@@ -17,6 +17,18 @@ RUNNER_CALLABLE = "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
 CORE_ENGINE = "neraium_core.sii_engine_unified.SIIEngine"
 VALIDATION_RUNNER = "neraium_core.sii_fd004_validation.FD004ValidationRunner"
 STATE_PATH = Path(__file__).resolve().parents[1] / "runtime" / "latest_sii_state.json"
+STATE_REQUIRED_FIELDS = {
+    "facility_state",
+    "rooms",
+    "priority_room",
+    "neraium_score",
+    "primary_driver",
+    "supporting_evidence",
+    "structural_explanation",
+    "confidence_basis",
+    "last_processed_at",
+    "source",
+}
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
@@ -342,14 +354,31 @@ def read_latest_sii_state() -> dict[str, Any] | None:
     if not STATE_PATH.exists():
         return None
     try:
-        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+        state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    return state if is_valid_latest_sii_state(state) else None
 
 
 def write_latest_sii_state(state: dict[str, Any]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    temp_path = STATE_PATH.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    temp_path.replace(STATE_PATH)
+
+
+def is_valid_latest_sii_state(state: Any) -> bool:
+    if not isinstance(state, dict):
+        return False
+    if not STATE_REQUIRED_FIELDS <= set(state):
+        return False
+    if not isinstance(state.get("rooms"), list):
+        return False
+    if not isinstance(state.get("supporting_evidence"), list):
+        return False
+    if not isinstance(state.get("structural_explanation"), list):
+        return False
+    return True
 
 
 def to_plain_dict(value: Any) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services.sii_runner import RUNNER_MODULE, write_latest_sii_state
+from app.services.sii_runner import RUNNER_MODULE, STATE_PATH, write_latest_sii_state
 
 
 def test_root_endpoint_returns_service_metadata() -> None:
@@ -161,6 +161,52 @@ def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
     assert payload["intelligence"]["source"] == "uploaded"
     assert payload["intelligence"]["facility_state"] == "Runner facility state"
     assert payload["intelligence"]["primary_driver"] == "Runner driver"
+
+
+def test_facility_systems_uses_sample_when_latest_sii_state_is_corrupt() -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text("{not-valid-json", encoding="utf-8")
+    client = TestClient(create_app())
+
+    response = client.get("/api/facility/systems")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["intelligence"]["source"] == "sii_engine"
+    assert payload["intelligence"]["mode"] == "sample"
+
+
+def test_facility_systems_uses_sample_when_latest_sii_state_is_incomplete() -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text('{"source": "uploaded"}', encoding="utf-8")
+    client = TestClient(create_app())
+
+    response = client.get("/api/facility/systems")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["intelligence"]["source"] == "sii_engine"
+    assert payload["intelligence"]["mode"] == "sample"
+
+
+def test_latest_sii_state_write_replaces_atomically() -> None:
+    write_latest_sii_state(
+        {
+            "source": "uploaded",
+            "facility_state": "Atomic state",
+            "rooms": [],
+            "priority_room": "Runner Room",
+            "neraium_score": 88,
+            "primary_driver": "Runner driver",
+            "supporting_evidence": ["Runner evidence"],
+            "structural_explanation": ["Runner explanation"],
+            "confidence_basis": "Runner confidence",
+            "last_processed_at": "2026-05-08T00:00:00+00:00",
+        }
+    )
+
+    assert STATE_PATH.exists()
+    assert not STATE_PATH.with_suffix(".json.tmp").exists()
 
 
 def test_health_endpoint_returns_cors_header_for_production_frontend() -> None:

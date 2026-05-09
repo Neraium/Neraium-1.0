@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
 import {
   API_BASE_URL,
   API_CONFIG_WARNING,
@@ -199,7 +199,7 @@ function App() {
       const payload = await response.json();
       if (Array.isArray(payload.systems)) {
         setSystems(payload.systems);
-        setFacilityIntelligence(payload.intelligence ?? null);
+        setFacilityIntelligence(normalizeFacilityIntelligence(payload.intelligence));
         setIntelligenceStatus(payload.intelligence_status ?? buildFallbackIntelligenceStatus());
         setSystemsState("ready");
         setBackendError(API_CONFIG_WARNING);
@@ -398,7 +398,9 @@ function App() {
         <DataIntakeWorkspace
           latestUploadResult={latestUploadResult}
           onUploadComplete={async (payload) => {
-            setLatestUploadResult(payload);
+            if (hasFullUploadResult(payload)) {
+              setLatestUploadResult(payload);
+            }
             await loadFacilitySystems();
             await loadEngineIdentity();
           }}
@@ -443,14 +445,17 @@ function App() {
 
   if (!hasAccess) {
     return (
-      <AccessGate
-        onAccessGranted={handleAccessGranted}
-        configWarning={APP_ACCESS_CONFIG_WARNING}
-      />
+      <AppErrorBoundary>
+        <AccessGate
+          onAccessGranted={handleAccessGranted}
+          configWarning={APP_ACCESS_CONFIG_WARNING}
+        />
+      </AppErrorBoundary>
     );
   }
 
   return (
+    <AppErrorBoundary>
     <main className="platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
         <WorkspaceNavigationContent
@@ -538,7 +543,47 @@ function App() {
         />
       </aside>
     </main>
+    </AppErrorBoundary>
   );
+}
+
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error("Neraium UI recovered from render error", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="access-shell">
+          <section className="access-panel" aria-labelledby="recovery-title">
+            <div className="access-brand">
+              <div className="brand-mark">N</div>
+              <span>System recovery</span>
+            </div>
+            <div className="access-copy">
+              <p className="eyebrow">Neraium</p>
+              <h1 id="recovery-title">System view is recovering.</h1>
+              <p>Backend processing is still available. Refresh the page to reload the latest stable state.</p>
+            </div>
+            <button className="command-button" type="button" onClick={() => window.location.reload()}>
+              Refresh view
+            </button>
+          </section>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function AccessGate({ onAccessGranted, configWarning }) {
@@ -706,7 +751,7 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
         />
         <StatusChip
           label="Readiness"
-          value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality.readiness) : liveOps.readinessLabel}
+          value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.facilityTone}
         />
         <StatusChip
@@ -2442,17 +2487,17 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
     });
   }
 
-  if (!result) {
+  if (!hasFullUploadResult(result)) {
     items.push({
       time: "Standby",
-      title: "Monitoring active telemetry feed",
-      detail: `Live telemetry feed active. ${roomContext.primary} remains the primary review lane.`,
+      title: "Telemetry batch processing",
+      detail: `SII processing is active. ${roomContext.primary} remains on the last confirmed state until the runner writes new findings.`,
       tone: "info",
     });
     items.push({
       time: "Standby",
-      title: "Awaiting additional room telemetry",
-      detail: "Upload room exports to replace simulated operational monitoring with current facility data.",
+      title: "Awaiting completed runner output",
+      detail: "Facility Command will update after the completed SII state is available.",
       tone: "review",
     });
     return items;
@@ -2479,16 +2524,16 @@ function buildOperationalTimeline(result, apiStatus, roomContext) {
   });
   items.push({
     time: "Review",
-      title: "Readiness assessed",
-      detail: formatReadiness(result.data_quality.readiness),
-      tone: mapOperationalTone(result.data_quality.readiness),
-    });
+    title: "Readiness assessed",
+    detail: formatReadiness(result.data_quality?.readiness),
+    tone: mapOperationalTone(result.data_quality?.readiness),
+  });
   items.push({
     time: "Review",
-      title: "Mapping coverage",
-      detail: `${result.cultivation_mapping.mapped_column_count} mapped columns across cultivation systems.`,
-      tone: result.cultivation_mapping.mapped_column_count > 0 ? "nominal" : "info",
-    });
+    title: "Mapping coverage",
+    detail: `${result.cultivation_mapping?.mapped_column_count ?? 0} mapped columns across cultivation systems.`,
+    tone: (result.cultivation_mapping?.mapped_column_count ?? 0) > 0 ? "nominal" : "info",
+  });
   if (result.engine_result) {
     items.push({
       time: timeCoverage.last ?? "Findings",
@@ -2677,20 +2722,20 @@ function buildRoomTransitions(result, roomContext) {
 }
 
 function buildEvidenceConsole(result) {
-  if (!result) {
+  if (!hasFullUploadResult(result)) {
     return [
-      "evidence.console=monitoring_sample_telemetry",
-      "schema.mapping=no_facility_upload_connected",
-      "grower.report=awaiting_room_exports",
+      "evidence.console=telemetry_processing",
+      "schema.mapping=awaiting_completed_runner_output",
+      "grower.report=last_confirmed_state_preserved",
     ];
   }
 
   const lines = [
     `batch.file=${result.filename}`,
-    `data.readiness=${result.data_quality.readiness}`,
+    `data.readiness=${result.data_quality?.readiness ?? "processing"}`,
     `rows=${result.row_count}`,
     `columns=${result.column_count}`,
-    `mapping.coverage=${result.cultivation_mapping.coverage_percent}%`,
+    `mapping.coverage=${result.cultivation_mapping?.coverage_percent ?? 0}%`,
   ];
 
   (result.operator_report?.source_sections_used ?? []).forEach((section) => {
@@ -2716,14 +2761,14 @@ function buildConsoleEvents(result, apiStatus, roomContext) {
     `console.irrigation=${roomContext.irrigation}`,
   ];
 
-  if (result) {
+  if (hasFullUploadResult(result)) {
     lines.push(`console.batch=${result.filename}`);
-    lines.push(`console.readiness=${result.data_quality.readiness}`);
+    lines.push(`console.readiness=${result.data_quality?.readiness ?? "processing"}`);
     (result.engine_result?.signals ?? []).slice(0, 6).forEach((signal) => {
       lines.push(`signal.event=${signal.message}`);
     });
   } else {
-    lines.push("console.batch=no_facility_upload_connected");
+    lines.push("console.batch=telemetry_processing");
   }
 
   return [...lines, ...buildEvidenceConsole(result).slice(0, 10)];
@@ -2879,6 +2924,54 @@ function deriveTimeCoverage(result) {
       first && last
         ? `${first} to ${last}`
         : result.timestamp_profile.estimated_sample_interval ?? "Timestamp range unavailable",
+  };
+}
+
+function hasFullUploadResult(result) {
+  return Boolean(result?.data_quality && result?.engine_result && result?.cultivation_mapping);
+}
+
+function normalizeFacilityIntelligence(intelligence) {
+  const safe = {
+    source: "processing",
+    mode: "processing",
+    facility_state: "Processing",
+    room_state: "Processing",
+    urgency: "review",
+    intervention_window: "Processing",
+    neraium_score: null,
+    primary_room: "Processing uploaded telemetry",
+    priority_room: null,
+    primary_driver: "SII engine is analyzing uploaded telemetry",
+    supporting_evidence: ["Telemetry batch processing is underway."],
+    relationship_evidence: [],
+    structural_explanation: ["Awaiting completed runner output."],
+    confidence_basis: "Awaiting completed runner output",
+    recommended_operator_review: "Processing uploaded telemetry",
+    next_operator_move: "Processing uploaded telemetry",
+    what_to_check: ["Wait for SII processing to complete"],
+    why_flagged: "Telemetry batch processing",
+    baseline_comparison: "Awaiting completed runner output",
+    observed_persistence: "Awaiting completed runner output",
+    last_updated: new Date().toISOString(),
+    rooms: [],
+  };
+  if (!intelligence || typeof intelligence !== "object") {
+    return safe;
+  }
+  const rooms = Array.isArray(intelligence.rooms) ? intelligence.rooms : [];
+  return {
+    ...safe,
+    ...intelligence,
+    rooms,
+    source: intelligence.source ?? safe.source,
+    mode: intelligence.mode ?? safe.mode,
+    facility_state: intelligence.facility_state ?? safe.facility_state,
+    primary_driver: intelligence.primary_driver ?? safe.primary_driver,
+    supporting_evidence: Array.isArray(intelligence.supporting_evidence) ? intelligence.supporting_evidence : safe.supporting_evidence,
+    relationship_evidence: Array.isArray(intelligence.relationship_evidence) ? intelligence.relationship_evidence : safe.relationship_evidence,
+    structural_explanation: Array.isArray(intelligence.structural_explanation) ? intelligence.structural_explanation : safe.structural_explanation,
+    what_to_check: Array.isArray(intelligence.what_to_check) ? intelligence.what_to_check : safe.what_to_check,
   };
 }
 
@@ -3129,70 +3222,72 @@ function buildSiiOperationalContext({
   connectionStatusLine,
   connectionActionHint,
 }) {
-  const facilityTone = mapSiiUrgency(intelligence.urgency);
-  const interventionItems = buildSiiInterventionItems(intelligence);
+  const safeIntelligence = normalizeFacilityIntelligence(intelligence);
+  const fullResult = hasFullUploadResult(result) ? result : null;
+  const facilityTone = mapSiiUrgency(safeIntelligence.urgency);
+  const interventionItems = buildSiiInterventionItems(safeIntelligence);
   const primaryWindow = interventionItems[0] ?? null;
-  const telemetryCards = result ? buildTelemetryCards(result) : buildSiiTelemetryCards(intelligence);
+  const telemetryCards = fullResult ? buildTelemetryCards(fullResult) : buildSiiTelemetryCards(safeIntelligence);
   const actionQueue = buildActionQueue(interventionItems);
-  const score = intelligence.neraium_score ?? calculateNeraiumScore(facilityTone, interventionItems, Boolean(result));
+  const score = safeIntelligence.neraium_score ?? calculateNeraiumScore(facilityTone, interventionItems, Boolean(fullResult));
 
   return {
     useDemoTelemetry: false,
-    intelligenceMode: intelligence.mode ?? intelligenceStatus?.mode ?? (result ? "live" : "sample"),
+    intelligenceMode: safeIntelligence.mode ?? intelligenceStatus?.mode ?? (fullResult ? "live" : "sample"),
     facilityTone,
-    facilityStateLabel: intelligence.facility_state ?? formatOperationalLabel(facilityTone),
+    facilityStateLabel: safeIntelligence.facility_state ?? formatOperationalLabel(facilityTone),
     heroTag: facilityTone === "nominal" ? "SII state stable" : "SII drift observed",
     heroHeadline: heroHeadlineFromTone(facilityTone),
-    heroSubline: intelligence.why_flagged ?? heroSublineFromTone(facilityTone, intelligence.primary_room ?? roomContext.primary),
-    readinessLabel: result ? formatReadiness(result?.data_quality?.readiness) : "SII sample intelligence",
+    heroSubline: safeIntelligence.why_flagged ?? heroSublineFromTone(facilityTone, safeIntelligence.primary_room ?? roomContext.primary),
+    readinessLabel: fullResult ? formatReadiness(fullResult.data_quality?.readiness) : "SII sample intelligence",
     connectionTone,
-    connectionLabel: formatIntelligenceSourceLabel(intelligence.mode ?? intelligenceStatus?.mode),
+    connectionLabel: formatIntelligenceSourceLabel(safeIntelligence.mode ?? intelligenceStatus?.mode),
     connectionDetail: apiStatus.detail,
     connectionSummary,
     connectionStatusLine,
     connectionActionHint,
-    dataSourceLabel: result ? latestManualSourceLabel(result) : "Backend SII sample",
+    dataSourceLabel: fullResult ? latestManualSourceLabel(fullResult) : "Backend SII sample",
     neraiumScore: score,
     scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
-    scoreContext: `SII ${formatIntelligenceSourceLabel(intelligence.mode ?? intelligenceStatus?.mode)} | ${intelligence.observed_persistence ?? "Evidence fields present"}`,
-    windowContext: intelligence.baseline_comparison ?? buildWindowContext(primaryWindow, roomContext),
+    scoreContext: `SII ${formatIntelligenceSourceLabel(safeIntelligence.mode ?? intelligenceStatus?.mode)} | ${safeIntelligence.observed_persistence ?? "Evidence fields present"}`,
+    windowContext: safeIntelligence.baseline_comparison ?? buildWindowContext(primaryWindow, roomContext),
     primaryWindow,
     interventionItems,
     actionQueue,
     topologyNodes: buildTopologyNodes(interventionItems),
-    alerts: result ? buildAlertItems(result, apiStatus) : buildSiiAlerts(intelligence),
-    findings: result ? buildFindingsFeed(result) : buildSiiFindings(intelligence),
-    timeline: result ? buildOperationalTimeline(result, apiStatus, roomContext) : buildSiiTimeline(intelligence, apiStatus, tick),
+    alerts: fullResult ? buildAlertItems(fullResult, apiStatus) : buildSiiAlerts(safeIntelligence),
+    findings: fullResult ? buildFindingsFeed(fullResult) : buildSiiFindings(safeIntelligence),
+    timeline: fullResult ? buildOperationalTimeline(fullResult, apiStatus, roomContext) : buildSiiTimeline(safeIntelligence, apiStatus, tick),
     telemetryCards,
     summaryTelemetry: telemetryCards.slice(0, 4),
-    overviewMetrics: buildOverviewMetrics(result, apiStatus, systems, systemsState),
-    roomCards: buildSiiRoomCards(intelligence),
-    roomTransitions: result ? buildRoomTransitions(result, roomContext) : buildSiiRoomTransitions(intelligence),
-    driftRows: result
-      ? (result?.baseline_analysis?.column_drift ?? []).map((row) => ({
+    overviewMetrics: buildOverviewMetrics(fullResult, apiStatus, systems, systemsState),
+    roomCards: buildSiiRoomCards(safeIntelligence),
+    roomTransitions: fullResult ? buildRoomTransitions(fullResult, roomContext) : buildSiiRoomTransitions(safeIntelligence),
+    driftRows: fullResult
+      ? (fullResult?.baseline_analysis?.column_drift ?? []).map((row) => ({
           ...row,
           drift_flag: mapOperationalTone(row.drift_flag),
         }))
-      : buildSiiDriftRows(intelligence),
-    relationshipRows: result ? buildRelationshipRows(result) : buildSiiRelationshipRows(intelligence),
-    irrigationNotes: intelligence.what_to_check ?? [],
+      : buildSiiDriftRows(safeIntelligence),
+    relationshipRows: fullResult ? buildRelationshipRows(fullResult) : buildSiiRelationshipRows(safeIntelligence),
+    irrigationNotes: safeIntelligence.what_to_check ?? [],
     systemRows: systems.map((system) => [
       system.name,
       system.scope,
       systemRoomContext(system.name, roomContext),
       systemsState === "ready" ? "Backend SII fields active" : "Local fallback surface",
     ]),
-    intakeStages: result ? buildIntakeStages(result, "complete", roomContext) : buildSimulatedIntakeStages(apiStatus, tick, roomContext),
-    evidenceLines: result ? buildEvidenceConsole(result) : buildSiiEvidenceLines(intelligence),
-    consoleEvents: result ? buildConsoleEvents(result, apiStatus, roomContext) : buildSiiConsoleEvents(intelligence, apiStatus),
-    observations: result ? buildRoomObservations(result, roomContext) : [
-      intelligence.why_flagged,
-      intelligence.baseline_comparison,
-      intelligence.confidence_basis,
+    intakeStages: fullResult ? buildIntakeStages(fullResult, "complete", roomContext) : buildSimulatedIntakeStages(apiStatus, tick, roomContext),
+    evidenceLines: fullResult ? buildEvidenceConsole(fullResult) : buildSiiEvidenceLines(safeIntelligence),
+    consoleEvents: fullResult ? buildConsoleEvents(fullResult, apiStatus, roomContext) : buildSiiConsoleEvents(safeIntelligence, apiStatus),
+    observations: fullResult ? buildRoomObservations(fullResult, roomContext) : [
+      safeIntelligence.why_flagged,
+      safeIntelligence.baseline_comparison,
+      safeIntelligence.confidence_basis,
     ].filter(Boolean),
     reportNotes: [
       "SII fields are being read from the backend intelligence contract",
-      `Mode: ${intelligence.mode ?? "sample"}`,
+      `Mode: ${safeIntelligence.mode ?? "sample"}`,
       `Evidence fields: ${(intelligenceStatus?.evidence_fields_present ?? []).length}`,
     ],
     connectionEvents: buildConnectionEvents(apiStatus, tick),
@@ -3211,12 +3306,13 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     ? ""
     : "Check facility WiFi if room changes stop syncing.";
 
-  const apiIntelligence = result?.sii_intelligence ?? facilityIntelligence;
+  const fullResult = hasFullUploadResult(result) ? result : null;
+  const apiIntelligence = fullResult?.sii_intelligence ?? facilityIntelligence;
   if (apiIntelligence) {
     return buildSiiOperationalContext({
       intelligence: apiIntelligence,
       intelligenceStatus,
-      result,
+      result: fullResult,
       apiStatus,
       roomContext,
       systems,
@@ -3229,28 +3325,28 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
     });
   }
 
-  if (!useDemoTelemetry) {
-    const telemetryCards = buildTelemetryCards(result);
-    const facilityTone = mapOperationalTone(result?.engine_result?.overall_result ?? result?.data_quality?.readiness ?? "nominal");
-    const interventionItems = buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone);
+  if (!useDemoTelemetry && fullResult) {
+    const telemetryCards = buildTelemetryCards(fullResult);
+    const facilityTone = mapOperationalTone(fullResult.engine_result?.overall_result ?? fullResult.data_quality?.readiness ?? "nominal");
+    const interventionItems = buildUploadedInterventionItems(fullResult, roomContext, telemetryCards, facilityTone);
     const actionQueue = buildActionQueue(interventionItems);
     const primaryWindow = interventionItems[0] ?? null;
     return {
       useDemoTelemetry: false,
       intelligenceMode: "fallback",
       facilityTone,
-      facilityStateLabel: formatEngineResult(result?.engine_result?.overall_result ?? "normal"),
+      facilityStateLabel: formatEngineResult(fullResult.engine_result?.overall_result ?? "normal"),
       heroTag: facilityTone === "nominal" ? "Control window established" : "Decision window tightening",
       heroHeadline: heroHeadlineFromTone(facilityTone),
       heroSubline: heroSublineFromTone(facilityTone, roomContext.primary),
-      readinessLabel: formatReadiness(result?.data_quality?.readiness),
+      readinessLabel: formatReadiness(fullResult.data_quality?.readiness),
       connectionTone,
       connectionLabel: "Live telemetry feed",
       connectionDetail: apiStatus.detail,
       connectionSummary,
       connectionStatusLine,
       connectionActionHint,
-      dataSourceLabel: latestManualSourceLabel(result),
+      dataSourceLabel: latestManualSourceLabel(fullResult),
       neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, true),
       scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
       scoreContext: buildScoreContext(calculateNeraiumScore(facilityTone, interventionItems, true), facilityTone, interventionItems),
@@ -3259,19 +3355,19 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
       interventionItems,
       actionQueue,
       topologyNodes: buildTopologyNodes(interventionItems),
-      alerts: buildAlertItems(result, apiStatus),
-      findings: buildFindingsFeed(result),
-      timeline: buildOperationalTimeline(result, apiStatus, roomContext),
+      alerts: buildAlertItems(fullResult, apiStatus),
+      findings: buildFindingsFeed(fullResult),
+      timeline: buildOperationalTimeline(fullResult, apiStatus, roomContext),
       telemetryCards,
       summaryTelemetry: telemetryCards,
-      overviewMetrics: buildOverviewMetrics(result, apiStatus, systems, systemsState),
+      overviewMetrics: buildOverviewMetrics(fullResult, apiStatus, systems, systemsState),
       roomCards: buildZoneSummary(roomContext),
-      roomTransitions: buildRoomTransitions(result, roomContext),
-      driftRows: (result?.baseline_analysis?.column_drift ?? []).map((row) => ({
+      roomTransitions: buildRoomTransitions(fullResult, roomContext),
+      driftRows: (fullResult.baseline_analysis?.column_drift ?? []).map((row) => ({
         ...row,
         drift_flag: mapOperationalTone(row.drift_flag),
       })),
-      relationshipRows: buildRelationshipRows(result),
+      relationshipRows: buildRelationshipRows(fullResult),
       irrigationNotes: [
         `Irrigation context: ${roomContext.irrigation}.`,
         "Baseline established from current upload.",
@@ -3283,10 +3379,10 @@ function buildOperationalContext({ result, apiStatus, roomContext, systems, syst
         systemRoomContext(system.name, roomContext),
         systemsState === "ready" ? "Backend feed active" : "Local fallback surface",
       ]),
-      intakeStages: buildIntakeStages(result, "complete", roomContext),
-      evidenceLines: buildEvidenceConsole(result),
-      consoleEvents: buildConsoleEvents(result, apiStatus, roomContext),
-      observations: buildRoomObservations(result, roomContext),
+      intakeStages: buildIntakeStages(fullResult, "complete", roomContext),
+      evidenceLines: buildEvidenceConsole(fullResult),
+      consoleEvents: buildConsoleEvents(fullResult, apiStatus, roomContext),
+      observations: buildRoomObservations(fullResult, roomContext),
       reportNotes: REPORT_TEMPLATES,
       connectionEvents: buildConnectionEvents(apiStatus, tick),
     };
@@ -4324,7 +4420,7 @@ function apiStatusWindow(result) {
   if (!result) {
     return "Monitoring";
   }
-  return result.data_quality?.readiness === "ready" ? "2 weeks" : "5 days";
+  return result?.data_quality?.readiness === "ready" ? "2 weeks" : "5 days";
 }
 
 function tonePriority(tone) {
