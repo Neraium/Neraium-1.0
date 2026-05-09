@@ -4586,8 +4586,20 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
       tone: "info",
     },
     {
-      title: "Baseline and evidence extraction",
-      detail: "Awaiting uploaded room exports to replace simulated evidence and room trend relationships.",
+      title: "SII engine processing",
+      detail: "Awaiting uploaded room exports before SII engine processing starts.",
+      state: "standby",
+      tone: "review",
+    },
+    {
+      title: "Evidence and state write",
+      detail: "Runner state will refresh Facility Command after processing completes.",
+      state: "standby",
+      tone: "review",
+    },
+    {
+      title: "Complete",
+      detail: "Upload completion will replace sample telemetry with uploaded runner state.",
       state: "standby",
       tone: "review",
     },
