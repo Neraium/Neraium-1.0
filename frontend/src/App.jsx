@@ -944,6 +944,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
+  const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
 
@@ -967,6 +968,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
     setUploadError("");
     setUploadResult(null);
     setUploadJob(null);
+    uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
 
     try {
@@ -981,6 +983,11 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         throw buildUploadRequestError(response, payload, "upload");
       }
 
+      if (!payload?.job_id) {
+        throw buildUploadRequestError(response, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+      }
+
+      uploadJobIdRef.current = payload.job_id;
       setUploadJob(payload);
       setUploadState(normalizeUploadStatus(payload.status));
       pollUploadStatus(payload.job_id);
@@ -993,8 +1000,15 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
   }
 
   async function pollUploadStatus(jobId) {
+    const pollingJobId = jobId || uploadJobIdRef.current;
+    if (!pollingJobId) {
+      setUploadError("Upload state unavailable.");
+      setUploadState("error");
+      return;
+    }
+
     try {
-      const response = await apiFetch(`/api/data/upload-status/${jobId}`, { accessCode });
+      const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
       const payload = await readJsonPayload(response);
 
       if (!response.ok) {
@@ -1002,6 +1016,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
       }
 
       pollFailureCountRef.current = 0;
+      uploadJobIdRef.current = payload.job_id ?? pollingJobId;
       setUploadJob(payload);
       const nextStatus = normalizeUploadStatus(payload.status);
       setUploadState(nextStatus);
@@ -1034,16 +1049,16 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         return;
       }
 
-      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(jobId), 2000);
+      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), 2000);
     } catch (error) {
       const classified = classifyUploadError(error, "poll");
-      console.warn("telemetry_polling_failure", { ...classified, jobId, attempts: pollFailureCountRef.current + 1 });
+      console.warn("telemetry_polling_failure", { ...classified, jobId: pollingJobId, attempts: pollFailureCountRef.current + 1 });
       if (classified.retryable && pollFailureCountRef.current < 8) {
         pollFailureCountRef.current += 1;
         setUploadState((current) => isUploadProcessing(current) ? current : "running_sii");
         setUploadError(classified.message);
         pollTimerRef.current = window.setTimeout(
-          () => pollUploadStatus(jobId),
+          () => pollUploadStatus(pollingJobId),
           Math.min(2000 + pollFailureCountRef.current * 1500, 12000),
         );
         return;
@@ -2966,8 +2981,11 @@ function operatorUploadMessage({ status, errorType, detail, phase }) {
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : "Telemetry processing session could not be validated.";
   }
+  if (errorType === "upload_session_missing") {
+    return "Upload state unavailable.";
+  }
   if (errorType === "job_not_found" || status === 404) {
-    return "Upload interrupted. Refresh your workspace and try again.";
+    return "Upload processing interrupted.";
   }
   if (errorType === "sii_processing_failure") {
     return detail ? `SII processing failure: ${normalizeErrorMessage(detail)}` : "SII processing failure.";
@@ -2980,7 +2998,7 @@ function operatorUploadMessage({ status, errorType, detail, phase }) {
   }
   return typeof detail === "string" && detail.trim()
     ? detail
-    : "Upload interrupted. Refresh your workspace and try again.";
+    : "Upload processing interrupted.";
 }
 
 function writeAccessCookie(accessCode) {

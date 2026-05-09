@@ -133,10 +133,24 @@ def read_job(job_id: str) -> dict[str, Any] | None:
         legacy_path = LEGACY_JOB_DIR / path.name
         path = legacy_path if legacy_path.exists() else path
     if not path.exists():
+        logger.warning(
+            "upload_job_metadata_missing job_id=%s job_dir=%s legacy_job_dir=%s validation_failure_reason=%s",
+            job_id,
+            JOB_DIR,
+            LEGACY_JOB_DIR,
+            "upload_session_missing",
+        )
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(
+            "upload_job_metadata_unreadable job_id=%s path=%s validation_failure_reason=%s error_type=%s",
+            job_id,
+            path,
+            "upload_metadata_unreadable",
+            type(exc).__name__,
+        )
         return None
 
 
@@ -181,6 +195,7 @@ def normalize_status(status: str) -> str:
 def process_upload_job(job_id: str) -> None:
     metadata = read_job(job_id)
     if metadata is None:
+        logger.warning("upload_job_start_missing_metadata job_id=%s validation_failure_reason=%s", job_id, "upload_session_missing")
         return
 
     started = time.perf_counter()

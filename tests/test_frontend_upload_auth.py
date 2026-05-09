@@ -25,7 +25,7 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
 
     for endpoint in (
         'apiFetch("/api/data/upload"',
-        "apiFetch(`/api/data/upload-status/${jobId}`",
+        "apiFetch(`/api/data/upload-status/${pollingJobId}`",
         'apiFetch("/api/data/latest-upload"',
         'apiFetch("/api/facility/systems"',
         'apiFetch("/api/intelligence/engine-identity"',
@@ -52,6 +52,16 @@ def test_polling_does_not_enter_error_state_on_single_auth_failure() -> None:
     assert 'state: isAuthDuringPolling || (phase === "poll" && error.retryable) ? "running_sii" : "error"' in source
 
 
+def test_upload_polling_preserves_returned_job_id() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert "const uploadJobIdRef = useRef(null);" in source
+    assert "uploadJobIdRef.current = payload.job_id;" in source
+    assert "const pollingJobId = jobId || uploadJobIdRef.current;" in source
+    assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
+    assert 'throw buildUploadRequestError(response, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");' in source
+
+
 def test_object_errors_render_through_normalized_messages() -> None:
     source = read_frontend(APP_JSX)
 
@@ -73,3 +83,5 @@ def test_protected_route_unauthorized_copy_is_session_expired() -> None:
 
     assert "Session expired. Refresh workspace." in source
     assert "[object Object]" not in source
+    assert "Upload processing interrupted." in source
+    assert "Upload state unavailable." in source

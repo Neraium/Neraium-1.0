@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
@@ -26,9 +26,9 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "status": "NOT_FOUND",
             "progress": 0,
             "processing_state": "not_found",
-            "progress_label": "Upload job was not found.",
-            "message": "Telemetry upload interrupted.",
-            "error_type": "job_not_found",
+            "progress_label": "Upload session expired or was not found.",
+            "message": "Upload session expired or was not found.",
+            "error_type": "upload_session_missing",
             "filename": None,
             "file_size_bytes": 0,
             "rows_processed": 0,
@@ -42,7 +42,7 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "core_engine": None,
             "started_at": None,
             "completed_at": None,
-            "error": "Upload job was not found.",
+            "error": "upload_session_missing",
             "result_summary": None,
         }
 
@@ -94,6 +94,7 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
 
 @router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED)
 async def upload_csv(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
@@ -107,11 +108,16 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="CSV file is empty.")
 
     background_tasks.add_task(process_upload_job, metadata["job_id"])
+    auth_context = getattr(request.state, "auth_context", {})
     logger.info(
-        "upload_job_accepted job_id=%s filename=%s size_bytes=%s",
+        "upload_job_accepted job_id=%s returned_job_id=%s filename=%s size_bytes=%s auth_subject=%s auth_source=%s metadata_exists=%s",
+        metadata["job_id"],
         metadata["job_id"],
         metadata["filename"],
         metadata["file_size_bytes"],
+        auth_context.get("auth_subject", "unknown"),
+        auth_context.get("auth_source", "unknown"),
+        read_job(metadata["job_id"]) is not None,
     )
     return {
         "job_id": metadata["job_id"],
@@ -127,18 +133,30 @@ async def upload_csv(
 
 
 @router.get("/data/upload-status/{job_id}")
-def read_upload_status(job_id: str) -> dict[str, Any]:
+def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
     metadata = read_job(job_id)
+    auth_context = getattr(request.state, "auth_context", {})
     if metadata is None:
-        logger.warning("upload_status_not_found job_id=%s", job_id)
+        logger.warning(
+            "upload_status_not_found polling_job_id=%s auth_subject=%s auth_source=%s metadata_exists=%s validation_failure_reason=%s",
+            job_id,
+            auth_context.get("auth_subject", "unknown"),
+            auth_context.get("auth_source", "unknown"),
+            False,
+            "upload_session_missing",
+        )
         return JSONResponse(status_code=404, content=upload_status_payload(None, job_id))
     payload = upload_status_payload(metadata, job_id)
     logger.info(
-        "upload_status_polled job_id=%s status=%s rows=%s chunks=%s",
+        "upload_status_polled polling_job_id=%s persisted_job_id=%s status=%s rows=%s chunks=%s auth_subject=%s auth_source=%s metadata_exists=%s",
+        job_id,
         payload["job_id"],
         payload["status"],
         payload["rows_processed"],
         payload["chunk_count"],
+        auth_context.get("auth_subject", "unknown"),
+        auth_context.get("auth_source", "unknown"),
+        True,
     )
     return payload
 

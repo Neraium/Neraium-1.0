@@ -113,6 +113,31 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
     assert payload["rows_processed"] == 500_000
 
 
+def test_upload_status_missing_job_returns_session_missing_contract() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/data/upload-status/not-a-real-job")
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["job_id"] == "not-a-real-job"
+    assert payload["status"] == "NOT_FOUND"
+    assert payload["error_type"] == "upload_session_missing"
+    assert payload["error"] == "upload_session_missing"
+    assert payload["message"] == "Upload session expired or was not found."
+
+
+def test_upload_status_logs_session_missing_context(caplog) -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/data/upload-status/missing-job")
+
+    assert response.status_code == 404
+    assert "polling_job_id=missing-job" in caplog.text
+    assert "validation_failure_reason=upload_session_missing" in caplog.text
+    assert "metadata_exists=False" in caplog.text
+
+
 def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     client = TestClient(create_app())
     rows = "\n".join(
