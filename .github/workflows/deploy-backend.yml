@@ -64,4 +64,4 @@ jobs:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: sha256-acf9
           cluster: default
-          wait-for-service-stability: true
+          wait-for-service-stability: false
