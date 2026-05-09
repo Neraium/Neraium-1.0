@@ -59,6 +59,27 @@ def test_upload_auth_failure_returns_upload_json_contract(tmp_path) -> None:
     assert payload["job_id"] is None
 
 
+def test_upload_accepts_access_header_in_production(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+        files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status_url"].startswith("/api/data/upload-status/")
+
+
 def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",

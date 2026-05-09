@@ -313,3 +313,72 @@ def test_protected_endpoint_unauthorized_response_is_structured_json(tmp_path) -
         "error_type": "auth",
         "error": "Telemetry processing session could not be validated.",
     }
+
+
+def test_protected_endpoint_accepts_bearer_access_code_in_production(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get(
+        "/api/facility/systems",
+        headers={"Authorization": "Bearer expected-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["systems"]
+
+
+def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get(
+        "/api/intelligence/engine-identity",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["engine_name"] == "Neraium SII"
+
+
+def test_auth_failure_logs_debug_context_without_secret(tmp_path, caplog) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        app_access_code="expected-secret",
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.get(
+        "/api/facility/systems",
+        headers={
+            "Origin": "https://app.neraium.com",
+            "Authorization": "Bearer wrong-secret",
+        },
+    )
+
+    assert response.status_code == 401
+    log_text = caplog.text
+    assert "failure_reason=credential_mismatch" in log_text
+    assert "origin=https://app.neraium.com" in log_text
+    assert "has_authorization=True" in log_text
+    assert "auth_scheme=bearer" in log_text
+    assert "wrong-secret" not in log_text
+    assert "expected-secret" not in log_text

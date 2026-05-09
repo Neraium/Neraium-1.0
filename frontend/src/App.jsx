@@ -199,6 +199,9 @@ function App() {
     try {
       const response = await apiFetch("/api/facility/systems", { accessCode: apiAccessCode });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Session expired. Refresh workspace.");
+        }
         throw new Error(`Unexpected response: ${response.status}`);
       }
 
@@ -212,12 +215,12 @@ function App() {
         return true;
       }
       throw new Error("Facility systems payload was incomplete.");
-    } catch {
+    } catch (error) {
       setSystems(FALLBACK_SYSTEMS);
       setFacilityIntelligence(null);
       setIntelligenceStatus(buildFallbackIntelligenceStatus());
       setSystemsState("fallback");
-      setBackendError("Backend connection unavailable. System data could not be loaded.");
+      setBackendError(normalizeErrorMessage(error?.message ?? error) || "Backend connection unavailable. System data could not be loaded.");
       return false;
     }
   }, [apiAccessCode, hasAccess]);
@@ -230,13 +233,19 @@ function App() {
     try {
       const response = await apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Session expired. Refresh workspace.");
+        }
         throw new Error(`Unexpected response: ${response.status}`);
       }
 
       setEngineIdentity(await response.json());
       return true;
-    } catch {
+    } catch (error) {
       setEngineIdentity(null);
+      if (normalizeErrorMessage(error?.message ?? error) === "Session expired. Refresh workspace.") {
+        setBackendError("Session expired. Refresh workspace.");
+      }
       return false;
     }
   }, [apiAccessCode, hasAccess]);
@@ -2979,8 +2988,9 @@ function writeAccessCookie(accessCode) {
     return;
   }
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const sameSite = window.location.protocol === "https:" ? "; SameSite=None" : "; SameSite=Lax";
   const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
-  document.cookie = `${ACCESS_CODE_COOKIE}=${encodeURIComponent(accessCode)}; Path=/; SameSite=Lax; Max-Age=86400${secure}${domain}`;
+  document.cookie = `${ACCESS_CODE_COOKIE}=${encodeURIComponent(accessCode)}; Path=/${sameSite}; Max-Age=86400${secure}${domain}`;
 }
 
 function clearAccessCookie() {
@@ -2988,8 +2998,9 @@ function clearAccessCookie() {
     return;
   }
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const sameSite = window.location.protocol === "https:" ? "; SameSite=None" : "; SameSite=Lax";
   const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
-  document.cookie = `${ACCESS_CODE_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0${secure}${domain}`;
+  document.cookie = `${ACCESS_CODE_COOKIE}=; Path=/${sameSite}; Max-Age=0${secure}${domain}`;
 }
 
 function systemRoomContext(systemName, roomContext) {

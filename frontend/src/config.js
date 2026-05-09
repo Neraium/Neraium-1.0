@@ -1,4 +1,4 @@
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
 const configuredAppAccessCode = import.meta.env.VITE_APP_ACCESS_CODE?.trim();
 const isProductionBuild = import.meta.env.PROD;
 

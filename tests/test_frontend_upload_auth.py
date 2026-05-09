@@ -13,9 +13,11 @@ def read_frontend(path: Path) -> str:
 def test_shared_api_helper_forces_credentials_include() -> None:
     source = read_frontend(CONFIG_JS)
 
+    assert 'trim().replace(/\\/+$/, "")' in source
     assert 'credentials: "include"' in source
     assert "return fetch(`${API_BASE_URL}${path}`" in source
     assert "const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;" in source
+    assert "...(headers ?? {})" in source
 
 
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
@@ -57,3 +59,17 @@ def test_object_errors_render_through_normalized_messages() -> None:
     assert "return JSON.stringify(error);" in source
     assert "{normalizeErrorMessage(uploadError)}" in source
     assert "{safeMessage}" in source
+
+
+def test_https_access_cookie_supports_cross_origin_ecs_api() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert 'window.location.protocol === "https:" ? "; SameSite=None" : "; SameSite=Lax"' in source
+    assert 'window.location.protocol === "https:" ? "; Secure" : ""' in source
+
+
+def test_protected_route_unauthorized_copy_is_session_expired() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert "Session expired. Refresh workspace." in source
+    assert "[object Object]" not in source
