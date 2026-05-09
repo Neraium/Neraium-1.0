@@ -24,12 +24,12 @@ export function buildAccessHeaders(accessCode = APP_ACCESS_CODE) {
 }
 
 export function apiFetch(path, options = {}) {
-  const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;
+  const { accessCode, headers, ...rest } = options;
   return fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     credentials: "include",
     headers: {
-      ...buildAccessHeaders(accessCode),
+      ...buildAccessHeaders(accessCode || APP_ACCESS_CODE),
       ...(headers ?? {}),
     },
   });
@@ -46,3 +46,4 @@ export const APP_ACCESS_CONFIG_WARNING = configuredAppAccessCode
   : isProductionBuild
     ? "Access is not configured for this production build."
     : "Local development access is enabled.";
+
