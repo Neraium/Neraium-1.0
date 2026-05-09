@@ -30,7 +30,7 @@ async def upload_csv(
     background_tasks.add_task(process_upload_job, metadata["job_id"])
     return {
         "job_id": metadata["job_id"],
-        "status": "queued",
+        "status": metadata["status"],
         "filename": metadata["filename"],
         "message": "Telemetry batch received. Processing started.",
         "status_url": f"/api/data/upload-status/{metadata['job_id']}",
@@ -51,6 +51,10 @@ def read_upload_status(job_id: str) -> dict[str, Any]:
         "file_size_bytes": metadata.get("file_size_bytes", 0),
         "rows_processed": metadata.get("rows_processed", 0),
         "columns_detected": metadata.get("columns_detected", 0),
+        "chunk_count": metadata.get("chunk_count", 0),
+        "memory_estimate_bytes": metadata.get("memory_estimate_bytes", 0),
+        "processing_duration_seconds": metadata.get("processing_duration_seconds"),
+        "engine_runtime_seconds": metadata.get("engine_runtime_seconds"),
         "runner_used": metadata.get("runner_used", False),
         "runner_module": metadata.get("runner_module"),
         "core_engine": metadata.get("core_engine"),
@@ -90,4 +94,7 @@ def read_latest_upload() -> dict[str, Any]:
         "core_engine": summary.get("core_engine") or (latest_state or {}).get("core_engine"),
         "state_available": latest_state is not None,
         "runner_used": summary.get("runner_used", False),
+        "chunk_count": summary.get("chunk_count", 0),
+        "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
+        "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
     }

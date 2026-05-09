@@ -28,12 +28,6 @@ const WORKSPACES = [
     description: "Connect facility telemetry to improve confidence, timing, and traceability.",
   },
   {
-    id: "evidence-reports",
-    label: "Evidence & Reports",
-    eyebrow: "Evidence",
-    description: "Room evidence, operator briefs, and action support.",
-  },
-  {
     id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
@@ -386,9 +380,6 @@ function App() {
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
           onSelectIntervention={setSelectedInterventionId}
-          onNavigateWorkspace={setActiveWorkspace}
-          operatorActions={operatorActions}
-          onOperatorAction={handleOperatorAction}
         />
       );
     }
@@ -406,22 +397,6 @@ function App() {
           }}
           roomContext={roomContext}
           liveOps={liveOps}
-          selectedInterventionId={selectedInterventionId}
-          operatorActions={operatorActions}
-        />
-      );
-    }
-
-    if (activeWorkspace === "evidence-reports") {
-      return (
-        <EvidenceReportsWorkspace
-          latestUploadResult={latestUploadResult}
-          roomContext={roomContext}
-          setActiveWorkspace={setActiveWorkspace}
-          liveOps={liveOps}
-          selectedInterventionId={selectedInterventionId}
-          operatorActions={operatorActions}
-          onOperatorAction={handleOperatorAction}
         />
       );
     }
@@ -432,11 +407,6 @@ function App() {
         apiStatus={apiStatus}
         roomContext={roomContext}
         liveOps={liveOps}
-        selectedInterventionId={selectedInterventionId}
-        onSelectIntervention={setSelectedInterventionId}
-        onNavigateWorkspace={setActiveWorkspace}
-        operatorActions={operatorActions}
-        onOperatorAction={handleOperatorAction}
         engineIdentity={engineIdentity}
         intelligenceStatus={intelligenceStatus}
       />
@@ -745,24 +715,9 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
         />
         <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
-          label="Data source"
-          value={liveOps.dataSourceLabel}
-          tone="info"
-        />
-        <StatusChip
           label="Readiness"
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.facilityTone}
-        />
-        <StatusChip
-          label="Time coverage"
-          value={timeCoverage.summary}
-          tone={timeCoverage.hasCoverage ? "nominal" : "info"}
-        />
-        <StatusChip
-          label="State"
-          value={latestUploadResult?.engine_result ? formatEngineResult(latestUploadResult.engine_result.overall_result) : liveOps.facilityStateLabel}
-          tone={latestUploadResult?.engine_result?.overall_result ?? liveOps.facilityTone}
         />
         <StatusChip
           label="Last sync"
@@ -866,7 +821,7 @@ function OverviewWorkspace({
           <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>
             Open system detail
           </button>
-          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("evidence-reports")}>
+          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("intelligence-console")}>
             View evidence
           </button>
         </div>
@@ -881,14 +836,9 @@ function FacilitySystemsWorkspace({
   liveOps,
   selectedInterventionId,
   onSelectIntervention,
-  onNavigateWorkspace,
-  operatorActions,
-  onOperatorAction,
 }) {
   const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
-  const relationshipRows = liveOps.relationshipRows;
-  const roomTransitions = liveOps.roomTransitions;
   const irrigationPanel = telemetryCards.find((card) => card.label === "Irrigation") ?? null;
   const systemsFocus = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0] ?? null;
   const fleetSummary = buildFleetSummary(liveOps.interventionItems, liveOps.neraiumScore, liveOps.facilityTone);
@@ -916,56 +866,25 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Selected room"
-        subtitle="Why this intervention window is moving."
-        className="span-3"
-      >
-        <WhyPanel
-          item={systemsFocus}
-          findings={liveOps.findings.slice(0, 3)}
-          actionStatus={operatorActions[systemsFocus?.id]}
-          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
-          onLogIntervention={(id) => onOperatorAction(id, "log")}
-          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
-        />
-      </Panel>
-
-      <Panel
         title="Room drivers"
         subtitle="Climate, irrigation, and cycle signals affecting the current window."
-        className="span-6"
+        className="span-8"
       >
         <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
       </Panel>
 
       <Panel
-        title="Room transitions"
-        subtitle="Changes affecting timing."
-        className="span-3"
-      >
-        <TimelineFeed items={roomTransitions} />
-      </Panel>
-
-      <Panel
         title="Room trend by channel"
         subtitle="Baseline movement by grow-room significance."
-        className="span-5"
+        className="span-6"
       >
         <DriftMonitor rows={driftRows} />
       </Panel>
 
       <Panel
-        title="Relationship shifts"
-        subtitle="Paired changes most likely to shift confidence."
-        className="span-3"
-      >
-        <RelationshipMonitor rows={relationshipRows} />
-      </Panel>
-
-      <Panel
         title="Irrigation context"
         subtitle="Cycle state and grower review notes."
-        className="span-4"
+        className="span-6"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
         <CompactList
@@ -990,7 +909,7 @@ function FacilitySystemsWorkspace({
   );
 }
 
-function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps, selectedInterventionId }) {
+function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext, liveOps }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -1031,7 +950,7 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       }
 
       setUploadJob(payload);
-      setUploadState("queued");
+      setUploadState(normalizeUploadStatus(payload.status));
       pollUploadStatus(payload.job_id);
     } catch (error) {
       setUploadError(
@@ -1053,9 +972,10 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       }
 
       setUploadJob(payload);
-      setUploadState(payload.status);
+      const nextStatus = normalizeUploadStatus(payload.status);
+      setUploadState(nextStatus);
 
-      if (payload.status === "complete") {
+      if (nextStatus === "complete") {
         const latestResponse = await fetch(`${API_BASE_URL}/api/data/latest-upload`);
         const latestPayload = latestResponse.ok ? await latestResponse.json() : payload.result_summary;
         const completedPayload = {
@@ -1070,12 +990,12 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
         return;
       }
 
-      if (payload.status === "failed") {
+      if (nextStatus === "failed") {
         setUploadError(payload.error ?? "Telemetry processing failed.");
         return;
       }
 
-      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(jobId), 1400);
+      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(jobId), 2000);
     } catch (error) {
       setUploadError(error instanceof TypeError ? "Upload status is temporarily unavailable." : error.message);
       setUploadState("error");
@@ -1087,8 +1007,6 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
     : uploadResult
       ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
     : liveOps.intakeStages;
-  const intakeFocus = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0] ?? null;
-
   return (
     <div className="workspace-grid workspace-grid--intake">
       <Panel
@@ -1116,14 +1034,17 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
                 setUploadError("");
               }}
             />
-            <button className="command-button" type="submit" disabled={["uploading", "queued", "parsing", "running_sii", "writing_state"].includes(uploadState)}>
-              {["uploading", "queued", "parsing", "running_sii", "writing_state"].includes(uploadState) ? "Processing batch" : "Validate batch"}
+            <button className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
+              {isUploadProcessing(uploadState) ? "Processing batch" : "Validate batch"}
             </button>
           </div>
 
           <div className="intake-flow__status">
             <span>{selectedFile ? selectedFile.name : "No file selected"}</span>
-            <span>{uploadJob?.progress_label ?? uploadStateMessage(uploadState)}</span>
+            <span className="intake-flow__progress">
+              {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
+              {uploadJob?.progress_label ?? uploadStateMessage(uploadState)}
+            </span>
           </div>
 
           {uploadError && <p className="form-error">{uploadError}</p>}
@@ -1139,159 +1060,19 @@ function DataIntakeWorkspace({ latestUploadResult, onUploadComplete, roomContext
       </Panel>
 
       <Panel
-        title="Room mapping"
-        subtitle="Facility context already connected."
-        className="span-4"
-      >
-        <SchemaMappingPanel result={uploadResult} roomContext={roomContext} />
-      </Panel>
-
-      <Panel
-        title="Confidence inputs"
-        subtitle="Checks that govern how much Neraium should trust the upload."
-        className="span-4"
-      >
-        <VerificationPanel result={uploadResult} />
-      </Panel>
-
-      <Panel
-        title="Evidence readiness"
-        subtitle="What is usable for explanation and action."
-        className="span-4"
-      >
-        <EvidenceExtractionPanel result={uploadResult} />
-      </Panel>
-
-      <Panel
-        title="Expected impact"
-        subtitle="How the current upload changes timing and confidence."
+        title="Batch summary"
+        subtitle="Upload shape and processing status."
         className="span-5"
       >
-        <WhyPanel item={intakeFocus} findings={liveOps.findings.slice(0, 3)} />
-      </Panel>
-
-      <Panel
-        title="Baseline comparison"
-        subtitle="Current room trend extracted from the batch."
-        className="span-7"
-      >
-        {uploadResult ? (
-          uploadResult.baseline_analysis ? (
-            <DriftMonitor rows={uploadResult.baseline_analysis.column_drift} detailed />
-          ) : (
-            <EmptyState
-              compact
-              title="Latest upload processed"
-              body={`${uploadResult.row_count ?? uploadResult.rows_processed ?? 0} rows processed. Facility Command has been refreshed.`}
-            />
-          )
-        ) : (
-          <EmptyState
-            compact
-            title="Baseline established from current telemetry surface"
-            body="Live telemetry feed is active. Manual upload remains available if you want to validate a room export."
-          />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-function EvidenceReportsWorkspace({
-  latestUploadResult,
-  roomContext,
-  setActiveWorkspace,
-  liveOps,
-  selectedInterventionId,
-  operatorActions,
-  onOperatorAction,
-}) {
-  const latestReport = latestUploadResult?.operator_report;
-  const findings = liveOps.findings;
-  const evidenceLines = liveOps.evidenceLines;
-  const observations = liveOps.observations;
-  const reportFocus =
-    liveOps.actionQueue.find((item) => item.id === selectedInterventionId)
-    ?? liveOps.interventionItems.find((item) => item.id === selectedInterventionId)
-    ?? liveOps.actionQueue[0]
-    ?? liveOps.interventionItems[0]
-    ?? null;
-
-  return (
-    <div className="workspace-grid workspace-grid--evidence">
-      <Panel
-        title="Executive brief"
-        subtitle="What is happening, why it matters, and the next move."
-        className="span-7"
-      >
-        <ExecutiveBrief
-          focus={reportFocus}
-          report={latestReport}
-          observations={observations}
-          roomContext={roomContext}
-          facilityTone={liveOps.facilityTone}
+        <MetricGrid
+          metrics={[
+            { label: "File", value: uploadResult?.filename ?? uploadJob?.filename ?? selectedFile?.name ?? "Awaiting upload" },
+            { label: "Rows", value: uploadResult?.row_count ?? uploadResult?.rows_processed ?? uploadJob?.rows_processed ?? "Pending" },
+            { label: "Columns", value: uploadResult?.column_count ?? uploadResult?.columns_detected ?? uploadJob?.columns_detected ?? "Pending" },
+            { label: "Status", value: uploadJob?.status ? uploadStateMessage(uploadJob.status) : uploadStateMessage(uploadState) },
+          ]}
+          compact
         />
-      </Panel>
-
-      <Panel
-        title="Why and confidence"
-        subtitle="The reasoning behind the current recommendation."
-        className="span-5"
-      >
-        <WhyPanel
-          item={reportFocus}
-          findings={findings.slice(0, 3)}
-          actionStatus={operatorActions[reportFocus?.targetId ?? reportFocus?.id]}
-          onSeeWhatsWrong={() => setActiveWorkspace("facility-systems")}
-          onLogIntervention={(id) => onOperatorAction(id, "log")}
-          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
-        />
-      </Panel>
-
-      <Panel
-        title="Technical evidence"
-        subtitle="Expandable traces, observations, and source detail beneath the brief."
-        className="span-5"
-      >
-        <TechnicalEvidencePanel
-          evidenceLines={evidenceLines}
-          observations={observations}
-          report={latestReport}
-          timeline={liveOps.timeline}
-        />
-      </Panel>
-
-      <Panel
-        title="Report outputs"
-        subtitle="Limitations and exported brief surfaces."
-        className="span-3"
-      >
-        {latestReport ? (
-          <CompactList items={[...latestReport.limitations, ...REPORT_TEMPLATES]} emptyText="No report output available." />
-        ) : (
-          <CompactList items={liveOps.reportNotes} emptyText="Awaiting additional room telemetry." />
-        )}
-      </Panel>
-
-      <Panel
-        title="Supporting findings"
-        subtitle="Evidence-backed notes and a direct path back to intake."
-        className="span-12"
-      >
-        <div className="evidence-action-row">
-          <CompactList
-            items={findings.slice(0, 6).map((item) => `${item.title}: ${item.detail}`)}
-            emptyText="Awaiting evidence-linked findings."
-            inline
-          />
-          <div className="evidence-action-row__meta">
-            <StatusDot tone={liveOps.facilityTone} />
-            <span>{liveOps.connectionSummary}</span>
-          </div>
-          <button className="command-button command-button--secondary" type="button" onClick={() => setActiveWorkspace("data-intake")}>
-            Refine Intake
-          </button>
-        </div>
       </Panel>
     </div>
   );
@@ -1300,48 +1081,19 @@ function EvidenceReportsWorkspace({
 function IntelligenceConsoleWorkspace({
   latestUploadResult,
   liveOps,
-  selectedInterventionId,
-  onSelectIntervention,
-  onNavigateWorkspace,
-  operatorActions,
-  onOperatorAction,
   engineIdentity,
   intelligenceStatus,
 }) {
-  const telemetryCards = liveOps.telemetryCards;
   const driftRows = liveOps.driftRows;
   const relationshipRows = liveOps.relationshipRows;
   const timeline = liveOps.timeline;
-  const findings = liveOps.findings;
-  const consoleEvents = liveOps.consoleEvents;
-  const queueItems = liveOps.actionQueue.slice(0, 4);
 
   return (
     <div className="workspace-grid workspace-grid--console">
       <Panel
-        title="Live decision stream"
-        subtitle="The channels currently driving intervention timing."
-        className="span-6"
-      >
-        <TelemetryCardGrid cards={telemetryCards} />
-      </Panel>
-
-      <Panel
-        title="Action queue"
-        subtitle="Priority-ranked grower actions."
-        className="span-3"
-      >
-        <ActionQueue
-          items={queueItems}
-          selectedId={selectedInterventionId ?? queueItems[0]?.id ?? null}
-          onSelect={onSelectIntervention}
-        />
-      </Panel>
-
-      <Panel
         title="Room trend feed"
         subtitle="Changes shortening the current window."
-        className="span-3"
+        className="span-4"
       >
         <DriftFeed rows={driftRows} />
       </Panel>
@@ -1349,32 +1101,9 @@ function IntelligenceConsoleWorkspace({
       <Panel
         title="Relationship shifts"
         subtitle="Paired changes affecting confidence."
-        className="span-3"
+        className="span-4"
       >
         <RelationshipMonitor rows={relationshipRows} />
-      </Panel>
-
-      <Panel
-        title="Grower notices"
-        subtitle="Short-form findings and review notices."
-        className="span-3"
-      >
-        <FeedList items={findings.slice(0, 6)} emptyText="Monitoring active telemetry feed." />
-      </Panel>
-
-      <Panel
-        title="Selected action"
-        subtitle="Next grower action with evidence."
-        className="span-3"
-      >
-        <WhyPanel
-          item={queueItems.find((item) => item.id === selectedInterventionId) ?? queueItems[0] ?? null}
-          findings={findings.slice(0, 3)}
-          actionStatus={operatorActions[(queueItems.find((item) => item.id === selectedInterventionId) ?? queueItems[0])?.targetId ?? selectedInterventionId ?? queueItems[0]?.id]}
-          onSeeWhatsWrong={() => onNavigateWorkspace("facility-systems")}
-          onLogIntervention={(id) => onOperatorAction(id, "log")}
-          onIgnorePattern={(id) => onOperatorAction(id, "ignore")}
-        />
       </Panel>
 
       <Panel
@@ -1383,22 +1112,6 @@ function IntelligenceConsoleWorkspace({
         className="span-4"
       >
         <TimelineFeed items={timeline} />
-      </Panel>
-
-      <Panel
-        title="Evidence terminal"
-        subtitle="Streaming traces behind the current action surface."
-        className="span-5"
-      >
-        <EvidenceConsole lines={consoleEvents} animated />
-      </Panel>
-
-      <Panel
-        title="Connection diagnostics"
-        subtitle="Sync state, last confirmed update, and grower guidance."
-        className="span-3"
-      >
-        <FeedList items={liveOps.connectionEvents} emptyText="Connection diagnostics unavailable." />
       </Panel>
 
       <Panel
@@ -1470,74 +1183,6 @@ function WorkflowStages({ items }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function SchemaMappingPanel({ result, roomContext }) {
-  return (
-    <MetricGrid
-      metrics={[
-        { label: "Primary room", value: roomContext.primary },
-        { label: "Secondary lane", value: roomContext.secondary },
-        {
-          label: "Mapped columns",
-          value: result?.cultivation_mapping
-            ? result.cultivation_mapping.mapped_column_count
-            : result?.columns_detected ?? result?.column_count ?? "Awaiting facility upload",
-        },
-        {
-          label: "Unknown columns",
-          value: result?.cultivation_mapping ? result.cultivation_mapping.unknown_column_count : "Awaiting facility upload",
-        },
-      ]}
-      compact
-    />
-  );
-}
-
-function VerificationPanel({ result }) {
-  return (
-    <MetricGrid
-      metrics={[
-        {
-          label: "Readiness",
-          value: result?.data_quality ? formatReadiness(result.data_quality.readiness) : result ? "Processed" : "Awaiting facility upload",
-        },
-        { label: "Rows parsed", value: result ? result.row_count ?? result.rows_processed : "Monitoring active telemetry feed" },
-        { label: "Timestamp context", value: result?.detected_timestamp_column ?? "Awaiting additional room telemetry" },
-        { label: "Numeric channels", value: result?.data_quality ? result.data_quality.numeric_column_count : "Live telemetry feed" },
-      ]}
-      compact
-    />
-  );
-}
-
-function EvidenceExtractionPanel({ result }) {
-  return (
-    <FeedList
-      items={[
-        {
-          title: "Baseline evidence",
-          detail: result?.baseline_analysis
-            ? `${result.baseline_analysis.columns_analyzed} columns analyzed.`
-            : result
-              ? `${result.rows_processed ?? result.row_count ?? 0} rows processed.`
-              : "Monitoring active telemetry feed.",
-          tone: result ? "nominal" : "info",
-        },
-        {
-          title: "Engine evidence",
-          detail: result?.engine_result ? `${result.engine_result.evidence.length} evidence items.` : "Awaiting additional room telemetry.",
-          tone: result?.engine_result ? "nominal" : "review",
-        },
-        {
-          title: "Grower report",
-          detail: result?.operator_report ? "Current findings report available." : "Manual upload remains optional.",
-          tone: result?.operator_report ? "nominal" : "info",
-        },
-      ]}
-      emptyText="Monitoring evidence stream."
-    />
   );
 }
 
@@ -2150,50 +1795,6 @@ function TopologyMap({ nodes, selectedId, onSelect }) {
   );
 }
 
-function OperatorReportPanel({ report }) {
-  return (
-    <div className="panel-stack">
-      <StatusBanner
-        title={report.title}
-        subtitle={report.summary}
-        tone={report.data_readiness}
-      />
-
-      <MetricGrid
-        metrics={[
-          { label: "Readiness", value: formatReadiness(report.data_readiness) },
-          {
-            label: "Timestamp column",
-            value: report.time_coverage.detected_timestamp_column ?? "Not detected",
-          },
-          {
-            label: "Sample interval",
-            value: report.time_coverage.estimated_sample_interval ?? "Not available",
-          },
-          {
-            label: "Evidence sources",
-            value: report.source_sections_used.length,
-          },
-        ]}
-        compact
-      />
-
-      <div className="two-column-block">
-        <CompactList
-          items={report.key_observations}
-          emptyText="No observations were generated."
-          title="Observations"
-        />
-        <CompactList
-          items={report.recommended_operator_checks}
-          emptyText="No grower checks were generated."
-          title="Grower checks"
-        />
-      </div>
-    </div>
-  );
-}
-
 function FleetSummary({ summary }) {
   return (
     <div className="fleet-summary">
@@ -2236,71 +1837,6 @@ function TargetSelector({ items, selectedId, onSelect }) {
           <p className="target-selector__driver">{buildGuidanceForItem(item).primaryDriver}</p>
         </button>
       ))}
-    </div>
-  );
-}
-
-function ExecutiveBrief({ focus, report, observations, roomContext, facilityTone }) {
-  if (!focus) {
-    return <EmptyState title="No executive brief available" body="Monitoring active telemetry feed." />;
-  }
-
-  const briefPoints = report?.recommended_operator_checks?.slice(0, 3)
-    ?? observations.slice(0, 3);
-  const guidance = buildGuidanceForItem(focus);
-
-  return (
-    <div className="panel-stack">
-      <StatusBanner
-        title={focus.title}
-        subtitle={focus.whyHeadline ?? focus.summary}
-        tone={focus.tone ?? facilityTone}
-      />
-      <MetricGrid
-        metrics={[
-          { label: "Time remaining", value: focus.window },
-          { label: "Confidence", value: `${focus.confidence}%` },
-          { label: "Primary room", value: roomContext.primary },
-          { label: "Next move", value: focus.primaryAction ?? focus.recommendation },
-        ]}
-        compact
-      />
-      <CompactList
-        items={[
-          `Primary driver: ${guidance.primaryDriver}`,
-          `Why Neraium flagged this: ${guidance.whyFlagged}`,
-          ...guidance.whatToCheck.slice(0, 3),
-          ...briefPoints,
-        ].slice(0, 6)}
-        emptyText="No executive observations available."
-        title="Executive takeaways"
-      />
-    </div>
-  );
-}
-
-function TechnicalEvidencePanel({ evidenceLines, observations, report, timeline }) {
-  return (
-    <div className="technical-evidence">
-      <details className="technical-evidence__section" open>
-        <summary>Evidence terminal</summary>
-        <EvidenceConsole lines={evidenceLines} />
-      </details>
-      <details className="technical-evidence__section">
-        <summary>Room observations</summary>
-        <CompactList items={observations} emptyText="No room observations available." />
-      </details>
-      <details className="technical-evidence__section">
-        <summary>Timeline detail</summary>
-        <TimelineFeed items={timeline.slice(0, 6)} />
-      </details>
-      <details className="technical-evidence__section">
-        <summary>Report limitations</summary>
-        <CompactList
-          items={report?.limitations ?? REPORT_TEMPLATES}
-          emptyText="No report limitations available."
-        />
-      </details>
     </div>
   );
 }
@@ -2992,14 +2528,15 @@ function deriveFacilityStability(result) {
 function buildIntakeStages(result, uploadState, roomContext, job = null) {
   const activeIndex = uploadStageIndex(uploadState);
   return INTAKE_STAGES.map((stage, index) => {
-    if (job || ["uploading", "queued", "parsing", "running_sii", "writing_state", "failed"].includes(uploadState)) {
+    if (job || [...["failed"], ...["uploading", "queued", "parsing", "baseline_modeling", "running_sii", "writing_state"]].includes(normalizeUploadStatus(uploadState))) {
+      const normalizedStatus = normalizeUploadStatus(uploadState);
       return {
         title: stage,
         detail: uploadStageDetail(stage, index, job, roomContext),
-        state: uploadState === "failed"
+        state: normalizedStatus === "failed"
           ? index <= activeIndex ? "failed" : "queued"
           : index < activeIndex ? "complete" : index === activeIndex ? "active" : "queued",
-        tone: uploadState === "failed" && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
+        tone: normalizedStatus === "failed" && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
       };
     }
 
@@ -3035,6 +2572,7 @@ function uploadStageIndex(uploadState) {
     uploading: 0,
     queued: 0,
     parsing: 1,
+    baseline_modeling: 2,
     running_sii: 3,
     writing_state: 4,
     complete: 5,
@@ -3043,23 +2581,44 @@ function uploadStageIndex(uploadState) {
 }
 
 function uploadStageDetail(stage, index, job, roomContext) {
-  if (job?.status === "failed" && index === uploadStageIndex("failed")) {
+  const jobStatus = normalizeUploadStatus(job?.status);
+  if (jobStatus === "failed" && index === uploadStageIndex("failed")) {
     return job.error ?? "Telemetry processing failed.";
   }
-  if (job?.status === "complete") {
+  if (jobStatus === "complete") {
     return index === 5
       ? "Facility Command is using the latest uploaded runner state."
       : "Stage complete.";
   }
   const details = [
     job?.message ?? "Telemetry batch received.",
-    job?.status === "parsing" ? job.progress_label : "Waiting for header and schema detection.",
-    `Room context will resolve against ${roomContext.primary}.`,
-    job?.status === "running_sii" ? job.progress_label : "SII engine processing will start after parsing.",
-    job?.status === "writing_state" ? job.progress_label : "Evidence and runner state will be written after SII processing.",
+    jobStatus === "parsing" ? job.progress_label : "Waiting for header and schema detection.",
+    jobStatus === "baseline_modeling" ? job.progress_label : `Room context will resolve against ${roomContext.primary}.`,
+    jobStatus === "running_sii" ? job.progress_label : "SII engine processing will start after baseline modeling.",
+    jobStatus === "writing_state" ? job.progress_label : "Evidence and runner state will be written after SII processing.",
     "Completion will refresh Facility Command.",
   ];
   return details[index] ?? stage;
+}
+
+function normalizeUploadStatus(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  const aliases = {
+    pending: "queued",
+    queued: "queued",
+    parsing: "parsing",
+    baseline_modeling: "baseline_modeling",
+    running_sii: "running_sii",
+    generating_evidence: "writing_state",
+    writing_state: "writing_state",
+    complete: "complete",
+    failed: "failed",
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function isUploadProcessing(status) {
+  return ["uploading", "queued", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalizeUploadStatus(status));
 }
 
 function systemRoomContext(systemName, roomContext) {
@@ -3084,25 +2643,29 @@ function formatCategory(category) {
 }
 
 function uploadStateMessage(uploadState) {
-  if (uploadState === "uploading") {
+  const normalized = normalizeUploadStatus(uploadState);
+  if (normalized === "uploading") {
     return "Telemetry batch received";
   }
-  if (uploadState === "queued") {
+  if (normalized === "queued") {
     return "Processing queued";
   }
-  if (uploadState === "parsing") {
+  if (normalized === "parsing") {
     return "Header and schema detection";
   }
-  if (uploadState === "running_sii") {
+  if (normalized === "baseline_modeling") {
+    return "Baseline modeling";
+  }
+  if (normalized === "running_sii") {
     return "SII engine processing";
   }
-  if (uploadState === "writing_state") {
+  if (normalized === "writing_state") {
     return "Writing evidence state";
   }
-  if (uploadState === "complete") {
+  if (normalized === "complete") {
     return "Batch processing complete";
   }
-  if (uploadState === "error") {
+  if (normalized === "error") {
     return "Validation needs attention";
   }
   return "Awaiting file selection";

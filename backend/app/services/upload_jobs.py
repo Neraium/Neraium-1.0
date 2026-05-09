@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
+import csv
+import time
 import uuid
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,15 +32,22 @@ from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner
 
 RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
-JOB_DIR = RUNTIME_DIR / "jobs"
+JOB_DIR = RUNTIME_DIR / "upload_jobs"
+LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
+CHUNK_SIZE_ROWS = 10_000
+MAX_ANALYSIS_ROWS = 50_000
+MAX_SII_ROWS = 20_000
+
+logger = logging.getLogger(__name__)
 
 PROGRESS_LABELS = {
-    "queued": "Telemetry batch received. Processing is queued.",
-    "parsing": "Reading CSV headers, rows, and timestamp context.",
-    "running_sii": "Running SII engine against uploaded telemetry.",
-    "writing_state": "Writing SII evidence and facility state.",
-    "complete": "Telemetry processing complete.",
-    "failed": "Telemetry processing failed.",
+    "PENDING": "Telemetry batch received. Processing is queued.",
+    "PARSING": "Reading CSV headers, rows, and timestamp context.",
+    "BASELINE_MODELING": "Building baseline model from telemetry windows.",
+    "RUNNING_SII": "Running SII engine against uploaded telemetry.",
+    "GENERATING_EVIDENCE": "Generating evidence and writing facility state.",
+    "COMPLETE": "Telemetry processing complete.",
+    "FAILED": "Telemetry processing failed.",
 }
 
 
@@ -68,10 +79,14 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
         "filename": filename,
         "file_path": str(upload_path),
         "file_size_bytes": size_bytes,
-        "status": "queued",
-        "progress_label": PROGRESS_LABELS["queued"],
+        "status": "PENDING",
+        "progress_label": PROGRESS_LABELS["PENDING"],
         "rows_processed": 0,
         "columns_detected": 0,
+        "chunk_count": 0,
+        "memory_estimate_bytes": 0,
+        "processing_duration_seconds": None,
+        "engine_runtime_seconds": None,
         "runner_used": False,
         "runner_module": RUNNER_MODULE,
         "core_engine": CORE_ENGINE,
@@ -93,6 +108,9 @@ def read_job(job_id: str) -> dict[str, Any] | None:
     ensure_runtime_dirs()
     path = job_path(job_id)
     if not path.exists():
+        legacy_path = LEGACY_JOB_DIR / path.name
+        path = legacy_path if legacy_path.exists() else path
+    if not path.exists():
         return None
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -102,7 +120,13 @@ def read_job(job_id: str) -> dict[str, Any] | None:
 
 def write_job(metadata: dict[str, Any]) -> None:
     ensure_runtime_dirs()
-    job_path(metadata["job_id"]).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    if "status" in metadata:
+        metadata["status"] = normalize_status(str(metadata["status"]))
+        metadata["progress_label"] = PROGRESS_LABELS.get(metadata["status"], metadata.get("progress_label"))
+    path = job_path(metadata["job_id"])
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    temp_path.replace(path)
 
 
 def update_job(job_id: str, **updates: Any) -> dict[str, Any]:
@@ -111,9 +135,25 @@ def update_job(job_id: str, **updates: Any) -> dict[str, Any]:
         metadata = {"job_id": job_id, "started_at": now_iso()}
     metadata.update(updates)
     if "status" in updates:
-        metadata["progress_label"] = PROGRESS_LABELS.get(str(updates["status"]), metadata.get("progress_label"))
+        metadata["status"] = normalize_status(str(updates["status"]))
+        metadata["progress_label"] = PROGRESS_LABELS.get(metadata["status"], metadata.get("progress_label"))
     write_job(metadata)
     return metadata
+
+
+def normalize_status(status: str) -> str:
+    aliases = {
+        "queued": "PENDING",
+        "pending": "PENDING",
+        "parsing": "PARSING",
+        "baseline_modeling": "BASELINE_MODELING",
+        "running_sii": "RUNNING_SII",
+        "writing_state": "GENERATING_EVIDENCE",
+        "generating_evidence": "GENERATING_EVIDENCE",
+        "complete": "COMPLETE",
+        "failed": "FAILED",
+    }
+    return aliases.get(status.lower(), status.upper())
 
 
 def process_upload_job(job_id: str) -> None:
@@ -121,41 +161,65 @@ def process_upload_job(job_id: str) -> None:
     if metadata is None:
         return
 
+    started = time.perf_counter()
     try:
-        update_job(job_id, status="parsing")
-        content = Path(metadata["file_path"]).read_bytes()
-        result = process_csv_content(
-            content=content,
+        logger.info(
+            "upload_job_started job_id=%s filename=%s size_bytes=%s",
+            job_id,
+            metadata.get("filename"),
+            metadata.get("file_size_bytes"),
+        )
+        update_job(job_id, status="PARSING")
+        result = process_csv_file(
+            file_path=Path(metadata["file_path"]),
             filename=metadata["filename"],
             status_callback=lambda status, **updates: update_job(job_id, status=status, **updates),
         )
         update_job(
             job_id,
-            status="writing_state",
+            status="GENERATING_EVIDENCE",
             rows_processed=result["row_count"],
             columns_detected=result["column_count"],
             runner_used=result["sii_runner_result"]["runner_used"],
+            chunk_count=result["processing_stats"]["chunk_count"],
+            memory_estimate_bytes=result["processing_stats"]["memory_estimate_bytes"],
+            engine_runtime_seconds=result["processing_stats"]["engine_runtime_seconds"],
         )
         completed_at = now_iso()
         summary = summarize_result(result, completed_at)
+        duration = round(time.perf_counter() - started, 4)
         update_job(
             job_id,
-            status="complete",
+            status="COMPLETE",
             rows_processed=result["row_count"],
             columns_detected=result["column_count"],
             runner_used=result["sii_runner_result"]["runner_used"],
             runner_module=result["sii_runner_result"]["runner_module"],
             core_engine=result["sii_runner_result"]["core_engine"],
             completed_at=completed_at,
+            processing_duration_seconds=duration,
+            engine_runtime_seconds=result["processing_stats"]["engine_runtime_seconds"],
             error=None,
             result_summary=summary,
         )
         write_latest_upload_summary(job_id, summary)
+        logger.info(
+            "upload_job_complete job_id=%s rows=%s columns=%s chunks=%s duration=%s engine_runtime=%s memory_estimate=%s",
+            job_id,
+            result["row_count"],
+            result["column_count"],
+            result["processing_stats"]["chunk_count"],
+            duration,
+            result["processing_stats"]["engine_runtime_seconds"],
+            result["processing_stats"]["memory_estimate_bytes"],
+        )
     except Exception as exc:
+        logger.exception("upload_job_failed job_id=%s", job_id)
         update_job(
             job_id,
-            status="failed",
+            status="FAILED",
             completed_at=now_iso(),
+            processing_duration_seconds=round(time.perf_counter() - started, 4),
             error=f"{type(exc).__name__}: {exc}",
         )
 
@@ -167,9 +231,131 @@ def process_csv_content(
     status_callback: Any | None = None,
 ) -> dict[str, Any]:
     columns, data_rows = parse_csv_content(content)
+    return build_upload_result(
+        columns=columns,
+        data_rows=data_rows,
+        total_rows=len(data_rows),
+        filename=filename,
+        status_callback=status_callback,
+        processing_stats={
+            "chunk_count": 1 if data_rows else 0,
+            "sampled_rows": len(data_rows),
+            "sii_sampled_rows": min(len(data_rows), MAX_SII_ROWS),
+            "memory_estimate_bytes": estimate_rows_memory(data_rows),
+            "used_streaming": False,
+            "engine_runtime_seconds": 0,
+        },
+    )
+
+
+def process_csv_file(
+    *,
+    file_path: Path,
+    filename: str,
+    status_callback: Any | None = None,
+) -> dict[str, Any]:
+    columns, data_rows, total_rows, processing_stats = stream_csv_windows(file_path, status_callback)
+    return build_upload_result(
+        columns=columns,
+        data_rows=data_rows,
+        total_rows=total_rows,
+        filename=filename,
+        status_callback=status_callback,
+        processing_stats=processing_stats,
+    )
+
+
+def stream_csv_windows(
+    file_path: Path,
+    status_callback: Any | None = None,
+) -> tuple[list[str], list[list[str]], int, dict[str, Any]]:
+    first_rows: list[list[str]] = []
+    tail_rows: deque[list[str]] = deque(maxlen=MAX_ANALYSIS_ROWS // 2)
+    total_rows = 0
+    malformed_rows = 0
+    chunk_count = 0
+    columns: list[str] | None = None
+
+    try:
+        csv_file = file_path.open("r", encoding="utf-8-sig", newline="")
+    except UnicodeDecodeError as exc:
+        raise ValueError("CSV file must be UTF-8 encoded.") from exc
+
+    with csv_file:
+        reader = csv.reader(csv_file)
+        try:
+            columns = [column.strip() for column in next(reader)]
+        except StopIteration as exc:
+            raise ValueError("CSV file is empty.") from exc
+        if not any(columns):
+            raise ValueError("CSV file must include a header row.")
+
+        for row in reader:
+            if not any(cell.strip() for cell in row):
+                continue
+            total_rows += 1
+            if len(row) != len(columns):
+                malformed_rows += 1
+            if len(first_rows) < MAX_ANALYSIS_ROWS // 2:
+                first_rows.append(row)
+            else:
+                tail_rows.append(row)
+            if total_rows % CHUNK_SIZE_ROWS == 0:
+                chunk_count += 1
+                if status_callback:
+                    status_callback(
+                        "PARSING",
+                        rows_processed=total_rows,
+                        columns_detected=len(columns),
+                        chunk_count=chunk_count,
+                        memory_estimate_bytes=estimate_rows_memory(first_rows) + estimate_rows_memory(list(tail_rows)),
+                    )
+
+    if total_rows == 0:
+        raise ValueError("CSV file is empty.")
+
+    if total_rows % CHUNK_SIZE_ROWS:
+        chunk_count += 1
+
+    data_rows = first_rows + list(tail_rows)
     if status_callback:
-        status_callback("parsing", rows_processed=len(data_rows), columns_detected=len(columns))
+        status_callback(
+            "PARSING",
+            rows_processed=total_rows,
+            columns_detected=len(columns),
+            chunk_count=chunk_count,
+            memory_estimate_bytes=estimate_rows_memory(data_rows),
+        )
+
+    return columns, data_rows, total_rows, {
+        "chunk_count": chunk_count,
+        "sampled_rows": len(data_rows),
+        "sii_sampled_rows": min(len(data_rows), MAX_SII_ROWS),
+        "malformed_rows": malformed_rows,
+        "memory_estimate_bytes": estimate_rows_memory(data_rows),
+        "used_streaming": True,
+        "engine_runtime_seconds": 0,
+    }
+
+
+def build_upload_result(
+    *,
+    columns: list[str],
+    data_rows: list[list[str]],
+    total_rows: int,
+    filename: str,
+    status_callback: Any | None = None,
+    processing_stats: dict[str, Any],
+) -> dict[str, Any]:
+    if status_callback:
+        status_callback("PARSING", rows_processed=total_rows, columns_detected=len(columns))
     warnings = build_warnings(columns, data_rows)
+    if processing_stats.get("used_streaming") and processing_stats.get("sampled_rows", 0) < total_rows:
+        warnings.append(
+            f"Large upload was processed with streaming windows: {processing_stats['sampled_rows']} representative rows modeled from {total_rows} total rows."
+        )
+    if processing_stats.get("malformed_rows"):
+        warnings.append(f"{processing_stats['malformed_rows']} rows had a different column count than the header.")
     detected_timestamp_column = detect_timestamp_column(columns)
     if detected_timestamp_column is None:
         warnings.append("No obvious timestamp column detected.")
@@ -188,12 +374,14 @@ def process_csv_content(
         if profile["range_warning"] is not None
     )
     data_quality = build_data_quality(
-        row_count=len(data_rows),
+        row_count=total_rows,
         column_count=len(columns),
         numeric_column_count=len(numeric_profiles),
         timestamp_detected=detected_timestamp_column is not None,
         warnings=warnings,
     )
+    if status_callback:
+        status_callback("BASELINE_MODELING", rows_processed=total_rows, columns_detected=len(columns))
     baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
     cultivation_mapping = map_cultivation_columns(columns)
     operator_report = build_operator_report(
@@ -204,7 +392,8 @@ def process_csv_content(
         cultivation_mapping=cultivation_mapping,
     )
     if status_callback:
-        status_callback("running_sii", rows_processed=len(data_rows), columns_detected=len(columns))
+        status_callback("RUNNING_SII", rows_processed=total_rows, columns_detected=len(columns))
+    engine_started = time.perf_counter()
     engine_result = run_engine_analysis(
         columns=columns,
         rows=data_rows,
@@ -213,6 +402,7 @@ def process_csv_content(
         cultivation_mapping=cultivation_mapping,
         numeric_profiles=numeric_profiles,
     )
+    processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
     driver_attribution = build_driver_attribution(
         room_state={
             "room": primary_room_from_upload(columns, data_rows),
@@ -235,7 +425,7 @@ def process_csv_content(
     )
     sii_intelligence = build_upload_intelligence(
         filename=filename,
-        row_count=len(data_rows),
+        row_count=total_rows,
         data_quality=data_quality,
         baseline_analysis=baseline_analysis,
         engine_result=engine_result,
@@ -246,12 +436,13 @@ def process_csv_content(
     processing_trace = build_processing_trace(
         engine_result=engine_result,
         driver_attribution=driver_attribution,
-        rows_processed=len(data_rows),
+        rows_processed=total_rows,
         columns_analyzed=baseline_analysis["columns_analyzed"],
     )
+    sii_rows = downsample_rows(data_rows, MAX_SII_ROWS)
     sii_runner_result = run_sii_runner(
         columns=columns,
-        rows=data_rows,
+        rows=sii_rows,
         numeric_profiles=numeric_profiles,
         timestamp_column=detected_timestamp_column,
         primary_room=primary_room_from_upload(columns, data_rows),
@@ -262,7 +453,7 @@ def process_csv_content(
 
     return {
         "filename": filename,
-        "row_count": len(data_rows),
+        "row_count": total_rows,
         "column_count": len(columns),
         "columns": columns,
         "preview_rows": preview_rows(columns, data_rows),
@@ -279,16 +470,22 @@ def process_csv_content(
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": truncate_runner_result(sii_runner_result),
         "processing_trace": processing_trace,
+        "processing_stats": processing_stats,
         "validation_provenance": VALIDATION_PROVENANCE,
     }
 
 
 def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any]:
     runner = result["sii_runner_result"]
+    stats = result.get("processing_stats", {})
     return {
         "filename": result["filename"],
         "rows_processed": result["row_count"],
         "columns_detected": result["column_count"],
+        "chunk_count": stats.get("chunk_count", 0),
+        "sampled_rows": stats.get("sampled_rows", result["row_count"]),
+        "memory_estimate_bytes": stats.get("memory_estimate_bytes", 0),
+        "engine_runtime_seconds": stats.get("engine_runtime_seconds"),
         "last_processed_at": completed_at,
         "runner_used": runner["runner_used"],
         "runner_module": runner["runner_module"],
@@ -305,10 +502,10 @@ def latest_upload_path() -> Path:
 
 def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
     ensure_runtime_dirs()
-    latest_upload_path().write_text(
-        json.dumps({"job_id": job_id, **summary}, indent=2),
-        encoding="utf-8",
-    )
+    path = latest_upload_path()
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps({"job_id": job_id, **summary}, indent=2), encoding="utf-8")
+    temp_path.replace(path)
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
@@ -332,7 +529,7 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
             metadata = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if metadata.get("status") == "complete":
+        if normalize_status(str(metadata.get("status"))) == "COMPLETE":
             completed_jobs.append(metadata)
     if not completed_jobs:
         return None
@@ -387,3 +584,14 @@ def state_from_assessment(assessment: str) -> str:
 
 def severity_from_assessment(assessment: str) -> str:
     return "review" if assessment == "needs_review" else "info"
+
+
+def downsample_rows(rows: list[list[str]], limit: int) -> list[list[str]]:
+    if len(rows) <= limit:
+        return rows
+    step = len(rows) / limit
+    return [rows[min(len(rows) - 1, int(index * step))] for index in range(limit)]
+
+
+def estimate_rows_memory(rows: list[list[str]]) -> int:
+    return sum(sum(len(cell) for cell in row) + len(row) * 8 for row in rows)
