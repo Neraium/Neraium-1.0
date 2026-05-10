@@ -47,7 +47,7 @@ def now_iso() -> str:
 
 def default_connection_payload(settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
-    auto_polling_enabled = settings.app_env == "development" and os.getenv("PYTEST_CURRENT_TEST") is None
+    auto_polling_enabled = False
     return {
         "connection_id": DEFAULT_CONNECTION_ID,
         "name": DEFAULT_CONNECTION_NAME,

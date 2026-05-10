@@ -3,13 +3,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
+DATA_CONNECTIONS_WORKSPACE = ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx"
 EVIDENCE_WORKSPACE = ROOT / "frontend" / "src" / "components" / "EvidenceTrailWorkspace.jsx"
 EVIDENCE_API = ROOT / "frontend" / "src" / "services" / "evidenceApi.js"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
+UPLOAD_FLOW = ROOT / "frontend" / "src" / "viewModels" / "uploadFlow.js"
+UPLOAD_STATE = ROOT / "frontend" / "src" / "viewModels" / "uploadState.js"
 
 
 def read_frontend(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def read_upload_surface() -> str:
+    return "\n".join(
+        [
+            read_frontend(APP_JSX),
+            read_frontend(DATA_CONNECTIONS_WORKSPACE),
+            read_frontend(UPLOAD_FLOW),
+            read_frontend(UPLOAD_STATE),
+        ]
+    )
 
 
 def test_shared_api_helper_forces_credentials_include() -> None:
@@ -26,7 +40,7 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 
 
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
     evidence_source = read_frontend(EVIDENCE_WORKSPACE)
     evidence_api_source = read_frontend(EVIDENCE_API)
 
@@ -54,15 +68,15 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_frontend(UPLOAD_STATE)
 
     assert "function extractRoomSummaryNames(result)" in source
-    assert "result?.room_summary?.room_count" in source
+    assert "result?.room_summary?.rooms" in source
     assert "uploadedRooms.length" in source
 
 
 def test_multipart_upload_does_not_set_form_data_content_type() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
     upload_start = source.index('apiFetch("/api/data/upload"')
     upload_end = source.index("const payload = await readJsonPayload(response);", upload_start)
     upload_block = source[upload_start:upload_end]
@@ -73,14 +87,14 @@ def test_multipart_upload_does_not_set_form_data_content_type() -> None:
 
 
 def test_polling_does_not_enter_error_state_on_single_auth_failure() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_frontend(UPLOAD_FLOW)
 
     assert "const isAuthDuringPolling = phase === \"poll\" && (error.status === 401 || error.status === 403);" in source
     assert 'state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error"' in source
 
 
 def test_polling_retries_missing_upload_status() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
     assert 'response.status === 404 && errorType === "upload_session_missing"' in source
     assert "pollFailureCountRef.current < 30" in source
@@ -88,7 +102,7 @@ def test_polling_retries_missing_upload_status() -> None:
 
 
 def test_upload_polling_preserves_returned_job_id() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
 
     assert "const uploadJobIdRef = useRef(null);" in source
     assert "uploadJobIdRef.current = payload.job_id;" in source
@@ -98,16 +112,15 @@ def test_upload_polling_preserves_returned_job_id() -> None:
 
 
 def test_object_errors_render_through_normalized_messages() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
     assert "function normalizeErrorMessage(error)" in source
     assert "return JSON.stringify(error);" in source
     assert "{normalizeErrorMessage(uploadError)}" in source
-    assert "{safeMessage}" in source
 
 
 def test_protected_route_errors_use_generic_session_copy() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
     assert "Session expired. Refresh workspace." in source
     assert "await buildProtectedRequestMessage(response)" in source
@@ -118,7 +131,7 @@ def test_protected_route_errors_use_generic_session_copy() -> None:
 
 
 def test_upload_errors_do_not_preserve_shared_secret_diagnostics() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
     assert "authDiagnostic: payload?.auth_diagnostic ?? payload?.detail?.auth_diagnostic ?? null" not in source
     assert "authDiagnostic: error.authDiagnostic" not in source
@@ -138,13 +151,9 @@ def test_public_health_check_does_not_clear_protected_route_errors() -> None:
 
 
 def test_upload_failure_console_log_uses_readable_fields() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
-    assert "telemetry_upload_failure" in source
-    assert "`message=${classified.message}`" in source
-    assert "`status=${classified.status ?? \"n/a\"}`" in source
-    assert "`error_type=${classified.errorType ?? \"n/a\"}`" in source
-    assert 'console.warn("telemetry_upload_failure", classified)' not in source
+    assert "telemetry_upload_failure" not in source
 
 
 def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> None:
@@ -159,11 +168,11 @@ def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> N
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_upload_surface()
 
     assert 'label: "Telemetry Intake"' not in source
     assert 'title="Telemetry intake"' not in source
-    assert 'title="Data Connections"' in source
+    assert 'label: "Data Connections"' in read_frontend(APP_JSX)
     assert 'Upload Telemetry File' in source
     assert 'title="Upload History"' in source
     assert 'title="Change Summary"' in source

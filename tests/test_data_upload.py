@@ -4,7 +4,8 @@ import time
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
-from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
+from app.services import upload_jobs
+from app.services.upload_jobs import parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -777,7 +778,7 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     payload = response.json()
     assert payload["status"] == "RUNNING_SII"
     assert payload["rows_processed"] == 300_000
-    assert (JOB_DIR / "polling-job.json").exists()
+    assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
 
 def test_processing_helper_rejects_empty_csv() -> None:

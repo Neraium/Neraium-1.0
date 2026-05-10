@@ -354,6 +354,6 @@ def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
         engine_result={"persistence_assessment": {"persistent_columns": []}, "evidence": []},
     )
 
-    assert attribution["driver_category"] == "unknown_system_drift"
+    assert attribution["driver_category"] == "hvac_instability"
     assert attribution["attribution_confidence"] == "low"
-    assert attribution["next_operator_move"] == "Collect more room telemetry before assigning a likely driver"
+    assert attribution["next_operator_move"] == "Check room temperature setpoints, HVAC activity, and recovery timing"

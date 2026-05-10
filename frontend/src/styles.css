@@ -2279,17 +2279,46 @@ h4 {
 
 .intake-flow__controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.intake-flow__controls input {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  background: rgba(8, 12, 14, 0.98);
-  color: var(--text-primary);
+.intake-flow__input {
+  display: none;
+}
+
+.connector-json-hint {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(120, 148, 139, 0.08);
+}
+
+.connector-json-hint__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.connector-json-hint__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connector-json-hint__code {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(120, 148, 139, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 12, 14, 0.92);
+  color: var(--text-secondary);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  overflow-x: auto;
 }
 
 .command-button {
@@ -5948,7 +5977,7 @@ h3 {
     gap: 10px;
   }
 
-  .intake-flow__controls input,
+  .intake-flow__controls > button,
   .connector-form__actions > button,
   .connector-rest-grid input,
   .connector-rest-grid select,

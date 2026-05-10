@@ -91,6 +91,7 @@ export default function DataConnectionsWorkspace({
   formatClockTime,
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
@@ -98,6 +99,8 @@ export default function DataConnectionsWorkspace({
   const [connectionError, setConnectionError] = useState("");
   const [connections, setConnections] = useState([]);
   const [connectionBusy, setConnectionBusy] = useState("");
+  const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
+  const [copyState, setCopyState] = useState("idle");
   const [connectionForm, setConnectionForm] = useState({
     connection_id: DEFAULT_CONNECTION_ID,
     name: "Node-RED Cultivation Telemetry",
@@ -109,6 +112,7 @@ export default function DataConnectionsWorkspace({
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
+  const uploadInputRef = useRef(null);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -129,6 +133,14 @@ export default function DataConnectionsWorkspace({
       window.clearTimeout(pollTimerRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    if (copyState !== "copied") {
+      return undefined;
+    }
+    const timerId = window.setTimeout(() => setCopyState("idle"), 1600);
+    return () => window.clearTimeout(timerId);
+  }, [copyState]);
 
   useEffect(() => {
     setUploadResult(latestUploadResult);
@@ -158,7 +170,7 @@ export default function DataConnectionsWorkspace({
   async function handleUpload(event) {
     event.preventDefault();
     if (!selectedFile) {
-      setUploadError("Choose a CSV telemetry file to upload.");
+      setUploadError("Choose a CSV or JSON telemetry file to upload.");
       return;
     }
 
@@ -195,6 +207,24 @@ export default function DataConnectionsWorkspace({
       const classified = classifyUploadError(error, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
+    }
+  }
+
+  function openFilePicker(kind) {
+    setPendingUploadKind(kind);
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = "";
+      uploadInputRef.current.accept = kind === "json" ? ".json,application/json" : ".csv,text/csv";
+      uploadInputRef.current.click();
+    }
+  }
+
+  async function handleCopyJsonSchema() {
+    try {
+      await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
+      setCopyState("copied");
+    } catch {
+      setCopyState("error");
     }
   }
 
@@ -363,21 +393,29 @@ export default function DataConnectionsWorkspace({
 
           <div className="intake-flow__controls">
             <input
-              accept=".csv,.json,text/csv,application/json"
+              ref={uploadInputRef}
+              accept=".csv,text/csv"
               id="csv-upload"
               type="file"
+              className="intake-flow__input"
               onChange={(event) => {
                 setSelectedFile(event.target.files?.[0] ?? null);
                 setUploadError("");
               }}
             />
-            <button className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
-              {isUploadProcessing(uploadState) ? "Processing" : "Upload Telemetry File"}
+            <button className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>
+              Upload CSV Telemetry
+            </button>
+            <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
+              Upload JSON Telemetry
+            </button>
+            <button className="secondary-command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
+              {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()} File`}
             </button>
           </div>
 
           <div className="intake-flow__status">
-            <span>{selectedFile ? selectedFile.name : (latestUploadSnapshot?.last_filename ?? "No data connected yet")}</span>
+            <span>{selectedFile ? `${selectedFile.name} (${pendingUploadKind.toUpperCase()})` : (latestUploadSnapshot?.last_filename ?? "No data connected yet")}</span>
             <span className="intake-flow__progress">
               {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
               {latestMessage}
@@ -387,8 +425,20 @@ export default function DataConnectionsWorkspace({
           {uploadError && <p className="form-error">{normalizeErrorMessage(uploadError)}</p>}
         </form>
         <div className="connector-json-hint">
-          <p className="section-token">JSON upload schema</p>
-          <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>
+          <div className="connector-json-hint__header">
+            <p className="section-token">JSON upload schema</p>
+            <div className="connector-json-hint__actions">
+              <button className="secondary-command-button" type="button" onClick={handleCopyJsonSchema}>
+                {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
+              </button>
+              <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
+                {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
+              </button>
+            </div>
+          </div>
+          {isJsonSchemaOpen && (
+            <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>
+          )}
         </div>
       </Panel>
 
