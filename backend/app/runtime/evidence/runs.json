@@ -1,5 +1,110 @@
 [
   {
+    "run_id": "node-red-cultivation-telemetry-10cedf7a4b",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T21:47:40.732333+00:00",
+    "completed_at": "2026-05-10T21:47:40.732333+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 62,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "a0c1cf4f0df3a94e57e8e460c27ad29853a54cdc8851c50bdbb58e5198053813",
+    "result_hash": "1b54b64c1b06f1864f0c67b21b8d3e9389c21e585469d710ad1d90451d33d4e4",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 452
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-9334ab2e0b",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T21:47:34.072282+00:00",
+    "completed_at": "2026-05-10T21:47:34.072282+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 48,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Lighting schedule influence"
+    ],
+    "evidence_summary": [
+      "Environmental coupling is less consistent than the room's recent baseline",
+      "Lighting and room temperature response became less consistent"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "68a6ea8ba1e1a2d55efed8da21b4af8a6a3ba84101710c884cf08e7147eaa958",
+    "result_hash": "bc8697db1911a36193e521f86335e35f191089f69c5f0434a1eb0bff57e9fb73",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 451
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-b98b4261cb",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T21:47:26.147648+00:00",
+    "completed_at": "2026-05-10T21:47:26.147648+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 41,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Lighting schedule influence"
+    ],
+    "evidence_summary": [
+      "Environmental coupling is less consistent than the room's recent baseline",
+      "Lighting and room temperature response became less consistent"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "624d6c4e2878f356031f58db4ef2c131a3f062a3dab7cc3c242fd502e3074ccb",
+    "result_hash": "29ecd6851d7582e576e58d6bbb1eec8dd85c5cf032d28a5d5b7e6450273f6176",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 450
+  },
+  {
     "run_id": "node-red-cultivation-telemetry-73f95bee54",
     "source_type": "external_rest_api",
     "source_name": "Node-RED Cultivation Telemetry",
