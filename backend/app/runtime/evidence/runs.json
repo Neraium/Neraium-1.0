@@ -1,5 +1,250 @@
 [
   {
+    "run_id": "node-red-cultivation-telemetry-506b01bac3",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:18:25.847077+00:00",
+    "completed_at": "2026-05-10T22:18:25.847077+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 73,
+    "drift_status": "review",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "df935ffc2ed0cce8c93ffc06090474474e076ea819e721da27292144072401b7",
+    "result_hash": "fa27ef5687609ea2a9837f7977eea05fb73a5eabf7f5ef16d82ba33afb4d71c0",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 712
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-63d0fdb264",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:18:12.268888+00:00",
+    "completed_at": "2026-05-10T22:18:12.268888+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 51,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Room temperature control instability"
+    ],
+    "evidence_summary": [
+      "Room temperature behavior moved away from baseline and persisted across recent readings",
+      "Environmental coupling is less consistent than the room's recent baseline"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "64ac97f72f8733f4a5104d51f5d856e5ed3915e19290dbf94e239c4d54f7123e",
+    "result_hash": "925bd1d37b49d0783ffa99a93d9883c8d4c1b9e8887f7d3ba46b8e61b3de64c5",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 710
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-1831cafd61",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:17:58.670165+00:00",
+    "completed_at": "2026-05-10T22:17:58.670165+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 58,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Room temperature control instability"
+    ],
+    "evidence_summary": [
+      "Room temperature behavior moved away from baseline and persisted across recent readings",
+      "Environmental coupling is less consistent than the room's recent baseline"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "5cbf0896eac2e2292ef505f7a98467ecb26181aa483b52e747ed6989c9c7199c",
+    "result_hash": "6baa14411f1bb0ea6c12ba7b706763c9a6f06a45dcf740d883cb388ce8989fb5",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 708
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-035be35c6a",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:17:04.196820+00:00",
+    "completed_at": "2026-05-10T22:17:04.196820+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 73,
+    "drift_status": "review",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "598147ba7704d9f1bd0a030cb166361010f7f0acfc7daff32cd37f0f616d55ce",
+    "result_hash": "6da8aab99c598ffe2f4ff085e1b629dc56970657d21cccd99f9e5dc109bc5f09",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 700
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-d036c8a16a",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:16:50.107295+00:00",
+    "completed_at": "2026-05-10T22:16:50.107295+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 58,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Room temperature control instability"
+    ],
+    "evidence_summary": [
+      "Room temperature behavior moved away from baseline and persisted across recent readings",
+      "Environmental coupling is less consistent than the room's recent baseline"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "f46ed33906ad7a78fae74dc764a4073c0e4db0ec36b3ceabb51701a4d9f78f68",
+    "result_hash": "12812bf3bc9fd813086f158fb85c328844fa707bc92bce3a81a1c67a767f982f",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 698
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-cee9c14043",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:16:29.912918+00:00",
+    "completed_at": "2026-05-10T22:16:29.912918+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 73,
+    "drift_status": "review",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "d03d4e74400b0abc10c1d60e4608ea5b3930a5d46da63647bdce0e520152a4e2",
+    "result_hash": "fb52c10d0543f60a55b4a66e587a27cccc1b2180ffad2fcd3cf5444d252ebc5a",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 695
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-6909b3ed54",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:15:48.456233+00:00",
+    "completed_at": "2026-05-10T22:15:48.456233+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 58,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Room temperature control instability"
+    ],
+    "evidence_summary": [
+      "Room temperature behavior moved away from baseline and persisted across recent readings",
+      "Environmental coupling is less consistent than the room's recent baseline"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "4ca357d0a745a71441240e693531822ebc19fd674b477fabb58fb7ca2436e6a7",
+    "result_hash": "b7a12b3ccbabbe7d902112fdbd6c023c91a2a27e0142d31ded9930af7a1ab741",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 689
+  },
+  {
     "run_id": "node-red-cultivation-telemetry-d8f47943d6",
     "source_type": "external_rest_api",
     "source_name": "Node-RED Cultivation Telemetry",
