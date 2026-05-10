@@ -12,6 +12,7 @@ from app.services.upload_jobs import (
     delete_upload_file,
     latest_completed_job_summary,
     process_upload_job,
+    read_upload_history,
     read_latest_upload_result,
     read_job,
 )
@@ -208,6 +209,7 @@ def read_latest_upload() -> dict[str, Any]:
             "state_available": False,
             "connection_status": "no_data",
             "result_source": None,
+            "history": [],
             "latest_result": None,
         }
         logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
@@ -243,6 +245,7 @@ def read_latest_upload() -> dict[str, Any]:
         "state_available": latest_state is not None,
         "connection_status": "connected",
         "result_source": "file_upload",
+        "history": read_upload_history(limit=6),
         "runner_used": summary.get("runner_used", False),
         "chunk_count": summary.get("chunk_count", 0),
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),

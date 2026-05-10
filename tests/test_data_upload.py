@@ -235,6 +235,30 @@ def test_latest_upload_endpoint_returns_completed_summary() -> None:
     assert payload["rows_processed"] == 6
     assert payload["columns_detected"] == 3
     assert payload["state_available"] is True
+    assert payload["history"][0]["filename"] == "latest.csv"
+
+
+def test_latest_upload_endpoint_returns_recent_history_and_score_diff() -> None:
+    client = TestClient(create_app())
+    first_rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{74 + index * 0.1:.1f},{55 + index * 0.1:.1f}"
+        for index in range(6)
+    )
+    second_rows = "\n".join(
+        f"2026-05-02T08:{index:02d}:00Z,Flower 1,{81 + index * 0.8:.1f},{67 + index * 0.7:.1f}"
+        for index in range(6)
+    )
+
+    post_csv(client, "baseline.csv", f"timestamp,room,temperature,humidity\n{first_rows}")
+    post_csv(client, "changed.csv", f"timestamp,room,temperature,humidity\n{second_rows}")
+
+    payload = client.get("/api/data/latest-upload").json()
+
+    assert len(payload["history"]) == 2
+    assert payload["history"][0]["filename"] == "changed.csv"
+    assert payload["history"][1]["filename"] == "baseline.csv"
+    assert payload["history"][0]["diff"]["previous_filename"] == "baseline.csv"
+    assert "neraium_score_delta" in payload["history"][0]["diff"]
 
 
 def test_latest_upload_endpoint_returns_persisted_detailed_result() -> None:

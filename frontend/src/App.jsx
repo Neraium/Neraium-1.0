@@ -4,6 +4,8 @@ import {
  apiFetch,
  API_CONFIG_WARNING,
 } from "./config";
+import CommandOverviewWorkspace from "./components/CommandOverviewWorkspace";
+import * as uploadStateView from "./viewModels/uploadState";
 import "./styles.css";
 
 const WORKSPACES = [
@@ -115,11 +117,11 @@ function App() {
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [facilityIntelligence, setFacilityIntelligence] = useState(null);
-  const [intelligenceStatus, setIntelligenceStatus] = useState(buildEmptyIntelligenceStatus());
+  const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
   const [engineIdentity, setEngineIdentity] = useState(null);
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
-  const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(buildEmptyLatestUploadSnapshot());
+  const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
 
@@ -186,7 +188,7 @@ function App() {
       if (Array.isArray(payload.systems)) {
         setSystems(payload.systems);
         setFacilityIntelligence(payload.intelligence ? normalizeFacilityIntelligence(payload.intelligence) : null);
-        setIntelligenceStatus(payload.intelligence_status ?? buildEmptyIntelligenceStatus());
+        setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
         setSystemsState("ready");
         setBackendError(API_CONFIG_WARNING);
         return true;
@@ -195,7 +197,7 @@ function App() {
     } catch (error) {
       setSystems(FALLBACK_SYSTEMS);
       setFacilityIntelligence(null);
-      setIntelligenceStatus(buildEmptyIntelligenceStatus());
+      setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
       setBackendError(normalizeErrorMessage(error?.message ?? error) || "Backend connection unavailable. System data could not be loaded.");
       return false;
@@ -239,16 +241,16 @@ function App() {
       }
 
       const payload = await response.json();
-      setLatestUploadSnapshot(payload ?? buildEmptyLatestUploadSnapshot());
+      setLatestUploadSnapshot(payload ?? uploadStateView.buildEmptyLatestUploadSnapshot());
       const latestResult = payload?.latest_result;
-      if (hasFullUploadResult(latestResult)) {
+      if (uploadStateView.hasFullUploadResult(latestResult)) {
         setLatestUploadResult(latestResult);
         return true;
       }
       setLatestUploadResult(null);
       return false;
     } catch {
-      setLatestUploadSnapshot(buildEmptyLatestUploadSnapshot());
+      setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
       setLatestUploadResult(null);
       return false;
     }
@@ -300,8 +302,8 @@ function App() {
   }, [hasAccess, loadEngineIdentity, loadFacilitySystems, loadLatestUploadState]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
-  const roomContext = deriveRoomContext(latestUploadResult);
-  const timeCoverage = deriveTimeCoverage(latestUploadResult);
+  const roomContext = uploadStateView.deriveRoomContext(latestUploadResult);
+  const timeCoverage = uploadStateView.deriveTimeCoverage(latestUploadResult);
   const liveOps = buildOperationalContext({
     result: latestUploadResult,
     latestUploadSnapshot,
@@ -369,11 +371,15 @@ function App() {
     if (activeWorkspace === "overview") {
       return (
         <OverviewWorkspace
-          apiStatus={apiStatus}
-          latestUploadResult={latestUploadResult}
-          systems={systems}
-          systemsState={systemsState}
-          roomContext={roomContext}
+          Panel={Panel}
+          MetricGrid={MetricGrid}
+          CompactList={CompactList}
+          InterventionGrid={InterventionGrid}
+          WhyPanel={WhyPanel}
+          buildGuidanceForItem={buildGuidanceForItem}
+          formatFacilityPlainState={formatFacilityPlainState}
+          formatScoreReadiness={formatScoreReadiness}
+          latestUploadSnapshot={latestUploadSnapshot}
           liveOps={liveOps}
           selectedInterventionId={selectedInterventionId}
           onSelectIntervention={setSelectedInterventionId}
@@ -673,103 +679,7 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
   );
 }
 
-function OverviewWorkspace({
-  liveOps,
-  selectedInterventionId,
-  onSelectIntervention,
-  onNavigateWorkspace,
-  operatorActions,
-  onOperatorAction,
-}) {
-  const findings = liveOps.findings.slice(0, 3);
-  const selectedRoom = liveOps.interventionItems.find((item) => item.id === selectedInterventionId) ?? liveOps.interventionItems[0];
-  const primaryRoom = liveOps.primaryWindow ?? selectedRoom;
-  const primaryGuidance = buildGuidanceForItem(primaryRoom);
-  const heroHeadline = formatFacilityPlainState(liveOps.facilityTone, primaryRoom);
-  const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
-  const roomCount = liveOps.interventionItems.length;
-
-  return (
-    <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
-      <Panel
-        title="Operating State"
-        className="span-12 overview-panel overview-panel--hero overview-panel--command"
-      >
-        <div className="overview-hero">
-          <div className="overview-hero__lead">
-            <span className={`overview-pill overview-pill--${liveOps.facilityTone}`}>{liveOps.heroTag}</span>
-            <h2 className="overview-hero__headline">{heroHeadline}</h2>
-            <p>{heroSubline}</p>
-          </div>
-
-          <div className="countdown-hero">
-            <div className="countdown-hero__score">
-              <span>Neraium Score</span>
-              <strong>{liveOps.neraiumScore}</strong>
-              <p className="countdown-hero__readiness">{formatScoreReadiness(liveOps.neraiumScore)}</p>
-              <p className="countdown-hero__context">{liveOps.scoreContext}</p>
-            </div>
-            <div className="countdown-hero__window">
-              <span>Window</span>
-              <strong>{primaryRoom?.window ?? "Monitoring"}</strong>
-              <p>{primaryRoom?.label ?? "The facility"} before intervention.</p>
-              <p className="countdown-hero__context">{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</p>
-            </div>
-          </div>
-
-          <div className="operating-state-next">
-            <span>Next Move</span>
-            <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
-            <div className="operator-guidance-brief">
-              <p><b>Primary driver:</b> {primaryGuidance.primaryDriver}</p>
-              <p><b>Why flagged:</b> {primaryGuidance.whyFlagged}</p>
-              <ul>
-                {primaryGuidance.whatToCheck.slice(0, 3).map((check) => (
-                  <li key={check}>{check}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel
-        title="Rooms"
-        className="span-8 overview-panel overview-panel--rooms overview-panel--room-first"
-      >
-        <InterventionGrid
-          items={liveOps.interventionItems}
-          selectedId={selectedRoom?.id ?? null}
-          onSelect={onSelectIntervention}
-          compact
-          limit={4}
-        />
-      </Panel>
-
-      <Panel
-        title="Selected Room"
-        className="span-4 overview-panel overview-panel--findings overview-panel--detail"
-      >
-        <WhyPanel
-          item={selectedRoom}
-          findings={findings}
-          actionStatus={operatorActions[selectedRoom?.targetId ?? selectedRoom?.id]}
-          onOperatorAction={onOperatorAction}
-          compact
-        />
-
-        <div className="room-first-actions">
-          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>
-            System Detail
-          </button>
-          <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("intelligence-console")}>
-            Evidence
-          </button>
-        </div>
-      </Panel>
-    </div>
-  );
-}
+const OverviewWorkspace = CommandOverviewWorkspace;
 function FacilitySystemsWorkspace({
   systems,
   systemsState,
@@ -992,7 +902,7 @@ function DataConnectionsWorkspace({
         const latestPayload = latestResponse.ok ? await readJsonPayload(latestResponse) : payload.result_summary;
         const latestResult = latestPayload?.latest_result;
         const completedPayload = {
-          ...(hasFullUploadResult(latestResult) ? latestResult : {}),
+          ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
           ...(latestPayload ?? {}),
           filename: latestPayload?.last_filename ?? payload.filename,
           row_count: latestPayload?.rows_processed ?? payload.rows_processed,
@@ -1069,8 +979,10 @@ function DataConnectionsWorkspace({
     ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
     : uploadResult
       ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
-      : buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext });
+      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext });
   const latestStatus = latestUploadSnapshot?.status ?? "empty";
+  const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
+  const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
   const latestMessage = normalizeErrorMessage(
     uploadError
       || uploadJob?.error
@@ -1128,11 +1040,11 @@ function DataConnectionsWorkspace({
 
       <Panel
         title="Latest Sync"
-        className="span-12"
+        className="span-7"
       >
         <MetricGrid
           metrics={[
-            { label: "State", value: connectionStateLabel(latestStatus, uploadState, uploadError) },
+            { label: "State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, uploadError) },
             { label: "Backend", value: apiStatus.label },
             { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
             { label: "Source", value: latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Upload" },
@@ -1142,6 +1054,43 @@ function DataConnectionsWorkspace({
             { label: "Primary Room", value: roomContext.primary },
           ]}
         />
+      </Panel>
+
+      <Panel
+        title="Change Summary"
+        className="span-5"
+      >
+        <MetricGrid
+          metrics={[
+            { label: "Current File", value: latestUploadSnapshot?.history?.[0]?.filename ?? "No active result" },
+            { label: "Previous File", value: latestUploadSnapshot?.history?.[1]?.filename ?? "None" },
+            { label: "Score Delta", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "n/a" },
+            { label: "Result", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting upload" },
+          ]}
+          compact
+        />
+        <CompactList items={uploadDiffSummary.lines} emptyText="Upload two files to compare changes." />
+      </Panel>
+
+      <Panel
+        title="Upload History"
+        className="span-12"
+      >
+        {uploadHistoryRows.length > 0 ? (
+          <DataTable
+            columns={["File", "Status", "Score", "State", "Room", "Delta"]}
+            rows={uploadHistoryRows.map((row) => [
+              row.filename,
+              row.status,
+              row.score,
+              row.state,
+              row.room,
+              row.scoreDelta ?? "n/a",
+            ])}
+          />
+        ) : (
+          <EmptyState title="No upload history" body="Completed uploads will appear here." compact />
+        )}
       </Panel>
 
       <Panel
@@ -1214,7 +1163,7 @@ function DataConnectionsWorkspace({
             { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
             { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
             { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-            { label: "Timestamps", value: deriveTimeCoverage(latestUploadResult).summary },
+            { label: "Timestamps", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
           ]}
           compact
         />

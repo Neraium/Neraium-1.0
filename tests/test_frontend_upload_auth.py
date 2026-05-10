@@ -137,7 +137,7 @@ def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> N
 
     assert "const [latestUploadResult, setLatestUploadResult] = useState(null);" in source
     assert "const loadLatestUploadState = useCallback(async () => {" in source
-    assert "setLatestUploadSnapshot(payload ?? buildEmptyLatestUploadSnapshot());" in source
+    assert "setLatestUploadSnapshot(payload ?? uploadStateView.buildEmptyLatestUploadSnapshot());" in source
     assert "const latestResult = payload?.latest_result;" in source
     assert "setLatestUploadResult(latestResult);" in source
     assert "window.localStorage" not in source
@@ -150,3 +150,5 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     assert 'title="Telemetry intake"' not in source
     assert 'title="Data Connections"' in source
     assert 'Upload Telemetry File' in source
+    assert 'title="Upload History"' in source
+    assert 'title="Change Summary"' in source

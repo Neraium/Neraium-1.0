@@ -457,6 +457,7 @@ def build_upload_result(
     cultivation_mapping = map_cultivation_columns(columns)
     room_summary = processing_stats.get("room_summary") or build_room_summary(columns, data_rows, total_rows)
     primary_room = primary_room_from_summary(room_summary)
+    previous_upload_summary = read_upload_history(limit=1)[0] if read_upload_history(limit=1) else None
     operator_report = build_operator_report(
         data_quality=data_quality,
         timestamp_profile=timestamp_profile,
@@ -564,6 +565,7 @@ def build_upload_result(
         "processing_trace": processing_trace,
         "processing_stats": processing_stats,
         "room_summary": room_summary,
+        "previous_upload_summary": previous_upload_summary,
         "validation_provenance": VALIDATION_PROVENANCE,
     }
 
@@ -571,6 +573,13 @@ def build_upload_result(
 def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any]:
     runner = result["sii_runner_result"]
     stats = result.get("processing_stats", {})
+    intelligence = result.get("sii_intelligence", {})
+    previous = result.get("previous_upload_summary") or {}
+    current_score = intelligence.get("neraium_score")
+    previous_score = previous.get("neraium_score")
+    score_delta = None
+    if isinstance(current_score, (int, float)) and isinstance(previous_score, (int, float)):
+        score_delta = round(float(current_score) - float(previous_score), 2)
     return {
         "filename": result["filename"],
         "rows_processed": result["row_count"],
@@ -584,6 +593,16 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
         "runner_module": runner["runner_module"],
         "core_engine": runner["core_engine"],
         "source": "uploaded",
+        "neraium_score": current_score,
+        "operating_state": intelligence.get("facility_state"),
+        "primary_room": intelligence.get("primary_room"),
+        "drift_status": intelligence.get("urgency"),
+        "upload_result_source": "file_upload",
+        "diff": {
+            "previous_filename": previous.get("filename"),
+            "previous_processed_at": previous.get("last_processed_at"),
+            "neraium_score_delta": score_delta,
+        },
         "warnings": result["warnings"][:10],
         "runner_errors": runner.get("errors", [])[:5],
         "room_summary": result.get("room_summary", {}),
@@ -598,10 +617,15 @@ def latest_upload_result_path() -> Path:
     return RUNTIME_DIR / "latest_upload_result.json"
 
 
+def latest_upload_history_path() -> Path:
+    return RUNTIME_DIR / "upload_history.json"
+
+
 def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
     ensure_runtime_dirs()
     path = latest_upload_path()
     atomic_write_json(path, {"job_id": job_id, **summary})
+    append_upload_history({"job_id": job_id, **summary})
     logger.info(
         "upload_result_persisted kind=summary job_id=%s filename=%s rows=%s columns=%s",
         job_id,
@@ -645,6 +669,29 @@ def read_latest_upload_result() -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def read_upload_history(limit: int = 5) -> list[dict[str, Any]]:
+    ensure_runtime_dirs()
+    path = latest_upload_history_path()
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    history = [item for item in payload if isinstance(item, dict)]
+    history.sort(key=lambda item: item.get("last_processed_at") or "", reverse=True)
+    return history[:limit]
+
+
+def append_upload_history(summary: dict[str, Any], limit: int = 12) -> None:
+    path = latest_upload_history_path()
+    existing = read_upload_history(limit=limit)
+    filtered = [item for item in existing if item.get("job_id") != summary.get("job_id")]
+    atomic_write_json_list(path, [summary, *filtered][:limit])
 
 
 def latest_completed_job_summary() -> dict[str, Any] | None:
@@ -719,6 +766,21 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    last_error: OSError | None = None
+    for attempt in range(WRITE_RETRY_ATTEMPTS):
+        try:
+            temp_path.replace(path)
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(WRITE_RETRY_DELAY_SECONDS * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+
+
+def atomic_write_json_list(path: Path, payload: list[dict[str, Any]]) -> None:
     temp_path = path.with_suffix(".json.tmp")
     temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     last_error: OSError | None = None
