@@ -90,9 +90,20 @@ def test_protected_route_unauthorized_copy_is_session_expired() -> None:
     assert "Access code reached ECS but does not match backend setting." in source
     assert "Access code did not reach ECS." in source
     assert "await buildProtectedRequestMessage(response)" in source
+    assert "function formatAuthDiagnosticMessage(diagnostic)" in source
     assert "[object Object]" not in source
     assert "Upload processing interrupted." in source
     assert "Upload state unavailable." in source
+
+
+def test_upload_errors_preserve_auth_diagnostics() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert "authDiagnostic: payload?.auth_diagnostic ?? payload?.detail?.auth_diagnostic ?? null" in source
+    assert "authDiagnostic: error.authDiagnostic" in source
+    assert "formatAuthDiagnosticMessage(authDiagnostic)" in source
+    assert "`auth_reason=${classified.authDiagnostic?.failure_reason ?? \"n/a\"}`" in source
+    assert "`auth_source=${classified.authDiagnostic?.auth_source ?? \"n/a\"}`" in source
 
 
 def test_public_health_check_does_not_clear_protected_route_errors() -> None:
@@ -112,4 +123,6 @@ def test_upload_failure_console_log_uses_readable_fields() -> None:
     assert "`message=${classified.message}`" in source
     assert "`status=${classified.status ?? \"n/a\"}`" in source
     assert "`error_type=${classified.errorType ?? \"n/a\"}`" in source
+    assert "`auth_reason=${classified.authDiagnostic?.failure_reason ?? \"n/a\"}`" in source
+    assert "`auth_source=${classified.authDiagnostic?.auth_source ?? \"n/a\"}`" in source
     assert 'console.warn("telemetry_upload_failure", classified)' not in source

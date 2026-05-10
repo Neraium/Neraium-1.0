@@ -999,6 +999,8 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         `message=${classified.message}`,
         `status=${classified.status ?? "n/a"}`,
         `error_type=${classified.errorType ?? "n/a"}`,
+        `auth_reason=${classified.authDiagnostic?.failure_reason ?? "n/a"}`,
+        `auth_source=${classified.authDiagnostic?.auth_source ?? "n/a"}`,
       );
     }
   }
@@ -2916,14 +2918,21 @@ async function readJsonPayload(response) {
 
 async function buildProtectedRequestMessage(response) {
   const payload = await readJsonPayload(response);
-  const diagnostic = payload?.auth_diagnostic;
+  const diagnosticMessage = formatAuthDiagnosticMessage(payload?.auth_diagnostic);
+  if (diagnosticMessage) {
+    return diagnosticMessage;
+  }
+  return normalizeErrorMessage(payload?.message ?? payload?.error) || "Session expired. Refresh workspace.";
+}
+
+function formatAuthDiagnosticMessage(diagnostic) {
   if (diagnostic?.failure_reason === "credential_mismatch") {
     return "Access code reached ECS but does not match backend setting.";
   }
   if (diagnostic?.failure_reason === "missing_credentials") {
     return "Access code did not reach ECS.";
   }
-  return normalizeErrorMessage(payload?.message ?? payload?.error) || "Session expired. Refresh workspace.";
+  return "";
 }
 
 function normalizeErrorMessage(error) {
@@ -2951,6 +2960,7 @@ function buildUploadRequestError(response, payload, phase) {
     status: response.status,
     phase,
     errorType: payload?.error_type ?? payload?.detail?.error_type ?? null,
+    authDiagnostic: payload?.auth_diagnostic ?? payload?.detail?.auth_diagnostic ?? null,
     detail: normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
     retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)),
   };
@@ -2964,9 +2974,11 @@ function classifyUploadError(error, phase) {
       retryable: phase === "poll" && error.retryable,
       status: error.status,
       errorType: error.errorType,
+      authDiagnostic: error.authDiagnostic,
       message: operatorUploadMessage({
         status: error.status,
         errorType: error.errorType,
+        authDiagnostic: error.authDiagnostic,
         detail: error.detail,
         phase,
       }),
@@ -2997,8 +3009,12 @@ function classifyUploadError(error, phase) {
   };
 }
 
-function operatorUploadMessage({ status, errorType, detail, phase }) {
+function operatorUploadMessage({ status, errorType, authDiagnostic, detail, phase }) {
   if (errorType === "auth" || errorType === "auth_session_expired" || status === 401 || status === 403) {
+    const diagnosticMessage = formatAuthDiagnosticMessage(authDiagnostic);
+    if (diagnosticMessage) {
+      return diagnosticMessage;
+    }
     return phase === "poll"
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : "Telemetry processing session could not be validated.";
