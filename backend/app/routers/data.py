@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
 from app.models.api_models import LatestUploadResponse, UploadAcceptedResponse, UploadStatusResponse
+from app.services.data_connections import read_connection_status
 from app.services.runtime_db import record_audit_event
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
@@ -21,6 +22,7 @@ from app.services.upload_jobs import (
 
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
+DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
 
 
 def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = None) -> dict[str, Any]:
@@ -203,14 +205,25 @@ def read_latest_upload() -> dict[str, Any]:
     summary = latest_completed_job_summary()
     detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
+    try:
+        live_connection = read_connection_status(DEFAULT_CONNECTION_ID)
+    except ValueError:
+        live_connection = None
     valid_sources = {"uploaded", "rest_poll"}
     if latest_state is not None and latest_state.get("source") not in valid_sources:
         latest_state = None
     if summary is None and latest_state is None and detailed_result is None:
+        baseline_status = live_connection.get("baseline_status") if live_connection else None
+        status = "building_baseline" if baseline_status == "building" else "empty"
+        message = (
+            "Building live baseline from REST telemetry."
+            if baseline_status == "building"
+            else "No data connected yet."
+        )
         payload = {
-            "status": "empty",
+            "status": status,
             "source": "none",
-            "message": "No data connected yet.",
+            "message": message,
             "last_filename": None,
             "rows_processed": 0,
             "columns_detected": 0,
@@ -222,6 +235,11 @@ def read_latest_upload() -> dict[str, Any]:
             "result_source": None,
             "history": [],
             "latest_result": None,
+            "baseline_source": live_connection.get("baseline_source") if live_connection else None,
+            "baseline_status": baseline_status,
+            "baseline_samples_collected": live_connection.get("baseline_samples_collected", 0) if live_connection else 0,
+            "baseline_samples_required": live_connection.get("baseline_samples_required", 0) if live_connection else 0,
+            "last_baseline_update": live_connection.get("last_baseline_update") if live_connection else None,
         }
         logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
         return payload
@@ -244,9 +262,13 @@ def read_latest_upload() -> dict[str, Any]:
     if not columns_detected and detailed_result:
         columns_detected = detailed_result.get("column_count", 0)
     payload = {
-        "status": "active",
+        "status": "active" if detailed_result is not None else ("baseline_active" if (live_connection or {}).get("baseline_status") == "active" else "building_baseline"),
         "source": summary.get("source") or (detailed_result or {}).get("sii_intelligence", {}).get("source") or "uploaded",
-        "message": "Latest result active.",
+        "message": (
+            "Latest result active."
+            if detailed_result is not None
+            else "Live baseline active. Waiting for the next telemetry comparison."
+        ),
         "last_filename": last_filename,
         "rows_processed": rows_processed,
         "columns_detected": columns_detected,
@@ -262,6 +284,11 @@ def read_latest_upload() -> dict[str, Any]:
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
         "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
         "latest_result": detailed_result,
+        "baseline_source": summary.get("baseline_source") or (live_connection or {}).get("baseline_source"),
+        "baseline_status": summary.get("baseline_status") or (live_connection or {}).get("baseline_status"),
+        "baseline_samples_collected": summary.get("baseline_samples_collected", (live_connection or {}).get("baseline_samples_collected", 0)),
+        "baseline_samples_required": summary.get("baseline_samples_required", (live_connection or {}).get("baseline_samples_required", 0)),
+        "last_baseline_update": summary.get("last_baseline_update") or (live_connection or {}).get("last_baseline_update"),
     }
     logger.info(
         "latest_result_served status=%s source=%s filename=%s rows=%s columns=%s state_available=%s",

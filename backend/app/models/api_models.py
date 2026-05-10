@@ -61,6 +61,11 @@ class LatestUploadResponse(BaseModel):
     chunk_count: int | None = None
     memory_estimate_bytes: int | None = None
     engine_runtime_seconds: float | None = None
+    baseline_source: str | None = None
+    baseline_status: str | None = None
+    baseline_samples_collected: int = 0
+    baseline_samples_required: int = 0
+    last_baseline_update: str | None = None
 
 
 class EvidenceRunResponse(BaseModel):
@@ -130,6 +135,12 @@ class DataConnectionResponse(BaseModel):
     current_tick: int | None = None
     latest_telemetry_timestamp: str | None = None
     last_ingestion_source: str | None = None
+    baseline_source: str | None = None
+    baseline_status: str = "none"
+    baseline_samples_collected: int = 0
+    baseline_samples_required: int = 0
+    last_baseline_update: str | None = None
+    baseline_error_message: str = ""
     masked_configuration: dict[str, Any] = Field(default_factory=dict)
 
 

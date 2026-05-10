@@ -15,6 +15,7 @@ from app.services.data_connections import (
     list_registered_data_connections,
     poll_data_connection_once,
     read_connection_status,
+    reset_connection_live_baseline,
     set_connection_polling,
     test_data_connection,
     upsert_registered_data_connection,
@@ -87,6 +88,18 @@ def poll_data_connection(connection_id: str) -> dict[str, Any]:
         "message": message,
         "latest_result": result.get("latest_result"),
         "meaningful_change": result.get("meaningful_change"),
+    }
+
+
+@router.post("/data-connections/{connection_id}/reset-baseline", response_model=DataConnectionActionResponse)
+def reset_data_connection_baseline(connection_id: str) -> dict[str, Any]:
+    try:
+        connection = reset_connection_live_baseline(connection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return {
+        "connection": connection,
+        "message": f"Live baseline reset for {connection['name']}. Polling will rebuild it from new telemetry.",
     }
 
 

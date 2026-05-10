@@ -33,7 +33,10 @@ DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
 DEFAULT_CONNECTION_NAME = "Node-RED Cultivation Telemetry"
 DEFAULT_CONNECTION_URL = "http://18.216.253.180:1880/telemetry/latest"
 DEFAULT_POLLING_INTERVAL_SECONDS = 5
+DEFAULT_LIVE_BASELINE_SAMPLE_COUNT = 6
 MAX_BUFFER_RECORDS = 2048
+MAX_BASELINE_RECORDS = 512
+MAX_RECENT_RECORDS = 512
 MEANINGFUL_STATE_KEYS = ("neraium_score", "operating_state", "primary_room", "drift_status", "primary_driver")
 
 
@@ -64,6 +67,12 @@ def default_connection_payload(settings: Settings | None = None) -> dict[str, An
         "current_tick": None,
         "latest_telemetry_timestamp": None,
         "last_ingestion_source": None,
+        "baseline_source": None,
+        "baseline_status": "none",
+        "baseline_samples_collected": 0,
+        "baseline_samples_required": DEFAULT_LIVE_BASELINE_SAMPLE_COUNT,
+        "last_baseline_update": None,
+        "baseline_error_message": "",
         "masked_configuration": {"url": DEFAULT_CONNECTION_URL},
     }
 
@@ -79,7 +88,7 @@ def ensure_default_data_connection(settings: Settings | None = None) -> dict[str
 
 def list_registered_data_connections() -> list[dict[str, Any]]:
     ensure_default_data_connection()
-    return list_data_connections(limit=100)
+    return [upsert_registered_data_connection(item) for item in list_data_connections(limit=100)]
 
 
 def upsert_registered_data_connection(payload: dict[str, Any]) -> dict[str, Any]:
@@ -92,6 +101,10 @@ def upsert_registered_data_connection(payload: dict[str, Any]) -> dict[str, Any]
     merged["masked_configuration"] = {"url": merged.get("url")}
     merged["status"] = merged.get("status") or ("polling" if merged.get("polling_enabled") else "offline")
     merged["error_message"] = merged.get("error_message") or ""
+    merged["baseline_status"] = merged.get("baseline_status") or "none"
+    merged["baseline_samples_required"] = int(merged.get("baseline_samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
+    merged["baseline_samples_collected"] = int(merged.get("baseline_samples_collected") or 0)
+    merged["baseline_error_message"] = merged.get("baseline_error_message") or ""
     upsert_data_connection(merged)
     return merged
 
@@ -104,12 +117,36 @@ def set_connection_polling(connection_id: str, *, enabled: bool) -> dict[str, An
     return upsert_registered_data_connection(connection)
 
 
+def reset_connection_live_baseline(connection_id: str) -> dict[str, Any]:
+    connection = require_connection(connection_id)
+    clear_live_baseline(connection_id)
+    connection["baseline_source"] = None
+    connection["baseline_status"] = "none"
+    connection["baseline_samples_collected"] = 0
+    connection["baseline_samples_required"] = DEFAULT_LIVE_BASELINE_SAMPLE_COUNT
+    connection["last_baseline_update"] = None
+    connection["baseline_error_message"] = ""
+    return upsert_registered_data_connection(connection)
+
+
+def baseline_state_key(connection_id: str) -> str:
+    return f"data_connection_live_baseline:{connection_id}"
+
+
+def baseline_records_key(connection_id: str) -> str:
+    return f"data_connection_live_baseline_records:{connection_id}"
+
+
+def recent_records_key(connection_id: str) -> str:
+    return f"data_connection_live_recent_records:{connection_id}"
+
+
 def require_connection(connection_id: str) -> dict[str, Any]:
     ensure_default_data_connection()
     connection = read_data_connection(connection_id)
     if connection is None:
         raise ValueError(f"Data connection {connection_id} was not found.")
-    return connection
+    return upsert_registered_data_connection(connection)
 
 
 def read_connection_status(connection_id: str) -> dict[str, Any]:
@@ -217,11 +254,132 @@ def state_fingerprint_key(connection_id: str) -> str:
     return f"data_connection_last_fingerprint:{connection_id}"
 
 
+def baseline_event_key(connection_id: str, event_name: str) -> str:
+    return f"data_connection_event:{connection_id}:{event_name}"
+
+
 def read_connection_buffer(connection_id: str) -> list[dict[str, Any]]:
     payload = read_latest_payload(records_buffer_key(connection_id))
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     return []
+
+
+def read_live_baseline_state(connection_id: str) -> dict[str, Any]:
+    payload = read_latest_payload(baseline_state_key(connection_id))
+    if not isinstance(payload, dict):
+        return {
+            "connection_id": connection_id,
+            "baseline_source": None,
+            "baseline_status": "none",
+            "samples_collected": 0,
+            "samples_required": DEFAULT_LIVE_BASELINE_SAMPLE_COUNT,
+            "last_baseline_update": None,
+            "activated_at": None,
+            "error_message": "",
+        }
+    return {
+        "connection_id": connection_id,
+        "baseline_source": payload.get("baseline_source"),
+        "baseline_status": payload.get("baseline_status") or "none",
+        "samples_collected": int(payload.get("samples_collected") or 0),
+        "samples_required": int(payload.get("samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT),
+        "last_baseline_update": payload.get("last_baseline_update"),
+        "activated_at": payload.get("activated_at"),
+        "error_message": payload.get("error_message") or "",
+    }
+
+
+def write_live_baseline_state(connection_id: str, state: dict[str, Any]) -> dict[str, Any]:
+    persisted = {
+        "connection_id": connection_id,
+        "baseline_source": state.get("baseline_source"),
+        "baseline_status": state.get("baseline_status") or "none",
+        "samples_collected": int(state.get("samples_collected") or 0),
+        "samples_required": int(state.get("samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT),
+        "last_baseline_update": state.get("last_baseline_update"),
+        "activated_at": state.get("activated_at"),
+        "error_message": state.get("error_message") or "",
+    }
+    upsert_latest_payload(baseline_state_key(connection_id), persisted)
+    return persisted
+
+
+def read_buffered_records(key: str) -> list[dict[str, Any]]:
+    payload = read_latest_payload(key)
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def write_buffered_records(key: str, records: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    trimmed = records[-limit:]
+    upsert_latest_payload(key, trimmed)
+    return trimmed
+
+
+def merge_normalized_record_dicts(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    combined = existing + incoming
+    combined.sort(key=lambda item: (item.get("timestamp") or "", item.get("sensor_id") or ""))
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for item in combined:
+        key = (
+            str(item.get("timestamp") or ""),
+            str(item.get("room_id") or ""),
+            str(item.get("sensor_id") or ""),
+            str(item.get("value") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def append_baseline_records(connection_id: str, records: list[NormalizedTelemetryRecord]) -> list[dict[str, Any]]:
+    existing = read_buffered_records(baseline_records_key(connection_id))
+    incoming = [record.model_dump() for record in records]
+    merged = merge_normalized_record_dicts(existing, incoming)
+    return write_buffered_records(baseline_records_key(connection_id), merged, limit=MAX_BASELINE_RECORDS)
+
+
+def read_baseline_records(connection_id: str) -> list[dict[str, Any]]:
+    return read_buffered_records(baseline_records_key(connection_id))
+
+
+def append_recent_records(connection_id: str, records: list[NormalizedTelemetryRecord]) -> list[dict[str, Any]]:
+    existing = read_buffered_records(recent_records_key(connection_id))
+    incoming = [record.model_dump() for record in records]
+    merged = merge_normalized_record_dicts(existing, incoming)
+    return write_buffered_records(recent_records_key(connection_id), merged, limit=MAX_RECENT_RECORDS)
+
+
+def read_recent_records(connection_id: str) -> list[dict[str, Any]]:
+    return read_buffered_records(recent_records_key(connection_id))
+
+
+def clear_live_baseline(connection_id: str) -> None:
+    upsert_latest_payload(records_buffer_key(connection_id), [])
+    upsert_latest_payload(baseline_records_key(connection_id), [])
+    upsert_latest_payload(recent_records_key(connection_id), [])
+    upsert_latest_payload(state_fingerprint_key(connection_id), {})
+    write_live_baseline_state(
+        connection_id,
+        {
+            "baseline_source": None,
+            "baseline_status": "none",
+            "samples_collected": 0,
+            "samples_required": DEFAULT_LIVE_BASELINE_SAMPLE_COUNT,
+            "last_baseline_update": None,
+            "activated_at": None,
+            "error_message": "",
+        },
+    )
+
+
+def grouped_sample_count(records: list[dict[str, Any]]) -> int:
+    return len({(str(item.get("timestamp") or ""), str(item.get("room_id") or "")) for item in records})
 
 
 def write_connection_buffer(connection_id: str, records: list[dict[str, Any]]) -> None:
@@ -292,9 +450,14 @@ def build_rows_from_normalized_records(records: list[dict[str, Any]]) -> tuple[l
     return columns, rows, room_summary
 
 
-def result_from_connection_batch(connection: dict[str, Any], normalized_records: list[NormalizedTelemetryRecord], metadata: dict[str, Any]) -> dict[str, Any]:
-    buffer = append_connection_buffer(connection["connection_id"], normalized_records)
-    columns, rows, room_summary = build_rows_from_normalized_records(buffer)
+def result_from_connection_batch(
+    connection: dict[str, Any],
+    processing_records: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    *,
+    baseline_state: dict[str, Any],
+) -> dict[str, Any]:
+    columns, rows, room_summary = build_rows_from_normalized_records(processing_records)
     result = build_upload_result(
         columns=columns,
         data_rows=rows,
@@ -315,7 +478,14 @@ def result_from_connection_batch(connection: dict[str, Any], normalized_records:
         },
         intelligence_source="rest_poll",
         intelligence_mode="live",
-        intelligence_source_metadata=metadata,
+        intelligence_source_metadata={
+            **metadata,
+            "baseline_source": baseline_state.get("baseline_source"),
+            "baseline_status": baseline_state.get("baseline_status"),
+            "baseline_samples_collected": baseline_state.get("samples_collected"),
+            "baseline_samples_required": baseline_state.get("samples_required"),
+            "last_baseline_update": baseline_state.get("last_baseline_update"),
+        },
     )
     result["source_name"] = connection["name"]
     result["source_url"] = connection["url"]
@@ -327,8 +497,18 @@ def result_from_connection_batch(connection: dict[str, Any], normalized_records:
     result["processing_stats"]["accepted_record_count"] = metadata.get("readings_accepted", 0)
     result["processing_stats"]["rejected_record_count"] = metadata.get("readings_rejected", 0)
     result["processing_stats"]["sensors_detected"] = metadata.get("sensors_detected", 0)
+    result["processing_stats"]["baseline_source"] = baseline_state.get("baseline_source")
+    result["processing_stats"]["baseline_status"] = baseline_state.get("baseline_status")
+    result["processing_stats"]["baseline_samples_collected"] = baseline_state.get("samples_collected")
+    result["processing_stats"]["baseline_samples_required"] = baseline_state.get("samples_required")
     result["sii_intelligence"]["source"] = "rest_poll"
-    result["sii_intelligence"]["source_metadata"] = metadata
+    result["sii_intelligence"]["source_metadata"] = {
+        **metadata,
+        "baseline_source": baseline_state.get("baseline_source"),
+        "baseline_status": baseline_state.get("baseline_status"),
+        "baseline_samples_collected": baseline_state.get("samples_collected"),
+        "baseline_samples_required": baseline_state.get("samples_required"),
+    }
     return result
 
 
@@ -349,6 +529,11 @@ def summarize_connection_result(connection: dict[str, Any], result: dict[str, An
     summary["readings_accepted"] = metadata.get("readings_accepted", 0)
     summary["readings_rejected"] = metadata.get("readings_rejected", 0)
     summary["sensors_detected"] = metadata.get("sensors_detected", 0)
+    summary["baseline_source"] = metadata.get("baseline_source")
+    summary["baseline_status"] = metadata.get("baseline_status")
+    summary["baseline_samples_collected"] = metadata.get("baseline_samples_collected", 0)
+    summary["baseline_samples_required"] = metadata.get("baseline_samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
+    summary["last_baseline_update"] = metadata.get("last_baseline_update")
     summary["primary_driver"] = result.get("sii_intelligence", {}).get("primary_driver")
     return summary
 
@@ -364,6 +549,56 @@ def has_meaningful_state_change(connection_id: str, summary: dict[str, Any]) -> 
         upsert_latest_payload(state_fingerprint_key(connection_id), current)
         return True
     return False
+
+
+def should_emit_event(connection_id: str, event_name: str, fingerprint: dict[str, Any]) -> bool:
+    key = baseline_event_key(connection_id, event_name)
+    previous = read_latest_payload(key)
+    if previous != fingerprint:
+        upsert_latest_payload(key, fingerprint)
+        return True
+    return False
+
+
+def build_connection_status_event_record(
+    connection: dict[str, Any],
+    *,
+    event_name: str,
+    status: str,
+    completed_at: str,
+    metadata: dict[str, Any],
+    warnings: list[str] | None = None,
+    errors: list[str] | None = None,
+    evidence_summary: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "run_id": f"{connection['connection_id']}-{event_name}-{uuid.uuid4().hex[:10]}",
+        "source_type": connection.get("source_type", "external_rest_api"),
+        "source_name": connection.get("name"),
+        "filename": connection.get("url"),
+        "created_at": completed_at,
+        "completed_at": completed_at,
+        "status": status,
+        "rows_received": metadata.get("readings_received", 0),
+        "rows_accepted": metadata.get("readings_accepted", 0),
+        "rows_rejected": metadata.get("readings_rejected", 0),
+        "sensors_detected": metadata.get("sensors_detected", 0),
+        "system_id": metadata.get("facility_id") or connection.get("facility_id"),
+        "room": metadata.get("room_id") or connection.get("room_id"),
+        "operating_state": metadata.get("operating_state"),
+        "neraium_score": metadata.get("neraium_score"),
+        "drift_status": metadata.get("drift_status"),
+        "primary_drivers": metadata.get("primary_drivers", []),
+        "evidence_summary": evidence_summary or [],
+        "warnings": warnings or [],
+        "errors": errors or [],
+        "input_hash": digest_payload({"event_name": event_name, "metadata": metadata}),
+        "result_hash": digest_payload({"status": status, "event_name": event_name, "metadata": metadata}),
+        "initiated_by": "system:rest-poller",
+        "source_url": connection.get("url"),
+        "scenario": metadata.get("scenario"),
+        "tick": metadata.get("tick"),
+    }
 
 
 def build_connection_evidence_record(connection: dict[str, Any], result: dict[str, Any], summary: dict[str, Any], completed_at: str, metadata: dict[str, Any], *, status: str) -> dict[str, Any]:
@@ -431,7 +666,14 @@ def build_failed_poll_evidence_record(connection: dict[str, Any], error_message:
     }
 
 
-def update_connection_health_fields(connection: dict[str, Any], metadata: dict[str, Any], *, status: str, error_message: str = "") -> dict[str, Any]:
+def update_connection_health_fields(
+    connection: dict[str, Any],
+    metadata: dict[str, Any],
+    *,
+    status: str,
+    error_message: str = "",
+    baseline_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     connection["status"] = status
     connection["error_message"] = error_message
     connection["last_poll_at"] = now_iso()
@@ -445,6 +687,13 @@ def update_connection_health_fields(connection: dict[str, Any], metadata: dict[s
     connection["current_tick"] = metadata.get("tick")
     connection["latest_telemetry_timestamp"] = metadata.get("timestamp")
     connection["last_ingestion_source"] = "rest_poll"
+    if baseline_state:
+        connection["baseline_source"] = baseline_state.get("baseline_source")
+        connection["baseline_status"] = baseline_state.get("baseline_status")
+        connection["baseline_samples_collected"] = baseline_state.get("samples_collected", 0)
+        connection["baseline_samples_required"] = baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
+        connection["last_baseline_update"] = baseline_state.get("last_baseline_update")
+        connection["baseline_error_message"] = baseline_state.get("error_message", "")
     return upsert_registered_data_connection(connection)
 
 
@@ -463,10 +712,158 @@ def test_data_connection(connection_id: str, transport: httpx.BaseTransport | No
     connection = require_connection(connection_id)
     payload = fetch_connection_payload(connection, transport=transport)
     records, metadata = normalize_external_rest_payload(payload, connection)
-    tested = update_connection_health_fields(connection, metadata, status="online")
+    tested = update_connection_health_fields(
+        connection,
+        metadata,
+        status="online",
+        baseline_state=read_live_baseline_state(connection_id),
+    )
     return {
         "connection": tested,
         "normalized_preview": [record.model_dump() for record in records[:6]],
+    }
+
+
+def build_processing_metadata(metadata: dict[str, Any], baseline_state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **metadata,
+        "baseline_source": baseline_state.get("baseline_source"),
+        "baseline_status": baseline_state.get("baseline_status"),
+        "baseline_samples_collected": baseline_state.get("samples_collected"),
+        "baseline_samples_required": baseline_state.get("samples_required"),
+        "last_baseline_update": baseline_state.get("last_baseline_update"),
+    }
+
+
+def activate_live_baseline(connection: dict[str, Any], metadata: dict[str, Any], baseline_state: dict[str, Any]) -> dict[str, Any]:
+    completed_at = now_iso()
+    baseline_state.update(
+        {
+            "baseline_source": "live_rest",
+            "baseline_status": "active",
+            "samples_collected": max(
+                grouped_sample_count(read_baseline_records(connection["connection_id"])),
+                baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT),
+            ),
+            "last_baseline_update": completed_at,
+            "activated_at": completed_at,
+            "error_message": "",
+        }
+    )
+    persisted = write_live_baseline_state(connection["connection_id"], baseline_state)
+    if should_emit_event(
+        connection["connection_id"],
+        "baseline_activated",
+        {
+            "activated_at": completed_at,
+            "scenario": metadata.get("scenario"),
+            "tick": metadata.get("tick"),
+        },
+    ):
+        upsert_evidence_run(
+            build_connection_status_event_record(
+                connection,
+                event_name="baseline-activated",
+                status="baseline_active",
+                completed_at=completed_at,
+                metadata=build_processing_metadata(metadata, persisted),
+                evidence_summary=[
+                    f"Live baseline activated for {connection.get('name')}.",
+                    f"{persisted.get('samples_collected')} live samples are now available for comparison.",
+                ],
+            )
+        )
+    return persisted
+
+
+def update_live_baseline(connection: dict[str, Any], normalized_records: list[NormalizedTelemetryRecord], metadata: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    connection_id = connection["connection_id"]
+    baseline_state = read_live_baseline_state(connection_id)
+    if baseline_state.get("baseline_status") == "failed":
+        baseline_state["baseline_status"] = "building"
+        baseline_state["error_message"] = ""
+    if baseline_state.get("baseline_status") == "none":
+        baseline_state = {
+            **baseline_state,
+            "baseline_source": "live_rest",
+            "baseline_status": "building",
+            "samples_collected": 0,
+            "samples_required": connection.get("baseline_samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT),
+            "last_baseline_update": now_iso(),
+            "activated_at": None,
+            "error_message": "",
+        }
+        baseline_state = write_live_baseline_state(connection_id, baseline_state)
+        if should_emit_event(connection_id, "baseline_building_started", {"started_at": baseline_state["last_baseline_update"]}):
+            upsert_evidence_run(
+                build_connection_status_event_record(
+                    connection,
+                    event_name="baseline-building-started",
+                    status="baseline_building",
+                    completed_at=baseline_state["last_baseline_update"],
+                    metadata=build_processing_metadata(metadata, baseline_state),
+                    evidence_summary=[
+                        f"Live source connected: {connection.get('name')}.",
+                        f"Building baseline from {baseline_state['samples_required']} live telemetry samples.",
+                    ],
+                )
+            )
+
+    if baseline_state.get("baseline_status") != "active":
+        baseline_records = append_baseline_records(connection_id, normalized_records)
+        samples_collected = grouped_sample_count(baseline_records)
+        baseline_state.update(
+            {
+                "baseline_source": "live_rest",
+                "baseline_status": "building",
+                "samples_collected": min(samples_collected, baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)),
+                "last_baseline_update": now_iso(),
+                "error_message": "",
+            }
+        )
+        baseline_state = write_live_baseline_state(connection_id, baseline_state)
+        if samples_collected >= baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT):
+            baseline_state = activate_live_baseline(connection, metadata, baseline_state)
+            return baseline_state, True
+        return baseline_state, False
+
+    baseline_records = read_baseline_records(connection_id)
+    if not baseline_records:
+        clear_live_baseline(connection_id)
+        return update_live_baseline(connection, normalized_records, metadata)
+
+    baseline_state.update(
+        {
+            "baseline_source": "live_rest",
+            "baseline_status": "active",
+            "samples_collected": max(grouped_sample_count(baseline_records), baseline_state.get("samples_collected", 0)),
+            "last_baseline_update": now_iso(),
+            "error_message": "",
+        }
+    )
+    return write_live_baseline_state(connection_id, baseline_state), True
+
+
+def latest_result_without_live_baseline(connection: dict[str, Any], baseline_state: dict[str, Any]) -> dict[str, Any]:
+    latest_result = read_latest_upload_result()
+    return {
+        "connection": update_connection_health_fields(
+            connection,
+            {
+                "timestamp": connection.get("latest_telemetry_timestamp"),
+                "scenario": connection.get("current_scenario"),
+                "tick": connection.get("current_tick"),
+                "readings_received": connection.get("readings_received", 0),
+                "readings_accepted": connection.get("readings_accepted", 0),
+                "readings_rejected": connection.get("readings_rejected", 0),
+                "sensors_detected": connection.get("sensors_detected", 0),
+            },
+            status="polling",
+            baseline_state=baseline_state,
+        ),
+        "summary": None,
+        "latest_result": latest_result,
+        "meaningful_change": False,
     }
 
 
@@ -478,13 +875,30 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
         upsert_registered_data_connection(connection)
         payload = fetch_connection_payload(connection, transport=transport)
         normalized_records, metadata = normalize_external_rest_payload(payload, connection)
-        result = result_from_connection_batch(connection, normalized_records, metadata)
+        baseline_state, baseline_ready = update_live_baseline(connection, normalized_records, metadata)
+        metadata = build_processing_metadata(metadata, baseline_state)
+        connection = update_connection_health_fields(connection, metadata, status="polling", baseline_state=baseline_state)
+        if not baseline_ready:
+            logger.info(
+                "data_connection_baseline_building connection_id=%s samples_collected=%s samples_required=%s",
+                connection_id,
+                baseline_state.get("samples_collected"),
+                baseline_state.get("samples_required"),
+            )
+            partial = latest_result_without_live_baseline(connection, baseline_state)
+            partial["actor"] = actor
+            return partial
+
+        recent_records = append_recent_records(connection_id, normalized_records)
+        baseline_records = read_baseline_records(connection_id)
+        processing_records = merge_normalized_record_dicts(baseline_records, recent_records)
+        result = result_from_connection_batch(connection, processing_records, metadata, baseline_state=baseline_state)
         completed_at = now_iso()
         summary = summarize_connection_result(connection, result, completed_at, metadata)
         meaningful_change = has_meaningful_state_change(connection_id, summary)
         write_latest_upload_result(connection_id, result)
         write_latest_upload_summary(connection_id, summary, append_history=meaningful_change)
-        connection = update_connection_health_fields(connection, metadata, status="polling")
+        connection = update_connection_health_fields(connection, metadata, status="polling", baseline_state=baseline_state)
         logger.info(
             "data_connection_poll_complete connection_id=%s readings_received=%s readings_accepted=%s sensors_detected=%s scenario=%s tick=%s meaningful_change=%s",
             connection_id,
@@ -499,6 +913,24 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
             upsert_evidence_run(
                 build_connection_evidence_record(connection, result, summary, completed_at, metadata, status="completed")
             )
+        elif should_emit_event(
+            connection_id,
+            "source_connected",
+            {"status": connection.get("status"), "last_success_at": connection.get("last_success_at")},
+        ):
+            upsert_evidence_run(
+                build_connection_status_event_record(
+                    connection,
+                    event_name="source-connected",
+                    status="connected",
+                    completed_at=completed_at,
+                    metadata=metadata,
+                    evidence_summary=[
+                        f"Live source connected: {connection.get('name')}.",
+                        f"Baseline status is {baseline_state.get('baseline_status')}.",
+                    ],
+                )
+            )
         return {
             "connection": connection,
             "summary": summary,
@@ -509,6 +941,12 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
     except Exception as exc:
         error_message = str(exc)
         logger.warning("data_connection_poll_failed connection_id=%s error=%s", connection_id, error_message)
+        baseline_state = read_live_baseline_state(connection_id)
+        if baseline_state.get("baseline_status") in {"none", "failed"}:
+            baseline_state["baseline_status"] = "failed"
+        baseline_state["error_message"] = error_message
+        baseline_state["last_baseline_update"] = now_iso()
+        baseline_state = write_live_baseline_state(connection_id, baseline_state)
         failure_metadata = {
             "scenario": connection.get("current_scenario"),
             "tick": connection.get("current_tick"),
@@ -516,7 +954,13 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
             "readings_received": 0,
             "sensors_detected": connection.get("sensors_detected", 0),
         }
-        connection = update_connection_health_fields(connection, failure_metadata, status="error", error_message=error_message)
+        connection = update_connection_health_fields(
+            connection,
+            failure_metadata,
+            status="error",
+            error_message=error_message,
+            baseline_state=baseline_state,
+        )
         if last_status != "error":
             upsert_evidence_run(build_failed_poll_evidence_record(connection, error_message, failure_metadata))
         return {

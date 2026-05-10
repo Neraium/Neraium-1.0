@@ -18,6 +18,11 @@ export function buildEmptyLatestUploadSnapshot() {
     result_source: null,
     history: [],
     latest_result: null,
+    baseline_source: null,
+    baseline_status: "none",
+    baseline_samples_collected: 0,
+    baseline_samples_required: 0,
+    last_baseline_update: null,
   };
 }
 
@@ -46,12 +51,12 @@ export function deriveRoomContext(result) {
         roomCount: summaryRooms.length,
       };
     }
-    return {
-      primary: "No data connected yet",
-      secondary: "Upload a telemetry file to activate room context",
-      cycle: "Cycle metadata unavailable",
-      irrigation: "Irrigation context unavailable",
-      uploadedRooms: [],
+      return {
+        primary: "No data connected yet",
+        secondary: "Connect live telemetry or upload a telemetry file to activate room context",
+        cycle: "Cycle metadata unavailable",
+        irrigation: "Irrigation context unavailable",
+        uploadedRooms: [],
       roomCount: 0,
     };
   }
@@ -108,54 +113,79 @@ export function deriveTimeCoverage(result) {
 export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext }) {
   const normalizedState = normalizeUploadStatus(uploadError ? "failed" : uploadState);
   const latestStatus = String(latestUploadSnapshot?.status ?? "empty").toLowerCase();
+  const baselineStatus = String(latestUploadSnapshot?.baseline_status ?? "none").toLowerCase();
+  const baselineSamplesCollected = latestUploadSnapshot?.baseline_samples_collected ?? 0;
+  const baselineSamplesRequired = latestUploadSnapshot?.baseline_samples_required ?? 0;
+  const baselineDetail = baselineSamplesRequired > 0
+    ? `${baselineSamplesCollected}/${baselineSamplesRequired} live samples collected.`
+    : "Waiting for live telemetry samples.";
   return [
     {
       title: "No data connected yet",
-      detail: latestStatus === "empty" ? "No completed telemetry upload is available." : "A completed upload is already available.",
-      state: latestStatus === "empty" ? "active" : "complete",
-      tone: latestStatus === "empty" ? "info" : "nominal",
+      detail: latestStatus === "empty" && baselineStatus === "none"
+        ? "No telemetry source is active yet."
+        : "A data source is connected or a result is already active.",
+      state: latestStatus === "empty" && baselineStatus === "none" ? "active" : "complete",
+      tone: latestStatus === "empty" && baselineStatus === "none" ? "info" : "nominal",
     },
     {
-      title: "Upload processing",
-      detail: isUploadProcessing(normalizedState)
-        ? "Telemetry file received and processing is underway."
-        : "Upload a telemetry file to start ingestion.",
-      state: isUploadProcessing(normalizedState) ? "active" : (latestStatus === "active" || uploadError ? "complete" : "standby"),
-      tone: isUploadProcessing(normalizedState) ? "review" : "info",
+      title: "Building live baseline",
+      detail: baselineStatus === "building"
+        ? baselineDetail
+        : baselineStatus === "active"
+          ? "Live baseline is ready for comparison."
+          : "Live polling will build a baseline automatically.",
+      state: baselineStatus === "building" ? "active" : (baselineStatus === "active" ? "complete" : "standby"),
+      tone: baselineStatus === "building" ? "review" : (baselineStatus === "active" ? "nominal" : "info"),
+    },
+    {
+      title: "Live telemetry processing",
+      detail: latestStatus === "active" && latestUploadSnapshot?.result_source === "rest_poll"
+        ? `Live telemetry is updating ${roomContext.primary}.`
+        : isUploadProcessing(normalizedState)
+          ? "Telemetry file received and processing is underway."
+          : "Live telemetry or upload processing will appear here.",
+      state: latestStatus === "active" || isUploadProcessing(normalizedState) ? "active" : "standby",
+      tone: latestStatus === "active" || isUploadProcessing(normalizedState) ? "nominal" : "info",
     },
     {
       title: "Upload complete",
-      detail: latestStatus === "active"
+      detail: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll"
         ? `${latestUploadSnapshot?.last_filename ?? "Latest upload"} completed and refreshed ${roomContext.primary}.`
-        : "Waiting for the next completed upload.",
-      state: latestStatus === "active" ? "complete" : "standby",
-      tone: latestStatus === "active" ? "nominal" : "info",
+        : "Upload telemetry remains available as an optional ingest action.",
+      state: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll" ? "complete" : "standby",
+      tone: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll" ? "nominal" : "info",
     },
     {
-      title: "Upload failed",
-      detail: uploadError ? normalizeErrorMessage(uploadError) : "Upload errors appear here if processing fails.",
-      state: uploadError ? "active" : "standby",
-      tone: uploadError ? "elevated" : "info",
-    },
-    {
-      title: "Latest result active",
-      detail: latestStatus === "active"
-        ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest upload"} as the active result.`
-        : "Dashboard will switch to the newest completed upload automatically.",
-      state: latestStatus === "active" ? "active" : "standby",
-      tone: latestStatus === "active" ? "nominal" : "info",
+      title: uploadError ? "Upload failed" : "Latest result active",
+      detail: uploadError
+        ? normalizeErrorMessage(uploadError)
+        : latestStatus === "active"
+          ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
+          : latestStatus === "baseline_active"
+            ? "Live baseline is active. The next telemetry comparison will activate Facility Command."
+            : "Dashboard will switch to the newest completed telemetry result automatically.",
+      state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
+      tone: uploadError ? "elevated" : (latestStatus === "active" || latestStatus === "baseline_active" ? "nominal" : "info"),
     },
   ];
 }
 
 export function connectionStateLabel(latestStatus, uploadState, uploadError) {
+  const normalizedLatestStatus = String(latestStatus).toLowerCase();
   if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
     return "Upload failed";
   }
   if (isUploadProcessing(uploadState)) {
     return "Upload processing";
   }
-  if (String(latestStatus).toLowerCase() === "active") {
+  if (normalizedLatestStatus === "building_baseline") {
+    return "Building live baseline";
+  }
+  if (normalizedLatestStatus === "baseline_active") {
+    return "Live baseline active";
+  }
+  if (normalizedLatestStatus === "active") {
     return "Latest result active";
   }
   return "No data connected yet";
@@ -182,7 +212,7 @@ export function buildUploadDiffSummary(history = []) {
   if (!current) {
     return {
       title: "No active result",
-      lines: ["Upload a telemetry file to establish a baseline."],
+      lines: ["Connect live telemetry or upload a telemetry file to start building a baseline."],
     };
   }
   const delta = current.diff?.neraium_score_delta;

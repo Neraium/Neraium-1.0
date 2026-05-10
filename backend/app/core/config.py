@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import field
 
 DEFAULT_APP_ENV = "development"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
@@ -24,8 +25,8 @@ class Settings:
     backend_host: str
     backend_port: int
     cors_origins: list[str]
-    cors_origin_regex: str | None
-    runtime_dir: Path
+    cors_origin_regex: str | None = None
+    runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
 
 
 def get_settings() -> Settings:

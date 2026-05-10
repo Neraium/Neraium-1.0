@@ -47,6 +47,20 @@ function formatConnectionStatus(status) {
   return "Not configured";
 }
 
+function formatBaselineStatus(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "building") {
+    return "Building";
+  }
+  if (normalized === "active") {
+    return "Active";
+  }
+  if (normalized === "failed") {
+    return "Failed";
+  }
+  return "None";
+}
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -249,7 +263,7 @@ export default function DataConnectionsWorkspace({
         throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
       }
       await loadConnections();
-      if (action === "poll-once" || payload?.latest_result) {
+      if (action === "poll-once" || action === "reset-baseline" || payload?.latest_result) {
         await onUploadComplete(payload?.latest_result ?? null);
       }
     } catch (error) {
@@ -307,13 +321,25 @@ export default function DataConnectionsWorkspace({
       || uploadStateMessage(uploadState),
   );
 
+  const baselineStatusLabel = formatBaselineStatus(activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status);
+  const baselineSamplesCollected = activeConnection?.baseline_samples_collected ?? latestUploadSnapshot?.baseline_samples_collected ?? 0;
+  const baselineSamplesRequired = activeConnection?.baseline_samples_required ?? latestUploadSnapshot?.baseline_samples_required ?? 0;
+  const baselineSource = activeConnection?.baseline_source ?? latestUploadSnapshot?.baseline_source;
+  const baselineMessage = latestUploadSnapshot?.baseline_status === "building"
+    ? "Building live baseline"
+    : latestUploadSnapshot?.baseline_status === "active"
+      ? "Live baseline active"
+      : latestUploadSnapshot?.baseline_status === "failed"
+        ? "Live baseline failed"
+        : "No data connected yet";
+
   return (
     <div className="workspace-grid workspace-grid--connections">
       <Panel title="Data Connections" className="span-7">
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
-            <p>Upload a production CSV or let the live REST source refresh the active facility result automatically.</p>
+            <p>Upload a production CSV if you want a file-based baseline. Live REST telemetry can build its own baseline automatically.</p>
           </div>
 
           <div className="intake-flow__controls">
@@ -354,6 +380,7 @@ export default function DataConnectionsWorkspace({
             { label: "Backend", value: apiStatus.label },
             { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
             { label: "Source", value: latestUploadSnapshot?.result_source === "rest_poll" ? "REST Poll" : latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Data" },
+            { label: "Baseline", value: baselineMessage },
             { label: "Connection", value: activeConnection?.name ?? "Awaiting source" },
             { label: "Primary Room", value: roomContext.primary },
             { label: "Scenario", value: activeConnection?.current_scenario ?? "Awaiting telemetry" },
@@ -436,11 +463,15 @@ export default function DataConnectionsWorkspace({
                 { label: "URL", value: activeConnection.url },
                 { label: "Status", value: formatConnectionStatus(activeConnection.status) },
                 { label: "Polling", value: activeConnection.polling_enabled ? "Enabled" : "Disabled" },
+                { label: "Baseline Source", value: baselineSource === "live_rest" ? "Live REST" : baselineSource === "uploaded_file" ? "Uploaded File" : "None" },
+                { label: "Baseline Status", value: baselineStatusLabel },
+                { label: "Samples", value: baselineSamplesRequired > 0 ? `${baselineSamplesCollected}/${baselineSamplesRequired}` : baselineSamplesCollected },
                 { label: "Last Poll", value: activeConnection.last_poll_at ? formatClockTime(activeConnection.last_poll_at) : "Not yet" },
                 { label: "Last Success", value: activeConnection.last_success_at ? formatClockTime(activeConnection.last_success_at) : "Not yet" },
                 { label: "Readings", value: activeConnection.readings_received ?? 0 },
                 { label: "Sensors", value: activeConnection.sensors_detected ?? 0 },
                 { label: "Scenario", value: activeConnection.current_scenario ?? "Awaiting telemetry" },
+                { label: "Baseline Updated", value: activeConnection.last_baseline_update ? formatClockTime(activeConnection.last_baseline_update) : "Not yet" },
               ]}
             />
             <div className="connector-form__actions">
@@ -476,6 +507,14 @@ export default function DataConnectionsWorkspace({
               >
                 {connectionBusy === `${activeConnection.connection_id}:stop` ? "Stopping" : "Stop Polling"}
               </button>
+              <button
+                className="secondary-command-button"
+                type="button"
+                disabled={connectionBusy === `${activeConnection.connection_id}:reset-baseline`}
+                onClick={() => handleConnectionAction(activeConnection.connection_id, "reset-baseline")}
+              >
+                {connectionBusy === `${activeConnection.connection_id}:reset-baseline` ? "Resetting" : "Rebuild Baseline"}
+              </button>
             </div>
             <CompactList
               items={[
@@ -483,8 +522,12 @@ export default function DataConnectionsWorkspace({
                 `Facility: ${activeConnection.facility_id ?? "Unknown facility"}`,
                 `Telemetry timestamp: ${activeConnection.latest_telemetry_timestamp ?? "Awaiting telemetry"}`,
                 `Last ingestion source: ${activeConnection.last_ingestion_source ?? "Not yet ingested"}`,
+                `Baseline status: ${baselineStatusLabel}`,
+                baselineSamplesRequired > 0 ? `Baseline samples: ${baselineSamplesCollected}/${baselineSamplesRequired}` : `Baseline samples: ${baselineSamplesCollected}`,
+                activeConnection.last_baseline_update ? `Last baseline update: ${activeConnection.last_baseline_update}` : "Last baseline update: Not yet",
+                activeConnection.baseline_error_message ? `Baseline error: ${activeConnection.baseline_error_message}` : null,
                 activeConnection.error_message ? `Error: ${activeConnection.error_message}` : `Connection is ${formatConnectionStatus(activeConnection.status).toLowerCase()}.`,
-              ]}
+              ].filter(Boolean)}
               emptyText="No live connection metadata yet."
             />
           </>
@@ -521,6 +564,7 @@ export default function DataConnectionsWorkspace({
                 metrics={[
                   { label: "Last Poll", value: connection.last_poll_at ? formatClockTime(connection.last_poll_at) : "Not yet" },
                   { label: "Last Success", value: connection.last_success_at ? formatClockTime(connection.last_success_at) : "Not yet" },
+                  { label: "Baseline", value: formatBaselineStatus(connection.baseline_status) },
                   { label: "Sensors", value: connection.sensors_detected ?? 0 },
                   { label: "Readings", value: connection.readings_received ?? 0 },
                 ]}
@@ -538,6 +582,10 @@ export default function DataConnectionsWorkspace({
                 <div className="connector-detail-row">
                   <span>Scenario</span>
                   <strong>{connection.current_scenario ?? "Awaiting telemetry"}</strong>
+                </div>
+                <div className="connector-detail-row">
+                  <span>Baseline Samples</span>
+                  <strong>{`${connection.baseline_samples_collected ?? 0}/${connection.baseline_samples_required ?? 0}`}</strong>
                 </div>
               </div>
               {(connection.error_message || connection.status === "error") && (
