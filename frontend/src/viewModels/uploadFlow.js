@@ -25,7 +25,9 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
     if (!result) {
       return {
         title: stage,
-        detail: index === 2 ? `Baseline established for ${roomContext.primary}.` : "Live telemetry feed is active. Manual upload remains available.",
+        detail: index === 2
+          ? `Room context will resolve to ${roomContext.primary} after a completed upload.`
+          : "Upload telemetry to begin ingestion and activate the dashboard.",
         state: "standby",
         tone: index === 3 ? "review" : "info",
       };

@@ -133,13 +133,6 @@ const REPORT_TEMPLATES = [
   "Grower Action Report",
 ];
 
-const DEMO_ROOMS = [
-  { name: "Flower Room 1", cultivar: "Gush Mintz", cycle: "Flower week 5", irrigation: "Pulse cycle 04", zone: "North bay" },
-  { name: "Flower Room 2", cultivar: "GDP", cycle: "Flower week 7", irrigation: "Pulse cycle 05", zone: "South bay" },
-  { name: "Veg Room A", cultivar: "Cap Junky", cycle: "Vegetative day 19", irrigation: "Feed hold", zone: "Propagation lane" },
-];
-
-const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
 const OPERATIONAL_CADENCE_MS = 30000;
 
 function App() {
@@ -161,7 +154,6 @@ function App() {
   });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
-  const [facilityIntelligence, setFacilityIntelligence] = useState(null);
   const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
   const [engineIdentity, setEngineIdentity] = useState(null);
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
@@ -198,7 +190,7 @@ function App() {
         checkedAt: checkTime.toISOString(),
         attemptCount,
         endpoint: formatEndpoint(API_BASE_URL),
-        message: trigger === "scheduled" ? "Live telemetry feed current." : "Facility sync refreshed.",
+        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
       });
       return true;
     } catch {
@@ -233,7 +225,6 @@ function App() {
       const payload = await response.json();
       if (Array.isArray(payload.systems)) {
         setSystems(payload.systems);
-        setFacilityIntelligence(payload.intelligence ? normalizeFacilityIntelligence(payload.intelligence) : null);
         setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
         setSystemsState("ready");
         setBackendError(API_CONFIG_WARNING);
@@ -242,7 +233,6 @@ function App() {
       throw new Error("Facility systems payload was incomplete.");
     } catch (error) {
       setSystems(FALLBACK_SYSTEMS);
-      setFacilityIntelligence(null);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
       setBackendError(normalizeErrorMessage(error?.message ?? error) || "Backend connection unavailable. System data could not be loaded.");
@@ -357,7 +347,6 @@ function App() {
     roomContext,
     systems,
     systemsState,
-    facilityIntelligence,
     intelligenceStatus,
     tick: telemetryTick,
   });
@@ -804,8 +793,8 @@ function buildTelemetryCards(result) {
   if (!result) {
     return TELEMETRY_CHANNELS.map((channel) => ({
       label: formatCategory(channel),
-      primary: "Monitoring standby",
-      secondary: "Live telemetry feed active.",
+      primary: "No active result",
+      secondary: "Upload telemetry to populate this system signal.",
       series: [],
       tone: "info",
     }));
@@ -979,8 +968,8 @@ function buildAlertItems(result, apiStatus) {
 
   if (!result) {
     alerts.push({
-      title: "Data source: Live telemetry feed",
-      detail: "Manual upload is available if you want to validate a room export.",
+      title: "No active result",
+      detail: "Upload telemetry in Data Connections to activate Facility Command.",
       tone: "info",
     });
     return alerts;
@@ -1025,7 +1014,7 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
   return [
     {
       label: "Facility stability",
-      value: result?.engine_result ? deriveFacilityStability(result) : "Monitoring active telemetry feed",
+      value: result?.engine_result ? deriveFacilityStability(result) : "No active result",
     },
     {
       label: "Active alerts",
@@ -1033,15 +1022,15 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
     },
     {
       label: "Data source",
-      value: result ? latestManualSourceLabel(result) : "Live telemetry feed",
+      value: result ? latestManualSourceLabel(result) : "No data connected",
     },
     {
       label: "Uploaded rooms",
-      value: result?.room_summary?.room_count ?? result?.sii_intelligence?.rooms?.length ?? "Live",
+      value: result?.room_summary?.room_count ?? result?.sii_intelligence?.rooms?.length ?? 0,
     },
     {
       label: "Systems in scope",
-      value: systemsState === "ready" ? `${systems.length} live` : `${systems.length} placeholder`,
+      value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} defined`,
     },
   ];
 }
@@ -1060,19 +1049,19 @@ function buildZoneSummary(roomContext) {
     {
       label: "Primary room",
       value: roomContext.primary,
-      detail: "Current room or zone inferred from active upload context.",
+      detail: "Current room or zone resolved from the latest completed upload.",
       tone: "nominal",
     },
     {
       label: "Secondary lane",
       value: roomContext.secondary,
-      detail: "Cross-room review placeholder for facility operations.",
+      detail: "Secondary review context from the latest completed upload.",
       tone: "info",
     },
     {
       label: "Grow cycle",
       value: roomContext.cycle,
-      detail: "Cycle context remains placeholder until facility metadata is connected.",
+      detail: "Cycle context from the uploaded telemetry when available.",
       tone: "review",
     },
     {
@@ -1431,7 +1420,7 @@ function buildRoomObservations(result, roomContext) {
   const observations = [
     `Primary room or zone context: ${roomContext.primary}.`,
     `Secondary review lane: ${roomContext.secondary}.`,
-    `Grow cycle placeholder: ${roomContext.cycle}.`,
+    `Grow cycle context: ${roomContext.cycle}.`,
     `Irrigation context: ${roomContext.irrigation}.`,
   ];
 
@@ -1442,70 +1431,6 @@ function buildRoomObservations(result, roomContext) {
   }
 
   return observations;
-}
-
-function deriveRoomContext(result) {
-  if (!result || !Array.isArray(result.columns)) {
-    const summaryRooms = extractRoomSummaryNames(result);
-    if (summaryRooms.length > 0) {
-      return {
-        primary: summaryRooms[0],
-        secondary: summaryRooms[1] ?? `${summaryRooms.length} uploaded rooms`,
-        cycle: "Mixed uploaded rooms",
-        irrigation: "Irrigation context pending",
-        uploadedRooms: summaryRooms,
-        roomCount: summaryRooms.length,
-      };
-    }
-    return {
-      primary: "No data connected yet",
-      secondary: "Upload a telemetry file to activate room context",
-      cycle: "Cycle metadata unavailable",
-      irrigation: "Irrigation context unavailable",
-      uploadedRooms: [],
-      roomCount: 0,
-    };
-  }
-
-  const summaryRooms = extractRoomSummaryNames(result);
-  const roomColumn = result.columns.find((column) => {
-    const normalized = column.toLowerCase();
-    return normalized.includes("room") || normalized.includes("zone");
-  });
-  const cycleColumn = result.columns.find((column) => {
-    const normalized = column.toLowerCase();
-    return normalized.includes("cycle") || normalized.includes("stage") || normalized.includes("phase");
-  });
-
-  const roomValues = roomColumn
-    ? result.preview_rows.map((row) => row[roomColumn]).filter(Boolean)
-    : [];
-  const cycleValues = cycleColumn
-    ? result.preview_rows.map((row) => row[cycleColumn]).filter(Boolean)
-    : [];
-  const irrigationMapped = result.cultivation_mapping?.categories?.irrigation?.length ?? 0;
-  const uploadedRooms = summaryRooms.length > 0 ? summaryRooms : uniqueValues(roomValues);
-
-  return {
-    primary: uploadedRooms[0] ?? "Room context not present in upload",
-    secondary: uploadedRooms[1] ?? (uploadedRooms.length > 1 ? `${uploadedRooms.length} uploaded rooms` : "Awaiting additional room telemetry"),
-    cycle: cycleValues[0] ?? "Cycle metadata unavailable",
-    irrigation: irrigationMapped > 0 ? "Irrigation channels mapped" : "Awaiting irrigation telemetry",
-    uploadedRooms,
-    roomCount: uploadedRooms.length,
-  };
-}
-
-function extractRoomSummaryNames(result) {
-  const rooms = result?.room_summary?.rooms;
-  if (!Array.isArray(rooms)) {
-    return [];
-  }
-  return uniqueValues(rooms.map((room) => room?.room).filter(Boolean));
-}
-
-function uniqueValues(values) {
-  return [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
 }
 
 function deriveTimeCoverage(result) {
@@ -1617,7 +1542,7 @@ function deriveFacilityStability(result) {
   if (overallResult === "needs_review") {
     return "Review recommended for irrigation variance";
   }
-  return "Monitoring active telemetry feed";
+  return "No active result";
 }
 
 async function buildProtectedRequestMessage(response) {
@@ -1730,11 +1655,6 @@ function formatIntelligenceSourceLabel(mode) {
   return "No upload connected";
 }
 
-function cycleValue(base, tick, range = 6, precision = 1) {
-  const value = base + Math.sin(tick / 2.2 + base / 7) * range + Math.cos(tick / 3.5 + base / 11) * (range / 2);
-  return Number(value.toFixed(precision));
-}
-
 function buildSiiOperationalContext({
   intelligence,
   intelligenceStatus,
@@ -1805,7 +1725,7 @@ function buildSiiOperationalContext({
       system.name,
       system.scope,
       systemRoomContext(system.name, roomContext),
-      systemsState === "ready" ? "Facility feed active" : "Backend connection unavailable",
+      systemsState === "ready" ? "Latest upload active" : "Backend connection unavailable",
     ]),
     intakeStages: fullResult ? buildIntakeStages(fullResult, "complete", roomContext) : buildConnectionStateStages({ latestUploadSnapshot, uploadState: "idle", uploadError: "", roomContext }),
     evidenceLines: fullResult ? buildEvidenceConsole(fullResult) : buildSiiEvidenceLines(safeIntelligence),
@@ -1824,7 +1744,7 @@ function buildSiiOperationalContext({
   };
 }
 
-function buildOperationalContext({ result, latestUploadSnapshot, apiStatus, roomContext, systems, systemsState, facilityIntelligence, intelligenceStatus, tick }) {
+function buildOperationalContext({ result, latestUploadSnapshot, apiStatus, roomContext, systems, systemsState, intelligenceStatus, tick }) {
   const connectionTone = apiStatus.state === "online" ? "nominal" : "elevated";
   const connectionSummary = apiStatus.checkedAt
     ? `Updated ${formatClockTime(apiStatus.checkedAt)} CT`
@@ -1837,10 +1757,10 @@ function buildOperationalContext({ result, latestUploadSnapshot, apiStatus, room
     : "Check facility WiFi if room changes stop syncing.";
 
   const fullResult = hasFullUploadResult(result) ? result : null;
-  const apiIntelligence = fullResult?.sii_intelligence ?? facilityIntelligence;
-  if (apiIntelligence) {
+  const uploadIntelligence = fullResult?.sii_intelligence;
+  if (uploadIntelligence) {
     return buildSiiOperationalContext({
-      intelligence: apiIntelligence,
+      intelligence: uploadIntelligence,
       intelligenceStatus,
       result: fullResult,
       latestUploadSnapshot,
@@ -1872,7 +1792,7 @@ function buildOperationalContext({ result, latestUploadSnapshot, apiStatus, room
       heroSubline: heroSublineFromTone(facilityTone, roomContext.primary),
       readinessLabel: formatReadiness(fullResult.data_quality?.readiness),
       connectionTone,
-      connectionLabel: "Live telemetry feed",
+      connectionLabel: "Latest upload active",
       connectionDetail: apiStatus.detail,
       connectionSummary,
       connectionStatusLine,
@@ -2084,19 +2004,6 @@ function buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadE
   ];
 }
 
-function connectionStateLabel(latestStatus, uploadState, uploadError) {
-  if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
-    return "Upload failed";
-  }
-  if (isUploadProcessing(uploadState)) {
-    return "Upload processing";
-  }
-  if (String(latestStatus).toLowerCase() === "active") {
-    return "Latest result active";
-  }
-  return "No data connected yet";
-}
-
 function buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone) {
   const engineSignals = result?.engine_result?.signals ?? [];
   const columnReview = result?.operator_report?.columns_requiring_review ?? [];
@@ -2198,7 +2105,7 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
       tone: "info",
       confidence: 68,
       summary: "Uploaded telemetry is connected, but additional room context will improve intervention precision.",
-      detail: result?.filename ?? "Live telemetry feed active",
+      detail: result?.filename ?? "Latest upload active",
       shortDetail: "Additional room coverage will improve decision confidence.",
       whyHeadline: "The facility is connected, but the confidence of longer-range decisions improves as room coverage deepens.",
       drivers: [
@@ -2284,36 +2191,6 @@ function buildSiiInterventionItems(intelligence) {
       rankLabel: `Priority ${String(index + 1).padStart(2, "0")}`,
     };
   }).sort((a, b) => tonePriority(a.tone) - tonePriority(b.tone));
-}
-
-function buildSimulatedInterventionItems(roomStates) {
-  return roomStates
-    .map((room, index) => ({
-      id: `room-${index + 1}`,
-      label: room.name,
-      title: `${room.name} intervention window`,
-      shortTitle: room.name,
-      status: room.cycle,
-      window: interventionWindowFromRoom(room),
-      tone: room.tone,
-      confidence: confidenceFromRoom(room),
-      summary: `${room.irrigationState}. Room behavior is shortening against its recent baseline while room temperature response remains visible.`,
-      detail: `${room.cycle} in ${room.zone}.`,
-      shortDetail: compactRoomSummary(room),
-      whyHeadline: whyHeadlineFromRoom(room),
-      drivers: buildDriversFromRoom(room),
-      structuralExplanation: buildStructuralExplanationFromRoom(room, index),
-      guidance: buildGuidanceFromRoom(room, index),
-      baselineContext: baselineContextFromRoom(room),
-      recommendation: recommendationFromTone(room.tone),
-      primaryAction: operatorMoveFromGuidance(buildGuidanceFromRoom(room, index)),
-      decisionLabel: decisionLabelFromTone(room.tone, index),
-      actions: actionSetFromTone(room.tone),
-      impact: impactFromTone(room.tone),
-      change: room.tone === "nominal" ? "Stable over the last cycle" : "Decision window shortened this cycle",
-      rankLabel: `Priority 0${index + 1}`,
-    }))
-    .sort((a, b) => tonePriority(a.tone) - tonePriority(b.tone));
 }
 
 function buildActionQueue(interventionItems) {
@@ -2548,7 +2425,7 @@ function buildScoreContext(score, facilityTone, interventionItems) {
 }
 
 function latestManualSourceLabel(result) {
-  return result?.filename ? "Manual data upload connected" : "Live telemetry feed";
+  return result?.filename ? "Telemetry upload" : "No data connected";
 }
 
 function baselineContextFromRoom(room) {
@@ -3053,312 +2930,20 @@ function resolveRoomTone(hvacDrift, instability, index, tick) {
   return "nominal";
 }
 
-function buildSimulatedTelemetryCards(roomStates, tick) {
-  const avgTemp = average(roomStates.map((room) => room.temperature));
-  const avgHumidity = average(roomStates.map((room) => room.humidity));
-  const avgCo2 = average(roomStates.map((room) => room.co2));
-  const maxDrift = Math.max(...roomStates.map((room) => room.hvacDrift));
-  const unstableRooms = roomStates.filter((room) => room.tone === "unstable" || room.tone === "elevated").length;
-
-  return [
-    {
-      label: "Temperature",
-      primary: `${avgTemp.toFixed(1)}F`,
-      secondary: `${roomStates[0].name} to ${roomStates[2].name} live spread`,
-      series: roomStates.map((room) => room.temperature),
-      tone: maxDrift > 1.5 ? "elevated" : "nominal",
-    },
-    {
-      label: "Humidity",
-      primary: `${avgHumidity.toFixed(1)}% RH`,
-      secondary: `${unstableRooms > 0 ? "Recovery lag detected" : "Room recovery nominal"}`,
-      series: roomStates.map((room) => room.humidity),
-      tone: unstableRooms > 0 ? "review" : "nominal",
-    },
-    {
-      label: "CO2",
-      primary: `${Math.round(avgCo2)} ppm`,
-      secondary: `${roomStates[1].name} currently carries peak enrichment`,
-      series: roomStates.map((room) => room.co2),
-      tone: "info",
-    },
-    {
-      label: "HVAC",
-      primary: `${maxDrift.toFixed(2)}F off baseline`,
-      secondary: `${unstableRooms} room${unstableRooms === 1 ? "" : "s"} under review`,
-      series: roomStates.map((room) => room.hvacDrift * 10),
-      tone: maxDrift > 1.7 ? "unstable" : maxDrift > 1.25 ? "elevated" : "review",
-    },
-    {
-      label: "Airflow",
-      primary: `${cycleValue(94, tick, 5, 0).toFixed(0)}% equipment activity`,
-      secondary: "Transition dampers modulating between flowering zones",
-      series: Array.from({ length: 6 }, (_, index) => 78 + ((tick + index * 7) % 18)),
-      tone: "info",
-    },
-    {
-      label: "Irrigation",
-      primary: roomStates[0].irrigationState,
-      secondary: `${roomStates[0].name} next review in ${12 - (tick % 6)} min`,
-      series: Array.from({ length: 6 }, (_, index) => 24 + ((tick + index * 3) % 22)),
-      tone: roomStates.some((room) => room.tone === "unstable") ? "review" : "nominal",
-    },
-  ];
-}
-
-function buildSimulatedTimeline(roomStates, tick) {
-  const time = new Date(Date.now() - tick * OPERATIONAL_CADENCE_MS);
-  return [
-    {
-      time: formatClockTime(time),
-      title: "Environmental transition detected",
-      detail: `${roomStates[1].name} humidity recovery slowed after irrigation cycle handoff.`,
-      tone: roomStates[1].tone,
-    },
-    {
-      time: formatClockTime(new Date(time.getTime() + 5 * 60000)),
-      title: "Room climate review opened",
-      detail: `${roomStates[0].name} supply temperature moved ${roomStates[0].hvacDrift.toFixed(2)}F off baseline.`,
-      tone: roomStates[0].tone,
-    },
-    {
-      time: formatClockTime(new Date(time.getTime() + 11 * 60000)),
-      title: "Ingestion monitor heartbeat",
-      detail: "Telemetry watcher confirmed active room feed continuity across current facility lanes.",
-      tone: "info",
-    },
-    {
-      time: formatClockTime(new Date(time.getTime() + 17 * 60000)),
-      title: "Grower review notice",
-      detail: "Review recommended for irrigation variance before next flowering cycle change.",
-      tone: "review",
-    },
-  ];
-}
-
-function buildSimulatedAlerts(roomStates, apiStatus) {
-  const alertRooms = roomStates.filter((room) => room.tone !== "nominal");
-  const items = [];
-  if (apiStatus.state !== "online") {
-    items.push({
-      title: "Live telemetry feed active",
-      detail: "Using the last confirmed facility state while live sync resumes.",
-      tone: "info",
-    });
-  }
-  alertRooms.slice(0, 2).forEach((room) => {
-    items.push({
-      title: `${room.name} requires review`,
-      detail: `${room.irrigationState}. Room temperature is ${room.hvacDrift.toFixed(2)}F off baseline with climate stability at ${room.instability.toFixed(2)}.`,
-      tone: room.tone,
-    });
-  });
-  items.push({
-    title: "Monitoring active telemetry feed",
-    detail: "Sample telemetry will remain active until uploaded facility exports replace the current surface.",
-    tone: "info",
-  });
-  return items.slice(0, 4);
-}
-
-function buildSimulatedFindings(roomStates) {
-  return roomStates.flatMap((room) => ([
-    {
-      title: `${room.name} telemetry review`,
-      detail: `${room.cycle} with ${room.irrigationState.toLowerCase()} and room temperature ${room.hvacDrift.toFixed(2)}F off baseline.`,
-      tone: room.tone,
-    },
-    {
-      title: `${room.name} evidence event`,
-      detail: `Climate stability ${room.instability.toFixed(2)} recorded against current room baseline.`,
-      tone: room.tone === "nominal" ? "info" : room.tone,
-    },
-  ])).slice(0, 6);
-}
-
-function buildSimulatedDriftRows(roomStates) {
-  return roomStates.flatMap((room) => ([
-    {
-      column: `${room.name} temperature`,
-      percent_change: Number((room.hvacDrift * 2.4).toFixed(1)),
-      absolute_change: room.hvacDrift,
-      drift_flag: room.tone,
-      direction: room.hvacDrift > 1.1 ? "temperature rising" : "stable recovery",
-      warnings: room.tone === "nominal" ? [] : [`Review recommended for ${room.name.toLowerCase()} HVAC balancing.`],
-    },
-    {
-      column: `${room.name} humidity`,
-      percent_change: Number((room.instability * 5.8).toFixed(1)),
-      absolute_change: Number((room.instability * 1.6).toFixed(2)),
-      drift_flag: room.tone === "nominal" ? "review" : room.tone,
-      direction: room.instability > 1.1 ? "recovery lag" : "nominal stabilization",
-      warnings: room.instability > 1.1 ? ["Environmental transition detected after latest irrigation cycle."] : [],
-    },
-  ])).slice(0, 6);
-}
-
-function buildSimulatedRelationshipRows(roomStates, tick) {
-  return [
-    {
-      columns: ["humidity", "irrigation"],
-      change: tick % 2 === 0
-        ? "Humidity recovery is becoming less stable after environmental transitions."
-        : "Humidity recovery is returning toward the room baseline.",
-      baseline_correlation: "0.74",
-      recent_correlation: tick % 2 === 0 ? "0.59" : "0.68",
-      tone: tick % 2 === 0 ? "review" : "nominal",
-    },
-    {
-      columns: ["HVAC", "temperature"],
-      change: roomStates[0].hvacDrift > 1.4
-        ? "Environmental coupling is less consistent than the room's recent baseline."
-        : "Temperature response remains consistent with recent room behavior.",
-      baseline_correlation: "0.81",
-      recent_correlation: roomStates[0].hvacDrift > 1.4 ? "0.63" : "0.77",
-      tone: roomStates[0].hvacDrift > 1.4 ? "elevated" : "nominal",
-    },
-    {
-      columns: ["CO2", "airflow"],
-      change: "Air movement behavior became less consistent during changing room conditions.",
-      baseline_correlation: "0.66",
-      recent_correlation: "0.52",
-      tone: "info",
-    },
-  ];
-}
-
-function buildSimulatedOverviewMetrics(roomStates, systems, systemsState) {
-  const roomsUnderReview = roomStates.filter((room) => room.tone !== "nominal").length;
-  return [
-    {
-      label: "Facility stability",
-      value: roomsUnderReview > 1 ? "Environmental transition detected" : "Monitoring active telemetry feed",
-    },
-    {
-      label: "Rooms under review",
-      value: roomsUnderReview,
-    },
-    {
-      label: "Telemetry cadence",
-      value: "4.2 second refresh",
-    },
-    {
-      label: "Systems in scope",
-      value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} local surfaces`,
-    },
-  ];
-}
-
-function buildSimulatedSystemRows(systems, roomStates, systemsState, apiStatus) {
-  return systems.map((system, index) => {
-    const room = roomStates[index % roomStates.length];
-    const stateLabel = room.tone === "nominal" ? "Monitoring active telemetry feed" : `${formatOperationalLabel(room.tone)} in ${room.name}`;
-    return [
-      system.name,
-      system.scope,
-      `${room.name} | ${room.zone}`,
-      apiStatus.state === "online" && systemsState === "ready" ? "Backend feed active" : stateLabel,
-    ];
-  });
-}
-
-function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
-  return [
-    {
-      title: "Batch receipt",
-      detail: "Live telemetry feed is active and maintaining current workspace state.",
-      state: "standby",
-      tone: "info",
-    },
-    {
-      title: "Header and schema detection",
-      detail: `Last sync checked ${formatClockTime(apiStatus.checkedAt ?? new Date())} CT.`,
-      state: "monitoring",
-      tone: apiStatus.state === "online" ? "nominal" : "review",
-    },
-    {
-      title: "Timestamp and room context review",
-      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live telemetry cadence ${tick}.`,
-      state: "active",
-      tone: "info",
-    },
-    {
-      title: "SII engine processing",
-      detail: "Awaiting uploaded room exports before SII engine processing starts.",
-      state: "standby",
-      tone: "review",
-    },
-    {
-      title: "Evidence and state write",
-      detail: "Runner state will refresh Facility Command after processing completes.",
-      state: "standby",
-      tone: "review",
-    },
-    {
-      title: "Complete",
-      detail: "Upload completion will replace baseline telemetry with uploaded runner state.",
-      state: "standby",
-      tone: "review",
-    },
-  ];
-}
-
-function buildSimulatedEvidenceLines(roomStates, tick, apiStatus) {
-  return [
-    `console.mode=frontend_simulation`,
-    `connection.state=${apiStatus.state}`,
-    `connection.last_check=${formatClockTime(apiStatus.checkedAt ?? new Date())}`,
-    `room.primary=${roomStates[0].name}`,
-    `room.transition=${roomStates[1].name}:humidity_recovery_review`,
-    `room.temperature_review=${roomStates[0].hvacDrift.toFixed(2)}F_off_baseline`,
-    `irrigation.state=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
-    `evidence.sequence=${tick}`,
-    `grower.notice=review_recommended_for_irrigation_variance`,
-  ];
-}
-
-function buildSimulatedConsoleEvents(roomStates, tick, apiStatus) {
-  return [
-    `telemetry.link=${apiStatus.state}`,
-    `telemetry.sequence=${tick}`,
-    `event.room_transition=${roomStates[1].name.replace(/ /g, "_").toLowerCase()}`,
-    `event.room_temperature_delta=${roomStates[0].hvacDrift.toFixed(2)}`,
-    `event.climate_stability=${roomStates[1].instability.toFixed(2)}`,
-    `event.irrigation_cycle=${roomStates[0].irrigationState.replace(/ /g, "_").toLowerCase()}`,
-    `event.review_notice=grower_review_open`,
-    ...buildSimulatedEvidenceLines(roomStates, tick, apiStatus),
-  ];
-}
-
-function buildSimulatedObservations(roomStates) {
-  return roomStates.map((room) => (
-    `${room.name} in ${room.zone} is ${formatOperationalLabel(room.tone).toLowerCase()} with ${room.irrigationState.toLowerCase()}.`
-  ));
-}
-
-function buildSimulatedRoomTransitions(roomStates, tick) {
-  return roomStates.map((room, index) => ({
-    time: formatClockTime(new Date(Date.now() - (index + 1) * 7 * 60000 - tick * 500)),
-    title: `${room.name} transition`,
-    detail: `${room.irrigationState} | ${room.zone} | ${room.temperature.toFixed(1)}F / ${room.humidity.toFixed(1)}% RH`,
-    tone: room.tone,
-  }));
-}
-
 function buildConnectionEvents(apiStatus, tick) {
   const checkedAt = apiStatus.checkedAt ?? new Date().toISOString();
   return [
     {
-      title: apiStatus.state === "online" ? "Live telemetry current" : "Sync delayed",
+      title: apiStatus.state === "online" ? "Backend sync current" : "Sync delayed",
       detail: apiStatus.state === "online"
         ? `Last sync ${formatClockTime(checkedAt)} CT.`
         : `Last confirmed state held from ${formatClockTime(checkedAt)} CT.`,
       tone: apiStatus.state === "online" ? "nominal" : "elevated",
     },
     {
-      title: apiStatus.state === "online" ? "Telemetry monitor" : "Grower action",
+      title: apiStatus.state === "online" ? "Connection monitor" : "Grower action",
       detail: apiStatus.state === "online"
-        ? "Live telemetry feed is current."
+        ? "Backend connection is healthy."
         : "Check facility WiFi if room changes stop syncing.",
       tone: apiStatus.state === "online" ? "info" : "review",
     },

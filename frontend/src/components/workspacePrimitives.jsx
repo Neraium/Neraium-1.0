@@ -65,7 +65,7 @@ export function FeedList({ items, emptyText, inline = false }) {
 
 export function TimelineFeed({ items }) {
   if (!items || items.length === 0) {
-    return <EmptyState title="No timeline events" body="Monitoring active telemetry feed." compact />;
+    return <EmptyState title="No timeline events" body="No completed upload yet." compact />;
   }
 
   return (
@@ -86,7 +86,7 @@ export function TimelineFeed({ items }) {
 
 export function TelemetryCardGrid({ cards, compact = false, formatOperationalTone }) {
   if (!cards || cards.length === 0) {
-    return <EmptyState title="No telemetry available" body="Awaiting additional room telemetry." compact />;
+    return <EmptyState title="No telemetry available" body="Upload telemetry to populate these system cards." compact />;
   }
 
   return (
@@ -122,7 +122,7 @@ export function TelemetryCardGrid({ cards, compact = false, formatOperationalTon
 
 export function MiniSeries({ values, tone }) {
   if (!values || values.length === 0) {
-    return <div className="mini-series mini-series--empty">No live series</div>;
+    return <div className="mini-series mini-series--empty">No series yet</div>;
   }
 
   const maxValue = Math.max(...values, 1);
@@ -142,7 +142,7 @@ export function MiniSeries({ values, tone }) {
 
 export function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No room trend review available" body="Awaiting additional room telemetry." compact />;
+    return <EmptyState title="No room trend review available" body="Upload telemetry to generate room drift review." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -186,7 +186,7 @@ export function DriftMonitor({ rows, detailed = false }) {
 
 export function DriftFeed({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No room trend feed" body="Monitoring active telemetry feed." compact />;
+    return <EmptyState title="No room trend feed" body="No completed upload yet." compact />;
   }
 
   return (
@@ -266,7 +266,7 @@ export function InterventionGrid({
   formatRoomDecisionState,
 }) {
   if (!items || items.length === 0) {
-    return <EmptyState title="No intervention windows available" body="Monitoring active telemetry feed." compact />;
+    return <EmptyState title="No intervention windows available" body="Upload telemetry to activate intervention windows." compact />;
   }
 
   return (
@@ -318,7 +318,7 @@ export function WhyPanel({
   formatClockTime,
 }) {
   if (!item) {
-    return <EmptyState title="No active explanation" body="Monitoring active telemetry feed." compact />;
+    return <EmptyState title="No active explanation" body="Upload telemetry to generate the first explanation." compact />;
   }
 
   const confidenceBasis = item.confidenceBasis ?? buildConfidenceBasis(item, findings);
