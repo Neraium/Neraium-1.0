@@ -12,7 +12,9 @@ DEFAULT_CORS_ORIGINS = [
     "http://localhost:3010",
     "http://localhost:5173",
     "https://app.neraium.com",
+    "https://www.app.neraium.com",
 ]
+DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?neraium\.com$"
 DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
 
 
@@ -22,6 +24,7 @@ class Settings:
     backend_host: str
     backend_port: int
     cors_origins: list[str]
+    cors_origin_regex: str | None
     runtime_dir: Path
 
 
@@ -31,6 +34,7 @@ def get_settings() -> Settings:
         backend_host=os.getenv("BACKEND_HOST", DEFAULT_BACKEND_HOST),
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
         cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
+        cors_origin_regex=parse_cors_origin_regex(os.getenv("CORS_ORIGIN_REGEX")),
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
     )
 
@@ -49,6 +53,12 @@ def parse_cors_origins(raw_value: str | None) -> list[str]:
         if required_origin not in origins:
             origins.append(required_origin)
     return origins
+
+
+def parse_cors_origin_regex(raw_value: str | None) -> str | None:
+    if raw_value and raw_value.strip():
+        return raw_value.strip()
+    return DEFAULT_CORS_ORIGIN_REGEX
 
 
 def parse_runtime_dir(raw_value: str | None) -> Path:
