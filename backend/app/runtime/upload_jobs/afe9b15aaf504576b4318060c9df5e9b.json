@@ -1,0 +1,59 @@
+{
+  "job_id": "afe9b15aaf504576b4318060c9df5e9b",
+  "filename": "neraium-upload-b.csv",
+  "file_path": "C:\\Users\\Owner\\Documents\\Neraium-1.0\\backend\\app\\runtime\\uploads\\afe9b15aaf504576b4318060c9df5e9b.csv",
+  "file_size_bytes": 498,
+  "status": "COMPLETE",
+  "progress_label": "Telemetry processing complete.",
+  "rows_processed": 8,
+  "columns_detected": 7,
+  "chunk_count": 1,
+  "memory_estimate_bytes": 832,
+  "processing_duration_seconds": 0.682,
+  "engine_runtime_seconds": 0.0007,
+  "runner_used": true,
+  "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
+  "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+  "started_at": "2026-05-10T15:33:35.876395+00:00",
+  "completed_at": "2026-05-10T15:33:36.953035+00:00",
+  "error": null,
+  "result_summary": {
+    "filename": "neraium-upload-b.csv",
+    "rows_processed": 8,
+    "columns_detected": 7,
+    "chunk_count": 1,
+    "sampled_rows": 8,
+    "memory_estimate_bytes": 832,
+    "engine_runtime_seconds": 0.0007,
+    "last_processed_at": "2026-05-10T15:33:36.953035+00:00",
+    "runner_used": true,
+    "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
+    "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+    "source": "uploaded",
+    "neraium_score": 78,
+    "operating_state": "Monitoring",
+    "primary_room": "Flower 2",
+    "drift_status": "nominal",
+    "upload_result_source": "file_upload",
+    "diff": {
+      "previous_filename": "neraium-upload-a.csv",
+      "previous_processed_at": "2026-05-10T15:33:35.119540+00:00",
+      "neraium_score_delta": 0.0
+    },
+    "warnings": [],
+    "runner_errors": [],
+    "room_summary": {
+      "room_count": 1,
+      "rooms": [
+        {
+          "room": "Flower 2",
+          "row_count": 8
+        }
+      ],
+      "total_rows": 8,
+      "unassigned_rows": 0
+    }
+  },
+  "input_hash": "361dac1f0c0c90babc769a93d593299ee14eac43a1ecc159cc3dd381bb00c31b",
+  "initiated_by": "anonymous"
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "run_id": "5928ec23b3784074ac6b7bc4bfbb4913",
+    "source_type": "file_upload",
+    "source_name": "neraium-upload-c.csv",
+    "filename": "neraium-upload-c.csv",
+    "created_at": "2026-05-10T15:34:08.560745+00:00",
+    "completed_at": "2026-05-10T15:34:09.727252+00:00",
+    "status": "completed",
+    "rows_received": 12,
+    "rows_accepted": 12,
+    "rows_rejected": 0,
+    "sensors_detected": 5,
+    "system_id": "Flower 3",
+    "room": "Flower 3",
+    "operating_state": "Needs review",
+    "neraium_score": 74,
+    "drift_status": "unstable",
+    "primary_drivers": [
+      "Room temperature control instability"
+    ],
+    "evidence_summary": [
+      "Room temperature behavior moved away from baseline and persisted across recent readings",
+      "Humidity movement overlaps with HVAC context"
+    ],
+    "warnings": [],
+    "errors": [],
+    "input_hash": "3b022dee6de199e0e03b22ad9d252177db45313fc569603c117082b4bba93cdf",
+    "result_hash": "9fed6ffba1b7eddd7aa6275f0d21e26550a30e6a560402c7c8a9e0a55d71ba6b",
+    "initiated_by": "anonymous"
+  },
+  {
+    "run_id": "afe9b15aaf504576b4318060c9df5e9b",
+    "source_type": "file_upload",
+    "source_name": "neraium-upload-b.csv",
+    "filename": "neraium-upload-b.csv",
+    "created_at": "2026-05-10T15:33:35.876395+00:00",
+    "completed_at": "2026-05-10T15:33:36.953035+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 5,
+    "system_id": "Flower 2",
+    "room": "Flower 2",
+    "operating_state": "Monitoring",
+    "neraium_score": 78,
+    "drift_status": "nominal",
+    "primary_drivers": [
+      "Unclear room system trend"
+    ],
+    "evidence_summary": [
+      "Irrigation response moved away from baseline"
+    ],
+    "warnings": [],
+    "errors": [],
+    "input_hash": "361dac1f0c0c90babc769a93d593299ee14eac43a1ecc159cc3dd381bb00c31b",
+    "result_hash": "f2791307def4a2740fb8df4c7f08f6da1e69632f86551798301218442210e2dd",
+    "initiated_by": "anonymous"
+  },
+  {
+    "run_id": "0b99c365e8bf46fbadc255eaa314afb9",
+    "source_type": "file_upload",
+    "source_name": "neraium-upload-a.csv",
+    "filename": "neraium-upload-a.csv",
+    "created_at": "2026-05-10T15:33:33.766516+00:00",
+    "completed_at": "2026-05-10T15:33:35.119540+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 5,
+    "system_id": "Flower 1",
+    "room": "Flower 1",
+    "operating_state": "Monitoring",
+    "neraium_score": 78,
+    "drift_status": "nominal",
+    "primary_drivers": [
+      "Unclear room system trend"
+    ],
+    "evidence_summary": [
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [],
+    "errors": [],
+    "input_hash": "64678435a99cc16b7b53f39bdacbc183ff5f186e8d2adbfc4b4380d752830f88",
+    "result_hash": "a3b5f8a2d43684d13dcb32cd5cea3f3436054a4c8366fa65823f82c674ac0907",
+    "initiated_by": "anonymous"
+  }
+]
