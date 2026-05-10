@@ -174,7 +174,6 @@ function App() {
         endpoint: formatEndpoint(API_BASE_URL),
         message: trigger === "scheduled" ? "Live telemetry feed current." : "Facility sync refreshed.",
       });
-      setBackendError(API_CONFIG_WARNING);
       return true;
     } catch {
       setApiStatus({

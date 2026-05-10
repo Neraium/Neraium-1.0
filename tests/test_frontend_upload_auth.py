@@ -95,6 +95,16 @@ def test_protected_route_unauthorized_copy_is_session_expired() -> None:
     assert "Upload state unavailable." in source
 
 
+def test_public_health_check_does_not_clear_protected_route_errors() -> None:
+    source = read_frontend(APP_JSX)
+    health_start = source.index('const response = await apiFetch("/api/health"')
+    health_end = source.index("return true;", health_start)
+    health_success_block = source[health_start:health_end]
+
+    assert "setApiStatus({" in health_success_block
+    assert "setBackendError(API_CONFIG_WARNING)" not in health_success_block
+
+
 def test_upload_failure_console_log_uses_readable_fields() -> None:
     source = read_frontend(APP_JSX)
 
