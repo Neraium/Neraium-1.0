@@ -618,11 +618,12 @@ function WorkspaceNavigationContent({
 }
 
 function Panel({ title, subtitle, className = "", children }) {
+  const heading = subtitle || title;
   return (
     <section className={`ops-panel ${className}`.trim()}>
       <div className="ops-panel__header">
-        <p className="section-token">{title}</p>
-        <h2>{subtitle}</h2>
+        {subtitle && title ? <p className="section-token">{title}</p> : null}
+        <h2>{heading}</h2>
       </div>
       <div className="ops-panel__body">{children}</div>
     </section>
@@ -692,7 +693,6 @@ function OverviewWorkspace({
     <div className="workspace-grid workspace-grid--overview workspace-grid--overview-simple workspace-grid--operator-flow">
       <Panel
         title="Operating State"
-        subtitle="Facility state, priority room, time, and next operator move."
         className="span-12 overview-panel overview-panel--hero overview-panel--command"
       >
         <div className="overview-hero">
@@ -704,25 +704,25 @@ function OverviewWorkspace({
 
           <div className="countdown-hero">
             <div className="countdown-hero__score">
-              <span>Neraium score</span>
+              <span>Neraium Score</span>
               <strong>{liveOps.neraiumScore}</strong>
               <p className="countdown-hero__readiness">{formatScoreReadiness(liveOps.neraiumScore)}</p>
               <p className="countdown-hero__context">{liveOps.scoreContext}</p>
             </div>
             <div className="countdown-hero__window">
-              <span>Time</span>
+              <span>Window</span>
               <strong>{primaryRoom?.window ?? "Monitoring"}</strong>
-              <p>Before {primaryRoom?.label ?? "the facility"} needs intervention.</p>
+              <p>{primaryRoom?.label ?? "The facility"} before intervention.</p>
               <p className="countdown-hero__context">{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</p>
             </div>
           </div>
 
           <div className="operating-state-next">
-            <span>Next operator move</span>
+            <span>Next Move</span>
             <strong>{primaryRoom?.primaryAction ?? primaryRoom?.recommendation ?? "Continue monitoring"}</strong>
             <div className="operator-guidance-brief">
               <p><b>Primary driver:</b> {primaryGuidance.primaryDriver}</p>
-              <p><b>Why Neraium flagged this:</b> {primaryGuidance.whyFlagged}</p>
+              <p><b>Why flagged:</b> {primaryGuidance.whyFlagged}</p>
               <ul>
                 {primaryGuidance.whatToCheck.slice(0, 3).map((check) => (
                   <li key={check}>{check}</li>
@@ -735,7 +735,6 @@ function OverviewWorkspace({
 
       <Panel
         title="Rooms"
-        subtitle={`${roomCount} rooms monitored. Priority rooms shown first.`}
         className="span-8 overview-panel overview-panel--rooms overview-panel--room-first"
       >
         <InterventionGrid
@@ -748,8 +747,7 @@ function OverviewWorkspace({
       </Panel>
 
       <Panel
-        title="Selected room detail"
-        subtitle="Why it matters and what to do next."
+        title="Selected Room"
         className="span-4 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
@@ -762,10 +760,10 @@ function OverviewWorkspace({
 
         <div className="room-first-actions">
           <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>
-            Open system detail
+            System Detail
           </button>
           <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("intelligence-console")}>
-            View evidence
+            Evidence
           </button>
         </div>
       </Panel>
@@ -789,16 +787,14 @@ function FacilitySystemsWorkspace({
   return (
     <div className="workspace-grid workspace-grid--systems">
       <Panel
-        title="Facility overview"
-        subtitle="Start with the full grow, then move into the room that needs attention."
+        title="Facility Overview"
         className="span-8"
       >
         <FleetSummary summary={fleetSummary} />
       </Panel>
 
       <Panel
-        title="Rooms to review"
-        subtitle="Ranked by time remaining."
+        title="Rooms to Review"
         className="span-4"
       >
         <TargetSelector
@@ -809,24 +805,21 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Room drivers"
-        subtitle="Climate, irrigation, and cycle signals affecting the current window."
+        title="Room Drivers"
         className="span-8"
       >
         <TelemetryCardGrid cards={telemetryCards.slice(0, 6)} />
       </Panel>
 
       <Panel
-        title="Room trend by channel"
-        subtitle="Baseline movement by grow-room significance."
+        title="Room Trends"
         className="span-6"
       >
         <DriftMonitor rows={driftRows} />
       </Panel>
 
       <Panel
-        title="Irrigation context"
-        subtitle="Cycle state and grower review notes."
+        title="Irrigation"
         className="span-6"
       >
         <TelemetryCardGrid cards={irrigationPanel ? [irrigationPanel] : []} compact />
@@ -837,8 +830,7 @@ function FacilitySystemsWorkspace({
       </Panel>
 
       <Panel
-        title="Systems in scope"
-        subtitle="Source coverage and room context behind active decisions."
+        title="Systems in Scope"
         className="span-12"
       >
         <SystemsMatrix
@@ -1092,17 +1084,12 @@ function DataConnectionsWorkspace({
     <div className="workspace-grid workspace-grid--connections">
       <Panel
         title="Data Connections"
-        subtitle="Upload facility telemetry and keep ingestion status visible."
         className="span-7"
       >
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
-            <p className="section-token">Telemetry upload</p>
             <h3>Upload Telemetry File</h3>
-            <p>
-              Upload a production CSV export to refresh Neraium score, operating state, room context,
-              drift evidence, and timestamps across the workspace.
-            </p>
+            <p>Upload a production CSV to refresh the active facility result.</p>
           </div>
 
           <div className="intake-flow__controls">
@@ -1116,7 +1103,7 @@ function DataConnectionsWorkspace({
               }}
             />
             <button className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
-              {isUploadProcessing(uploadState) ? "Upload processing" : "Upload Telemetry File"}
+              {isUploadProcessing(uploadState) ? "Processing" : "Upload Telemetry File"}
             </button>
           </div>
 
@@ -1134,7 +1121,6 @@ function DataConnectionsWorkspace({
 
       <Panel
         title="Ingestion State"
-        subtitle="Visible upload lifecycle and latest active result."
         className="span-5"
       >
         <WorkflowStages items={intakeStages} />
@@ -1142,41 +1128,38 @@ function DataConnectionsWorkspace({
 
       <Panel
         title="Latest Sync"
-        subtitle="Current upload status, backend connectivity, and active result source."
         className="span-12"
       >
         <MetricGrid
           metrics={[
             { label: "State", value: connectionStateLabel(latestStatus, uploadState, uploadError) },
-            { label: "Backend/API", value: apiStatus.label },
-            { label: "Latest sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
-            { label: "Result source", value: latestUploadSnapshot?.result_source ? "File upload" : "Awaiting upload" },
+            { label: "Backend", value: apiStatus.label },
+            { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
+            { label: "Source", value: latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Upload" },
             { label: "File", value: latestUploadSnapshot?.last_filename ?? uploadJob?.filename ?? "Awaiting upload" },
             { label: "Rows", value: latestUploadSnapshot?.rows_processed ?? uploadJob?.rows_processed ?? "Pending" },
             { label: "Columns", value: latestUploadSnapshot?.columns_detected ?? uploadJob?.columns_detected ?? "Pending" },
-            { label: "Primary room", value: roomContext.primary },
+            { label: "Primary Room", value: roomContext.primary },
           ]}
         />
       </Panel>
 
       <Panel
-        title="Connector command"
-        subtitle="Customer telemetry ingestion status across file, API, and industrial connector lanes."
+        title="Connection Overview"
         className="span-12"
       >
         <MetricGrid
           metrics={[
-            { label: "Connector types", value: connectorTypes.length || "Pending" },
-            { label: "Ready connectors", value: healthyCount },
-            { label: "Sensors detected", value: totalSensors || "Pending" },
-            { label: "Records ingested", value: totalRecords || "Pending" },
+            { label: "Types", value: connectorTypes.length || "Pending" },
+            { label: "Ready", value: healthyCount },
+            { label: "Sensors", value: totalSensors || "Pending" },
+            { label: "Records", value: totalRecords || "Pending" },
           ]}
         />
       </Panel>
 
       <Panel
-        title="Connector registry"
-        subtitle="Operational status, sync posture, and validation surface for each integration type."
+        title="Connections"
         className="span-7"
       >
         <div className="connector-status-list">
@@ -1193,7 +1176,7 @@ function DataConnectionsWorkspace({
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Last sync", value: connector.last_sync_time ? formatClockTime(connector.last_sync_time) : "Awaiting sync" },
+                  { label: "Last Sync", value: connector.last_sync_time ? formatClockTime(connector.last_sync_time) : "Awaiting sync" },
                   { label: "Sensors", value: connector.sensors_detected ?? 0 },
                   { label: "Records", value: connector.records_ingested ?? 0 },
                   { label: "Mode", value: connector.functional ? "Functional" : "Scaffolded" },
@@ -1223,16 +1206,15 @@ function DataConnectionsWorkspace({
       </Panel>
 
       <Panel
-        title="Upload result"
-        subtitle="The latest completed upload that is driving the dashboard."
+        title="Active Result"
         className="span-5"
       >
         <MetricGrid
           metrics={[
-            { label: "Neraium score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
-            { label: "Operating state", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
-            { label: "Drift status", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-            { label: "Timestamp coverage", value: deriveTimeCoverage(latestUploadResult).summary },
+            { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
+            { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
+            { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
+            { label: "Timestamps", value: deriveTimeCoverage(latestUploadResult).summary },
           ]}
           compact
         />
@@ -1243,8 +1225,7 @@ function DataConnectionsWorkspace({
       </Panel>
 
       <Panel
-        title="REST connector"
-        subtitle="Validate remote telemetry APIs, mask secrets, and normalize JSON payloads."
+        title="REST Connection"
         className="span-12"
       >
         <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>
@@ -1314,10 +1295,10 @@ function DataConnectionsWorkspace({
         <div className="connector-rest-output">
           <MetricGrid
             metrics={[
-              { label: "Connection", value: restResult?.connection_status ? formatConnectorStatus(restResult.connection_status) : "Awaiting validation" },
+              { label: "State", value: restResult?.connection_status ? formatConnectorStatus(restResult.connection_status) : "Awaiting validation" },
               { label: "Sensors", value: restResult?.sensors_detected ?? "Pending" },
               { label: "Records", value: restResult?.records_ingested ?? "Pending" },
-              { label: "Last sync", value: restResult?.last_sync_time ? formatClockTime(restResult.last_sync_time) : "Awaiting validation" },
+              { label: "Last Sync", value: restResult?.last_sync_time ? formatClockTime(restResult.last_sync_time) : "Awaiting validation" },
             ]}
             compact
           />
@@ -1365,32 +1346,28 @@ function IntelligenceConsoleWorkspace({
   return (
     <div className="workspace-grid workspace-grid--console">
       <Panel
-        title="Room trend feed"
-        subtitle="Changes shortening the current window."
+        title="Room Trend Feed"
         className="span-4"
       >
         <DriftFeed rows={driftRows} />
       </Panel>
 
       <Panel
-        title="Relationship shifts"
-        subtitle="Paired changes affecting confidence."
+        title="Relationship Shifts"
         className="span-4"
       >
         <RelationshipMonitor rows={relationshipRows} />
       </Panel>
 
       <Panel
-        title="Recent changes"
-        subtitle="Events that changed decision timing."
+        title="Recent Changes"
         className="span-4"
       >
         <TimelineFeed items={timeline} />
       </Panel>
 
       <Panel
-        title="Engine identity"
-        subtitle="Production SII pipeline provenance."
+        title="Engine Identity"
         className="span-12"
       >
         <EngineIdentityPanel
@@ -3723,19 +3700,19 @@ function buildEmptyOperationalContext({
 
 function buildEmptyTelemetryCards() {
   return [
-    { label: "Neraium score", primary: "No active result", secondary: "Complete an upload to calculate score.", series: [], tone: "info" },
-    { label: "Operating state", primary: "No data connected yet", secondary: "Facility state will populate from the latest completed upload.", series: [], tone: "info" },
-    { label: "Primary room", primary: "Awaiting upload", secondary: "Room context will populate from uploaded telemetry.", series: [], tone: "info" },
-    { label: "Drift status", primary: "Awaiting upload", secondary: "Drift and alert status require a completed upload.", series: [], tone: "info" },
+    { label: "Neraium Score", primary: "No active result", secondary: "Complete an upload to calculate a score.", series: [], tone: "info" },
+    { label: "Operating State", primary: "No data connected yet", secondary: "This updates from the latest completed upload.", series: [], tone: "info" },
+    { label: "Primary Room", primary: "Awaiting upload", secondary: "Room context appears after ingestion completes.", series: [], tone: "info" },
+    { label: "Drift", primary: "Awaiting upload", secondary: "Drift and alerts appear after a completed upload.", series: [], tone: "info" },
   ];
 }
 
 function buildEmptyOverviewMetrics(systems, systemsState) {
   return [
-    { label: "Facility stability", value: "No data connected yet" },
-    { label: "Rooms under review", value: 0 },
-    { label: "Telemetry cadence", value: "Awaiting upload" },
-    { label: "Systems in scope", value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} defined` },
+    { label: "Facility Stability", value: "No data connected yet" },
+    { label: "Rooms Under Review", value: 0 },
+    { label: "Telemetry Cadence", value: "Awaiting upload" },
+    { label: "Systems in Scope", value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} defined` },
   ];
 }
 
