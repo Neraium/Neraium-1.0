@@ -1,7 +1,7 @@
 {
   "job_id": "node-red-cultivation-telemetry",
   "filename": "Node-RED Cultivation Telemetry",
-  "row_count": 47,
+  "row_count": 51,
   "column_count": 11,
   "columns": [
     "timestamp",
@@ -101,8 +101,8 @@
     {
       "column": "co2",
       "min": 1039.12,
-      "max": 1059.72,
-      "average": 1048.6602,
+      "max": 1059.76,
+      "average": 1048.7684,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
@@ -131,8 +131,8 @@
     {
       "column": "hvac_load",
       "min": 68.99,
-      "max": 72.67,
-      "average": 70.8936,
+      "max": 73.0,
+      "average": 71.0357,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
@@ -142,7 +142,7 @@
       "column": "light_level",
       "min": 91.61,
       "max": 92.39,
-      "average": 92.0219,
+      "average": 92.04,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
@@ -152,7 +152,7 @@
       "column": "temperature",
       "min": 74.03,
       "max": 74.37,
-      "average": 74.1877,
+      "average": 74.1886,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
@@ -172,14 +172,14 @@
   "timestamp_profile": {
     "detected_timestamp_column": "timestamp",
     "first_timestamp": "2026-05-10T21:41:43.279000",
-    "last_timestamp": "2026-05-10T21:48:08.057000",
+    "last_timestamp": "2026-05-10T21:48:36.470000",
     "estimated_sample_interval": null,
     "warnings": [
       "Timestamp intervals are inconsistent."
     ]
   },
   "data_quality": {
-    "row_count": 47,
+    "row_count": 51,
     "column_count": 11,
     "numeric_column_count": 8,
     "timestamp_detected": true,
@@ -189,8 +189,8 @@
     "readiness": "needs_review"
   },
   "baseline_analysis": {
-    "baseline_window_rows": 10,
-    "recent_window_rows": 10,
+    "baseline_window_rows": 11,
+    "recent_window_rows": 11,
     "columns_analyzed": 8,
     "column_drift": [
       {
@@ -205,10 +205,10 @@
       },
       {
         "column": "co2",
-        "baseline_average": 1048.806,
-        "recent_average": 1046.93,
-        "absolute_change": -1.876,
-        "percent_change": -0.1789,
+        "baseline_average": 1049.3936,
+        "recent_average": 1047.3445,
+        "absolute_change": -2.0491,
+        "percent_change": -0.1953,
         "direction": "flat",
         "drift_flag": "normal",
         "warnings": []
@@ -235,30 +235,30 @@
       },
       {
         "column": "hvac_load",
-        "baseline_average": 69.5,
-        "recent_average": 72.174,
-        "absolute_change": 2.674,
-        "percent_change": 3.8475,
+        "baseline_average": 69.5718,
+        "recent_average": 72.3845,
+        "absolute_change": 2.8127,
+        "percent_change": 4.0429,
         "direction": "up",
         "drift_flag": "normal",
         "warnings": []
       },
       {
         "column": "light_level",
-        "baseline_average": 91.97,
-        "recent_average": 92.075,
-        "absolute_change": 0.105,
-        "percent_change": 0.1142,
+        "baseline_average": 91.9436,
+        "recent_average": 92.1518,
+        "absolute_change": 0.2082,
+        "percent_change": 0.2264,
         "direction": "flat",
         "drift_flag": "normal",
         "warnings": []
       },
       {
         "column": "temperature",
-        "baseline_average": 74.176,
-        "recent_average": 74.178,
-        "absolute_change": 0.002,
-        "percent_change": 0.0027,
+        "baseline_average": 74.1664,
+        "recent_average": 74.1936,
+        "absolute_change": 0.0273,
+        "percent_change": 0.0368,
         "direction": "flat",
         "drift_flag": "normal",
         "warnings": []
@@ -321,14 +321,14 @@
     "time_coverage": {
       "detected_timestamp_column": "timestamp",
       "first_timestamp": "2026-05-10T21:41:43.279000",
-      "last_timestamp": "2026-05-10T21:48:08.057000",
+      "last_timestamp": "2026-05-10T21:48:36.470000",
       "estimated_sample_interval": null
     },
     "key_observations": [
-      "File contains 47 data rows, 11 columns, and 8 numeric columns.",
+      "File contains 51 data rows, 11 columns, and 8 numeric columns.",
       "Timestamp column detected: timestamp.",
-      "Time coverage runs from 2026-05-10T21:41:43.279000 to 2026-05-10T21:48:08.057000.",
-      "Baseline comparison analyzed 8 numeric columns using 10 baseline rows and 10 recent rows.",
+      "Time coverage runs from 2026-05-10T21:41:43.279000 to 2026-05-10T21:48:36.470000.",
+      "Baseline comparison analyzed 8 numeric columns using 11 baseline rows and 11 recent rows.",
       "No numeric columns were flagged by the simple baseline comparison.",
       "Cultivation mapping identified columns for: temperature, humidity, HVAC, airflow, lighting, CO2."
     ],
@@ -357,33 +357,14 @@
   },
   "engine_result": {
     "engine_version": "neraium-cultivation-v1",
-    "summary": "Neraium SII v1 found elevated system behavior changes across the uploaded cultivation data. Review the grouped evidence, persistence notes, and operator checks before using this file for operational decisions.",
-    "overall_result": "elevated",
-    "signals": [
-      {
-        "type": "relationship_change",
-        "level": "elevated",
-        "columns": [
-          "co2",
-          "light_level"
-        ],
-        "message": "CO2 and light level relationship consistency became less stable between the baseline and active windows."
-      },
-      {
-        "type": "relationship_change",
-        "level": "elevated",
-        "columns": [
-          "co2",
-          "temperature"
-        ],
-        "message": "CO2 and temperature relationship consistency became less stable between the baseline and active windows."
-      }
-    ],
+    "summary": "Neraium SII v1 was limited by the available cultivation data. Review the listed limitations before relying on this upload.",
+    "overall_result": "needs_review",
+    "signals": [],
     "evidence": [
       {
         "type": "baseline_window",
-        "baseline_window_rows": 10,
-        "recent_window_rows": 10,
+        "baseline_window_rows": 11,
+        "recent_window_rows": 11,
         "columns_analyzed": 8,
         "overall_assessment": "normal"
       },
@@ -400,10 +381,10 @@
       {
         "type": "column_drift",
         "column": "co2",
-        "baseline_average": 1048.806,
-        "recent_average": 1046.93,
-        "absolute_change": -1.876,
-        "percent_change": -0.1789,
+        "baseline_average": 1049.3936,
+        "recent_average": 1047.3445,
+        "absolute_change": -2.0491,
+        "percent_change": -0.1953,
         "direction": "flat",
         "drift_flag": "normal"
       },
@@ -430,30 +411,30 @@
       {
         "type": "column_drift",
         "column": "hvac_load",
-        "baseline_average": 69.5,
-        "recent_average": 72.174,
-        "absolute_change": 2.674,
-        "percent_change": 3.8475,
+        "baseline_average": 69.5718,
+        "recent_average": 72.3845,
+        "absolute_change": 2.8127,
+        "percent_change": 4.0429,
         "direction": "up",
         "drift_flag": "normal"
       },
       {
         "type": "column_drift",
         "column": "light_level",
-        "baseline_average": 91.97,
-        "recent_average": 92.075,
-        "absolute_change": 0.105,
-        "percent_change": 0.1142,
+        "baseline_average": 91.9436,
+        "recent_average": 92.1518,
+        "absolute_change": 0.2082,
+        "percent_change": 0.2264,
         "direction": "flat",
         "drift_flag": "normal"
       },
       {
         "type": "column_drift",
         "column": "temperature",
-        "baseline_average": 74.176,
-        "recent_average": 74.178,
-        "absolute_change": 0.002,
-        "percent_change": 0.0027,
+        "baseline_average": 74.1664,
+        "recent_average": 74.1936,
+        "absolute_change": 0.0273,
+        "percent_change": 0.0368,
         "direction": "flat",
         "drift_flag": "normal"
       },
@@ -473,9 +454,9 @@
           "co2",
           "hvac_load"
         ],
-        "baseline_correlation": 0.1899,
-        "recent_correlation": -0.2679,
-        "change": -0.4578
+        "baseline_correlation": 0.358,
+        "recent_correlation": 0.1033,
+        "change": -0.2547
       },
       {
         "type": "relationship_change",
@@ -483,9 +464,9 @@
           "co2",
           "light_level"
         ],
-        "baseline_correlation": 0.5869,
-        "recent_correlation": -0.0314,
-        "change": -0.6183
+        "baseline_correlation": 0.4224,
+        "recent_correlation": 0.1574,
+        "change": -0.2649
       },
       {
         "type": "relationship_change",
@@ -493,9 +474,9 @@
           "co2",
           "temperature"
         ],
-        "baseline_correlation": 0.2202,
-        "recent_correlation": -0.7156,
-        "change": -0.9358
+        "baseline_correlation": 0.1071,
+        "recent_correlation": -0.1571,
+        "change": -0.2643
       },
       {
         "type": "relationship_change",
@@ -503,9 +484,9 @@
           "hvac_load",
           "light_level"
         ],
-        "baseline_correlation": 0.4273,
-        "recent_correlation": 0.0779,
-        "change": -0.3493
+        "baseline_correlation": 0.1329,
+        "recent_correlation": 0.307,
+        "change": 0.1741
       },
       {
         "type": "relationship_change",
@@ -513,9 +494,9 @@
           "hvac_load",
           "temperature"
         ],
-        "baseline_correlation": 0.1119,
-        "recent_correlation": 0.2344,
-        "change": 0.1225
+        "baseline_correlation": -0.0808,
+        "recent_correlation": 0.2272,
+        "change": 0.308
       },
       {
         "type": "relationship_change",
@@ -523,9 +504,9 @@
           "light_level",
           "temperature"
         ],
-        "baseline_correlation": -0.2006,
-        "recent_correlation": -0.1336,
-        "change": 0.067
+        "baseline_correlation": -0.1076,
+        "recent_correlation": 0.0609,
+        "change": 0.1685
       }
     ],
     "system_evidence": {
@@ -534,25 +515,15 @@
           "columns": [
             "temperature"
           ],
-          "signals": [
-            {
-              "type": "relationship_change",
-              "level": "elevated",
-              "columns": [
-                "co2",
-                "temperature"
-              ],
-              "message": "CO2 and temperature relationship consistency became less stable between the baseline and active windows."
-            }
-          ],
+          "signals": [],
           "evidence": [
             {
               "type": "column_drift",
               "column": "temperature",
-              "baseline_average": 74.176,
-              "recent_average": 74.178,
-              "absolute_change": 0.002,
-              "percent_change": 0.0027,
+              "baseline_average": 74.1664,
+              "recent_average": 74.1936,
+              "absolute_change": 0.0273,
+              "percent_change": 0.0368,
               "direction": "flat",
               "drift_flag": "normal"
             },
@@ -562,9 +533,9 @@
                 "co2",
                 "temperature"
               ],
-              "baseline_correlation": 0.2202,
-              "recent_correlation": -0.7156,
-              "change": -0.9358
+              "baseline_correlation": 0.1071,
+              "recent_correlation": -0.1571,
+              "change": -0.2643
             },
             {
               "type": "relationship_change",
@@ -572,9 +543,9 @@
                 "hvac_load",
                 "temperature"
               ],
-              "baseline_correlation": 0.1119,
-              "recent_correlation": 0.2344,
-              "change": 0.1225
+              "baseline_correlation": -0.0808,
+              "recent_correlation": 0.2272,
+              "change": 0.308
             },
             {
               "type": "relationship_change",
@@ -582,9 +553,9 @@
                 "light_level",
                 "temperature"
               ],
-              "baseline_correlation": -0.2006,
-              "recent_correlation": -0.1336,
-              "change": 0.067
+              "baseline_correlation": -0.1076,
+              "recent_correlation": 0.0609,
+              "change": 0.1685
             }
           ]
         },
@@ -616,10 +587,10 @@
             {
               "type": "column_drift",
               "column": "hvac_load",
-              "baseline_average": 69.5,
-              "recent_average": 72.174,
-              "absolute_change": 2.674,
-              "percent_change": 3.8475,
+              "baseline_average": 69.5718,
+              "recent_average": 72.3845,
+              "absolute_change": 2.8127,
+              "percent_change": 4.0429,
               "direction": "up",
               "drift_flag": "normal"
             },
@@ -629,9 +600,9 @@
                 "co2",
                 "hvac_load"
               ],
-              "baseline_correlation": 0.1899,
-              "recent_correlation": -0.2679,
-              "change": -0.4578
+              "baseline_correlation": 0.358,
+              "recent_correlation": 0.1033,
+              "change": -0.2547
             },
             {
               "type": "relationship_change",
@@ -639,9 +610,9 @@
                 "hvac_load",
                 "light_level"
               ],
-              "baseline_correlation": 0.4273,
-              "recent_correlation": 0.0779,
-              "change": -0.3493
+              "baseline_correlation": 0.1329,
+              "recent_correlation": 0.307,
+              "change": 0.1741
             },
             {
               "type": "relationship_change",
@@ -649,9 +620,9 @@
                 "hvac_load",
                 "temperature"
               ],
-              "baseline_correlation": 0.1119,
-              "recent_correlation": 0.2344,
-              "change": 0.1225
+              "baseline_correlation": -0.0808,
+              "recent_correlation": 0.2272,
+              "change": 0.308
             }
           ]
         },
@@ -682,25 +653,15 @@
           "columns": [
             "light_level"
           ],
-          "signals": [
-            {
-              "type": "relationship_change",
-              "level": "elevated",
-              "columns": [
-                "co2",
-                "light_level"
-              ],
-              "message": "CO2 and light level relationship consistency became less stable between the baseline and active windows."
-            }
-          ],
+          "signals": [],
           "evidence": [
             {
               "type": "column_drift",
               "column": "light_level",
-              "baseline_average": 91.97,
-              "recent_average": 92.075,
-              "absolute_change": 0.105,
-              "percent_change": 0.1142,
+              "baseline_average": 91.9436,
+              "recent_average": 92.1518,
+              "absolute_change": 0.2082,
+              "percent_change": 0.2264,
               "direction": "flat",
               "drift_flag": "normal"
             },
@@ -710,9 +671,9 @@
                 "co2",
                 "light_level"
               ],
-              "baseline_correlation": 0.5869,
-              "recent_correlation": -0.0314,
-              "change": -0.6183
+              "baseline_correlation": 0.4224,
+              "recent_correlation": 0.1574,
+              "change": -0.2649
             },
             {
               "type": "relationship_change",
@@ -720,9 +681,9 @@
                 "hvac_load",
                 "light_level"
               ],
-              "baseline_correlation": 0.4273,
-              "recent_correlation": 0.0779,
-              "change": -0.3493
+              "baseline_correlation": 0.1329,
+              "recent_correlation": 0.307,
+              "change": 0.1741
             },
             {
               "type": "relationship_change",
@@ -730,9 +691,9 @@
                 "light_level",
                 "temperature"
               ],
-              "baseline_correlation": -0.2006,
-              "recent_correlation": -0.1336,
-              "change": 0.067
+              "baseline_correlation": -0.1076,
+              "recent_correlation": 0.0609,
+              "change": 0.1685
             }
           ]
         },
@@ -740,34 +701,15 @@
           "columns": [
             "co2"
           ],
-          "signals": [
-            {
-              "type": "relationship_change",
-              "level": "elevated",
-              "columns": [
-                "co2",
-                "light_level"
-              ],
-              "message": "CO2 and light level relationship consistency became less stable between the baseline and active windows."
-            },
-            {
-              "type": "relationship_change",
-              "level": "elevated",
-              "columns": [
-                "co2",
-                "temperature"
-              ],
-              "message": "CO2 and temperature relationship consistency became less stable between the baseline and active windows."
-            }
-          ],
+          "signals": [],
           "evidence": [
             {
               "type": "column_drift",
               "column": "co2",
-              "baseline_average": 1048.806,
-              "recent_average": 1046.93,
-              "absolute_change": -1.876,
-              "percent_change": -0.1789,
+              "baseline_average": 1049.3936,
+              "recent_average": 1047.3445,
+              "absolute_change": -2.0491,
+              "percent_change": -0.1953,
               "direction": "flat",
               "drift_flag": "normal"
             },
@@ -777,9 +719,9 @@
                 "co2",
                 "hvac_load"
               ],
-              "baseline_correlation": 0.1899,
-              "recent_correlation": -0.2679,
-              "change": -0.4578
+              "baseline_correlation": 0.358,
+              "recent_correlation": 0.1033,
+              "change": -0.2547
             },
             {
               "type": "relationship_change",
@@ -787,9 +729,9 @@
                 "co2",
                 "light_level"
               ],
-              "baseline_correlation": 0.5869,
-              "recent_correlation": -0.0314,
-              "change": -0.6183
+              "baseline_correlation": 0.4224,
+              "recent_correlation": 0.1574,
+              "change": -0.2649
             },
             {
               "type": "relationship_change",
@@ -797,9 +739,9 @@
                 "co2",
                 "temperature"
               ],
-              "baseline_correlation": 0.2202,
-              "recent_correlation": -0.7156,
-              "change": -0.9358
+              "baseline_correlation": 0.1071,
+              "recent_correlation": -0.1571,
+              "change": -0.2643
             }
           ]
         },
@@ -840,9 +782,9 @@
           ]
         }
       },
-      "categories_showing_meaningful_change": 3,
-      "numeric_signals_showing_meaningful_change": 3,
-      "corroboration_level": "strong"
+      "categories_showing_meaningful_change": 0,
+      "numeric_signals_showing_meaningful_change": 0,
+      "corroboration_level": "limited"
     },
     "persistence_assessment": {
       "status": "not_persistent",
@@ -852,8 +794,6 @@
       "limitations": []
     },
     "recommended_checks": [
-      "Compare CO2 and light level timing against room activity logs.",
-      "Compare CO2 and temperature timing against room activity logs.",
       "Review unmapped CSV columns for clearer cultivation sensor labels."
     ],
     "limitations": [
@@ -864,16 +804,16 @@
     ],
     "audit_trace": [
       "engine.version:neraium-cultivation-v1",
-      "inputs.rows:47",
+      "inputs.rows:51",
       "inputs.columns:11",
       "inputs.mapped_columns:7",
-      "baseline_window_rows_used:10",
-      "recent_window_rows_used:10",
+      "baseline_window_rows_used:11",
+      "recent_window_rows_used:11",
       "columns_analyzed:8",
       "columns_skipped:timestamp:timestamp_context",
       "columns_skipped:room:non_numeric",
       "columns_skipped:facility_id:non_numeric",
-      "baseline.windows:baseline=10,recent=10,columns=8",
+      "baseline.windows:baseline=11,recent=11,columns=8",
       "engine.data_quality:warnings_present",
       "drift.column:airflow:flat:normal",
       "drift.column:co2:flat:normal",
@@ -901,9 +841,9 @@
       "relationship_checks_skipped:insufficient_paired_values",
       "relationships.pair_skipped:co2:humidity",
       "relationship_checks_skipped:insufficient_paired_values",
-      "relationships.pair:co2:hvac_load:change=-0.4578",
-      "relationships.pair:co2:light_level:change=-0.6183",
-      "relationships.pair:co2:temperature:change=-0.9358",
+      "relationships.pair:co2:hvac_load:change=-0.2547",
+      "relationships.pair:co2:light_level:change=-0.2649",
+      "relationships.pair:co2:temperature:change=-0.2643",
       "relationships.pair_skipped:co2:vpd",
       "relationship_checks_skipped:insufficient_paired_values",
       "relationships.pair_skipped:dehumidifier_load:humidity",
@@ -938,9 +878,9 @@
     "mode": "live",
     "facility_state": "Monitoring",
     "room_state": "Monitoring",
-    "urgency": "unstable",
-    "intervention_window": "8 hours",
-    "neraium_score": 55,
+    "urgency": "review",
+    "intervention_window": "2 days",
+    "neraium_score": 71,
     "primary_room": "flower-room-1",
     "priority_room": "flower-room-1",
     "primary_driver": "Sensor network continuity",
@@ -969,13 +909,13 @@
     "why_flagged": "Timestamp intervals are inconsistent",
     "baseline_comparison": "Current telemetry remains within available baseline comparison.",
     "observed_persistence": "Persistence evidence is limited in the current telemetry.",
-    "last_updated": "2026-05-10T21:48:09.587014+00:00",
+    "last_updated": "2026-05-10T21:48:37.751865+00:00",
     "filename": "Node-RED Cultivation Telemetry",
-    "row_count": 47,
+    "row_count": 51,
     "timestamp_coverage": {
       "detected_timestamp_column": "timestamp",
       "first_timestamp": "2026-05-10T21:41:43.279000",
-      "last_timestamp": "2026-05-10T21:48:08.057000",
+      "last_timestamp": "2026-05-10T21:48:36.470000",
       "estimated_sample_interval": null,
       "warnings": [
         "Timestamp intervals are inconsistent."
@@ -986,18 +926,18 @@
       "rooms": [
         {
           "room": "flower-room-1",
-          "row_count": 376
+          "row_count": 408
         }
       ],
-      "total_rows": 47,
+      "total_rows": 51,
       "unassigned_rows": 0
     },
     "rooms": [
       {
         "room": "flower-room-1",
         "room_state": "Monitoring",
-        "urgency": "unstable",
-        "intervention_window": "8 hours",
+        "urgency": "review",
+        "intervention_window": "2 days",
         "primary_driver": "Sensor network continuity",
         "supporting_evidence": [
           "Timestamp intervals are inconsistent",
@@ -1024,17 +964,17 @@
         "why_flagged": "Timestamp intervals are inconsistent",
         "baseline_comparison": "Current telemetry remains within available baseline comparison.",
         "observed_persistence": "Persistence evidence is limited in the current telemetry.",
-        "last_updated": "2026-05-10T21:48:09.587014+00:00",
+        "last_updated": "2026-05-10T21:48:37.751865+00:00",
         "confidence": 58
       }
     ],
     "source_metadata": {
       "scenario": "airflow_drift",
-      "tick": 456,
+      "tick": 460,
       "source_id": "node-red-sim-api-001",
       "facility_id": "cultivation-facility-001",
       "room_id": "flower-room-1",
-      "timestamp": "2026-05-10T21:48:08.057Z",
+      "timestamp": "2026-05-10T21:48:36.470Z",
       "source_type": "external_rest_api",
       "external_source_url": "http://18.216.253.180:1880/telemetry/latest",
       "readings_received": 8,
@@ -1047,7 +987,7 @@
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
-    "rows_processed": 47,
+    "rows_processed": 51,
     "columns_used": [
       "airflow",
       "co2",
@@ -1058,28 +998,28 @@
       "temperature",
       "vpd"
     ],
-    "sensor_vector_count": 47,
+    "sensor_vector_count": 51,
     "output_summary": {
-      "frames_processed": 47,
+      "frames_processed": 51,
       "latest_regime": "STABLE",
       "latest_urgency": "NOMINAL",
-      "latest_instability_score": 0.02866016418744248,
+      "latest_instability_score": 0.019979685505768258,
       "max_instability_score": 0.278178,
-      "latest_structural_drift": 0.07067461521160255,
-      "latest_confidence": 0.9730549834579826
+      "latest_structural_drift": 0.04905442196251681,
+      "latest_confidence": 0.9730480202423704
     },
     "latest_state": {
-      "timestamp": 1778449688.057,
-      "cycle": 47,
-      "instability_score": 0.02866016418744248,
+      "timestamp": 1778449716.47,
+      "cycle": 51,
+      "instability_score": 0.019979685505768258,
       "regime": "STABLE",
       "urgency": "NOMINAL",
-      "structural_drift": 0.07067461521160255,
-      "drift_velocity": -0.0010633672581234093,
-      "transition_pressure": 7.255881095396306e-05,
-      "confidence": 0.9730549834579826,
-      "gradient_norm": 81.1391527413724,
-      "recovery_alignment": -0.18110345839252878,
+      "structural_drift": 0.04905442196251681,
+      "drift_velocity": -0.000988808849478377,
+      "transition_pressure": 4.7334944949975775e-05,
+      "confidence": 0.9730480202423704,
+      "gradient_norm": 55.42840710353929,
+      "recovery_alignment": 0.09658548615798343,
       "detection_context": {
         "first_detection_cycle": null,
         "threshold_alert_cycle": null,
@@ -1090,7 +1030,7 @@
     "evidence": [
       "SIIEngineAdapter ingested 8 numeric telemetry channels.",
       "Unified SII core reported STABLE regime and NOMINAL urgency.",
-      "Instability score 0.0287 with structural drift 0.0707.",
+      "Instability score 0.02 with structural drift 0.0491.",
       "Driver attribution category: sensor_network.",
       "Environmental coupling is less consistent than the room's recent baseline.",
       "Environmental coupling is less consistent than the room's recent baseline."
@@ -1102,16 +1042,16 @@
     "engine_module": "app.engine.analysis",
     "engine_version": "neraium-cultivation-v1",
     "driver_attribution_ran": true,
-    "rows_processed": 47,
+    "rows_processed": 51,
     "columns_analyzed": 8,
     "evidence_count": 15,
-    "git_commit": "981be63"
+    "git_commit": "09eea9e"
   },
   "processing_stats": {
     "chunk_count": 1,
-    "sampled_rows": 47,
-    "sii_sampled_rows": 47,
-    "memory_estimate_bytes": 8777,
+    "sampled_rows": 51,
+    "sii_sampled_rows": 51,
+    "memory_estimate_bytes": 9523,
     "used_streaming": false,
     "engine_runtime_seconds": 0.0014,
     "room_summary": {
@@ -1119,10 +1059,10 @@
       "rooms": [
         {
           "room": "flower-room-1",
-          "row_count": 376
+          "row_count": 408
         }
       ],
-      "total_rows": 47,
+      "total_rows": 51,
       "unassigned_rows": 0
     },
     "record_count": 8,
@@ -1135,19 +1075,19 @@
     "rooms": [
       {
         "room": "flower-room-1",
-        "row_count": 376
+        "row_count": 408
       }
     ],
-    "total_rows": 47,
+    "total_rows": 51,
     "unassigned_rows": 0
   },
   "ingestion_metadata": {
     "scenario": "airflow_drift",
-    "tick": 456,
+    "tick": 460,
     "source_id": "node-red-sim-api-001",
     "facility_id": "cultivation-facility-001",
     "room_id": "flower-room-1",
-    "timestamp": "2026-05-10T21:48:08.057Z",
+    "timestamp": "2026-05-10T21:48:36.470Z",
     "source_type": "external_rest_api",
     "external_source_url": "http://18.216.253.180:1880/telemetry/latest",
     "readings_received": 8,
