@@ -1,6 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { exportEvidenceRun, fetchEvidenceRun, fetchEvidenceRuns, fetchLatestEvidence } from "../services/evidenceApi";
 
+function formatRunStatusTone(status) {
+  switch ((status ?? "").toLowerCase()) {
+    case "completed":
+    case "complete":
+    case "active":
+      return "nominal";
+    case "processing":
+    case "queued":
+    case "pending":
+      return "review";
+    case "failed":
+    case "error":
+      return "elevated";
+    default:
+      return "muted";
+  }
+}
+
 export default function EvidenceTrailWorkspace({
   apiFetch,
   readJsonPayload,
@@ -136,18 +154,25 @@ export default function EvidenceTrailWorkspace({
         {runs.length === 0 ? (
           <EmptyState title="No run history" body="Completed and failed runs will appear here." compact />
         ) : (
-          <div className="feed-list">
+          <div className="run-history-list">
             {runs.map((run) => (
               <button
-                className={`workspace-nav__item ${selectedRunId === run.run_id ? "workspace-nav__item--active" : ""}`}
+                className={`run-history-item ${selectedRunId === run.run_id ? "run-history-item--active" : ""}`}
                 key={run.run_id}
                 type="button"
                 onClick={() => setSelectedRunId(run.run_id)}
               >
-                <span className="workspace-nav__label">{run.source_name ?? run.run_id}</span>
-                <span className="workspace-nav__detail">
-                  {run.completed_at ? formatClockTime(run.completed_at) : "Pending"} | {run.operating_state ?? "n/a"} | {run.neraium_score ?? "n/a"} | {run.status}
-                </span>
+                <div className="run-history-item__top">
+                  <strong>{run.source_name ?? run.run_id}</strong>
+                  <span className={`connector-status-pill connector-status-pill--${formatRunStatusTone(run.status)}`}>
+                    {run.status ?? "Unknown"}
+                  </span>
+                </div>
+                <div className="run-history-item__meta">
+                  <span>{run.completed_at ? formatClockTime(run.completed_at) : "Pending"}</span>
+                  <span>{run.operating_state ?? "n/a"}</span>
+                  <span>Score {run.neraium_score ?? "n/a"}</span>
+                </div>
               </button>
             ))}
           </div>
