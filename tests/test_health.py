@@ -28,7 +28,7 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.json() == {"status": "ok", "service": "neraium-api"}
 
 
-def test_facility_systems_endpoint_returns_placeholder_systems() -> None:
+def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
     client = TestClient(create_app())
 
     response = client.get("/api/facility/systems")
@@ -43,32 +43,13 @@ def test_facility_systems_endpoint_returns_placeholder_systems() -> None:
         "Lighting",
         "Sensor network",
     ]
-    assert payload["intelligence"]["source"] == "sii_engine"
-    assert payload["intelligence"]["mode"] == "sample"
-    assert payload["intelligence"]["neraium_score"] > 0
-    assert payload["intelligence"]["rooms"]
-    required_fields = {
-        "facility_state",
-        "room_state",
-        "urgency",
-        "intervention_window",
-        "neraium_score",
-        "primary_driver",
-        "supporting_evidence",
-        "relationship_evidence",
-        "structural_explanation",
-        "confidence_basis",
-        "recommended_operator_review",
-        "what_to_check",
-        "why_flagged",
-        "baseline_comparison",
-        "observed_persistence",
-        "last_updated",
-    }
-    assert required_fields <= set(payload["intelligence"])
+    assert payload["intelligence"] is None
+    assert payload["intelligence_status"]["source"] == "none"
+    assert payload["intelligence_status"]["mode"] == "empty"
+    assert payload["intelligence_status"]["status"] == "no_data"
 
 
-def test_intelligence_status_endpoint_returns_sii_mode() -> None:
+def test_intelligence_status_endpoint_returns_empty_state_without_upload() -> None:
     client = TestClient(create_app())
 
     response = client.get("/api/intelligence/status")
@@ -76,10 +57,10 @@ def test_intelligence_status_endpoint_returns_sii_mode() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["engine_loaded"] is True
-    assert payload["source"] == "sii_engine"
-    assert payload["mode"] == "sample"
-    assert payload["active_rooms_count"] > 0
-    assert "primary_driver" in payload["evidence_fields_present"]
+    assert payload["source"] == "none"
+    assert payload["mode"] == "empty"
+    assert payload["active_rooms_count"] == 0
+    assert payload["status"] == "no_data"
 
 
 def test_engine_identity_endpoint_returns_actual_engine_metadata() -> None:
@@ -123,7 +104,7 @@ def test_runner_status_endpoint_reports_real_adapter() -> None:
     assert payload["validation_runner"] == "neraium_core.sii_fd004_validation.FD004ValidationRunner"
     assert payload["same_engine_family_as_validation"] is True
     assert payload["same_exact_fd004_validation_runner"] is False
-    assert payload["source"] == "sample"
+    assert payload["source"] == "none"
 
 
 def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
@@ -164,7 +145,7 @@ def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
     assert payload["intelligence"]["primary_driver"] == "Runner driver"
 
 
-def test_facility_systems_uses_sample_when_latest_sii_state_is_corrupt() -> None:
+def test_facility_systems_returns_empty_state_when_latest_sii_state_is_corrupt() -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text("{not-valid-json", encoding="utf-8")
     client = TestClient(create_app())
@@ -173,11 +154,11 @@ def test_facility_systems_uses_sample_when_latest_sii_state_is_corrupt() -> None
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["intelligence"]["source"] == "sii_engine"
-    assert payload["intelligence"]["mode"] == "sample"
+    assert payload["intelligence"] is None
+    assert payload["intelligence_status"]["mode"] == "empty"
 
 
-def test_facility_systems_uses_sample_when_latest_sii_state_is_incomplete() -> None:
+def test_facility_systems_returns_empty_state_when_latest_sii_state_is_incomplete() -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATE_PATH.write_text('{"source": "uploaded"}', encoding="utf-8")
     client = TestClient(create_app())
@@ -186,8 +167,8 @@ def test_facility_systems_uses_sample_when_latest_sii_state_is_incomplete() -> N
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["intelligence"]["source"] == "sii_engine"
-    assert payload["intelligence"]["mode"] == "sample"
+    assert payload["intelligence"] is None
+    assert payload["intelligence_status"]["mode"] == "empty"
 
 
 def test_latest_sii_state_write_replaces_atomically() -> None:

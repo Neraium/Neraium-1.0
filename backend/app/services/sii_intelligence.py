@@ -264,6 +264,18 @@ def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dic
     }
 
 
+def build_empty_intelligence_status() -> dict[str, Any]:
+    return {
+        "engine_loaded": True,
+        "source": "none",
+        "last_processed_at": None,
+        "active_rooms_count": 0,
+        "evidence_fields_present": [],
+        "mode": "empty",
+        "status": "no_data",
+    }
+
+
 def score_from_upload(data_quality: dict[str, Any], engine_result: dict[str, Any], attribution: dict[str, Any]) -> int:
     readiness = data_quality.get("readiness")
     severity = attribution.get("severity")

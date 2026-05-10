@@ -129,7 +129,7 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
     }
     write_job(metadata)
     logger.info(
-        "upload_job_created job_id=%s filename=%s size_bytes=%s",
+        "upload_file_received job_id=%s filename=%s size_bytes=%s",
         job_id,
         filename,
         size_bytes,
@@ -239,6 +239,8 @@ def process_upload_job(job_id: str) -> None:
         completed_at = now_iso()
         summary = summarize_result(result, completed_at)
         duration = round(time.perf_counter() - started, 4)
+        write_latest_upload_summary(job_id, summary)
+        write_latest_upload_result(job_id, result)
         update_job(
             job_id,
             status="COMPLETE",
@@ -253,8 +255,6 @@ def process_upload_job(job_id: str) -> None:
             error=None,
             result_summary=summary,
         )
-        write_latest_upload_summary(job_id, summary)
-        write_latest_upload_result(job_id, result)
         logger.info(
             "upload_job_complete job_id=%s rows=%s columns=%s chunks=%s duration=%s engine_runtime=%s memory_estimate=%s",
             job_id,
@@ -386,6 +386,16 @@ def stream_csv_windows(
             chunk_count=chunk_count,
             memory_estimate_bytes=estimate_rows_memory(data_rows),
         )
+
+    logger.info(
+        "upload_rows_parsed filename=%s rows_parsed=%s rows_accepted=%s rows_rejected=%s columns_detected=%s chunks=%s",
+        file_path.name,
+        total_rows,
+        max(total_rows - malformed_rows, 0),
+        malformed_rows,
+        len(columns),
+        chunk_count,
+    )
 
     return columns, data_rows, total_rows, {
         "chunk_count": chunk_count,
@@ -523,6 +533,15 @@ def build_upload_result(
             "last_processed_at": now_iso(),
         }
     )
+    logger.info(
+        "upload_result_calculated filename=%s rows=%s columns=%s readiness=%s overall_result=%s primary_room=%s",
+        filename,
+        total_rows,
+        len(columns),
+        data_quality.get("readiness"),
+        engine_result.get("overall_result"),
+        primary_room,
+    )
 
     return {
         "filename": filename,
@@ -583,6 +602,13 @@ def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
     ensure_runtime_dirs()
     path = latest_upload_path()
     atomic_write_json(path, {"job_id": job_id, **summary})
+    logger.info(
+        "upload_result_persisted kind=summary job_id=%s filename=%s rows=%s columns=%s",
+        job_id,
+        summary.get("filename"),
+        summary.get("rows_processed"),
+        summary.get("columns_detected"),
+    )
 
 
 def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
@@ -590,6 +616,13 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
     path = latest_upload_result_path()
     persistable = build_persistable_upload_result(job_id, result)
     atomic_write_json(path, persistable)
+    logger.info(
+        "upload_result_persisted kind=detailed job_id=%s filename=%s rows=%s columns=%s",
+        job_id,
+        persistable.get("filename"),
+        persistable.get("row_count"),
+        persistable.get("column_count"),
+    )
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:

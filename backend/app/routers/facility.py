@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from app.core.security import require_api_access
 from app.services.engine_identity import build_engine_identity
-from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_intelligence_status, build_sample_intelligence
+from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 from app.services.upload_jobs import read_latest_upload_result
 
@@ -13,12 +13,7 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 @router.get("/facility/systems")
 def read_facility_systems() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = read_latest_sii_state()
-    if intelligence is None and latest_result:
-        candidate = latest_result.get("sii_intelligence")
-        if is_valid_persisted_intelligence(candidate):
-            intelligence = candidate
-    intelligence = intelligence or build_sample_intelligence()
+    intelligence = resolve_uploaded_intelligence(latest_result)
     return {
         "systems": [
             {
@@ -56,19 +51,26 @@ def read_facility_systems() -> dict[str, Any]:
             "unknown_system_drift",
         ],
         "intelligence": intelligence,
-        "intelligence_status": build_intelligence_status(intelligence),
+        "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
 
 
 @router.get("/intelligence/status")
 def read_intelligence_status() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
+    intelligence = resolve_uploaded_intelligence(latest_result)
+    return build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status()
+
+
+def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None) -> dict[str, Any] | None:
     intelligence = read_latest_sii_state()
-    if intelligence is None and latest_result:
+    if is_valid_persisted_intelligence(intelligence):
+        return intelligence
+    if latest_result:
         candidate = latest_result.get("sii_intelligence")
         if is_valid_persisted_intelligence(candidate):
-            intelligence = candidate
-    return build_intelligence_status(intelligence or build_sample_intelligence())
+            return candidate
+    return None
 
 
 def is_valid_persisted_intelligence(candidate: Any) -> bool:

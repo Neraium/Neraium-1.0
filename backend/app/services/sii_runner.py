@@ -82,7 +82,7 @@ def build_runner_status() -> dict[str, Any]:
         "validation_runner_file": identity["validation_runner_file"],
         "state_available": state is not None,
         "last_processed_at": state.get("last_processed_at") if state else None,
-        "source": state.get("source") if state else "sample",
+        "source": state.get("source") if state else "none",
         "same_engine_family_as_validation": True,
         "same_exact_fd004_validation_runner": False,
         "note": (

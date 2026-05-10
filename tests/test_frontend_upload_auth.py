@@ -132,12 +132,21 @@ def test_upload_failure_console_log_uses_readable_fields() -> None:
     assert 'console.warn("telemetry_upload_failure", classified)' not in source
 
 
-def test_frontend_restores_latest_upload_result_from_cache_and_backend() -> None:
+def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> None:
     source = read_frontend(APP_JSX)
 
-    assert 'const LATEST_UPLOAD_CACHE_KEY = "neraium.latestUploadResult";' in source
-    assert "const [latestUploadResult, setLatestUploadResult] = useState(() => readCachedLatestUploadResult());" in source
+    assert "const [latestUploadResult, setLatestUploadResult] = useState(null);" in source
     assert "const loadLatestUploadState = useCallback(async () => {" in source
+    assert "setLatestUploadSnapshot(payload ?? buildEmptyLatestUploadSnapshot());" in source
     assert "const latestResult = payload?.latest_result;" in source
-    assert "persistLatestUploadResult(latestResult);" in source
-    assert "window.localStorage.setItem(LATEST_UPLOAD_CACHE_KEY, JSON.stringify(result));" in source
+    assert "setLatestUploadResult(latestResult);" in source
+    assert "window.localStorage" not in source
+
+
+def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert 'label: "Telemetry Intake"' not in source
+    assert 'title="Telemetry intake"' not in source
+    assert 'title="Data Connections"' in source
+    assert 'Upload Telemetry File' in source

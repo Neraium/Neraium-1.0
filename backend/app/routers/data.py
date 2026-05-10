@@ -192,9 +192,13 @@ def read_latest_upload() -> dict[str, Any]:
     summary = latest_completed_job_summary()
     detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
+    if latest_state is not None and latest_state.get("source") != "uploaded":
+        latest_state = None
     if summary is None and latest_state is None and detailed_result is None:
-        return {
-            "source": "sample",
+        payload = {
+            "status": "empty",
+            "source": "none",
+            "message": "No data connected yet.",
             "last_filename": None,
             "rows_processed": 0,
             "columns_detected": 0,
@@ -202,8 +206,12 @@ def read_latest_upload() -> dict[str, Any]:
             "runner_module": None,
             "core_engine": None,
             "state_available": False,
+            "connection_status": "no_data",
+            "result_source": None,
             "latest_result": None,
         }
+        logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
+        return payload
     summary = summary or {}
     last_processed_at = summary.get("last_processed_at")
     if last_processed_at is None and latest_state:
@@ -222,8 +230,10 @@ def read_latest_upload() -> dict[str, Any]:
     columns_detected = summary.get("columns_detected", 0)
     if not columns_detected and detailed_result:
         columns_detected = detailed_result.get("column_count", 0)
-    return {
+    payload = {
+        "status": "active",
         "source": "uploaded",
+        "message": "Latest result active.",
         "last_filename": last_filename,
         "rows_processed": rows_processed,
         "columns_detected": columns_detected,
@@ -231,9 +241,21 @@ def read_latest_upload() -> dict[str, Any]:
         "runner_module": summary.get("runner_module") or (latest_state or {}).get("runner_module"),
         "core_engine": summary.get("core_engine") or (latest_state or {}).get("core_engine"),
         "state_available": latest_state is not None,
+        "connection_status": "connected",
+        "result_source": "file_upload",
         "runner_used": summary.get("runner_used", False),
         "chunk_count": summary.get("chunk_count", 0),
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
         "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
         "latest_result": detailed_result,
     }
+    logger.info(
+        "latest_result_served status=%s source=%s filename=%s rows=%s columns=%s state_available=%s",
+        payload["status"],
+        payload["source"],
+        payload["last_filename"],
+        payload["rows_processed"],
+        payload["columns_detected"],
+        payload["state_available"],
+    )
+    return payload
