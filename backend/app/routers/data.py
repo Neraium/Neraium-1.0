@@ -137,6 +137,9 @@ def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
     metadata = read_job(job_id)
     auth_context = getattr(request.state, "auth_context", {})
     if metadata is None:
+        latest_summary = latest_completed_job_summary()
+        if latest_summary and latest_summary.get("job_id") == job_id:
+            return upload_status_payload(completed_metadata_from_summary(job_id, latest_summary), job_id)
         logger.warning(
             "upload_status_not_found polling_job_id=%s auth_subject=%s auth_source=%s metadata_exists=%s validation_failure_reason=%s",
             job_id,
@@ -159,6 +162,28 @@ def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
         True,
     )
     return payload
+
+
+def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "filename": summary.get("filename"),
+        "file_size_bytes": summary.get("file_size_bytes", 0),
+        "status": "COMPLETE",
+        "rows_processed": summary.get("rows_processed", 0),
+        "columns_detected": summary.get("columns_detected", 0),
+        "chunk_count": summary.get("chunk_count", 0),
+        "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
+        "processing_duration_seconds": summary.get("processing_duration_seconds"),
+        "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
+        "runner_used": summary.get("runner_used", False),
+        "runner_module": summary.get("runner_module"),
+        "core_engine": summary.get("core_engine"),
+        "started_at": summary.get("started_at"),
+        "completed_at": summary.get("last_processed_at"),
+        "error": None,
+        "result_summary": summary,
+    }
 
 
 @router.get("/data/latest-upload")

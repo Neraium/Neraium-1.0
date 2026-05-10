@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
-from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job
+from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -125,6 +125,30 @@ def test_upload_status_missing_job_returns_session_missing_contract() -> None:
     assert payload["error_type"] == "upload_session_missing"
     assert payload["error"] == "upload_session_missing"
     assert payload["message"] == "Upload session expired or was not found."
+
+
+def test_upload_status_recovers_from_latest_completed_summary() -> None:
+    client = TestClient(create_app())
+    write_latest_upload_summary(
+        "completed-job",
+        {
+            "filename": "completed.csv",
+            "rows_processed": 300_000,
+            "columns_detected": 12,
+            "chunk_count": 30,
+            "last_processed_at": "2026-05-10T00:00:00+00:00",
+            "runner_used": True,
+            "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
+            "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+        },
+    )
+
+    response = client.get("/api/data/upload-status/completed-job")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "COMPLETE"
+    assert payload["rows_processed"] == 300_000
 
 
 def test_upload_status_logs_session_missing_context(caplog) -> None:

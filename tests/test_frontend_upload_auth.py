@@ -60,7 +60,15 @@ def test_polling_does_not_enter_error_state_on_single_auth_failure() -> None:
     source = read_frontend(APP_JSX)
 
     assert "const isAuthDuringPolling = phase === \"poll\" && (error.status === 401 || error.status === 403);" in source
-    assert 'state: isAuthDuringPolling || (phase === "poll" && error.retryable) ? "running_sii" : "error"' in source
+    assert 'state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error"' in source
+
+
+def test_polling_retries_missing_upload_status() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert 'response.status === 404 && errorType === "upload_session_missing"' in source
+    assert "pollFailureCountRef.current < 30" in source
+    assert "Waiting for upload status to become available." in source
 
 
 def test_upload_polling_preserves_returned_job_id() -> None:

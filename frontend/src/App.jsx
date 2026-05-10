@@ -951,7 +951,7 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
     } catch (error) {
       const classified = classifyUploadError(error, "poll");
       console.warn("telemetry_polling_failure", { ...classified, jobId: pollingJobId, attempts: pollFailureCountRef.current + 1 });
-      if (classified.retryable && pollFailureCountRef.current < 8) {
+      if (classified.retryable && pollFailureCountRef.current < 30) {
         pollFailureCountRef.current += 1;
         setUploadState((current) => isUploadProcessing(current) ? current : "running_sii");
         setUploadError(classified.message);
@@ -961,8 +961,8 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         );
         return;
       }
-      setUploadError(classified.message);
-      setUploadState(classified.state);
+      setUploadError(classified.finalMessage ?? classified.message);
+      setUploadState(classified.retryable ? "error" : classified.state);
     }
   }
 
@@ -2875,24 +2875,30 @@ function normalizeErrorMessage(error) {
 }
 
 function buildUploadRequestError(response, payload, phase) {
+  const errorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
+  const isMissingStatusDuringPoll = phase === "poll" && response.status === 404 && errorType === "upload_session_missing";
   return {
     name: "UploadRequestError",
     status: response.status,
     phase,
-    errorType: payload?.error_type ?? payload?.detail?.error_type ?? null,
+    errorType,
     detail: normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
-    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)),
+    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)) || isMissingStatusDuringPoll,
   };
 }
 
 function classifyUploadError(error, phase) {
   if (error?.name === "UploadRequestError") {
     const isAuthDuringPolling = phase === "poll" && (error.status === 401 || error.status === 403);
+    const isMissingStatusDuringPoll = phase === "poll" && error.status === 404 && error.errorType === "upload_session_missing";
     return {
-      state: isAuthDuringPolling || (phase === "poll" && error.retryable) ? "running_sii" : "error",
+      state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error",
       retryable: phase === "poll" && error.retryable,
       status: error.status,
       errorType: error.errorType,
+      finalMessage: isMissingStatusDuringPoll
+        ? "Upload status unavailable. The backend may have restarted or another ECS task may be serving polling."
+        : null,
       message: operatorUploadMessage({
         status: error.status,
         errorType: error.errorType,
@@ -2933,6 +2939,9 @@ function operatorUploadMessage({ status, errorType, detail, phase }) {
       : "Telemetry processing session could not be validated.";
   }
   if (errorType === "upload_session_missing") {
+    if (phase === "poll") {
+      return "Telemetry batch processing in progress. Waiting for upload status to become available.";
+    }
     return "Upload state unavailable.";
   }
   if (errorType === "job_not_found" || status === 404) {
