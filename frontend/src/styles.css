@@ -634,9 +634,6 @@ p {
 }
 
 .top-status {
-  position: sticky;
-  top: 0;
-  z-index: 8;
   display: flex;
   align-items: end;
   justify-content: space-between;
@@ -5822,9 +5819,6 @@ h3 {
   }
 
   .top-status {
-    position: sticky;
-    top: calc(58px + env(safe-area-inset-top, 0px));
-    z-index: 9;
     gap: 10px;
     padding: 14px;
     background: rgba(9, 13, 16, 0.92);
@@ -6074,7 +6068,6 @@ h3 {
   }
 
   .top-status {
-    top: calc(56px + env(safe-area-inset-top, 0px));
     padding: 12px;
   }
 
