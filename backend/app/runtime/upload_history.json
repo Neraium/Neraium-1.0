@@ -2,26 +2,26 @@
   {
     "job_id": "node-red-cultivation-telemetry",
     "filename": "Node-RED Cultivation Telemetry",
-    "rows_processed": 49,
+    "rows_processed": 58,
     "columns_detected": 11,
     "chunk_count": 1,
-    "sampled_rows": 49,
-    "memory_estimate_bytes": 9150,
-    "engine_runtime_seconds": 0.0024,
-    "last_processed_at": "2026-05-10T21:48:23.407260+00:00",
+    "sampled_rows": 58,
+    "memory_estimate_bytes": 10830,
+    "engine_runtime_seconds": 0.0015,
+    "last_processed_at": "2026-05-10T21:49:27.287984+00:00",
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
     "source": "rest_poll",
-    "neraium_score": 71,
+    "neraium_score": 62,
     "operating_state": "Monitoring",
     "primary_room": "flower-room-1",
-    "drift_status": "review",
+    "drift_status": "unstable",
     "upload_result_source": "rest_poll",
     "diff": {
       "previous_filename": "Node-RED Cultivation Telemetry",
-      "previous_processed_at": "2026-05-10T21:48:09.760493+00:00",
-      "neraium_score_delta": 16.0
+      "previous_processed_at": "2026-05-10T21:49:19.829688+00:00",
+      "neraium_score_delta": 14.0
     },
     "warnings": [
       "Timestamp intervals are inconsistent."
@@ -32,10 +32,10 @@
       "rooms": [
         {
           "room": "flower-room-1",
-          "row_count": 392
+          "row_count": 464
         }
       ],
-      "total_rows": 49,
+      "total_rows": 58,
       "unassigned_rows": 0
     },
     "source_name": "Node-RED Cultivation Telemetry",
@@ -44,8 +44,8 @@
     "facility_id": "cultivation-facility-001",
     "room_id": "flower-room-1",
     "scenario": "airflow_drift",
-    "tick": 458,
-    "latest_telemetry_timestamp": "2026-05-10T21:48:22.023Z",
+    "tick": 467,
+    "latest_telemetry_timestamp": "2026-05-10T21:49:25.745Z",
     "readings_received": 8,
     "readings_accepted": 8,
     "readings_rejected": 0,
