@@ -711,7 +711,7 @@ function WorkspaceNavigationContent({
           <div className="brand-mark">N</div>
           <div>
             <p className="brand-name">Neraium</p>
-            <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+            <p className="brand-subtitle">Cultivation Infrastructure Intelligence</p>
           </div>
         </div>
         <span className="brand-edition">Operations Edition</span>
