@@ -1,191 +1,74 @@
 {
-  "job_id": "5928ec23b3784074ac6b7bc4bfbb4913",
-  "filename": "neraium-upload-c.csv",
-  "row_count": 12,
-  "column_count": 7,
+  "job_id": "23f993bf79054098a9aad70fa95bf59c",
+  "filename": "health.csv",
+  "row_count": 1,
+  "column_count": 3,
   "columns": [
     "timestamp",
-    "room",
     "temperature",
-    "humidity",
-    "hvac_runtime",
-    "airflow",
-    "irrigation"
+    "humidity"
   ],
   "preview_rows": [
     {
-      "timestamp": "2026-05-03T08:00:00Z",
-      "room": "Flower 3",
-      "temperature": "72.0",
-      "humidity": "50.0",
-      "hvac_runtime": "20.0",
-      "airflow": "82.0",
-      "irrigation": "1.20"
-    },
-    {
-      "timestamp": "2026-05-03T08:01:00Z",
-      "room": "Flower 3",
-      "temperature": "73.3",
-      "humidity": "52.4",
-      "hvac_runtime": "26.0",
-      "airflow": "79.8",
-      "irrigation": "1.38"
-    },
-    {
-      "timestamp": "2026-05-03T08:02:00Z",
-      "room": "Flower 3",
-      "temperature": "74.6",
-      "humidity": "54.8",
-      "hvac_runtime": "32.0",
-      "airflow": "77.6",
-      "irrigation": "1.56"
-    },
-    {
-      "timestamp": "2026-05-03T08:03:00Z",
-      "room": "Flower 3",
-      "temperature": "75.9",
-      "humidity": "57.2",
-      "hvac_runtime": "38.0",
-      "airflow": "75.4",
-      "irrigation": "1.74"
-    },
-    {
-      "timestamp": "2026-05-03T08:04:00Z",
-      "room": "Flower 3",
-      "temperature": "77.2",
-      "humidity": "59.6",
-      "hvac_runtime": "44.0",
-      "airflow": "73.2",
-      "irrigation": "1.92"
+      "timestamp": "2026-05-01T08:00:00Z",
+      "temperature": "74",
+      "humidity": "55"
     }
   ],
   "detected_timestamp_column": "timestamp",
-  "warnings": [],
+  "warnings": [
+    "At least two timestamps are required to estimate sample interval."
+  ],
   "numeric_profiles": [
     {
       "column": "temperature",
-      "min": 72.0,
-      "max": 86.3,
-      "average": 79.15,
+      "min": 74.0,
+      "max": 74.0,
+      "average": 74.0,
       "missing_count": 0,
       "missing_percent": 0.0,
-      "variability": "normal",
+      "variability": "low",
       "range_warning": null
     },
     {
       "column": "humidity",
-      "min": 50.0,
-      "max": 76.4,
-      "average": 63.2,
+      "min": 55.0,
+      "max": 55.0,
+      "average": 55.0,
       "missing_count": 0,
       "missing_percent": 0.0,
-      "variability": "normal",
-      "range_warning": null
-    },
-    {
-      "column": "hvac_runtime",
-      "min": 20.0,
-      "max": 86.0,
-      "average": 53.0,
-      "missing_count": 0,
-      "missing_percent": 0.0,
-      "variability": "high",
-      "range_warning": null
-    },
-    {
-      "column": "airflow",
-      "min": 57.8,
-      "max": 82.0,
-      "average": 69.9,
-      "missing_count": 0,
-      "missing_percent": 0.0,
-      "variability": "normal",
-      "range_warning": null
-    },
-    {
-      "column": "irrigation",
-      "min": 1.2,
-      "max": 3.18,
-      "average": 2.19,
-      "missing_count": 0,
-      "missing_percent": 0.0,
-      "variability": "high",
+      "variability": "low",
       "range_warning": null
     }
   ],
   "timestamp_profile": {
     "detected_timestamp_column": "timestamp",
-    "first_timestamp": "2026-05-03T08:00:00",
-    "last_timestamp": "2026-05-03T08:11:00",
-    "estimated_sample_interval": "1 minute",
-    "warnings": []
+    "first_timestamp": "2026-05-01T08:00:00",
+    "last_timestamp": "2026-05-01T08:00:00",
+    "estimated_sample_interval": null,
+    "warnings": [
+      "At least two timestamps are required to estimate sample interval."
+    ]
   },
   "data_quality": {
-    "row_count": 12,
-    "column_count": 7,
-    "numeric_column_count": 5,
+    "row_count": 1,
+    "column_count": 3,
+    "numeric_column_count": 2,
     "timestamp_detected": true,
-    "warnings": [],
-    "readiness": "ready"
+    "warnings": [
+      "At least two timestamps are required to estimate sample interval."
+    ],
+    "readiness": "needs_review"
   },
   "baseline_analysis": {
-    "baseline_window_rows": 3,
-    "recent_window_rows": 3,
-    "columns_analyzed": 5,
-    "column_drift": [
-      {
-        "column": "temperature",
-        "baseline_average": 73.3,
-        "recent_average": 85.0,
-        "absolute_change": 11.7,
-        "percent_change": 15.9618,
-        "direction": "up",
-        "drift_flag": "watch",
-        "warnings": []
-      },
-      {
-        "column": "humidity",
-        "baseline_average": 52.4,
-        "recent_average": 74.0,
-        "absolute_change": 21.6,
-        "percent_change": 41.2214,
-        "direction": "up",
-        "drift_flag": "review",
-        "warnings": []
-      },
-      {
-        "column": "hvac_runtime",
-        "baseline_average": 26.0,
-        "recent_average": 80.0,
-        "absolute_change": 54.0,
-        "percent_change": 207.6923,
-        "direction": "up",
-        "drift_flag": "review",
-        "warnings": []
-      },
-      {
-        "column": "airflow",
-        "baseline_average": 79.8,
-        "recent_average": 60.0,
-        "absolute_change": -19.8,
-        "percent_change": -24.812,
-        "direction": "down",
-        "drift_flag": "review",
-        "warnings": []
-      },
-      {
-        "column": "irrigation",
-        "baseline_average": 1.38,
-        "recent_average": 3.0,
-        "absolute_change": 1.62,
-        "percent_change": 117.3913,
-        "direction": "up",
-        "drift_flag": "review",
-        "warnings": []
-      }
-    ],
+    "baseline_window_rows": 0,
+    "recent_window_rows": 0,
+    "columns_analyzed": 0,
+    "column_drift": [],
     "overall_assessment": "needs_review",
-    "warnings": []
+    "warnings": [
+      "At least 5 data rows are needed for baseline comparison."
+    ]
   },
   "cultivation_mapping": {
     "categories": {
@@ -195,26 +78,19 @@
       "humidity": [
         "humidity"
       ],
-      "HVAC": [
-        "hvac_runtime"
-      ],
-      "airflow": [
-        "airflow"
-      ],
-      "irrigation": [
-        "irrigation"
-      ],
+      "HVAC": [],
+      "airflow": [],
+      "irrigation": [],
       "lighting": [],
       "CO2": [],
       "sensor network": [],
       "unknown": [
-        "timestamp",
-        "room"
+        "timestamp"
       ]
     },
-    "mapped_column_count": 5,
-    "unknown_column_count": 2,
-    "coverage_percent": 71.4286,
+    "mapped_column_count": 2,
+    "unknown_column_count": 1,
+    "coverage_percent": 66.6667,
     "warnings": [
       "Some columns could not be mapped to a cultivation system category."
     ]
@@ -222,64 +98,32 @@
   "operator_report": {
     "title": "Cultivation Data Upload Report",
     "summary": "The uploaded cultivation sensor export can be reviewed, but one or more data quality or baseline comparison items need operator review.",
-    "data_readiness": "ready",
+    "data_readiness": "needs_review",
     "time_coverage": {
       "detected_timestamp_column": "timestamp",
-      "first_timestamp": "2026-05-03T08:00:00",
-      "last_timestamp": "2026-05-03T08:11:00",
-      "estimated_sample_interval": "1 minute"
+      "first_timestamp": "2026-05-01T08:00:00",
+      "last_timestamp": "2026-05-01T08:00:00",
+      "estimated_sample_interval": null
     },
     "key_observations": [
-      "File contains 12 data rows, 7 columns, and 5 numeric columns.",
+      "File contains 1 data rows, 3 columns, and 2 numeric columns.",
       "Timestamp column detected: timestamp.",
-      "Time coverage runs from 2026-05-03T08:00:00 to 2026-05-03T08:11:00.",
-      "Baseline comparison analyzed 5 numeric columns using 3 baseline rows and 3 recent rows.",
-      "Columns flagged for operator review: temperature, humidity, hvac_runtime, airflow, irrigation.",
-      "Cultivation mapping identified columns for: temperature, humidity, HVAC, airflow, irrigation."
+      "Time coverage runs from 2026-05-01T08:00:00 to 2026-05-01T08:00:00.",
+      "Baseline comparison was limited because not enough usable rows were available.",
+      "Cultivation mapping identified columns for: temperature, humidity."
     ],
-    "columns_requiring_review": [
-      {
-        "column": "hvac_runtime",
-        "reasons": [
-          "High variability in the uploaded values.",
-          "Baseline comparison flag is review with up movement."
-        ]
-      },
-      {
-        "column": "irrigation",
-        "reasons": [
-          "High variability in the uploaded values.",
-          "Baseline comparison flag is review with up movement."
-        ]
-      },
-      {
-        "column": "temperature",
-        "reasons": [
-          "Baseline comparison flag is watch with up movement."
-        ]
-      },
-      {
-        "column": "humidity",
-        "reasons": [
-          "Baseline comparison flag is review with up movement."
-        ]
-      },
-      {
-        "column": "airflow",
-        "reasons": [
-          "Baseline comparison flag is review with down movement."
-        ]
-      }
-    ],
+    "columns_requiring_review": [],
     "recommended_operator_checks": [
-      "Review source sensor channels for: hvac_runtime, irrigation, temperature, humidity, airflow.",
+      "Review timestamp formatting and sampling consistency in the source export.",
       "Compare the baseline and recent windows against facility logs for the same period.",
       "Review unmapped CSV columns and rename source exports when labels are unclear."
     ],
     "limitations": [
       "This report uses only the uploaded CSV profile and simple baseline comparison.",
       "No data is stored permanently and the Neraium engine has not been run.",
-      "This report does not identify root cause or predict crop stress, equipment failure, or yield impact."
+      "This report does not identify root cause or predict crop stress, equipment failure, or yield impact.",
+      "Evidence is limited because the upload has data quality items requiring review.",
+      "Baseline comparison is limited because no numeric columns were analyzed."
     ],
     "source_sections_used": [
       "data_quality",
@@ -289,202 +133,23 @@
       "cultivation_mapping"
     ],
     "warnings": [
+      "At least two timestamps are required to estimate sample interval.",
+      "At least 5 data rows are needed for baseline comparison.",
       "Some columns could not be mapped to a cultivation system category."
     ]
   },
   "engine_result": {
     "engine_version": "neraium-cultivation-v1",
-    "summary": "Neraium SII v1 found elevated system behavior changes across the uploaded cultivation data. Review the grouped evidence, persistence notes, and operator checks before using this file for operational decisions.",
-    "overall_result": "elevated",
-    "signals": [
-      {
-        "type": "baseline_drift",
-        "level": "watch",
-        "column": "temperature",
-        "message": "temperature moved up from the baseline window to the recent window."
-      },
-      {
-        "type": "baseline_drift",
-        "level": "elevated",
-        "column": "humidity",
-        "message": "humidity moved up from the baseline window to the recent window."
-      },
-      {
-        "type": "baseline_drift",
-        "level": "elevated",
-        "column": "hvac_runtime",
-        "message": "hvac_runtime moved up from the baseline window to the recent window."
-      },
-      {
-        "type": "baseline_drift",
-        "level": "elevated",
-        "column": "airflow",
-        "message": "airflow moved down from the baseline window to the recent window."
-      },
-      {
-        "type": "baseline_drift",
-        "level": "elevated",
-        "column": "irrigation",
-        "message": "irrigation moved up from the baseline window to the recent window."
-      }
-    ],
+    "summary": "Neraium SII v1 was limited by the available cultivation data. Review the listed limitations before relying on this upload.",
+    "overall_result": "needs_review",
+    "signals": [],
     "evidence": [
       {
         "type": "baseline_window",
-        "baseline_window_rows": 3,
-        "recent_window_rows": 3,
-        "columns_analyzed": 5,
+        "baseline_window_rows": 0,
+        "recent_window_rows": 0,
+        "columns_analyzed": 0,
         "overall_assessment": "needs_review"
-      },
-      {
-        "type": "column_drift",
-        "column": "temperature",
-        "baseline_average": 73.3,
-        "recent_average": 85.0,
-        "absolute_change": 11.7,
-        "percent_change": 15.9618,
-        "direction": "up",
-        "drift_flag": "watch"
-      },
-      {
-        "type": "column_drift",
-        "column": "humidity",
-        "baseline_average": 52.4,
-        "recent_average": 74.0,
-        "absolute_change": 21.6,
-        "percent_change": 41.2214,
-        "direction": "up",
-        "drift_flag": "review"
-      },
-      {
-        "type": "column_drift",
-        "column": "hvac_runtime",
-        "baseline_average": 26.0,
-        "recent_average": 80.0,
-        "absolute_change": 54.0,
-        "percent_change": 207.6923,
-        "direction": "up",
-        "drift_flag": "review"
-      },
-      {
-        "type": "column_drift",
-        "column": "airflow",
-        "baseline_average": 79.8,
-        "recent_average": 60.0,
-        "absolute_change": -19.8,
-        "percent_change": -24.812,
-        "direction": "down",
-        "drift_flag": "review"
-      },
-      {
-        "type": "column_drift",
-        "column": "irrigation",
-        "baseline_average": 1.38,
-        "recent_average": 3.0,
-        "absolute_change": 1.62,
-        "percent_change": 117.3913,
-        "direction": "up",
-        "drift_flag": "review"
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "temperature",
-          "humidity"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "temperature",
-          "hvac_runtime"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "temperature",
-          "airflow"
-        ],
-        "baseline_correlation": -1.0,
-        "recent_correlation": -1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "temperature",
-          "irrigation"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "humidity",
-          "hvac_runtime"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "humidity",
-          "airflow"
-        ],
-        "baseline_correlation": -1.0,
-        "recent_correlation": -1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "humidity",
-          "irrigation"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "hvac_runtime",
-          "airflow"
-        ],
-        "baseline_correlation": -1.0,
-        "recent_correlation": -1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "hvac_runtime",
-          "irrigation"
-        ],
-        "baseline_correlation": 1.0,
-        "recent_correlation": 1.0,
-        "change": 0.0
-      },
-      {
-        "type": "relationship_change",
-        "columns": [
-          "airflow",
-          "irrigation"
-        ],
-        "baseline_correlation": -1.0,
-        "recent_correlation": -1.0,
-        "change": 0.0
       }
     ],
     "system_evidence": {
@@ -493,326 +158,30 @@
           "columns": [
             "temperature"
           ],
-          "signals": [
-            {
-              "type": "baseline_drift",
-              "level": "watch",
-              "column": "temperature",
-              "message": "temperature moved up from the baseline window to the recent window."
-            }
-          ],
-          "evidence": [
-            {
-              "type": "column_drift",
-              "column": "temperature",
-              "baseline_average": 73.3,
-              "recent_average": 85.0,
-              "absolute_change": 11.7,
-              "percent_change": 15.9618,
-              "direction": "up",
-              "drift_flag": "watch"
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "humidity"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "hvac_runtime"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            }
-          ]
+          "signals": [],
+          "evidence": []
         },
         "humidity": {
           "columns": [
             "humidity"
           ],
-          "signals": [
-            {
-              "type": "baseline_drift",
-              "level": "elevated",
-              "column": "humidity",
-              "message": "humidity moved up from the baseline window to the recent window."
-            }
-          ],
-          "evidence": [
-            {
-              "type": "column_drift",
-              "column": "humidity",
-              "baseline_average": 52.4,
-              "recent_average": 74.0,
-              "absolute_change": 21.6,
-              "percent_change": 41.2214,
-              "direction": "up",
-              "drift_flag": "review"
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "humidity"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "hvac_runtime"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            }
-          ]
+          "signals": [],
+          "evidence": []
         },
         "HVAC": {
-          "columns": [
-            "hvac_runtime"
-          ],
-          "signals": [
-            {
-              "type": "baseline_drift",
-              "level": "elevated",
-              "column": "hvac_runtime",
-              "message": "hvac_runtime moved up from the baseline window to the recent window."
-            }
-          ],
-          "evidence": [
-            {
-              "type": "column_drift",
-              "column": "hvac_runtime",
-              "baseline_average": 26.0,
-              "recent_average": 80.0,
-              "absolute_change": 54.0,
-              "percent_change": 207.6923,
-              "direction": "up",
-              "drift_flag": "review"
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "hvac_runtime"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "hvac_runtime"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "hvac_runtime",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "hvac_runtime",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            }
-          ]
+          "columns": [],
+          "signals": [],
+          "evidence": []
         },
         "airflow": {
-          "columns": [
-            "airflow"
-          ],
-          "signals": [
-            {
-              "type": "baseline_drift",
-              "level": "elevated",
-              "column": "airflow",
-              "message": "airflow moved down from the baseline window to the recent window."
-            }
-          ],
-          "evidence": [
-            {
-              "type": "column_drift",
-              "column": "airflow",
-              "baseline_average": 79.8,
-              "recent_average": 60.0,
-              "absolute_change": -19.8,
-              "percent_change": -24.812,
-              "direction": "down",
-              "drift_flag": "review"
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "hvac_runtime",
-                "airflow"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "airflow",
-                "irrigation"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            }
-          ]
+          "columns": [],
+          "signals": [],
+          "evidence": []
         },
         "irrigation": {
-          "columns": [
-            "irrigation"
-          ],
-          "signals": [
-            {
-              "type": "baseline_drift",
-              "level": "elevated",
-              "column": "irrigation",
-              "message": "irrigation moved up from the baseline window to the recent window."
-            }
-          ],
-          "evidence": [
-            {
-              "type": "column_drift",
-              "column": "irrigation",
-              "baseline_average": 1.38,
-              "recent_average": 3.0,
-              "absolute_change": 1.62,
-              "percent_change": 117.3913,
-              "direction": "up",
-              "drift_flag": "review"
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "temperature",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "humidity",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "hvac_runtime",
-                "irrigation"
-              ],
-              "baseline_correlation": 1.0,
-              "recent_correlation": 1.0,
-              "change": 0.0
-            },
-            {
-              "type": "relationship_change",
-              "columns": [
-                "airflow",
-                "irrigation"
-              ],
-              "baseline_correlation": -1.0,
-              "recent_correlation": -1.0,
-              "change": 0.0
-            }
-          ]
+          "columns": [],
+          "signals": [],
+          "evidence": []
         },
         "lighting": {
           "columns": [],
@@ -831,228 +200,151 @@
         },
         "unknown": {
           "columns": [
-            "timestamp",
-            "room"
+            "timestamp"
           ],
           "signals": [],
           "evidence": []
         }
       },
-      "categories_showing_meaningful_change": 5,
-      "numeric_signals_showing_meaningful_change": 5,
-      "corroboration_level": "strong"
+      "categories_showing_meaningful_change": 0,
+      "numeric_signals_showing_meaningful_change": 0,
+      "corroboration_level": "limited"
     },
     "persistence_assessment": {
-      "status": "persistent",
-      "persistent_columns": [
-        "temperature",
-        "humidity",
-        "hvac_runtime",
-        "airflow",
-        "irrigation"
-      ],
-      "columns_assessed": 5,
-      "details": [
-        {
-          "column": "temperature",
-          "direction": "up",
-          "recent_values_checked": 3,
-          "supporting_recent_rows": 3,
-          "support_percent": 100.0,
-          "persistent": true
-        },
-        {
-          "column": "humidity",
-          "direction": "up",
-          "recent_values_checked": 3,
-          "supporting_recent_rows": 3,
-          "support_percent": 100.0,
-          "persistent": true
-        },
-        {
-          "column": "hvac_runtime",
-          "direction": "up",
-          "recent_values_checked": 3,
-          "supporting_recent_rows": 3,
-          "support_percent": 100.0,
-          "persistent": true
-        },
-        {
-          "column": "airflow",
-          "direction": "down",
-          "recent_values_checked": 3,
-          "supporting_recent_rows": 3,
-          "support_percent": 100.0,
-          "persistent": true
-        },
-        {
-          "column": "irrigation",
-          "direction": "up",
-          "recent_values_checked": 3,
-          "supporting_recent_rows": 3,
-          "support_percent": 100.0,
-          "persistent": true
-        }
-      ],
-      "limitations": []
+      "status": "limited",
+      "persistent_columns": [],
+      "columns_assessed": 0,
+      "details": [],
+      "limitations": [
+        "Persistence review needs at least 3 recent-window rows."
+      ]
     },
     "recommended_checks": [
-      "Review temperature readings against facility logs for the uploaded period.",
-      "Review humidity readings against facility logs for the uploaded period.",
-      "Review hvac_runtime readings against facility logs for the uploaded period.",
-      "Review airflow readings against facility logs for the uploaded period.",
-      "Review irrigation readings against facility logs for the uploaded period.",
       "Review unmapped CSV columns for clearer cultivation sensor labels."
     ],
     "limitations": [
       "Neraium SII v1 uses only the uploaded CSV profile, cultivation mapping, baseline comparison, and paired numeric relationships.",
       "It does not forecast crop stress, equipment failure, yield impact, or root cause.",
-      "No data is stored permanently and no AI or LLM analysis is used."
+      "No data is stored permanently and no AI or LLM analysis is used.",
+      "Data quality warnings are present in the upload profile.",
+      "Relationship review skipped because there are not enough rows.",
+      "Persistence review needs at least 3 recent-window rows."
     ],
     "audit_trace": [
       "engine.version:neraium-cultivation-v1",
-      "inputs.rows:12",
-      "inputs.columns:7",
-      "inputs.mapped_columns:5",
-      "baseline_window_rows_used:3",
-      "recent_window_rows_used:3",
-      "columns_analyzed:5",
+      "inputs.rows:1",
+      "inputs.columns:3",
+      "inputs.mapped_columns:2",
+      "baseline_window_rows_used:0",
+      "recent_window_rows_used:0",
+      "columns_analyzed:0",
       "columns_skipped:timestamp:timestamp_context",
-      "columns_skipped:room:non_numeric",
-      "baseline.windows:baseline=3,recent=3,columns=5",
-      "drift.column:temperature:up:watch",
-      "drift.column:humidity:up:review",
-      "drift.column:hvac_runtime:up:review",
-      "drift.column:airflow:down:review",
-      "drift.column:irrigation:up:review",
-      "relationships.pair:temperature:humidity:change=0.0",
-      "relationships.pair:temperature:hvac_runtime:change=0.0",
-      "relationships.pair:temperature:airflow:change=0.0",
-      "relationships.pair:temperature:irrigation:change=0.0",
-      "relationships.pair:humidity:hvac_runtime:change=0.0",
-      "relationships.pair:humidity:airflow:change=0.0",
-      "relationships.pair:humidity:irrigation:change=0.0",
-      "relationships.pair:hvac_runtime:airflow:change=0.0",
-      "relationships.pair:hvac_runtime:irrigation:change=0.0",
-      "relationships.pair:airflow:irrigation:change=0.0",
-      "relationship_checks_attempted:10",
+      "baseline.windows:baseline=0,recent=0,columns=0",
+      "engine.data_quality:warnings_present",
+      "relationships.skipped:insufficient_rows",
+      "relationship_checks_attempted:0",
+      "relationship_checks_skipped:insufficient_rows",
       "engine.mapping:unknown_columns_present",
-      "persistence.recent_window_rows:3",
-      "persistence.column:temperature:3/3:persistent",
-      "persistence.column:humidity:3/3:persistent",
-      "persistence.column:hvac_runtime:3/3:persistent",
-      "persistence.column:airflow:3/3:persistent",
-      "persistence.column:irrigation:3/3:persistent"
+      "persistence.recent_window_rows:0",
+      "persistence.skipped:insufficient_recent_rows"
     ]
   },
   "driver_attribution": {
-    "room": "Flower 3",
+    "room": "Current room",
     "state": "Needs review",
-    "likely_driver": "Room temperature control instability",
-    "driver_category": "hvac_instability",
+    "likely_driver": "Sensor network continuity",
+    "driver_category": "sensor_network",
     "contributing_signals": [
-      "HVAC"
+      "room data",
+      "timestamps"
     ],
     "supporting_evidence": [
-      "Room temperature behavior moved away from baseline and persisted across recent readings",
-      "Humidity movement overlaps with HVAC context"
+      "At least two timestamps are required to estimate sample interval",
+      "Some source columns are not mapped to cultivation systems"
     ],
     "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-    "next_operator_move": "Check room temperature setpoints, HVAC activity, and recovery timing",
-    "severity": "action",
-    "attribution_confidence": "medium"
+    "next_operator_move": "Check sensor sync, gateway status, and stale room readings",
+    "severity": "review",
+    "attribution_confidence": "low"
   },
   "sii_intelligence": {
     "source": "uploaded",
     "mode": "live",
     "facility_state": "Needs review",
     "room_state": "Needs review",
-    "urgency": "unstable",
-    "intervention_window": "8 hours",
-    "neraium_score": 74,
-    "primary_room": "Flower 3",
-    "priority_room": "Flower 3",
-    "primary_driver": "Room temperature control instability",
+    "urgency": "review",
+    "intervention_window": "2 days",
+    "neraium_score": 60,
+    "primary_room": "Current room",
+    "priority_room": "Current room",
+    "primary_driver": "Sensor network continuity",
     "supporting_evidence": [
-      "Room temperature behavior moved away from baseline and persisted across recent readings",
-      "Humidity movement overlaps with HVAC context"
+      "At least two timestamps are required to estimate sample interval",
+      "Some source columns are not mapped to cultivation systems"
     ],
     "relationship_evidence": [
-      "Humidity recovery is becoming less stable after environmental transitions.",
-      "Environmental coupling is less consistent than the room's recent baseline.",
-      "Air movement behavior is diverging from this room's recent operating pattern.",
-      "Environmental coupling is less consistent than the room's recent baseline."
+      "Environmental coupling evidence is limited in the current telemetry."
     ],
     "structural_explanation": [
-      "Room temperature recovery appears less consistent than baseline.",
-      "Temperature and humidity recovery are not moving together as expected.",
-      "Environmental coupling is less consistent than the room's recent baseline."
+      "Environmental coupling evidence is limited in the current telemetry."
     ],
     "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-    "recommended_operator_review": "Check room temperature setpoints, HVAC activity, and recovery timing",
+    "recommended_operator_review": "Check sensor sync, gateway status, and stale room readings",
     "what_to_check": [
-      "Review temperature recovery",
-      "Check cooling response stability",
-      "Compare hot spots against recent room behavior"
+      "Confirm room telemetry coverage",
+      "Review missing or stale readings",
+      "Compare connected signals against expected room sources"
     ],
-    "why_flagged": "Room temperature behavior moved away from baseline and persisted across recent readings",
-    "baseline_comparison": "humidity moved away from recent baseline.",
-    "observed_persistence": "Observed across persistent readings for temperature",
-    "last_updated": "2026-05-10T15:34:09.562829+00:00",
-    "filename": "neraium-upload-c.csv",
-    "row_count": 12,
+    "why_flagged": "At least two timestamps are required to estimate sample interval",
+    "baseline_comparison": "Current telemetry remains within available baseline comparison.",
+    "observed_persistence": "Persistence evidence is limited in the current telemetry.",
+    "last_updated": "2026-05-10T15:46:32.449075+00:00",
+    "filename": "health.csv",
+    "row_count": 1,
     "timestamp_coverage": {
       "detected_timestamp_column": "timestamp",
-      "first_timestamp": "2026-05-03T08:00:00",
-      "last_timestamp": "2026-05-03T08:11:00",
-      "estimated_sample_interval": "1 minute",
-      "warnings": []
+      "first_timestamp": "2026-05-01T08:00:00",
+      "last_timestamp": "2026-05-01T08:00:00",
+      "estimated_sample_interval": null,
+      "warnings": [
+        "At least two timestamps are required to estimate sample interval."
+      ]
     },
     "room_summary": {
-      "room_count": 1,
-      "rooms": [
-        {
-          "room": "Flower 3",
-          "row_count": 12
-        }
-      ],
-      "total_rows": 12,
-      "unassigned_rows": 0
+      "room_count": 0,
+      "rooms": [],
+      "total_rows": 1,
+      "unassigned_rows": 1
     },
     "rooms": [
       {
-        "room": "Flower 3",
+        "room": "Current room",
         "room_state": "Needs review",
-        "urgency": "unstable",
-        "intervention_window": "8 hours",
-        "primary_driver": "Room temperature control instability",
+        "urgency": "review",
+        "intervention_window": "2 days",
+        "primary_driver": "Sensor network continuity",
         "supporting_evidence": [
-          "Room temperature behavior moved away from baseline and persisted across recent readings",
-          "Humidity movement overlaps with HVAC context"
+          "At least two timestamps are required to estimate sample interval",
+          "Some source columns are not mapped to cultivation systems"
         ],
         "relationship_evidence": [
-          "Humidity recovery is becoming less stable after environmental transitions.",
-          "Environmental coupling is less consistent than the room's recent baseline.",
-          "Air movement behavior is diverging from this room's recent operating pattern.",
-          "Environmental coupling is less consistent than the room's recent baseline."
+          "Environmental coupling evidence is limited in the current telemetry."
         ],
         "structural_explanation": [
-          "Room temperature recovery appears less consistent than baseline.",
-          "Temperature and humidity recovery are not moving together as expected.",
-          "Environmental coupling is less consistent than the room's recent baseline."
+          "Environmental coupling evidence is limited in the current telemetry."
         ],
         "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-        "recommended_operator_review": "Check room temperature setpoints, HVAC activity, and recovery timing",
+        "recommended_operator_review": "Check sensor sync, gateway status, and stale room readings",
         "what_to_check": [
-          "Review temperature recovery",
-          "Check cooling response stability",
-          "Compare hot spots against recent room behavior"
+          "Confirm room telemetry coverage",
+          "Review missing or stale readings",
+          "Compare connected signals against expected room sources"
         ],
-        "why_flagged": "Room temperature behavior moved away from baseline and persisted across recent readings",
-        "baseline_comparison": "humidity moved away from recent baseline.",
-        "observed_persistence": "Observed across persistent readings for temperature",
-        "last_updated": "2026-05-10T15:34:09.562829+00:00",
-        "confidence": 74
+        "why_flagged": "At least two timestamps are required to estimate sample interval",
+        "baseline_comparison": "Current telemetry remains within available baseline comparison.",
+        "observed_persistence": "Persistence evidence is limited in the current telemetry.",
+        "last_updated": "2026-05-10T15:46:32.449075+00:00",
+        "confidence": 58
       }
     ]
   },
@@ -1060,36 +352,33 @@
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
-    "rows_processed": 12,
+    "rows_processed": 1,
     "columns_used": [
       "temperature",
-      "humidity",
-      "hvac_runtime",
-      "airflow",
-      "irrigation"
+      "humidity"
     ],
-    "sensor_vector_count": 12,
+    "sensor_vector_count": 1,
     "output_summary": {
-      "frames_processed": 12,
-      "latest_regime": "STABLE",
+      "frames_processed": 1,
+      "latest_regime": "WARMUP",
       "latest_urgency": "NOMINAL",
-      "latest_instability_score": 4.48705154470759e-17,
+      "latest_instability_score": 0.0,
       "max_instability_score": 0.0,
-      "latest_structural_drift": 1.1028160839018828e-16,
-      "latest_confidence": 1.0
+      "latest_structural_drift": 0.0,
+      "latest_confidence": 0.0
     },
     "latest_state": {
-      "timestamp": 1777795860.0,
-      "cycle": 12,
-      "instability_score": 4.48705154470759e-17,
-      "regime": "STABLE",
+      "timestamp": 1777622400.0,
+      "cycle": 1,
+      "instability_score": 0.0,
+      "regime": "WARMUP",
       "urgency": "NOMINAL",
-      "structural_drift": 1.1028160839018828e-16,
-      "drift_velocity": -2.1653488314302482e-18,
-      "transition_pressure": 2.4040201289990384e-34,
-      "confidence": 1.0,
-      "gradient_norm": 0.6987251446169076,
-      "recovery_alignment": -0.9999999984249669,
+      "structural_drift": 0.0,
+      "drift_velocity": 0.0,
+      "transition_pressure": 0.0,
+      "confidence": 0.0,
+      "gradient_norm": 0.0,
+      "recovery_alignment": 0.0,
       "detection_context": {
         "first_detection_cycle": null,
         "threshold_alert_cycle": null,
@@ -1098,11 +387,10 @@
       }
     },
     "evidence": [
-      "SIIEngineAdapter ingested 5 numeric telemetry channels.",
-      "Unified SII core reported STABLE regime and NOMINAL urgency.",
+      "SIIEngineAdapter ingested 2 numeric telemetry channels.",
+      "Unified SII core reported WARMUP regime and NOMINAL urgency.",
       "Instability score 0.0 with structural drift 0.0.",
-      "Driver attribution category: hvac_instability.",
-      "Environmental coupling is less consistent than the room's recent baseline.",
+      "Driver attribution category: sensor_network.",
       "Environmental coupling is less consistent than the room's recent baseline."
     ],
     "errors": []
@@ -1112,41 +400,31 @@
     "engine_module": "app.engine.analysis",
     "engine_version": "neraium-cultivation-v1",
     "driver_attribution_ran": true,
-    "rows_processed": 12,
-    "columns_analyzed": 5,
-    "evidence_count": 16,
-    "git_commit": "3c737c7"
+    "rows_processed": 1,
+    "columns_analyzed": 0,
+    "evidence_count": 1,
+    "git_commit": "887ca75"
   },
   "processing_stats": {
     "chunk_count": 1,
-    "sampled_rows": 12,
-    "sii_sampled_rows": 12,
+    "sampled_rows": 1,
+    "sii_sampled_rows": 1,
     "malformed_rows": 0,
-    "memory_estimate_bytes": 1248,
+    "memory_estimate_bytes": 48,
     "used_streaming": true,
-    "engine_runtime_seconds": 0.0006,
+    "engine_runtime_seconds": 0.0001,
     "room_summary": {
-      "room_count": 1,
-      "rooms": [
-        {
-          "room": "Flower 3",
-          "row_count": 12
-        }
-      ],
-      "total_rows": 12,
-      "unassigned_rows": 0
+      "room_count": 0,
+      "rooms": [],
+      "total_rows": 1,
+      "unassigned_rows": 1
     }
   },
   "room_summary": {
-    "room_count": 1,
-    "rooms": [
-      {
-        "room": "Flower 3",
-        "row_count": 12
-      }
-    ],
-    "total_rows": 12,
-    "unassigned_rows": 0
+    "room_count": 0,
+    "rooms": [],
+    "total_rows": 1,
+    "unassigned_rows": 1
   },
   "validation_provenance": {
     "cmapss_supported": true,

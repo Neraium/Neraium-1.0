@@ -135,8 +135,11 @@ def build_upload_intelligence(
     room_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     last_updated = now_iso()
-    severity = driver_attribution.get("severity", "info")
-    urgency = "unstable" if severity == "action" else "review" if severity == "review" else "nominal"
+    urgency = urgency_from_upload(
+        data_quality=data_quality,
+        engine_result=engine_result,
+        attribution=driver_attribution,
+    )
     score = score_from_upload(data_quality, engine_result, driver_attribution)
     primary_driver = driver_attribution.get("likely_driver") or "Available telemetry suggests a room behavior change."
     supporting_evidence = driver_attribution.get("supporting_evidence") or operator_report.get("key_observations", [])
@@ -278,15 +281,69 @@ def build_empty_intelligence_status() -> dict[str, Any]:
 
 def score_from_upload(data_quality: dict[str, Any], engine_result: dict[str, Any], attribution: dict[str, Any]) -> int:
     readiness = data_quality.get("readiness")
-    severity = attribution.get("severity")
-    score = 86 if readiness == "ready" else 74 if readiness == "needs_review" else 58
-    if engine_result.get("overall_result") == "needs_review":
-        score -= 8
-    if severity == "action":
-        score -= 12
-    elif severity == "review":
+    severity = attribution.get("severity", "info")
+    signal_profile = summarize_signal_profile(engine_result)
+    score = 92 if readiness == "ready" else 80 if readiness == "needs_review" else 64
+    score -= signal_profile["watch_count"] * 2
+    score -= signal_profile["review_count"] * 4
+    score -= signal_profile["elevated_count"] * 7
+    if signal_profile["corroboration_level"] == "strong":
+        score -= 4
+    elif signal_profile["corroboration_level"] == "moderate":
+        score -= 2
+    score -= min(signal_profile["persistent_columns"] * 2, 4)
+    if engine_result.get("overall_result") == "needs_review" and not engine_result.get("signals"):
         score -= 6
+    elif engine_result.get("overall_result") == "elevated":
+        score -= 4
+    if severity == "action":
+        score -= 6
+    elif severity == "review":
+        score -= 3
     return max(0, min(100, score))
+
+
+def urgency_from_upload(
+    *,
+    data_quality: dict[str, Any],
+    engine_result: dict[str, Any],
+    attribution: dict[str, Any],
+) -> str:
+    severity = attribution.get("severity", "info")
+    if severity == "action":
+        return "unstable"
+    signal_profile = summarize_signal_profile(engine_result)
+    if signal_profile["elevated_count"] > 0:
+        return "unstable"
+    if severity == "review":
+        return "review"
+    if data_quality.get("readiness") == "not_ready":
+        return "review"
+    if (
+        signal_profile["review_count"] > 0
+        or signal_profile["watch_count"] >= 1
+        or signal_profile["corroboration_level"] in {"moderate", "strong"}
+        or signal_profile["persistent_columns"] > 0
+    ):
+        return "review"
+    return "nominal"
+
+
+def summarize_signal_profile(engine_result: dict[str, Any]) -> dict[str, Any]:
+    signals = engine_result.get("signals", [])
+    watch_count = sum(1 for signal in signals if signal.get("level") == "watch")
+    review_count = sum(1 for signal in signals if signal.get("level") == "review")
+    elevated_count = sum(1 for signal in signals if signal.get("level") == "elevated")
+    system_evidence = engine_result.get("system_evidence", {})
+    persistence = engine_result.get("persistence_assessment", {})
+    return {
+        "watch_count": watch_count,
+        "review_count": review_count,
+        "elevated_count": elevated_count,
+        "corroboration_level": system_evidence.get("corroboration_level", "limited"),
+        "meaningful_categories": system_evidence.get("categories_showing_meaningful_change", 0),
+        "persistent_columns": len(persistence.get("persistent_columns", [])),
+    }
 
 
 def relationship_evidence_from_engine(engine_result: dict[str, Any]) -> list[str]:

@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import time
 
 from app.core.config import Settings
 from app.main import create_app
@@ -11,6 +12,19 @@ def post_csv(client: TestClient, filename: str, content: str):
         "/api/data/upload",
         files={"file": (filename, content, "text/csv")},
     )
+
+
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
+    deadline = time.time() + timeout_seconds
+    last_payload = None
+    while time.time() < deadline:
+        response = client.get(status_url)
+        assert response.status_code == 200
+        last_payload = response.json()
+        if last_payload["status"] in {"COMPLETE", "FAILED"}:
+            return last_payload
+        time.sleep(0.05)
+    raise AssertionError(f"Upload did not reach a terminal state. Last payload: {last_payload}")
 
 
 def test_upload_returns_accepted_job_id() -> None:
@@ -170,11 +184,8 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     )
 
     upload = post_csv(client, "ready-report.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
     job_id = upload.json()["job_id"]
-    status = client.get(f"/api/data/upload-status/{job_id}")
-
-    assert status.status_code == 200
-    payload = status.json()
     assert payload["job_id"] == job_id
     assert payload["status"] == "COMPLETE"
     assert payload["progress_label"] == "Telemetry processing complete."
@@ -190,12 +201,19 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
 
 def test_upload_status_can_return_queued_state() -> None:
     client = TestClient(create_app())
-    response = post_csv(client, "queued.csv", "timestamp,temperature,humidity\n2026-05-01T08:00:00Z,74,55\n")
-    job = read_job(response.json()["job_id"])
-
-    assert job is not None
-    job["status"] = "queued"
+    job = {
+        "job_id": "queued-job",
+        "filename": "queued.csv",
+        "status": "queued",
+        "progress_label": "Telemetry batch received. Processing is queued.",
+        "rows_processed": 0,
+        "columns_detected": 0,
+        "started_at": "2026-05-08T00:00:00+00:00",
+        "completed_at": None,
+        "error": None,
+    }
     write_job(job)
+
     status = client.get(f"/api/data/upload-status/{job['job_id']}")
 
     assert status.status_code == 200
@@ -204,12 +222,17 @@ def test_upload_status_can_return_queued_state() -> None:
 
 def test_upload_status_can_return_failed_state() -> None:
     client = TestClient(create_app())
-    response = post_csv(client, "failed.csv", "timestamp,temperature\n2026-05-01T08:00:00Z,74\n")
-    job = read_job(response.json()["job_id"])
-
-    assert job is not None
-    job["status"] = "failed"
-    job["error"] = "Example failure"
+    job = {
+        "job_id": "failed-job",
+        "filename": "failed.csv",
+        "status": "failed",
+        "progress_label": "Telemetry processing failed.",
+        "rows_processed": 0,
+        "columns_detected": 0,
+        "started_at": "2026-05-08T00:00:00+00:00",
+        "completed_at": "2026-05-08T00:05:00+00:00",
+        "error": "Example failure",
+    }
     write_job(job)
     status = client.get(f"/api/data/upload-status/{job['job_id']}")
 
@@ -224,7 +247,8 @@ def test_latest_upload_endpoint_returns_completed_summary() -> None:
         f"2026-05-01T08:{index:02d}:00Z,{75 + index},{58 + index}"
         for index in range(6)
     )
-    post_csv(client, "latest.csv", f"timestamp,temperature,humidity\n{rows}")
+    upload = post_csv(client, "latest.csv", f"timestamp,temperature,humidity\n{rows}")
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     response = client.get("/api/data/latest-upload")
 
@@ -249,8 +273,10 @@ def test_latest_upload_endpoint_returns_recent_history_and_score_diff() -> None:
         for index in range(6)
     )
 
-    post_csv(client, "baseline.csv", f"timestamp,room,temperature,humidity\n{first_rows}")
-    post_csv(client, "changed.csv", f"timestamp,room,temperature,humidity\n{second_rows}")
+    baseline = post_csv(client, "baseline.csv", f"timestamp,room,temperature,humidity\n{first_rows}")
+    wait_for_terminal_upload_status(client, baseline.json()["status_url"])
+    changed = post_csv(client, "changed.csv", f"timestamp,room,temperature,humidity\n{second_rows}")
+    wait_for_terminal_upload_status(client, changed.json()["status_url"])
 
     payload = client.get("/api/data/latest-upload").json()
 
@@ -270,6 +296,7 @@ def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None
 
     upload = post_csv(client, "evidence.csv", f"timestamp,room,temperature,humidity\n{rows}")
     run_id = upload.json()["job_id"]
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     latest = client.get("/api/evidence/latest")
     detail = client.get(f"/api/evidence/runs/{run_id}")
@@ -297,6 +324,7 @@ def test_upload_records_authenticated_actor_in_evidence() -> None:
         files={"file": ("actor.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
     )
     run_id = upload.json()["job_id"]
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
     detail = client.get(f"/api/evidence/runs/{run_id}")
 
     assert detail.status_code == 200
@@ -308,6 +336,7 @@ def test_failed_processing_creates_failed_evidence_record(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.process_csv_file", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
     upload = post_csv(client, "bad.csv", "timestamp\n2026-05-01T08:00:00Z\n")
     run_id = upload.json()["job_id"]
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     detail = client.get(f"/api/evidence/runs/{run_id}")
 
@@ -325,6 +354,7 @@ def test_evidence_export_endpoint_returns_report() -> None:
     )
     upload = post_csv(client, "export.csv", f"timestamp,room,temperature,humidity\n{rows}")
     run_id = upload.json()["job_id"]
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     response = client.get(f"/api/evidence/export/{run_id}")
 
@@ -345,6 +375,7 @@ def test_observability_summary_reports_queue_and_audit_counts() -> None:
         files={"file": ("obs.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
     )
     run_id = upload.json()["job_id"]
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
     client.get(f"/api/evidence/export/{run_id}", headers={"X-Neraium-User": "ops@example.com"})
 
     response = client.get("/api/observability/summary")
@@ -408,7 +439,8 @@ def test_facility_systems_uses_latest_state_after_upload() -> None:
         f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index},{58 + index}"
         for index in range(6)
     )
-    post_csv(client, "facility-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    upload = post_csv(client, "facility-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     response = client.get("/api/facility/systems")
 
@@ -475,7 +507,8 @@ def test_facility_systems_uses_multi_room_state_after_upload() -> None:
             "2026-05-01T08:20:00Z,Flower Room 1,75,56",
         ]
     )
-    post_csv(client, "multi-room-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    upload = post_csv(client, "multi-room-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
 
     payload = client.get("/api/facility/systems").json()
 
@@ -488,10 +521,7 @@ def test_one_column_csv_reports_runner_error_without_failed_job() -> None:
     rows = "\n".join(f"2026-05-01T08:{index:02d}:00Z,{75 + index}" for index in range(6))
 
     upload = post_csv(client, "one-column.csv", f"timestamp,temperature\n{rows}")
-    status = client.get(upload.json()["status_url"])
-
-    assert status.status_code == 200
-    payload = status.json()
+    payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
     assert payload["status"] == "COMPLETE"
     assert payload["runner_used"] is False
     assert payload["error"] is None
@@ -565,6 +595,32 @@ def test_processing_helper_detects_multiple_uploaded_rooms() -> None:
         "Veg Room A",
     ]
     assert len(result["sii_intelligence"]["rooms"]) == 4
+
+
+def test_processing_helper_distinguishes_calm_and_drifted_uploads() -> None:
+    calm_rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,75.0,58.0"
+        for index in range(10)
+    )
+    drift_rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{70 if index < 3 else 72 if index < 8 else 82},{55 if index < 3 else 56 if index < 8 else 68}"
+        for index in range(15)
+    )
+
+    calm_result = process_csv_content(
+        filename="calm.csv",
+        content=f"timestamp,room,temperature,humidity\n{calm_rows}".encode(),
+    )
+    drift_result = process_csv_content(
+        filename="drift.csv",
+        content=f"timestamp,room,temperature,humidity\n{drift_rows}".encode(),
+    )
+
+    calm_intelligence = calm_result["sii_intelligence"]
+    drift_intelligence = drift_result["sii_intelligence"]
+
+    assert drift_intelligence["neraium_score"] < calm_intelligence["neraium_score"]
+    assert drift_intelligence["urgency"] != calm_intelligence["urgency"]
 
 
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:

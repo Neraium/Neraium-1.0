@@ -1,6 +1,20 @@
-[
-  {
-    "job_id": "23f993bf79054098a9aad70fa95bf59c",
+{
+  "job_id": "23f993bf79054098a9aad70fa95bf59c",
+  "started_at": "2026-05-10T15:46:32.829227+00:00",
+  "status": "COMPLETE",
+  "rows_processed": 1,
+  "columns_detected": 3,
+  "runner_used": true,
+  "chunk_count": 1,
+  "memory_estimate_bytes": 48,
+  "engine_runtime_seconds": 0.0001,
+  "progress_label": "Telemetry processing complete.",
+  "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
+  "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+  "completed_at": "2026-05-10T15:46:32.898773+00:00",
+  "processing_duration_seconds": 1.0097,
+  "error": null,
+  "result_summary": {
     "filename": "health.csv",
     "rows_processed": 1,
     "columns_detected": 3,
@@ -34,4 +48,4 @@
       "unassigned_rows": 1
     }
   }
-]
+}

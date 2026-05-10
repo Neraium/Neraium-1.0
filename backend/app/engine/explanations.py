@@ -4,9 +4,26 @@ from app.engine.schemas import RESULT_ELEVATED, RESULT_NEEDS_REVIEW, RESULT_NORM
 def determine_overall_result(signals: list[dict], limitations: list[str]) -> str:
     if any(signal["level"] == "elevated" for signal in signals):
         return RESULT_ELEVATED
-    if signals or limitations:
+    if signals:
+        return RESULT_NEEDS_REVIEW
+    if has_material_limitations(limitations):
         return RESULT_NEEDS_REVIEW
     return RESULT_NORMAL
+
+
+def has_material_limitations(limitations: list[str]) -> bool:
+    material_markers = (
+        "not enough rows",
+        "not ready",
+        "missing values",
+        "timestamp coverage is missing",
+        "timestamp coverage could not be parsed",
+        "data quality warnings are present",
+    )
+    return any(
+        any(marker in str(limitation).lower() for marker in material_markers)
+        for limitation in limitations
+    )
 
 
 def build_summary(overall_result: str, signals: list[dict], limitations: list[str]) -> str:

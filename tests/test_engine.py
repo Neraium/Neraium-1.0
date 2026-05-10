@@ -92,6 +92,16 @@ def test_engine_handles_missing_numeric_values() -> None:
     assert any("numeric columns contain missing values" in limitation for limitation in result["limitations"])
 
 
+def test_engine_limitations_only_can_remain_normal() -> None:
+    rows = [[str(index), "75"] for index in range(6)]
+
+    result = engine_for(["timestamp", "temperature"], rows)
+
+    assert result["signals"] == []
+    assert result["overall_result"] == "normal"
+    assert any("fewer than two numeric columns" in limitation for limitation in result["limitations"])
+
+
 def test_engine_detects_relationship_coupling_change() -> None:
     rows = [
         ["0", "1", "1"],

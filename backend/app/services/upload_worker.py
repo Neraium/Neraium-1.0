@@ -28,7 +28,11 @@ def start_upload_worker(poll_interval_seconds: float = 1.0) -> None:
 
 
 def stop_upload_worker() -> None:
+    global _worker_thread
     _stop_event.set()
+    if _worker_thread is not None and _worker_thread.is_alive():
+        _worker_thread.join(timeout=2.0)
+    _worker_thread = None
 
 
 def _worker_loop(poll_interval_seconds: float) -> None:

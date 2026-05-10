@@ -238,18 +238,25 @@ def unknown_attribution(
     top: DriverScore,
 ) -> dict[str, Any]:
     evidence = top.evidence[:2]
+    readiness = telemetry_context.get("data_quality", {}).get("readiness")
+    has_directional_evidence = top.category != "unknown_system_drift" and top.score >= 1.5 and bool(evidence)
+    driver_category = top.category if has_directional_evidence else "unknown_system_drift"
     if not evidence:
         evidence = ["Available telemetry does not provide enough corroborating evidence"]
     return {
         "room": room_state.get("room") or room_state.get("label") or "Current room",
         "state": room_state.get("state") or room_state.get("status") or "Needs review",
-        "likely_driver": DRIVER_LABELS["unknown_system_drift"],
-        "driver_category": "unknown_system_drift",
-        "contributing_signals": CATEGORY_SIGNALS["unknown_system_drift"],
+        "likely_driver": DRIVER_LABELS[driver_category],
+        "driver_category": driver_category,
+        "contributing_signals": sorted(top.signals) or CATEGORY_SIGNALS[driver_category],
         "supporting_evidence": evidence,
-        "confidence_basis": "Evidence is limited or based on a single weak signal",
-        "next_operator_move": NEXT_MOVES["unknown_system_drift"],
-        "severity": "review" if telemetry_context.get("data_quality", {}).get("readiness") != "ready" else "info",
+        "confidence_basis": (
+            "Single-signal drift is present, but corroboration is still limited."
+            if has_directional_evidence
+            else "Evidence is limited or based on a single weak signal."
+        ),
+        "next_operator_move": NEXT_MOVES[driver_category],
+        "severity": "review" if readiness != "ready" or has_directional_evidence else "info",
         "attribution_confidence": "low",
     }
 
