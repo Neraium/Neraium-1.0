@@ -1,37 +1,55 @@
 [
   {
-    "job_id": "23f993bf79054098a9aad70fa95bf59c",
-    "filename": "health.csv",
-    "rows_processed": 1,
-    "columns_detected": 3,
+    "job_id": "node-red-cultivation-telemetry",
+    "filename": "Node-RED Cultivation Telemetry",
+    "rows_processed": 34,
+    "columns_detected": 11,
     "chunk_count": 1,
-    "sampled_rows": 1,
-    "memory_estimate_bytes": 48,
-    "engine_runtime_seconds": 0.0001,
-    "last_processed_at": "2026-05-10T15:46:32.898773+00:00",
+    "sampled_rows": 34,
+    "memory_estimate_bytes": 9730,
+    "engine_runtime_seconds": 0.0039,
+    "last_processed_at": "2026-05-10T17:06:39.175859+00:00",
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
-    "source": "uploaded",
-    "neraium_score": 60,
-    "operating_state": "Needs review",
-    "primary_room": "Current room",
-    "drift_status": "review",
-    "upload_result_source": "file_upload",
+    "source": "rest_poll",
+    "neraium_score": 13,
+    "operating_state": "Monitoring",
+    "primary_room": "flower-room-1",
+    "drift_status": "unstable",
+    "upload_result_source": "rest_poll",
     "diff": {
-      "previous_filename": null,
-      "previous_processed_at": null,
-      "neraium_score_delta": null
+      "previous_filename": "Node-RED Cultivation Telemetry",
+      "previous_processed_at": "2026-05-10T17:06:31.647333+00:00",
+      "neraium_score_delta": 13.0
     },
     "warnings": [
-      "At least two timestamps are required to estimate sample interval."
+      "Timestamp intervals are inconsistent."
     ],
     "runner_errors": [],
     "room_summary": {
-      "room_count": 0,
-      "rooms": [],
-      "total_rows": 1,
-      "unassigned_rows": 1
-    }
+      "room_count": 1,
+      "rooms": [
+        {
+          "room": "flower-room-1",
+          "row_count": 272
+        }
+      ],
+      "total_rows": 34,
+      "unassigned_rows": 0
+    },
+    "source_name": "Node-RED Cultivation Telemetry",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "connection_id": "node-red-cultivation-telemetry",
+    "facility_id": "cultivation-facility-001",
+    "room_id": "flower-room-1",
+    "scenario": "airflow_drift",
+    "tick": 45,
+    "latest_telemetry_timestamp": "2026-05-10T17:06:37.826Z",
+    "readings_received": 8,
+    "readings_accepted": 8,
+    "readings_rejected": 0,
+    "sensors_detected": 8,
+    "primary_driver": "Airflow restriction"
   }
 ]

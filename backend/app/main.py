@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.routers import app_info, connectors, data, evidence, facility, health, observability
+from app.routers import app_info, connectors, data, data_connections, evidence, facility, health, observability
+from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
+from app.services.data_connections import ensure_default_data_connection
 from app.services.runtime_db import init_runtime_db
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
 
@@ -17,11 +19,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     init_runtime_db()
+    ensure_default_data_connection(app.state.settings)
     start_upload_worker()
+    start_data_connection_poller()
     logger.info("runtime_services_started")
     try:
         yield
     finally:
+        stop_data_connection_poller()
         stop_upload_worker()
         logger.info("runtime_services_stopped")
 
@@ -47,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(app_info.router, prefix="/api")
     app.include_router(connectors.router, prefix="/api")
+    app.include_router(data_connections.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")

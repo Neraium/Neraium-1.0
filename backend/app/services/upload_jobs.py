@@ -503,6 +503,9 @@ def build_upload_result(
     filename: str,
     status_callback: Any | None = None,
     processing_stats: dict[str, Any],
+    intelligence_source: str = "uploaded",
+    intelligence_mode: str = "live",
+    intelligence_source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if status_callback:
         status_callback("PARSING", rows_processed=total_rows, columns_detected=len(columns))
@@ -593,6 +596,9 @@ def build_upload_result(
         operator_report=operator_report,
         timestamp_profile=timestamp_profile,
         room_summary=room_summary,
+        source=intelligence_source,
+        mode=intelligence_mode,
+        source_metadata=intelligence_source_metadata,
     )
     processing_trace = build_processing_trace(
         engine_result=engine_result,
@@ -707,12 +713,13 @@ def latest_upload_history_path() -> Path:
     return RUNTIME_DIR / "upload_history.json"
 
 
-def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
+def write_latest_upload_summary(job_id: str, summary: dict[str, Any], *, append_history: bool = True) -> None:
     ensure_runtime_dirs()
     path = latest_upload_path()
     upsert_latest_payload("latest_upload_summary", {"job_id": job_id, **summary})
     atomic_write_json(path, {"job_id": job_id, **summary})
-    append_upload_history({"job_id": job_id, **summary})
+    if append_history:
+        append_upload_history({"job_id": job_id, **summary})
     logger.info(
         "upload_result_persisted kind=summary job_id=%s filename=%s rows=%s columns=%s",
         job_id,
@@ -903,6 +910,11 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "processing_trace": result.get("processing_trace", {}),
         "processing_stats": result.get("processing_stats", {}),
         "room_summary": result.get("room_summary", {}),
+        "ingestion_metadata": result.get("ingestion_metadata", {}),
+        "source_name": result.get("source_name"),
+        "source_url": result.get("source_url"),
+        "source_type": result.get("source_type"),
+        "connection_id": result.get("connection_id"),
         "validation_provenance": result.get("validation_provenance", {}),
     }
 

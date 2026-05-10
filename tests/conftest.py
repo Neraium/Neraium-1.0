@@ -2,6 +2,7 @@ import pytest
 import time
 
 from app.services.sii_runner import STATE_PATH
+from app.services.data_connection_poller import stop_data_connection_poller
 from app.services.evidence_store import evidence_runs_path
 from app.services.runtime_db import db_connection, init_runtime_db
 from app.services.upload_jobs import JOB_DIR, UPLOAD_DIR, latest_upload_history_path, latest_upload_path, latest_upload_result_path
@@ -16,6 +17,7 @@ def clear_runtime_state():
 
 
 def cleanup_runtime_state() -> None:
+    stop_data_connection_poller()
     stop_upload_worker()
     remove_path_if_present(STATE_PATH)
     remove_path_if_present(latest_upload_path())
@@ -43,6 +45,7 @@ def clear_runtime_db() -> None:
                     DELETE FROM evidence_runs;
                     DELETE FROM audit_events;
                     DELETE FROM latest_payloads;
+                    DELETE FROM data_connections;
                     """
                 )
             return

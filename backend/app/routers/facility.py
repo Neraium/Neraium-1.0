@@ -78,7 +78,7 @@ def is_valid_persisted_intelligence(candidate: Any) -> bool:
         return False
     if not set(REQUIRED_INTELLIGENCE_FIELDS) <= set(candidate):
         return False
-    if candidate.get("source") != "uploaded":
+    if candidate.get("source") not in {"uploaded", "rest_poll"}:
         return False
     return isinstance(candidate.get("rooms"), list)
 

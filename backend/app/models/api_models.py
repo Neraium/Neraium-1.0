@@ -67,6 +67,7 @@ class EvidenceRunResponse(BaseModel):
     run_id: str
     source_type: str
     source_name: str | None = None
+    source_url: str | None = None
     filename: str | None = None
     created_at: str
     completed_at: str | None = None
@@ -87,6 +88,8 @@ class EvidenceRunResponse(BaseModel):
     input_hash: str | None = None
     result_hash: str | None = None
     initiated_by: str | None = None
+    scenario: str | None = None
+    tick: int | None = None
 
 
 class EvidenceRunsListResponse(BaseModel):
@@ -104,3 +107,50 @@ class ObservabilitySummaryResponse(BaseModel):
     evidence_runs: dict[str, Any]
     audit: dict[str, Any]
     alerts: list[dict[str, Any]]
+
+
+class DataConnectionResponse(BaseModel):
+    connection_id: str
+    name: str
+    url: str
+    source_type: str
+    facility_id: str | None = None
+    room_id: str | None = None
+    polling_enabled: bool = False
+    polling_interval_seconds: int = 5
+    last_poll_at: str | None = None
+    last_success_at: str | None = None
+    status: str
+    error_message: str = ""
+    readings_received: int = 0
+    readings_accepted: int = 0
+    readings_rejected: int = 0
+    sensors_detected: int = 0
+    current_scenario: str | None = None
+    current_tick: int | None = None
+    latest_telemetry_timestamp: str | None = None
+    last_ingestion_source: str | None = None
+    masked_configuration: dict[str, Any] = Field(default_factory=dict)
+
+
+class DataConnectionsListResponse(BaseModel):
+    connections: list[DataConnectionResponse] = Field(default_factory=list)
+
+
+class DataConnectionUpsertRequest(BaseModel):
+    connection_id: str | None = None
+    name: str
+    url: str
+    source_type: str = "external_rest_api"
+    facility_id: str | None = None
+    room_id: str | None = None
+    polling_enabled: bool = False
+    polling_interval_seconds: int = 5
+
+
+class DataConnectionActionResponse(BaseModel):
+    connection: DataConnectionResponse
+    message: str
+    normalized_preview: list[dict[str, Any]] = Field(default_factory=list)
+    latest_result: dict[str, Any] | None = None
+    meaningful_change: bool | None = None

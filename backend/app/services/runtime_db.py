@@ -82,6 +82,15 @@ def init_runtime_db() -> None:
                 updated_at TEXT NOT NULL,
                 payload_json TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS data_connections (
+                connection_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                polling_enabled INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
             """
         )
 
@@ -308,3 +317,51 @@ def audit_events_count() -> int:
     with db_connection() as connection:
         row = connection.execute("SELECT COUNT(*) AS count FROM audit_events").fetchone()
     return int(row["count"]) if row else 0
+
+
+def upsert_data_connection(payload: dict[str, Any]) -> None:
+    init_runtime_db()
+    timestamp = now_iso()
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO data_connections (connection_id, name, status, polling_enabled, updated_at, payload_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(connection_id) DO UPDATE SET
+                name=excluded.name,
+                status=excluded.status,
+                polling_enabled=excluded.polling_enabled,
+                updated_at=excluded.updated_at,
+                payload_json=excluded.payload_json
+            """,
+            (
+                payload["connection_id"],
+                payload.get("name", payload["connection_id"]),
+                payload.get("status", "not_configured"),
+                1 if payload.get("polling_enabled") else 0,
+                timestamp,
+                json.dumps(payload),
+            ),
+        )
+
+
+def read_data_connection(connection_id: str) -> dict[str, Any] | None:
+    init_runtime_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT payload_json FROM data_connections WHERE connection_id = ?",
+            (connection_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row["payload_json"])
+
+
+def list_data_connections(limit: int = 100) -> list[dict[str, Any]]:
+    init_runtime_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT payload_json FROM data_connections ORDER BY updated_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]

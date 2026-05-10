@@ -29,11 +29,14 @@ SUPPORTED_UNITS = {
     "kw",
     "w",
     "amps",
+    "cfm",
 }
 
 
 class NormalizedTelemetryRecord(BaseModel):
     source_id: str
+    facility_id: str | None = None
+    room_id: str | None = None
     system_id: str
     sensor_id: str
     sensor_name: str

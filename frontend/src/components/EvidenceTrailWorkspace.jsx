@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { exportEvidenceRun, fetchEvidenceRun, fetchEvidenceRuns, fetchLatestEvidence } from "../services/evidenceApi";
 
+const EVIDENCE_REFRESH_MS = 5000;
+
 function formatRunStatusTone(status) {
   switch ((status ?? "").toLowerCase()) {
     case "completed":
@@ -62,8 +64,10 @@ export default function EvidenceTrailWorkspace({
       }
     }
     loadEvidence();
+    const intervalId = window.setInterval(loadEvidence, EVIDENCE_REFRESH_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [accessCode, apiFetch, normalizeErrorMessage, readJsonPayload, refreshKey, selectedRunId]);
 

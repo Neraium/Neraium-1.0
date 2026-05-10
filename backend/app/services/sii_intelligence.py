@@ -133,6 +133,9 @@ def build_upload_intelligence(
     operator_report: dict[str, Any],
     timestamp_profile: dict[str, Any],
     room_summary: dict[str, Any] | None = None,
+    source: str = "uploaded",
+    mode: str = "live",
+    source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     last_updated = now_iso()
     urgency = urgency_from_upload(
@@ -172,8 +175,8 @@ def build_upload_intelligence(
     )
     primary_room_record = room_records[0]
     return {
-        "source": "uploaded",
-        "mode": "live",
+        "source": source,
+        "mode": mode,
         "facility_state": primary_room_record["room_state"],
         "room_state": primary_room_record["room_state"],
         "urgency": urgency,
@@ -197,6 +200,7 @@ def build_upload_intelligence(
         "timestamp_coverage": timestamp_profile,
         "room_summary": room_summary or {},
         "rooms": room_records,
+        "source_metadata": source_metadata or {},
     }
 
 

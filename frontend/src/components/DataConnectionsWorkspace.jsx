@@ -10,9 +10,42 @@ import {
   readJsonPayload,
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
-import { connectorStatusTone, formatConnectorStatus } from "../viewModels/operationalHelpers";
 import * as uploadStateView from "../viewModels/uploadState";
 import { CompactList, DataTable, EmptyState, MetricGrid, Panel, WorkflowStages } from "./workspacePrimitives";
+
+const LIVE_CONNECTION_REFRESH_MS = 5000;
+const DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry";
+
+function connectionTone(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "online") {
+    return "nominal";
+  }
+  if (normalized === "polling") {
+    return "review";
+  }
+  if (normalized === "error") {
+    return "elevated";
+  }
+  return "info";
+}
+
+function formatConnectionStatus(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  if (normalized === "online") {
+    return "Online";
+  }
+  if (normalized === "polling") {
+    return "Polling";
+  }
+  if (normalized === "error") {
+    return "Error";
+  }
+  if (normalized === "offline") {
+    return "Offline";
+  }
+  return "Not configured";
+}
 
 export default function DataConnectionsWorkspace({
   accessCode,
@@ -29,46 +62,34 @@ export default function DataConnectionsWorkspace({
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
+  const [connectionError, setConnectionError] = useState("");
+  const [connections, setConnections] = useState([]);
+  const [connectionBusy, setConnectionBusy] = useState("");
+  const [connectionForm, setConnectionForm] = useState({
+    connection_id: DEFAULT_CONNECTION_ID,
+    name: "Node-RED Cultivation Telemetry",
+    url: "http://18.216.253.180:1880/telemetry/latest",
+    facility_id: "cultivation-facility-001",
+    room_id: "flower-room-1",
+    polling_interval_seconds: 5,
+  });
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
-  const [connectorTypes, setConnectorTypes] = useState([]);
-  const [connectorHealth, setConnectorHealth] = useState([]);
-  const [connectorError, setConnectorError] = useState("");
-  const [restForm, setRestForm] = useState({
-    source_id: "customer-rest",
-    system_id: "facility-rest",
-    endpoint: "",
-    method: "GET",
-    token: "",
-    records_path: "",
-  });
-  const [restResult, setRestResult] = useState(null);
-  const [restBusy, setRestBusy] = useState("");
 
-  const loadConnectorData = useCallback(async () => {
+  const loadConnections = useCallback(async () => {
     try {
-      const [typesResponse, healthResponse] = await Promise.all([
-        apiFetch("/api/connectors/types", { accessCode }),
-        apiFetch("/api/connectors/health", { accessCode }),
-      ]);
-      const [typesPayload, healthPayload] = await Promise.all([
-        readJsonPayload(typesResponse),
-        readJsonPayload(healthResponse),
-      ]);
-      if (!typesResponse.ok) {
-        throw new Error(typesPayload?.detail ?? `Unexpected response: ${typesResponse.status}`);
+      const response = await apiFetch("/api/data-connections", { accessCode });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? `Unexpected response: ${response.status}`);
       }
-      if (!healthResponse.ok) {
-        throw new Error(healthPayload?.detail ?? `Unexpected response: ${healthResponse.status}`);
-      }
-      setConnectorTypes(typesPayload?.types ?? []);
-      setConnectorHealth(healthPayload?.connectors ?? []);
-      setConnectorError("");
+      setConnections(payload?.connections ?? []);
+      setConnectionError("");
     } catch (error) {
-      setConnectorError(normalizeErrorMessage(error?.message ?? error));
+      setConnectionError(normalizeErrorMessage(error?.message ?? error));
     }
-  }, [accessCode, apiFetch, normalizeErrorMessage, readJsonPayload]);
+  }, [accessCode, apiFetch]);
 
   useEffect(() => () => {
     if (pollTimerRef.current) {
@@ -81,8 +102,25 @@ export default function DataConnectionsWorkspace({
   }, [latestUploadResult]);
 
   useEffect(() => {
-    loadConnectorData();
-  }, [loadConnectorData]);
+    const activeConnection = connections.find((item) => item.connection_id === DEFAULT_CONNECTION_ID) ?? connections[0];
+    if (!activeConnection) {
+      return;
+    }
+    setConnectionForm({
+      connection_id: activeConnection.connection_id,
+      name: activeConnection.name,
+      url: activeConnection.url,
+      facility_id: activeConnection.facility_id ?? "",
+      room_id: activeConnection.room_id ?? "",
+      polling_interval_seconds: activeConnection.polling_interval_seconds ?? 5,
+    });
+  }, [connections]);
+
+  useEffect(() => {
+    loadConnections();
+    const intervalId = window.setInterval(loadConnections, LIVE_CONNECTION_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [loadConnections]);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -124,12 +162,6 @@ export default function DataConnectionsWorkspace({
       const classified = classifyUploadError(error, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
-      console.warn(
-        "telemetry_upload_failure",
-        `message=${classified.message}`,
-        `status=${classified.status ?? "n/a"}`,
-        `error_type=${classified.errorType ?? "n/a"}`,
-      );
     }
   }
 
@@ -172,7 +204,7 @@ export default function DataConnectionsWorkspace({
         };
         setUploadResult(completedPayload);
         await onUploadComplete(completedPayload);
-        await loadConnectorData();
+        await loadConnections();
         return;
       }
 
@@ -189,7 +221,6 @@ export default function DataConnectionsWorkspace({
       pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), 2000);
     } catch (error) {
       const classified = classifyUploadError(error, "poll");
-      console.warn("telemetry_polling_failure", { ...classified, jobId: pollingJobId, attempts: pollFailureCountRef.current + 1 });
       if (classified.retryable && pollFailureCountRef.current < 30) {
         pollFailureCountRef.current += 1;
         setUploadState((current) => isUploadProcessing(current) ? current : "running_sii");
@@ -205,37 +236,60 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function handleRestAction(mode) {
-    setRestBusy(mode);
-    setConnectorError("");
-    const payload = {
-      ...restForm,
-      records_path: restForm.records_path.trim() || null,
-      token: restForm.token.trim() || null,
-    };
+  async function handleConnectionAction(connectionId, action) {
+    setConnectionBusy(`${connectionId}:${action}`);
+    setConnectionError("");
     try {
-      const response = await apiFetch(mode === "test" ? "/api/connectors/rest/test" : "/api/connectors/rest/ingest", {
+      const response = await apiFetch(`/api/data-connections/${connectionId}/${action}`, {
         accessCode,
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
       });
-      const result = await readJsonPayload(response);
+      const payload = await readJsonPayload(response);
       if (!response.ok) {
-        throw new Error(result?.detail ?? result?.message ?? `Unexpected response: ${response.status}`);
+        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
       }
-      setRestResult(result);
-      await loadConnectorData();
+      await loadConnections();
+      if (action === "poll-once" || payload?.latest_result) {
+        await onUploadComplete(payload?.latest_result ?? null);
+      }
     } catch (error) {
-      setConnectorError(normalizeErrorMessage(error?.message ?? error));
+      setConnectionError(normalizeErrorMessage(error?.message ?? error));
     } finally {
-      setRestBusy("");
+      setConnectionBusy("");
     }
   }
 
-  const healthyCount = connectorHealth.filter((item) => item.connection_status === "ready").length;
-  const totalSensors = connectorHealth.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
-  const totalRecords = connectorHealth.reduce((sum, item) => sum + (item.records_ingested ?? 0), 0);
+  async function handleSaveConnection() {
+    setConnectionBusy(`${connectionForm.connection_id}:save`);
+    setConnectionError("");
+    try {
+      const response = await apiFetch("/api/data-connections", {
+        accessCode,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...connectionForm,
+          source_type: "external_rest_api",
+          polling_enabled: Boolean(activeConnection?.polling_enabled),
+          polling_interval_seconds: Number(connectionForm.polling_interval_seconds || 5),
+        }),
+      });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
+      }
+      await loadConnections();
+    } catch (error) {
+      setConnectionError(normalizeErrorMessage(error?.message ?? error));
+    } finally {
+      setConnectionBusy("");
+    }
+  }
+
+  const activeConnection = connections.find((item) => item.connection_id === DEFAULT_CONNECTION_ID) ?? connections[0] ?? null;
+  const healthyCount = connections.filter((item) => ["online", "polling"].includes(String(item.status).toLowerCase())).length;
+  const totalSensors = connections.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
+  const totalReadings = connections.reduce((sum, item) => sum + (item.readings_received ?? 0), 0);
   const intakeStages = uploadJob
     ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
     : uploadResult
@@ -259,7 +313,7 @@ export default function DataConnectionsWorkspace({
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
-            <p>Upload a production CSV to refresh the active facility result.</p>
+            <p>Upload a production CSV or let the live REST source refresh the active facility result automatically.</p>
           </div>
 
           <div className="intake-flow__controls">
@@ -299,11 +353,11 @@ export default function DataConnectionsWorkspace({
             { label: "State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, uploadError) },
             { label: "Backend", value: apiStatus.label },
             { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
-            { label: "Source", value: latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Upload" },
-            { label: "File", value: latestUploadSnapshot?.last_filename ?? uploadJob?.filename ?? "Awaiting upload" },
-            { label: "Rows", value: latestUploadSnapshot?.rows_processed ?? uploadJob?.rows_processed ?? "Pending" },
-            { label: "Columns", value: latestUploadSnapshot?.columns_detected ?? uploadJob?.columns_detected ?? "Pending" },
+            { label: "Source", value: latestUploadSnapshot?.result_source === "rest_poll" ? "REST Poll" : latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Data" },
+            { label: "Connection", value: activeConnection?.name ?? "Awaiting source" },
             { label: "Primary Room", value: roomContext.primary },
+            { label: "Scenario", value: activeConnection?.current_scenario ?? "Awaiting telemetry" },
+            { label: "Tick", value: activeConnection?.current_tick ?? "n/a" },
           ]}
         />
       </Panel>
@@ -311,82 +365,184 @@ export default function DataConnectionsWorkspace({
       <Panel title="Change Summary" className="span-5">
         <MetricGrid
           metrics={[
-            { label: "Current File", value: latestUploadSnapshot?.history?.[0]?.filename ?? "No active result" },
-            { label: "Previous File", value: latestUploadSnapshot?.history?.[1]?.filename ?? "None" },
+            { label: "Current Result", value: latestUploadSnapshot?.history?.[0]?.filename ?? activeConnection?.name ?? "No active result" },
+            { label: "Previous Result", value: latestUploadSnapshot?.history?.[1]?.filename ?? "None" },
             { label: "Score Delta", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "n/a" },
-            { label: "Result", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting upload" },
+            { label: "Result", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting data" },
           ]}
           compact
         />
-        <CompactList items={uploadDiffSummary.lines} emptyText="Upload two files to compare changes." />
+        <CompactList items={uploadDiffSummary.lines} emptyText="Waiting for a meaningful state change." />
       </Panel>
 
-      <Panel title="Upload History" className="span-12">
-        {uploadHistoryRows.length > 0 ? (
-          <DataTable
-            columns={["File", "Status", "Score", "State", "Room", "Delta"]}
-            rows={uploadHistoryRows.map((row) => [
-              row.filename,
-              row.status,
-              row.score,
-              row.state,
-              row.room,
-              row.scoreDelta ?? "n/a",
-            ])}
-          />
+      <Panel title="Node-RED Cultivation Telemetry" className="span-12">
+        {activeConnection ? (
+          <>
+            <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>
+              <label>
+                <span>Name</span>
+                <input
+                  type="text"
+                  value={connectionForm.name}
+                  onChange={(event) => setConnectionForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>URL</span>
+                <input
+                  type="url"
+                  value={connectionForm.url}
+                  onChange={(event) => setConnectionForm((current) => ({ ...current, url: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Facility ID</span>
+                <input
+                  type="text"
+                  value={connectionForm.facility_id}
+                  onChange={(event) => setConnectionForm((current) => ({ ...current, facility_id: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Room ID</span>
+                <input
+                  type="text"
+                  value={connectionForm.room_id}
+                  onChange={(event) => setConnectionForm((current) => ({ ...current, room_id: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Polling Interval</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={connectionForm.polling_interval_seconds}
+                  onChange={(event) => setConnectionForm((current) => ({ ...current, polling_interval_seconds: event.target.value }))}
+                />
+              </label>
+              <div className="connector-form__actions">
+                <button
+                  className="secondary-command-button"
+                  type="button"
+                  disabled={connectionBusy === `${connectionForm.connection_id}:save`}
+                  onClick={handleSaveConnection}
+                >
+                  {connectionBusy === `${connectionForm.connection_id}:save` ? "Saving" : "Save Connection"}
+                </button>
+              </div>
+            </form>
+            <MetricGrid
+              metrics={[
+                { label: "URL", value: activeConnection.url },
+                { label: "Status", value: formatConnectionStatus(activeConnection.status) },
+                { label: "Polling", value: activeConnection.polling_enabled ? "Enabled" : "Disabled" },
+                { label: "Last Poll", value: activeConnection.last_poll_at ? formatClockTime(activeConnection.last_poll_at) : "Not yet" },
+                { label: "Last Success", value: activeConnection.last_success_at ? formatClockTime(activeConnection.last_success_at) : "Not yet" },
+                { label: "Readings", value: activeConnection.readings_received ?? 0 },
+                { label: "Sensors", value: activeConnection.sensors_detected ?? 0 },
+                { label: "Scenario", value: activeConnection.current_scenario ?? "Awaiting telemetry" },
+              ]}
+            />
+            <div className="connector-form__actions">
+              <button
+                className="secondary-command-button"
+                type="button"
+                disabled={connectionBusy === `${activeConnection.connection_id}:test`}
+                onClick={() => handleConnectionAction(activeConnection.connection_id, "test")}
+              >
+                {connectionBusy === `${activeConnection.connection_id}:test` ? "Testing" : "Test Connection"}
+              </button>
+              <button
+                className="secondary-command-button"
+                type="button"
+                disabled={connectionBusy === `${activeConnection.connection_id}:poll-once`}
+                onClick={() => handleConnectionAction(activeConnection.connection_id, "poll-once")}
+              >
+                {connectionBusy === `${activeConnection.connection_id}:poll-once` ? "Polling" : "Poll Once"}
+              </button>
+              <button
+                className="command-button"
+                type="button"
+                disabled={activeConnection.polling_enabled || connectionBusy === `${activeConnection.connection_id}:start`}
+                onClick={() => handleConnectionAction(activeConnection.connection_id, "start")}
+              >
+                {connectionBusy === `${activeConnection.connection_id}:start` ? "Starting" : "Start Polling"}
+              </button>
+              <button
+                className="secondary-command-button"
+                type="button"
+                disabled={!activeConnection.polling_enabled || connectionBusy === `${activeConnection.connection_id}:stop`}
+                onClick={() => handleConnectionAction(activeConnection.connection_id, "stop")}
+              >
+                {connectionBusy === `${activeConnection.connection_id}:stop` ? "Stopping" : "Stop Polling"}
+              </button>
+            </div>
+            <CompactList
+              items={[
+                `Room: ${activeConnection.room_id ?? "Unknown room"}`,
+                `Facility: ${activeConnection.facility_id ?? "Unknown facility"}`,
+                `Telemetry timestamp: ${activeConnection.latest_telemetry_timestamp ?? "Awaiting telemetry"}`,
+                `Last ingestion source: ${activeConnection.last_ingestion_source ?? "Not yet ingested"}`,
+                activeConnection.error_message ? `Error: ${activeConnection.error_message}` : `Connection is ${formatConnectionStatus(activeConnection.status).toLowerCase()}.`,
+              ]}
+              emptyText="No live connection metadata yet."
+            />
+          </>
         ) : (
-          <EmptyState title="No upload history" body="Completed uploads will appear here." compact />
+          <EmptyState title="No data connection registered" body="Register a REST telemetry source to start live polling." compact />
         )}
       </Panel>
 
       <Panel title="Connection Overview" className="span-12">
         <MetricGrid
           metrics={[
-            { label: "Types", value: connectorTypes.length || "Pending" },
-            { label: "Ready", value: healthyCount },
+            { label: "Connections", value: connections.length || "Pending" },
+            { label: "Online", value: healthyCount },
             { label: "Sensors", value: totalSensors || "Pending" },
-            { label: "Records", value: totalRecords || "Pending" },
+            { label: "Readings", value: totalReadings || "Pending" },
           ]}
         />
       </Panel>
 
       <Panel title="Connections" className="span-7">
         <div className="connector-status-list">
-          {connectorHealth.map((connector) => (
-            <div className="connector-status-card" key={connector.connector_type}>
+          {connections.map((connection) => (
+            <div className="connector-status-card" key={connection.connection_id}>
               <div className="connector-status-card__header">
                 <div>
-                  <p className="section-token">{connector.connector_type}</p>
-                  <h3>{connector.display_name}</h3>
+                  <p className="section-token">{connection.source_type}</p>
+                  <h3>{connection.name}</h3>
                 </div>
-                <span className={`connector-status-pill connector-status-pill--${connectorStatusTone(connector.connection_status)}`}>
-                  {formatConnectorStatus(connector.connection_status)}
+                <span className={`connector-status-pill connector-status-pill--${connectionTone(connection.status)}`}>
+                  {formatConnectionStatus(connection.status)}
                 </span>
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Last Sync", value: connector.last_sync_time ? formatClockTime(connector.last_sync_time) : "Awaiting sync" },
-                  { label: "Sensors", value: connector.sensors_detected ?? 0 },
-                  { label: "Records", value: connector.records_ingested ?? 0 },
-                  { label: "Mode", value: connector.functional ? "Functional" : "Scaffolded" },
+                  { label: "Last Poll", value: connection.last_poll_at ? formatClockTime(connection.last_poll_at) : "Not yet" },
+                  { label: "Last Success", value: connection.last_success_at ? formatClockTime(connection.last_success_at) : "Not yet" },
+                  { label: "Sensors", value: connection.sensors_detected ?? 0 },
+                  { label: "Readings", value: connection.readings_received ?? 0 },
                 ]}
                 compact
               />
-              {connector.masked_configuration && Object.keys(connector.masked_configuration).length > 0 && (
-                <div className="connector-detail-list">
-                  {Object.entries(connector.masked_configuration).map(([key, value]) => (
-                    <div className="connector-detail-row" key={key}>
-                      <span>{key}</span>
-                      <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
-                    </div>
-                  ))}
+              <div className="connector-detail-list">
+                <div className="connector-detail-row">
+                  <span>URL</span>
+                  <strong>{connection.url}</strong>
                 </div>
-              )}
-              {(connector.warnings?.length > 0 || connector.errors?.length > 0) && (
+                <div className="connector-detail-row">
+                  <span>Room</span>
+                  <strong>{connection.room_id ?? "Unknown room"}</strong>
+                </div>
+                <div className="connector-detail-row">
+                  <span>Scenario</span>
+                  <strong>{connection.current_scenario ?? "Awaiting telemetry"}</strong>
+                </div>
+              </div>
+              {(connection.error_message || connection.status === "error") && (
                 <div className="connector-issues">
-                  {[...(connector.warnings ?? []), ...(connector.errors ?? [])].slice(0, 4).map((item) => (
-                    <p key={item}>{item}</p>
-                  ))}
+                  <p>{connection.error_message || "Connection error. Last valid facility state has been preserved."}</p>
                 </div>
               )}
             </div>
@@ -400,7 +556,7 @@ export default function DataConnectionsWorkspace({
             { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
             { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
             { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-            { label: "Timestamps", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
+            { label: "Timestamp", value: activeConnection?.latest_telemetry_timestamp ? formatClockTime(activeConnection.latest_telemetry_timestamp) : uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
           ]}
           compact
         />
@@ -410,102 +566,27 @@ export default function DataConnectionsWorkspace({
         />
       </Panel>
 
-      <Panel title="REST Connection" className="span-12">
-        <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>
-          <label>
-            <span>Endpoint</span>
-            <input
-              type="url"
-              value={restForm.endpoint}
-              onChange={(event) => setRestForm((current) => ({ ...current, endpoint: event.target.value }))}
-              placeholder="https://customer.example.com/telemetry"
-            />
-          </label>
-          <label>
-            <span>HTTP method</span>
-            <select
-              value={restForm.method}
-              onChange={(event) => setRestForm((current) => ({ ...current, method: event.target.value }))}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-            </select>
-          </label>
-          <label>
-            <span>Source ID</span>
-            <input
-              type="text"
-              value={restForm.source_id}
-              onChange={(event) => setRestForm((current) => ({ ...current, source_id: event.target.value }))}
-            />
-          </label>
-          <label>
-            <span>System ID</span>
-            <input
-              type="text"
-              value={restForm.system_id}
-              onChange={(event) => setRestForm((current) => ({ ...current, system_id: event.target.value }))}
-            />
-          </label>
-          <label>
-            <span>Token</span>
-            <input
-              type="password"
-              value={restForm.token}
-              onChange={(event) => setRestForm((current) => ({ ...current, token: event.target.value }))}
-              placeholder="Bearer token"
-            />
-          </label>
-          <label>
-            <span>Records path</span>
-            <input
-              type="text"
-              value={restForm.records_path}
-              onChange={(event) => setRestForm((current) => ({ ...current, records_path: event.target.value }))}
-              placeholder="data.records"
-            />
-          </label>
-          <div className="connector-form__actions">
-            <button className="secondary-command-button" type="button" disabled={restBusy === "test"} onClick={() => handleRestAction("test")}>
-              {restBusy === "test" ? "Testing" : "Test connection"}
-            </button>
-            <button className="command-button" type="button" disabled={restBusy === "ingest"} onClick={() => handleRestAction("ingest")}>
-              {restBusy === "ingest" ? "Ingesting" : "Ingest connector data"}
-            </button>
-          </div>
-        </form>
-
-        <div className="connector-rest-output">
-          <MetricGrid
-            metrics={[
-              { label: "State", value: restResult?.connection_status ? formatConnectorStatus(restResult.connection_status) : "Awaiting validation" },
-              { label: "Sensors", value: restResult?.sensors_detected ?? "Pending" },
-              { label: "Records", value: restResult?.records_ingested ?? "Pending" },
-              { label: "Last Sync", value: restResult?.last_sync_time ? formatClockTime(restResult.last_sync_time) : "Awaiting validation" },
-            ]}
-            compact
+      <Panel title="Upload History" className="span-12">
+        {uploadHistoryRows.length > 0 ? (
+          <DataTable
+            columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
+            rows={uploadHistoryRows.map((row) => [
+              row.filename,
+              row.status,
+              row.score,
+              row.state,
+              row.room,
+              row.scoreDelta ?? "n/a",
+            ])}
           />
-          {restResult?.masked_configuration && (
-            <div className="connector-detail-list">
-              {Object.entries(restResult.masked_configuration).map(([key, value]) => (
-                <div className="connector-detail-row" key={key}>
-                  <span>{key}</span>
-                  <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-          {restResult?.warnings?.length > 0 && (
-            <div className="connector-issues">
-              {restResult.warnings.slice(0, 4).map((warning) => <p key={warning}>{warning}</p>)}
-            </div>
-          )}
-        </div>
+        ) : (
+          <EmptyState title="No ingestion history" body="Completed uploads and meaningful live polling changes will appear here." compact />
+        )}
       </Panel>
 
-      {connectorError && (
-        <Panel title="Connector response" subtitle="Operator-friendly validation feedback." className="span-12">
-          <p className="form-error">{connectorError}</p>
+      {connectionError && (
+        <Panel title="Connection Response" className="span-12">
+          <p className="form-error">{connectionError}</p>
         </Panel>
       )}
     </div>

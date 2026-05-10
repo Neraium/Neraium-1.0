@@ -135,6 +135,7 @@ const REPORT_TEMPLATES = [
 ];
 
 const OPERATIONAL_CADENCE_MS = 30000;
+const LIVE_REFRESH_INTERVAL_MS = 5000;
 
 function App() {
   const hasAccess = true;
@@ -337,6 +338,19 @@ function App() {
     loadEngineIdentity();
     loadLatestUploadState();
   }, [hasAccess, loadEngineIdentity, loadFacilitySystems, loadLatestUploadState]);
+
+  useEffect(() => {
+    if (!hasAccess) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      loadLatestUploadState();
+      loadFacilitySystems();
+    }, LIVE_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasAccess, loadFacilitySystems, loadLatestUploadState]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = uploadStateView.deriveRoomContext(latestUploadResult);

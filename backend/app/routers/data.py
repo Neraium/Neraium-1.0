@@ -203,7 +203,8 @@ def read_latest_upload() -> dict[str, Any]:
     summary = latest_completed_job_summary()
     detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
-    if latest_state is not None and latest_state.get("source") != "uploaded":
+    valid_sources = {"uploaded", "rest_poll"}
+    if latest_state is not None and latest_state.get("source") not in valid_sources:
         latest_state = None
     if summary is None and latest_state is None and detailed_result is None:
         payload = {
@@ -244,7 +245,7 @@ def read_latest_upload() -> dict[str, Any]:
         columns_detected = detailed_result.get("column_count", 0)
     payload = {
         "status": "active",
-        "source": "uploaded",
+        "source": summary.get("source") or (detailed_result or {}).get("sii_intelligence", {}).get("source") or "uploaded",
         "message": "Latest result active.",
         "last_filename": last_filename,
         "rows_processed": rows_processed,
@@ -254,7 +255,7 @@ def read_latest_upload() -> dict[str, Any]:
         "core_engine": summary.get("core_engine") or (latest_state or {}).get("core_engine"),
         "state_available": latest_state is not None,
         "connection_status": "connected",
-        "result_source": "file_upload",
+        "result_source": summary.get("upload_result_source") or "file_upload",
         "history": read_upload_history(limit=6),
         "runner_used": summary.get("runner_used", False),
         "chunk_count": summary.get("chunk_count", 0),

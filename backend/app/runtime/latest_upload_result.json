@@ -1,40 +1,168 @@
 {
-  "job_id": "23f993bf79054098a9aad70fa95bf59c",
-  "filename": "health.csv",
-  "row_count": 1,
-  "column_count": 3,
+  "job_id": "node-red-cultivation-telemetry",
+  "filename": "Node-RED Cultivation Telemetry",
+  "row_count": 34,
+  "column_count": 11,
   "columns": [
     "timestamp",
+    "room",
+    "facility_id",
+    "airflow",
+    "co2",
+    "dehumidifier_load",
+    "humidity",
+    "hvac_load",
+    "light_level",
     "temperature",
-    "humidity"
+    "vpd"
   ],
   "preview_rows": [
     {
-      "timestamp": "2026-05-01T08:00:00Z",
-      "temperature": "74",
-      "humidity": "55"
+      "timestamp": "2026-05-10T17:02:54.720Z",
+      "room": "flower-room-1",
+      "facility_id": "cultivation-facility-001",
+      "airflow": "99.97504961815997",
+      "co2": "1052.862230685784",
+      "dehumidifier_load": "37.84349408027546",
+      "humidity": "57.25818623767878",
+      "hvac_load": "42.09748053994323",
+      "light_level": "92.07547469629412",
+      "temperature": "74.06327936233168",
+      "vpd": "1.1958437527377048"
+    },
+    {
+      "timestamp": "2026-05-10T17:03:01.304Z",
+      "room": "flower-room-1",
+      "facility_id": "cultivation-facility-001",
+      "airflow": "100.1179990511381",
+      "co2": "1045.306041921813",
+      "dehumidifier_load": "37.735453943522906",
+      "humidity": "57.12164457816818",
+      "hvac_load": "42.22591323146218",
+      "light_level": "91.98503843151987",
+      "temperature": "74.07527261610534",
+      "vpd": "1.1926702839911936"
+    },
+    {
+      "timestamp": "2026-05-10T17:03:08.409Z",
+      "room": "flower-room-1",
+      "facility_id": "cultivation-facility-001",
+      "airflow": "99.7538737068617",
+      "co2": "1048.000912871606",
+      "dehumidifier_load": "38.030654781689556",
+      "humidity": "56.96881922610876",
+      "hvac_load": "42.18873652303821",
+      "light_level": "91.87684448673784",
+      "temperature": "74.00366040988506",
+      "vpd": "1.202951200478981"
+    },
+    {
+      "timestamp": "2026-05-10T17:03:14.952Z",
+      "room": "flower-room-1",
+      "facility_id": "cultivation-facility-001",
+      "airflow": "100.26764234655646",
+      "co2": "1053.499670950919",
+      "dehumidifier_load": "38.021582970306056",
+      "humidity": "57.11404725461291",
+      "hvac_load": "42.2307277377508",
+      "light_level": "91.95648778588162",
+      "temperature": "73.98416682931575",
+      "vpd": "1.2077141081962997"
+    },
+    {
+      "timestamp": "2026-05-10T17:03:15.409Z",
+      "room": "flower-room-1",
+      "facility_id": "cultivation-facility-001",
+      "airflow": "99.96110795378272",
+      "co2": "1053.8649845637935",
+      "dehumidifier_load": "38.2542759159144",
+      "humidity": "56.9896816818979",
+      "hvac_load": "41.95098040635642",
+      "light_level": "91.92968169216897",
+      "temperature": "73.92391140928967",
+      "vpd": "1.196411960761332"
     }
   ],
   "detected_timestamp_column": "timestamp",
   "warnings": [
-    "At least two timestamps are required to estimate sample interval."
+    "Timestamp intervals are inconsistent."
   ],
   "numeric_profiles": [
     {
-      "column": "temperature",
-      "min": 74.0,
-      "max": 74.0,
-      "average": 74.0,
+      "column": "airflow",
+      "min": 96.1281,
+      "max": 100.2676,
+      "average": 98.4722,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
       "range_warning": null
     },
     {
+      "column": "co2",
+      "min": 1044.2783,
+      "max": 1055.9873,
+      "average": 1050.0158,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "low",
+      "range_warning": null
+    },
+    {
+      "column": "dehumidifier_load",
+      "min": 37.7355,
+      "max": 40.7053,
+      "average": 39.0538,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "normal",
+      "range_warning": null
+    },
+    {
       "column": "humidity",
-      "min": 55.0,
-      "max": 55.0,
-      "average": 55.0,
+      "min": 56.7901,
+      "max": 58.8146,
+      "average": 57.7444,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "low",
+      "range_warning": null
+    },
+    {
+      "column": "hvac_load",
+      "min": 41.7032,
+      "max": 42.2307,
+      "average": 41.9586,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "low",
+      "range_warning": null
+    },
+    {
+      "column": "light_level",
+      "min": 91.7037,
+      "max": 92.2635,
+      "average": 91.9741,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "low",
+      "range_warning": null
+    },
+    {
+      "column": "temperature",
+      "min": 73.7264,
+      "max": 74.2573,
+      "average": 73.9838,
+      "missing_count": 0,
+      "missing_percent": 0.0,
+      "variability": "low",
+      "range_warning": null
+    },
+    {
+      "column": "vpd",
+      "min": 1.191,
+      "max": 1.2088,
+      "average": 1.2,
       "missing_count": 0,
       "missing_percent": 0.0,
       "variability": "low",
@@ -43,32 +171,111 @@
   ],
   "timestamp_profile": {
     "detected_timestamp_column": "timestamp",
-    "first_timestamp": "2026-05-01T08:00:00",
-    "last_timestamp": "2026-05-01T08:00:00",
+    "first_timestamp": "2026-05-10T17:02:54.720000",
+    "last_timestamp": "2026-05-10T17:06:37.826000",
     "estimated_sample_interval": null,
     "warnings": [
-      "At least two timestamps are required to estimate sample interval."
+      "Timestamp intervals are inconsistent."
     ]
   },
   "data_quality": {
-    "row_count": 1,
-    "column_count": 3,
-    "numeric_column_count": 2,
+    "row_count": 34,
+    "column_count": 11,
+    "numeric_column_count": 8,
     "timestamp_detected": true,
     "warnings": [
-      "At least two timestamps are required to estimate sample interval."
+      "Timestamp intervals are inconsistent."
     ],
     "readiness": "needs_review"
   },
   "baseline_analysis": {
-    "baseline_window_rows": 0,
-    "recent_window_rows": 0,
-    "columns_analyzed": 0,
-    "column_drift": [],
-    "overall_assessment": "needs_review",
-    "warnings": [
-      "At least 5 data rows are needed for baseline comparison."
-    ]
+    "baseline_window_rows": 7,
+    "recent_window_rows": 7,
+    "columns_analyzed": 8,
+    "column_drift": [
+      {
+        "column": "airflow",
+        "baseline_average": 99.9543,
+        "recent_average": 96.5616,
+        "absolute_change": -3.3927,
+        "percent_change": -3.3942,
+        "direction": "down",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "co2",
+        "baseline_average": 1050.3055,
+        "recent_average": 1049.1507,
+        "absolute_change": -1.1548,
+        "percent_change": -0.1099,
+        "direction": "flat",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "dehumidifier_load",
+        "baseline_average": 37.9284,
+        "recent_average": 40.4313,
+        "absolute_change": 2.5029,
+        "percent_change": 6.5991,
+        "direction": "up",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "humidity",
+        "baseline_average": 57.1371,
+        "recent_average": 58.6151,
+        "absolute_change": 1.478,
+        "percent_change": 2.5867,
+        "direction": "up",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "hvac_load",
+        "baseline_average": 42.0842,
+        "recent_average": 41.8585,
+        "absolute_change": -0.2256,
+        "percent_change": -0.5362,
+        "direction": "flat",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "light_level",
+        "baseline_average": 91.9284,
+        "recent_average": 92.0053,
+        "absolute_change": 0.0769,
+        "percent_change": 0.0837,
+        "direction": "flat",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "temperature",
+        "baseline_average": 74.025,
+        "recent_average": 74.0089,
+        "absolute_change": -0.0161,
+        "percent_change": -0.0218,
+        "direction": "flat",
+        "drift_flag": "normal",
+        "warnings": []
+      },
+      {
+        "column": "vpd",
+        "baseline_average": 1.1996,
+        "recent_average": 1.1993,
+        "absolute_change": -0.0003,
+        "percent_change": -0.0222,
+        "direction": "flat",
+        "drift_flag": "normal",
+        "warnings": []
+      }
+    ],
+    "overall_assessment": "normal",
+    "warnings": []
   },
   "cultivation_mapping": {
     "categories": {
@@ -78,19 +285,31 @@
       "humidity": [
         "humidity"
       ],
-      "HVAC": [],
-      "airflow": [],
+      "HVAC": [
+        "facility_id",
+        "hvac_load"
+      ],
+      "airflow": [
+        "airflow"
+      ],
       "irrigation": [],
-      "lighting": [],
-      "CO2": [],
+      "lighting": [
+        "light_level"
+      ],
+      "CO2": [
+        "co2"
+      ],
       "sensor network": [],
       "unknown": [
-        "timestamp"
+        "timestamp",
+        "room",
+        "dehumidifier_load",
+        "vpd"
       ]
     },
-    "mapped_column_count": 2,
-    "unknown_column_count": 1,
-    "coverage_percent": 66.6667,
+    "mapped_column_count": 7,
+    "unknown_column_count": 4,
+    "coverage_percent": 63.6364,
     "warnings": [
       "Some columns could not be mapped to a cultivation system category."
     ]
@@ -101,29 +320,28 @@
     "data_readiness": "needs_review",
     "time_coverage": {
       "detected_timestamp_column": "timestamp",
-      "first_timestamp": "2026-05-01T08:00:00",
-      "last_timestamp": "2026-05-01T08:00:00",
+      "first_timestamp": "2026-05-10T17:02:54.720000",
+      "last_timestamp": "2026-05-10T17:06:37.826000",
       "estimated_sample_interval": null
     },
     "key_observations": [
-      "File contains 1 data rows, 3 columns, and 2 numeric columns.",
+      "File contains 34 data rows, 11 columns, and 8 numeric columns.",
       "Timestamp column detected: timestamp.",
-      "Time coverage runs from 2026-05-01T08:00:00 to 2026-05-01T08:00:00.",
-      "Baseline comparison was limited because not enough usable rows were available.",
-      "Cultivation mapping identified columns for: temperature, humidity."
+      "Time coverage runs from 2026-05-10T17:02:54.720000 to 2026-05-10T17:06:37.826000.",
+      "Baseline comparison analyzed 8 numeric columns using 7 baseline rows and 7 recent rows.",
+      "No numeric columns were flagged by the simple baseline comparison.",
+      "Cultivation mapping identified columns for: temperature, humidity, HVAC, airflow, lighting, CO2."
     ],
     "columns_requiring_review": [],
     "recommended_operator_checks": [
       "Review timestamp formatting and sampling consistency in the source export.",
-      "Compare the baseline and recent windows against facility logs for the same period.",
       "Review unmapped CSV columns and rename source exports when labels are unclear."
     ],
     "limitations": [
       "This report uses only the uploaded CSV profile and simple baseline comparison.",
       "No data is stored permanently and the Neraium engine has not been run.",
       "This report does not identify root cause or predict crop stress, equipment failure, or yield impact.",
-      "Evidence is limited because the upload has data quality items requiring review.",
-      "Baseline comparison is limited because no numeric columns were analyzed."
+      "Evidence is limited because the upload has data quality items requiring review."
     ],
     "source_sections_used": [
       "data_quality",
@@ -133,23 +351,285 @@
       "cultivation_mapping"
     ],
     "warnings": [
-      "At least two timestamps are required to estimate sample interval.",
-      "At least 5 data rows are needed for baseline comparison.",
+      "Timestamp intervals are inconsistent.",
       "Some columns could not be mapped to a cultivation system category."
     ]
   },
   "engine_result": {
     "engine_version": "neraium-cultivation-v1",
-    "summary": "Neraium SII v1 was limited by the available cultivation data. Review the listed limitations before relying on this upload.",
-    "overall_result": "needs_review",
-    "signals": [],
+    "summary": "Neraium SII v1 found elevated system behavior changes across the uploaded cultivation data. Review the grouped evidence, persistence notes, and operator checks before using this file for operational decisions.",
+    "overall_result": "elevated",
+    "signals": [
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "airflow",
+          "dehumidifier_load"
+        ],
+        "message": "airflow and dehumidifier load relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "airflow",
+          "humidity"
+        ],
+        "message": "airflow and humidity relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "airflow",
+          "light_level"
+        ],
+        "message": "airflow and light level relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "dehumidifier_load",
+          "humidity"
+        ],
+        "message": "dehumidifier load and humidity relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "dehumidifier_load",
+          "temperature"
+        ],
+        "message": "dehumidifier load and temperature relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "humidity",
+          "vpd"
+        ],
+        "message": "humidity and vpd relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "light_level",
+          "temperature"
+        ],
+        "message": "light level and temperature relationship consistency became less stable between the baseline and active windows."
+      },
+      {
+        "type": "relationship_change",
+        "level": "elevated",
+        "columns": [
+          "light_level",
+          "vpd"
+        ],
+        "message": "light level and vpd relationship consistency became less stable between the baseline and active windows."
+      }
+    ],
     "evidence": [
       {
         "type": "baseline_window",
-        "baseline_window_rows": 0,
-        "recent_window_rows": 0,
-        "columns_analyzed": 0,
-        "overall_assessment": "needs_review"
+        "baseline_window_rows": 7,
+        "recent_window_rows": 7,
+        "columns_analyzed": 8,
+        "overall_assessment": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "airflow",
+        "baseline_average": 99.9543,
+        "recent_average": 96.5616,
+        "absolute_change": -3.3927,
+        "percent_change": -3.3942,
+        "direction": "down",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "co2",
+        "baseline_average": 1050.3055,
+        "recent_average": 1049.1507,
+        "absolute_change": -1.1548,
+        "percent_change": -0.1099,
+        "direction": "flat",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "dehumidifier_load",
+        "baseline_average": 37.9284,
+        "recent_average": 40.4313,
+        "absolute_change": 2.5029,
+        "percent_change": 6.5991,
+        "direction": "up",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "humidity",
+        "baseline_average": 57.1371,
+        "recent_average": 58.6151,
+        "absolute_change": 1.478,
+        "percent_change": 2.5867,
+        "direction": "up",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "hvac_load",
+        "baseline_average": 42.0842,
+        "recent_average": 41.8585,
+        "absolute_change": -0.2256,
+        "percent_change": -0.5362,
+        "direction": "flat",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "light_level",
+        "baseline_average": 91.9284,
+        "recent_average": 92.0053,
+        "absolute_change": 0.0769,
+        "percent_change": 0.0837,
+        "direction": "flat",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "temperature",
+        "baseline_average": 74.025,
+        "recent_average": 74.0089,
+        "absolute_change": -0.0161,
+        "percent_change": -0.0218,
+        "direction": "flat",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "column_drift",
+        "column": "vpd",
+        "baseline_average": 1.1996,
+        "recent_average": 1.1993,
+        "absolute_change": -0.0003,
+        "percent_change": -0.0222,
+        "direction": "flat",
+        "drift_flag": "normal"
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "co2"
+        ],
+        "baseline_correlation": 0.3086,
+        "recent_correlation": -0.1092,
+        "change": -0.4178
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "dehumidifier_load"
+        ],
+        "baseline_correlation": 0.0697,
+        "recent_correlation": -0.7968,
+        "change": -0.8664
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "humidity"
+        ],
+        "baseline_correlation": -0.0732,
+        "recent_correlation": -0.7533,
+        "change": -0.6801
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "hvac_load"
+        ],
+        "baseline_correlation": 0.5532,
+        "recent_correlation": 0.263,
+        "change": -0.2902
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "light_level"
+        ],
+        "baseline_correlation": 0.5854,
+        "recent_correlation": -0.3657,
+        "change": -0.951
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "temperature"
+        ],
+        "baseline_correlation": 0.0183,
+        "recent_correlation": -0.0929,
+        "change": -0.1112
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "airflow",
+          "vpd"
+        ],
+        "baseline_correlation": 0.0833,
+        "recent_correlation": -0.0421,
+        "change": -0.1254
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "co2",
+          "dehumidifier_load"
+        ],
+        "baseline_correlation": 0.6079,
+        "recent_correlation": 0.2212,
+        "change": -0.3867
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "co2",
+          "humidity"
+        ],
+        "baseline_correlation": -0.0273,
+        "recent_correlation": -0.2754,
+        "change": -0.2481
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "co2",
+          "hvac_load"
+        ],
+        "baseline_correlation": -0.0396,
+        "recent_correlation": -0.1748,
+        "change": -0.1352
+      },
+      {
+        "type": "relationship_change",
+        "columns": [
+          "co2",
+          "light_level"
+        ],
+        "baseline_correlation": 0.2601,
+        "recent_correlation": 0.5751,
+        "change": 0.315
       }
     ],
     "system_evidence": {
@@ -158,25 +638,429 @@
           "columns": [
             "temperature"
           ],
-          "signals": [],
-          "evidence": []
+          "signals": [
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "dehumidifier_load",
+                "temperature"
+              ],
+              "message": "dehumidifier load and temperature relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "light_level",
+                "temperature"
+              ],
+              "message": "light level and temperature relationship consistency became less stable between the baseline and active windows."
+            }
+          ],
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "temperature",
+              "baseline_average": 74.025,
+              "recent_average": 74.0089,
+              "absolute_change": -0.0161,
+              "percent_change": -0.0218,
+              "direction": "flat",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "temperature"
+              ],
+              "baseline_correlation": 0.0183,
+              "recent_correlation": -0.0929,
+              "change": -0.1112
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "temperature"
+              ],
+              "baseline_correlation": -0.123,
+              "recent_correlation": 0.3163,
+              "change": 0.4394
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "temperature"
+              ],
+              "baseline_correlation": -0.5619,
+              "recent_correlation": 0.0737,
+              "change": 0.6356
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "temperature"
+              ],
+              "baseline_correlation": 0.4155,
+              "recent_correlation": 0.2513,
+              "change": -0.1642
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "temperature"
+              ],
+              "baseline_correlation": 0.5235,
+              "recent_correlation": 0.6753,
+              "change": 0.1518
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "light_level",
+                "temperature"
+              ],
+              "baseline_correlation": -0.0433,
+              "recent_correlation": 0.5625,
+              "change": 0.6058
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "temperature",
+                "vpd"
+              ],
+              "baseline_correlation": 0.0557,
+              "recent_correlation": 0.0725,
+              "change": 0.0168
+            }
+          ]
         },
         "humidity": {
           "columns": [
             "humidity"
           ],
-          "signals": [],
-          "evidence": []
+          "signals": [
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "humidity"
+              ],
+              "message": "airflow and humidity relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "dehumidifier_load",
+                "humidity"
+              ],
+              "message": "dehumidifier load and humidity relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "humidity",
+                "vpd"
+              ],
+              "message": "humidity and vpd relationship consistency became less stable between the baseline and active windows."
+            }
+          ],
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "humidity",
+              "baseline_average": 57.1371,
+              "recent_average": 58.6151,
+              "absolute_change": 1.478,
+              "percent_change": 2.5867,
+              "direction": "up",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "humidity"
+              ],
+              "baseline_correlation": -0.0732,
+              "recent_correlation": -0.7533,
+              "change": -0.6801
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "humidity"
+              ],
+              "baseline_correlation": -0.0273,
+              "recent_correlation": -0.2754,
+              "change": -0.2481
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "humidity"
+              ],
+              "baseline_correlation": -0.7582,
+              "recent_correlation": 0.4462,
+              "change": 1.2043
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.2792,
+              "recent_correlation": 0.1785,
+              "change": 0.4577
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "light_level"
+              ],
+              "baseline_correlation": 0.0568,
+              "recent_correlation": 0.415,
+              "change": 0.3582
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "temperature"
+              ],
+              "baseline_correlation": 0.4155,
+              "recent_correlation": 0.2513,
+              "change": -0.1642
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "vpd"
+              ],
+              "baseline_correlation": -0.0945,
+              "recent_correlation": 0.5509,
+              "change": 0.6454
+            }
+          ]
         },
         "HVAC": {
-          "columns": [],
+          "columns": [
+            "facility_id",
+            "hvac_load"
+          ],
           "signals": [],
-          "evidence": []
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "hvac_load",
+              "baseline_average": 42.0842,
+              "recent_average": 41.8585,
+              "absolute_change": -0.2256,
+              "percent_change": -0.5362,
+              "direction": "flat",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "hvac_load"
+              ],
+              "baseline_correlation": 0.5532,
+              "recent_correlation": 0.263,
+              "change": -0.2902
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.0396,
+              "recent_correlation": -0.1748,
+              "change": -0.1352
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.0821,
+              "recent_correlation": -0.4777,
+              "change": -0.3957
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.2792,
+              "recent_correlation": 0.1785,
+              "change": 0.4577
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "light_level"
+              ],
+              "baseline_correlation": 0.3292,
+              "recent_correlation": 0.4239,
+              "change": 0.0947
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "temperature"
+              ],
+              "baseline_correlation": 0.5235,
+              "recent_correlation": 0.6753,
+              "change": 0.1518
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "vpd"
+              ],
+              "baseline_correlation": 0.2692,
+              "recent_correlation": 0.2315,
+              "change": -0.0377
+            }
+          ]
         },
         "airflow": {
-          "columns": [],
-          "signals": [],
-          "evidence": []
+          "columns": [
+            "airflow"
+          ],
+          "signals": [
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "dehumidifier_load"
+              ],
+              "message": "airflow and dehumidifier load relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "humidity"
+              ],
+              "message": "airflow and humidity relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "light_level"
+              ],
+              "message": "airflow and light level relationship consistency became less stable between the baseline and active windows."
+            }
+          ],
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "airflow",
+              "baseline_average": 99.9543,
+              "recent_average": 96.5616,
+              "absolute_change": -3.3927,
+              "percent_change": -3.3942,
+              "direction": "down",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "co2"
+              ],
+              "baseline_correlation": 0.3086,
+              "recent_correlation": -0.1092,
+              "change": -0.4178
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "dehumidifier_load"
+              ],
+              "baseline_correlation": 0.0697,
+              "recent_correlation": -0.7968,
+              "change": -0.8664
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "humidity"
+              ],
+              "baseline_correlation": -0.0732,
+              "recent_correlation": -0.7533,
+              "change": -0.6801
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "hvac_load"
+              ],
+              "baseline_correlation": 0.5532,
+              "recent_correlation": 0.263,
+              "change": -0.2902
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "light_level"
+              ],
+              "baseline_correlation": 0.5854,
+              "recent_correlation": -0.3657,
+              "change": -0.951
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "temperature"
+              ],
+              "baseline_correlation": 0.0183,
+              "recent_correlation": -0.0929,
+              "change": -0.1112
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "vpd"
+              ],
+              "baseline_correlation": 0.0833,
+              "recent_correlation": -0.0421,
+              "change": -0.1254
+            }
+          ]
         },
         "irrigation": {
           "columns": [],
@@ -184,14 +1068,208 @@
           "evidence": []
         },
         "lighting": {
-          "columns": [],
-          "signals": [],
-          "evidence": []
+          "columns": [
+            "light_level"
+          ],
+          "signals": [
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "light_level"
+              ],
+              "message": "airflow and light level relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "light_level",
+                "temperature"
+              ],
+              "message": "light level and temperature relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "light_level",
+                "vpd"
+              ],
+              "message": "light level and vpd relationship consistency became less stable between the baseline and active windows."
+            }
+          ],
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "light_level",
+              "baseline_average": 91.9284,
+              "recent_average": 92.0053,
+              "absolute_change": 0.0769,
+              "percent_change": 0.0837,
+              "direction": "flat",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "light_level"
+              ],
+              "baseline_correlation": 0.5854,
+              "recent_correlation": -0.3657,
+              "change": -0.951
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "light_level"
+              ],
+              "baseline_correlation": 0.2601,
+              "recent_correlation": 0.5751,
+              "change": 0.315
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "light_level"
+              ],
+              "baseline_correlation": -0.0366,
+              "recent_correlation": 0.179,
+              "change": 0.2156
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "light_level"
+              ],
+              "baseline_correlation": 0.0568,
+              "recent_correlation": 0.415,
+              "change": 0.3582
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "light_level"
+              ],
+              "baseline_correlation": 0.3292,
+              "recent_correlation": 0.4239,
+              "change": 0.0947
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "light_level",
+                "temperature"
+              ],
+              "baseline_correlation": -0.0433,
+              "recent_correlation": 0.5625,
+              "change": 0.6058
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "light_level",
+                "vpd"
+              ],
+              "baseline_correlation": -0.4317,
+              "recent_correlation": 0.4203,
+              "change": 0.852
+            }
+          ]
         },
         "CO2": {
-          "columns": [],
+          "columns": [
+            "co2"
+          ],
           "signals": [],
-          "evidence": []
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "co2",
+              "baseline_average": 1050.3055,
+              "recent_average": 1049.1507,
+              "absolute_change": -1.1548,
+              "percent_change": -0.1099,
+              "direction": "flat",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "co2"
+              ],
+              "baseline_correlation": 0.3086,
+              "recent_correlation": -0.1092,
+              "change": -0.4178
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "dehumidifier_load"
+              ],
+              "baseline_correlation": 0.6079,
+              "recent_correlation": 0.2212,
+              "change": -0.3867
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "humidity"
+              ],
+              "baseline_correlation": -0.0273,
+              "recent_correlation": -0.2754,
+              "change": -0.2481
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.0396,
+              "recent_correlation": -0.1748,
+              "change": -0.1352
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "light_level"
+              ],
+              "baseline_correlation": 0.2601,
+              "recent_correlation": 0.5751,
+              "change": 0.315
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "temperature"
+              ],
+              "baseline_correlation": -0.123,
+              "recent_correlation": 0.3163,
+              "change": 0.4394
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "vpd"
+              ],
+              "baseline_correlation": 0.35,
+              "recent_correlation": -0.102,
+              "change": -0.452
+            }
+          ]
         },
         "sensor network": {
           "columns": [],
@@ -200,185 +1278,470 @@
         },
         "unknown": {
           "columns": [
-            "timestamp"
+            "timestamp",
+            "room",
+            "dehumidifier_load",
+            "vpd"
           ],
-          "signals": [],
-          "evidence": []
+          "signals": [
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "airflow",
+                "dehumidifier_load"
+              ],
+              "message": "airflow and dehumidifier load relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "dehumidifier_load",
+                "humidity"
+              ],
+              "message": "dehumidifier load and humidity relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "dehumidifier_load",
+                "temperature"
+              ],
+              "message": "dehumidifier load and temperature relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "humidity",
+                "vpd"
+              ],
+              "message": "humidity and vpd relationship consistency became less stable between the baseline and active windows."
+            },
+            {
+              "type": "relationship_change",
+              "level": "elevated",
+              "columns": [
+                "light_level",
+                "vpd"
+              ],
+              "message": "light level and vpd relationship consistency became less stable between the baseline and active windows."
+            }
+          ],
+          "evidence": [
+            {
+              "type": "column_drift",
+              "column": "dehumidifier_load",
+              "baseline_average": 37.9284,
+              "recent_average": 40.4313,
+              "absolute_change": 2.5029,
+              "percent_change": 6.5991,
+              "direction": "up",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "column_drift",
+              "column": "vpd",
+              "baseline_average": 1.1996,
+              "recent_average": 1.1993,
+              "absolute_change": -0.0003,
+              "percent_change": -0.0222,
+              "direction": "flat",
+              "drift_flag": "normal"
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "dehumidifier_load"
+              ],
+              "baseline_correlation": 0.0697,
+              "recent_correlation": -0.7968,
+              "change": -0.8664
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "airflow",
+                "vpd"
+              ],
+              "baseline_correlation": 0.0833,
+              "recent_correlation": -0.0421,
+              "change": -0.1254
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "dehumidifier_load"
+              ],
+              "baseline_correlation": 0.6079,
+              "recent_correlation": 0.2212,
+              "change": -0.3867
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "co2",
+                "vpd"
+              ],
+              "baseline_correlation": 0.35,
+              "recent_correlation": -0.102,
+              "change": -0.452
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "humidity"
+              ],
+              "baseline_correlation": -0.7582,
+              "recent_correlation": 0.4462,
+              "change": 1.2043
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "hvac_load"
+              ],
+              "baseline_correlation": -0.0821,
+              "recent_correlation": -0.4777,
+              "change": -0.3957
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "light_level"
+              ],
+              "baseline_correlation": -0.0366,
+              "recent_correlation": 0.179,
+              "change": 0.2156
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "temperature"
+              ],
+              "baseline_correlation": -0.5619,
+              "recent_correlation": 0.0737,
+              "change": 0.6356
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "vpd"
+              ],
+              "baseline_correlation": 0.2487,
+              "recent_correlation": -0.1991,
+              "change": -0.4477
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "dehumidifier_load",
+                "vpd"
+              ],
+              "baseline_correlation": 0.2487,
+              "recent_correlation": -0.1991,
+              "change": -0.4477
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "humidity",
+                "vpd"
+              ],
+              "baseline_correlation": -0.0945,
+              "recent_correlation": 0.5509,
+              "change": 0.6454
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "hvac_load",
+                "vpd"
+              ],
+              "baseline_correlation": 0.2692,
+              "recent_correlation": 0.2315,
+              "change": -0.0377
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "light_level",
+                "vpd"
+              ],
+              "baseline_correlation": -0.4317,
+              "recent_correlation": 0.4203,
+              "change": 0.852
+            },
+            {
+              "type": "relationship_change",
+              "columns": [
+                "temperature",
+                "vpd"
+              ],
+              "baseline_correlation": 0.0557,
+              "recent_correlation": 0.0725,
+              "change": 0.0168
+            }
+          ]
         }
       },
-      "categories_showing_meaningful_change": 0,
-      "numeric_signals_showing_meaningful_change": 0,
-      "corroboration_level": "limited"
+      "categories_showing_meaningful_change": 5,
+      "numeric_signals_showing_meaningful_change": 6,
+      "corroboration_level": "strong"
     },
     "persistence_assessment": {
-      "status": "limited",
+      "status": "not_persistent",
       "persistent_columns": [],
       "columns_assessed": 0,
       "details": [],
-      "limitations": [
-        "Persistence review needs at least 3 recent-window rows."
-      ]
+      "limitations": []
     },
     "recommended_checks": [
+      "Compare airflow and dehumidifier load timing against room activity logs.",
+      "Compare airflow and humidity timing against room activity logs.",
+      "Compare airflow and light level timing against room activity logs.",
+      "Compare dehumidifier load and humidity timing against room activity logs.",
+      "Compare dehumidifier load and temperature timing against room activity logs.",
+      "Compare humidity and vpd timing against room activity logs.",
+      "Compare light level and temperature timing against room activity logs.",
+      "Compare light level and vpd timing against room activity logs.",
       "Review unmapped CSV columns for clearer cultivation sensor labels."
     ],
     "limitations": [
       "Neraium SII v1 uses only the uploaded CSV profile, cultivation mapping, baseline comparison, and paired numeric relationships.",
       "It does not forecast crop stress, equipment failure, yield impact, or root cause.",
       "No data is stored permanently and no AI or LLM analysis is used.",
-      "Data quality warnings are present in the upload profile.",
-      "Relationship review skipped because there are not enough rows.",
-      "Persistence review needs at least 3 recent-window rows."
+      "Data quality warnings are present in the upload profile."
     ],
     "audit_trace": [
       "engine.version:neraium-cultivation-v1",
-      "inputs.rows:1",
-      "inputs.columns:3",
-      "inputs.mapped_columns:2",
-      "baseline_window_rows_used:0",
-      "recent_window_rows_used:0",
-      "columns_analyzed:0",
+      "inputs.rows:34",
+      "inputs.columns:11",
+      "inputs.mapped_columns:7",
+      "baseline_window_rows_used:7",
+      "recent_window_rows_used:7",
+      "columns_analyzed:8",
       "columns_skipped:timestamp:timestamp_context",
-      "baseline.windows:baseline=0,recent=0,columns=0",
+      "columns_skipped:room:non_numeric",
+      "columns_skipped:facility_id:non_numeric",
+      "baseline.windows:baseline=7,recent=7,columns=8",
       "engine.data_quality:warnings_present",
-      "relationships.skipped:insufficient_rows",
-      "relationship_checks_attempted:0",
-      "relationship_checks_skipped:insufficient_rows",
-      "engine.mapping:unknown_columns_present",
-      "persistence.recent_window_rows:0",
-      "persistence.skipped:insufficient_recent_rows"
+      "drift.column:airflow:down:normal",
+      "drift.column:co2:flat:normal",
+      "drift.column:dehumidifier_load:up:normal",
+      "drift.column:humidity:up:normal",
+      "drift.column:hvac_load:flat:normal",
+      "drift.column:light_level:flat:normal",
+      "drift.column:temperature:flat:normal",
+      "drift.column:vpd:flat:normal",
+      "relationships.pair:airflow:co2:change=-0.4178",
+      "relationships.pair:airflow:dehumidifier_load:change=-0.8664",
+      "relationships.pair:airflow:humidity:change=-0.6801",
+      "relationships.pair:airflow:hvac_load:change=-0.2902",
+      "relationships.pair:airflow:light_level:change=-0.951",
+      "relationships.pair:airflow:temperature:change=-0.1112",
+      "relationships.pair:airflow:vpd:change=-0.1254",
+      "relationships.pair:co2:dehumidifier_load:change=-0.3867",
+      "relationships.pair:co2:humidity:change=-0.2481",
+      "relationships.pair:co2:hvac_load:change=-0.1352",
+      "relationships.pair:co2:light_level:change=0.315",
+      "relationships.pair:co2:temperature:change=0.4394",
+      "relationships.pair:co2:vpd:change=-0.452",
+      "relationships.pair:dehumidifier_load:humidity:change=1.2043",
+      "relationships.pair:dehumidifier_load:hvac_load:change=-0.3957",
+      "relationships.pair:dehumidifier_load:light_level:change=0.2156",
+      "relationships.pair:dehumidifier_load:temperature:change=0.6356",
+      "relationships.pair:dehumidifier_load:vpd:change=-0.4477",
+      "relationships.pair:humidity:hvac_load:change=0.4577",
+      "relationships.pair:humidity:light_level:change=0.3582",
+      "relationships.pair:humidity:temperature:change=-0.1642",
+      "relationships.pair:humidity:vpd:change=0.6454",
+      "relationships.pair:hvac_load:light_level:change=0.0947",
+      "relationships.pair:hvac_load:temperature:change=0.1518",
+      "relationships.pair:hvac_load:vpd:change=-0.0377",
+      "relationships.pair:light_level:temperature:change=0.6058",
+      "relationships.pair:light_level:vpd:change=0.852",
+      "relationships.pair:temperature:vpd:change=0.0168",
+      "relationship_checks_attempted:28",
+      "engine.mapping:unknown_columns_present"
     ]
   },
   "driver_attribution": {
-    "room": "Current room",
-    "state": "Needs review",
-    "likely_driver": "Sensor network continuity",
-    "driver_category": "sensor_network",
+    "room": "flower-room-1",
+    "state": "Monitoring",
+    "likely_driver": "Airflow restriction",
+    "driver_category": "airflow_restriction",
     "contributing_signals": [
-      "room data",
-      "timestamps"
+      "airflow"
     ],
     "supporting_evidence": [
-      "At least two timestamps are required to estimate sample interval",
-      "Some source columns are not mapped to cultivation systems"
+      "Air movement behavior is diverging from this room's recent operating pattern",
+      "Airflow response consistency weakened during active climate periods",
+      "Air movement behavior became less consistent during changing room conditions"
     ],
     "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-    "next_operator_move": "Check sensor sync, gateway status, and stale room readings",
+    "next_operator_move": "Check fans, filters, vents, and room pressure balance",
     "severity": "review",
-    "attribution_confidence": "low"
+    "attribution_confidence": "medium"
   },
   "sii_intelligence": {
-    "source": "uploaded",
+    "source": "rest_poll",
     "mode": "live",
-    "facility_state": "Needs review",
-    "room_state": "Needs review",
-    "urgency": "review",
-    "intervention_window": "2 days",
-    "neraium_score": 60,
-    "primary_room": "Current room",
-    "priority_room": "Current room",
-    "primary_driver": "Sensor network continuity",
+    "facility_state": "Monitoring",
+    "room_state": "Monitoring",
+    "urgency": "unstable",
+    "intervention_window": "8 hours",
+    "neraium_score": 13,
+    "primary_room": "flower-room-1",
+    "priority_room": "flower-room-1",
+    "primary_driver": "Airflow restriction",
     "supporting_evidence": [
-      "At least two timestamps are required to estimate sample interval",
-      "Some source columns are not mapped to cultivation systems"
+      "Air movement behavior is diverging from this room's recent operating pattern",
+      "Airflow response consistency weakened during active climate periods",
+      "Air movement behavior became less consistent during changing room conditions"
     ],
     "relationship_evidence": [
-      "Environmental coupling evidence is limited in the current telemetry."
+      "Air movement behavior is diverging from this room's recent operating pattern.",
+      "Air movement behavior is diverging from this room's recent operating pattern.",
+      "Airflow response consistency weakened during active climate periods.",
+      "Air movement behavior is diverging from this room's recent operating pattern."
     ],
     "structural_explanation": [
-      "Environmental coupling evidence is limited in the current telemetry."
+      "Airflow response consistency weakened during active climate periods.",
+      "Room exchange behavior may be affecting environmental recovery.",
+      "Air movement behavior is diverging from this room's recent operating pattern."
     ],
     "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-    "recommended_operator_review": "Check sensor sync, gateway status, and stale room readings",
+    "recommended_operator_review": "Check fans, filters, vents, and room pressure balance",
     "what_to_check": [
-      "Confirm room telemetry coverage",
-      "Review missing or stale readings",
-      "Compare connected signals against expected room sources"
+      "Inspect airflow path",
+      "Check fan response consistency",
+      "Review room exchange behavior"
     ],
-    "why_flagged": "At least two timestamps are required to estimate sample interval",
+    "why_flagged": "Air movement behavior is diverging from this room's recent operating pattern",
     "baseline_comparison": "Current telemetry remains within available baseline comparison.",
     "observed_persistence": "Persistence evidence is limited in the current telemetry.",
-    "last_updated": "2026-05-10T15:46:32.449075+00:00",
-    "filename": "health.csv",
-    "row_count": 1,
+    "last_updated": "2026-05-10T17:06:39.111543+00:00",
+    "filename": "Node-RED Cultivation Telemetry",
+    "row_count": 34,
     "timestamp_coverage": {
       "detected_timestamp_column": "timestamp",
-      "first_timestamp": "2026-05-01T08:00:00",
-      "last_timestamp": "2026-05-01T08:00:00",
+      "first_timestamp": "2026-05-10T17:02:54.720000",
+      "last_timestamp": "2026-05-10T17:06:37.826000",
       "estimated_sample_interval": null,
       "warnings": [
-        "At least two timestamps are required to estimate sample interval."
+        "Timestamp intervals are inconsistent."
       ]
     },
     "room_summary": {
-      "room_count": 0,
-      "rooms": [],
-      "total_rows": 1,
-      "unassigned_rows": 1
+      "room_count": 1,
+      "rooms": [
+        {
+          "room": "flower-room-1",
+          "row_count": 272
+        }
+      ],
+      "total_rows": 34,
+      "unassigned_rows": 0
     },
     "rooms": [
       {
-        "room": "Current room",
-        "room_state": "Needs review",
-        "urgency": "review",
-        "intervention_window": "2 days",
-        "primary_driver": "Sensor network continuity",
+        "room": "flower-room-1",
+        "room_state": "Monitoring",
+        "urgency": "unstable",
+        "intervention_window": "8 hours",
+        "primary_driver": "Airflow restriction",
         "supporting_evidence": [
-          "At least two timestamps are required to estimate sample interval",
-          "Some source columns are not mapped to cultivation systems"
+          "Air movement behavior is diverging from this room's recent operating pattern",
+          "Airflow response consistency weakened during active climate periods",
+          "Air movement behavior became less consistent during changing room conditions"
         ],
         "relationship_evidence": [
-          "Environmental coupling evidence is limited in the current telemetry."
+          "Air movement behavior is diverging from this room's recent operating pattern.",
+          "Air movement behavior is diverging from this room's recent operating pattern.",
+          "Airflow response consistency weakened during active climate periods.",
+          "Air movement behavior is diverging from this room's recent operating pattern."
         ],
         "structural_explanation": [
-          "Environmental coupling evidence is limited in the current telemetry."
+          "Airflow response consistency weakened during active climate periods.",
+          "Room exchange behavior may be affecting environmental recovery.",
+          "Air movement behavior is diverging from this room's recent operating pattern."
         ],
         "confidence_basis": "Multiple supporting signals from the uploaded telemetry",
-        "recommended_operator_review": "Check sensor sync, gateway status, and stale room readings",
+        "recommended_operator_review": "Check fans, filters, vents, and room pressure balance",
         "what_to_check": [
-          "Confirm room telemetry coverage",
-          "Review missing or stale readings",
-          "Compare connected signals against expected room sources"
+          "Inspect airflow path",
+          "Check fan response consistency",
+          "Review room exchange behavior"
         ],
-        "why_flagged": "At least two timestamps are required to estimate sample interval",
+        "why_flagged": "Air movement behavior is diverging from this room's recent operating pattern",
         "baseline_comparison": "Current telemetry remains within available baseline comparison.",
         "observed_persistence": "Persistence evidence is limited in the current telemetry.",
-        "last_updated": "2026-05-10T15:46:32.449075+00:00",
-        "confidence": 58
+        "last_updated": "2026-05-10T17:06:39.111543+00:00",
+        "confidence": 74
       }
-    ]
+    ],
+    "source_metadata": {
+      "scenario": "airflow_drift",
+      "tick": 45,
+      "source_id": "node-red-sim-api-001",
+      "facility_id": "cultivation-facility-001",
+      "room_id": "flower-room-1",
+      "timestamp": "2026-05-10T17:06:37.826Z",
+      "source_type": "external_rest_api",
+      "external_source_url": "http://18.216.253.180:1880/telemetry/latest",
+      "readings_received": 8,
+      "readings_accepted": 8,
+      "readings_rejected": 0,
+      "sensors_detected": 8
+    }
   },
   "sii_runner_result": {
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
-    "rows_processed": 1,
+    "rows_processed": 34,
     "columns_used": [
+      "airflow",
+      "co2",
+      "dehumidifier_load",
+      "humidity",
+      "hvac_load",
+      "light_level",
       "temperature",
-      "humidity"
+      "vpd"
     ],
-    "sensor_vector_count": 1,
+    "sensor_vector_count": 34,
     "output_summary": {
-      "frames_processed": 1,
-      "latest_regime": "WARMUP",
+      "frames_processed": 34,
+      "latest_regime": "STABLE",
       "latest_urgency": "NOMINAL",
-      "latest_instability_score": 0.0,
-      "max_instability_score": 0.0,
-      "latest_structural_drift": 0.0,
-      "latest_confidence": 0.0
+      "latest_instability_score": 0.16358184521696387,
+      "max_instability_score": 0.28202,
+      "latest_structural_drift": 0.40073630362219115,
+      "latest_confidence": 0.9892545327367798
     },
     "latest_state": {
-      "timestamp": 1777622400.0,
-      "cycle": 1,
-      "instability_score": 0.0,
-      "regime": "WARMUP",
+      "timestamp": 1778432797.826,
+      "cycle": 34,
+      "instability_score": 0.16358184521696387,
+      "regime": "STABLE",
       "urgency": "NOMINAL",
-      "structural_drift": 0.0,
-      "drift_velocity": 0.0,
-      "transition_pressure": 0.0,
-      "confidence": 0.0,
-      "gradient_norm": 0.0,
-      "recovery_alignment": 0.0,
+      "structural_drift": 0.40073630362219115,
+      "drift_velocity": 0.007600133471900879,
+      "transition_pressure": 0.0025093130732149645,
+      "confidence": 0.9892545327367798,
+      "gradient_norm": 4398.757203506693,
+      "recovery_alignment": -0.04192392493413646,
       "detection_context": {
         "first_detection_cycle": null,
         "threshold_alert_cycle": null,
@@ -387,10 +1750,11 @@
       }
     },
     "evidence": [
-      "SIIEngineAdapter ingested 2 numeric telemetry channels.",
-      "Unified SII core reported WARMUP regime and NOMINAL urgency.",
-      "Instability score 0.0 with structural drift 0.0.",
-      "Driver attribution category: sensor_network.",
+      "SIIEngineAdapter ingested 8 numeric telemetry channels.",
+      "Unified SII core reported STABLE regime and NOMINAL urgency.",
+      "Instability score 0.1636 with structural drift 0.4007.",
+      "Driver attribution category: airflow_restriction.",
+      "Environmental coupling is less consistent than the room's recent baseline.",
       "Environmental coupling is less consistent than the room's recent baseline."
     ],
     "errors": []
@@ -400,32 +1764,63 @@
     "engine_module": "app.engine.analysis",
     "engine_version": "neraium-cultivation-v1",
     "driver_attribution_ran": true,
-    "rows_processed": 1,
-    "columns_analyzed": 0,
-    "evidence_count": 1,
-    "git_commit": "887ca75"
+    "rows_processed": 34,
+    "columns_analyzed": 8,
+    "evidence_count": 37,
+    "git_commit": "589430a"
   },
   "processing_stats": {
     "chunk_count": 1,
-    "sampled_rows": 1,
-    "sii_sampled_rows": 1,
-    "malformed_rows": 0,
-    "memory_estimate_bytes": 48,
-    "used_streaming": true,
-    "engine_runtime_seconds": 0.0001,
+    "sampled_rows": 34,
+    "sii_sampled_rows": 34,
+    "memory_estimate_bytes": 9730,
+    "used_streaming": false,
+    "engine_runtime_seconds": 0.0039,
     "room_summary": {
-      "room_count": 0,
-      "rooms": [],
-      "total_rows": 1,
-      "unassigned_rows": 1
-    }
+      "room_count": 1,
+      "rooms": [
+        {
+          "room": "flower-room-1",
+          "row_count": 272
+        }
+      ],
+      "total_rows": 34,
+      "unassigned_rows": 0
+    },
+    "record_count": 8,
+    "accepted_record_count": 8,
+    "rejected_record_count": 0,
+    "sensors_detected": 8
   },
   "room_summary": {
-    "room_count": 0,
-    "rooms": [],
-    "total_rows": 1,
-    "unassigned_rows": 1
+    "room_count": 1,
+    "rooms": [
+      {
+        "room": "flower-room-1",
+        "row_count": 272
+      }
+    ],
+    "total_rows": 34,
+    "unassigned_rows": 0
   },
+  "ingestion_metadata": {
+    "scenario": "airflow_drift",
+    "tick": 45,
+    "source_id": "node-red-sim-api-001",
+    "facility_id": "cultivation-facility-001",
+    "room_id": "flower-room-1",
+    "timestamp": "2026-05-10T17:06:37.826Z",
+    "source_type": "external_rest_api",
+    "external_source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "readings_received": 8,
+    "readings_accepted": 8,
+    "readings_rejected": 0,
+    "sensors_detected": 8
+  },
+  "source_name": "Node-RED Cultivation Telemetry",
+  "source_url": "http://18.216.253.180:1880/telemetry/latest",
+  "source_type": "external_rest_api",
+  "connection_id": "node-red-cultivation-telemetry",
   "validation_provenance": {
     "cmapss_supported": true,
     "known_validation_result": "707 units, 687 detected, 97.2% coverage, average lead time 198.4 cycles",
