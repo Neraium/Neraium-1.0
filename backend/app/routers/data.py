@@ -244,6 +244,11 @@ def read_latest_upload() -> dict[str, Any]:
         logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
         return payload
     summary = summary or {}
+    live_baseline_source = (live_connection or {}).get("baseline_source")
+    live_baseline_status = (live_connection or {}).get("baseline_status")
+    live_baseline_samples_collected = (live_connection or {}).get("baseline_samples_collected", 0)
+    live_baseline_samples_required = (live_connection or {}).get("baseline_samples_required", 0)
+    live_baseline_last_updated = (live_connection or {}).get("last_baseline_update")
     last_processed_at = summary.get("last_processed_at")
     if last_processed_at is None and latest_state:
         last_processed_at = latest_state.get("last_processed_at")
@@ -284,11 +289,11 @@ def read_latest_upload() -> dict[str, Any]:
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
         "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
         "latest_result": detailed_result,
-        "baseline_source": summary.get("baseline_source") or (live_connection or {}).get("baseline_source"),
-        "baseline_status": summary.get("baseline_status") or (live_connection or {}).get("baseline_status"),
-        "baseline_samples_collected": summary.get("baseline_samples_collected", (live_connection or {}).get("baseline_samples_collected", 0)),
-        "baseline_samples_required": summary.get("baseline_samples_required", (live_connection or {}).get("baseline_samples_required", 0)),
-        "last_baseline_update": summary.get("last_baseline_update") or (live_connection or {}).get("last_baseline_update"),
+        "baseline_source": live_baseline_source or summary.get("baseline_source"),
+        "baseline_status": live_baseline_status or summary.get("baseline_status"),
+        "baseline_samples_collected": live_baseline_samples_collected if live_connection is not None else summary.get("baseline_samples_collected", 0),
+        "baseline_samples_required": live_baseline_samples_required if live_connection is not None else summary.get("baseline_samples_required", 0),
+        "last_baseline_update": live_baseline_last_updated or summary.get("last_baseline_update"),
     }
     logger.info(
         "latest_result_served status=%s source=%s filename=%s rows=%s columns=%s state_available=%s",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -46,6 +47,7 @@ def now_iso() -> str:
 
 def default_connection_payload(settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
+    auto_polling_enabled = settings.app_env == "development" and os.getenv("PYTEST_CURRENT_TEST") is None
     return {
         "connection_id": DEFAULT_CONNECTION_ID,
         "name": DEFAULT_CONNECTION_NAME,
@@ -53,11 +55,11 @@ def default_connection_payload(settings: Settings | None = None) -> dict[str, An
         "source_type": "external_rest_api",
         "facility_id": "cultivation-facility-001",
         "room_id": "flower-room-1",
-        "polling_enabled": settings.app_env == "development",
+        "polling_enabled": auto_polling_enabled,
         "polling_interval_seconds": DEFAULT_POLLING_INTERVAL_SECONDS,
         "last_poll_at": None,
         "last_success_at": None,
-        "status": "polling" if settings.app_env == "development" else "offline",
+        "status": "polling" if auto_polling_enabled else "offline",
         "error_message": "",
         "readings_received": 0,
         "readings_accepted": 0,
