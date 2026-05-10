@@ -20,7 +20,7 @@ export function resolveAccessCode(accessCode = APP_ACCESS_CODE) {
 
 export function buildAccessHeaders(accessCode = APP_ACCESS_CODE) {
   const resolvedAccessCode = resolveAccessCode(accessCode);
-  return resolvedAccessCode ? { [ACCESS_CODE_HEADER]: resolvedAccessCode } : {};
+  console.log("ACCESS CODE:", resolvedAccessCode); return resolvedAccessCode ? { [ACCESS_CODE_HEADER]: resolvedAccessCode } : {};
 }
 
 export function apiFetch(path, options = {}) {
@@ -46,4 +46,5 @@ export const APP_ACCESS_CONFIG_WARNING = configuredAppAccessCode
   : isProductionBuild
     ? "Access is not configured for this production build."
     : "Local development access is enabled.";
+
 
