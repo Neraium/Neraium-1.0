@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
-from app.services.upload_jobs import JOB_DIR, process_csv_content, process_csv_file, read_job, write_job
+from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -31,6 +31,12 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["message"] == "Telemetry batch received. Processing started."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
     assert payload["file_size_bytes"] > 0
+
+
+def test_positive_int_env_parser_falls_back_for_invalid_values(monkeypatch) -> None:
+    monkeypatch.setenv("NERAIUM_TEST_ROWS", "not-a-number")
+
+    assert parse_positive_int_env("NERAIUM_TEST_ROWS", 123) == 123
 
 
 def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
@@ -223,6 +229,25 @@ def test_facility_systems_uses_latest_state_after_upload() -> None:
     assert payload["intelligence"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
 
 
+def test_facility_systems_uses_multi_room_state_after_upload() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        [
+            "2026-05-01T08:00:00Z,Flower Room 1,74,55",
+            "2026-05-01T08:05:00Z,Flower Room 2,76,60",
+            "2026-05-01T08:10:00Z,Veg Room A,80,65",
+            "2026-05-01T08:15:00Z,Mother Room,75,57",
+            "2026-05-01T08:20:00Z,Flower Room 1,75,56",
+        ]
+    )
+    post_csv(client, "multi-room-state.csv", f"timestamp,room,temperature,humidity\n{rows}")
+
+    payload = client.get("/api/facility/systems").json()
+
+    assert payload["intelligence"]["room_summary"]["room_count"] == 4
+    assert len(payload["intelligence"]["rooms"]) == 4
+
+
 def test_one_column_csv_reports_runner_error_without_failed_job() -> None:
     client = TestClient(create_app())
     rows = "\n".join(f"2026-05-01T08:{index:02d}:00Z,{75 + index}" for index in range(6))
@@ -285,6 +310,28 @@ def test_processing_helper_preserves_profile_metadata() -> None:
     assert result["sii_runner_result"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
 
 
+def test_processing_helper_detects_multiple_uploaded_rooms() -> None:
+    result = process_csv_content(
+        filename="multi-room.csv",
+        content=(
+            "timestamp,room,temperature,humidity\n"
+            "2026-05-01T08:00:00Z,Flower Room 1,74,55\n"
+            "2026-05-01T08:05:00Z,Flower Room 2,76,60\n"
+            "2026-05-01T08:10:00Z,Veg Room A,80,65\n"
+            "2026-05-01T08:15:00Z,Mother Room,75,57\n"
+        ).encode(),
+    )
+
+    assert result["room_summary"]["room_count"] == 4
+    assert [room["room"] for room in result["room_summary"]["rooms"]] == [
+        "Flower Room 1",
+        "Flower Room 2",
+        "Mother Room",
+        "Veg Room A",
+    ]
+    assert len(result["sii_intelligence"]["rooms"]) == 4
+
+
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     client = TestClient(create_app())
@@ -314,7 +361,7 @@ def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -
 
     assert result["row_count"] == 100_000
     assert result["processing_stats"]["used_streaming"] is True
-    assert result["processing_stats"]["sampled_rows"] == 50_000
+    assert result["processing_stats"]["sampled_rows"] == 20_000
     assert result["processing_stats"]["chunk_count"] == 10
 
 
@@ -331,7 +378,7 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-300k.csv")
 
     assert result["row_count"] == 300_000
-    assert result["processing_stats"]["sampled_rows"] == 50_000
+    assert result["processing_stats"]["sampled_rows"] == 20_000
     assert result["processing_stats"]["chunk_count"] == 30
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 300_000
@@ -350,7 +397,7 @@ def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-500k.csv")
 
     assert result["row_count"] == 500_000
-    assert result["processing_stats"]["sampled_rows"] == 50_000
+    assert result["processing_stats"]["sampled_rows"] == 20_000
     assert result["processing_stats"]["chunk_count"] == 50
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 500_000

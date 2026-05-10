@@ -37,6 +37,14 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
         assert endpoint in source
 
 
+def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert "function extractRoomSummaryNames(result)" in source
+    assert "result?.room_summary?.room_count" in source
+    assert "uploadedRooms.length" in source
+
+
 def test_multipart_upload_does_not_set_form_data_content_type() -> None:
     source = read_frontend(APP_JSX)
     upload_start = source.index('apiFetch("/api/data/upload"')

@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import csv
+import os
 import time
 import uuid
-from collections import deque
+from collections import Counter, deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,18 +29,31 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
-from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner
+from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner, write_latest_sii_state
 
 
 RUNTIME_DIR = get_settings().runtime_dir
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
-CHUNK_SIZE_ROWS = 10_000
-MAX_ANALYSIS_ROWS = 50_000
-MAX_SII_ROWS = 20_000
-
 logger = logging.getLogger(__name__)
+
+
+def parse_positive_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning("invalid_integer_env name=%s value=%s default=%s", name, raw_value, default)
+        return default
+    return value if value > 0 else default
+
+
+CHUNK_SIZE_ROWS = parse_positive_int_env("NERAIUM_UPLOAD_CHUNK_SIZE_ROWS", 10_000)
+MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000)
+MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000)
 
 PROGRESS_LABELS = {
     "PENDING": "Telemetry batch received. Processing is queued.",
@@ -270,6 +284,7 @@ def process_csv_content(
     status_callback: Any | None = None,
 ) -> dict[str, Any]:
     columns, data_rows = parse_csv_content(content)
+    room_summary = build_room_summary(columns, data_rows)
     return build_upload_result(
         columns=columns,
         data_rows=data_rows,
@@ -283,6 +298,7 @@ def process_csv_content(
             "memory_estimate_bytes": estimate_rows_memory(data_rows),
             "used_streaming": False,
             "engine_runtime_seconds": 0,
+            "room_summary": room_summary,
         },
     )
 
@@ -310,6 +326,7 @@ def stream_csv_windows(
 ) -> tuple[list[str], list[list[str]], int, dict[str, Any]]:
     first_rows: list[list[str]] = []
     tail_rows: deque[list[str]] = deque(maxlen=MAX_ANALYSIS_ROWS // 2)
+    room_counts: Counter[str] = Counter()
     total_rows = 0
     malformed_rows = 0
     chunk_count = 0
@@ -328,11 +345,14 @@ def stream_csv_windows(
             raise ValueError("CSV file is empty.") from exc
         if not any(columns):
             raise ValueError("CSV file must include a header row.")
+        room_index = first_room_column_index(columns)
 
         for row in reader:
             if not any(cell.strip() for cell in row):
                 continue
             total_rows += 1
+            if room_index is not None and room_index < len(row) and row[room_index].strip():
+                room_counts[row[room_index].strip()] += 1
             if len(row) != len(columns):
                 malformed_rows += 1
             if len(first_rows) < MAX_ANALYSIS_ROWS // 2:
@@ -347,7 +367,7 @@ def stream_csv_windows(
                         rows_processed=total_rows,
                         columns_detected=len(columns),
                         chunk_count=chunk_count,
-                        memory_estimate_bytes=estimate_rows_memory(first_rows) + estimate_rows_memory(list(tail_rows)),
+                        memory_estimate_bytes=0,
                     )
 
     if total_rows == 0:
@@ -374,6 +394,7 @@ def stream_csv_windows(
         "memory_estimate_bytes": estimate_rows_memory(data_rows),
         "used_streaming": True,
         "engine_runtime_seconds": 0,
+        "room_summary": room_summary_from_counts(room_counts, total_rows),
     }
 
 
@@ -423,6 +444,8 @@ def build_upload_result(
         status_callback("BASELINE_MODELING", rows_processed=total_rows, columns_detected=len(columns))
     baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
     cultivation_mapping = map_cultivation_columns(columns)
+    room_summary = processing_stats.get("room_summary") or build_room_summary(columns, data_rows, total_rows)
+    primary_room = primary_room_from_summary(room_summary)
     operator_report = build_operator_report(
         data_quality=data_quality,
         timestamp_profile=timestamp_profile,
@@ -444,7 +467,7 @@ def build_upload_result(
     processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
     driver_attribution = build_driver_attribution(
         room_state={
-            "room": primary_room_from_upload(columns, data_rows),
+            "room": primary_room,
             "state": state_from_assessment(baseline_analysis["overall_assessment"]),
             "severity": severity_from_assessment(baseline_analysis["overall_assessment"]),
         },
@@ -471,6 +494,7 @@ def build_upload_result(
         driver_attribution=driver_attribution,
         operator_report=operator_report,
         timestamp_profile=timestamp_profile,
+        room_summary=room_summary,
     )
     processing_trace = build_processing_trace(
         engine_result=engine_result,
@@ -484,10 +508,19 @@ def build_upload_result(
         rows=sii_rows,
         numeric_profiles=numeric_profiles,
         timestamp_column=detected_timestamp_column,
-        primary_room=primary_room_from_upload(columns, data_rows),
+        primary_room=primary_room,
         driver_attribution=driver_attribution,
         engine_result=engine_result,
         processing_trace=processing_trace,
+    )
+    write_latest_sii_state(
+        {
+            **sii_intelligence,
+            "runner_module": sii_runner_result.get("runner_module"),
+            "core_engine": sii_runner_result.get("core_engine"),
+            "runner_used": sii_runner_result.get("runner_used"),
+            "last_processed_at": now_iso(),
+        }
     )
 
     return {
@@ -510,6 +543,7 @@ def build_upload_result(
         "sii_runner_result": truncate_runner_result(sii_runner_result),
         "processing_trace": processing_trace,
         "processing_stats": processing_stats,
+        "room_summary": room_summary,
         "validation_provenance": VALIDATION_PROVENANCE,
     }
 
@@ -532,6 +566,7 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
         "source": "uploaded",
         "warnings": result["warnings"][:10],
         "runner_errors": runner.get("errors", [])[:5],
+        "room_summary": result.get("room_summary", {}),
     }
 
 
@@ -602,19 +637,48 @@ def truncate_runner_result(runner_result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def primary_room_from_upload(columns: list[str], rows: list[list[str]]) -> str:
-    room_columns = [
-        index
-        for index, column in enumerate(columns)
-        if any(token in column.lower() for token in ("room", "zone", "bay"))
-    ]
-    if not room_columns:
-        return "Current room"
-    room_index = room_columns[0]
+def first_room_column_index(columns: list[str]) -> int | None:
+    for index, column in enumerate(columns):
+        if any(token in column.lower() for token in ("room", "zone", "bay")):
+            return index
+    return None
+
+
+def build_room_summary(columns: list[str], rows: list[list[str]], total_rows: int | None = None) -> dict[str, Any]:
+    room_index = first_room_column_index(columns)
+    if room_index is None:
+        return room_summary_from_counts(Counter(), total_rows if total_rows is not None else len(rows))
+    room_counts: Counter[str] = Counter()
     for row in rows:
         if room_index < len(row) and row[room_index].strip():
-            return row[room_index].strip()
+            room_counts[row[room_index].strip()] += 1
+    return room_summary_from_counts(room_counts, total_rows if total_rows is not None else len(rows))
+
+
+def room_summary_from_counts(room_counts: Counter[str], total_rows: int) -> dict[str, Any]:
+    rooms = [
+        {"room": room, "row_count": count}
+        for room, count in sorted(room_counts.items(), key=lambda item: (-item[1], item[0].lower()))
+    ]
+    return {
+        "room_count": len(rooms),
+        "rooms": rooms,
+        "total_rows": total_rows,
+        "unassigned_rows": max(total_rows - sum(item["row_count"] for item in rooms), 0),
+    }
+
+
+def primary_room_from_summary(room_summary: dict[str, Any]) -> str:
+    rooms = room_summary.get("rooms") if isinstance(room_summary, dict) else []
+    if isinstance(rooms, list) and rooms:
+        first = rooms[0]
+        if isinstance(first, dict) and first.get("room"):
+            return str(first["room"])
     return "Current room"
+
+
+def primary_room_from_upload(columns: list[str], rows: list[list[str]]) -> str:
+    return primary_room_from_summary(build_room_summary(columns, rows))
 
 
 def state_from_assessment(assessment: str) -> str:

@@ -132,6 +132,7 @@ def build_upload_intelligence(
     driver_attribution: dict[str, Any],
     operator_report: dict[str, Any],
     timestamp_profile: dict[str, Any],
+    room_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     last_updated = now_iso()
     severity = driver_attribution.get("severity", "info")
@@ -147,49 +148,107 @@ def build_upload_intelligence(
     room = driver_attribution.get("room") or "Current room"
     room_state = driver_attribution.get("state") or state_from_urgency(urgency)
 
-    room_record = {
-        "room": room,
-        "room_state": room_state,
-        "urgency": urgency,
-        "intervention_window": intervention_window,
-        "primary_driver": primary_driver,
-        "supporting_evidence": supporting_evidence,
-        "relationship_evidence": relationship_evidence,
-        "structural_explanation": structural_explanation,
-        "confidence_basis": driver_attribution.get("confidence_basis") or "Evidence is being compared across uploaded room signals.",
-        "recommended_operator_review": driver_attribution.get("next_operator_move") or (what_to_check[0] if what_to_check else "Continue monitoring"),
-        "what_to_check": what_to_check,
-        "why_flagged": why_flagged,
-        "baseline_comparison": baseline_comparison_from_analysis(baseline_analysis),
-        "observed_persistence": observed_persistence_from_engine(engine_result),
-        "last_updated": last_updated,
-        "confidence": confidence_number(driver_attribution),
-    }
+    room_records = build_upload_room_records(
+        room_summary=room_summary,
+        fallback_room=room,
+        room_state=room_state,
+        urgency=urgency,
+        intervention_window=intervention_window,
+        primary_driver=primary_driver,
+        supporting_evidence=supporting_evidence,
+        relationship_evidence=relationship_evidence,
+        structural_explanation=structural_explanation,
+        confidence_basis=driver_attribution.get("confidence_basis") or "Evidence is being compared across uploaded room signals.",
+        recommended_operator_review=driver_attribution.get("next_operator_move") or (what_to_check[0] if what_to_check else "Continue monitoring"),
+        what_to_check=what_to_check,
+        why_flagged=why_flagged,
+        baseline_comparison=baseline_comparison_from_analysis(baseline_analysis),
+        observed_persistence=observed_persistence_from_engine(engine_result),
+        last_updated=last_updated,
+        confidence=confidence_number(driver_attribution),
+    )
+    primary_room_record = room_records[0]
     return {
-        "source": "sii_engine",
+        "source": "uploaded",
         "mode": "live",
-        "facility_state": room_state,
-        "room_state": room_state,
+        "facility_state": primary_room_record["room_state"],
+        "room_state": primary_room_record["room_state"],
         "urgency": urgency,
         "intervention_window": intervention_window,
         "neraium_score": score,
-        "primary_room": room,
+        "primary_room": primary_room_record["room"],
+        "priority_room": primary_room_record["room"],
         "primary_driver": primary_driver,
         "supporting_evidence": supporting_evidence,
         "relationship_evidence": relationship_evidence,
         "structural_explanation": structural_explanation,
-        "confidence_basis": room_record["confidence_basis"],
-        "recommended_operator_review": room_record["recommended_operator_review"],
+        "confidence_basis": primary_room_record["confidence_basis"],
+        "recommended_operator_review": primary_room_record["recommended_operator_review"],
         "what_to_check": what_to_check,
         "why_flagged": why_flagged,
-        "baseline_comparison": room_record["baseline_comparison"],
-        "observed_persistence": room_record["observed_persistence"],
+        "baseline_comparison": primary_room_record["baseline_comparison"],
+        "observed_persistence": primary_room_record["observed_persistence"],
         "last_updated": last_updated,
         "filename": filename,
         "row_count": row_count,
         "timestamp_coverage": timestamp_profile,
-        "rooms": [room_record],
+        "room_summary": room_summary or {},
+        "rooms": room_records,
     }
+
+
+def build_upload_room_records(
+    *,
+    room_summary: dict[str, Any] | None,
+    fallback_room: str,
+    room_state: str,
+    urgency: str,
+    intervention_window: str,
+    primary_driver: str,
+    supporting_evidence: list[str],
+    relationship_evidence: list[str],
+    structural_explanation: list[str],
+    confidence_basis: str,
+    recommended_operator_review: str,
+    what_to_check: list[str],
+    why_flagged: str,
+    baseline_comparison: str,
+    observed_persistence: str,
+    last_updated: str,
+    confidence: int,
+) -> list[dict[str, Any]]:
+    summary_rooms = room_summary.get("rooms", []) if isinstance(room_summary, dict) else []
+    room_names = [
+        str(item.get("room"))
+        for item in summary_rooms
+        if isinstance(item, dict) and item.get("room")
+    ]
+    if not room_names:
+        room_names = [fallback_room or "Current room"]
+
+    records = []
+    for index, room_name in enumerate(room_names):
+        records.append(
+            {
+                "room": room_name,
+                "room_state": room_state if index == 0 else "Monitoring",
+                "urgency": urgency if index == 0 else "nominal",
+                "intervention_window": intervention_window if index == 0 else "Monitoring",
+                "primary_driver": primary_driver if index == 0 else "Room telemetry included in latest upload.",
+                "supporting_evidence": supporting_evidence if index == 0 else [f"{room_name} was detected in the uploaded telemetry."],
+                "relationship_evidence": relationship_evidence,
+                "structural_explanation": structural_explanation,
+                "confidence_basis": confidence_basis,
+                "recommended_operator_review": recommended_operator_review if index == 0 else "Continue monitoring",
+                "what_to_check": what_to_check,
+                "why_flagged": why_flagged if index == 0 else f"{room_name} is part of the uploaded room set.",
+                "baseline_comparison": baseline_comparison,
+                "observed_persistence": observed_persistence,
+                "last_updated": last_updated,
+                "confidence": confidence if index == 0 else max(confidence - 8, 0),
+            }
+        )
+    return records
 
 
 def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dict[str, Any]:

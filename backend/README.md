@@ -33,6 +33,9 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `BACKEND_PORT` defaults to `8010`.
 - `CORS_ORIGINS` defaults to local frontend origins and `https://app.neraium.com`.
 - `NERAIUM_RUNTIME_DIR` defaults to `backend/app/runtime`.
+- `NERAIUM_UPLOAD_CHUNK_SIZE_ROWS` defaults to `10000`.
+- `NERAIUM_MAX_ANALYSIS_ROWS` defaults to `20000`.
+- `NERAIUM_MAX_SII_ROWS` defaults to `5000`.
 
 For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=80`, `CORS_ORIGINS` to the deployed Amplify frontend origin, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path.
 

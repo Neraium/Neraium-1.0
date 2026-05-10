@@ -2191,6 +2191,10 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
       value: result ? latestManualSourceLabel(result) : "Live telemetry feed",
     },
     {
+      label: "Uploaded rooms",
+      value: result?.room_summary?.room_count ?? result?.sii_intelligence?.rooms?.length ?? "Live",
+    },
+    {
       label: "Systems in scope",
       value: systemsState === "ready" ? `${systems.length} live` : `${systems.length} placeholder`,
     },
@@ -2198,6 +2202,15 @@ function buildOverviewMetrics(result, apiStatus, systems, systemsState) {
 }
 
 function buildZoneSummary(roomContext) {
+  const uploadedRooms = Array.isArray(roomContext.uploadedRooms) ? roomContext.uploadedRooms : [];
+  if (uploadedRooms.length > 0) {
+    return uploadedRooms.slice(0, 8).map((room, index) => ({
+      label: index === 0 ? "Primary room" : `Uploaded room ${index + 1}`,
+      value: room,
+      detail: `${uploadedRooms.length} room${uploadedRooms.length === 1 ? "" : "s"} detected in the latest upload.`,
+      tone: index === 0 ? "nominal" : "info",
+    }));
+  }
   return [
     {
       label: "Primary room",
@@ -2588,14 +2601,28 @@ function buildRoomObservations(result, roomContext) {
 
 function deriveRoomContext(result) {
   if (!result || !Array.isArray(result.columns)) {
+    const summaryRooms = extractRoomSummaryNames(result);
+    if (summaryRooms.length > 0) {
+      return {
+        primary: summaryRooms[0],
+        secondary: summaryRooms[1] ?? `${summaryRooms.length} uploaded rooms`,
+        cycle: "Mixed uploaded rooms",
+        irrigation: "Pulse cycle under review",
+        uploadedRooms: summaryRooms,
+        roomCount: summaryRooms.length,
+      };
+    }
     return {
       primary: "Flower Room 1",
       secondary: "Flower Room 2",
       cycle: "Mixed flowering rooms",
       irrigation: "Pulse cycle under review",
+      uploadedRooms: ["Flower Room 1", "Flower Room 2"],
+      roomCount: 2,
     };
   }
 
+  const summaryRooms = extractRoomSummaryNames(result);
   const roomColumn = result.columns.find((column) => {
     const normalized = column.toLowerCase();
     return normalized.includes("room") || normalized.includes("zone");
@@ -2612,13 +2639,28 @@ function deriveRoomContext(result) {
     ? result.preview_rows.map((row) => row[cycleColumn]).filter(Boolean)
     : [];
   const irrigationMapped = result.cultivation_mapping?.categories?.irrigation?.length ?? 0;
+  const uploadedRooms = summaryRooms.length > 0 ? summaryRooms : uniqueValues(roomValues);
 
   return {
-    primary: roomValues[0] ?? "Room context not present in upload",
-    secondary: roomValues[1] ?? "Awaiting additional room telemetry",
+    primary: uploadedRooms[0] ?? "Room context not present in upload",
+    secondary: uploadedRooms[1] ?? (uploadedRooms.length > 1 ? `${uploadedRooms.length} uploaded rooms` : "Awaiting additional room telemetry"),
     cycle: cycleValues[0] ?? "Cycle metadata unavailable",
     irrigation: irrigationMapped > 0 ? "Irrigation channels mapped" : "Awaiting irrigation telemetry",
+    uploadedRooms,
+    roomCount: uploadedRooms.length,
   };
+}
+
+function extractRoomSummaryNames(result) {
+  const rooms = result?.room_summary?.rooms;
+  if (!Array.isArray(rooms)) {
+    return [];
+  }
+  return uniqueValues(rooms.map((room) => room?.room).filter(Boolean));
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
 }
 
 function deriveTimeCoverage(result) {

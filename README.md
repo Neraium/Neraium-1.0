@@ -47,6 +47,9 @@ Backend configuration is read from environment variables with local defaults:
 - `BACKEND_PORT=8010`
 - `CORS_ORIGINS=http://127.0.0.1:3010,http://localhost:3010,https://app.neraium.com`
 - `NERAIUM_RUNTIME_DIR=backend/app/runtime`
+- `NERAIUM_UPLOAD_CHUNK_SIZE_ROWS=10000`
+- `NERAIUM_MAX_ANALYSIS_ROWS=20000`
+- `NERAIUM_MAX_SII_ROWS=5000`
 
 ## Frontend Setup
 
