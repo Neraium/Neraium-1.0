@@ -2,26 +2,26 @@
   {
     "job_id": "node-red-cultivation-telemetry",
     "filename": "Node-RED Cultivation Telemetry",
-    "rows_processed": 17,
+    "rows_processed": 37,
     "columns_detected": 11,
     "chunk_count": 1,
-    "sampled_rows": 17,
-    "memory_estimate_bytes": 3173,
-    "engine_runtime_seconds": 0.0009,
-    "last_processed_at": "2026-05-10T21:43:48.576868+00:00",
+    "sampled_rows": 37,
+    "memory_estimate_bytes": 6908,
+    "engine_runtime_seconds": 0.0027,
+    "last_processed_at": "2026-05-10T21:46:54.643233+00:00",
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
     "source": "rest_poll",
-    "neraium_score": 41,
+    "neraium_score": 62,
     "operating_state": "Monitoring",
     "primary_room": "flower-room-1",
     "drift_status": "unstable",
     "upload_result_source": "rest_poll",
     "diff": {
       "previous_filename": "Node-RED Cultivation Telemetry",
-      "previous_processed_at": "2026-05-10T21:43:41.048114+00:00",
-      "neraium_score_delta": 17.0
+      "previous_processed_at": "2026-05-10T21:46:47.648218+00:00",
+      "neraium_score_delta": -9.0
     },
     "warnings": [
       "Timestamp intervals are inconsistent."
@@ -32,10 +32,10 @@
       "rooms": [
         {
           "room": "flower-room-1",
-          "row_count": 136
+          "row_count": 296
         }
       ],
-      "total_rows": 17,
+      "total_rows": 37,
       "unassigned_rows": 0
     },
     "source_name": "Node-RED Cultivation Telemetry",
@@ -44,12 +44,12 @@
     "facility_id": "cultivation-facility-001",
     "room_id": "flower-room-1",
     "scenario": "airflow_drift",
-    "tick": 426,
-    "latest_telemetry_timestamp": "2026-05-10T21:43:47.125Z",
+    "tick": 446,
+    "latest_telemetry_timestamp": "2026-05-10T21:46:53.070Z",
     "readings_received": 8,
     "readings_accepted": 8,
     "readings_rejected": 0,
     "sensors_detected": 8,
-    "primary_driver": "Lighting schedule influence"
+    "primary_driver": "Sensor network continuity"
   }
 ]
