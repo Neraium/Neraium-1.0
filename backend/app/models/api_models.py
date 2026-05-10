@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class UploadAcceptedResponse(BaseModel):
+    job_id: str
+    status: str
+    progress: int
+    processing_state: str
+    error_type: str | None = None
+    filename: str
+    message: str
+    status_url: str
+    file_size_bytes: int
+
+
+class UploadStatusResponse(BaseModel):
+    job_id: str | None
+    status: str
+    progress: int
+    processing_state: str
+    progress_label: str | None = None
+    message: str
+    error_type: str | None = None
+    filename: str | None = None
+    file_size_bytes: int = 0
+    rows_processed: int = 0
+    columns_detected: int = 0
+    chunk_count: int = 0
+    memory_estimate_bytes: int = 0
+    processing_duration_seconds: float | None = None
+    engine_runtime_seconds: float | None = None
+    runner_used: bool = False
+    runner_module: str | None = None
+    core_engine: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    result_summary: dict[str, Any] | None = None
+
+
+class LatestUploadResponse(BaseModel):
+    status: str
+    source: str
+    message: str
+    last_filename: str | None = None
+    rows_processed: int = 0
+    columns_detected: int = 0
+    last_processed_at: str | None = None
+    runner_module: str | None = None
+    core_engine: str | None = None
+    state_available: bool = False
+    connection_status: str
+    result_source: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    latest_result: dict[str, Any] | None = None
+    runner_used: bool | None = None
+    chunk_count: int | None = None
+    memory_estimate_bytes: int | None = None
+    engine_runtime_seconds: float | None = None
+
+
+class EvidenceRunResponse(BaseModel):
+    run_id: str
+    source_type: str
+    source_name: str | None = None
+    filename: str | None = None
+    created_at: str
+    completed_at: str | None = None
+    status: str
+    rows_received: int = 0
+    rows_accepted: int = 0
+    rows_rejected: int = 0
+    sensors_detected: int = 0
+    system_id: str | None = None
+    room: str | None = None
+    operating_state: str | None = None
+    neraium_score: int | None = None
+    drift_status: str | None = None
+    primary_drivers: list[str] = Field(default_factory=list)
+    evidence_summary: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    input_hash: str | None = None
+    result_hash: str | None = None
+    initiated_by: str | None = None
+
+
+class EvidenceRunsListResponse(BaseModel):
+    runs: list[EvidenceRunResponse] = Field(default_factory=list)
+
+
+class LatestEvidenceResponse(BaseModel):
+    status: str
+    message: str | None = None
+    run: EvidenceRunResponse | None = None
+
+
+class ObservabilitySummaryResponse(BaseModel):
+    queue: dict[str, int]
+    evidence_runs: dict[str, Any]
+    audit: dict[str, Any]
+    alerts: list[dict[str, Any]]

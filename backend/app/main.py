@@ -1,3 +1,5 @@
+import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -5,7 +7,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.routers import app_info, connectors, data, evidence, facility, health
+from app.routers import app_info, connectors, data, evidence, facility, health, observability
+from app.services.runtime_db import init_runtime_db
+from app.services.upload_worker import start_upload_worker, stop_upload_worker
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    init_runtime_db()
+    start_upload_worker()
+    logger.info("runtime_services_started")
+    try:
+        yield
+    finally:
+        stop_upload_worker()
+        logger.info("runtime_services_stopped")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -14,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="Neraium API",
         version="0.1.0",
         description="Customer-facing API for the Neraium application.",
+        lifespan=app_lifespan,
     )
     app.state.settings = settings
 
@@ -31,6 +50,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
+    app.include_router(observability.router, prefix="/api")
+
+    @app.middleware("http")
+    async def add_request_id_header(request: Request, call_next):
+        response = await call_next(request)
+        request_id = getattr(request.state, "request_id", None)
+        if request_id:
+            response.headers["X-Request-Id"] = request_id
+        return response
 
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

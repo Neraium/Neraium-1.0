@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
 EVIDENCE_WORKSPACE = ROOT / "frontend" / "src" / "components" / "EvidenceTrailWorkspace.jsx"
+EVIDENCE_API = ROOT / "frontend" / "src" / "services" / "evidenceApi.js"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
 
 
@@ -27,6 +28,7 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
     source = read_frontend(APP_JSX)
     evidence_source = read_frontend(EVIDENCE_WORKSPACE)
+    evidence_api_source = read_frontend(EVIDENCE_API)
 
     for endpoint in (
         'apiFetch("/api/data/upload"',
@@ -41,10 +43,14 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
     for endpoint in (
         'apiFetch("/api/evidence/latest"',
         'apiFetch("/api/evidence/runs"',
-        "apiFetch(`/api/evidence/runs/${selectedRunId}`",
-        "apiFetch(`/api/evidence/export/${selectedRunId}`",
+        "apiFetch(`/api/evidence/runs/${runId}`",
+        "apiFetch(`/api/evidence/export/${runId}`",
     ):
-        assert endpoint in evidence_source
+        assert endpoint in evidence_api_source
+    assert "fetchLatestEvidence" in evidence_source
+    assert "fetchEvidenceRuns" in evidence_source
+    assert "fetchEvidenceRun" in evidence_source
+    assert "exportEvidenceRun" in evidence_source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:

@@ -278,9 +278,29 @@ def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None
     assert latest.json()["run"]["run_id"] == run_id
     assert latest.json()["run"]["source_name"] == "evidence.csv"
     assert latest.json()["run"]["status"] == "completed"
+    assert latest.json()["run"]["initiated_by"] == "anonymous"
     assert detail.status_code == 200
     assert detail.json()["rows_accepted"] == 6
     assert detail.json()["sensors_detected"] >= 2
+
+
+def test_upload_records_authenticated_actor_in_evidence() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.2:.1f},{58 + index * 0.3:.1f}"
+        for index in range(6)
+    )
+
+    upload = client.post(
+        "/api/data/upload",
+        headers={"X-Neraium-User": "operator@example.com"},
+        files={"file": ("actor.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
+    )
+    run_id = upload.json()["job_id"]
+    detail = client.get(f"/api/evidence/runs/{run_id}")
+
+    assert detail.status_code == 200
+    assert detail.json()["initiated_by"] == "operator@example.com"
 
 
 def test_failed_processing_creates_failed_evidence_record(monkeypatch) -> None:
@@ -311,6 +331,29 @@ def test_evidence_export_endpoint_returns_report() -> None:
     assert response.status_code == 200
     assert "# Neraium Evidence Report" in response.text
     assert "Run ID:" in response.text
+
+
+def test_observability_summary_reports_queue_and_audit_counts() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.2:.1f},{58 + index * 0.3:.1f}"
+        for index in range(6)
+    )
+    upload = client.post(
+        "/api/data/upload",
+        headers={"X-Neraium-User": "ops@example.com"},
+        files={"file": ("obs.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
+    )
+    run_id = upload.json()["job_id"]
+    client.get(f"/api/evidence/export/{run_id}", headers={"X-Neraium-User": "ops@example.com"})
+
+    response = client.get("/api/observability/summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "queue" in payload
+    assert "audit" in payload
+    assert payload["audit"]["event_count"] >= 2
 
 
 def test_latest_upload_endpoint_returns_persisted_detailed_result() -> None:

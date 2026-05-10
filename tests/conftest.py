@@ -3,6 +3,7 @@ import time
 
 from app.services.sii_runner import STATE_PATH
 from app.services.evidence_store import evidence_runs_path
+from app.services.runtime_db import DB_PATH
 from app.services.upload_jobs import JOB_DIR, UPLOAD_DIR, latest_upload_history_path, latest_upload_path, latest_upload_result_path
 
 
@@ -19,6 +20,7 @@ def cleanup_runtime_state() -> None:
     remove_path_if_present(latest_upload_result_path())
     remove_path_if_present(latest_upload_history_path())
     remove_path_if_present(evidence_runs_path())
+    remove_path_if_present(DB_PATH)
     for directory in (JOB_DIR, UPLOAD_DIR):
         if directory.exists():
             for path in directory.glob("*"):

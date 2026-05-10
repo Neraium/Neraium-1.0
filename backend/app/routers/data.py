@@ -6,12 +6,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
+from app.models.api_models import LatestUploadResponse, UploadAcceptedResponse, UploadStatusResponse
+from app.services.runtime_db import record_audit_event
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
     create_upload_job,
     delete_upload_file,
     latest_completed_job_summary,
-    process_upload_job,
+    process_next_queued_upload_job,
     read_upload_history,
     read_latest_upload_result,
     read_job,
@@ -94,7 +96,7 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     }
 
 
-@router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED, response_model=UploadAcceptedResponse)
 async def upload_csv(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -104,13 +106,13 @@ async def upload_csv(
     if Path(filename).suffix.lower() != ".csv":
         raise HTTPException(status_code=400, detail="Only .csv files are supported.")
 
-    metadata = await create_upload_job(file)
+    auth_context = getattr(request.state, "auth_context", {})
+    metadata = await create_upload_job(file, initiated_by=auth_context.get("auth_subject", "anonymous"))
     if metadata["file_size_bytes"] == 0:
         delete_upload_file(metadata)
         raise HTTPException(status_code=400, detail="CSV file is empty.")
 
-    background_tasks.add_task(process_upload_job, metadata["job_id"])
-    auth_context = getattr(request.state, "auth_context", {})
+    background_tasks.add_task(process_next_queued_upload_job)
     logger.info(
         "upload_job_accepted job_id=%s returned_job_id=%s filename=%s size_bytes=%s auth_subject=%s auth_source=%s metadata_exists=%s",
         metadata["job_id"],
@@ -120,6 +122,14 @@ async def upload_csv(
         auth_context.get("auth_subject", "unknown"),
         auth_context.get("auth_source", "unknown"),
         read_job(metadata["job_id"]) is not None,
+    )
+    record_audit_event(
+        actor=auth_context.get("auth_subject", "unknown"),
+        action="upload.accepted",
+        resource_type="upload_job",
+        resource_id=metadata["job_id"],
+        request_id=auth_context.get("request_id"),
+        detail={"filename": metadata["filename"], "size_bytes": metadata["file_size_bytes"]},
     )
     return {
         "job_id": metadata["job_id"],
@@ -134,7 +144,7 @@ async def upload_csv(
     }
 
 
-@router.get("/data/upload-status/{job_id}")
+@router.get("/data/upload-status/{job_id}", response_model=UploadStatusResponse)
 def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
     metadata = read_job(job_id)
     auth_context = getattr(request.state, "auth_context", {})
@@ -188,7 +198,7 @@ def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dic
     }
 
 
-@router.get("/data/latest-upload")
+@router.get("/data/latest-upload", response_model=LatestUploadResponse)
 def read_latest_upload() -> dict[str, Any]:
     summary = latest_completed_job_summary()
     detailed_result = read_latest_upload_result()

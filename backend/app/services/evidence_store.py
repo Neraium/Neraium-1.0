@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.runtime_db import list_evidence_runs_db, read_evidence_run_db, upsert_evidence_run_db
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -23,6 +24,9 @@ def evidence_runs_path() -> Path:
 
 
 def list_evidence_runs(limit: int = 50) -> list[dict[str, Any]]:
+    db_items = list_evidence_runs_db(limit=limit)
+    if db_items:
+        return db_items
     path = evidence_runs_path()
     if not path.exists():
         return []
@@ -38,6 +42,9 @@ def list_evidence_runs(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def read_evidence_run(run_id: str) -> dict[str, Any] | None:
+    db_item = read_evidence_run_db(run_id)
+    if db_item is not None:
+        return db_item
     for item in list_evidence_runs(limit=500):
         if item.get("run_id") == run_id:
             return item
@@ -50,6 +57,7 @@ def latest_evidence_run() -> dict[str, Any] | None:
 
 
 def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
+    upsert_evidence_run_db(record)
     path = evidence_runs_path()
     items = list_evidence_runs(limit=500)
     filtered = [item for item in items if item.get("run_id") != record.get("run_id")]

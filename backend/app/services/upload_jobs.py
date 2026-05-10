@@ -30,6 +30,16 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
 from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.operator_report import build_operator_report
+from app.services.runtime_db import (
+    claim_next_upload_job,
+    complete_upload_queue_job,
+    enqueue_upload_job,
+    list_upload_jobs,
+    read_latest_payload,
+    read_upload_job,
+    upsert_latest_payload,
+    upsert_upload_job,
+)
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner, write_latest_sii_state
 
@@ -94,7 +104,7 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-async def create_upload_job(file: UploadFile) -> dict[str, Any]:
+async def create_upload_job(file: UploadFile, initiated_by: str = "anonymous") -> dict[str, Any]:
     ensure_runtime_dirs()
     job_id = uuid.uuid4().hex
     filename = Path(file.filename or "telemetry.csv").name
@@ -131,8 +141,10 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
         "error": None,
         "result_summary": None,
         "input_hash": hasher.hexdigest(),
+        "initiated_by": initiated_by,
     }
     write_job(metadata)
+    enqueue_upload_job(job_id)
     logger.info(
         "upload_file_received job_id=%s filename=%s size_bytes=%s",
         job_id,
@@ -163,7 +175,7 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
             "errors": [],
             "input_hash": metadata["input_hash"],
             "result_hash": None,
-            "initiated_by": "public",
+            "initiated_by": initiated_by,
         }
     )
     return metadata
@@ -176,6 +188,9 @@ def job_path(job_id: str) -> Path:
 
 def read_job(job_id: str) -> dict[str, Any] | None:
     ensure_runtime_dirs()
+    db_metadata = read_upload_job(job_id)
+    if db_metadata is not None:
+        return db_metadata
     path = job_path(job_id)
     if not path.exists():
         legacy_path = LEGACY_JOB_DIR / path.name
@@ -207,6 +222,7 @@ def write_job(metadata: dict[str, Any]) -> None:
     if "status" in metadata:
         metadata["status"] = normalize_status(str(metadata["status"]))
         metadata["progress_label"] = PROGRESS_LABELS.get(metadata["status"], metadata.get("progress_label"))
+    upsert_upload_job(metadata)
     path = job_path(metadata["job_id"])
     atomic_write_json(path, metadata)
 
@@ -298,6 +314,7 @@ def process_upload_job(job_id: str) -> None:
             result["processing_stats"]["engine_runtime_seconds"],
             result["processing_stats"]["memory_estimate_bytes"],
         )
+        complete_upload_queue_job(job_id, "completed")
     except Exception as exc:
         logger.exception("upload_job_failed job_id=%s", job_id)
         completed_at = now_iso()
@@ -332,11 +349,19 @@ def process_upload_job(job_id: str) -> None:
                 "errors": [f"{type(exc).__name__}: {exc}"],
                 "input_hash": metadata.get("input_hash"),
                 "result_hash": None,
-                "initiated_by": "public",
+                "initiated_by": metadata.get("initiated_by", "anonymous"),
             }
         )
+        complete_upload_queue_job(job_id, "failed", f"{type(exc).__name__}: {exc}")
     finally:
         delete_upload_file(metadata)
+
+
+def process_next_queued_upload_job() -> None:
+    job_id = claim_next_upload_job()
+    if not job_id:
+        return
+    process_upload_job(job_id)
 
 
 def process_csv_content(
@@ -685,6 +710,7 @@ def latest_upload_history_path() -> Path:
 def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
     ensure_runtime_dirs()
     path = latest_upload_path()
+    upsert_latest_payload("latest_upload_summary", {"job_id": job_id, **summary})
     atomic_write_json(path, {"job_id": job_id, **summary})
     append_upload_history({"job_id": job_id, **summary})
     logger.info(
@@ -700,6 +726,7 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
     ensure_runtime_dirs()
     path = latest_upload_result_path()
     persistable = build_persistable_upload_result(job_id, result)
+    upsert_latest_payload("latest_upload_result", persistable)
     atomic_write_json(path, persistable)
     logger.info(
         "upload_result_persisted kind=detailed job_id=%s filename=%s rows=%s columns=%s",
@@ -712,6 +739,9 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
     ensure_runtime_dirs()
+    db_payload = read_latest_payload("latest_upload_summary")
+    if db_payload is not None:
+        return db_payload
     path = latest_upload_path()
     if not path.exists():
         return None
@@ -723,6 +753,9 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
 
 def read_latest_upload_result() -> dict[str, Any] | None:
     ensure_runtime_dirs()
+    db_payload = read_latest_payload("latest_upload_result")
+    if db_payload is not None:
+        return db_payload
     path = latest_upload_result_path()
     if not path.exists():
         return None
@@ -794,7 +827,7 @@ def build_evidence_record(
         "errors": result.get("sii_runner_result", {}).get("errors", [])[:5],
         "input_hash": metadata.get("input_hash"),
         "result_hash": digest_payload(summary),
-        "initiated_by": "public",
+        "initiated_by": metadata.get("initiated_by", "anonymous"),
     }
     return record
 
@@ -803,14 +836,18 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
     latest = read_latest_upload_summary()
     if latest:
         return latest
-    completed_jobs: list[dict[str, Any]] = []
-    for path in JOB_DIR.glob("*.json"):
-        try:
-            metadata = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if normalize_status(str(metadata.get("status"))) == "COMPLETE":
-            completed_jobs.append(metadata)
+    completed_jobs: list[dict[str, Any]] = [
+        metadata for metadata in list_upload_jobs(status="COMPLETE", limit=100)
+        if normalize_status(str(metadata.get("status"))) == "COMPLETE"
+    ]
+    if not completed_jobs:
+        for path in JOB_DIR.glob("*.json"):
+            try:
+                metadata = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if normalize_status(str(metadata.get("status"))) == "COMPLETE":
+                completed_jobs.append(metadata)
     if not completed_jobs:
         return None
     completed_jobs.sort(key=lambda item: item.get("completed_at") or "", reverse=True)

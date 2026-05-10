@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { exportEvidenceRun, fetchEvidenceRun, fetchEvidenceRuns, fetchLatestEvidence } from "../services/evidenceApi";
 
 export default function EvidenceTrailWorkspace({
   apiFetch,
@@ -23,13 +24,9 @@ export default function EvidenceTrailWorkspace({
     let cancelled = false;
     async function loadEvidence() {
       try {
-        const [latestResponse, runsResponse] = await Promise.all([
-          apiFetch("/api/evidence/latest", { accessCode }),
-          apiFetch("/api/evidence/runs", { accessCode }),
-        ]);
         const [latestPayload, runsPayload] = await Promise.all([
-          readJsonPayload(latestResponse),
-          readJsonPayload(runsResponse),
+          fetchLatestEvidence({ apiFetch, readJsonPayload, accessCode }),
+          fetchEvidenceRuns({ apiFetch, readJsonPayload, accessCode }),
         ]);
         if (cancelled) {
           return;
@@ -60,8 +57,7 @@ export default function EvidenceTrailWorkspace({
         return;
       }
       try {
-        const response = await apiFetch(`/api/evidence/runs/${selectedRunId}`, { accessCode });
-        const payload = await readJsonPayload(response);
+        const payload = await fetchEvidenceRun({ apiFetch, readJsonPayload, accessCode, runId: selectedRunId });
         if (!cancelled) {
           setSelectedRun(payload);
         }
@@ -82,8 +78,7 @@ export default function EvidenceTrailWorkspace({
       return;
     }
     try {
-      const response = await apiFetch(`/api/evidence/export/${selectedRunId}`, { accessCode });
-      const body = await response.text();
+      const body = await exportEvidenceRun({ apiFetch, accessCode, runId: selectedRunId });
       setExportBody(body);
       setError("");
     } catch (exportError) {
