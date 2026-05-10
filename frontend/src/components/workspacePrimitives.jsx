@@ -659,6 +659,7 @@ export function DataTable({ columns, rows }) {
                 <td
                   className={cellIndex === 0 ? "data-table__primary-cell" : ""}
                   key={`${rowIndex}-${cellIndex}`}
+                  data-label={columns[cellIndex]}
                 >
                   {cell}
                 </td>

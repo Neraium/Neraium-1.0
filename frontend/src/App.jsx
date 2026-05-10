@@ -572,9 +572,9 @@ function App() {
         <header className="mobile-status-bar">
           <div className="mobile-status-bar__brand">
             <div className="brand-mark">N</div>
-            <div>
+            <div className="mobile-status-bar__copy">
               <p className="brand-name">Neraium</p>
-              <p className="brand-subtitle">Cultivation infrastructure intelligence</p>
+              <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
             </div>
           </div>
           <button
@@ -587,7 +587,7 @@ function App() {
             <span className="workspace-menu-button__icon" aria-hidden="true">
               |||
             </span>
-            <span>Workspaces</span>
+            <span>Menu</span>
           </button>
         </header>
 
@@ -629,6 +629,20 @@ function App() {
         aria-label="Workspace drawer"
         aria-hidden={!isWorkspaceMenuOpen}
       >
+        <div className="workspace-drawer__header">
+          <div>
+            <p className="sidebar-kicker">Navigation</p>
+            <strong>{activeConfig.label}</strong>
+          </div>
+          <button
+            className="workspace-drawer__close"
+            type="button"
+            aria-label="Close workspace menu"
+            onClick={() => setIsWorkspaceMenuOpen(false)}
+          >
+            Close
+          </button>
+        </div>
         <WorkspaceNavigationContent
           activeWorkspace={activeWorkspace}
           apiStatus={apiStatus}
