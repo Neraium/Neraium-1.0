@@ -35,7 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if exc.status_code in {401, 403}:
             return JSONResponse(
                 status_code=exc.status_code,
-                content=auth_error_payload(),
+                content=auth_error_payload(exc.detail),
                 headers=exc.headers,
             )
         if not request.url.path.startswith("/api/data/upload"):
@@ -79,7 +79,7 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
         message = normalize_error_message(detail)
 
     if status_code in {401, 403}:
-        return auth_error_payload()
+        return auth_error_payload(detail)
 
     return {
         "job_id": None,
@@ -92,9 +92,9 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
     }
 
 
-def auth_error_payload() -> dict[str, Any]:
+def auth_error_payload(detail: Any | None = None) -> dict[str, Any]:
     message = "Telemetry processing session could not be validated."
-    return {
+    payload = {
         "job_id": None,
         "status": "unauthorized",
         "progress": 0,
@@ -103,6 +103,9 @@ def auth_error_payload() -> dict[str, Any]:
         "error_type": "auth",
         "error": message,
     }
+    if isinstance(detail, dict) and isinstance(detail.get("auth_diagnostic"), dict):
+        payload["auth_diagnostic"] = detail["auth_diagnostic"]
+    return payload
 
 
 def normalize_error_message(error: Any) -> str:

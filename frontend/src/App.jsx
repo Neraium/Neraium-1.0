@@ -200,7 +200,7 @@ function App() {
       const response = await apiFetch("/api/facility/systems", { accessCode: apiAccessCode });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          throw new Error("Session expired. Refresh workspace.");
+          throw new Error(await buildProtectedRequestMessage(response));
         }
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -234,7 +234,7 @@ function App() {
       const response = await apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          throw new Error("Session expired. Refresh workspace.");
+          throw new Error(await buildProtectedRequestMessage(response));
         }
         throw new Error(`Unexpected response: ${response.status}`);
       }
@@ -2913,6 +2913,18 @@ async function readJsonPayload(response) {
   } catch {
     return {};
   }
+}
+
+async function buildProtectedRequestMessage(response) {
+  const payload = await readJsonPayload(response);
+  const diagnostic = payload?.auth_diagnostic;
+  if (diagnostic?.failure_reason === "credential_mismatch") {
+    return "Access code reached ECS but does not match backend setting.";
+  }
+  if (diagnostic?.failure_reason === "missing_credentials") {
+    return "Access code did not reach ECS.";
+  }
+  return normalizeErrorMessage(payload?.message ?? payload?.error) || "Session expired. Refresh workspace.";
 }
 
 function normalizeErrorMessage(error) {

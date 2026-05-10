@@ -304,7 +304,8 @@ def test_protected_endpoint_unauthorized_response_is_structured_json(tmp_path) -
     response = client.get("/api/facility/systems")
 
     assert response.status_code == 401
-    assert response.json() == {
+    payload = response.json()
+    assert payload == {
         "job_id": None,
         "status": "unauthorized",
         "progress": 0,
@@ -312,6 +313,14 @@ def test_protected_endpoint_unauthorized_response_is_structured_json(tmp_path) -
         "message": "Telemetry processing session could not be validated.",
         "error_type": "auth",
         "error": "Telemetry processing session could not be validated.",
+        "auth_diagnostic": {
+            "failure_reason": "missing_credentials",
+            "auth_source": "none",
+            "auth_scheme": "none",
+            "has_access_header": False,
+            "has_access_cookie": False,
+            "has_authorization": False,
+        },
     }
 
 
@@ -399,6 +408,14 @@ def test_auth_failure_logs_debug_context_without_secret(tmp_path, caplog) -> Non
     )
 
     assert response.status_code == 401
+    assert response.json()["auth_diagnostic"] == {
+        "failure_reason": "credential_mismatch",
+        "auth_source": "authorization_bearer",
+        "auth_scheme": "bearer",
+        "has_access_header": False,
+        "has_access_cookie": False,
+        "has_authorization": True,
+    }
     log_text = caplog.text
     assert "failure_reason=credential_mismatch" in log_text
     assert "origin=https://app.neraium.com" in log_text

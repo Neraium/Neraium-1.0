@@ -29,6 +29,10 @@ def require_api_access(
     request.state.auth_context = {
         "auth_source": auth_source,
         "auth_subject": "access_code" if supplied_access_code else "anonymous",
+        "auth_scheme": auth_scheme or "none",
+        "has_access_header": bool(x_neraium_access_code),
+        "has_access_cookie": bool(neraium_access_code),
+        "has_authorization": bool(authorization),
     }
     log_auth_debug(
         request=request,
@@ -59,6 +63,14 @@ def require_api_access(
                 "status": "unauthorized",
                 "error_type": "auth",
                 "message": "Telemetry processing session could not be validated.",
+                "auth_diagnostic": {
+                    "failure_reason": failure_reason,
+                    "auth_source": auth_source,
+                    "auth_scheme": auth_scheme or "none",
+                    "has_access_header": bool(x_neraium_access_code),
+                    "has_access_cookie": bool(neraium_access_code),
+                    "has_authorization": bool(authorization),
+                },
             },
         )
     refresh_access_cookie(response, settings=settings, access_code=supplied_access_code)

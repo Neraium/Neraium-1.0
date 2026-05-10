@@ -87,6 +87,9 @@ def test_protected_route_unauthorized_copy_is_session_expired() -> None:
     source = read_frontend(APP_JSX)
 
     assert "Session expired. Refresh workspace." in source
+    assert "Access code reached ECS but does not match backend setting." in source
+    assert "Access code did not reach ECS." in source
+    assert "await buildProtectedRequestMessage(response)" in source
     assert "[object Object]" not in source
     assert "Upload processing interrupted." in source
     assert "Upload state unavailable." in source
