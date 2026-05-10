@@ -20,16 +20,21 @@ export function resolveAccessCode(accessCode = APP_ACCESS_CODE) {
 
 export function buildAccessHeaders(accessCode = APP_ACCESS_CODE) {
   const resolvedAccessCode = resolveAccessCode(accessCode);
-  console.log("ACCESS CODE:", resolvedAccessCode); return resolvedAccessCode ? { [ACCESS_CODE_HEADER]: resolvedAccessCode } : {};
+  return resolvedAccessCode
+    ? {
+        [ACCESS_CODE_HEADER]: resolvedAccessCode,
+        Authorization: `Bearer ${resolvedAccessCode}`,
+      }
+    : {};
 }
 
 export function apiFetch(path, options = {}) {
-  const { accessCode, headers, ...rest } = options;
+  const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;
   return fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     credentials: "include",
     headers: {
-      ...buildAccessHeaders(accessCode || APP_ACCESS_CODE),
+      ...buildAccessHeaders(accessCode),
       ...(headers ?? {}),
     },
   });

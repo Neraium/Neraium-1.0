@@ -18,6 +18,9 @@ def test_shared_api_helper_forces_credentials_include() -> None:
     assert "return fetch(`${API_BASE_URL}${path}`" in source
     assert "const { accessCode = APP_ACCESS_CODE, headers, ...rest } = options;" in source
     assert "...(headers ?? {})" in source
+    assert "[ACCESS_CODE_HEADER]: resolvedAccessCode" in source
+    assert "Authorization: `Bearer ${resolvedAccessCode}`" in source
+    assert 'console.log("ACCESS CODE:"' not in source
     assert 'export const ACCESS_CODE_SESSION_KEY = "neraium_access_code";' in source
     assert "window.sessionStorage.getItem(ACCESS_CODE_SESSION_KEY)" in source
 
