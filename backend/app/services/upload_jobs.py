@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import UploadFile
 
+from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import get_settings
 from app.engine import run_engine_analysis
 from app.services.baseline_analysis import build_baseline_analysis
@@ -78,6 +79,7 @@ PROGRESS_LABELS = {
     "COMPLETE": "Telemetry processing complete.",
     "FAILED": "Telemetry processing failed.",
 }
+SUPPORTED_UPLOAD_EXTENSIONS = {".csv", ".json"}
 
 
 def ensure_runtime_dirs() -> None:
@@ -269,7 +271,7 @@ def process_upload_job(job_id: str) -> None:
             metadata.get("file_size_bytes"),
         )
         update_job(job_id, status="PARSING")
-        result = process_csv_file(
+        result = process_telemetry_file(
             file_path=Path(metadata["file_path"]),
             filename=metadata["filename"],
             status_callback=lambda status, **updates: update_job(job_id, status=status, **updates),
@@ -390,6 +392,17 @@ def process_csv_content(
     )
 
 
+def process_telemetry_file(
+    *,
+    file_path: Path,
+    filename: str,
+    status_callback: Any | None = None,
+) -> dict[str, Any]:
+    if file_path.suffix.lower() == ".json":
+        return process_json_file(file_path=file_path, filename=filename, status_callback=status_callback)
+    return process_csv_file(file_path=file_path, filename=filename, status_callback=status_callback)
+
+
 def process_csv_file(
     *,
     file_path: Path,
@@ -404,6 +417,52 @@ def process_csv_file(
         filename=filename,
         status_callback=status_callback,
         processing_stats=processing_stats,
+    )
+
+
+def process_json_file(
+    *,
+    file_path: Path,
+    filename: str,
+    status_callback: Any | None = None,
+) -> dict[str, Any]:
+    try:
+        payload = json.loads(file_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("JSON telemetry file could not be parsed.") from exc
+    return process_json_payload(payload=payload, filename=filename, status_callback=status_callback)
+
+
+def process_json_payload(
+    *,
+    payload: Any,
+    filename: str,
+    status_callback: Any | None = None,
+) -> dict[str, Any]:
+    normalized_records, metadata = normalize_uploaded_json_payload(payload, filename)
+    columns, data_rows, room_summary = build_rows_from_normalized_records([record.model_dump() for record in normalized_records])
+    return build_upload_result(
+        columns=columns,
+        data_rows=data_rows,
+        total_rows=len(data_rows),
+        filename=filename,
+        status_callback=status_callback,
+        processing_stats={
+            "chunk_count": 1 if data_rows else 0,
+            "sampled_rows": len(data_rows),
+            "sii_sampled_rows": min(len(data_rows), MAX_SII_ROWS),
+            "memory_estimate_bytes": estimate_rows_memory(data_rows),
+            "used_streaming": False,
+            "engine_runtime_seconds": 0,
+            "room_summary": room_summary,
+            "record_count": metadata.get("readings_received", 0),
+            "accepted_record_count": metadata.get("readings_accepted", 0),
+            "rejected_record_count": metadata.get("readings_rejected", 0),
+            "sensors_detected": metadata.get("sensors_detected", 0),
+        },
+        intelligence_source="uploaded",
+        intelligence_mode="live",
+        intelligence_source_metadata=metadata,
     )
 
 
@@ -917,6 +976,156 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "connection_id": result.get("connection_id"),
         "validation_provenance": result.get("validation_provenance", {}),
     }
+
+
+def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:
+    snapshots = payload if isinstance(payload, list) else [payload]
+    if not snapshots or not all(isinstance(item, dict) for item in snapshots):
+        raise ValueError("JSON telemetry file must contain an object or array of telemetry objects.")
+
+    normalized: list[NormalizedTelemetryRecord] = []
+    total_received = 0
+    total_rejected = 0
+    scenarios: list[str] = []
+    ticks: list[Any] = []
+    latest_timestamp: str | None = None
+    facility_id: str | None = None
+    room_id: str | None = None
+    source_id: str | None = None
+
+    for snapshot in snapshots:
+        records, metadata = normalize_uploaded_json_snapshot(snapshot, filename)
+        normalized.extend(records)
+        total_received += metadata["readings_received"]
+        total_rejected += metadata["readings_rejected"]
+        if metadata.get("scenario"):
+            scenarios.append(str(metadata["scenario"]))
+        if metadata.get("tick") is not None:
+            ticks.append(metadata["tick"])
+        latest_timestamp = metadata.get("timestamp") or latest_timestamp
+        facility_id = metadata.get("facility_id") or facility_id
+        room_id = metadata.get("room_id") or room_id
+        source_id = metadata.get("source_id") or source_id
+
+    if not normalized:
+        raise ValueError("JSON telemetry file did not contain any valid readings.")
+
+    return normalized, {
+        "source_id": source_id or filename,
+        "facility_id": facility_id,
+        "room_id": room_id,
+        "timestamp": latest_timestamp,
+        "source_type": "uploaded_json",
+        "ingestion_type": "json_upload",
+        "readings_received": total_received,
+        "readings_accepted": len(normalized),
+        "readings_rejected": total_rejected,
+        "sensors_detected": len({record.sensor_id for record in normalized}),
+        "scenario": scenarios[-1] if scenarios else None,
+        "tick": ticks[-1] if ticks else None,
+    }
+
+
+def normalize_uploaded_json_snapshot(snapshot: dict[str, Any], filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:
+    readings = snapshot.get("readings")
+    if not isinstance(readings, list) or not readings:
+        raise ValueError("JSON telemetry object must include a non-empty readings array.")
+
+    source_id = str(snapshot.get("source_id") or filename)
+    facility_id = str(snapshot.get("facility_id") or "uploaded-facility")
+    room_id = str(snapshot.get("room_id") or "uploaded-room")
+    scenario = snapshot.get("scenario")
+    tick = snapshot.get("tick")
+    payload_timestamp = snapshot.get("timestamp")
+    normalized: list[NormalizedTelemetryRecord] = []
+    rejected = 0
+
+    for item in readings:
+        if not isinstance(item, dict):
+            rejected += 1
+            continue
+        sensor_id = item.get("sensor_id")
+        sensor_name = item.get("sensor_name")
+        raw_value = item.get("value")
+        timestamp = item.get("timestamp") or payload_timestamp
+        if not sensor_id or not sensor_name or raw_value is None or not timestamp:
+            rejected += 1
+            continue
+        try:
+            numeric_value = float(raw_value)
+        except (TypeError, ValueError):
+            rejected += 1
+            continue
+        normalized.append(
+            NormalizedTelemetryRecord(
+                source_id=source_id,
+                facility_id=facility_id,
+                room_id=room_id,
+                system_id=facility_id,
+                sensor_id=str(sensor_id),
+                sensor_name=str(sensor_name),
+                value=numeric_value,
+                unit=str(item.get("unit") or "").strip().lower(),
+                timestamp=str(timestamp),
+                quality_status=str(item.get("quality") or "good").strip().lower() or "good",
+                metadata={
+                    "scenario": scenario,
+                    "tick": tick,
+                    "ingestion_type": "json_upload",
+                    "source_type": snapshot.get("source_type") or "uploaded_json",
+                },
+            )
+        )
+
+    return normalized, {
+        "source_id": source_id,
+        "facility_id": facility_id,
+        "room_id": room_id,
+        "timestamp": payload_timestamp or (normalized[-1].timestamp if normalized else None),
+        "source_type": snapshot.get("source_type") or "uploaded_json",
+        "scenario": scenario,
+        "tick": tick,
+        "readings_received": len(readings),
+        "readings_accepted": len(normalized),
+        "readings_rejected": rejected,
+        "sensors_detected": len({record.sensor_id for record in normalized}),
+    }
+
+
+def build_rows_from_normalized_records(records: list[dict[str, Any]]) -> tuple[list[str], list[list[str]], dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    sensor_names: set[str] = set()
+    room_counts: Counter[str] = Counter()
+
+    for item in records:
+        timestamp = str(item.get("timestamp") or "")
+        room_id = str(item.get("room_id") or "Current room")
+        facility_id = str(item.get("facility_id") or item.get("system_id") or "Current facility")
+        sensor_name = str(item.get("sensor_name") or item.get("sensor_id") or "sensor")
+        grouped.setdefault((timestamp, room_id, facility_id), {})[sensor_name] = item.get("value")
+        room_counts[room_id] += 1
+        sensor_names.add(sensor_name)
+
+    ordered_sensors = sorted(sensor_names)
+    columns = ["timestamp", "room", "facility_id", *ordered_sensors]
+    rows: list[list[str]] = []
+    for (timestamp, room_id, facility_id), values in sorted(grouped.items(), key=lambda item: item[0][0]):
+        rows.append(
+            [
+                timestamp,
+                room_id,
+                facility_id,
+                *["" if values.get(sensor_name) is None else str(values.get(sensor_name)) for sensor_name in ordered_sensors],
+            ]
+        )
+
+    room_summary = {
+        "room_count": len(room_counts),
+        "rooms": [{"room": room, "row_count": count} for room, count in sorted(room_counts.items(), key=lambda item: (-item[1], item[0].lower()))],
+        "total_rows": len(rows),
+        "unassigned_rows": 0,
+    }
+    return columns, rows, room_summary
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:

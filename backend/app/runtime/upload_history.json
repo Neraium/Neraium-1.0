@@ -2,26 +2,26 @@
   {
     "job_id": "node-red-cultivation-telemetry",
     "filename": "Node-RED Cultivation Telemetry",
-    "rows_processed": 15,
+    "rows_processed": 17,
     "columns_detected": 11,
     "chunk_count": 1,
-    "sampled_rows": 15,
-    "memory_estimate_bytes": 2809,
+    "sampled_rows": 17,
+    "memory_estimate_bytes": 3173,
     "engine_runtime_seconds": 0.0009,
-    "last_processed_at": "2026-05-10T21:21:35.354191+00:00",
+    "last_processed_at": "2026-05-10T21:43:48.576868+00:00",
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
     "source": "rest_poll",
-    "neraium_score": 6,
+    "neraium_score": 41,
     "operating_state": "Monitoring",
     "primary_room": "flower-room-1",
     "drift_status": "unstable",
     "upload_result_source": "rest_poll",
     "diff": {
       "previous_filename": "Node-RED Cultivation Telemetry",
-      "previous_processed_at": "2026-05-10T21:21:28.537803+00:00",
-      "neraium_score_delta": 6.0
+      "previous_processed_at": "2026-05-10T21:43:41.048114+00:00",
+      "neraium_score_delta": 17.0
     },
     "warnings": [
       "Timestamp intervals are inconsistent."
@@ -32,10 +32,10 @@
       "rooms": [
         {
           "room": "flower-room-1",
-          "row_count": 120
+          "row_count": 136
         }
       ],
-      "total_rows": 15,
+      "total_rows": 17,
       "unassigned_rows": 0
     },
     "source_name": "Node-RED Cultivation Telemetry",
@@ -44,12 +44,12 @@
     "facility_id": "cultivation-facility-001",
     "room_id": "flower-room-1",
     "scenario": "airflow_drift",
-    "tick": 240,
-    "latest_telemetry_timestamp": "2026-05-10T21:21:33.884Z",
+    "tick": 426,
+    "latest_telemetry_timestamp": "2026-05-10T21:43:47.125Z",
     "readings_received": 8,
     "readings_accepted": 8,
     "readings_rejected": 0,
     "sensors_detected": 8,
-    "primary_driver": "Room temperature control instability"
+    "primary_driver": "Lighting schedule influence"
   }
 ]

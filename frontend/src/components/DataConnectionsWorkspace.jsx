@@ -15,6 +15,25 @@ import { CompactList, DataTable, EmptyState, MetricGrid, Panel, WorkflowStages }
 
 const LIVE_CONNECTION_REFRESH_MS = 5000;
 const DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry";
+const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
+  "source_id": "pilot-json-001",
+  "source_type": "external_rest_api",
+  "facility_id": "cultivation-facility-001",
+  "room_id": "flower-room-1",
+  "scenario": "airflow_drift",
+  "tick": 10,
+  "timestamp": "2026-05-01T08:00:00Z",
+  "readings": [
+    {
+      "timestamp": "2026-05-01T08:00:00Z",
+      "sensor_id": "temp-001",
+      "sensor_name": "temperature",
+      "value": 75.2,
+      "unit": "F",
+      "quality": "good"
+    }
+  ]
+}`;
 
 function connectionTone(status) {
   const normalized = String(status ?? "").toLowerCase();
@@ -339,12 +358,12 @@ export default function DataConnectionsWorkspace({
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
-            <p>Upload a production CSV if you want a file-based baseline. Live REST telemetry can build its own baseline automatically.</p>
+            <p>Upload a production CSV or JSON telemetry export if you want a file-based baseline. Live REST telemetry can build its own baseline automatically.</p>
           </div>
 
           <div className="intake-flow__controls">
             <input
-              accept=".csv,text/csv"
+              accept=".csv,.json,text/csv,application/json"
               id="csv-upload"
               type="file"
               onChange={(event) => {
@@ -367,6 +386,10 @@ export default function DataConnectionsWorkspace({
 
           {uploadError && <p className="form-error">{normalizeErrorMessage(uploadError)}</p>}
         </form>
+        <div className="connector-json-hint">
+          <p className="section-token">JSON upload schema</p>
+          <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>
+        </div>
       </Panel>
 
       <Panel title="Ingestion State" className="span-5">

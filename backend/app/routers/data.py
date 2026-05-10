@@ -11,6 +11,7 @@ from app.services.data_connections import read_connection_status
 from app.services.runtime_db import record_audit_event
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
+    SUPPORTED_UPLOAD_EXTENSIONS,
     create_upload_job,
     delete_upload_file,
     latest_completed_job_summary,
@@ -105,14 +106,15 @@ async def upload_csv(
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
     filename = file.filename or ""
-    if Path(filename).suffix.lower() != ".csv":
-        raise HTTPException(status_code=400, detail="Only .csv files are supported.")
+    extension = Path(filename).suffix.lower()
+    if extension not in SUPPORTED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Only .csv and .json telemetry files are supported.")
 
     auth_context = getattr(request.state, "auth_context", {})
     metadata = await create_upload_job(file, initiated_by=auth_context.get("auth_subject", "anonymous"))
     if metadata["file_size_bytes"] == 0:
         delete_upload_file(metadata)
-        raise HTTPException(status_code=400, detail="CSV file is empty.")
+        raise HTTPException(status_code=400, detail=f"{extension.upper().lstrip('.')} file is empty.")
 
     background_tasks.add_task(process_next_queued_upload_job)
     logger.info(

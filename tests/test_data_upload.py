@@ -4,13 +4,20 @@ import time
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
-from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
     return client.post(
         "/api/data/upload",
         files={"file": (filename, content, "text/csv")},
+    )
+
+
+def post_json(client: TestClient, filename: str, content: str):
+    return client.post(
+        "/api/data/upload",
+        files={"file": (filename, content, "application/json")},
     )
 
 
@@ -45,6 +52,32 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["message"] == "Telemetry batch received. Processing started."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
     assert payload["file_size_bytes"] > 0
+
+
+def test_json_upload_returns_accepted_job_id() -> None:
+    client = TestClient(create_app())
+    json_content = """
+    {
+      "source_id": "pilot-json-001",
+      "source_type": "external_rest_api",
+      "facility_id": "cultivation-facility-001",
+      "room_id": "flower-room-1",
+      "scenario": "airflow_drift",
+      "tick": 10,
+      "timestamp": "2026-05-01T08:00:00Z",
+      "readings": [
+        {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 75.2, "unit": "F", "quality": "good"},
+        {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 58, "unit": "%", "quality": "good"}
+      ]
+    }
+    """
+
+    response = post_json(client, "sensor-export.json", json_content)
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["job_id"]
+    assert payload["filename"] == "sensor-export.json"
 
 
 def test_positive_int_env_parser_falls_back_for_invalid_values(monkeypatch) -> None:
@@ -538,7 +571,7 @@ def test_upload_rejects_invalid_extension() -> None:
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["message"] == "Only .csv files are supported."
+    assert payload["message"] == "Only .csv and .json telemetry files are supported."
     assert payload["status"] == "FAILED"
     assert payload["processing_state"] == "failed"
 
@@ -553,6 +586,32 @@ def test_upload_rejects_empty_csv() -> None:
     assert payload["message"] == "CSV file is empty."
     assert payload["status"] == "FAILED"
     assert payload["processing_state"] == "failed"
+
+
+def test_processing_helper_accepts_live_shape_json_payload() -> None:
+    result = process_json_payload(
+        filename="pilot-upload.json",
+        payload={
+            "source_id": "pilot-json-001",
+            "source_type": "external_rest_api",
+            "facility_id": "cultivation-facility-001",
+            "room_id": "flower-room-1",
+            "scenario": "airflow_drift",
+            "tick": 10,
+            "timestamp": "2026-05-01T08:00:00Z",
+            "readings": [
+                {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 74, "unit": "F", "quality": "good"},
+                {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 55, "unit": "%", "quality": "good"},
+                {"timestamp": "2026-05-01T08:05:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 75, "unit": "F", "quality": "good"},
+                {"timestamp": "2026-05-01T08:05:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 56, "unit": "%", "quality": "good"},
+            ],
+        },
+    )
+
+    assert result["filename"] == "pilot-upload.json"
+    assert result["row_count"] == 2
+    assert result["room_summary"]["room_count"] == 1
+    assert result["sii_intelligence"]["source"] == "uploaded"
 
 
 def test_processing_helper_preserves_profile_metadata() -> None:
