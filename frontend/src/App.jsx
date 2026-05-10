@@ -26,6 +26,12 @@ const WORKSPACES = [
     description: "Connect facility telemetry to improve confidence, timing, and traceability.",
   },
   {
+    id: "data-connections",
+    label: "Data Connections",
+    eyebrow: "Connectors",
+    description: "Customer telemetry connectors, health, sync status, and normalized ingestion controls.",
+  },
+  {
     id: "intelligence-console",
     label: "Intelligence Console",
     eyebrow: "Console",
@@ -392,6 +398,12 @@ function App() {
           roomContext={roomContext}
           liveOps={liveOps}
         />
+      );
+    }
+
+    if (activeWorkspace === "data-connections") {
+      return (
+        <DataConnectionsWorkspace accessCode={apiAccessCode} />
       );
     }
 
@@ -1038,6 +1050,324 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
           compact
         />
       </Panel>
+    </div>
+  );
+}
+
+function DataConnectionsWorkspace({ accessCode }) {
+  const [connectorTypes, setConnectorTypes] = useState([]);
+  const [connectorHealth, setConnectorHealth] = useState([]);
+  const [connectorError, setConnectorError] = useState("");
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvResult, setCsvResult] = useState(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [restForm, setRestForm] = useState({
+    source_id: "customer-rest",
+    system_id: "facility-rest",
+    endpoint: "",
+    method: "GET",
+    token: "",
+    records_path: "",
+  });
+  const [restResult, setRestResult] = useState(null);
+  const [restBusy, setRestBusy] = useState("");
+
+  const loadConnectorData = useCallback(async () => {
+    try {
+      const [typesResponse, healthResponse] = await Promise.all([
+        apiFetch("/api/connectors/types", { accessCode }),
+        apiFetch("/api/connectors/health", { accessCode }),
+      ]);
+      const [typesPayload, healthPayload] = await Promise.all([
+        readJsonPayload(typesResponse),
+        readJsonPayload(healthResponse),
+      ]);
+      if (!typesResponse.ok) {
+        throw new Error(typesPayload?.detail ?? `Unexpected response: ${typesResponse.status}`);
+      }
+      if (!healthResponse.ok) {
+        throw new Error(healthPayload?.detail ?? `Unexpected response: ${healthResponse.status}`);
+      }
+      setConnectorTypes(typesPayload?.types ?? []);
+      setConnectorHealth(healthPayload?.connectors ?? []);
+      setConnectorError("");
+    } catch (error) {
+      setConnectorError(normalizeErrorMessage(error?.message ?? error));
+    }
+  }, [accessCode]);
+
+  useEffect(() => {
+    loadConnectorData();
+  }, [loadConnectorData]);
+
+  async function handleCsvUpload(event) {
+    event.preventDefault();
+    if (!csvFile) {
+      setConnectorError("Choose a CSV telemetry export to ingest through the CSV connector.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", csvFile);
+    formData.append("source_id", "customer-csv");
+    formData.append("system_id", "facility-csv");
+    setCsvBusy(true);
+    setConnectorError("");
+    try {
+      const response = await apiFetch("/api/connectors/csv/upload", {
+        accessCode,
+        method: "POST",
+        body: formData,
+      });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
+      }
+      setCsvResult(payload);
+      await loadConnectorData();
+    } catch (error) {
+      setConnectorError(normalizeErrorMessage(error?.message ?? error));
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
+  async function handleRestAction(mode) {
+    setRestBusy(mode);
+    setConnectorError("");
+    const payload = {
+      ...restForm,
+      records_path: restForm.records_path.trim() || null,
+      token: restForm.token.trim() || null,
+    };
+    try {
+      const response = await apiFetch(mode === "test" ? "/api/connectors/rest/test" : "/api/connectors/rest/ingest", {
+        accessCode,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await readJsonPayload(response);
+      if (!response.ok) {
+        throw new Error(result?.detail ?? result?.message ?? `Unexpected response: ${response.status}`);
+      }
+      setRestResult(result);
+      await loadConnectorData();
+    } catch (error) {
+      setConnectorError(normalizeErrorMessage(error?.message ?? error));
+    } finally {
+      setRestBusy("");
+    }
+  }
+
+  const healthyCount = connectorHealth.filter((item) => item.connection_status === "ready").length;
+  const totalSensors = connectorHealth.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
+  const totalRecords = connectorHealth.reduce((sum, item) => sum + (item.records_ingested ?? 0), 0);
+
+  return (
+    <div className="workspace-grid workspace-grid--connections">
+      <Panel
+        title="Connector command"
+        subtitle="Customer telemetry ingestion status across file, API, and industrial connector lanes."
+        className="span-12"
+      >
+        <MetricGrid
+          metrics={[
+            { label: "Connector types", value: connectorTypes.length || "Pending" },
+            { label: "Ready connectors", value: healthyCount },
+            { label: "Sensors detected", value: totalSensors || "Pending" },
+            { label: "Records ingested", value: totalRecords || "Pending" },
+          ]}
+        />
+      </Panel>
+
+      <Panel
+        title="Connector registry"
+        subtitle="Operational status, sync posture, and validation surface for each integration type."
+        className="span-7"
+      >
+        <div className="connector-status-list">
+          {connectorHealth.map((connector) => (
+            <div className="connector-status-card" key={connector.connector_type}>
+              <div className="connector-status-card__header">
+                <div>
+                  <p className="section-token">{connector.connector_type}</p>
+                  <h3>{connector.display_name}</h3>
+                </div>
+                <span className={`connector-status-pill connector-status-pill--${connectorStatusTone(connector.connection_status)}`}>
+                  {formatConnectorStatus(connector.connection_status)}
+                </span>
+              </div>
+              <MetricGrid
+                metrics={[
+                  { label: "Last sync", value: connector.last_sync_time ? formatClockTime(connector.last_sync_time) : "Awaiting sync" },
+                  { label: "Sensors", value: connector.sensors_detected ?? 0 },
+                  { label: "Records", value: connector.records_ingested ?? 0 },
+                  { label: "Mode", value: connector.functional ? "Functional" : "Scaffolded" },
+                ]}
+                compact
+              />
+              {connector.masked_configuration && Object.keys(connector.masked_configuration).length > 0 && (
+                <div className="connector-detail-list">
+                  {Object.entries(connector.masked_configuration).map(([key, value]) => (
+                    <div className="connector-detail-row" key={key}>
+                      <span>{key}</span>
+                      <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(connector.warnings?.length > 0 || connector.errors?.length > 0) && (
+                <div className="connector-issues">
+                  {[...(connector.warnings ?? []), ...(connector.errors ?? [])].slice(0, 4).map((item) => (
+                    <p key={item}>{item}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel
+        title="CSV connector"
+        subtitle="Normalize customer file exports without changing the intelligence engine boundary."
+        className="span-5"
+      >
+        <form className="connector-form" onSubmit={handleCsvUpload}>
+          <input
+            accept=".csv,text/csv"
+            type="file"
+            onChange={(event) => {
+              setCsvFile(event.target.files?.[0] ?? null);
+              setConnectorError("");
+            }}
+          />
+          <button className="command-button" type="submit" disabled={csvBusy}>
+            {csvBusy ? "Ingesting CSV" : "Ingest sample data"}
+          </button>
+          <div className="connector-form__status">
+            <span>{csvFile?.name ?? "No CSV selected"}</span>
+            <span>{csvResult?.message ?? "Upload a timestamped telemetry file to normalize it."}</span>
+          </div>
+        </form>
+        <MetricGrid
+          metrics={[
+            { label: "Records", value: csvResult?.records_ingested ?? "Pending" },
+            { label: "Sensors", value: csvResult?.sensors_detected ?? "Pending" },
+            { label: "Status", value: csvResult?.connection_status ? formatConnectorStatus(csvResult.connection_status) : "Awaiting run" },
+            { label: "Last sync", value: csvResult?.last_sync_time ? formatClockTime(csvResult.last_sync_time) : "Awaiting run" },
+          ]}
+          compact
+        />
+      </Panel>
+
+      <Panel
+        title="REST connector"
+        subtitle="Validate remote telemetry APIs, mask secrets, and normalize JSON payloads."
+        className="span-12"
+      >
+        <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>
+          <label>
+            <span>Endpoint</span>
+            <input
+              type="url"
+              value={restForm.endpoint}
+              onChange={(event) => setRestForm((current) => ({ ...current, endpoint: event.target.value }))}
+              placeholder="https://customer.example.com/telemetry"
+            />
+          </label>
+          <label>
+            <span>HTTP method</span>
+            <select
+              value={restForm.method}
+              onChange={(event) => setRestForm((current) => ({ ...current, method: event.target.value }))}
+            >
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+          </label>
+          <label>
+            <span>Source ID</span>
+            <input
+              type="text"
+              value={restForm.source_id}
+              onChange={(event) => setRestForm((current) => ({ ...current, source_id: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>System ID</span>
+            <input
+              type="text"
+              value={restForm.system_id}
+              onChange={(event) => setRestForm((current) => ({ ...current, system_id: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Token</span>
+            <input
+              type="password"
+              value={restForm.token}
+              onChange={(event) => setRestForm((current) => ({ ...current, token: event.target.value }))}
+              placeholder="Bearer token"
+            />
+          </label>
+          <label>
+            <span>Records path</span>
+            <input
+              type="text"
+              value={restForm.records_path}
+              onChange={(event) => setRestForm((current) => ({ ...current, records_path: event.target.value }))}
+              placeholder="data.records"
+            />
+          </label>
+          <div className="connector-form__actions">
+            <button className="secondary-command-button" type="button" disabled={restBusy === "test"} onClick={() => handleRestAction("test")}>
+              {restBusy === "test" ? "Testing" : "Test connection"}
+            </button>
+            <button className="command-button" type="button" disabled={restBusy === "ingest"} onClick={() => handleRestAction("ingest")}>
+              {restBusy === "ingest" ? "Ingesting" : "Ingest sample data"}
+            </button>
+          </div>
+        </form>
+
+        <div className="connector-rest-output">
+          <MetricGrid
+            metrics={[
+              { label: "Connection", value: restResult?.connection_status ? formatConnectorStatus(restResult.connection_status) : "Awaiting validation" },
+              { label: "Sensors", value: restResult?.sensors_detected ?? "Pending" },
+              { label: "Records", value: restResult?.records_ingested ?? "Pending" },
+              { label: "Last sync", value: restResult?.last_sync_time ? formatClockTime(restResult.last_sync_time) : "Awaiting validation" },
+            ]}
+            compact
+          />
+          {restResult?.masked_configuration && (
+            <div className="connector-detail-list">
+              {Object.entries(restResult.masked_configuration).map(([key, value]) => (
+                <div className="connector-detail-row" key={key}>
+                  <span>{key}</span>
+                  <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+          {restResult?.warnings?.length > 0 && (
+            <div className="connector-issues">
+              {restResult.warnings.slice(0, 4).map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {connectorError && (
+        <Panel
+          title="Connector response"
+          subtitle="Operator-friendly validation feedback."
+          className="span-12"
+        >
+          <p className="form-error">{connectorError}</p>
+        </Panel>
+      )}
     </div>
   );
 }
@@ -4861,6 +5191,24 @@ function average(values) {
 
 function formatColumnsRequiringReview(columnsRequiringReview) {
   return columnsRequiringReview.map((item) => `${item.column}: ${item.reasons.join(" ")}`);
+}
+
+function formatConnectorStatus(status) {
+  const value = String(status ?? "not_configured").replace(/_/g, " ");
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function connectorStatusTone(status) {
+  if (status === "ready") {
+    return "nominal";
+  }
+  if (status === "degraded") {
+    return "review";
+  }
+  if (status === "offline") {
+    return "elevated";
+  }
+  return "muted";
 }
 
 export default App;
