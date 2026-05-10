@@ -1,5 +1,75 @@
 [
   {
+    "run_id": "node-red-cultivation-telemetry-d8f47943d6",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:12:39.955022+00:00",
+    "completed_at": "2026-05-10T22:12:39.955022+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 73,
+    "drift_status": "review",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "a070be67661af97d019c080e2ec6ce3b7fd576c3c000952e75ad94e8fd372e78",
+    "result_hash": "097c0f9b0b84c2e6eba180a99ac53001a26b843ed4095c50a7048756c60a709f",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 661
+  },
+  {
+    "run_id": "node-red-cultivation-telemetry-0d2e78343a",
+    "source_type": "external_rest_api",
+    "source_name": "Node-RED Cultivation Telemetry",
+    "filename": "http://18.216.253.180:1880/telemetry/latest",
+    "created_at": "2026-05-10T22:12:19.862062+00:00",
+    "completed_at": "2026-05-10T22:12:19.862062+00:00",
+    "status": "completed",
+    "rows_received": 8,
+    "rows_accepted": 8,
+    "rows_rejected": 0,
+    "sensors_detected": 8,
+    "system_id": "cultivation-facility-001",
+    "room": "flower-room-1",
+    "operating_state": "Monitoring",
+    "neraium_score": 71,
+    "drift_status": "review",
+    "primary_drivers": [
+      "Sensor network continuity"
+    ],
+    "evidence_summary": [
+      "Timestamp intervals are inconsistent",
+      "Some source columns are not mapped to cultivation systems"
+    ],
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ],
+    "errors": [],
+    "input_hash": "4f3a3ea31cb591641638bfe3c86fbef2062dd7de09d507d6ac1653377844edfb",
+    "result_hash": "6a8e5b985e47a4d661d56f101f7c1803563df200d3442466f4e41b5198464eb4",
+    "initiated_by": "system:rest-poller",
+    "source_url": "http://18.216.253.180:1880/telemetry/latest",
+    "scenario": "airflow_drift",
+    "tick": 658
+  },
+  {
     "run_id": "node-red-cultivation-telemetry-dcdd267bfe",
     "source_type": "external_rest_api",
     "source_name": "Node-RED Cultivation Telemetry",
