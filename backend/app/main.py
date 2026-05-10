@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.routers import app_info, connectors, data, facility, health
+from app.routers import app_info, connectors, data, evidence, facility, health
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -30,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(connectors.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
+    app.include_router(evidence.router, prefix="/api")
 
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

@@ -5,6 +5,7 @@ import {
  API_CONFIG_WARNING,
 } from "./config";
 import CommandOverviewWorkspace from "./components/CommandOverviewWorkspace";
+import EvidenceTrailWorkspace from "./components/EvidenceTrailWorkspace";
 import * as uploadStateView from "./viewModels/uploadState";
 import "./styles.css";
 
@@ -32,6 +33,12 @@ const WORKSPACES = [
     label: "Intelligence Console",
     eyebrow: "Console",
     description: "Structural diagnostics, relationship evidence, and confidence basis.",
+  },
+  {
+    id: "evidence-trail",
+    label: "Evidence Trail",
+    eyebrow: "Evidence",
+    description: "Run history, explanations, warnings, errors, and report export.",
   },
 ];
 
@@ -122,6 +129,7 @@ function App() {
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
+  const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
 
@@ -417,7 +425,25 @@ function App() {
             await loadLatestUploadState();
             await loadFacilitySystems();
             await loadEngineIdentity();
+            setEvidenceRefreshKey((current) => current + 1);
           }}
+        />
+      );
+    }
+
+    if (activeWorkspace === "evidence-trail") {
+      return (
+        <EvidenceTrailWorkspace
+          apiFetch={apiFetch}
+          readJsonPayload={readJsonPayload}
+          normalizeErrorMessage={normalizeErrorMessage}
+          formatClockTime={formatClockTime}
+          Panel={Panel}
+          MetricGrid={MetricGrid}
+          CompactList={CompactList}
+          EmptyState={EmptyState}
+          accessCode={apiAccessCode}
+          refreshKey={evidenceRefreshKey}
         />
       );
     }

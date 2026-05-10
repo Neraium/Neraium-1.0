@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
+EVIDENCE_WORKSPACE = ROOT / "frontend" / "src" / "components" / "EvidenceTrailWorkspace.jsx"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
 
 
@@ -25,6 +26,7 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
     source = read_frontend(APP_JSX)
+    evidence_source = read_frontend(EVIDENCE_WORKSPACE)
 
     for endpoint in (
         'apiFetch("/api/data/upload"',
@@ -36,6 +38,13 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
         'apiFetch("/api/data/latest-upload"',
     ):
         assert endpoint in source
+    for endpoint in (
+        'apiFetch("/api/evidence/latest"',
+        'apiFetch("/api/evidence/runs"',
+        "apiFetch(`/api/evidence/runs/${selectedRunId}`",
+        "apiFetch(`/api/evidence/export/${selectedRunId}`",
+    ):
+        assert endpoint in evidence_source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
@@ -152,3 +161,4 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     assert 'Upload Telemetry File' in source
     assert 'title="Upload History"' in source
     assert 'title="Change Summary"' in source
+    assert 'label: "Evidence Trail"' in source

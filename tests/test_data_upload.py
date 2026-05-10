@@ -261,6 +261,58 @@ def test_latest_upload_endpoint_returns_recent_history_and_score_diff() -> None:
     assert "neraium_score_delta" in payload["history"][0]["diff"]
 
 
+def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.2:.1f},{58 + index * 0.3:.1f}"
+        for index in range(6)
+    )
+
+    upload = post_csv(client, "evidence.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    run_id = upload.json()["job_id"]
+
+    latest = client.get("/api/evidence/latest")
+    detail = client.get(f"/api/evidence/runs/{run_id}")
+
+    assert latest.status_code == 200
+    assert latest.json()["run"]["run_id"] == run_id
+    assert latest.json()["run"]["source_name"] == "evidence.csv"
+    assert latest.json()["run"]["status"] == "completed"
+    assert detail.status_code == 200
+    assert detail.json()["rows_accepted"] == 6
+    assert detail.json()["sensors_detected"] >= 2
+
+
+def test_failed_processing_creates_failed_evidence_record(monkeypatch) -> None:
+    client = TestClient(create_app())
+    monkeypatch.setattr("app.services.upload_jobs.process_csv_file", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    upload = post_csv(client, "bad.csv", "timestamp\n2026-05-01T08:00:00Z\n")
+    run_id = upload.json()["job_id"]
+
+    detail = client.get(f"/api/evidence/runs/{run_id}")
+
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert payload["status"] == "failed"
+    assert payload["errors"]
+
+
+def test_evidence_export_endpoint_returns_report() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.2:.1f},{58 + index * 0.3:.1f}"
+        for index in range(6)
+    )
+    upload = post_csv(client, "export.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    run_id = upload.json()["job_id"]
+
+    response = client.get(f"/api/evidence/export/{run_id}")
+
+    assert response.status_code == 200
+    assert "# Neraium Evidence Report" in response.text
+    assert "Run ID:" in response.text
+
+
 def test_latest_upload_endpoint_returns_persisted_detailed_result() -> None:
     client = TestClient(create_app())
     detailed_result = {

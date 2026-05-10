@@ -6,6 +6,7 @@ import csv
 import os
 import time
 import uuid
+import hashlib
 from collections import Counter, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +28,7 @@ from app.services.data_quality import (
 )
 from app.services.driver_attribution import build_driver_attribution
 from app.services.engine_identity import VALIDATION_PROVENANCE, build_processing_trace
+from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner, write_latest_sii_state
@@ -98,12 +100,14 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
     filename = Path(file.filename or "telemetry.csv").name
     upload_path = UPLOAD_DIR / f"{job_id}.csv"
     size_bytes = 0
+    hasher = hashlib.sha256()
     with upload_path.open("wb") as output:
         while True:
             chunk = await file.read(1024 * 1024)
             if not chunk:
                 break
             size_bytes += len(chunk)
+            hasher.update(chunk)
             output.write(chunk)
 
     metadata = {
@@ -126,6 +130,7 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
         "completed_at": None,
         "error": None,
         "result_summary": None,
+        "input_hash": hasher.hexdigest(),
     }
     write_job(metadata)
     logger.info(
@@ -133,6 +138,33 @@ async def create_upload_job(file: UploadFile) -> dict[str, Any]:
         job_id,
         filename,
         size_bytes,
+    )
+    upsert_evidence_run(
+        {
+            "run_id": job_id,
+            "source_type": "file_upload",
+            "source_name": filename,
+            "filename": filename,
+            "created_at": metadata["started_at"],
+            "completed_at": None,
+            "status": "pending",
+            "rows_received": 0,
+            "rows_accepted": 0,
+            "rows_rejected": 0,
+            "sensors_detected": 0,
+            "system_id": None,
+            "room": None,
+            "operating_state": None,
+            "neraium_score": None,
+            "drift_status": None,
+            "primary_drivers": [],
+            "evidence_summary": [],
+            "warnings": [],
+            "errors": [],
+            "input_hash": metadata["input_hash"],
+            "result_hash": None,
+            "initiated_by": "public",
+        }
     )
     return metadata
 
@@ -241,6 +273,7 @@ def process_upload_job(job_id: str) -> None:
         duration = round(time.perf_counter() - started, 4)
         write_latest_upload_summary(job_id, summary)
         write_latest_upload_result(job_id, result)
+        upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
         update_job(
             job_id,
             status="COMPLETE",
@@ -267,12 +300,40 @@ def process_upload_job(job_id: str) -> None:
         )
     except Exception as exc:
         logger.exception("upload_job_failed job_id=%s", job_id)
+        completed_at = now_iso()
         update_job(
             job_id,
             status="FAILED",
-            completed_at=now_iso(),
+            completed_at=completed_at,
             processing_duration_seconds=round(time.perf_counter() - started, 4),
             error=f"{type(exc).__name__}: {exc}",
+        )
+        upsert_evidence_run(
+            {
+                "run_id": job_id,
+                "source_type": "file_upload",
+                "source_name": metadata.get("filename"),
+                "filename": metadata.get("filename"),
+                "created_at": metadata.get("started_at"),
+                "completed_at": completed_at,
+                "status": "failed",
+                "rows_received": metadata.get("rows_processed", 0),
+                "rows_accepted": 0,
+                "rows_rejected": 0,
+                "sensors_detected": metadata.get("columns_detected", 0),
+                "system_id": None,
+                "room": None,
+                "operating_state": None,
+                "neraium_score": None,
+                "drift_status": None,
+                "primary_drivers": [],
+                "evidence_summary": [],
+                "warnings": [],
+                "errors": [f"{type(exc).__name__}: {exc}"],
+                "input_hash": metadata.get("input_hash"),
+                "result_hash": None,
+                "initiated_by": "public",
+            }
         )
     finally:
         delete_upload_file(metadata)
@@ -692,6 +753,50 @@ def append_upload_history(summary: dict[str, Any], limit: int = 12) -> None:
     existing = read_upload_history(limit=limit)
     filtered = [item for item in existing if item.get("job_id") != summary.get("job_id")]
     atomic_write_json_list(path, [summary, *filtered][:limit])
+
+
+def build_evidence_record(
+    metadata: dict[str, Any],
+    result: dict[str, Any],
+    summary: dict[str, Any],
+    completed_at: str,
+    status: str,
+) -> dict[str, Any]:
+    intelligence = result.get("sii_intelligence", {})
+    processing_stats = result.get("processing_stats", {})
+    driver = intelligence.get("primary_driver")
+    evidence_summary = intelligence.get("supporting_evidence") or []
+    rows_received = result.get("row_count", 0)
+    rows_rejected = processing_stats.get("malformed_rows", 0)
+    rows_accepted = max(rows_received - rows_rejected, 0)
+    sensors_detected = len(result.get("numeric_profiles", []))
+    room = intelligence.get("primary_room") or primary_room_from_summary(result.get("room_summary", {}))
+    record = {
+        "run_id": metadata.get("job_id"),
+        "source_type": "file_upload",
+        "source_name": metadata.get("filename"),
+        "filename": metadata.get("filename"),
+        "created_at": metadata.get("started_at"),
+        "completed_at": completed_at,
+        "status": status,
+        "rows_received": rows_received,
+        "rows_accepted": rows_accepted,
+        "rows_rejected": rows_rejected,
+        "sensors_detected": sensors_detected,
+        "system_id": room,
+        "room": room,
+        "operating_state": intelligence.get("facility_state"),
+        "neraium_score": intelligence.get("neraium_score"),
+        "drift_status": intelligence.get("urgency"),
+        "primary_drivers": [driver] if driver else [],
+        "evidence_summary": evidence_summary[:6],
+        "warnings": result.get("warnings", [])[:10],
+        "errors": result.get("sii_runner_result", {}).get("errors", [])[:5],
+        "input_hash": metadata.get("input_hash"),
+        "result_hash": digest_payload(summary),
+        "initiated_by": "public",
+    }
+    return record
 
 
 def latest_completed_job_summary() -> dict[str, Any] | None:
