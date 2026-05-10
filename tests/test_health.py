@@ -246,7 +246,7 @@ def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -271,7 +271,7 @@ def test_upload_status_preflight_succeeds_without_auth_for_local_vite(tmp_path) 
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["http://127.0.0.1:5173"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -290,47 +290,30 @@ def test_upload_status_preflight_succeeds_without_auth_for_local_vite(tmp_path) 
     assert response.headers["access-control-allow-credentials"] == "true"
 
 
-def test_protected_endpoint_unauthorized_response_is_structured_json(tmp_path) -> None:
+def test_facility_systems_allows_requests_without_shared_secret_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
 
     response = client.get("/api/facility/systems")
 
-    assert response.status_code == 401
-    payload = response.json()
-    assert payload == {
-        "job_id": None,
-        "status": "unauthorized",
-        "progress": 0,
-        "processing_state": "unauthorized",
-        "message": "Telemetry processing session could not be validated.",
-        "error_type": "auth",
-        "error": "Telemetry processing session could not be validated.",
-        "auth_diagnostic": {
-            "failure_reason": "missing_credentials",
-            "auth_source": "none",
-            "auth_scheme": "none",
-            "has_access_header": False,
-            "has_access_cookie": False,
-            "has_authorization": False,
-        },
-    }
+    assert response.status_code == 200
+    assert response.json()["systems"]
 
 
-def test_protected_endpoint_accepts_bearer_access_code_in_production(tmp_path) -> None:
+def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -344,13 +327,13 @@ def test_protected_endpoint_accepts_bearer_access_code_in_production(tmp_path) -
     assert response.json()["systems"]
 
 
-def test_valid_production_auth_refreshes_secure_httponly_cookie(tmp_path) -> None:
+def test_access_header_is_ignored_without_refreshing_auth_cookie(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -361,11 +344,7 @@ def test_valid_production_auth_refreshes_secure_httponly_cookie(tmp_path) -> Non
     )
 
     assert response.status_code == 200
-    set_cookie = response.headers["set-cookie"]
-    assert "neraium_access_code=" in set_cookie
-    assert "HttpOnly" in set_cookie
-    assert "Secure" in set_cookie
-    assert "SameSite=none" in set_cookie
+    assert "set-cookie" not in response.headers
 
 
 def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
@@ -374,7 +353,7 @@ def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -388,13 +367,13 @@ def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
     assert response.json()["engine_name"] == "Neraium SII"
 
 
-def test_auth_failure_logs_debug_context_without_secret(tmp_path, caplog) -> None:
+def test_wrong_bearer_code_does_not_block_production_requests(tmp_path, caplog) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -407,19 +386,8 @@ def test_auth_failure_logs_debug_context_without_secret(tmp_path, caplog) -> Non
         },
     )
 
-    assert response.status_code == 401
-    assert response.json()["auth_diagnostic"] == {
-        "failure_reason": "credential_mismatch",
-        "auth_source": "authorization_bearer",
-        "auth_scheme": "bearer",
-        "has_access_header": False,
-        "has_access_cookie": False,
-        "has_authorization": True,
-    }
+    assert response.status_code == 200
+    assert response.json()["systems"]
     log_text = caplog.text
-    assert "failure_reason=credential_mismatch" in log_text
-    assert "origin=https://app.neraium.com" in log_text
-    assert "has_authorization=True" in log_text
-    assert "auth_scheme=bearer" in log_text
     assert "wrong-secret" not in log_text
     assert "expected-secret" not in log_text

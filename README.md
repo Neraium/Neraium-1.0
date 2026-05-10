@@ -46,7 +46,6 @@ Backend configuration is read from environment variables with local defaults:
 - `BACKEND_HOST=127.0.0.1`
 - `BACKEND_PORT=8010`
 - `CORS_ORIGINS=http://127.0.0.1:3010,http://localhost:3010,https://app.neraium.com`
-- `NERAIUM_API_ACCESS_CODE=neraium-dev`
 - `NERAIUM_RUNTIME_DIR=backend/app/runtime`
 
 ## Frontend Setup

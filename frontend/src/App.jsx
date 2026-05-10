@@ -3,9 +3,6 @@ import {
  API_BASE_URL,
  apiFetch,
  API_CONFIG_WARNING,
- APP_ACCESS_CODE,
- APP_ACCESS_CONFIG_WARNING,
- HAS_APP_ACCESS_CODE,
 } from "./config";
 import "./styles.css";
 
@@ -96,18 +93,11 @@ const DEMO_ROOMS = [
 ];
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
-const ACCESS_SESSION_KEY = "neraium_access_granted";
-const ACCESS_CODE_SESSION_KEY = "neraium_access_code";
-const ACCESS_CODE_COOKIE = "neraium_access_code";
 const OPERATIONAL_CADENCE_MS = 30000;
 
 function App() {
-  const [hasAccess, setHasAccess] = useState(() => (
-    HAS_APP_ACCESS_CODE && window.sessionStorage.getItem(ACCESS_SESSION_KEY) === "true"
-  ));
-  const [apiAccessCode, setApiAccessCode] = useState(() => (
-    window.sessionStorage.getItem(ACCESS_CODE_SESSION_KEY) || APP_ACCESS_CODE
-  ));
+  const hasAccess = true;
+  const apiAccessCode = "";
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
@@ -138,12 +128,6 @@ function App() {
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
-
-  useEffect(() => {
-    if (hasAccess && apiAccessCode) {
-      writeAccessCookie(apiAccessCode);
-    }
-  }, [apiAccessCode, hasAccess]);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) {
@@ -360,24 +344,6 @@ function App() {
     }));
   }
 
-  function handleAccessGranted(accessCode) {
-    const normalizedAccessCode = accessCode.trim();
-    window.sessionStorage.setItem(ACCESS_SESSION_KEY, "true");
-    window.sessionStorage.setItem(ACCESS_CODE_SESSION_KEY, normalizedAccessCode);
-    writeAccessCookie(normalizedAccessCode);
-    setApiAccessCode(normalizedAccessCode);
-    setHasAccess(true);
-  }
-
-  function handleLockApp() {
-    window.sessionStorage.removeItem(ACCESS_SESSION_KEY);
-    window.sessionStorage.removeItem(ACCESS_CODE_SESSION_KEY);
-    clearAccessCookie();
-    setApiAccessCode(APP_ACCESS_CODE);
-    setHasAccess(false);
-    setIsWorkspaceMenuOpen(false);
-  }
-
   function renderActiveWorkspace() {
     if (activeWorkspace === "overview") {
       return (
@@ -441,17 +407,6 @@ function App() {
     );
   }
 
-  if (!hasAccess) {
-    return (
-      <AppErrorBoundary>
-        <AccessGate
-          onAccessGranted={handleAccessGranted}
-          configWarning={APP_ACCESS_CONFIG_WARNING}
-        />
-      </AppErrorBoundary>
-    );
-  }
-
   return (
     <AppErrorBoundary>
     <main className="platform-shell">
@@ -463,7 +418,6 @@ function App() {
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
-          onLockApp={handleLockApp}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
@@ -536,7 +490,6 @@ function App() {
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
-          onLockApp={handleLockApp}
           onSelectWorkspace={handleWorkspaceSelect}
         />
       </aside>
@@ -584,67 +537,11 @@ class AppErrorBoundary extends Component {
   }
 }
 
-function AccessGate({ onAccessGranted, configWarning }) {
-  const [accessCode, setAccessCode] = useState("");
-  const [accessError, setAccessError] = useState("");
-  const isLockedByConfig = !HAS_APP_ACCESS_CODE;
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    if (isLockedByConfig || accessCode.trim() !== APP_ACCESS_CODE) {
-      setAccessError("Access code not recognized.");
-      return;
-    }
-
-    setAccessError("");
-    onAccessGranted(accessCode);
-  }
-
-  return (
-    <main className="access-shell">
-      <section className="access-panel" aria-labelledby="access-title">
-        <div className="access-brand">
-          <div className="brand-mark">N</div>
-          <span>Private operations access</span>
-        </div>
-        <div className="access-copy">
-          <p className="eyebrow">Neraium Access</p>
-          <h1 id="access-title">Systemic Infrastructure Intelligence</h1>
-          <p>Enter access code to continue.</p>
-        </div>
-
-        <form className="access-form" onSubmit={handleSubmit}>
-          <label htmlFor="access-code">Access code</label>
-          <input
-            id="access-code"
-            type="password"
-            value={accessCode}
-            onChange={(event) => {
-              setAccessCode(event.target.value);
-              setAccessError("");
-            }}
-            disabled={isLockedByConfig}
-            autoComplete="current-password"
-          />
-          <button className="command-button" type="submit" disabled={isLockedByConfig}>
-            Continue
-          </button>
-        </form>
-
-        {(accessError || configWarning) && (
-          <p className="access-error">{normalizeErrorMessage(isLockedByConfig ? configWarning : accessError)}</p>
-        )}
-      </section>
-    </main>
-  );
-}
-
 function WorkspaceNavigationContent({
   activeWorkspace,
   roomContext,
   timeCoverage,
   liveOps,
-  onLockApp,
   onSelectWorkspace,
 }) {
   return (
@@ -694,9 +591,6 @@ function WorkspaceNavigationContent({
           <p>{liveOps.connectionStatusLine}</p>
           <span>{liveOps.connectionActionHint}</span>
         </div>
-        <button className="lock-app-button" type="button" onClick={onLockApp}>
-          Lock app
-        </button>
       </div>
     </>
   );
@@ -999,8 +893,6 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
         `message=${classified.message}`,
         `status=${classified.status ?? "n/a"}`,
         `error_type=${classified.errorType ?? "n/a"}`,
-        `auth_reason=${classified.authDiagnostic?.failure_reason ?? "n/a"}`,
-        `auth_source=${classified.authDiagnostic?.auth_source ?? "n/a"}`,
       );
     }
   }
@@ -2918,21 +2810,7 @@ async function readJsonPayload(response) {
 
 async function buildProtectedRequestMessage(response) {
   const payload = await readJsonPayload(response);
-  const diagnosticMessage = formatAuthDiagnosticMessage(payload?.auth_diagnostic);
-  if (diagnosticMessage) {
-    return diagnosticMessage;
-  }
   return normalizeErrorMessage(payload?.message ?? payload?.error) || "Session expired. Refresh workspace.";
-}
-
-function formatAuthDiagnosticMessage(diagnostic) {
-  if (diagnostic?.failure_reason === "credential_mismatch") {
-    return "Access code reached ECS but does not match backend setting.";
-  }
-  if (diagnostic?.failure_reason === "missing_credentials") {
-    return "Access code did not reach ECS.";
-  }
-  return "";
 }
 
 function normalizeErrorMessage(error) {
@@ -2960,7 +2838,6 @@ function buildUploadRequestError(response, payload, phase) {
     status: response.status,
     phase,
     errorType: payload?.error_type ?? payload?.detail?.error_type ?? null,
-    authDiagnostic: payload?.auth_diagnostic ?? payload?.detail?.auth_diagnostic ?? null,
     detail: normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
     retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)),
   };
@@ -2974,11 +2851,9 @@ function classifyUploadError(error, phase) {
       retryable: phase === "poll" && error.retryable,
       status: error.status,
       errorType: error.errorType,
-      authDiagnostic: error.authDiagnostic,
       message: operatorUploadMessage({
         status: error.status,
         errorType: error.errorType,
-        authDiagnostic: error.authDiagnostic,
         detail: error.detail,
         phase,
       }),
@@ -3009,12 +2884,8 @@ function classifyUploadError(error, phase) {
   };
 }
 
-function operatorUploadMessage({ status, errorType, authDiagnostic, detail, phase }) {
+function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "auth" || errorType === "auth_session_expired" || status === 401 || status === 403) {
-    const diagnosticMessage = formatAuthDiagnosticMessage(authDiagnostic);
-    if (diagnosticMessage) {
-      return diagnosticMessage;
-    }
     return phase === "poll"
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : "Telemetry processing session could not be validated.";
@@ -3037,26 +2908,6 @@ function operatorUploadMessage({ status, errorType, authDiagnostic, detail, phas
   return typeof detail === "string" && detail.trim()
     ? detail
     : "Upload processing interrupted.";
-}
-
-function writeAccessCookie(accessCode) {
-  if (!accessCode || typeof document === "undefined") {
-    return;
-  }
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  const sameSite = window.location.protocol === "https:" ? "; SameSite=None" : "; SameSite=Lax";
-  const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
-  document.cookie = `${ACCESS_CODE_COOKIE}=${encodeURIComponent(accessCode)}; Path=/${sameSite}; Max-Age=86400${secure}${domain}`;
-}
-
-function clearAccessCookie() {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  const sameSite = window.location.protocol === "https:" ? "; SameSite=None" : "; SameSite=Lax";
-  const domain = window.location.hostname.endsWith(".neraium.com") ? "; Domain=.neraium.com" : "";
-  document.cookie = `${ACCESS_CODE_COOKIE}=; Path=/${sameSite}; Max-Age=0${secure}${domain}`;
 }
 
 function systemRoomContext(systemName, roomContext) {

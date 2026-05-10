@@ -33,13 +33,13 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["file_size_bytes"] > 0
 
 
-def test_upload_auth_failure_returns_upload_json_contract(tmp_path) -> None:
+def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -49,14 +49,10 @@ def test_upload_auth_failure_returns_upload_json_contract(tmp_path) -> None:
         files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 202
     payload = response.json()
-    assert payload["status"] == "unauthorized"
-    assert payload["message"] == "Telemetry processing session could not be validated."
-    assert payload["processing_state"] == "unauthorized"
-    assert payload["progress"] == 0
-    assert payload["error_type"] == "auth"
-    assert payload["job_id"] is None
+    assert payload["status"] == "PENDING"
+    assert payload["job_id"]
 
 
 def test_upload_accepts_access_header_in_production(tmp_path) -> None:
@@ -65,7 +61,7 @@ def test_upload_accepts_access_header_in_production(tmp_path) -> None:
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -86,7 +82,7 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-        app_access_code="expected-secret",
+
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -102,8 +98,6 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
         "error": None,
     }
     write_job(job)
-    client.cookies.set("neraium_access_code", "expected-secret")
-
     response = client.get("/api/data/upload-status/session-job")
 
     assert response.status_code == 200

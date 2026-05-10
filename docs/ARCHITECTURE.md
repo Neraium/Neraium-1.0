@@ -8,7 +8,7 @@ Neraium is starting as a small full-stack customer-facing application for cannab
 - A Vite React frontend provides the first customer-facing app shell for controlled environment operations.
 - Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, cultivation column mapping, lightweight data profiling, simple baseline comparison, deterministic Neraium SII v1 engine output, and deterministic operator report generation.
 
-This scaffold intentionally does not include user accounts, a database, cloud deployment automation, assistant features, or legacy data schemas. It does include a backend-enforced shared access code for private pilot gating.
+This scaffold intentionally does not include user accounts, a database, cloud deployment automation, assistant features, legacy data schemas, or private access-code gating.
 
 ## Backend
 
@@ -72,7 +72,7 @@ Runtime configuration is centralized in `backend/app/core/config.py` for backend
 
 Future work should add capabilities in small, explicit layers:
 
-- User identity and role-based authorization when pilot access grows beyond a shared private access code.
+- User identity and role-based authorization before broader customer access.
 - Persistence when the first durable customer data model is defined.
 - Deployment configuration when the target environment is selected.
 - Controlled environment operations workflows once the API contracts are clear.
