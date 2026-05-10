@@ -4,6 +4,7 @@ import json
 import os
 import inspect
 import sys
+import time
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -366,7 +367,16 @@ def write_latest_sii_state(state: dict[str, Any]) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temp_path = STATE_PATH.with_suffix(".json.tmp")
     temp_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    temp_path.replace(STATE_PATH)
+    last_error: OSError | None = None
+    for attempt in range(6):
+        try:
+            temp_path.replace(STATE_PATH)
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.02 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
 
 
 def is_valid_latest_sii_state(state: Any) -> bool:

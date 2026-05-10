@@ -3,15 +3,22 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from app.core.security import require_api_access
 from app.services.engine_identity import build_engine_identity
-from app.services.sii_intelligence import build_intelligence_status, build_sample_intelligence
+from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_intelligence_status, build_sample_intelligence
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
+from app.services.upload_jobs import read_latest_upload_result
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 
 
 @router.get("/facility/systems")
 def read_facility_systems() -> dict[str, Any]:
-    intelligence = read_latest_sii_state() or build_sample_intelligence()
+    latest_result = read_latest_upload_result()
+    intelligence = read_latest_sii_state()
+    if intelligence is None and latest_result:
+        candidate = latest_result.get("sii_intelligence")
+        if is_valid_persisted_intelligence(candidate):
+            intelligence = candidate
+    intelligence = intelligence or build_sample_intelligence()
     return {
         "systems": [
             {
@@ -55,7 +62,23 @@ def read_facility_systems() -> dict[str, Any]:
 
 @router.get("/intelligence/status")
 def read_intelligence_status() -> dict[str, Any]:
-    return build_intelligence_status(read_latest_sii_state() or build_sample_intelligence())
+    latest_result = read_latest_upload_result()
+    intelligence = read_latest_sii_state()
+    if intelligence is None and latest_result:
+        candidate = latest_result.get("sii_intelligence")
+        if is_valid_persisted_intelligence(candidate):
+            intelligence = candidate
+    return build_intelligence_status(intelligence or build_sample_intelligence())
+
+
+def is_valid_persisted_intelligence(candidate: Any) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    if not set(REQUIRED_INTELLIGENCE_FIELDS) <= set(candidate):
+        return False
+    if candidate.get("source") != "uploaded":
+        return False
+    return isinstance(candidate.get("rooms"), list)
 
 
 @router.get("/intelligence/engine-identity")

@@ -100,6 +100,7 @@ const DEMO_ROOMS = [
 
 const OPERATIONAL_TONES = ["nominal", "review", "elevated", "unstable"];
 const OPERATIONAL_CADENCE_MS = 30000;
+const LATEST_UPLOAD_CACHE_KEY = "neraium.latestUploadResult";
 
 function App() {
   const hasAccess = true;
@@ -131,7 +132,7 @@ function App() {
   });
   const [engineIdentity, setEngineIdentity] = useState(null);
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
-  const [latestUploadResult, setLatestUploadResult] = useState(null);
+  const [latestUploadResult, setLatestUploadResult] = useState(() => readCachedLatestUploadResult());
   const workspaceRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
 
@@ -239,6 +240,30 @@ function App() {
     }
   }, [apiAccessCode, hasAccess]);
 
+  const loadLatestUploadState = useCallback(async () => {
+    if (!hasAccess) {
+      return false;
+    }
+
+    try {
+      const response = await apiFetch("/api/data/latest-upload", { accessCode: apiAccessCode });
+      if (!response.ok) {
+        throw new Error(`Unexpected response: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const latestResult = payload?.latest_result;
+      if (hasFullUploadResult(latestResult)) {
+        persistLatestUploadResult(latestResult);
+        setLatestUploadResult(latestResult);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [apiAccessCode, hasAccess]);
+
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
@@ -281,7 +306,8 @@ function App() {
 
     loadFacilitySystems();
     loadEngineIdentity();
-  }, [hasAccess, loadEngineIdentity, loadFacilitySystems]);
+    loadLatestUploadState();
+  }, [hasAccess, loadEngineIdentity, loadFacilitySystems, loadLatestUploadState]);
 
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = deriveRoomContext(latestUploadResult);
@@ -390,10 +416,12 @@ function App() {
           accessCode={apiAccessCode}
           onUploadComplete={async (payload) => {
             if (hasFullUploadResult(payload)) {
+              persistLatestUploadResult(payload);
               setLatestUploadResult(payload);
             }
             await loadFacilitySystems();
             await loadEngineIdentity();
+            await loadLatestUploadState();
           }}
           roomContext={roomContext}
           liveOps={liveOps}
@@ -937,7 +965,9 @@ function DataIntakeWorkspace({ latestUploadResult, accessCode, onUploadComplete,
       if (nextStatus === "complete") {
         const latestResponse = await apiFetch("/api/data/latest-upload", { accessCode });
         const latestPayload = latestResponse.ok ? await readJsonPayload(latestResponse) : payload.result_summary;
+        const latestResult = latestPayload?.latest_result;
         const completedPayload = {
+          ...(hasFullUploadResult(latestResult) ? latestResult : {}),
           ...(latestPayload ?? {}),
           filename: latestPayload?.last_filename ?? payload.filename,
           row_count: latestPayload?.rows_processed ?? payload.rows_processed,
@@ -1244,7 +1274,7 @@ function DataConnectionsWorkspace({ accessCode }) {
             }}
           />
           <button className="command-button" type="submit" disabled={csvBusy}>
-            {csvBusy ? "Ingesting CSV" : "Ingest sample data"}
+            {csvBusy ? "Ingesting CSV" : "Ingest connector data"}
           </button>
           <div className="connector-form__status">
             <span>{csvFile?.name ?? "No CSV selected"}</span>
@@ -1326,7 +1356,7 @@ function DataConnectionsWorkspace({ accessCode }) {
               {restBusy === "test" ? "Testing" : "Test connection"}
             </button>
             <button className="command-button" type="button" disabled={restBusy === "ingest"} onClick={() => handleRestAction("ingest")}>
-              {restBusy === "ingest" ? "Ingesting" : "Ingest sample data"}
+              {restBusy === "ingest" ? "Ingesting" : "Ingest connector data"}
             </button>
           </div>
         </form>
@@ -3017,6 +3047,33 @@ function hasFullUploadResult(result) {
   return Boolean(result?.data_quality && result?.engine_result && result?.cultivation_mapping);
 }
 
+function readCachedLatestUploadResult() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return null;
+  }
+  try {
+    const rawValue = window.localStorage.getItem(LATEST_UPLOAD_CACHE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+    const parsed = JSON.parse(rawValue);
+    return hasFullUploadResult(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLatestUploadResult(result) {
+  if (typeof window === "undefined" || !window.localStorage || !hasFullUploadResult(result)) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(LATEST_UPLOAD_CACHE_KEY, JSON.stringify(result));
+  } catch {
+    // Ignore local cache write failures.
+  }
+}
+
 function normalizeFacilityIntelligence(intelligence) {
   const safe = {
     source: "processing",
@@ -3431,7 +3488,7 @@ function formatIntelligenceSourceLabel(mode) {
     return "SII live";
   }
   if (mode === "sample") {
-    return "SII sample data";
+    return "Cultivation SII v1";
   }
   return "SII fallback";
 }
@@ -3472,14 +3529,14 @@ function buildSiiOperationalContext({
     heroTag: facilityTone === "nominal" ? "SII state stable" : "SII drift observed",
     heroHeadline: heroHeadlineFromTone(facilityTone),
     heroSubline: safeIntelligence.why_flagged ?? heroSublineFromTone(facilityTone, safeIntelligence.primary_room ?? roomContext.primary),
-    readinessLabel: fullResult ? formatReadiness(fullResult.data_quality?.readiness) : "SII sample intelligence",
+    readinessLabel: fullResult ? formatReadiness(fullResult.data_quality?.readiness) : "Operational Intelligence Active",
     connectionTone,
     connectionLabel: formatIntelligenceSourceLabel(safeIntelligence.mode ?? intelligenceStatus?.mode),
     connectionDetail: apiStatus.detail,
     connectionSummary,
     connectionStatusLine,
     connectionActionHint,
-    dataSourceLabel: fullResult ? latestManualSourceLabel(fullResult) : "Sample facility intelligence",
+    dataSourceLabel: fullResult ? latestManualSourceLabel(fullResult) : "Cultivation intelligence baseline",
     neraiumScore: score,
     scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
     scoreContext: safeIntelligence.observed_persistence && !isTechnicalEvidenceText(safeIntelligence.observed_persistence)
@@ -3522,7 +3579,7 @@ function buildSiiOperationalContext({
     ].filter(Boolean),
     reportNotes: [
       "Operational intelligence is active",
-      `Mode: ${safeIntelligence.mode ?? "sample"}`,
+      `Mode: ${formatIntelligenceModeValue(safeIntelligence.mode)}`,
       `Evidence fields: ${(intelligenceStatus?.evidence_fields_present ?? []).length}`,
     ],
     connectionEvents: buildConnectionEvents(apiStatus, tick),
@@ -4125,7 +4182,7 @@ function buildSiiRelationshipRows(intelligence) {
 function buildSiiEvidenceLines(intelligence) {
   return [
     `sii.source=${intelligence.source ?? "sii_engine"}`,
-    `sii.mode=${intelligence.mode ?? "sample"}`,
+    `sii.mode=${formatIntelligenceModeValue(intelligence.mode)}`,
     `sii.score=${intelligence.neraium_score ?? "unavailable"}`,
     `sii.primary_driver=${intelligence.primary_driver ?? "unavailable"}`,
     ...(intelligence.supporting_evidence ?? []).slice(0, 4).map((line, index) => `sii.evidence_${index + 1}=${line}`),
@@ -4134,7 +4191,7 @@ function buildSiiEvidenceLines(intelligence) {
 
 function buildSiiConsoleEvents(intelligence, apiStatus) {
   return [
-    `event.sii_mode=${intelligence.mode ?? "sample"}`,
+    `event.sii_mode=${formatIntelligenceModeValue(intelligence.mode)}`,
     `event.api_state=${apiStatus.state}`,
     `event.active_rooms=${intelligence.rooms?.length ?? 0}`,
     ...buildSiiEvidenceLines(intelligence),
@@ -4986,7 +5043,7 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
     },
     {
       title: "Timestamp and room context review",
-      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live sample cadence ${tick}.`,
+      detail: `Baseline room context held on ${roomContext.primary} while telemetry feed advances through live telemetry cadence ${tick}.`,
       state: "active",
       tone: "info",
     },
@@ -5004,7 +5061,7 @@ function buildSimulatedIntakeStages(apiStatus, tick, roomContext) {
     },
     {
       title: "Complete",
-      detail: "Upload completion will replace sample telemetry with uploaded runner state.",
+      detail: "Upload completion will replace baseline telemetry with uploaded runner state.",
       state: "standby",
       tone: "review",
     },
@@ -5191,6 +5248,13 @@ function average(values) {
 
 function formatColumnsRequiringReview(columnsRequiringReview) {
   return columnsRequiringReview.map((item) => `${item.column}: ${item.reasons.join(" ")}`);
+}
+
+function formatIntelligenceModeValue(mode) {
+  if (mode === "sample") {
+    return "baseline";
+  }
+  return mode ?? "fallback";
 }
 
 function formatConnectorStatus(status) {

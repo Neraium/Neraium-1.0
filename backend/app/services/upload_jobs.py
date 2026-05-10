@@ -37,6 +37,8 @@ UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 logger = logging.getLogger(__name__)
+WRITE_RETRY_ATTEMPTS = 6
+WRITE_RETRY_DELAY_SECONDS = 0.02
 
 
 def parse_positive_int_env(name: str, default: int) -> int:
@@ -174,9 +176,7 @@ def write_job(metadata: dict[str, Any]) -> None:
         metadata["status"] = normalize_status(str(metadata["status"]))
         metadata["progress_label"] = PROGRESS_LABELS.get(metadata["status"], metadata.get("progress_label"))
     path = job_path(metadata["job_id"])
-    temp_path = path.with_suffix(".json.tmp")
-    temp_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    atomic_write_json(path, metadata)
 
 
 def update_job(job_id: str, **updates: Any) -> dict[str, Any]:
@@ -254,6 +254,7 @@ def process_upload_job(job_id: str) -> None:
             result_summary=summary,
         )
         write_latest_upload_summary(job_id, summary)
+        write_latest_upload_result(job_id, result)
         logger.info(
             "upload_job_complete job_id=%s rows=%s columns=%s chunks=%s duration=%s engine_runtime=%s memory_estimate=%s",
             job_id,
@@ -574,17 +575,37 @@ def latest_upload_path() -> Path:
     return RUNTIME_DIR / "latest_upload.json"
 
 
+def latest_upload_result_path() -> Path:
+    return RUNTIME_DIR / "latest_upload_result.json"
+
+
 def write_latest_upload_summary(job_id: str, summary: dict[str, Any]) -> None:
     ensure_runtime_dirs()
     path = latest_upload_path()
-    temp_path = path.with_suffix(".json.tmp")
-    temp_path.write_text(json.dumps({"job_id": job_id, **summary}, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    atomic_write_json(path, {"job_id": job_id, **summary})
+
+
+def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
+    ensure_runtime_dirs()
+    path = latest_upload_result_path()
+    persistable = build_persistable_upload_result(job_id, result)
+    atomic_write_json(path, persistable)
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
     ensure_runtime_dirs()
     path = latest_upload_path()
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def read_latest_upload_result() -> dict[str, Any] | None:
+    ensure_runtime_dirs()
+    path = latest_upload_result_path()
     if not path.exists():
         return None
     try:
@@ -635,6 +656,48 @@ def truncate_runner_result(runner_result: dict[str, Any]) -> dict[str, Any]:
         "evidence": runner_result.get("evidence", [])[:10],
         "errors": runner_result.get("errors", [])[:5],
     }
+
+
+def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "filename": result["filename"],
+        "row_count": result["row_count"],
+        "column_count": result["column_count"],
+        "columns": result.get("columns", []),
+        "preview_rows": result.get("preview_rows", []),
+        "detected_timestamp_column": result.get("detected_timestamp_column"),
+        "warnings": result.get("warnings", [])[:25],
+        "numeric_profiles": result.get("numeric_profiles", [])[:25],
+        "timestamp_profile": result.get("timestamp_profile", {}),
+        "data_quality": result["data_quality"],
+        "baseline_analysis": result.get("baseline_analysis", {}),
+        "cultivation_mapping": result["cultivation_mapping"],
+        "operator_report": result.get("operator_report", {}),
+        "engine_result": result["engine_result"],
+        "driver_attribution": result.get("driver_attribution", {}),
+        "sii_intelligence": result["sii_intelligence"],
+        "sii_runner_result": result.get("sii_runner_result", {}),
+        "processing_trace": result.get("processing_trace", {}),
+        "processing_stats": result.get("processing_stats", {}),
+        "room_summary": result.get("room_summary", {}),
+        "validation_provenance": result.get("validation_provenance", {}),
+    }
+
+
+def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    last_error: OSError | None = None
+    for attempt in range(WRITE_RETRY_ATTEMPTS):
+        try:
+            temp_path.replace(path)
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(WRITE_RETRY_DELAY_SECONDS * (attempt + 1))
+    if last_error is not None:
+        raise last_error
 
 
 def first_room_column_index(columns: list[str]) -> int | None:

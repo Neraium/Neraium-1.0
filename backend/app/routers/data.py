@@ -12,6 +12,7 @@ from app.services.upload_jobs import (
     delete_upload_file,
     latest_completed_job_summary,
     process_upload_job,
+    read_latest_upload_result,
     read_job,
 )
 
@@ -189,8 +190,9 @@ def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dic
 @router.get("/data/latest-upload")
 def read_latest_upload() -> dict[str, Any]:
     summary = latest_completed_job_summary()
+    detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
-    if summary is None and latest_state is None:
+    if summary is None and latest_state is None and detailed_result is None:
         return {
             "source": "sample",
             "last_filename": None,
@@ -200,16 +202,31 @@ def read_latest_upload() -> dict[str, Any]:
             "runner_module": None,
             "core_engine": None,
             "state_available": False,
+            "latest_result": None,
         }
     summary = summary or {}
     last_processed_at = summary.get("last_processed_at")
     if last_processed_at is None and latest_state:
         last_processed_at = latest_state.get("last_processed_at")
+    if last_processed_at is None and detailed_result:
+        last_processed_at = (
+            detailed_result.get("sii_intelligence", {}).get("last_updated")
+            or detailed_result.get("processing_trace", {}).get("completed_at")
+        )
+    last_filename = summary.get("filename")
+    if last_filename is None and detailed_result:
+        last_filename = detailed_result.get("filename")
+    rows_processed = summary.get("rows_processed", 0)
+    if not rows_processed and detailed_result:
+        rows_processed = detailed_result.get("row_count", 0)
+    columns_detected = summary.get("columns_detected", 0)
+    if not columns_detected and detailed_result:
+        columns_detected = detailed_result.get("column_count", 0)
     return {
         "source": "uploaded",
-        "last_filename": summary.get("filename"),
-        "rows_processed": summary.get("rows_processed", 0),
-        "columns_detected": summary.get("columns_detected", 0),
+        "last_filename": last_filename,
+        "rows_processed": rows_processed,
+        "columns_detected": columns_detected,
         "last_processed_at": last_processed_at,
         "runner_module": summary.get("runner_module") or (latest_state or {}).get("runner_module"),
         "core_engine": summary.get("core_engine") or (latest_state or {}).get("core_engine"),
@@ -218,4 +235,5 @@ def read_latest_upload() -> dict[str, Any]:
         "chunk_count": summary.get("chunk_count", 0),
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),
         "engine_runtime_seconds": summary.get("engine_runtime_seconds"),
+        "latest_result": detailed_result,
     }

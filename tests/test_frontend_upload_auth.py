@@ -33,6 +33,7 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
         'apiFetch("/api/facility/systems"',
         'apiFetch("/api/intelligence/engine-identity"',
         'apiFetch("/api/health"',
+        'apiFetch("/api/data/latest-upload"',
     ):
         assert endpoint in source
 
@@ -129,3 +130,14 @@ def test_upload_failure_console_log_uses_readable_fields() -> None:
     assert "`status=${classified.status ?? \"n/a\"}`" in source
     assert "`error_type=${classified.errorType ?? \"n/a\"}`" in source
     assert 'console.warn("telemetry_upload_failure", classified)' not in source
+
+
+def test_frontend_restores_latest_upload_result_from_cache_and_backend() -> None:
+    source = read_frontend(APP_JSX)
+
+    assert 'const LATEST_UPLOAD_CACHE_KEY = "neraium.latestUploadResult";' in source
+    assert "const [latestUploadResult, setLatestUploadResult] = useState(() => readCachedLatestUploadResult());" in source
+    assert "const loadLatestUploadState = useCallback(async () => {" in source
+    assert "const latestResult = payload?.latest_result;" in source
+    assert "persistLatestUploadResult(latestResult);" in source
+    assert "window.localStorage.setItem(LATEST_UPLOAD_CACHE_KEY, JSON.stringify(result));" in source

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
-from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job, write_latest_upload_summary
+from app.services.upload_jobs import JOB_DIR, parse_positive_int_env, process_csv_content, process_csv_file, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -237,6 +237,52 @@ def test_latest_upload_endpoint_returns_completed_summary() -> None:
     assert payload["state_available"] is True
 
 
+def test_latest_upload_endpoint_returns_persisted_detailed_result() -> None:
+    client = TestClient(create_app())
+    detailed_result = {
+        "filename": "persisted.csv",
+        "row_count": 12,
+        "column_count": 4,
+        "data_quality": {"readiness": "ready"},
+        "engine_result": {"overall_result": "stable"},
+        "cultivation_mapping": {"room": "room"},
+        "sii_intelligence": {
+            "source": "uploaded",
+            "mode": "live",
+            "facility_state": "Monitoring active telemetry feed",
+            "room_state": "Monitoring active telemetry feed",
+            "urgency": "nominal",
+            "intervention_window": "12 hours",
+            "neraium_score": 88,
+            "primary_room": "Flower Room 1",
+            "priority_room": "Flower Room 1",
+            "primary_driver": "Uploaded telemetry active",
+            "supporting_evidence": ["Uploaded telemetry active"],
+            "relationship_evidence": ["Uploaded telemetry active"],
+            "structural_explanation": ["Uploaded telemetry active"],
+            "confidence_basis": "Uploaded telemetry active",
+            "recommended_operator_review": "Continue monitoring",
+            "what_to_check": ["Continue monitoring"],
+            "why_flagged": "Uploaded telemetry active",
+            "baseline_comparison": "Uploaded telemetry active",
+            "observed_persistence": "Uploaded telemetry active",
+            "last_updated": "2026-05-10T00:00:00+00:00",
+            "rooms": [],
+        },
+        "processing_trace": {},
+        "room_summary": {"room_count": 1, "rooms": [{"room": "Flower Room 1", "row_count": 12}]},
+    }
+    write_latest_upload_result("persisted-job", detailed_result)
+
+    response = client.get("/api/data/latest-upload")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["last_filename"] == "persisted.csv"
+    assert payload["rows_processed"] == 12
+    assert payload["latest_result"]["data_quality"]["readiness"] == "ready"
+
+
 def test_facility_systems_uses_latest_state_after_upload() -> None:
     client = TestClient(create_app())
     rows = "\n".join(
@@ -252,6 +298,52 @@ def test_facility_systems_uses_latest_state_after_upload() -> None:
     assert payload["intelligence"]["source"] == "uploaded"
     assert payload["intelligence"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
 
+
+def test_facility_systems_recovers_from_persisted_upload_result_when_state_missing() -> None:
+    client = TestClient(create_app())
+    write_latest_upload_result(
+        "persisted-facility-job",
+        {
+            "filename": "persisted.csv",
+            "row_count": 24,
+            "column_count": 4,
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"room": "room"},
+            "sii_intelligence": {
+                "source": "uploaded",
+                "mode": "live",
+                "facility_state": "Monitoring active telemetry feed",
+                "room_state": "Monitoring active telemetry feed",
+                "urgency": "nominal",
+                "intervention_window": "12 hours",
+                "neraium_score": 90,
+                "primary_room": "Flower Room 3",
+                "priority_room": "Flower Room 3",
+                "primary_driver": "Recovered from persisted upload result",
+                "supporting_evidence": ["Recovered from persisted upload result"],
+                "relationship_evidence": ["Recovered from persisted upload result"],
+                "structural_explanation": ["Recovered from persisted upload result"],
+                "confidence_basis": "Recovered from persisted upload result",
+                "recommended_operator_review": "Continue monitoring",
+                "what_to_check": ["Continue monitoring"],
+                "why_flagged": "Recovered from persisted upload result",
+                "baseline_comparison": "Recovered from persisted upload result",
+                "observed_persistence": "Recovered from persisted upload result",
+                "last_updated": "2026-05-10T00:00:00+00:00",
+                "rooms": [],
+            },
+            "processing_trace": {},
+            "room_summary": {"room_count": 1, "rooms": [{"room": "Flower Room 3", "row_count": 24}]},
+        },
+    )
+
+    response = client.get("/api/facility/systems")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["intelligence"]["source"] == "uploaded"
+    assert payload["intelligence"]["primary_driver"] == "Recovered from persisted upload result"
 
 def test_facility_systems_uses_multi_room_state_after_upload() -> None:
     client = TestClient(create_app())
