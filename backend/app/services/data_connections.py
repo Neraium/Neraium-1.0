@@ -32,7 +32,6 @@ from app.services.upload_jobs import (
 logger = logging.getLogger(__name__)
 DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
 DEFAULT_CONNECTION_NAME = "Node-RED Cultivation Telemetry"
-DEFAULT_CONNECTION_URL = "http://18.216.253.180:1880/telemetry/latest"
 DEFAULT_POLLING_INTERVAL_SECONDS = 5
 DEFAULT_LIVE_BASELINE_SAMPLE_COUNT = 6
 MAX_BUFFER_RECORDS = 2048
@@ -47,11 +46,12 @@ def now_iso() -> str:
 
 def default_connection_payload(settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
+    default_connection_url = settings.default_telemetry_url
     auto_polling_enabled = False
     return {
         "connection_id": DEFAULT_CONNECTION_ID,
         "name": DEFAULT_CONNECTION_NAME,
-        "url": DEFAULT_CONNECTION_URL,
+        "url": default_connection_url,
         "source_type": "external_rest_api",
         "facility_id": "cultivation-facility-001",
         "room_id": "flower-room-1",
@@ -75,7 +75,7 @@ def default_connection_payload(settings: Settings | None = None) -> dict[str, An
         "baseline_samples_required": DEFAULT_LIVE_BASELINE_SAMPLE_COUNT,
         "last_baseline_update": None,
         "baseline_error_message": "",
-        "masked_configuration": {"url": DEFAULT_CONNECTION_URL},
+        "masked_configuration": {"url": default_connection_url},
     }
 
 

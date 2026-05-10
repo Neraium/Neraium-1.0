@@ -33,6 +33,7 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `BACKEND_PORT` defaults to `8010`.
 - `CORS_ORIGINS` defaults to local frontend origins and `https://app.neraium.com`.
 - `CORS_ORIGIN_REGEX` defaults to `^https://([a-z0-9-]+\.)?neraium\.com$`.
+- `NERAIUM_DEFAULT_TELEMETRY_URL` defaults to `http://127.0.0.1:1880/telemetry/latest` in development and should be set explicitly in production.
 - `NERAIUM_RUNTIME_DIR` defaults to `backend/app/runtime`.
 - `NERAIUM_UPLOAD_CHUNK_SIZE_ROWS` defaults to `10000`.
 - `NERAIUM_MAX_ANALYSIS_ROWS` defaults to `20000`.

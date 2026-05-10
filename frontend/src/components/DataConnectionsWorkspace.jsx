@@ -15,6 +15,7 @@ import { CompactList, DataTable, EmptyState, MetricGrid, Panel, WorkflowStages }
 
 const LIVE_CONNECTION_REFRESH_MS = 5000;
 const DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry";
+const DEFAULT_CONNECTION_URL = "http://127.0.0.1:1880/telemetry/latest";
 const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
   "source_id": "pilot-json-001",
   "source_type": "external_rest_api",
@@ -104,7 +105,7 @@ export default function DataConnectionsWorkspace({
   const [connectionForm, setConnectionForm] = useState({
     connection_id: DEFAULT_CONNECTION_ID,
     name: "Node-RED Cultivation Telemetry",
-    url: "http://18.216.253.180:1880/telemetry/latest",
+    url: DEFAULT_CONNECTION_URL,
     facility_id: "cultivation-facility-001",
     room_id: "flower-room-1",
     polling_interval_seconds: 5,
