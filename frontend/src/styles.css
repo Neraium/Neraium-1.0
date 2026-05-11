@@ -6403,3 +6403,168 @@ h3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Premium normalization pass: consistent spacing, type scale, and lower visual noise. */
+:root {
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --type-xs: 0.7rem;
+  --type-sm: 0.82rem;
+  --type-md: 0.92rem;
+  --type-lg: 1.05rem;
+  --type-xl: clamp(1.65rem, 2.1vw, 2.2rem);
+}
+
+.platform-workspace {
+  padding: var(--space-3) var(--space-3) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+
+.top-status {
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+
+.top-status__title {
+  gap: var(--space-1);
+}
+
+h1 {
+  font-size: var(--type-xl);
+  line-height: 1.05;
+}
+
+h2 {
+  font-size: var(--type-lg);
+}
+
+h3 {
+  font-size: var(--type-md);
+}
+
+.eyebrow,
+.sidebar-kicker,
+.section-token,
+.status-chip span,
+.metric-cell span,
+.timeline-item__time,
+.telemetry-card span,
+.zone-summary-card span {
+  font-size: var(--type-xs);
+}
+
+.workspace-grid {
+  gap: var(--space-2);
+}
+
+.ops-panel,
+.workspace-grid--systems .ops-panel,
+.workspace-grid--intake .ops-panel,
+.workspace-grid--evidence .ops-panel,
+.workspace-grid--console .ops-panel {
+  padding: var(--space-2);
+  gap: var(--space-2);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.ops-panel__header {
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+.workspace-hero-panel {
+  border-color: rgba(186, 197, 193, 0.16);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.workspace-hero-panel .ops-panel__header h2 {
+  font-size: 1.08rem;
+  letter-spacing: 0.01em;
+}
+
+.metric-grid,
+.metric-grid--compact,
+.workspace-nav,
+.connector-status-list,
+.run-history-list {
+  gap: var(--space-1);
+}
+
+.metric-cell,
+.status-chip,
+.telemetry-card,
+.zone-summary-card,
+.compact-list-block,
+.empty-state,
+.run-history-item,
+.connector-status-card,
+.connector-detail-row,
+.intervention-card,
+.why-panel__section,
+.why-panel__recommendation {
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.intervention-card {
+  min-height: 152px;
+}
+
+.workspace-nav__item {
+  min-height: 52px;
+  padding: 8px 10px;
+}
+
+.workspace-nav__label {
+  font-size: var(--type-sm);
+}
+
+.workspace-nav__detail {
+  font-size: var(--type-xs);
+}
+
+.compact-list,
+.feed-item p,
+.timeline-item p,
+.empty-state p,
+.telemetry-card p,
+.why-panel__section p {
+  font-size: var(--type-sm);
+}
+
+.command-button,
+.secondary-command-button,
+.workspace-menu-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: var(--type-sm);
+  box-shadow: none;
+}
+
+.command-button {
+  background: linear-gradient(180deg, rgba(67, 58, 44, 0.92), rgba(42, 35, 25, 0.92));
+}
+
+.command-button:hover:enabled,
+.secondary-command-button:hover:enabled,
+.workspace-menu-button:hover {
+  transform: none;
+}
+
+.status-chip,
+.overview-pill,
+.connector-status-pill,
+.sii-source-chip,
+.status-dot,
+.drift-row__flag {
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  .platform-workspace {
+    padding: var(--space-2) 14px calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  }
+}

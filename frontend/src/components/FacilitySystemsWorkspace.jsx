@@ -28,7 +28,7 @@ export default function FacilitySystemsWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--systems">
-      <Panel title="Facility Overview" className="span-8">
+      <Panel title="Facility Overview" className="span-8 workspace-hero-panel">
         <FleetSummary summary={fleetSummary} />
       </Panel>
 

@@ -356,7 +356,7 @@ export function WhyPanel({
       </div>
 
       <div className="why-panel__section guidance-flag">
-        <span className="section-token">Why Neraium flagged this</span>
+        <span className="section-token">Why flagged</span>
         <p>{guidance.whyFlagged}</p>
       </div>
 

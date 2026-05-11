@@ -404,7 +404,7 @@ export default function DataConnectionsWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--connections">
-      <Panel title="Data Connections" className="span-7">
+      <Panel title="Data Connections" className="span-7 workspace-hero-panel">
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
@@ -495,7 +495,7 @@ export default function DataConnectionsWorkspace({
         <CompactList items={uploadDiffSummary.lines} emptyText="Waiting for a meaningful state change." />
       </Panel>
 
-      <Panel title="Node-RED Cultivation Telemetry" className="span-12">
+      <Panel title="Telemetry Stream" className="span-12">
         {activeConnection ? (
           <>
             <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>

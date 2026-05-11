@@ -136,7 +136,7 @@ export default function EvidenceTrailWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Evidence Trail" className="span-12">
+      <Panel title="Evidence Summary" className="span-12 workspace-hero-panel">
         <MetricGrid metrics={latestMetrics} />
       </Panel>
 
@@ -208,7 +208,7 @@ export default function EvidenceTrailWorkspace({
         )}
       </Panel>
 
-      <Panel title="Export Evidence Report" className="span-12">
+      <Panel title="Export Report" className="span-12">
         <div className="room-first-actions">
           <button className="command-button" type="button" onClick={handleExport} disabled={!selectedRunId}>
             Export Evidence Report

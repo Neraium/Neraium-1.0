@@ -23,11 +23,11 @@ export default function IntelligenceConsoleWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Room Trend Feed" className="span-4">
+      <Panel title="Room Trend Feed" className="span-6 workspace-hero-panel">
         <DriftFeed rows={driftRows} />
       </Panel>
 
-      <Panel title="Relationship Shifts" className="span-4">
+      <Panel title="Relationship Shifts" className="span-3">
         <RelationshipMonitor
           rows={relationshipRows}
           formatRelationshipPair={formatRelationshipPair}
@@ -36,7 +36,7 @@ export default function IntelligenceConsoleWorkspace({
         />
       </Panel>
 
-      <Panel title="Recent Changes" className="span-4">
+      <Panel title="Recent Changes" className="span-3">
         <TimelineFeed items={timeline} />
       </Panel>
 
