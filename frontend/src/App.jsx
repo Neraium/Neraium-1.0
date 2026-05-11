@@ -163,6 +163,7 @@ function App() {
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
   const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
   const workspaceRef = useRef(null);
+  const workspaceDrawerRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
@@ -441,6 +442,9 @@ function App() {
     if (!isWorkspaceMenuOpen) {
       return undefined;
     }
+    if (workspaceDrawerRef.current) {
+      workspaceDrawerRef.current.scrollTop = 0;
+    }
 
     function handleKeyDown(event) {
       if (event.key === "Escape") {
@@ -647,6 +651,7 @@ function App() {
         onClick={() => setIsWorkspaceMenuOpen(false)}
       />
       <aside
+        ref={workspaceDrawerRef}
         className={`workspace-drawer ${isWorkspaceMenuOpen ? "workspace-drawer--open" : ""}`}
         id="mobile-workspace-drawer"
         aria-label="Workspace drawer"
@@ -1640,5 +1645,4 @@ function formatIntelligenceModeValue(mode) {
 }
 
 export default App;
-
 
