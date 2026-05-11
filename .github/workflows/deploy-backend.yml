@@ -2,11 +2,9 @@ name: Deploy Backend to ECS
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "backend/Dockerfile"
-      - ".github/workflows/deploy-backend.yml"
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy-backend:
@@ -34,14 +32,12 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
+      - name: Build and push backend image
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
-
           docker build -f backend/Dockerfile -t $IMAGE_URI .
           docker push $IMAGE_URI
-
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Download current task definition
@@ -60,7 +56,7 @@ jobs:
             .registeredBy
           )' task-definition.json > clean-task-definition.json
 
-      - name: Render new task definition
+      - name: Render task definition
         id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
