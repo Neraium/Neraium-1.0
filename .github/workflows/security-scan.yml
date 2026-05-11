@@ -55,7 +55,7 @@ jobs:
         run: docker build -f backend/Dockerfile -t neraium-backend:scan backend
 
       - name: Trivy scan (high,critical)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: neraium-backend:scan
           format: table
