@@ -165,6 +165,7 @@ function App() {
   const workspaceRef = useRef(null);
   const workspaceDrawerRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
+  const facilitySystemsFetchDisabledRef = useRef(false);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) {
@@ -215,6 +216,9 @@ function App() {
     if (!hasAccess) {
       return false;
     }
+    if (facilitySystemsFetchDisabledRef.current) {
+      return false;
+    }
 
     try {
       const response = await apiFetch("/api/facility/systems", { accessCode: apiAccessCode });
@@ -236,6 +240,14 @@ function App() {
       throw new Error("Facility systems payload was incomplete.");
     } catch (error) {
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
+      const lowerMessage = String(normalizedMessage || "").toLowerCase();
+      if (
+        lowerMessage.includes("failed to fetch")
+        || lowerMessage.includes("networkerror")
+        || lowerMessage.includes("cors")
+      ) {
+        facilitySystemsFetchDisabledRef.current = true;
+      }
       setSystems(FALLBACK_SYSTEMS);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
@@ -307,6 +319,7 @@ function App() {
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
+      facilitySystemsFetchDisabledRef.current = false;
       await loadFacilitySystems();
       await loadEngineIdentity();
     }
@@ -1645,4 +1658,3 @@ function formatIntelligenceModeValue(mode) {
 }
 
 export default App;
-
