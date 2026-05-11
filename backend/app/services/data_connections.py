@@ -40,6 +40,10 @@ MAX_RECENT_RECORDS = 512
 MEANINGFUL_STATE_KEYS = ("neraium_score", "operating_state", "primary_room", "drift_status", "primary_driver")
 
 
+class TelemetryFetchError(RuntimeError):
+    pass
+
+
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -753,6 +757,12 @@ def activate_live_baseline(connection: dict[str, Any], metadata: dict[str, Any],
         }
     )
     persisted = write_live_baseline_state(connection["connection_id"], baseline_state)
+    logger.info(
+        "baseline_ready connection_id=%s samples_collected=%s samples_required=%s",
+        connection["connection_id"],
+        persisted.get("samples_collected"),
+        persisted.get("samples_required"),
+    )
     if should_emit_event(
         connection["connection_id"],
         "baseline_activated",
@@ -812,6 +822,7 @@ def update_live_baseline(connection: dict[str, Any], normalized_records: list[No
             )
 
     if baseline_state.get("baseline_status") != "active":
+        previous_samples_collected = int(baseline_state.get("samples_collected") or 0)
         baseline_records = append_baseline_records(connection_id, normalized_records)
         samples_collected = grouped_sample_count(baseline_records)
         baseline_state.update(
@@ -824,6 +835,16 @@ def update_live_baseline(connection: dict[str, Any], normalized_records: list[No
             }
         )
         baseline_state = write_live_baseline_state(connection_id, baseline_state)
+        if baseline_state.get("samples_collected", 0) > previous_samples_collected:
+            logger.info(
+                "baseline_sample_added connection_id=%s samples_collected=%s samples_required=%s readings_accepted=%s scenario=%s tick=%s",
+                connection_id,
+                baseline_state.get("samples_collected"),
+                baseline_state.get("samples_required"),
+                metadata.get("readings_accepted"),
+                metadata.get("scenario"),
+                metadata.get("tick"),
+            )
         if samples_collected >= baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT):
             baseline_state = activate_live_baseline(connection, metadata, baseline_state)
             return baseline_state, True
@@ -875,9 +896,52 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
     try:
         connection["last_poll_at"] = now_iso()
         upsert_registered_data_connection(connection)
-        payload = fetch_connection_payload(connection, transport=transport)
-        normalized_records, metadata = normalize_external_rest_payload(payload, connection)
-        baseline_state, baseline_ready = update_live_baseline(connection, normalized_records, metadata)
+        try:
+            payload = fetch_connection_payload(connection, transport=transport)
+            normalized_records, metadata = normalize_external_rest_payload(payload, connection)
+        except Exception as exc:
+            raise TelemetryFetchError(str(exc)) from exc
+
+        logger.info(
+            "telemetry_fetch_success connection_id=%s readings_received=%s scenario=%s tick=%s timestamp=%s",
+            connection_id,
+            metadata.get("readings_received"),
+            metadata.get("scenario"),
+            metadata.get("tick"),
+            metadata.get("timestamp"),
+        )
+        append_connection_buffer(connection_id, normalized_records)
+        append_recent_records(connection_id, normalized_records)
+        logger.info(
+            "telemetry_readings_accepted connection_id=%s readings_accepted=%s readings_rejected=%s sensors_detected=%s",
+            connection_id,
+            metadata.get("readings_accepted"),
+            metadata.get("readings_rejected"),
+            metadata.get("sensors_detected"),
+        )
+
+        try:
+            baseline_state, baseline_ready = update_live_baseline(connection, normalized_records, metadata)
+        except Exception as exc:
+            error_message = str(exc)
+            logger.exception("baseline_build_failed connection_id=%s error=%s", connection_id, error_message)
+            baseline_state = read_live_baseline_state(connection_id)
+            baseline_state.update(
+                {
+                    "baseline_source": baseline_state.get("baseline_source") or "live_rest",
+                    "baseline_status": "failed" if baseline_state.get("baseline_status") in {"none", "failed"} else "building",
+                    "last_baseline_update": now_iso(),
+                    "error_message": error_message,
+                }
+            )
+            baseline_state = write_live_baseline_state(connection_id, baseline_state)
+            metadata = build_processing_metadata(metadata, baseline_state)
+            connection = update_connection_health_fields(connection, metadata, status="polling", baseline_state=baseline_state)
+            partial = latest_result_without_live_baseline(connection, baseline_state)
+            partial["actor"] = actor
+            partial["baseline_error"] = error_message
+            return partial
+
         metadata = build_processing_metadata(metadata, baseline_state)
         connection = update_connection_health_fields(connection, metadata, status="polling", baseline_state=baseline_state)
         if not baseline_ready:
@@ -891,7 +955,7 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
             partial["actor"] = actor
             return partial
 
-        recent_records = append_recent_records(connection_id, normalized_records)
+        recent_records = read_recent_records(connection_id)
         baseline_records = read_baseline_records(connection_id)
         processing_records = merge_normalized_record_dicts(baseline_records, recent_records)
         result = result_from_connection_batch(connection, processing_records, metadata, baseline_state=baseline_state)
@@ -940,7 +1004,7 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
             "meaningful_change": meaningful_change,
             "actor": actor,
         }
-    except Exception as exc:
+    except TelemetryFetchError as exc:
         error_message = str(exc)
         logger.warning("data_connection_poll_failed connection_id=%s error=%s", connection_id, error_message)
         baseline_state = read_live_baseline_state(connection_id)

@@ -6,9 +6,9 @@
     "columns_detected": 11,
     "chunk_count": 1,
     "sampled_rows": 256,
-    "memory_estimate_bytes": 47541,
-    "engine_runtime_seconds": 0.0048,
-    "last_processed_at": "2026-05-10T23:06:15.034590+00:00",
+    "memory_estimate_bytes": 47526,
+    "engine_runtime_seconds": 0.009,
+    "last_processed_at": "2026-05-11T00:01:34.543101+00:00",
     "runner_used": true,
     "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
     "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
@@ -20,7 +20,7 @@
     "upload_result_source": "rest_poll",
     "diff": {
       "previous_filename": "Node-RED Cultivation Telemetry",
-      "previous_processed_at": "2026-05-10T23:06:07.698025+00:00",
+      "previous_processed_at": "2026-05-11T00:01:27.200722+00:00",
       "neraium_score_delta": 9.0
     },
     "warnings": [
@@ -44,8 +44,8 @@
     "facility_id": "cultivation-facility-001",
     "room_id": "flower-room-1",
     "scenario": "airflow_drift",
-    "tick": 1103,
-    "latest_telemetry_timestamp": "2026-05-10T23:06:12.764Z",
+    "tick": 1535,
+    "latest_telemetry_timestamp": "2026-05-11T00:01:32.396Z",
     "readings_received": 8,
     "readings_accepted": 8,
     "readings_rejected": 0,

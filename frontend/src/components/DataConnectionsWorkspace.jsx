@@ -354,19 +354,31 @@ export default function DataConnectionsWorkspace({
   const healthyCount = connections.filter((item) => ["online", "polling"].includes(String(item.status).toLowerCase())).length;
   const totalSensors = connections.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
   const totalReadings = connections.reduce((sum, item) => sum + (item.readings_received ?? 0), 0);
+  const hasSuccessfulLiveTelemetry = Boolean(
+    activeConnection?.last_success_at
+      && (activeConnection?.readings_accepted ?? 0) > 0
+      && !activeConnection?.error_message,
+  );
+  const displayUploadError = hasSuccessfulLiveTelemetry && !isUploadProcessing(uploadState) ? "" : uploadError;
   const intakeStages = uploadJob
     ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
     : uploadResult
       ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
-      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext });
+      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError: displayUploadError, roomContext });
   const latestStatus = latestUploadSnapshot?.status ?? "empty";
   const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
+  const liveTelemetryMessage = activeConnection?.baseline_status === "active"
+    ? "Live telemetry baseline ready"
+    : activeConnection?.baseline_status === "building"
+      ? `Building live baseline (${activeConnection?.baseline_samples_collected ?? 0}/${activeConnection?.baseline_samples_required ?? 0})`
+      : "Live telemetry received";
   const latestMessage = normalizeErrorMessage(
-    uploadError
+    displayUploadError
       || uploadJob?.error
       || uploadJob?.message
       || uploadJob?.progress_label
+      || (hasSuccessfulLiveTelemetry ? liveTelemetryMessage : "")
       || latestUploadSnapshot?.message
       || uploadStateMessage(uploadState),
   );
@@ -375,11 +387,12 @@ export default function DataConnectionsWorkspace({
   const baselineSamplesCollected = activeConnection?.baseline_samples_collected ?? latestUploadSnapshot?.baseline_samples_collected ?? 0;
   const baselineSamplesRequired = activeConnection?.baseline_samples_required ?? latestUploadSnapshot?.baseline_samples_required ?? 0;
   const baselineSource = activeConnection?.baseline_source ?? latestUploadSnapshot?.baseline_source;
-  const baselineMessage = latestUploadSnapshot?.baseline_status === "building"
+  const currentBaselineStatus = activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status;
+  const baselineMessage = currentBaselineStatus === "building"
     ? "Building live baseline"
-    : latestUploadSnapshot?.baseline_status === "active"
+    : currentBaselineStatus === "active"
       ? "Live baseline active"
-      : latestUploadSnapshot?.baseline_status === "failed"
+      : currentBaselineStatus === "failed"
         ? "Live baseline failed"
         : "No data connected yet";
 
@@ -423,7 +436,7 @@ export default function DataConnectionsWorkspace({
             </span>
           </div>
 
-          {uploadError && <p className="form-error">{normalizeErrorMessage(uploadError)}</p>}
+          {displayUploadError && <p className="form-error">{normalizeErrorMessage(displayUploadError)}</p>}
         </form>
         <div className="connector-json-hint">
           <div className="connector-json-hint__header">
