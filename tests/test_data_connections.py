@@ -6,6 +6,7 @@ from app.core.config import Settings
 from app.main import create_app
 
 BASELINE_SAMPLE_COUNT = 6
+TEST_DEFAULT_TELEMETRY_URL = "http://127.0.0.1:1880/telemetry/latest"
 
 
 def build_client(tmp_path) -> TestClient:
@@ -14,6 +15,7 @@ def build_client(tmp_path) -> TestClient:
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["http://localhost:3010"],
+        default_telemetry_url=TEST_DEFAULT_TELEMETRY_URL,
         cors_origin_regex=None,
         runtime_dir=tmp_path,
     )
@@ -67,7 +69,7 @@ def test_data_connections_endpoint_lists_default_node_red_connection(tmp_path) -
     payload = response.json()
     assert payload["connections"]
     assert payload["connections"][0]["name"] == "Node-RED Cultivation Telemetry"
-    assert payload["connections"][0]["url"] == "http://18.216.253.180:1880/telemetry/latest"
+    assert payload["connections"][0]["url"] == TEST_DEFAULT_TELEMETRY_URL
 
 
 def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tmp_path) -> None:

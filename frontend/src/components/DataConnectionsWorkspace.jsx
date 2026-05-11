@@ -463,7 +463,7 @@ export default function DataConnectionsWorkspace({
       <Panel title="Latest Sync" className="span-7">
         <MetricGrid
           metrics={[
-            { label: "State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, uploadError) },
+            { label: "State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
             { label: "Backend", value: apiStatus.label },
             { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
             { label: "Source", value: latestUploadSnapshot?.result_source === "rest_poll" ? "REST Poll" : latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Data" },
