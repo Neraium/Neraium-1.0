@@ -6791,3 +6791,415 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Mobile operator console pass: guided, touch-friendly, and low-noise. */
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .platform-shell {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .platform-main {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .mobile-status-bar {
+    min-height: 64px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+    border-bottom-color: rgba(186, 197, 193, 0.1);
+    background: rgba(7, 10, 12, 0.97);
+  }
+
+  .mobile-status-bar .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-status-bar .brand-name {
+    font-size: 0.96rem;
+  }
+
+  .mobile-status-bar__workspace {
+    font-size: 0.72rem;
+  }
+
+  .workspace-menu-button {
+    min-width: 92px;
+    min-height: 46px;
+    border-radius: 8px;
+  }
+
+  .workspace-drawer {
+    width: min(360px, 94vw);
+    gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .workspace-drawer__header {
+    padding: 0 0 8px;
+  }
+
+  .workspace-drawer__close {
+    min-height: 46px;
+    border-radius: 8px;
+  }
+
+  .workspace-drawer .sidebar-brand-shell {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .workspace-drawer .brand-edition,
+  .workspace-drawer .workspace-nav__detail,
+  .workspace-drawer .sidebar-footer span {
+    display: none;
+  }
+
+  .workspace-drawer .workspace-nav {
+    gap: 8px;
+  }
+
+  .workspace-drawer .workspace-nav__item {
+    min-height: 52px;
+    padding: 0 12px;
+    border-radius: 8px;
+    align-content: center;
+  }
+
+  .workspace-drawer .workspace-nav__label {
+    font-size: 0.94rem;
+    line-height: 1.2;
+  }
+
+  .sidebar-footer {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .top-status {
+    display: none;
+  }
+
+  .platform-workspace {
+    width: 100%;
+    max-width: none;
+    padding: 12px 12px calc(28px + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+  }
+
+  .workspace-grid,
+  .workspace-grid--operator-flow,
+  .workspace-grid--systems,
+  .workspace-grid--intake,
+  .workspace-grid--evidence,
+  .workspace-grid--console {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .span-12,
+  .span-8,
+  .span-7,
+  .span-6,
+  .span-5,
+  .span-4,
+  .span-3,
+  .span-2,
+  .workspace-grid--operator-flow > .overview-panel--command,
+  .workspace-grid--operator-flow > .overview-panel--room-first,
+  .workspace-grid--operator-flow > .overview-panel--detail {
+    grid-column: 1;
+  }
+
+  .ops-panel,
+  .workspace-grid--systems .ops-panel,
+  .workspace-grid--intake .ops-panel,
+  .workspace-grid--evidence .ops-panel,
+  .workspace-grid--console .ops-panel {
+    width: 100%;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+  }
+
+  .ops-panel__header {
+    padding-bottom: 8px;
+  }
+
+  .ops-panel__header h2 {
+    max-width: none;
+    font-size: 0.98rem;
+    line-height: 1.3;
+  }
+
+  .workspace-grid--operator-flow .overview-panel--command .ops-panel__header {
+    display: none;
+  }
+
+  .workspace-grid--operator-flow .overview-panel--command .ops-panel__body {
+    gap: 12px;
+  }
+
+  .workspace-grid--operator-flow .overview-hero {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .workspace-grid--operator-flow .overview-hero__lead {
+    gap: 8px;
+    padding: 0;
+  }
+
+  .workspace-grid--operator-flow .overview-hero__headline {
+    max-width: 100%;
+    font-size: 2rem;
+    line-height: 1.05;
+  }
+
+  .workspace-grid--operator-flow .overview-hero__lead p {
+    max-width: none;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .operator-story {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .operator-story__item {
+    min-height: 0;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .operator-story__item--score {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .operator-story__item--score span,
+  .operator-story__item--score p {
+    grid-column: 1;
+  }
+
+  .operator-story__item--score strong {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    font-size: 2.55rem;
+  }
+
+  .operator-story__item strong {
+    font-size: 1.08rem;
+  }
+
+  .operator-story__item p {
+    font-size: 0.82rem;
+  }
+
+  .operating-state-next {
+    gap: 8px;
+    padding: 14px;
+    border-radius: 8px;
+  }
+
+  .operating-state-next strong {
+    font-size: 1.12rem;
+    line-height: 1.25;
+  }
+
+  .operating-state-next p,
+  .operator-guidance-brief li {
+    max-width: none;
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+
+  .operator-guidance-brief ul,
+  .guidance-checks ul {
+    padding-left: 18px;
+  }
+
+  .workspace-grid--operator-flow .overview-panel--room-first .intervention-grid,
+  .intervention-grid,
+  .target-selector,
+  .telemetry-grid,
+  .telemetry-grid--compact,
+  .metric-grid,
+  .metric-grid--compact,
+  .fleet-summary__grid,
+  .connector-rest-grid,
+  .connector-form__actions,
+  .room-first-actions,
+  .workspace-grid--operator-flow .room-first-actions {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .workspace-grid--operator-flow .overview-panel--room-first .intervention-card,
+  .intervention-card,
+  .target-selector__item,
+  .telemetry-card,
+  .metric-cell,
+  .compact-list-block,
+  .empty-state,
+  .connector-status-card,
+  .run-history-item,
+  .relationship-row {
+    min-height: 0;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .intervention-card__header {
+    align-items: start;
+  }
+
+  .workspace-grid--operator-flow .intervention-card__header strong,
+  .target-selector__item strong {
+    font-size: 1.1rem;
+    line-height: 1.2;
+  }
+
+  .intervention-card__window {
+    padding: 8px 0;
+  }
+
+  .intervention-card__window strong {
+    font-size: 1.7rem;
+  }
+
+  .workspace-grid--operator-flow .intervention-card p,
+  .target-selector__item p,
+  .telemetry-card p,
+  .compact-list,
+  .empty-state p {
+    max-width: none;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .why-panel,
+  .workspace-grid--operator-flow .why-panel {
+    gap: 10px;
+  }
+
+  .workspace-grid--operator-flow .why-panel__summary {
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .workspace-grid--operator-flow .why-panel__summary h3 {
+    font-size: 1.15rem;
+  }
+
+  .workspace-grid--operator-flow .why-panel__summary p,
+  .workspace-grid--operator-flow .why-panel__section p,
+  .workspace-grid--operator-flow .why-panel__headline {
+    font-size: 0.9rem;
+  }
+
+  .progression-strip--compact {
+    grid-template-columns: repeat(4, minmax(76px, 1fr));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .technical-summary-panel summary {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .technical-detail-panel,
+  .engine-identity-panel,
+  .table-shell,
+  .evidence-console {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .data-table {
+    min-width: 0;
+  }
+
+  .command-button,
+  .secondary-command-button,
+  .operator-action-button,
+  .workspace-menu-button,
+  .workspace-drawer__close {
+    min-height: 48px;
+  }
+}
+
+@media (min-width: 390px) and (max-width: 760px) {
+  .platform-workspace {
+    padding-inline: 14px;
+  }
+
+  .workspace-grid--operator-flow .overview-hero__headline {
+    font-size: 2.12rem;
+  }
+}
+
+@media (min-width: 430px) and (max-width: 760px) {
+  .platform-workspace {
+    padding-inline: 16px;
+  }
+
+  .operator-story__item {
+    padding: 14px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1023px) {
+  .platform-shell {
+    grid-template-columns: 1fr;
+    overflow-x: hidden;
+  }
+
+  .platform-sidebar {
+    display: none;
+  }
+
+  .mobile-status-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .platform-workspace {
+    width: 100%;
+    max-width: none;
+    padding: 18px;
+  }
+
+  .workspace-grid,
+  .workspace-grid--operator-flow {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .span-12,
+  .span-8,
+  .span-7,
+  .span-6,
+  .span-5,
+  .span-4,
+  .span-3,
+  .span-2,
+  .workspace-grid--operator-flow > .overview-panel--command,
+  .workspace-grid--operator-flow > .overview-panel--room-first,
+  .workspace-grid--operator-flow > .overview-panel--detail {
+    grid-column: span 6;
+  }
+}
