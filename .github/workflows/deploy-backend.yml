@@ -1,4 +1,4 @@
-name: Deploy backend to ECS
+name: Deploy Backend to ECS
 
 on:
   push:
@@ -6,19 +6,22 @@ on:
     paths:
       - "backend/**"
       - "backend/Dockerfile"
-      - ".aws/task-definition.json"
       - ".github/workflows/deploy-backend.yml"
 
-concurrency:
-  group: backend-deploy-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  deploy-backend:
     runs-on: ubuntu-latest
 
+    env:
+      AWS_REGION: us-east-2
+      ECR_REPOSITORY: neraium-api
+      ECS_CLUSTER: default
+      ECS_SERVICE: neraium-api-service-3z8k8vz1
+      ECS_TASK_DEFINITION_FAMILY: default-sha256-08a0
+      CONTAINER_NAME: Main
+
     steps:
-      - name: Check out repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
@@ -26,42 +29,49 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
+      - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build and push image
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.sha }}
 
-      - name: Build and push backend image
-        id: build-image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/neraium-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          docker build -f backend/Dockerfile -t $IMAGE_URI .
+          docker push $IMAGE_URI
 
-      - name: Export image URI
-        id: image
-        run: echo "image=${{ steps.login-ecr.outputs.registry }}/neraium-api:latest" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      - name: Render ECS task definition
-        id: task-def
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $ECS_TASK_DEFINITION_FAMILY \
+            --query taskDefinition > task-definition.json
+
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          )' task-definition.json > clean-task-definition.json
+
+      - name: Render new task definition
+        id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: .aws/task-definition.json
-          container-name: Main
-          image: ${{ steps.image.outputs.image }}
+          task-definition: clean-task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.IMAGE_URI }}
 
-      - name: Deploy ECS task definition
+      - name: Deploy ECS service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: sha256-acf9
-          cluster: default
-          wait-for-service-stability: false
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
