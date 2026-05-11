@@ -125,14 +125,45 @@ def set_connection_polling(connection_id: str, *, enabled: bool) -> dict[str, An
 
 def reset_connection_live_baseline(connection_id: str) -> dict[str, Any]:
     connection = require_connection(connection_id)
+    logger.info(
+        "baseline_rebuild_started connection_id=%s previous_status=%s previous_samples=%s",
+        connection_id,
+        connection.get("baseline_status"),
+        connection.get("baseline_samples_collected"),
+    )
     clear_live_baseline(connection_id)
-    connection["baseline_source"] = None
-    connection["baseline_status"] = "none"
-    connection["baseline_samples_collected"] = 0
-    connection["baseline_samples_required"] = DEFAULT_LIVE_BASELINE_SAMPLE_COUNT
-    connection["last_baseline_update"] = None
+    samples_required = max(
+        int(connection.get("baseline_samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT),
+        1,
+    )
+    rebuilt_state = write_live_baseline_state(
+        connection_id,
+        {
+            "connection_id": connection_id,
+            "baseline_source": "live_rest",
+            "baseline_status": "building",
+            "samples_collected": 0,
+            "samples_required": samples_required,
+            "last_baseline_update": now_iso(),
+            "activated_at": None,
+            "error_message": "",
+        },
+    )
+    connection["baseline_source"] = rebuilt_state.get("baseline_source")
+    connection["baseline_status"] = rebuilt_state.get("baseline_status")
+    connection["baseline_samples_collected"] = rebuilt_state.get("samples_collected", 0)
+    connection["baseline_samples_required"] = rebuilt_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
+    connection["last_baseline_update"] = rebuilt_state.get("last_baseline_update")
     connection["baseline_error_message"] = ""
-    return upsert_registered_data_connection(connection)
+    updated = upsert_registered_data_connection(connection)
+    logger.info(
+        "baseline_rebuild_completed connection_id=%s status=%s samples=%s required=%s",
+        connection_id,
+        updated.get("baseline_status"),
+        updated.get("baseline_samples_collected"),
+        updated.get("baseline_samples_required"),
+    )
+    return updated
 
 
 def baseline_state_key(connection_id: str) -> str:
@@ -365,8 +396,9 @@ def read_recent_records(connection_id: str) -> list[dict[str, Any]]:
     return read_buffered_records(recent_records_key(connection_id))
 
 
-def clear_live_baseline(connection_id: str) -> None:
-    upsert_latest_payload(records_buffer_key(connection_id), [])
+def clear_live_baseline(connection_id: str, *, keep_connection_buffer: bool = False) -> None:
+    if not keep_connection_buffer:
+        upsert_latest_payload(records_buffer_key(connection_id), [])
     upsert_latest_payload(baseline_records_key(connection_id), [])
     upsert_latest_payload(recent_records_key(connection_id), [])
     upsert_latest_payload(state_fingerprint_key(connection_id), {})
@@ -908,7 +940,7 @@ def update_live_baseline(connection: dict[str, Any], normalized_records: list[No
 
     baseline_records = read_baseline_records(connection_id)
     if not baseline_records:
-        clear_live_baseline(connection_id)
+        clear_live_baseline(connection_id, keep_connection_buffer=True)
         return update_live_baseline(connection, normalized_records, metadata)
 
     baseline_state.update(
@@ -956,6 +988,9 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
             payload = fetch_connection_payload(connection, transport=transport)
             normalized_records, metadata = normalize_external_rest_payload(payload, connection)
         except Exception as exc:
+            if isinstance(exc, httpx.TimeoutException):
+                logger.warning("telemetry_fetch_timeout connection_id=%s url=%s", connection_id, connection.get("url"))
+                raise TelemetryFetchError("Telemetry source timed out while fetching live readings.") from exc
             raise TelemetryFetchError(str(exc)) from exc
 
         logger.info(
@@ -1062,7 +1097,12 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
         }
     except TelemetryFetchError as exc:
         error_message = str(exc)
-        logger.warning("data_connection_poll_failed connection_id=%s error=%s", connection_id, error_message)
+        logger.warning(
+            "data_connection_poll_failed connection_id=%s timeout=%s error=%s",
+            connection_id,
+            "timed out" in error_message.lower(),
+            error_message,
+        )
         baseline_state = read_live_baseline_state(connection_id)
         if baseline_state.get("baseline_status") in {"none", "failed"}:
             baseline_state["baseline_status"] = "failed"

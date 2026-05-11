@@ -179,7 +179,7 @@ def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monke
     assert status.json()["baseline_status"] == "active"
 
 
-def test_reset_baseline_clears_live_baseline_state(monkeypatch, tmp_path) -> None:
+def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payloads = [
         payload_for(
@@ -189,7 +189,7 @@ def test_reset_baseline_clears_live_baseline_state(monkeypatch, tmp_path) -> Non
             humidity=55.2 + index,
             airflow=101.4 - index,
         )
-        for index in range(BASELINE_SAMPLE_COUNT)
+        for index in range(BASELINE_SAMPLE_COUNT + 1)
     ]
     payload_iter = iter(payloads)
     monkeypatch.setattr("app.services.data_connections.fetch_connection_payload", lambda connection, transport=None: next(payload_iter))
@@ -200,8 +200,16 @@ def test_reset_baseline_clears_live_baseline_state(monkeypatch, tmp_path) -> Non
     reset = client.post("/api/data-connections/node-red-cultivation-telemetry/reset-baseline")
     latest = client.get("/api/data/latest-upload")
     status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
+    post_reset_poll = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+    post_reset_status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
 
     assert reset.status_code == 200
-    assert reset.json()["connection"]["baseline_status"] == "none"
-    assert latest.json()["baseline_status"] == "none"
+    assert reset.json()["connection"]["baseline_source"] == "live_rest"
+    assert reset.json()["connection"]["baseline_status"] == "building"
+    assert reset.json()["connection"]["baseline_samples_collected"] == 0
+    assert latest.json()["baseline_status"] == "building"
     assert status.json()["baseline_samples_collected"] == 0
+    assert post_reset_poll.status_code == 200
+    assert post_reset_status.status_code == 200
+    assert post_reset_status.json()["baseline_status"] == "building"
+    assert post_reset_status.json()["baseline_samples_collected"] == 1

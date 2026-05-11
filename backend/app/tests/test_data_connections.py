@@ -158,3 +158,53 @@ def test_health_update_recovers_baseline_from_buffer_when_state_missing(isolated
     assert recovered["baseline_samples_collected"] > 0
     assert len(data_connections.read_baseline_records(connection_id)) > 0
     assert len(data_connections.read_recent_records(connection_id)) > 0
+
+
+def test_reset_baseline_starts_clean_and_rebuilds_on_next_poll(isolated_runtime):
+    transport = mock_transport(
+        [
+            telemetry_payload("2026-05-10T15:00:00Z", tick=1),
+            telemetry_payload("2026-05-10T15:01:00Z", tick=2),
+            telemetry_payload("2026-05-10T15:02:00Z", tick=3),
+        ]
+    )
+    first = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=transport)
+    assert first["connection"]["baseline_samples_collected"] == 1
+    second = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=transport)
+    assert second["connection"]["baseline_samples_collected"] == 2
+
+    rebuilt = data_connections.reset_connection_live_baseline(data_connections.DEFAULT_CONNECTION_ID)
+    assert rebuilt["baseline_source"] == "live_rest"
+    assert rebuilt["baseline_status"] == "building"
+    assert rebuilt["baseline_samples_collected"] == 0
+    assert len(data_connections.read_baseline_records(data_connections.DEFAULT_CONNECTION_ID)) == 0
+    assert len(data_connections.read_recent_records(data_connections.DEFAULT_CONNECTION_ID)) == 0
+
+    rebuilt_poll = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=transport)
+    assert rebuilt_poll["connection"]["baseline_status"] == "building"
+    assert rebuilt_poll["connection"]["baseline_samples_collected"] == 1
+
+def test_timeout_error_clears_after_next_successful_poll(isolated_runtime, monkeypatch):
+    warmup_transport = mock_transport([telemetry_payload("2026-05-10T16:00:00Z", tick=4)])
+    data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=warmup_transport)
+    data_connections.reset_connection_live_baseline(data_connections.DEFAULT_CONNECTION_ID)
+
+    def raise_timeout(connection, transport=None):
+        raise httpx.ReadTimeout("read timed out")
+
+    monkeypatch.setattr(data_connections, "fetch_connection_payload", raise_timeout)
+    timed_out = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID)
+    assert "timed out" in timed_out["error"].lower()
+    assert timed_out["connection"]["status"] == "error"
+    assert timed_out["connection"]["error_message"]
+
+    monkeypatch.setattr(
+        data_connections,
+        "fetch_connection_payload",
+        lambda connection, transport=None: telemetry_payload("2026-05-10T16:01:00Z", tick=5),
+    )
+    recovered = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID)
+    assert recovered["connection"]["status"] == "polling"
+    assert recovered["connection"]["error_message"] == ""
+    assert recovered["connection"]["baseline_status"] == "building"
+    assert recovered["connection"]["baseline_samples_collected"] == 1

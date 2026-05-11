@@ -41,3 +41,5 @@ backend/app/runtime/latest_sii_state.json
 backend/app/runtime/latest_upload.json
 backend/app/runtime/uploads/
 backend/app/runtime/jobs/
+backend/app/runtime/*
+!backend/app/runtime/.gitkeep
