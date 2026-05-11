@@ -236,6 +236,23 @@ def test_latest_upload_endpoint_returns_cors_header_for_production_frontend() ->
     assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
 
 
+def test_api_errors_return_json_with_cors_header_for_production_frontend(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.routers.data.latest_completed_job_summary",
+        lambda: (_ for _ in ()).throw(RuntimeError("runtime state unavailable")),
+    )
+    client = TestClient(create_app(), raise_server_exceptions=False)
+
+    response = client.get(
+        "/api/data/latest-upload",
+        headers={"Origin": "https://app.neraium.com"},
+    )
+
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
+    assert response.json()["error_type"] == "api_request_error"
+
+
 def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path) -> None:
     settings = Settings(
         app_env="production",

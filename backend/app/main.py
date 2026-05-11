@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -41,15 +42,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_origin_regex=settings.cors_origin_regex,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     app.include_router(health.router, prefix="/api")
     app.include_router(app_info.router, prefix="/api")
     app.include_router(connectors.router, prefix="/api")
@@ -66,6 +58,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request_id:
             response.headers["X-Request-Id"] = request_id
         return response
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -88,10 +89,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(Exception)
     async def upload_unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         if not request.url.path.startswith("/api/data/upload"):
-            raise exc
+            logger.exception("api_request_failed path=%s", request.url.path)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "Unexpected API error.",
+                    "error_type": "api_request_error",
+                    "path": request.url.path,
+                },
+                headers=cors_error_headers(request),
+            )
         return JSONResponse(
             status_code=500,
             content=upload_error_payload("Unexpected processing error", status_code=500),
+            headers=cors_error_headers(request),
         )
 
     @app.get("/")
@@ -159,6 +170,23 @@ def normalize_error_message(error: Any) -> str:
     if message:
         return normalize_error_message(message)
     return str(error) or "Unexpected processing error"
+
+
+def cors_error_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    settings = request.app.state.settings
+    origin_allowed = origin in settings.cors_origins
+    if not origin_allowed and settings.cors_origin_regex:
+        origin_allowed = re.match(settings.cors_origin_regex, origin) is not None
+    if not origin_allowed:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }
 
 
 app = create_app()
