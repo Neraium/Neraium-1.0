@@ -684,6 +684,8 @@ export function EmptyState({ title, body, compact = false }) {
 export function StatusDot({ tone }) {
   return (
     <span className={`status-dot status-dot--${tone}`}>
+      <span className="status-dot__halo" />
+      <span className="status-dot__ring" />
       <span className="status-dot__core" />
     </span>
   );

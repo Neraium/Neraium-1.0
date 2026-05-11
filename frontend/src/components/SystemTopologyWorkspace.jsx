@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { StatusDot } from "./workspacePrimitives";
+import KftHealthOrb from "./KftHealthOrb";
 import StructuralIntegrityField from "./StructuralIntegrityField";
 
 const ZONES = [
@@ -111,6 +112,11 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
+  const systemState = liveOps.facilityTone === "nominal"
+    ? "stable"
+    : liveOps.facilityTone === "review"
+      ? "drift"
+      : "separation";
   const fieldToneClass = coherence > 0.72 ? "field--coherent" : coherence > 0.46 ? "field--strained" : "field--collapsing";
   const hoveredRows = useMemo(() => {
     if (!hoveredEdge) {
@@ -130,14 +136,17 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
 
       <div className="integrity-hero">
         <div className="integrity-hero__lead">
-          <p className="integrity-hero__kicker">Primary System Condition Indicator</p>
+          <p className="integrity-hero__kicker">KFT Primary System Condition Indicator</p>
           <h3>Systems fail in relationships before they fail in signals.</h3>
           <p>
             This field is the operational heartbeat of Neraium. It exposes hidden structural deterioration before endpoint telemetry crosses hard thresholds.
           </p>
         </div>
         <div className="integrity-hero__score">
-          <span>Coherence Index</span>
+          <div className="integrity-hero__score-orb">
+            <KftHealthOrb systemState={systemState} intensity={1 - coherence} />
+          </div>
+          <span>KFT Coherence Index</span>
           <strong>{Math.round(coherence * 100)}</strong>
           <p>{state.label}</p>
         </div>
@@ -146,12 +155,12 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       <div className="topology-card topology-card--heartbeat">
         <div className="topology-card__status">
           <StatusDot tone={liveOps.facilityTone} />
-          <strong>Platform Heartbeat • {state.label}</strong>
+          <strong>Platform Heartbeat | {state.label}</strong>
           <span>{liveOps.connectionSummary}</span>
         </div>
 
         <StructuralIntegrityField
-          systemState={liveOps.facilityTone === "nominal" ? "stable" : liveOps.facilityTone === "review" ? "drift" : "separation"}
+          systemState={systemState}
           intensity={Math.round((1 - coherence) * 100)}
           animated
         />
@@ -258,3 +267,4 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     </section>
   );
 }
+

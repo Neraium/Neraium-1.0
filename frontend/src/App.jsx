@@ -777,7 +777,10 @@ function StatusBanner({ title, subtitle, tone }) {
 function StatusChip({ label, value, tone }) { 
   return (
     <div className={`status-chip status-chip--${tone}`}>
-      <span>{label}</span>
+      <div className="status-chip__head">
+        <StatusDot tone={tone} />
+        <span>{label}</span>
+      </div>
       <strong>{value}</strong>
     </div>
   );
