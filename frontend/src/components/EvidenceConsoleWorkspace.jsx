@@ -45,7 +45,7 @@ export default function EvidenceConsoleWorkspace({ liveOps, selectedTarget }) {
       <div className="evidence-console-view__header">
         <p className="system-body__kicker">Interpretability View</p>
         <h2>Evidence Console</h2>
-        <p>Directional reasoning behind every hidden drift call.</p>
+        <p>Human-readable reasoning for what is wrong, where it is happening, and why the platform believes it.</p>
       </div>
 
       <div className="evidence-console-view__grid">

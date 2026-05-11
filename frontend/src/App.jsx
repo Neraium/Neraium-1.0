@@ -33,7 +33,7 @@ const WORKSPACES = [
     id: "system-body",
     label: "System Body",
     eyebrow: "Topology View",
-    description: "Facility-wide coherence rendered as a living topology map.",
+    description: "Top-level facility health with one live structural orb.",
   },
   {
     id: "drift-timeline",
@@ -51,7 +51,7 @@ const WORKSPACES = [
     id: "data-connections",
     label: "Data Connections",
     eyebrow: "Signal Intake",
-    description: "Upload CSV, configure API telemetry credentials, and run live polling.",
+    description: "Upload telemetry files and manage the live intake endpoint.",
   },
   {
     id: "historical-replay",
@@ -701,6 +701,7 @@ function TopStatusBar({
   onSetDemoScenario,
 }) {
   const intelligenceLabel = formatIntelligenceSourceLabel(liveOps.intelligenceMode);
+  const triageSummary = deriveTriageSummary(liveOps, roomContext);
   return (
     <header className="top-status"> 
       <div className="top-status__title"> 
@@ -718,6 +719,25 @@ function TopStatusBar({
             <span className="top-status__meta-copy top-status__meta-copy--actionable">{liveOps.connectionActionHint}</span>
           )}
         </div>
+      </div>
+
+      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone}`}>
+        <article className="top-status__brief-item">
+          <span>What&apos;s wrong</span>
+          <strong>{triageSummary.problem}</strong>
+        </article>
+        <article className="top-status__brief-item">
+          <span>Where</span>
+          <strong>{triageSummary.where}</strong>
+        </article>
+        <article className="top-status__brief-item top-status__brief-item--wide">
+          <span>Why we think that</span>
+          <p>{triageSummary.why}</p>
+        </article>
+        <article className="top-status__brief-item top-status__brief-item--wide">
+          <span>Human read</span>
+          <p>{triageSummary.human}</p>
+        </article>
       </div>
 
       <div className="status-rack">
@@ -793,6 +813,37 @@ function SidebarTelemetry({ label, value }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function deriveTriageSummary(liveOps, roomContext) {
+  const tone = liveOps.facilityTone;
+  const firstFinding = liveOps.findings?.[0];
+  const secondFinding = liveOps.findings?.[1];
+  const firstEvidence = liveOps.evidenceLines?.find(Boolean);
+  const firstRelationship = liveOps.relationshipRows?.[0]?.detail;
+  const recommendation = liveOps.interventionItems?.[0]?.recommendation;
+  const focusRoom = roomContext?.primary ?? liveOps.primaryWindow?.label ?? "Facility overview";
+  const why = firstFinding?.detail
+    || firstRelationship
+    || firstEvidence
+    || liveOps.heroSubline
+    || "The platform is comparing live system behavior against the facility's recent operating baseline.";
+
+  if (tone === "nominal" || tone === "info") {
+    return {
+      problem: "No active failure signal right now.",
+      where: focusRoom,
+      why,
+      human: recommendation || "The structure looks steady, but we are still watching for early relationship shifts before they become hard failures.",
+    };
+  }
+
+  return {
+    problem: firstFinding?.title || liveOps.facilityStateLabel || "System behavior is off baseline.",
+    where: liveOps.primaryWindow?.label || focusRoom,
+    why,
+    human: recommendation || secondFinding?.detail || liveOps.connectionActionHint || "This is an operational reasoning signal, not just a threshold breach, so the app is flagging the pattern before the room becomes harder to control.",
+  };
 }
 
 function formatRelationshipPair(columns = [], index = 0) {

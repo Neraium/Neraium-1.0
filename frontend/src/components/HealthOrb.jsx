@@ -55,12 +55,12 @@ function clamp(value, min, max) {
 
 function toneMeta(systemState) {
   if (systemState === "drift") {
-    return { className: "kft-orb--drift", hue: "#f3bb47", coreOpacity: 0.9 };
+    return { className: "health-orb--drift", hue: "#f3bb47", coreOpacity: 0.9 };
   }
   if (systemState === "separation") {
-    return { className: "kft-orb--separation", hue: "#ff4d52", coreOpacity: 0.94 };
+    return { className: "health-orb--separation", hue: "#ff4d52", coreOpacity: 0.94 };
   }
-  return { className: "kft-orb--stable", hue: "#a7ff3c", coreOpacity: 0.88 };
+  return { className: "health-orb--stable", hue: "#a7ff3c", coreOpacity: 0.88 };
 }
 
 function transformNode(node, systemState, intensity) {
@@ -108,7 +108,7 @@ function edgeVisibility(linkIndex, systemState) {
   return linkIndex % 2 === 0 ? "faint" : "hidden";
 }
 
-export default function KftHealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
+export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
   const normalizedIntensity = clamp(Number(intensity) || 0, 0, 1);
   const tone = toneMeta(systemState);
   const nodes = ORB_NODES.map((node) => transformNode(node, systemState, normalizedIntensity));
@@ -116,37 +116,37 @@ export default function KftHealthOrb({ systemState = "stable", intensity = 0.4, 
 
   return (
     <div
-      className={`kft-orb ${tone.className} ${animated ? "kft-orb--animated" : ""}`}
-      style={{ "--kft-hue": tone.hue, "--kft-core-opacity": tone.coreOpacity }}
+      className={`health-orb ${tone.className} ${animated ? "health-orb--animated" : ""}`}
+      style={{ "--orb-hue": tone.hue, "--orb-core-opacity": tone.coreOpacity }}
     >
-      <svg className="kft-orb__svg" viewBox="0 0 340 300" role="img" aria-label="KFT system health orb">
+      <svg className="health-orb__svg" viewBox="0 0 340 300" role="img" aria-label="System health orb">
         <defs>
-          <radialGradient id="kftSphereGlow" cx="50%" cy="44%" r="52%">
-            <stop offset="0%" stopColor="var(--kft-hue)" stopOpacity="0.36" />
-            <stop offset="58%" stopColor="var(--kft-hue)" stopOpacity="0.1" />
-            <stop offset="100%" stopColor="var(--kft-hue)" stopOpacity="0" />
+          <radialGradient id="orbSphereGlow" cx="50%" cy="44%" r="52%">
+            <stop offset="0%" stopColor="var(--orb-hue)" stopOpacity="0.36" />
+            <stop offset="58%" stopColor="var(--orb-hue)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
           </radialGradient>
-          <radialGradient id="kftCoreGlow" cx="50%" cy="50%" r="54%">
+          <radialGradient id="orbCoreGlow" cx="50%" cy="50%" r="54%">
             <stop offset="0%" stopColor="white" stopOpacity="0.94" />
-            <stop offset="18%" stopColor="var(--kft-hue)" stopOpacity="0.92" />
-            <stop offset="100%" stopColor="var(--kft-hue)" stopOpacity="0" />
+            <stop offset="18%" stopColor="var(--orb-hue)" stopOpacity="0.92" />
+            <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
           </radialGradient>
-          <clipPath id="kftSphereMask">
+          <clipPath id="orbSphereMask">
             <circle cx="170" cy="132" r={systemState === "separation" ? 92 : 88} />
           </clipPath>
         </defs>
 
-        <g className="kft-orb__base">
-          <ellipse cx="170" cy="258" rx="72" ry="11" className="kft-orb__base-core" />
-          <ellipse cx="170" cy="258" rx="92" ry="16" className="kft-orb__base-ring" />
-          <ellipse cx="170" cy="258" rx="114" ry="22" className="kft-orb__base-ring" />
-          <ellipse cx="170" cy="258" rx="138" ry="28" className="kft-orb__base-ring" />
+        <g className="health-orb__base">
+          <ellipse cx="170" cy="258" rx="72" ry="11" className="health-orb__base-core" />
+          <ellipse cx="170" cy="258" rx="92" ry="16" className="health-orb__base-ring" />
+          <ellipse cx="170" cy="258" rx="114" ry="22" className="health-orb__base-ring" />
+          <ellipse cx="170" cy="258" rx="138" ry="28" className="health-orb__base-ring" />
         </g>
 
-        <circle cx="170" cy="132" r={systemState === "separation" ? 98 : 92} className="kft-orb__aura" />
-        <circle cx="170" cy="132" r={systemState === "stable" ? 89 : systemState === "drift" ? 92 : 96} className="kft-orb__shell" />
+        <circle cx="170" cy="132" r={systemState === "separation" ? 98 : 92} className="health-orb__aura" />
+        <circle cx="170" cy="132" r={systemState === "stable" ? 89 : systemState === "drift" ? 92 : 96} className="health-orb__shell" />
 
-        <g className="kft-orb__field" clipPath={systemState === "separation" ? undefined : "url(#kftSphereMask)"}>
+        <g className="health-orb__field" clipPath={systemState === "separation" ? undefined : "url(#orbSphereMask)"}>
           {ORB_LINKS.map(([from, to], index) => {
             const n1 = nodeMap[from];
             const n2 = nodeMap[to];
@@ -161,7 +161,7 @@ export default function KftHealthOrb({ systemState = "stable", intensity = 0.4, 
                 y1={n1.y}
                 x2={n2.x}
                 y2={n2.y}
-                className={`kft-orb__link kft-orb__link--${visibility}`}
+                className={`health-orb__link health-orb__link--${visibility}`}
               />
             );
           })}
@@ -172,29 +172,29 @@ export default function KftHealthOrb({ systemState = "stable", intensity = 0.4, 
               cx={node.x}
               cy={node.y}
               r={node.g === "core" ? 4.6 : node.g === "top" || node.g === "bottom" ? 3.6 : 3.2}
-              className={`kft-orb__node ${node.g === "core" ? "kft-orb__node--core" : ""}`}
-              style={{ "--kft-delay": `${index * 80}ms` }}
+              className={`health-orb__node ${node.g === "core" ? "health-orb__node--core" : ""}`}
+              style={{ "--orb-delay": `${index * 80}ms` }}
             />
           ))}
         </g>
 
         {systemState === "separation" && (
-          <g className="kft-orb__fragments">
+          <g className="health-orb__fragments">
             {FRAGMENT_SPARKS.map((spark, index) => (
               <circle
                 key={`${spark.x}-${spark.y}`}
                 cx={spark.x}
                 cy={spark.y}
                 r={spark.r}
-                className="kft-orb__spark"
-                style={{ "--kft-delay": `${index * 110}ms` }}
+                className="health-orb__spark"
+                style={{ "--orb-delay": `${index * 110}ms` }}
               />
             ))}
           </g>
         )}
 
-        <circle cx="170" cy="132" r="34" className="kft-orb__core" />
-        <circle cx="170" cy="132" r="14" className="kft-orb__core-hotspot" />
+        <circle cx="170" cy="132" r="34" className="health-orb__core" />
+        <circle cx="170" cy="132" r="14" className="health-orb__core-hotspot" />
       </svg>
     </div>
   );

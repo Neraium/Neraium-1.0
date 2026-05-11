@@ -56,7 +56,7 @@ function formatConnectionStatus(status) {
     return "Online";
   }
   if (normalized === "polling") {
-    return "Polling";
+    return "Connected";
   }
   if (normalized === "error") {
     return "Error";
@@ -301,34 +301,6 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function handleConnectionAction(connectionId, action) {
-    setConnectionBusy(`${connectionId}:${action}`);
-    setConnectionError("");
-    try {
-      const response = await apiFetch(`/api/data-connections/${connectionId}/${action}`, {
-        accessCode,
-        method: "POST",
-      });
-      const payload = await readJsonPayload(response);
-      if (!response.ok) {
-        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
-      }
-      await loadConnections();
-      if (action === "poll-once" || action === "reset-baseline" || payload?.latest_result) {
-        await onUploadComplete(payload?.latest_result ?? null);
-      }
-    } catch (error) {
-      console.error("data_connection_action_failed", {
-        connectionId,
-        action,
-        error: normalizeErrorMessage(error?.message ?? error),
-      });
-      setConnectionError(normalizeErrorMessage(error?.message ?? error));
-    } finally {
-      setConnectionBusy("");
-    }
-  }
-
   async function handleSaveConnection() {
     setConnectionBusy(`${connectionForm.connection_id}:save`);
     setConnectionError("");
@@ -408,7 +380,7 @@ export default function DataConnectionsWorkspace({
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
-            <p>Upload a production CSV or JSON telemetry export if you want a file-based baseline. Live REST telemetry can build its own baseline automatically.</p>
+            <p>Upload a production CSV or JSON telemetry export if you want a file-based baseline. You can also keep a live REST endpoint connected here for reference.</p>
           </div>
 
           <div className="intake-flow__controls">
@@ -532,15 +504,6 @@ export default function DataConnectionsWorkspace({
                   onChange={(event) => setConnectionForm((current) => ({ ...current, room_id: event.target.value }))}
                 />
               </label>
-              <label>
-                <span>Polling Interval</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={connectionForm.polling_interval_seconds}
-                  onChange={(event) => setConnectionForm((current) => ({ ...current, polling_interval_seconds: event.target.value }))}
-                />
-              </label>
               <div className="connector-form__actions">
                 <button
                   className="secondary-command-button"
@@ -556,7 +519,7 @@ export default function DataConnectionsWorkspace({
               metrics={[
                 { label: "URL", value: activeConnection.url },
                 { label: "Status", value: formatConnectionStatus(activeConnection.status) },
-                { label: "Polling", value: activeConnection.polling_enabled ? "Enabled" : "Disabled" },
+                { label: "Endpoint Mode", value: "Configured" },
                 { label: "Baseline Source", value: baselineSource === "live_rest" ? "Live REST" : baselineSource === "uploaded_file" ? "Uploaded File" : "None" },
                 { label: "Baseline Status", value: baselineStatusLabel },
                 { label: "Samples", value: baselineSamplesRequired > 0 ? `${baselineSamplesCollected}/${baselineSamplesRequired}` : baselineSamplesCollected },
@@ -568,48 +531,6 @@ export default function DataConnectionsWorkspace({
                 { label: "Baseline Updated", value: activeConnection.last_baseline_update ? formatClockTime(activeConnection.last_baseline_update) : "Not yet" },
               ]}
             />
-            <div className="connector-form__actions">
-              <button
-                className="secondary-command-button"
-                type="button"
-                disabled={connectionBusy === `${activeConnection.connection_id}:test`}
-                onClick={() => handleConnectionAction(activeConnection.connection_id, "test")}
-              >
-                {connectionBusy === `${activeConnection.connection_id}:test` ? "Testing" : "Test Connection"}
-              </button>
-              <button
-                className="secondary-command-button"
-                type="button"
-                disabled={connectionBusy === `${activeConnection.connection_id}:poll-once`}
-                onClick={() => handleConnectionAction(activeConnection.connection_id, "poll-once")}
-              >
-                {connectionBusy === `${activeConnection.connection_id}:poll-once` ? "Polling" : "Poll Once"}
-              </button>
-              <button
-                className="command-button"
-                type="button"
-                disabled={activeConnection.polling_enabled || connectionBusy === `${activeConnection.connection_id}:start`}
-                onClick={() => handleConnectionAction(activeConnection.connection_id, "start")}
-              >
-                {connectionBusy === `${activeConnection.connection_id}:start` ? "Starting" : "Start Polling"}
-              </button>
-              <button
-                className="secondary-command-button"
-                type="button"
-                disabled={!activeConnection.polling_enabled || connectionBusy === `${activeConnection.connection_id}:stop`}
-                onClick={() => handleConnectionAction(activeConnection.connection_id, "stop")}
-              >
-                {connectionBusy === `${activeConnection.connection_id}:stop` ? "Stopping" : "Stop Polling"}
-              </button>
-              <button
-                className="secondary-command-button"
-                type="button"
-                disabled={connectionBusy === `${activeConnection.connection_id}:reset-baseline`}
-                onClick={() => handleConnectionAction(activeConnection.connection_id, "reset-baseline")}
-              >
-                {connectionBusy === `${activeConnection.connection_id}:reset-baseline` ? "Resetting" : "Rebuild Baseline"}
-              </button>
-            </div>
             <CompactList
               items={[
                 `Room: ${activeConnection.room_id ?? "Unknown room"}`,
@@ -630,7 +551,7 @@ export default function DataConnectionsWorkspace({
             />
           </>
         ) : (
-          <EmptyState title="No data connection registered" body="Register a REST telemetry source to start live polling." compact />
+          <EmptyState title="No data connection registered" body="Register a REST telemetry source to keep the intake workspace ready for live data." compact />
         )}
       </Panel>
 
@@ -697,7 +618,7 @@ export default function DataConnectionsWorkspace({
                 ])}
               />
             ) : (
-              <EmptyState title="No ingestion history" body="Completed uploads and meaningful live polling changes will appear here." compact />
+              <EmptyState title="No ingestion history" body="Completed uploads and meaningful live telemetry changes will appear here." compact />
             )}
           </Panel>
         </details>
