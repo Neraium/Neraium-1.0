@@ -6568,3 +6568,95 @@ h3 {
     padding: var(--space-2) 14px calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Desktop width repair: keep command-center grids fluid on real desktop viewports. */
+@media (min-width: 1024px) {
+  .platform-shell {
+    grid-template-columns: 244px minmax(0, 1fr);
+    width: 100vw;
+  }
+
+  .platform-sidebar {
+    display: flex;
+  }
+
+  .mobile-status-bar,
+  .workspace-drawer,
+  .workspace-drawer-backdrop {
+    display: none !important;
+  }
+
+  .platform-main {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .platform-workspace {
+    width: 100%;
+    max-width: none;
+    overflow: auto;
+  }
+
+  .workspace-grid,
+  .workspace-grid--systems,
+  .workspace-grid--intake,
+  .workspace-grid--evidence,
+  .workspace-grid--console,
+  .workspace-grid--operator-flow {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .span-2 {
+    grid-column: span 2;
+  }
+
+  .span-3 {
+    grid-column: span 3;
+  }
+
+  .span-4 {
+    grid-column: span 4;
+  }
+
+  .span-5 {
+    grid-column: span 5;
+  }
+
+  .span-6 {
+    grid-column: span 6;
+  }
+
+  .span-7 {
+    grid-column: span 7;
+  }
+
+  .span-8 {
+    grid-column: span 8;
+  }
+
+  .span-12 {
+    grid-column: span 12;
+  }
+
+  .workspace-grid--operator-flow > .overview-panel--command {
+    grid-column: span 12;
+  }
+
+  .workspace-grid--operator-flow > .overview-panel--room-first {
+    grid-column: span 7;
+  }
+
+  .workspace-grid--operator-flow > .overview-panel--detail {
+    grid-column: span 5;
+    position: relative;
+    top: auto;
+  }
+
+  .workspace-grid--operator-flow .overview-hero {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.85fr);
+  }
+}

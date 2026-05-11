@@ -221,6 +221,21 @@ def test_facility_systems_endpoint_returns_cors_header_for_production_frontend()
     assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
 
 
+def test_latest_upload_endpoint_returns_cors_header_for_production_frontend() -> None:
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/data/latest-upload",
+        headers={
+            "Origin": "https://app.neraium.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
+
+
 def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path) -> None:
     settings = Settings(
         app_env="production",

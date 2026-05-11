@@ -27,7 +27,7 @@ class Settings:
     backend_host: str
     backend_port: int
     cors_origins: list[str]
-    default_telemetry_url: str
+    default_telemetry_url: str = DEFAULT_LOCAL_TELEMETRY_URL
     cors_origin_regex: str | None = None
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
 

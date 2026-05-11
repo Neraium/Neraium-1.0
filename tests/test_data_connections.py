@@ -72,6 +72,22 @@ def test_data_connections_endpoint_lists_default_node_red_connection(tmp_path) -
     assert payload["connections"][0]["url"] == TEST_DEFAULT_TELEMETRY_URL
 
 
+def test_connection_test_failure_returns_clean_json(monkeypatch, tmp_path) -> None:
+    client = build_client(tmp_path)
+    monkeypatch.setattr(
+        "app.services.data_connections.fetch_connection_payload",
+        lambda connection, transport=None: (_ for _ in ()).throw(ValueError("External telemetry response did not include any readings.")),
+    )
+
+    response = client.post("/api/data-connections/node-red-cultivation-telemetry/test")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["connection"]["status"] == "error"
+    assert payload["connection"]["error_message"] == "External telemetry response did not include any readings."
+    assert payload["normalized_preview"] == []
+
+
 def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payloads = [

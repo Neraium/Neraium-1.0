@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,7 @@ from app.services.data_connections import (
 )
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/data-connections", response_model=DataConnectionsListResponse)
@@ -45,9 +47,34 @@ def create_or_update_data_connection(payload: DataConnectionUpsertRequest) -> di
 @router.post("/data-connections/{connection_id}/test", response_model=DataConnectionActionResponse)
 def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
     try:
+        existing_connection = read_connection_status(connection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+    try:
         result = test_data_connection(connection_id)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+        message = str(exc) or "Telemetry source did not return usable readings."
+        connection = {**existing_connection}
+        connection.update(
+            {
+                "status": "error",
+                "error_message": message,
+                "readings_received": connection.get("readings_received", 0),
+                "readings_accepted": connection.get("readings_accepted", 0),
+                "readings_rejected": connection.get("readings_rejected", 0),
+                "sensors_detected": connection.get("sensors_detected", 0),
+            }
+        )
+        connection = upsert_registered_data_connection(connection)
+        logger.warning("data_connection_test_failed connection_id=%s error=%s", connection_id, message)
+        return {
+            "connection": connection,
+            "message": message,
+            "normalized_preview": [],
+            "latest_result": None,
+            "meaningful_change": False,
+        }
     return {
         "connection": result["connection"],
         "message": f"{result['connection']['name']} responded with valid telemetry.",
