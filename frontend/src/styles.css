@@ -6138,6 +6138,142 @@ h3 {
   }
 }
 
+/* Desktop navigation polish: tighter, clearer, less intrusive rail. */
+@media (min-width: 761px) {
+  .platform-shell {
+    grid-template-columns: 244px minmax(0, 1fr);
+  }
+
+  .platform-sidebar {
+    gap: 12px;
+    padding: 12px 10px 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .platform-main {
+    min-width: 0;
+  }
+
+  .sidebar-brand-shell {
+    gap: 8px;
+    padding: 11px 11px 10px;
+    border-radius: 8px;
+  }
+
+  .sidebar-brand {
+    gap: 9px;
+    padding-bottom: 8px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    box-shadow: 0 0 0 1px rgba(47, 138, 130, 0.14);
+  }
+
+  .brand-name {
+    font-size: 0.94rem;
+    line-height: 1.05;
+  }
+
+  .brand-subtitle {
+    font-size: 0.7rem;
+    line-height: 1.25;
+  }
+
+  .brand-edition {
+    min-height: 20px;
+    padding: 0 6px;
+    font-size: 0.57rem;
+    letter-spacing: 0.12em;
+  }
+
+  .sidebar-section {
+    gap: 7px;
+  }
+
+  .sidebar-section--terminal {
+    margin-top: 2px;
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .workspace-nav {
+    gap: 6px;
+  }
+
+  .workspace-nav__item {
+    gap: 3px;
+    min-height: 54px;
+    padding: 9px 10px 8px;
+    border-radius: 8px;
+  }
+
+  .workspace-nav__item:hover {
+    transform: none;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+  }
+
+  .workspace-nav__item--active {
+    box-shadow:
+      inset 0 0 0 1px rgba(200, 160, 106, 0.08),
+      0 10px 20px rgba(0, 0, 0, 0.16);
+  }
+
+  .workspace-nav__label {
+    font-size: 0.79rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .workspace-nav__detail {
+    font-size: 0.68rem;
+    line-height: 1.28;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .sidebar-telemetry {
+    gap: 8px;
+    padding: 5px 0;
+  }
+
+  .sidebar-telemetry span {
+    font-size: 0.64rem;
+  }
+
+  .sidebar-telemetry strong {
+    font-size: 0.68rem;
+  }
+
+  .sidebar-footer {
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .sidebar-footer p {
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .sidebar-footer span {
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  .workspace-drawer__close {
+    display: none;
+  }
+}
+
 /* Enterprise polish pass: reduce visual noise and tighten hierarchy. */
 .platform-workspace {
   padding: 28px 28px calc(36px + env(safe-area-inset-bottom, 0px));
