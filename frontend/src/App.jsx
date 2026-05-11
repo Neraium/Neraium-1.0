@@ -512,6 +512,40 @@ function App() {
               <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
             </div>
           </div>
+          <div className="mobile-demo-controls" aria-label="Demo controls">
+            <button
+              className={`secondary-command-button mobile-demo-controls__toggle ${isDemoMode ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setIsDemoMode((current) => !current)}
+            >
+              {isDemoMode ? "Demo On" : "Demo Off"}
+            </button>
+            {isDemoMode && (
+              <div className="mobile-demo-controls__scenarios" role="group" aria-label="Demo scenario">
+                <button
+                  className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`}
+                  type="button"
+                  onClick={() => setDemoScenario("stable")}
+                >
+                  Stable
+                </button>
+                <button
+                  className={`secondary-command-button ${demoScenario === "drift" ? "is-active" : ""}`}
+                  type="button"
+                  onClick={() => setDemoScenario("drift")}
+                >
+                  Drift
+                </button>
+                <button
+                  className={`secondary-command-button ${demoScenario === "separation" ? "is-active" : ""}`}
+                  type="button"
+                  onClick={() => setDemoScenario("separation")}
+                >
+                  Separation
+                </button>
+              </div>
+            )}
+          </div>
           <button
             className="workspace-menu-button"
             type="button"

@@ -613,6 +613,31 @@ p {
   min-width: 0;
 }
 
+.mobile-demo-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-demo-controls__toggle {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 0.74rem;
+  justify-content: center;
+}
+
+.mobile-demo-controls__scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-demo-controls__scenarios .secondary-command-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.7rem;
+}
+
 .workspace-menu-button {
   display: inline-flex;
   align-items: center;
@@ -7182,7 +7207,8 @@ h3 {
 
   .mobile-status-bar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
+    align-items: start;
   }
 
   .platform-workspace {
@@ -7208,6 +7234,25 @@ h3 {
   .workspace-grid--operator-flow > .overview-panel--room-first,
   .workspace-grid--operator-flow > .overview-panel--detail {
     grid-column: span 6;
+  }
+}
+
+@media (max-width: 760px) {
+  .mobile-demo-controls {
+    width: 100%;
+  }
+
+  .mobile-demo-controls__toggle {
+    width: 100%;
+  }
+
+  .mobile-demo-controls__scenarios {
+    width: 100%;
+  }
+
+  .mobile-demo-controls__scenarios .secondary-command-button {
+    flex: 1 1 31%;
+    justify-content: center;
   }
 }
 
