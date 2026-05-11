@@ -234,13 +234,22 @@ function App() {
       }
       throw new Error("Facility systems payload was incomplete.");
     } catch (error) {
+      const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
       setSystems(FALLBACK_SYSTEMS);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
-      setBackendError(normalizeErrorMessage(error?.message ?? error) || "Backend connection unavailable. System data could not be loaded.");
+      setBackendError((current) => {
+        if (normalizedMessage === "Session expired. Refresh workspace.") {
+          return normalizedMessage;
+        }
+        if (apiStatus.state === "offline") {
+          return "Backend connection unavailable. System data could not be loaded.";
+        }
+        return current || API_CONFIG_WARNING;
+      });
       return false;
     }
-  }, [apiAccessCode, hasAccess]);
+  }, [apiAccessCode, apiStatus.state, hasAccess]);
 
   const loadEngineIdentity = useCallback(async () => {
     if (!hasAccess) {
@@ -1631,6 +1640,5 @@ function formatIntelligenceModeValue(mode) {
 }
 
 export default App;
-
 
 
