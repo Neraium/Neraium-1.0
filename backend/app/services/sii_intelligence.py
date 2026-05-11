@@ -63,6 +63,8 @@ def build_sample_intelligence() -> dict[str, Any]:
             "why_flagged": "Humidity recovery has remained slower than recent room behavior across recent monitoring windows.",
             "baseline_comparison": "Recovery behavior is shorter than this room's recent operating baseline.",
             "observed_persistence": "Observed across 3 monitoring windows",
+            "projected_time_to_failure": "Approximately 8 hours at current trajectory",
+            "projected_time_to_failure_hours": 8,
             "last_updated": last_updated,
             "confidence": 86,
         },
@@ -94,6 +96,8 @@ def build_sample_intelligence() -> dict[str, Any]:
             "why_flagged": "Room behavior remains visible and controllable across recent monitoring windows.",
             "baseline_comparison": "Room behavior is inside recent operating baseline.",
             "observed_persistence": "Stable across recent monitoring windows",
+            "projected_time_to_failure": "More than 5 weeks at current trajectory",
+            "projected_time_to_failure_hours": 840,
             "last_updated": last_updated,
             "confidence": 74,
         },
@@ -117,6 +121,8 @@ def build_sample_intelligence() -> dict[str, Any]:
         "why_flagged": rooms[0]["why_flagged"],
         "baseline_comparison": rooms[0]["baseline_comparison"],
         "observed_persistence": rooms[0]["observed_persistence"],
+        "projected_time_to_failure": rooms[0]["projected_time_to_failure"],
+        "projected_time_to_failure_hours": rooms[0]["projected_time_to_failure_hours"],
         "last_updated": last_updated,
         "rooms": rooms,
     }
@@ -153,6 +159,12 @@ def build_upload_intelligence(
     intervention_window = window_from_urgency(urgency)
     room = driver_attribution.get("room") or "Current room"
     room_state = driver_attribution.get("state") or state_from_urgency(urgency)
+    projected_time_to_failure_hours = project_time_to_failure_hours(
+        urgency=urgency,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+    )
+    projected_time_to_failure = format_projected_time_to_failure(projected_time_to_failure_hours)
 
     room_records = build_upload_room_records(
         room_summary=room_summary,
@@ -170,6 +182,8 @@ def build_upload_intelligence(
         why_flagged=why_flagged,
         baseline_comparison=baseline_comparison_from_analysis(baseline_analysis),
         observed_persistence=observed_persistence_from_engine(engine_result),
+        projected_time_to_failure=projected_time_to_failure,
+        projected_time_to_failure_hours=projected_time_to_failure_hours,
         last_updated=last_updated,
         confidence=confidence_number(driver_attribution),
     )
@@ -194,6 +208,8 @@ def build_upload_intelligence(
         "why_flagged": why_flagged,
         "baseline_comparison": primary_room_record["baseline_comparison"],
         "observed_persistence": primary_room_record["observed_persistence"],
+        "projected_time_to_failure": primary_room_record["projected_time_to_failure"],
+        "projected_time_to_failure_hours": primary_room_record["projected_time_to_failure_hours"],
         "last_updated": last_updated,
         "filename": filename,
         "row_count": row_count,
@@ -221,6 +237,8 @@ def build_upload_room_records(
     why_flagged: str,
     baseline_comparison: str,
     observed_persistence: str,
+    projected_time_to_failure: str,
+    projected_time_to_failure_hours: int,
     last_updated: str,
     confidence: int,
 ) -> list[dict[str, Any]]:
@@ -251,11 +269,50 @@ def build_upload_room_records(
                 "why_flagged": why_flagged if index == 0 else f"{room_name} is part of the uploaded room set.",
                 "baseline_comparison": baseline_comparison,
                 "observed_persistence": observed_persistence,
+                "projected_time_to_failure": projected_time_to_failure if index == 0 else "Monitoring",
+                "projected_time_to_failure_hours": projected_time_to_failure_hours if index == 0 else None,
                 "last_updated": last_updated,
                 "confidence": confidence if index == 0 else max(confidence - 8, 0),
             }
         )
     return records
+
+
+def project_time_to_failure_hours(
+    *,
+    urgency: str,
+    engine_result: dict[str, Any],
+    driver_attribution: dict[str, Any],
+) -> int:
+    base_hours = {"unstable": 8, "review": 48, "nominal": 504}.get(urgency, 72)
+    signal_profile = summarize_signal_profile(engine_result)
+    if signal_profile["elevated_count"] > 0:
+        base_hours = min(base_hours, 8)
+    elif signal_profile["review_count"] > 0:
+        base_hours = min(base_hours, 36)
+    elif signal_profile["watch_count"] > 0:
+        base_hours = min(base_hours, 120)
+    if signal_profile["corroboration_level"] == "strong":
+        base_hours = max(4, int(base_hours * 0.65))
+    elif signal_profile["corroboration_level"] == "moderate":
+        base_hours = max(6, int(base_hours * 0.8))
+    if signal_profile["persistent_columns"] > 0:
+        base_hours = max(4, int(base_hours * 0.7))
+    if driver_attribution.get("severity") == "action":
+        base_hours = min(base_hours, 8)
+    elif driver_attribution.get("severity") == "review":
+        base_hours = min(base_hours, 36)
+    return base_hours
+
+
+def format_projected_time_to_failure(hours: int) -> str:
+    if hours <= 12:
+        return f"Approximately {hours} hours at current trajectory"
+    if hours <= 72:
+        days = max(1, round(hours / 24))
+        return f"Approximately {days} days at current trajectory"
+    weeks = max(1, round(hours / 168))
+    return f"More than {weeks} weeks at current trajectory"
 
 
 def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -676,6 +676,25 @@ def build_upload_result(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
+    runner_latest_state = sii_runner_result.get("latest_state") if isinstance(sii_runner_result, dict) else None
+    if isinstance(runner_latest_state, dict):
+        runner_projection_hours = runner_latest_state.get("projected_time_to_failure_hours")
+        runner_projection = runner_latest_state.get("projected_time_to_failure")
+        if runner_projection:
+            sii_intelligence["projected_time_to_failure"] = runner_projection
+        if runner_projection_hours is not None:
+            sii_intelligence["projected_time_to_failure_hours"] = runner_projection_hours
+        if isinstance(sii_intelligence.get("rooms"), list):
+            for index, room in enumerate(sii_intelligence["rooms"]):
+                if not isinstance(room, dict):
+                    continue
+                if index == 0:
+                    if runner_projection:
+                        room["projected_time_to_failure"] = runner_projection
+                    if runner_projection_hours is not None:
+                        room["projected_time_to_failure_hours"] = runner_projection_hours
+                elif "projected_time_to_failure" not in room:
+                    room["projected_time_to_failure"] = "Monitoring"
     write_latest_sii_state(
         {
             **sii_intelligence,

@@ -791,6 +791,8 @@ function buildSiiInterventionItems(intelligence, deps) {
       whyFlagged: translation.whyFlagged,
       whatToCheck: room.what_to_check ?? intelligence.what_to_check ?? translation.whatToCheck,
     };
+    const projectedTimeToFailure = room.projected_time_to_failure ?? intelligence.projected_time_to_failure ?? "Monitoring";
+    const projectedTimeToFailureHours = room.projected_time_to_failure_hours ?? intelligence.projected_time_to_failure_hours ?? null;
     return {
       id: `sii-room-${index + 1}`,
       label: room.room ?? intelligence.primary_room ?? "Current room",
@@ -801,7 +803,7 @@ function buildSiiInterventionItems(intelligence, deps) {
       tone,
       confidence: room.confidence ?? deps.confidenceFromTone(tone, intelligence.mode === "live"),
       summary: guidance.primaryDriver,
-      detail: translation.baselineContext,
+      detail: `${translation.baselineContext} Projected time to failure: ${projectedTimeToFailure}.`,
       shortDetail: guidance.primaryDriver,
       whyHeadline: guidance.whyFlagged,
       drivers: translation.supportingEvidence,
@@ -821,6 +823,8 @@ function buildSiiInterventionItems(intelligence, deps) {
       change: deps.isTechnicalEvidenceText(room.observed_persistence ?? intelligence.observed_persistence)
         ? deps.translateEvidenceLine(room.observed_persistence ?? intelligence.observed_persistence, translation.category)
         : (room.observed_persistence ?? intelligence.observed_persistence ?? "Evidence active"),
+      projectedTimeToFailure,
+      projectedTimeToFailureHours,
       rankLabel: `Priority ${String(index + 1).padStart(2, "0")}`,
     };
   }).sort((a, b) => deps.tonePriority(a.tone) - deps.tonePriority(b.tone));
@@ -970,6 +974,8 @@ function buildSiiEvidenceLines(intelligence) {
     `sii.mode=${intelligence.mode ?? "unknown"}`,
     `sii.score=${intelligence.neraium_score ?? "unavailable"}`,
     `sii.primary_driver=${intelligence.primary_driver ?? "unavailable"}`,
+    `sii.projected_time_to_failure=${intelligence.projected_time_to_failure ?? "unavailable"}`,
+    `sii.projected_time_to_failure_hours=${intelligence.projected_time_to_failure_hours ?? "unavailable"}`,
     ...(intelligence.supporting_evidence ?? []).slice(0, 4).map((line, index) => `sii.evidence_${index + 1}=${line}`),
   ];
 }

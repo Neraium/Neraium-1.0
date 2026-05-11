@@ -172,6 +172,12 @@ def run_sii_runner(
         return base_result
 
     latest_state = states[-1]
+    projected_hours = project_time_to_failure_hours_from_state(latest_state)
+    latest_state = {
+        **latest_state,
+        "projected_time_to_failure_hours": projected_hours,
+        "projected_time_to_failure": format_projected_time_to_failure_hours(projected_hours),
+    }
     evidence = build_runner_evidence(latest_state, vector_rows["columns_used"], driver_attribution, engine_result)
     output_summary = summarize_runner_outputs(states)
     processing_trace = {
@@ -300,6 +306,10 @@ def build_runtime_state(
         "why_flagged": evidence[0] if evidence else "SII runner processed uploaded telemetry.",
         "baseline_comparison": f"SII latest structural drift: {output_summary.get('latest_structural_drift', 0.0)}",
         "observed_persistence": f"SII processed {output_summary.get('frames_processed', 0)} telemetry frames.",
+        "projected_time_to_failure": format_projected_time_to_failure_hours(
+            project_time_to_failure_hours_from_state(latest_state)
+        ),
+        "projected_time_to_failure_hours": project_time_to_failure_hours_from_state(latest_state),
         "last_updated": now_iso(),
         "confidence": round(float(latest_state.get("confidence", 0.0)) * 100),
     }
@@ -325,6 +335,8 @@ def build_runtime_state(
         "why_flagged": room["why_flagged"],
         "baseline_comparison": room["baseline_comparison"],
         "observed_persistence": room["observed_persistence"],
+        "projected_time_to_failure": room["projected_time_to_failure"],
+        "projected_time_to_failure_hours": room["projected_time_to_failure_hours"],
         "runner_module": RUNNER_MODULE,
         "core_engine": CORE_ENGINE,
         "latest_state": latest_state,
@@ -448,3 +460,22 @@ def next_move_from_urgency(urgency: str) -> str:
 def confidence_basis(latest_state: dict[str, Any]) -> str:
     confidence = round(float(latest_state.get("confidence", 0.0)) * 100)
     return f"Unified SII core confidence {confidence}% from baseline and telemetry history depth."
+
+
+def project_time_to_failure_hours_from_state(latest_state: dict[str, Any]) -> int:
+    urgency = normalize_urgency(str(latest_state.get("urgency", "NOMINAL")))
+    base_hours = {"unstable": 8, "elevated": 36, "review": 72, "nominal": 504}.get(urgency, 72)
+    instability_score = float(latest_state.get("instability_score", 0.0))
+    structural_drift = float(latest_state.get("structural_drift", 0.0))
+    transition_pressure = float(latest_state.get("transition_pressure", 0.0))
+    risk_factor = instability_score * 0.5 + structural_drift * 0.3 + transition_pressure * 0.2
+    scaled = int(base_hours * max(0.25, 1.0 - min(max(risk_factor, 0.0), 0.9)))
+    return max(4, scaled)
+
+
+def format_projected_time_to_failure_hours(hours: int) -> str:
+    if hours <= 12:
+        return f"Approximately {hours} hours at current trajectory"
+    if hours <= 72:
+        return f"Approximately {max(1, round(hours / 24))} days at current trajectory"
+    return f"More than {max(1, round(hours / 168))} weeks at current trajectory"

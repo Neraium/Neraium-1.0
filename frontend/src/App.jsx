@@ -1124,6 +1124,8 @@ function normalizeFacilityIntelligence(intelligence) {
     why_flagged: "Telemetry batch processing",
     baseline_comparison: "Awaiting completed runner output",
     observed_persistence: "Awaiting completed runner output",
+    projected_time_to_failure: "Awaiting completed runner output",
+    projected_time_to_failure_hours: null,
     last_updated: new Date().toISOString(),
     rooms: [],
   };
