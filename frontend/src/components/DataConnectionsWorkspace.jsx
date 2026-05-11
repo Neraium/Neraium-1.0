@@ -125,6 +125,7 @@ export default function DataConnectionsWorkspace({
       setConnections(payload?.connections ?? []);
       setConnectionError("");
     } catch (error) {
+      console.error("data_connections_load_failed", { error: normalizeErrorMessage(error?.message ?? error) });
       setConnectionError(normalizeErrorMessage(error?.message ?? error));
     }
   }, [accessCode, apiFetch]);
@@ -317,6 +318,11 @@ export default function DataConnectionsWorkspace({
         await onUploadComplete(payload?.latest_result ?? null);
       }
     } catch (error) {
+      console.error("data_connection_action_failed", {
+        connectionId,
+        action,
+        error: normalizeErrorMessage(error?.message ?? error),
+      });
       setConnectionError(normalizeErrorMessage(error?.message ?? error));
     } finally {
       setConnectionBusy("");
