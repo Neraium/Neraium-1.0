@@ -30,6 +30,17 @@ Thumbs.db
 # Logs
 *.log
 logs/
+frontend-dev.log
+frontend-dev.err.log
+
+# Local tool caches
+.uv-cache/
+
+# Frontend generated test artifacts
+output/playwright/
+
+# Backup snapshots
+*.backup-before-ecs.js
 
 # Data / generated files
 data/
