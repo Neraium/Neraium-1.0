@@ -7,6 +7,19 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
 
 export const API_BASE_URL = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
+function isCrossOriginApiTarget() {
+  if (typeof window === "undefined" || !API_BASE_URL) {
+    return false;
+  }
+
+  try {
+    const target = new URL(API_BASE_URL, window.location.origin);
+    return target.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 export function buildAccessHeaders() {
   return {};
 }
@@ -16,6 +29,7 @@ export function apiFetch(path, options = {}) {
   const normalizedMethod = String(method || "GET").toUpperCase();
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget();
   return fetch(`${API_BASE_URL}${path}`, {
     method: normalizedMethod,
     ...rest,
@@ -23,7 +37,7 @@ export function apiFetch(path, options = {}) {
     cache: cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
     headers: {
       ...buildAccessHeaders(),
-      ...(normalizedMethod === "GET" || normalizedMethod === "HEAD"
+      ...(addNoCacheHeaders
         ? { "Cache-Control": "no-cache", Pragma: "no-cache" }
         : {}),
       ...(headers ?? {}),
