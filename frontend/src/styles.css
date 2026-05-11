@@ -7876,8 +7876,19 @@ h3 {
 }
 
 @media (max-width: 760px) {
+  .integrity-hero {
+    gap: 10px;
+  }
+
   .integrity-hero__lead h3 {
     font-size: 1.06rem;
+  }
+
+  .integrity-hero__lead,
+  .integrity-hero__score,
+  .topology-card {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .integrity-footer {
@@ -7888,10 +7899,15 @@ h3 {
 
 /* Structural Integrity Field */
 .sif {
-  border: 1px solid rgba(128, 158, 145, 0.3);
-  border-radius: 10px;
+  border: 1px solid rgba(128, 158, 145, 0.22);
+  border-radius: 14px;
   overflow: hidden;
-  background: #0a100d;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.04), transparent 24%),
+    linear-gradient(180deg, #07100d 0%, #060b09 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(198, 230, 214, 0.04),
+    0 22px 52px rgba(0, 0, 0, 0.34);
 }
 
 .sif__svg {
@@ -7899,64 +7915,178 @@ h3 {
   height: auto;
   display: block;
   aspect-ratio: 25 / 14;
-  color: #39ff88;
+  color: #a7ff3c;
 }
 
 .sif__bg {
-  fill: #0a100d;
+  fill: #07100d;
 }
 
-.sif__field {
+.sif__aura {
   fill: url(#sifGlow);
-  stroke: currentColor;
-  stroke-opacity: 0.26;
+}
+
+.sif__shell {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 44%, rgba(255, 255, 255, 0.08));
   stroke-width: 1.2;
+  opacity: 0.52;
+}
+
+.sif__base-core,
+.sif__base-ring {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 64%, transparent);
+  stroke-width: 1.7;
+  opacity: 0.18;
+}
+
+.sif__base-core {
+  fill: color-mix(in srgb, currentColor 28%, transparent);
+  opacity: 0.58;
+  filter: blur(0.6px);
 }
 
 .sif__link {
   stroke: currentColor;
-  stroke-opacity: 0.62;
-  stroke-width: 1.8;
-  transition: stroke-opacity 280ms ease, stroke-width 280ms ease;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0.68;
+  transition: opacity 280ms ease, stroke-width 280ms ease;
 }
 
-.sif__link--weak {
-  stroke-opacity: 0.36;
+.sif__link--faint {
+  opacity: 0.24;
 }
 
 .sif__link--broken {
-  stroke-opacity: 0.12;
-  stroke-dasharray: 5 6;
+  opacity: 0.16;
+  stroke-dasharray: 5 8;
 }
 
 .sif__node {
   fill: currentColor;
   fill-opacity: 0.86;
-  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 0 9px color-mix(in srgb, currentColor 44%, transparent));
 }
 
-.sif--stable .sif__svg { color: #48ff99; }
-.sif--drift .sif__svg { color: #e0ad42; }
-.sif--separation .sif__svg { color: #e55b5b; }
+.sif__node--core {
+  fill-opacity: 1;
+  filter: drop-shadow(0 0 14px color-mix(in srgb, currentColor 58%, transparent));
+}
+
+.sif__core {
+  fill: url(#sifCore);
+  opacity: 0.92;
+}
+
+.sif__hotspot {
+  fill: white;
+  opacity: 0.8;
+  filter: blur(3px);
+}
+
+.sif__spark {
+  fill: currentColor;
+  opacity: 0.84;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, currentColor 54%, transparent));
+}
+
+.sif--stable .sif__svg { color: #a7ff3c; }
+.sif--drift .sif__svg { color: #f3bb47; }
+.sif--separation .sif__svg { color: #ff4d52; }
+
+.sif--animated .sif__aura {
+  animation: sifAuraPulse 4s ease-in-out infinite;
+}
+
+.sif--animated .sif__base-ring {
+  animation: sifBasePulse 3.8s ease-in-out infinite;
+}
 
 .sif--animated .sif__node {
-  animation: sifNodePulse 2.6s ease-in-out infinite;
+  animation: sifNodePulse 2.8s ease-in-out infinite;
 }
 
 .sif--animated .sif__link {
-  animation: sifLinkPulse 2.2s linear infinite;
+  animation: sifLinkPulse 2.4s linear infinite;
+}
+
+.sif--separation.sif--animated .sif__link--broken {
+  animation: sifBreakPulse 1.4s linear infinite;
+}
+
+.sif--animated .sif__spark {
+  animation: sifSparkBlink 2.1s ease-in-out infinite;
+}
+
+@keyframes sifAuraPulse {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(0.985);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes sifBasePulse {
+  0%,
+  100% {
+    opacity: 0.12;
+    transform: scaleX(0.99);
+  }
+
+  50% {
+    opacity: 0.28;
+    transform: scaleX(1.02);
+  }
 }
 
 @keyframes sifNodePulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes sifLinkPulse {
-  0% { stroke-opacity: 0.42; }
-  50% { stroke-opacity: 0.72; }
-  100% { stroke-opacity: 0.42; }
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+
+  50% {
+    opacity: 0.78;
+  }
+}
+
+@keyframes sifBreakPulse {
+  0% {
+    stroke-dashoffset: 0;
+  }
+
+  100% {
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes sifSparkBlink {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Premium polish layer */
@@ -8570,11 +8700,77 @@ h1, h2, h3 {
   .integrity-hero__score {
     min-width: 0;
     width: 100%;
-    padding: 18px 16px 16px;
+    gap: 4px;
+    padding: 16px 12px 14px;
   }
 
   .integrity-hero__score-orb {
-    width: 152px;
-    height: 152px;
+    width: min(148px, 48vw);
+    height: min(148px, 48vw);
+    margin-bottom: 0;
+  }
+
+  .kft-orb {
+    max-width: min(148px, 48vw);
+    filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.42));
+  }
+
+  .kft-orb__link {
+    stroke-width: 1.3;
+  }
+
+  .kft-orb__node {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--kft-hue) 40%, transparent));
+  }
+
+  .kft-orb__node--core {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--kft-hue) 52%, transparent));
+  }
+
+  .kft-orb__spark {
+    opacity: 0.62;
+  }
+
+  .sif {
+    border-radius: 12px;
+  }
+
+  .sif__svg,
+  .topology-map {
+    aspect-ratio: 1 / 1.06;
+  }
+
+  .sif__link {
+    stroke-width: 1.35;
+  }
+
+  .sif__node {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 36%, transparent));
+  }
+
+  .sif__node--core {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, currentColor 48%, transparent));
+  }
+
+  .sif__spark {
+    opacity: 0.58;
+  }
+
+  .topology-card__status {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .topology-card__status strong {
+    font-size: 0.74rem;
+  }
+
+  .topology-card__status span {
+    font-size: 0.7rem;
+  }
+
+  .integrity-footer strong,
+  .integrity-hero__score strong {
+    font-size: clamp(1.9rem, 9vw, 2.6rem);
   }
 }
