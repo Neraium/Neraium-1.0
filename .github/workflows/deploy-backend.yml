@@ -1,73 +1,60 @@
 name: Deploy Backend to ECS
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+push:
+branches: [main]
+paths:
+- "backend/**"
+- ".github/workflows/deploy-backend.yml"
+workflow_dispatch:
+
+permissions:
+contents: read
+
+env:
+AWS_REGION: us-east-2
+ECR_REPOSITORY: neraium-backend
+ECS_CLUSTER: default
+ECS_SERVICE: sha256-acf9
 
 jobs:
-  deploy-backend:
-    runs-on: ubuntu-latest
-    env:
-      AWS_REGION: us-east-2
-      TF_DIR: infra/terraform/aws
-      CONTAINER_NAME: api
+deploy-backend:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+steps:
+- name: Checkout repo
+uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+- name: Configure AWS credentials
+uses: aws-actions/configure-aws-credentials@v4
+with:
+aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+- name: Login to Amazon ECR
+id: ecr-login
+uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Terraform init
-        run: terraform -chdir=${{ env.TF_DIR }} init
+- name: Ensure ECR repository exists
+run: |
+aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" || \
+aws ecr create-repository --repository-name "$ECR_REPOSITORY" --region "$AWS_REGION"
 
-      - name: Read Terraform outputs
-        run: |
-          terraform -chdir=${{ env.TF_DIR }} output -json > tf-outputs.json
-          ECR_REPOSITORY_URL=$(jq -r '.ecr_repository_url.value' tf-outputs.json)
-          ECS_CLUSTER=$(jq -r '.ecs_cluster_name.value' tf-outputs.json)
-          ECS_SERVICE=$(jq -r '.ecs_service_name.value' tf-outputs.json)
-          echo "ECR_REPOSITORY_URL=$ECR_REPOSITORY_URL" >> $GITHUB_ENV
-          echo "ECS_CLUSTER=$ECS_CLUSTER" >> $GITHUB_ENV
-          echo "ECS_SERVICE=$ECS_SERVICE" >> $GITHUB_ENV
+- name: Build and push backend image
+env:
+ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+IMAGE_TAG: ${{ github.sha }}
+run: |
+IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+docker build -f backend/Dockerfile -t "$IMAGE_URI" backend
+docker push "$IMAGE_URI"
 
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push backend image
-        run: |
-          IMAGE_URI=${{ env.ECR_REPOSITORY_URL }}:${{ github.sha }}
-          docker build -f backend/Dockerfile -t $IMAGE_URI backend
-          docker push $IMAGE_URI
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-
-      - name: Download current task definition
-        run: |
-          TASK_DEFINITION_ARN=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].taskDefinition' --output text)
-          aws ecs describe-task-definition --task-definition "$TASK_DEFINITION_ARN" --query taskDefinition > task-definition.json
-          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' task-definition.json > clean-task-definition.json
-
-      - name: Render task definition
-        id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: clean-task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ env.IMAGE_URI }}
-
-      - name: Deploy ECS service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+- name: Force ECS new deployment
+run: |
+aws ecs update-service \
+--cluster "$ECS_CLUSTER" \
+--service "$ECS_SERVICE" \
+--force-new-deployment \
+--region "$AWS_REGION"
