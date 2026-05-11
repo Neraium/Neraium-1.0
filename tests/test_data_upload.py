@@ -1,11 +1,13 @@
 from fastapi.testclient import TestClient
+import asyncio
+import pytest
 import time
 
 from app.core.config import Settings
 from app.main import create_app
 from app.services.sii_runner import STATE_PATH
 from app.services import upload_jobs
-from app.services.upload_jobs import parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -107,6 +109,71 @@ def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
     payload = response.json()
     assert payload["status"] == "PENDING"
     assert payload["job_id"]
+
+
+def test_create_upload_job_enforces_streaming_size_limit() -> None:
+    class FakeUploadFile:
+        filename = "oversize.csv"
+
+        def __init__(self) -> None:
+            self._chunks = [b"timestamp,value\n", b"2026-05-01,75\n"]
+
+        async def read(self, _size: int) -> bytes:
+            if self._chunks:
+                return self._chunks.pop(0)
+            return b""
+
+    with pytest.raises(UploadTooLargeError):
+        asyncio.run(create_upload_job(FakeUploadFile(), max_size_bytes=16))
+
+
+def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+        max_upload_size_bytes=16,
+    )
+    monkeypatch.setattr("app.routers.data.get_settings", lambda: settings)
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("oversize.csv", "timestamp,value\n2026-05-01,75\n", "text/csv")},
+    )
+
+    assert response.status_code == 413
+    payload = response.json()
+    assert payload["error_type"] == "upload_too_large"
+    assert payload["status"] == "FAILED"
+    assert "16 bytes" in payload["message"]
+
+
+def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+        max_pending_upload_jobs=1,
+    )
+    monkeypatch.setattr("app.routers.data.get_settings", lambda: settings)
+    monkeypatch.setattr("app.routers.data.queue_metrics", lambda: {"pending": 1, "processing": 0})
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "30"
+    payload = response.json()
+    assert payload["error_type"] == "upload_queue_saturated"
+    assert payload["status"] == "FAILED"
 
 
 def test_upload_accepts_access_header_in_production(tmp_path) -> None:

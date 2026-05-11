@@ -14,6 +14,7 @@ from app.services.runtime_db import queue_metrics
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
     SUPPORTED_UPLOAD_EXTENSIONS,
+    UploadTooLargeError,
     create_upload_job,
     delete_upload_file,
     latest_completed_job_summary,
@@ -115,7 +116,11 @@ async def upload_csv(
             if size_bytes > settings.max_upload_size_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                    detail={
+                        "error_type": "upload_too_large",
+                        "message": f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                        "max_upload_size_bytes": settings.max_upload_size_bytes,
+                    },
                 )
         except ValueError:
             pass
@@ -125,7 +130,14 @@ async def upload_csv(
     if active_queue_depth >= settings.max_pending_upload_jobs:
         raise HTTPException(
             status_code=503,
-            detail="Upload queue is saturated. Retry after current processing backlog clears.",
+            detail={
+                "error_type": "upload_queue_saturated",
+                "message": "Upload queue is saturated. Retry after current processing backlog clears.",
+                "active_queue_depth": active_queue_depth,
+                "max_pending_upload_jobs": settings.max_pending_upload_jobs,
+                "retry_after_seconds": 30,
+            },
+            headers={"Retry-After": "30"},
         )
 
     filename = file.filename or ""
@@ -134,7 +146,28 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="Only .csv and .json telemetry files are supported.")
 
     auth_context = getattr(request.state, "auth_context", {})
-    metadata = await create_upload_job(file, initiated_by=auth_context.get("auth_subject", "anonymous"))
+    try:
+        metadata = await create_upload_job(
+            file,
+            initiated_by=auth_context.get("auth_subject", "anonymous"),
+            max_size_bytes=settings.max_upload_size_bytes,
+        )
+    except UploadTooLargeError:
+        logger.warning(
+            "upload_rejected_oversize filename=%s max_size_bytes=%s auth_subject=%s auth_source=%s",
+            filename,
+            settings.max_upload_size_bytes,
+            auth_context.get("auth_subject", "unknown"),
+            auth_context.get("auth_source", "unknown"),
+        )
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error_type": "upload_too_large",
+                "message": f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                "max_upload_size_bytes": settings.max_upload_size_bytes,
+            },
+        ) from None
     if metadata["file_size_bytes"] == 0:
         delete_upload_file(metadata)
         raise HTTPException(status_code=400, detail=f"{extension.upper().lstrip('.')} file is empty.")

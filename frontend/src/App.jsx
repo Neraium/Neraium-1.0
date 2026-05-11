@@ -512,16 +512,16 @@ function App() {
               <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
             </div>
           </div>
-          <div className="mobile-demo-controls" aria-label="Demo controls">
+          <div className="mobile-demo-controls" aria-label="Sample controls">
             <button
               className={`secondary-command-button mobile-demo-controls__toggle ${isDemoMode ? "is-active" : ""}`}
               type="button"
               onClick={() => setIsDemoMode((current) => !current)}
             >
-              {isDemoMode ? "Demo On" : "Demo Off"}
+              {isDemoMode ? "Sample On" : "Sample Off"}
             </button>
             {isDemoMode && (
-              <div className="mobile-demo-controls__scenarios" role="group" aria-label="Demo scenario">
+              <div className="mobile-demo-controls__scenarios" role="group" aria-label="Sample scenario">
                 <button
                   className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`}
                   type="button"
@@ -796,7 +796,7 @@ function TopStatusBar({
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
         />
         <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
-          {isDemoMode ? "Demo On" : "Demo Off"}
+          {isDemoMode ? "Sample On" : "Sample Off"}
         </button>
         {isDemoMode && (
           <>
@@ -1300,6 +1300,9 @@ function formatIntelligenceSourceLabel(mode) {
   if (mode === "live") {
     return "Latest upload";
   }
+  if (mode === "sample") {
+    return "Sample mode";
+  }
   if (mode === "processing") {
     return "Upload processing";
   }
@@ -1644,6 +1647,9 @@ function formatIntelligenceModeValue(mode) {
   if (mode === "live") {
     return "active";
   }
+  if (mode === "sample") {
+    return "sample";
+  }
   if (mode === "processing") {
     return "processing";
   }
@@ -1677,25 +1683,25 @@ function buildDemoLiveOps(tick = 0, scenario = "drift") {
       : "HVAC and irrigation signals are decoupling while room metrics still look nominal.";
   return {
     useDemoTelemetry: true,
-    intelligenceMode: "live",
+    intelligenceMode: "sample",
     facilityTone: tone,
     facilityStateLabel: tone === "nominal" ? "Stable structure" : tone === "elevated" ? "Structural separation forming" : "Relationship drift detected",
-    heroTag: "Demo scenario",
+    heroTag: "Sample scenario",
     heroHeadline: headline,
     heroSubline: subline,
     readinessLabel: "Operational Intelligence Active",
     connectionTone: "nominal",
-    connectionLabel: "Demo stream",
+    connectionLabel: "Sample stream",
     connectionDetail: "Synthetic operational state for walkthroughs.",
-    connectionSummary: "Demo loop active",
-    connectionStatusLine: "Demo mode enabled. No backend dependency required.",
-    connectionActionHint: "Switch demo off to return to live telemetry.",
-    dataSourceLabel: "Demo facility",
+    connectionSummary: "Sample loop active",
+    connectionStatusLine: "Sample mode enabled. Production outputs are paused in this view.",
+    connectionActionHint: "Switch sample mode off to return to backend SII telemetry.",
+    dataSourceLabel: "Sample facility",
     neraiumScore: tone === "nominal" ? 93 : tone === "elevated" ? 46 : 74,
     scoreNarrative: tone === "nominal"
       ? "Structural integrity is holding with low drift velocity."
       : "Structural drift is accumulating faster than endpoint thresholds.",
-    scoreContext: "Demo score tracks relationship integrity rather than raw sensor values.",
+    scoreContext: "Sample score tracks relationship integrity rather than raw sensor values.",
     windowContext: "Intervention window is compressing from 2 days toward 8 hours.",
     primaryWindow: { label: "Flower Room 1", tone, status: "Drift window", window: "12 hours" },
     interventionItems: [{
@@ -1780,9 +1786,9 @@ function buildDemoLiveOps(tick = 0, scenario = "drift") {
     systemRows: [],
     intakeStages: [],
     evidenceLines: [
-      "demo.mode=true",
-      `demo.structural_distance=${drift}`,
-      `demo.scenario=${scenario}`,
+      "sample.mode=true",
+      `sample.structural_distance=${drift}`,
+      `sample.scenario=${scenario}`,
     ],
     consoleEvents: [],
     observations: [],

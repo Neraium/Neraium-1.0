@@ -82,6 +82,12 @@ PROGRESS_LABELS = {
 SUPPORTED_UPLOAD_EXTENSIONS = {".csv", ".json"}
 
 
+class UploadTooLargeError(ValueError):
+    def __init__(self, max_size_bytes: int) -> None:
+        super().__init__(f"Upload exceeds max allowed size ({max_size_bytes} bytes).")
+        self.max_size_bytes = max_size_bytes
+
+
 def ensure_runtime_dirs() -> None:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     JOB_DIR.mkdir(parents=True, exist_ok=True)
@@ -106,21 +112,34 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-async def create_upload_job(file: UploadFile, initiated_by: str = "anonymous") -> dict[str, Any]:
+async def create_upload_job(
+    file: UploadFile,
+    initiated_by: str = "anonymous",
+    max_size_bytes: int | None = None,
+) -> dict[str, Any]:
     ensure_runtime_dirs()
     job_id = uuid.uuid4().hex
     filename = Path(file.filename or "telemetry.csv").name
     upload_path = UPLOAD_DIR / f"{job_id}.csv"
     size_bytes = 0
     hasher = hashlib.sha256()
-    with upload_path.open("wb") as output:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            size_bytes += len(chunk)
-            hasher.update(chunk)
-            output.write(chunk)
+    try:
+        with upload_path.open("wb") as output:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size_bytes += len(chunk)
+                if max_size_bytes is not None and size_bytes > max_size_bytes:
+                    raise UploadTooLargeError(max_size_bytes)
+                hasher.update(chunk)
+                output.write(chunk)
+    except UploadTooLargeError:
+        try:
+            upload_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("upload_oversize_cleanup_failed job_id=%s filename=%s", job_id, filename)
+        raise
 
     metadata = {
         "job_id": job_id,

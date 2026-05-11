@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import HealthOrb from "./HealthOrb";
 
 const STATE = {
@@ -25,6 +26,7 @@ const STATE = {
 
 export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSelectTarget }) {
   const state = STATE[liveOps.facilityTone] ?? STATE.info;
+  const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
     return Math.max(0, Math.min(1, 1 - total));
@@ -38,7 +40,22 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
   const sourceLabel = liveOps.dataSourceLabel ?? "Awaiting data";
-  const nextInspect = liveOps.primaryRoom ?? "No data connected yet";
+  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
+  const awaitingLabel = liveOps.intelligenceMode === "processing" ? "SII analysis running" : "Awaiting SII analysis";
+  const issueType = awaitingSii ? awaitingLabel : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
+  const suspectedLocation = awaitingSii ? awaitingLabel : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Location not isolated");
+  const runway = awaitingSii ? awaitingLabel : (primaryItem?.projectedTimeToFailure ?? primaryItem?.window ?? liveOps.primaryWindow?.window ?? "Runway unavailable");
+  const urgency = awaitingSii ? awaitingLabel : (primaryItem?.status ?? liveOps.primaryWindow?.status ?? state.label);
+  const confidence = awaitingSii
+    ? awaitingLabel
+    : (Number.isFinite(primaryItem?.confidence) ? `${primaryItem.confidence}% evidence quality` : (liveOps.readinessLabel ?? "Evidence building"));
+  const primaryEvidence = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.supportingEvidence?.[0] ?? findings[0]?.detail ?? "No active SII evidence yet");
+  const relationshipEvidence = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
+  const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
   void selectedTarget;
   void onSelectTarget;
 
@@ -69,20 +86,43 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
 
           <div className="integrity-hero__metrics">
             <article className="integrity-hero__metric">
-              <span>Data source</span>
-              <strong>{sourceLabel}</strong>
+              <span>Issue type</span>
+              <strong>{issueType}</strong>
             </article>
             <article className="integrity-hero__metric">
-              <span>Primary room</span>
-              <strong>{nextInspect}</strong>
+              <span>Suspected location</span>
+              <strong>{suspectedLocation}</strong>
             </article>
             <article className="integrity-hero__metric">
-              <span>Latest upload</span>
-              <strong>{liveOps.connectionSummary}</strong>
+              <span>Operational runway</span>
+              <strong>{runway}</strong>
             </article>
             <article className="integrity-hero__metric">
-              <span>What changed</span>
-              <strong>{findings[0]?.title ?? "No active evidence yet"}</strong>
+              <span>Urgency</span>
+              <strong>{urgency}</strong>
+            </article>
+            <article className="integrity-hero__metric">
+              <span>Evidence quality</span>
+              <strong>{confidence}</strong>
+            </article>
+            <article className="integrity-hero__metric">
+              <span>Latest update</span>
+              <strong>{lastUpdate}</strong>
+            </article>
+          </div>
+
+          <div className="integrity-hero__evidence">
+            <article>
+              <span>Primary evidence</span>
+              <p>{primaryEvidence}</p>
+            </article>
+            <article>
+              <span>Relationship evidence</span>
+              <p>{relationshipEvidence}</p>
+            </article>
+            <article>
+              <span>Source of truth</span>
+              <p>{sourceLabel}. Operational conclusions remain backend/SII sourced.</p>
             </article>
           </div>
         </div>

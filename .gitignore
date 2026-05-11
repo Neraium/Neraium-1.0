@@ -46,6 +46,8 @@ output/playwright/
 data/
 results/
 uploads/
+tmp/
+.tmp/
 *.csv
 *.jsonl
 backend/app/runtime/latest_sii_state.json

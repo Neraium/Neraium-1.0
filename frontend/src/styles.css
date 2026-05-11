@@ -8963,6 +8963,35 @@ h1, h2, h3 {
   line-height: 1.35;
 }
 
+.integrity-hero__evidence {
+  display: grid;
+  gap: 8px;
+}
+
+.integrity-hero__evidence article {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid rgba(136, 171, 153, 0.14);
+  border-radius: 12px;
+  background: rgba(6, 12, 10, 0.3);
+}
+
+.integrity-hero__evidence span {
+  color: rgba(186, 199, 192, 0.72);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.integrity-hero__evidence p {
+  margin: 0;
+  color: #dce7e2;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .connector-rest-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
