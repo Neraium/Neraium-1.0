@@ -23,7 +23,6 @@ export default function CommandOverviewWorkspace({
   const primaryGuidance = buildGuidanceForItem(primaryRoom);
   const heroHeadline = formatFacilityPlainState(liveOps.facilityTone, primaryRoom);
   const heroSubline = liveOps.heroSubline ?? "Neraium is monitoring the current facility state.";
-  const roomCount = liveOps.interventionItems.length;
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
 
   return (
@@ -72,7 +71,7 @@ export default function CommandOverviewWorkspace({
 
       <Panel
         title="Rooms"
-        className="span-6 overview-panel overview-panel--rooms overview-panel--room-first"
+        className="span-7 overview-panel overview-panel--rooms overview-panel--room-first"
       >
         <InterventionGrid
           items={liveOps.interventionItems}
@@ -84,24 +83,8 @@ export default function CommandOverviewWorkspace({
       </Panel>
 
       <Panel
-        title="Change Summary"
-        className="span-3 overview-panel overview-panel--findings overview-panel--detail"
-      >
-        <MetricGrid
-          metrics={[
-            { label: "Backend", value: liveOps.connectionLabel },
-            { label: "Source", value: liveOps.dataSourceLabel },
-            { label: "Score Delta", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "n/a" },
-            { label: "Rooms", value: roomCount },
-          ]}
-          compact
-        />
-        <CompactList items={uploadDiffSummary.lines} emptyText="Upload two files to compare changes." />
-      </Panel>
-
-      <Panel
-        title="Selected Room"
-        className="span-3 overview-panel overview-panel--findings overview-panel--detail"
+        title="Operator Focus"
+        className="span-5 overview-panel overview-panel--findings overview-panel--detail"
       >
         <WhyPanel
           item={selectedRoom}
@@ -110,6 +93,22 @@ export default function CommandOverviewWorkspace({
           onOperatorAction={onOperatorAction}
           compact
         />
+      </Panel>
+
+      <Panel
+        title="Change Summary"
+        className="span-12 overview-panel overview-panel--detail overview-panel--technical"
+      >
+        <MetricGrid
+          metrics={[
+            { label: "Score Delta", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "n/a" },
+            { label: "Tracked Rooms", value: liveOps.interventionItems.length },
+            { label: "Drift Signals", value: findings.length },
+            { label: "Data Source", value: liveOps.dataSourceLabel },
+          ]}
+          compact
+        />
+        <CompactList items={uploadDiffSummary.lines} emptyText="Upload two files to compare changes." />
 
         <div className="room-first-actions">
           <button className="secondary-command-button" type="button" onClick={() => onNavigateWorkspace("facility-systems")}>

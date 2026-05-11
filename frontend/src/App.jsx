@@ -820,20 +820,24 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
 
       <div className="status-rack">
         <StatusChip
-          label="Backend"
-          value={apiStatus.state === "online" ? "API Connected" : "API Offline"}
-          tone={apiStatus.state === "online" ? "nominal" : "offline"}
+          label="Severity"
+          value={liveOps.facilityStateLabel}
+          tone={liveOps.facilityTone}
         />
-        <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip
-          label="Readiness"
+          label="Primary room"
+          value={roomContext.primary}
+          tone={liveOps.facilityTone}
+        />
+        <StatusChip
+          label="Next inspect"
+          value={liveOps.primaryWindow?.label ?? "Facility overview"}
+          tone={liveOps.primaryWindow?.tone ?? "info"}
+        />
+        <StatusChip
+          label="What changed"
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
-          tone={latestUploadResult?.data_quality?.readiness ?? liveOps.facilityTone}
-        />
-        <StatusChip
-          label="Last sync"
-          value={liveOps.connectionSummary}
-          tone={liveOps.connectionTone}
+          tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
         />
       </div>
     </header>

@@ -6137,3 +6137,133 @@ h3 {
     padding-inline: 10px;
   }
 }
+
+/* Enterprise polish pass: reduce visual noise and tighten hierarchy. */
+.platform-workspace {
+  padding: 28px 28px calc(36px + env(safe-area-inset-bottom, 0px));
+}
+
+.top-status {
+  gap: 20px;
+  padding: 20px 28px 18px;
+  border-bottom-color: rgba(186, 197, 193, 0.1);
+  background: linear-gradient(180deg, rgba(10, 14, 16, 0.96), rgba(8, 11, 13, 0.92));
+}
+
+.top-status__title {
+  gap: 10px;
+}
+
+.top-status__title p:last-child {
+  max-width: 72ch;
+}
+
+.status-rack {
+  grid-template-columns: repeat(4, minmax(132px, 1fr));
+  gap: 12px;
+}
+
+.status-chip {
+  min-height: 68px;
+  gap: 4px;
+  border-radius: 8px;
+  border-color: rgba(186, 197, 193, 0.1);
+  background: linear-gradient(180deg, rgba(20, 26, 30, 0.92), rgba(14, 18, 21, 0.9));
+  box-shadow: none;
+}
+
+.status-chip strong {
+  font-size: 0.85rem;
+}
+
+.workspace-grid {
+  gap: 16px;
+}
+
+.ops-panel,
+.workspace-grid--systems .ops-panel,
+.workspace-grid--intake .ops-panel,
+.workspace-grid--evidence .ops-panel,
+.workspace-grid--console .ops-panel {
+  gap: 14px;
+  padding: 16px;
+  border-radius: 10px;
+  border-color: rgba(186, 197, 193, 0.1);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+.ops-panel__header {
+  padding-bottom: 10px;
+}
+
+.metric-grid,
+.metric-grid--compact {
+  gap: 8px;
+}
+
+.metric-cell,
+.compact-list-block,
+.empty-state {
+  border-radius: 8px;
+  border-color: rgba(186, 197, 193, 0.08);
+  background: rgba(12, 16, 19, 0.8);
+}
+
+.overview-hero {
+  gap: 14px;
+}
+
+.overview-hero__headline,
+.workspace-grid--operator-flow .overview-hero__headline {
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  line-height: 1;
+}
+
+.countdown-hero__score strong {
+  font-size: clamp(2.8rem, 5.2vw, 4rem);
+}
+
+.countdown-hero__score,
+.countdown-hero__window,
+.operating-state-next {
+  border-radius: 8px;
+}
+
+.intervention-card {
+  min-height: 168px;
+  border-radius: 10px;
+}
+
+.why-panel {
+  gap: 10px;
+}
+
+.why-panel__section p,
+.why-panel__summary p,
+.operator-guidance-brief p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.room-first-actions {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(186, 197, 193, 0.08);
+}
+
+.workspace-grid--overview .overview-panel--technical .ops-panel__body {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .top-status,
+  .platform-workspace {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .status-rack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
