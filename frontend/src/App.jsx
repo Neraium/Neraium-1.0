@@ -109,7 +109,14 @@ const LIVE_REFRESH_INTERVAL_MS = 5000;
 function App() { 
   const hasAccess = true;
   const apiAccessCode = "";
-  const [activeWorkspace, setActiveWorkspace] = useState("system-body");
+  const [activeWorkspace, setActiveWorkspace] = useState(() => {
+    if (typeof window === "undefined") {
+      return "system-body";
+    }
+    const params = new URLSearchParams(window.location.search);
+    const requestedWorkspace = params.get("workspace");
+    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : "system-body";
+  });
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({

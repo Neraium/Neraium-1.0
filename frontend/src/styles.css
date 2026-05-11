@@ -9149,3 +9149,114 @@ h1, h2, h3 {
     font-size: 0.86rem;
   }
 }
+
+/* Mobile layout repair: keep the app on the full viewport and make the header scan cleanly. */
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .platform-shell {
+    width: 100vw;
+    max-width: 100vw;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+  }
+
+  .platform-sidebar {
+    display: none;
+  }
+
+  .platform-main {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .mobile-status-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand menu"
+      "sample sample";
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+  }
+
+  .mobile-status-bar__brand {
+    grid-area: brand;
+    min-width: 0;
+  }
+
+  .workspace-menu-button {
+    grid-area: menu;
+    min-width: 86px;
+    min-height: 42px;
+    justify-self: end;
+  }
+
+  .mobile-demo-controls {
+    grid-area: sample;
+    display: grid;
+    grid-template-columns: minmax(100px, 0.6fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .mobile-demo-controls__toggle {
+    width: auto;
+    min-height: 36px;
+    padding: 0 10px;
+  }
+
+  .mobile-demo-controls__scenarios {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+
+  .mobile-demo-controls__scenarios .secondary-command-button {
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 6px;
+    justify-content: center;
+    font-size: 0.66rem;
+  }
+
+  .platform-workspace {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .system-body__header h2 {
+    font-size: 1.44rem;
+  }
+
+  .integrity-hero,
+  .integrity-hero--solo {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .integrity-hero__score,
+  .integrity-hero__meta,
+  .integrity-hero__metric,
+  .integrity-hero__evidence article {
+    min-width: 0;
+  }
+
+  .integrity-hero__score strong {
+    overflow-wrap: anywhere;
+  }
+}
