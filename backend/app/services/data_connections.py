@@ -388,6 +388,61 @@ def grouped_sample_count(records: list[dict[str, Any]]) -> int:
     return len({(str(item.get("timestamp") or ""), str(item.get("room_id") or "")) for item in records})
 
 
+def recover_live_baseline_from_buffer(connection: dict[str, Any]) -> dict[str, Any] | None:
+    connection_id = connection["connection_id"]
+    buffer_records = read_connection_buffer(connection_id)
+    if not buffer_records:
+        return None
+
+    baseline_seed = buffer_records[:MAX_BASELINE_RECORDS]
+    recent_seed = buffer_records[-MAX_RECENT_RECORDS:]
+    write_buffered_records(baseline_records_key(connection_id), baseline_seed, limit=MAX_BASELINE_RECORDS)
+    write_buffered_records(recent_records_key(connection_id), recent_seed, limit=MAX_RECENT_RECORDS)
+
+    samples_required = max(int(connection.get("baseline_samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT), 1)
+    samples_collected = grouped_sample_count(baseline_seed)
+    baseline_status = "active" if samples_collected >= samples_required else "building"
+    baseline_state = {
+        "connection_id": connection_id,
+        "baseline_source": "live_rest",
+        "baseline_status": baseline_status,
+        "samples_collected": max(samples_collected, samples_required) if baseline_status == "active" else samples_collected,
+        "samples_required": samples_required,
+        "last_baseline_update": now_iso(),
+        "activated_at": now_iso() if baseline_status == "active" else None,
+        "error_message": "",
+    }
+    persisted = write_live_baseline_state(connection_id, baseline_state)
+    logger.info(
+        "baseline_recovered_from_buffer connection_id=%s samples_collected=%s samples_required=%s status=%s",
+        connection_id,
+        persisted.get("samples_collected"),
+        persisted.get("samples_required"),
+        persisted.get("baseline_status"),
+    )
+    return persisted
+
+
+def resolve_baseline_state_for_health_update(
+    connection: dict[str, Any],
+    metadata: dict[str, Any],
+    baseline_state: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if baseline_state is not None:
+        return baseline_state
+
+    active_readings = int(metadata.get("readings_accepted") or 0)
+    if active_readings <= 0:
+        return read_live_baseline_state(connection["connection_id"])
+
+    current = read_live_baseline_state(connection["connection_id"])
+    if current.get("baseline_status") != "none" or int(current.get("samples_collected") or 0) > 0:
+        return current
+
+    recovered = recover_live_baseline_from_buffer(connection)
+    return recovered or current
+
+
 def write_connection_buffer(connection_id: str, records: list[dict[str, Any]]) -> None:
     upsert_latest_payload(records_buffer_key(connection_id), records[-MAX_BUFFER_RECORDS:])
 
@@ -693,13 +748,14 @@ def update_connection_health_fields(
     connection["current_tick"] = metadata.get("tick")
     connection["latest_telemetry_timestamp"] = metadata.get("timestamp")
     connection["last_ingestion_source"] = "rest_poll"
-    if baseline_state:
-        connection["baseline_source"] = baseline_state.get("baseline_source")
-        connection["baseline_status"] = baseline_state.get("baseline_status")
-        connection["baseline_samples_collected"] = baseline_state.get("samples_collected", 0)
-        connection["baseline_samples_required"] = baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
-        connection["last_baseline_update"] = baseline_state.get("last_baseline_update")
-        connection["baseline_error_message"] = baseline_state.get("error_message", "")
+    resolved_baseline_state = resolve_baseline_state_for_health_update(connection, metadata, baseline_state)
+    if resolved_baseline_state:
+        connection["baseline_source"] = resolved_baseline_state.get("baseline_source")
+        connection["baseline_status"] = resolved_baseline_state.get("baseline_status")
+        connection["baseline_samples_collected"] = resolved_baseline_state.get("samples_collected", 0)
+        connection["baseline_samples_required"] = resolved_baseline_state.get("samples_required", DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
+        connection["last_baseline_update"] = resolved_baseline_state.get("last_baseline_update")
+        connection["baseline_error_message"] = resolved_baseline_state.get("error_message", "")
     return upsert_registered_data_connection(connection)
 
 

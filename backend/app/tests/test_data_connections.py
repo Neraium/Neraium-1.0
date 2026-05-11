@@ -126,3 +126,35 @@ def test_baseline_failure_keeps_successful_telemetry_state(isolated_runtime, mon
     assert connection["baseline_error_message"] == "baseline append exploded"
     assert len(data_connections.read_connection_buffer(data_connections.DEFAULT_CONNECTION_ID)) == 2
     assert len(data_connections.read_recent_records(data_connections.DEFAULT_CONNECTION_ID)) == 2
+
+
+def test_health_update_recovers_baseline_from_buffer_when_state_missing(isolated_runtime):
+    transport = mock_transport([telemetry_payload("2026-05-10T14:00:00Z", tick=7)])
+    result = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=transport)
+    connection = result["connection"]
+    connection_id = connection["connection_id"]
+
+    runtime_db.upsert_latest_payload(data_connections.baseline_state_key(connection_id), [])
+    runtime_db.upsert_latest_payload(data_connections.baseline_records_key(connection_id), [])
+    runtime_db.upsert_latest_payload(data_connections.recent_records_key(connection_id), [])
+
+    recovered = data_connections.update_connection_health_fields(
+        connection,
+        {
+            "timestamp": "2026-05-10T14:00:00Z",
+            "scenario": "airflow_drift",
+            "tick": 7,
+            "readings_received": 2,
+            "readings_accepted": 2,
+            "readings_rejected": 0,
+            "sensors_detected": 2,
+        },
+        status="polling",
+        baseline_state=None,
+    )
+
+    assert recovered["baseline_source"] == "live_rest"
+    assert recovered["baseline_status"] in {"building", "active"}
+    assert recovered["baseline_samples_collected"] > 0
+    assert len(data_connections.read_baseline_records(connection_id)) > 0
+    assert len(data_connections.read_recent_records(connection_id)) > 0
