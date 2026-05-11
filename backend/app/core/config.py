@@ -19,6 +19,8 @@ DEFAULT_CORS_ORIGINS = [
 ]
 DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?neraium\.com$"
 DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
+DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,8 @@ class Settings:
     default_telemetry_url: str = DEFAULT_LOCAL_TELEMETRY_URL
     cors_origin_regex: str | None = None
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
+    max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
 
 
 def get_settings() -> Settings:
@@ -42,6 +46,8 @@ def get_settings() -> Settings:
         default_telemetry_url=parse_default_telemetry_url(os.getenv("NERAIUM_DEFAULT_TELEMETRY_URL"), app_env),
         cors_origin_regex=parse_cors_origin_regex(os.getenv("CORS_ORIGIN_REGEX")),
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
+        max_upload_size_bytes=parse_positive_int(os.getenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES"), DEFAULT_MAX_UPLOAD_SIZE_BYTES),
+        max_pending_upload_jobs=parse_positive_int(os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"), DEFAULT_MAX_PENDING_UPLOAD_JOBS),
     )
 
 
@@ -79,3 +85,10 @@ def parse_default_telemetry_url(raw_value: str | None, app_env: str) -> str:
     if app_env.strip().lower() == "production":
         return DEFAULT_PRODUCTION_TELEMETRY_URL
     return DEFAULT_LOCAL_TELEMETRY_URL
+
+
+def parse_positive_int(raw_value: str | None, default: int) -> int:
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    value = int(raw_value)
+    return value if value > 0 else default

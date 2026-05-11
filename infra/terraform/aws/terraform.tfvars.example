@@ -1,0 +1,13 @@
+project_name         = "neraium"
+environment          = "prod"
+aws_region           = "us-east-2"
+backend_image_tag    = "latest"
+backend_desired_count = 2
+
+# Required: Secrets Manager ARN containing NERAIUM_API_TOKEN.
+api_token_secret_arn = "arn:aws:secretsmanager:us-east-2:123456789012:secret:neraium/api-token"
+
+# Optional custom domain + TLS.
+hosted_zone_id  = "Z1234567890ABC"
+api_domain_name = "api.neraium.com"
+certificate_arn = "arn:aws:acm:us-east-2:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

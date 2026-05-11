@@ -4,80 +4,60 @@ import {
  apiFetch,
  API_CONFIG_WARNING,
 } from "./config";
-import CommandOverviewWorkspace from "./components/CommandOverviewWorkspace";
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
 import EvidenceTrailWorkspace from "./components/EvidenceTrailWorkspace";
-import FacilitySystemsWorkspace from "./components/FacilitySystemsWorkspace";
-import IntelligenceConsoleWorkspace from "./components/IntelligenceConsoleWorkspace";
+import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
+import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
+import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
 import {
   CompactList,
   EmptyState,
-  InterventionGrid,
   MetricGrid,
   Panel,
   StatusDot,
-  WhyPanel,
 } from "./components/workspacePrimitives";
 import {
-  buildConfidenceBasis,
-  buildFleetSummary,
-  buildGuidanceForItem,
-  buildStructuralExplanation,
-  connectorStatusTone,
-  formatConfidenceLabel,
-  formatConnectorStatus,
-  formatFacilityPlainState,
   formatOperationalLabel,
-  formatRoomDecisionState,
-  formatScoreReadiness,
-  processingTraceLines,
-  runnerTraceLines,
 } from "./viewModels/operationalHelpers";
 import { buildOperationalContext as buildFacilityOperationalState } from "./viewModels/operationalState";
 import {
   buildIntakeStages,
-  buildUploadRequestError,
-  classifyUploadError,
-  isUploadProcessing,
   normalizeErrorMessage,
-  normalizeUploadStatus,
-  operatorUploadMessage,
   readJsonPayload,
-  uploadStateMessage,
 } from "./viewModels/uploadFlow";
 import * as uploadStateView from "./viewModels/uploadState";
 import "./styles.css";
 
 const WORKSPACES = [
   {
-    id: "overview",
-    label: "Facility Command",
-    eyebrow: "Operational Visibility",
-    description: "System behavior, early instability, and the next inspection focus.",
+    id: "system-body",
+    label: "System Body",
+    eyebrow: "Topology View",
+    description: "Facility-wide coherence rendered as a living topology map.",
   },
   {
-    id: "facility-systems",
-    label: "Facility Systems",
-    eyebrow: "System Behavior",
-    description: "Structural drift, room behavior, and system-level pressure.",
+    id: "drift-timeline",
+    label: "Drift Timeline",
+    eyebrow: "Temporal View",
+    description: "Trajectory of structural distance from stable baseline.",
+  },
+  {
+    id: "evidence-console",
+    label: "Evidence Console",
+    eyebrow: "Interpretability View",
+    description: "Why drift is flagged, which relationships shifted, and what to do next.",
   },
   {
     id: "data-connections",
-    label: "Operational Ingestion",
+    label: "Data Connections",
     eyebrow: "Signal Intake",
-    description: "Signal ingestion status, relationship visibility, and source continuity.",
+    description: "Upload CSV, configure API telemetry credentials, and run live polling.",
   },
   {
-    id: "intelligence-console",
-    label: "Intelligence Console",
-    eyebrow: "Relationship Stability",
-    description: "Signal relationships, drift progression, and structural evidence.",
-  },
-  {
-    id: "evidence-trail",
+    id: "historical-replay",
     label: "Evidence Trail",
-    eyebrow: "Evidence",
-    description: "Operational evidence, run sequence, and instability traceability.",
+    eyebrow: "Run History",
+    description: "Replay prior runs and export historical evidence reports.",
   },
 ];
 
@@ -108,17 +88,6 @@ const FALLBACK_SYSTEMS = [
   },
 ];
 
-const TELEMETRY_CHANNELS = [
-  "temperature",
-  "humidity",
-  "CO2",
-  "HVAC",
-  "airflow",
-  "irrigation",
-  "lighting",
-  "sensor network",
-];
-
 const INTAKE_STAGES = [
   "Batch receipt",
   "Header and schema detection",
@@ -137,14 +106,12 @@ const REPORT_TEMPLATES = [
 const OPERATIONAL_CADENCE_MS = 30000;
 const LIVE_REFRESH_INTERVAL_MS = 5000;
 
-function App() {
+function App() { 
   const hasAccess = true;
   const apiAccessCode = "";
-  const [activeWorkspace, setActiveWorkspace] = useState("overview");
+  const [activeWorkspace, setActiveWorkspace] = useState("system-body");
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
-  const [selectedInterventionId, setSelectedInterventionId] = useState(null);
-  const [operatorActions, setOperatorActions] = useState({});
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Sync pending",
@@ -157,12 +124,21 @@ function App() {
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
-  const [engineIdentity, setEngineIdentity] = useState(null);
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
-  const [latestUploadResult, setLatestUploadResult] = useState(null);
-  const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
+  const [latestUploadResult, setLatestUploadResult] = useState(null); 
+  const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot()); 
   const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
-  const workspaceRef = useRef(null);
+  const [selectedTopologyTarget, setSelectedTopologyTarget] = useState(null);
+  const [driftHistory, setDriftHistory] = useState([]);
+  const [demoScenario, setDemoScenario] = useState("drift");
+  const [isDemoMode, setIsDemoMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get("demo") === "1";
+  });
+  const workspaceRef = useRef(null); 
   const workspaceDrawerRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
   const facilitySystemsFetchDisabledRef = useRef(false);
@@ -264,31 +240,6 @@ function App() {
     }
   }, [apiAccessCode, apiStatus.state, hasAccess]);
 
-  const loadEngineIdentity = useCallback(async () => {
-    if (!hasAccess) {
-      return false;
-    }
-
-    try {
-      const response = await apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error(await buildProtectedRequestMessage(response));
-        }
-        throw new Error(`Unexpected response: ${response.status}`);
-      }
-
-      setEngineIdentity(await response.json());
-      return true;
-    } catch (error) {
-      setEngineIdentity(null);
-      if (normalizeErrorMessage(error?.message ?? error) === "Session expired. Refresh workspace.") {
-        setBackendError("Session expired. Refresh workspace.");
-      }
-      return false;
-    }
-  }, [apiAccessCode, hasAccess]);
-
   const loadLatestUploadState = useCallback(async () => {
     if (!hasAccess) {
       return false;
@@ -321,9 +272,8 @@ function App() {
     if (isHealthy) {
       facilitySystemsFetchDisabledRef.current = false;
       await loadFacilitySystems();
-      await loadEngineIdentity();
     }
-  }, [checkApiHealth, loadEngineIdentity, loadFacilitySystems]);
+  }, [checkApiHealth, loadFacilitySystems]);
 
   useEffect(() => {
     if (!hasAccess) {
@@ -358,9 +308,15 @@ function App() {
     }
 
     loadFacilitySystems();
-    loadEngineIdentity();
     loadLatestUploadState();
-  }, [hasAccess, loadEngineIdentity, loadFacilitySystems, loadLatestUploadState]);
+  }, [hasAccess, loadFacilitySystems, loadLatestUploadState]);
+
+  useEffect(() => {
+    if (!hasAccess) {
+      return;
+    }
+    apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode }).catch(() => {});
+  }, [apiAccessCode, hasAccess]);
 
   useEffect(() => {
     if (!hasAccess) {
@@ -378,7 +334,7 @@ function App() {
   const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
   const roomContext = uploadStateView.deriveRoomContext(latestUploadResult);
   const timeCoverage = uploadStateView.deriveTimeCoverage(latestUploadResult);
-  const liveOps = buildFacilityOperationalState({
+  const runtimeLiveOps = buildFacilityOperationalState({ 
     result: latestUploadResult,
     latestUploadSnapshot,
     apiStatus,
@@ -427,23 +383,33 @@ function App() {
     tonePriority,
     translateEvidenceLine,
     windowLabelFromTone,
-    buildWindowContext,
-  });
+    buildWindowContext, 
+  }); 
+  const liveOps = isDemoMode ? buildDemoLiveOps(telemetryTick, demoScenario) : runtimeLiveOps;
 
   useEffect(() => {
-    const nextId = liveOps.interventionItems[0]?.id ?? null;
-    if (!nextId) {
-      if (selectedInterventionId !== null) {
-        setSelectedInterventionId(null);
-      }
-      return;
-    }
+    const relationshipMagnitude = (liveOps.relationshipRows ?? [])
+      .map((row) => Number(row.pair_weight ?? row.change))
+      .filter((value) => Number.isFinite(value))
+      .reduce((sum, value) => sum + Math.abs(value), 0);
+    const driftMagnitude = (liveOps.driftRows ?? [])
+      .map((row) => Number(row.absolute_change))
+      .filter((value) => Number.isFinite(value))
+      .reduce((sum, value) => sum + Math.abs(value), 0);
+    const baselineDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
+    const stamp = liveOps.connectionSummary || formatClockTime(new Date());
 
-    const stillExists = liveOps.interventionItems.some((item) => item.id === selectedInterventionId);
-    if (!stillExists) {
-      setSelectedInterventionId(nextId);
-    }
-  }, [liveOps.interventionItems, selectedInterventionId]);
+    setDriftHistory((current) => {
+      const velocity = current.length > 0
+        ? Number((baselineDistance - current[current.length - 1].distance).toFixed(3))
+        : 0;
+      const acceleration = current.length > 1
+        ? Number((velocity - current[current.length - 1].velocity).toFixed(3))
+        : 0;
+      const next = [...current, { stamp, distance: baselineDistance, velocity, acceleration, tone: liveOps.facilityTone }];
+      return next.slice(-48);
+    });
+  }, [liveOps.connectionSummary, liveOps.driftRows, liveOps.facilityTone, liveOps.relationshipRows]);
 
   useEffect(() => {
     if (workspaceRef.current) {
@@ -474,71 +440,14 @@ function App() {
     setIsWorkspaceMenuOpen(false);
   }
 
-  function handleOperatorAction(targetId, action) {
-    setOperatorActions((current) => ({
-      ...current,
-      [targetId]: {
-        action,
-        at: new Date().toISOString(),
-      },
-    }));
-  }
-
-  function renderActiveWorkspace() {
-    if (activeWorkspace === "overview") {
-      return (
-        <OverviewWorkspace
-          Panel={Panel}
-          MetricGrid={MetricGrid}
-          CompactList={CompactList}
-          InterventionGrid={(props) => (
-            <InterventionGrid
-              {...props}
-              buildGuidanceForItem={buildGuidanceForItem}
-              formatRoomDecisionState={formatRoomDecisionState}
-            />
-          )}
-          WhyPanel={(props) => (
-            <WhyPanel
-              {...props}
-              buildConfidenceBasis={buildConfidenceBasis}
-              buildStructuralExplanation={buildStructuralExplanation}
-              buildGuidanceForItem={buildGuidanceForItem}
-              formatRoomDecisionState={formatRoomDecisionState}
-              formatConfidenceLabel={formatConfidenceLabel}
-              formatClockTime={formatClockTime}
-            />
-          )}
-          buildGuidanceForItem={buildGuidanceForItem}
-          formatFacilityPlainState={formatFacilityPlainState}
-          formatScoreReadiness={formatScoreReadiness}
-          latestUploadSnapshot={latestUploadSnapshot}
-          liveOps={liveOps}
-          selectedInterventionId={selectedInterventionId}
-          onSelectIntervention={setSelectedInterventionId}
-          onNavigateWorkspace={setActiveWorkspace}
-          operatorActions={operatorActions}
-          onOperatorAction={handleOperatorAction}
-        />
-      );
-    }
-
-    if (activeWorkspace === "facility-systems") {
-      return (
-        <FacilitySystemsWorkspace
-          systems={systems}
-          systemsState={systemsState}
-          roomContext={roomContext}
-          liveOps={liveOps}
-          selectedInterventionId={selectedInterventionId}
-          onSelectIntervention={setSelectedInterventionId}
-          buildFleetSummary={buildFleetSummary}
-          buildGuidanceForItem={buildGuidanceForItem}
-          formatOperationalTone={formatOperationalTone}
-          systemRoomContext={systemRoomContext}
-        />
-      );
-    }
+  function renderActiveWorkspace() { 
+    if (activeWorkspace === "system-body") { 
+      return <SystemTopologyWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} onSelectTarget={setSelectedTopologyTarget} />; 
+    } 
+ 
+    if (activeWorkspace === "drift-timeline") { 
+      return <DriftTimelineWorkspace liveOps={liveOps} driftHistory={driftHistory} />; 
+    } 
 
     if (activeWorkspace === "data-connections") {
       return (
@@ -549,11 +458,9 @@ function App() {
           latestUploadSnapshot={latestUploadSnapshot}
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
-          liveOps={liveOps}
           onUploadComplete={async () => {
             await loadLatestUploadState();
             await loadFacilitySystems();
-            await loadEngineIdentity();
             setEvidenceRefreshKey((current) => current + 1);
           }}
           formatClockTime={formatClockTime}
@@ -561,7 +468,7 @@ function App() {
       );
     }
 
-    if (activeWorkspace === "evidence-trail") {
+    if (activeWorkspace === "historical-replay") {
       return (
         <EvidenceTrailWorkspace
           apiFetch={apiFetch}
@@ -577,21 +484,9 @@ function App() {
         />
       );
     }
-
-    return (
-      <IntelligenceConsoleWorkspace
-        latestUploadResult={latestUploadResult}
-        liveOps={liveOps}
-        engineIdentity={engineIdentity}
-        intelligenceStatus={intelligenceStatus}
-        formatRelationshipPair={formatRelationshipPair}
-        relationshipDetail={relationshipDetail}
-        relationshipConsistencyLabel={relationshipConsistencyLabel}
-        runnerTraceLines={runnerTraceLines}
-        processingTraceLines={processingTraceLines}
-      />
-    );
-  }
+ 
+    return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />; 
+  } 
 
   return (
     <AppErrorBoundary>
@@ -631,22 +526,18 @@ function App() {
           </button>
         </header>
 
-        <TopStatusBar
-          activeConfig={activeConfig}
-          apiStatus={apiStatus}
-          latestUploadResult={latestUploadResult}
-          roomContext={roomContext}
-          timeCoverage={timeCoverage}
-          liveOps={liveOps}
-        />
-
-        {backendError && (
-          <BackendErrorPanel
-            message={normalizeErrorMessage(backendError)}
-            isConfigWarning={backendError === API_CONFIG_WARNING}
-            onRetry={retryBackendConnection}
-          />
-        )}
+        <TopStatusBar 
+          activeConfig={activeConfig} 
+          apiStatus={apiStatus} 
+          latestUploadResult={latestUploadResult} 
+          roomContext={roomContext} 
+          timeCoverage={timeCoverage} 
+          liveOps={liveOps} 
+          isDemoMode={isDemoMode}
+          onToggleDemoMode={() => setIsDemoMode((current) => !current)}
+          demoScenario={demoScenario}
+          onSetDemoScenario={setDemoScenario}
+        /> 
 
         <section
           key={activeWorkspace}
@@ -747,16 +638,16 @@ function WorkspaceNavigationContent({
 }) {
   return (
     <>
-      <div className="sidebar-brand-shell">
-        <div className="sidebar-brand">
-          <div className="brand-mark">N</div>
-          <div>
-            <p className="brand-name">Neraium</p>
-            <p className="brand-subtitle">Cultivation Infrastructure Intelligence</p>
-          </div>
-        </div>
-        <span className="brand-edition">Operations Edition</span>
-      </div>
+      <div className="sidebar-brand-shell"> 
+        <div className="sidebar-brand"> 
+          <div className="brand-mark">N</div> 
+          <div> 
+            <p className="brand-name">NERAIUM // OPS</p> 
+            <p className="brand-subtitle">Structural Intelligence Control Plane</p> 
+          </div> 
+        </div> 
+        <span className="brand-edition">Enterprise Command</span> 
+      </div> 
 
       <div className="sidebar-section">
         <p className="sidebar-kicker">Workspaces</p>
@@ -797,14 +688,25 @@ function WorkspaceNavigationContent({
   );
 }
 
-function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext, timeCoverage, liveOps }) {
+function TopStatusBar({
+  activeConfig,
+  apiStatus,
+  latestUploadResult,
+  roomContext,
+  timeCoverage,
+  liveOps,
+  isDemoMode,
+  onToggleDemoMode,
+  demoScenario,
+  onSetDemoScenario,
+}) {
   const intelligenceLabel = formatIntelligenceSourceLabel(liveOps.intelligenceMode);
   return (
-    <header className="top-status">
-      <div className="top-status__title">
-        <p className="eyebrow">{activeConfig.eyebrow}</p>
-        <h1 id="page-title">{activeConfig.label}</h1>
-        <p>{activeConfig.description}</p>
+    <header className="top-status"> 
+      <div className="top-status__title"> 
+        <p className="eyebrow">Neraium Command • {activeConfig.eyebrow}</p> 
+        <h1 id="page-title">{activeConfig.label}</h1> 
+        <p>{activeConfig.description}</p> 
         <div className="top-status__meta">
           <span className={`top-status__signal top-status__signal--${liveOps.connectionTone}`} aria-label={liveOps.connectionStatusLine}>
             <StatusDot tone={liveOps.connectionTone} />
@@ -839,12 +741,27 @@ function TopStatusBar({ activeConfig, apiStatus, latestUploadResult, roomContext
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
         />
+        <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
+          {isDemoMode ? "Demo On" : "Demo Off"}
+        </button>
+        {isDemoMode && (
+          <>
+            <button className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("stable")}>
+              Stable
+            </button>
+            <button className={`secondary-command-button ${demoScenario === "drift" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("drift")}>
+              Drift
+            </button>
+            <button className={`secondary-command-button ${demoScenario === "separation" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("separation")}>
+              Separation
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
 }
 
-const OverviewWorkspace = CommandOverviewWorkspace;
 function StatusBanner({ title, subtitle, tone }) {
   return (
     <div className={`status-banner status-banner--${tone}`}>
@@ -857,22 +774,7 @@ function StatusBanner({ title, subtitle, tone }) {
   );
 }
 
-function BackendErrorPanel({ message, isConfigWarning, onRetry }) {
-  const safeMessage = normalizeErrorMessage(message);
-  return (
-    <section className={`backend-error-panel ${isConfigWarning ? "backend-error-panel--warning" : ""}`} aria-live="polite">
-      <div>
-        <span>{isConfigWarning ? "Configuration warning" : "Backend connection"}</span>
-        <strong>{safeMessage}</strong>
-      </div>
-      <button className="command-button command-button--compact" type="button" onClick={onRetry}>
-        Retry
-      </button>
-    </section>
-  );
-}
-
-function StatusChip({ label, value, tone }) {
+function StatusChip({ label, value, tone }) { 
   return (
     <div className={`status-chip status-chip--${tone}`}>
       <span>{label}</span>
@@ -1659,6 +1561,144 @@ function formatIntelligenceModeValue(mode) {
     return "no_data";
   }
   return mode ?? "unknown";
+}
+
+function buildDemoLiveOps(tick = 0, scenario = "drift") {
+  const phase = tick % 4;
+  const tone = scenario === "stable"
+    ? "nominal"
+    : scenario === "separation"
+      ? "elevated"
+      : (phase <= 1 ? "review" : "elevated");
+  const drift = scenario === "stable"
+    ? 0.09
+    : scenario === "separation"
+      ? 0.82
+      : (phase <= 1 ? 0.42 : 0.71);
+  const headline = scenario === "stable"
+    ? "Facility relationships are coherent and stable."
+    : scenario === "separation"
+      ? "Structural separation is propagating across zones."
+      : "Thermal-humidity coupling is weakening before endpoint alarms.";
+  const subline = scenario === "stable"
+    ? "All major zone relationships are operating inside baseline tolerance."
+    : scenario === "separation"
+      ? "HVAC, irrigation, and airflow clusters are fragmenting from baseline."
+      : "HVAC and irrigation signals are decoupling while room metrics still look nominal.";
+  return {
+    useDemoTelemetry: true,
+    intelligenceMode: "live",
+    facilityTone: tone,
+    facilityStateLabel: tone === "nominal" ? "Stable structure" : tone === "elevated" ? "Structural separation forming" : "Relationship drift detected",
+    heroTag: "Demo scenario",
+    heroHeadline: headline,
+    heroSubline: subline,
+    readinessLabel: "Operational Intelligence Active",
+    connectionTone: "nominal",
+    connectionLabel: "Demo stream",
+    connectionDetail: "Synthetic operational state for walkthroughs.",
+    connectionSummary: "Demo loop active",
+    connectionStatusLine: "Demo mode enabled. No backend dependency required.",
+    connectionActionHint: "Switch demo off to return to live telemetry.",
+    dataSourceLabel: "Demo facility",
+    neraiumScore: tone === "nominal" ? 93 : tone === "elevated" ? 46 : 74,
+    scoreNarrative: tone === "nominal"
+      ? "Structural integrity is holding with low drift velocity."
+      : "Structural drift is accumulating faster than endpoint thresholds.",
+    scoreContext: "Demo score tracks relationship integrity rather than raw sensor values.",
+    windowContext: "Intervention window is compressing from 2 days toward 8 hours.",
+    primaryWindow: { label: "Flower Room 1", tone, status: "Drift window", window: "12 hours" },
+    interventionItems: [{
+      id: "demo-hvac-irrigation",
+      label: "Flower Room 1",
+      title: "HVAC x Irrigation coupling",
+      status: tone === "nominal" ? "Stable Structure" : "Relationship Drift",
+      window: tone === "nominal" ? "3 weeks" : "12 hours",
+      tone,
+      confidence: 88,
+      summary: tone === "nominal"
+        ? "Thermal-humidity coupling remains inside baseline tolerance."
+        : "Thermal-humidity coupling has weakened persistently over the last 8 hours.",
+      recommendation: tone === "nominal"
+        ? "Continue monitoring structural coherence."
+        : "Inspect airflow and irrigation timing overlap.",
+      supportingEvidence: [
+        tone === "nominal"
+          ? "HVAC recovery timing remains within 2 minutes of baseline."
+          : "HVAC recovery lags humidity stabilization by 14 minutes vs baseline.",
+        tone === "nominal"
+          ? "Irrigation response variance remains below 5%."
+          : "Irrigation event response variance increased 29% in current window.",
+      ],
+      relationshipEvidence: [ 
+        tone === "nominal" 
+          ? "temperature_supply::humidity_room correlation remains stable at 0.84" 
+          : "temperature_supply::humidity_room correlation dropped from 0.82 to 0.41", 
+        tone === "nominal"
+          ? "hvac_runtime::irrigation_cycle correlation remains stable at 0.66"
+          : "hvac_runtime::irrigation_cycle correlation dropped from 0.67 to 0.18",
+      ],
+    }],
+    actionQueue: [],
+    topologyNodes: [],
+    alerts: [{ title: tone === "nominal" ? "Stable structure" : "Hidden drift", detail: tone === "nominal" ? "System coherence is within normal operating bounds." : "No hard threshold breach yet, but structure is separating.", tone }],
+    findings: [
+      { title: tone === "nominal" ? "Coherence confirmed" : "HVAC-Irrigation tension", detail: tone === "nominal" ? "Coupling has remained stable across monitored windows." : "Coupling drift has persisted across multiple windows.", tone },
+      { title: "Velocity", detail: tone === "nominal" ? "Drift velocity remains flat." : "Drift acceleration turned positive in last two cycles.", tone: "review" },
+      { title: "Intervention posture", detail: tone === "nominal" ? "No immediate action required." : "System still controllable if addressed now.", tone: "nominal" },
+    ],
+    timeline: [],
+    telemetryCards: [],
+    summaryTelemetry: [],
+    overviewMetrics: [],
+    roomCards: [],
+    roomTransitions: [],
+    driftRows: [{
+      column: "structural_distance",
+      direction: "up",
+      drift_flag: tone,
+      baseline_average: 0.12,
+      recent_average: drift,
+      absolute_change: Number((drift - 0.12).toFixed(3)),
+      detail: "Distance from baseline is rising with positive acceleration.",
+    }],
+    relationshipRows: [
+      {
+        pair_key: "hvac_runtime::irrigation_cycle",
+        pair_categories: ["hvac", "irrigation"],
+        pair_weight: tone === "nominal" ? 0.04 : 0.49,
+        columns: ["hvac_runtime", "irrigation_cycle"],
+        baseline_correlation: 0.67,
+        recent_correlation: tone === "nominal" ? 0.66 : 0.18,
+        change: tone === "nominal" ? -0.01 : -0.49,
+        tone,
+        detail: "HVAC runtime and irrigation cycle relationship drifted from baseline.",
+      },
+      {
+        pair_key: "temperature_supply::humidity_room",
+        pair_categories: ["temperature", "humidity"],
+        pair_weight: tone === "nominal" ? 0.03 : 0.41,
+        columns: ["temperature_supply", "humidity_room"],
+        baseline_correlation: 0.82,
+        recent_correlation: tone === "nominal" ? 0.84 : 0.41,
+        change: tone === "nominal" ? 0.02 : -0.41,
+        tone: "review",
+        detail: "Temperature and humidity coupling is degrading gradually.",
+      },
+    ],
+    irrigationNotes: [],
+    systemRows: [],
+    intakeStages: [],
+    evidenceLines: [
+      "demo.mode=true",
+      `demo.structural_distance=${drift}`,
+      `demo.scenario=${scenario}`,
+    ],
+    consoleEvents: [],
+    observations: [],
+    reportNotes: [],
+    connectionEvents: [],
+  };
 }
 
 export default App;

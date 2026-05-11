@@ -442,7 +442,8 @@ export default function DataConnectionsWorkspace({
             </span>
           </div>
 
-          {displayUploadError && <p className="form-error">{normalizeErrorMessage(displayUploadError)}</p>}
+          {uploadError && <span className="sr-only">{normalizeErrorMessage(uploadError)}</span>}
+          {displayUploadError && <p className="form-error">{normalizeErrorMessage(uploadError || displayUploadError)}</p>}
         </form>
         <div className="connector-json-hint">
           <div className="connector-json-hint__header">
@@ -633,100 +634,73 @@ export default function DataConnectionsWorkspace({
         )}
       </Panel>
 
-      <Panel title="Connection Overview" className="span-12">
-        <MetricGrid
-          metrics={[
-            { label: "Connections", value: connections.length || "Pending" },
-            { label: "Online", value: healthyCount },
-            { label: "Sensors", value: totalSensors || "Pending" },
-            { label: "Readings", value: totalReadings || "Pending" },
-          ]}
-        />
-      </Panel>
+      <Panel title="Advanced Diagnostics" className="span-12">
+        <details className="technical-summary-panel">
+          <summary>Show connection fleet, active result, and upload history</summary>
 
-      <Panel title="Connections" className="span-7">
-        <div className="connector-status-list">
-          {connections.map((connection) => (
-            <div className="connector-status-card" key={connection.connection_id}>
-              <div className="connector-status-card__header">
-                <div>
-                  <p className="section-token">{connection.source_type}</p>
-                  <h3>{connection.name}</h3>
-                </div>
-                <span className={`connector-status-pill connector-status-pill--${connectionTone(connection.status)}`}>
-                  {formatConnectionStatus(connection.status)}
-                </span>
-              </div>
-              <MetricGrid
-                metrics={[
-                  { label: "Last Poll", value: connection.last_poll_at ? formatClockTime(connection.last_poll_at) : "Not yet" },
-                  { label: "Last Success", value: connection.last_success_at ? formatClockTime(connection.last_success_at) : "Not yet" },
-                  { label: "Baseline", value: formatBaselineStatus(connection.baseline_status) },
-                  { label: "Sensors", value: connection.sensors_detected ?? 0 },
-                  { label: "Readings", value: connection.readings_received ?? 0 },
-                ]}
-                compact
-              />
-              <div className="connector-detail-list">
-                <div className="connector-detail-row">
-                  <span>URL</span>
-                  <strong>{connection.url}</strong>
-                </div>
-                <div className="connector-detail-row">
-                  <span>Room</span>
-                  <strong>{connection.room_id ?? "Unknown room"}</strong>
-                </div>
-                <div className="connector-detail-row">
-                  <span>Scenario</span>
-                  <strong>{connection.current_scenario ?? "Awaiting telemetry"}</strong>
-                </div>
-                <div className="connector-detail-row">
-                  <span>Baseline Samples</span>
-                  <strong>{`${connection.baseline_samples_collected ?? 0}/${connection.baseline_samples_required ?? 0}`}</strong>
-                </div>
-              </div>
-              {(connection.error_message || connection.status === "error") && (
-                <div className="connector-issues">
-                  <p>{connection.error_message || "Connection error. Last valid facility state has been preserved."}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </Panel>
-
-      <Panel title="Active Result" className="span-5">
-        <MetricGrid
-          metrics={[
-            { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
-            { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
-            { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-            { label: "Timestamp", value: activeConnection?.latest_telemetry_timestamp ? formatClockTime(activeConnection.latest_telemetry_timestamp) : uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
-          ]}
-          compact
-        />
-        <CompactList
-          items={latestUploadResult?.sii_intelligence?.supporting_evidence ?? [latestUploadSnapshot?.message ?? "No data connected yet."]}
-          emptyText="No data connected yet."
-        />
-      </Panel>
-
-      <Panel title="Upload History" className="span-12">
-        {uploadHistoryRows.length > 0 ? (
-          <DataTable
-            columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
-            rows={uploadHistoryRows.map((row) => [
-              row.filename,
-              row.status,
-              row.score,
-              row.state,
-              row.room,
-              row.scoreDelta ?? "n/a",
-            ])}
+          <MetricGrid
+            metrics={[
+              { label: "Connections", value: connections.length || "Pending" },
+              { label: "Online", value: healthyCount },
+              { label: "Sensors", value: totalSensors || "Pending" },
+              { label: "Readings", value: totalReadings || "Pending" },
+            ]}
           />
-        ) : (
-          <EmptyState title="No ingestion history" body="Completed uploads and meaningful live polling changes will appear here." compact />
-        )}
+
+          <div className="connector-status-list">
+            {connections.map((connection) => (
+              <div className="connector-status-card" key={connection.connection_id}>
+                <div className="connector-status-card__header">
+                  <div>
+                    <p className="section-token">{connection.source_type}</p>
+                    <h3>{connection.name}</h3>
+                  </div>
+                  <span className={`connector-status-pill connector-status-pill--${connectionTone(connection.status)}`}>
+                    {formatConnectionStatus(connection.status)}
+                  </span>
+                </div>
+                <MetricGrid
+                  metrics={[
+                    { label: "Last Poll", value: connection.last_poll_at ? formatClockTime(connection.last_poll_at) : "Not yet" },
+                    { label: "Last Success", value: connection.last_success_at ? formatClockTime(connection.last_success_at) : "Not yet" },
+                    { label: "Baseline", value: formatBaselineStatus(connection.baseline_status) },
+                    { label: "Sensors", value: connection.sensors_detected ?? 0 },
+                    { label: "Readings", value: connection.readings_received ?? 0 },
+                  ]}
+                  compact
+                />
+              </div>
+            ))}
+          </div>
+
+          <MetricGrid
+            metrics={[
+              { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
+              { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
+              { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
+              { label: "Timestamp", value: activeConnection?.latest_telemetry_timestamp ? formatClockTime(activeConnection.latest_telemetry_timestamp) : uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
+            ]}
+            compact
+          />
+
+          <Panel title="Upload History" className="span-12">
+            {uploadHistoryRows.length > 0 ? (
+              <DataTable
+                columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
+                rows={uploadHistoryRows.map((row) => [
+                  row.filename,
+                  row.status,
+                  row.score,
+                  row.state,
+                  row.room,
+                  row.scoreDelta ?? "n/a",
+                ])}
+              />
+            ) : (
+              <EmptyState title="No ingestion history" body="Completed uploads and meaningful live polling changes will appear here." compact />
+            )}
+          </Panel>
+        </details>
       </Panel>
 
       {connectionError && (

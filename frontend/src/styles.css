@@ -237,11 +237,13 @@ p {
 }
 
 .brand-name {
-  color: var(--text-primary);
-  font-size: 1.08rem;
-  font-weight: 700;
+  color: #effff7;
+  font-size: 0.96rem;
+  font-weight: 800;
   line-height: 1.05;
-  letter-spacing: 0;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .brand-subtitle,
@@ -260,7 +262,7 @@ p {
   padding: 0 8px;
   border: 1px solid rgba(47, 138, 130, 0.18);
   background: rgba(11, 28, 27, 0.72);
-  color: rgba(206, 223, 228, 0.88);
+  color: rgba(220, 255, 240, 0.92);
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -6688,6 +6690,11 @@ h3 {
   text-transform: uppercase;
 }
 
+.eyebrow {
+  color: #aef7d1;
+  letter-spacing: 0.13em;
+}
+
 .operator-story__item strong {
   color: var(--text-primary);
   font-size: 1.18rem;
@@ -7328,6 +7335,12 @@ body {
   transform: none;
 }
 
+.secondary-command-button.is-active {
+  border-color: rgba(57, 255, 136, 0.6);
+  color: #f4fff8;
+  box-shadow: inset 0 0 0 1px rgba(57, 255, 136, 0.3);
+}
+
 h1 {
   font-size: clamp(1.9rem, 2.9vw, 2.6rem);
   font-weight: 760;
@@ -7406,5 +7419,681 @@ h3 {
   .workspace-menu-button,
   .workspace-drawer__close {
     min-height: 48px;
+  }
+}
+
+/* Core visual metaphor refresh */
+.system-body, 
+.drift-timeline, 
+.evidence-console-view { 
+  display: grid; 
+  gap: 18px; 
+} 
+
+.system-body__kicker {
+  margin: 0;
+  color: #b9ffd8;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-shadow: 0 0 10px rgba(57, 255, 136, 0.32);
+}
+
+.system-body__header h2, 
+.drift-timeline__header h2, 
+.evidence-console-view__header h2 { 
+  margin: 8px 0 12px; 
+  font-size: 1.82rem; 
+  line-height: 1.02;
+  letter-spacing: 0.015em; 
+  color: #f4fff8; 
+} 
+
+.system-body__header p, 
+.drift-timeline__header p, 
+.evidence-console-view__header p { 
+  margin: 0; 
+  color: #d2ddd8; 
+  font-size: 0.95rem;
+  line-height: 1.52;
+  max-width: 70ch;
+} 
+
+.topology-card,
+.timeline-card,
+.evidence-block {
+  border: 1px solid #294137;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(57, 255, 136, 0.08), transparent 32%),
+    radial-gradient(circle at 95% 10%, rgba(208, 171, 51, 0.08), transparent 36%),
+    #090d0b;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgba(82, 118, 101, 0.18),
+    0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+.topology-card { 
+  padding: 16px; 
+} 
+
+.topology-card__status { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  margin-bottom: 14px; 
+} 
+
+.topology-card__status strong { 
+  color: #39ff88; 
+  letter-spacing: 0.04em; 
+  text-transform: uppercase; 
+  font-size: 0.8rem;
+} 
+
+.topology-card__status span {
+  color: #b6cbc2;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+}
+
+.topology-map {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 5 / 3;
+  border: 1px solid #27352f;
+  background: #0b120f;
+}
+
+.topology-edge {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+  animation: pulseFlow 1.8s linear infinite, edgeGlow 2.4s ease-in-out infinite;
+  cursor: pointer;
+}
+
+.edge--stable { stroke: #39ff88; }
+.edge--drift { stroke: #d0ab33; }
+.edge--separation { stroke: #e54b4b; stroke-width: 3; }
+.edge--pending { stroke: #6f7b76; }
+.edge--nominal { stroke: #39ff88; }
+.edge--review { stroke: #d0ab33; }
+.edge--elevated,
+.edge--unstable { stroke: #e54b4b; }
+.edge--info { stroke: #6f7b76; }
+.topology-edge--active { filter: drop-shadow(0 0 8px rgba(229, 75, 75, 0.7)); }
+
+.topology-node {
+  stroke-width: 1.8;
+  cursor: pointer;
+  animation: nodePulse 2.6s ease-in-out infinite;
+}
+
+.node--stable { fill: #0d2218; stroke: #39ff88; }
+.node--drift { fill: #27200d; stroke: #d0ab33; }
+.node--separation { fill: #2b1111; stroke: #e54b4b; }
+.node--pending { fill: #1b2622; stroke: #a3b5ad; }
+.topology-node--active { stroke-width: 3.2; }
+
+.topology-node__label { 
+  fill: #f2faf6; 
+  text-anchor: middle; 
+  font-size: 17px; 
+  font-family: "IBM Plex Mono", monospace; 
+  font-weight: 600; 
+  letter-spacing: 0.02em; 
+} 
+
+.topology-empty-hint {
+  margin: 10px 0 0;
+  color: #b9c9c2;
+  font-size: 0.78rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.topology-debug-panel {
+  margin-top: 12px;
+  border: 1px solid #24322b;
+  background: #0a100d;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.topology-debug-panel__title {
+  margin: 0 0 8px;
+  color: #d6e1dc;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+}
+
+.topology-debug-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.topology-debug-panel li {
+  display: grid;
+  grid-template-columns: repeat(4, auto minmax(0, 1fr));
+  gap: 4px 8px;
+  border: 1px solid #1e2a24;
+  background: #080d0b;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+@media (max-width: 1023px) { 
+  .topology-node__label { 
+    font-size: 14px; 
+  }
+
+  .system-body__header h2,
+  .drift-timeline__header h2,
+  .evidence-console-view__header h2 {
+    font-size: 1.56rem;
+  } 
+} 
+
+.topology-debug-panel li span {
+  color: #8fa29b;
+  font-size: 0.68rem;
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+}
+
+.topology-debug-panel li strong {
+  color: #e5efea;
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.system-body__notes,
+.evidence-console-view__grid,
+.timeline-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.system-note, 
+.timeline-stats > div { 
+  border: 1px solid #1b241f; 
+  background: #0a0f0d; 
+  border-radius: 8px; 
+  padding: 14px 13px; 
+} 
+
+.system-note strong, 
+.timeline-stats strong { 
+  color: #f3f7f5; 
+  font-size: 0.9rem;
+  line-height: 1.3;
+} 
+
+.system-note p, 
+.timeline-stats span { 
+  margin: 7px 0 0; 
+  color: #9fb0aa; 
+  font-size: 0.82rem;
+  line-height: 1.45;
+} 
+
+.timeline-card { 
+  padding: 18px; 
+  display: grid; 
+  gap: 16px; 
+} 
+
+.trajectory {
+  width: 100%;
+  height: auto;
+  border: 1px solid #18211c;
+  background: #060907;
+}
+
+.trajectory__line {
+  fill: none;
+  stroke: #d0ab33;
+  stroke-width: 3.2;
+  filter: drop-shadow(0 0 7px rgba(208, 171, 51, 0.46));
+}
+
+.evidence-console-view__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evidence-block { 
+  padding: 16px; 
+} 
+
+.evidence-block h3 { 
+  margin: 0 0 12px; 
+  color: #e8fff1; 
+  letter-spacing: 0.03em; 
+  font-size: 0.95rem;
+  text-transform: uppercase;
+} 
+
+.evidence-block ul { 
+  margin: 0; 
+  padding-left: 19px; 
+  color: #c9d3ce; 
+  display: grid; 
+  gap: 10px; 
+  font-size: 0.88rem;
+  line-height: 1.5;
+} 
+
+.evidence-block p { 
+  margin: 0; 
+  color: #c9d3ce; 
+  font-size: 0.9rem;
+  line-height: 1.52;
+} 
+
+.evidence-block__meta {
+  margin-top: 10px !important;
+  color: #90a29b !important;
+}
+
+@keyframes pulseFlow {
+  from { stroke-dashoffset: 22; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes edgeGlow {
+  0% { opacity: 0.75; }
+  50% { opacity: 1; }
+  100% { opacity: 0.75; }
+}
+
+@keyframes nodePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 900px) {
+  .system-body__notes,
+  .timeline-stats,
+  .evidence-console-view__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topology-debug-panel li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) { 
+  .topology-card,
+  .timeline-card,
+  .evidence-block,
+  .topology-debug-panel {
+    border-radius: 6px;
+  }
+
+  .topology-node__label { 
+    font-size: 12px; 
+  }
+
+  .system-body, 
+  .drift-timeline, 
+  .evidence-console-view { 
+    gap: 14px; 
+  } 
+
+  .system-body__header h2,
+  .drift-timeline__header h2,
+  .evidence-console-view__header h2 {
+    font-size: 1.36rem;
+    margin-bottom: 10px;
+  }
+
+  .system-body__header p,
+  .drift-timeline__header p,
+  .evidence-console-view__header p {
+    font-size: 0.88rem;
+  } 
+} 
+
+/* Structural heartbeat hero overrides */
+.integrity-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(210px, 0.5fr);
+  gap: 14px;
+}
+
+.integrity-hero__lead,
+.integrity-hero__score {
+  border: 1px solid rgba(136, 171, 153, 0.26);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at top left, rgba(57, 255, 136, 0.08), transparent 42%),
+    #0a100d;
+  padding: 16px 15px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+.integrity-hero__kicker {
+  margin: 0;
+  color: #b6ffd7;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.integrity-hero__lead h3 {
+  margin: 8px 0 10px;
+  color: #f2fff8;
+  font-size: 1.3rem;
+  line-height: 1.08;
+  letter-spacing: 0.02em;
+}
+
+.integrity-hero__lead p {
+  margin: 0;
+  color: #cfe0d9;
+  font-size: 0.9rem;
+  line-height: 1.52;
+  max-width: 58ch;
+}
+
+.integrity-hero__score {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+}
+
+.integrity-hero__score span {
+  color: #a9bcb4;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.integrity-hero__score strong {
+  margin-top: 8px;
+  color: #e7fff3;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: clamp(2.6rem, 4vw, 3.5rem);
+  line-height: 0.9;
+  text-shadow: 0 0 16px rgba(72, 255, 153, 0.34);
+}
+
+.integrity-hero__score p {
+  margin: 10px 0 0;
+  color: #b9cfc6;
+  font-size: 0.86rem;
+}
+
+.topology-card--heartbeat {
+  border-color: rgba(147, 255, 202, 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgba(139, 241, 193, 0.18),
+    0 24px 58px rgba(0, 0, 0, 0.42);
+}
+
+.integrity-footer {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px 0;
+}
+
+.integrity-footer span {
+  color: #a7bdb3;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.integrity-footer strong {
+  color: #e8fff4;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.2rem;
+}
+
+.integrity-footer p {
+  margin: 0;
+  color: #bfd0c9;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .integrity-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .integrity-hero__lead h3 {
+    font-size: 1.06rem;
+  }
+
+  .integrity-footer {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* Structural Integrity Field */
+.sif {
+  border: 1px solid rgba(128, 158, 145, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0a100d;
+}
+
+.sif__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 25 / 14;
+  color: #39ff88;
+}
+
+.sif__bg {
+  fill: #0a100d;
+}
+
+.sif__field {
+  fill: url(#sifGlow);
+  stroke: currentColor;
+  stroke-opacity: 0.26;
+  stroke-width: 1.2;
+}
+
+.sif__link {
+  stroke: currentColor;
+  stroke-opacity: 0.62;
+  stroke-width: 1.8;
+  transition: stroke-opacity 280ms ease, stroke-width 280ms ease;
+}
+
+.sif__link--weak {
+  stroke-opacity: 0.36;
+}
+
+.sif__link--broken {
+  stroke-opacity: 0.12;
+  stroke-dasharray: 5 6;
+}
+
+.sif__node {
+  fill: currentColor;
+  fill-opacity: 0.86;
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.3));
+}
+
+.sif--stable .sif__svg { color: #48ff99; }
+.sif--drift .sif__svg { color: #e0ad42; }
+.sif--separation .sif__svg { color: #e55b5b; }
+
+.sif--animated .sif__node {
+  animation: sifNodePulse 2.6s ease-in-out infinite;
+}
+
+.sif--animated .sif__link {
+  animation: sifLinkPulse 2.2s linear infinite;
+}
+
+@keyframes sifNodePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sifLinkPulse {
+  0% { stroke-opacity: 0.42; }
+  50% { stroke-opacity: 0.72; }
+  100% { stroke-opacity: 0.42; }
+}
+
+/* Premium polish layer */
+:root {
+  --premium-radius: 10px;
+  --premium-radius-sm: 8px;
+  --premium-border: rgba(139, 169, 154, 0.24);
+  --premium-border-strong: rgba(182, 236, 210, 0.34);
+  --premium-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  --premium-inset: inset 0 0 0 1px rgba(174, 226, 203, 0.14);
+}
+
+body {
+  letter-spacing: 0.002em;
+}
+
+.platform-sidebar {
+  border-right-color: rgba(150, 179, 165, 0.2);
+}
+
+.sidebar-brand-shell,
+.sidebar-section--terminal,
+.ops-panel,
+.topology-card,
+.timeline-card,
+.evidence-block,
+.system-note,
+.timeline-stats > div,
+.status-chip,
+.workspace-nav__item,
+.connector-status-card {
+  border-color: var(--premium-border);
+  border-radius: var(--premium-radius);
+  box-shadow: var(--premium-shadow), var(--premium-inset);
+}
+
+.workspace-nav__item {
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.workspace-nav__item:hover {
+  transform: translateY(-1px);
+}
+
+.workspace-nav__item--active {
+  border-color: var(--premium-border-strong);
+}
+
+.top-status {
+  border-bottom-color: rgba(150, 179, 165, 0.2);
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+.topology-card__status strong,
+.system-body__kicker {
+  font-variant: all-small-caps;
+}
+
+.command-button,
+.secondary-command-button,
+.workspace-menu-button {
+  border-radius: var(--premium-radius-sm);
+  letter-spacing: 0.02em;
+  font-weight: 650;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.command-button:hover,
+.secondary-command-button:hover,
+.workspace-menu-button:hover {
+  transform: translateY(-1px);
+}
+
+.command-button:active,
+.secondary-command-button:active,
+.workspace-menu-button:active {
+  transform: translateY(0);
+}
+
+.secondary-command-button.is-active {
+  border-color: rgba(132, 255, 196, 0.78);
+  background: linear-gradient(180deg, rgba(22, 44, 35, 0.96), rgba(14, 28, 22, 0.96));
+  color: #f5fff9;
+  box-shadow: inset 0 0 0 1px rgba(132, 255, 196, 0.38);
+}
+
+.topology-map,
+.trajectory {
+  border-radius: 8px;
+}
+
+.topology-node__label {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.system-note p,
+.evidence-block p,
+.evidence-block ul,
+.timeline-stats span {
+  color: #c8d8d1;
+}
+
+.topology-debug-panel {
+  border-radius: var(--premium-radius);
+  border-color: rgba(149, 191, 172, 0.26);
+}
+
+.topology-debug-panel li {
+  border-radius: 8px;
+  border-color: rgba(138, 173, 157, 0.24);
+}
+
+@media (max-width: 1023px) {
+  .sidebar-brand-shell,
+  .sidebar-section--terminal,
+  .ops-panel,
+  .topology-card,
+  .timeline-card,
+  .evidence-block {
+    border-radius: 9px;
+  }
+}
+
+@media (max-width: 760px) {
+  .top-status__title p:last-child,
+  .system-body__header p,
+  .drift-timeline__header p,
+  .evidence-console-view__header p {
+    line-height: 1.46;
+  }
+
+  .workspace-menu-button,
+  .command-button,
+  .secondary-command-button {
+    font-size: 0.85rem;
   }
 }

@@ -592,25 +592,54 @@ function buildConsoleEvents(result, apiStatus, roomContext, deps) {
   return [...lines, ...buildEvidenceConsole(result, deps).slice(0, 10)];
 }
 
-function buildRelationshipRows(result, deps) {
-  const evidence = result?.engine_result?.evidence ?? [];
-  return evidence
-    .filter((item) => item.type === "relationship_change")
-    .map((item) => ({
+function buildRelationshipRows(result, deps) { 
+  const evidence = result?.engine_result?.evidence ?? []; 
+  const categories = result?.cultivation_mapping?.categories ?? {};
+  const columnToCategory = {};
+  Object.entries(categories).forEach(([category, columns]) => {
+    (columns ?? []).forEach((column) => {
+      columnToCategory[String(column).toLowerCase()] = category;
+    });
+  });
+
+  return evidence 
+    .filter((item) => item.type === "relationship_change") 
+    .map((item) => {
+      const columns = Array.isArray(item.columns) ? item.columns : [];
+      const normalizedColumns = columns.map((column) => String(column).trim());
+      const pairKey = normalizedColumns
+        .map((column) => column.toLowerCase())
+        .sort()
+        .join("::");
+      const pairCategories = normalizedColumns
+        .map((column) => columnToCategory[column.toLowerCase()])
+        .filter(Boolean);
+      const pairWeight = Number.isFinite(Number(item.change))
+        ? Math.abs(Number(item.change))
+        : 0;
+
+      return {
       ...item,
-      detail: deps.translateEvidenceLine(
-        deps.relationshipDetail(item),
-        deps.inferOperationalCategory(item.columns?.join(" "), item.detail),
-      ),
-      tone: deps.mapOperationalTone(item.level ?? "review"),
-      technicalDetails: [
-        item.detail && `detail=${item.detail}`,
-        item.baseline_correlation !== undefined && `baseline_correlation=${item.baseline_correlation}`,
-        item.recent_correlation !== undefined && `recent_correlation=${item.recent_correlation}`,
-        item.columns && `columns=${item.columns.join(",")}`,
-      ].filter(Boolean),
-    }));
-}
+      columns: normalizedColumns,
+      pair_key: pairKey,
+      pair_categories: Array.from(new Set(pairCategories)),
+      pair_weight: pairWeight,
+      detail: deps.translateEvidenceLine( 
+        deps.relationshipDetail(item), 
+        deps.inferOperationalCategory(item.columns?.join(" "), item.detail), 
+      ), 
+      tone: deps.mapOperationalTone(item.level ?? "review"), 
+      technicalDetails: [ 
+        pairKey && `pair_key=${pairKey}`,
+        `pair_weight=${pairWeight}`,
+        item.detail && `detail=${item.detail}`, 
+        item.baseline_correlation !== undefined && `baseline_correlation=${item.baseline_correlation}`, 
+        item.recent_correlation !== undefined && `recent_correlation=${item.recent_correlation}`, 
+        item.columns && `columns=${item.columns.join(",")}`, 
+      ].filter(Boolean), 
+    }; 
+    }); 
+} 
 
 function buildUploadedInterventionItems(result, roomContext, telemetryCards, facilityTone, deps) {
   const engineSignals = result?.engine_result?.signals ?? [];

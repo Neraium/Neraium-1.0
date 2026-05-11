@@ -57,6 +57,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request_id = getattr(request.state, "request_id", None)
         if request_id:
             response.headers["X-Request-Id"] = request_id
+        # Baseline browser hardening for operator UI/API surfaces.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
+        if request.url.scheme == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 
     app.add_middleware(

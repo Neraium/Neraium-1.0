@@ -6,9 +6,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
+from app.core.config import get_settings
 from app.models.api_models import LatestUploadResponse, UploadAcceptedResponse, UploadStatusResponse
 from app.services.data_connections import read_connection_status
 from app.services.runtime_db import record_audit_event
+from app.services.runtime_db import queue_metrics
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_jobs import (
     SUPPORTED_UPLOAD_EXTENSIONS,
@@ -105,6 +107,27 @@ async def upload_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
+    settings = get_settings()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            size_bytes = int(content_length)
+            if size_bytes > settings.max_upload_size_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                )
+        except ValueError:
+            pass
+
+    queue = queue_metrics()
+    active_queue_depth = queue.get("pending", 0) + queue.get("processing", 0)
+    if active_queue_depth >= settings.max_pending_upload_jobs:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload queue is saturated. Retry after current processing backlog clears.",
+        )
+
     filename = file.filename or ""
     extension = Path(filename).suffix.lower()
     if extension not in SUPPORTED_UPLOAD_EXTENSIONS:

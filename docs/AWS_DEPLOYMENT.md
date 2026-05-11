@@ -49,6 +49,8 @@ NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime
 NERAIUM_UPLOAD_CHUNK_SIZE_ROWS=10000
 NERAIUM_MAX_ANALYSIS_ROWS=20000
 NERAIUM_MAX_SII_ROWS=5000
+NERAIUM_MAX_UPLOAD_SIZE_BYTES=26214400
+NERAIUM_MAX_PENDING_UPLOAD_JOBS=50
 ```
 
 Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, AI/LLM configuration, or shared access-code configuration. Add user identity and server-side sessions before broader customer access.

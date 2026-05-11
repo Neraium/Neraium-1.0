@@ -25,16 +25,19 @@ export function buildAccessHeaders() {
 }
 
 export function apiFetch(path, options = {}) {
-  const { accessCode, headers, method, cache, ...rest } = options;
-  const normalizedMethod = String(method || "GET").toUpperCase();
+  const { accessCode, headers, ...rest } = options;
+  const normalizedMethod = String(rest.method || "GET").toUpperCase();
+  const requestOptions = { ...rest };
+  delete requestOptions.method;
+  delete requestOptions.cache;
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget();
   return fetch(`${API_BASE_URL}${path}`, {
     method: normalizedMethod,
-    ...rest,
+    ...requestOptions,
     credentials: "include",
-    cache: cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
+    cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
     headers: {
       ...buildAccessHeaders(),
       ...(addNoCacheHeaders
