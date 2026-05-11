@@ -618,8 +618,12 @@ export default function DataConnectionsWorkspace({
                 `Baseline status: ${baselineStatusLabel}`,
                 baselineSamplesRequired > 0 ? `Baseline samples: ${baselineSamplesCollected}/${baselineSamplesRequired}` : `Baseline samples: ${baselineSamplesCollected}`,
                 activeConnection.last_baseline_update ? `Last baseline update: ${activeConnection.last_baseline_update}` : "Last baseline update: Not yet",
-                activeConnection.baseline_error_message ? `Baseline error: ${activeConnection.baseline_error_message}` : null,
-                activeConnection.error_message ? `Error: ${activeConnection.error_message}` : `Connection is ${formatConnectionStatus(activeConnection.status).toLowerCase()}.`,
+                activeConnection.baseline_status === "failed" && activeConnection.baseline_error_message
+                  ? `Baseline error: ${activeConnection.baseline_error_message}`
+                  : null,
+                String(activeConnection.status ?? "").toLowerCase() === "error" && activeConnection.error_message
+                  ? `Error: ${activeConnection.error_message}`
+                  : `Connection is ${formatConnectionStatus(activeConnection.status).toLowerCase()}.`,
               ].filter(Boolean)}
               emptyText="No live connection metadata yet."
             />

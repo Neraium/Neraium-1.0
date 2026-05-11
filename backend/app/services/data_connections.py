@@ -111,6 +111,10 @@ def upsert_registered_data_connection(payload: dict[str, Any]) -> dict[str, Any]
     merged["baseline_samples_required"] = int(merged.get("baseline_samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT)
     merged["baseline_samples_collected"] = int(merged.get("baseline_samples_collected") or 0)
     merged["baseline_error_message"] = merged.get("baseline_error_message") or ""
+    if merged["status"] != "error":
+        merged["error_message"] = ""
+    if merged["baseline_status"] in {"none", "active"}:
+        merged["baseline_error_message"] = ""
     upsert_data_connection(merged)
     return merged
 

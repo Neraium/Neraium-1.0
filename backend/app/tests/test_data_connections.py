@@ -208,3 +208,20 @@ def test_timeout_error_clears_after_next_successful_poll(isolated_runtime, monke
     assert recovered["connection"]["error_message"] == ""
     assert recovered["connection"]["baseline_status"] == "building"
     assert recovered["connection"]["baseline_samples_collected"] == 1
+
+
+def test_upsert_registered_data_connection_clears_stale_errors_when_recovered(isolated_runtime):
+    normalized = data_connections.upsert_registered_data_connection(
+        {
+            "connection_id": data_connections.DEFAULT_CONNECTION_ID,
+            "status": "polling",
+            "error_message": "timed out",
+            "baseline_status": "active",
+            "baseline_error_message": "timed out",
+        }
+    )
+
+    assert normalized["status"] == "polling"
+    assert normalized["error_message"] == ""
+    assert normalized["baseline_status"] == "active"
+    assert normalized["baseline_error_message"] == ""
