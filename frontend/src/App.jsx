@@ -52,32 +52,32 @@ const WORKSPACES = [
   {
     id: "overview",
     label: "Facility Command",
-    eyebrow: "Command",
-    description: "System status, room priority, and the next operator move.",
+    eyebrow: "Operational Visibility",
+    description: "System behavior, early instability, and the next inspection focus.",
   },
   {
     id: "facility-systems",
     label: "Facility Systems",
-    eyebrow: "Systems",
-    description: "Room climate, irrigation, and crop-cycle pressure across the facility.",
+    eyebrow: "System Behavior",
+    description: "Structural drift, room behavior, and system-level pressure.",
   },
   {
     id: "data-connections",
-    label: "Data Connections",
-    eyebrow: "Connectors",
-    description: "Upload telemetry, check connection health, and review the latest ingestion state.",
+    label: "Operational Ingestion",
+    eyebrow: "Signal Intake",
+    description: "Signal ingestion status, relationship visibility, and source continuity.",
   },
   {
     id: "intelligence-console",
     label: "Intelligence Console",
-    eyebrow: "Console",
-    description: "Structural diagnostics, relationship evidence, and confidence basis.",
+    eyebrow: "Relationship Stability",
+    description: "Signal relationships, drift progression, and structural evidence.",
   },
   {
     id: "evidence-trail",
     label: "Evidence Trail",
     eyebrow: "Evidence",
-    description: "Run history, explanations, warnings, errors, and report export.",
+    description: "Operational evidence, run sequence, and instability traceability.",
   },
 ];
 

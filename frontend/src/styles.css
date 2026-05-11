@@ -7203,3 +7203,208 @@ h3 {
     grid-column: span 6;
   }
 }
+
+/* Investor deck brand system: premium infrastructure UI */
+:root {
+  --bg-app: #080a0c;
+  --bg-sidebar: #0a0d10;
+  --bg-sidebar-alt: #0d1115;
+  --bg-panel: rgba(14, 18, 22, 0.96);
+  --bg-panel-alt: rgba(16, 20, 24, 0.94);
+  --bg-panel-soft: rgba(18, 23, 28, 0.86);
+  --border-soft: rgba(170, 180, 190, 0.14);
+  --border-strong: rgba(178, 190, 200, 0.26);
+  --text-primary: #f8fbff;
+  --text-secondary: #cad3db;
+  --text-muted: #8c98a3;
+  --accent-green: #39ff88;
+  --accent-cyan: #67f5be;
+  --accent-amber: #d5bc8c;
+  --accent-red: #ef8e86;
+  --accent-red-deep: #b45c57;
+  --accent-brand: #39ff88;
+  --brand-thread: rgba(57, 255, 136, 0.18);
+  --shadow-panel: 0 12px 28px rgba(0, 0, 0, 0.24);
+  --glow-green: 0 0 0 1px rgba(57, 255, 136, 0.22);
+  --glow-cyan: 0 0 0 1px rgba(103, 245, 190, 0.2);
+  --glow-amber: 0 0 0 1px rgba(213, 188, 140, 0.2);
+  --glow-red: 0 0 0 1px rgba(239, 142, 134, 0.2);
+  --shadow-lux: 0 20px 46px rgba(0, 0, 0, 0.36);
+  --shadow-rail: 10px 0 30px rgba(0, 0, 0, 0.22);
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% -12%, rgba(57, 255, 136, 0.08), transparent 32%),
+    linear-gradient(180deg, #080a0c 0%, #06080b 100%);
+}
+
+.platform-sidebar,
+.workspace-drawer {
+  background:
+    linear-gradient(180deg, rgba(13, 18, 22, 0.98), rgba(8, 11, 14, 0.98));
+}
+
+.sidebar-brand-shell,
+.sidebar-section--terminal,
+.ops-panel,
+.status-chip,
+.metric-cell,
+.telemetry-card,
+.zone-summary-card,
+.run-history-item,
+.connector-status-card,
+.compact-list-block,
+.empty-state,
+.relationship-row,
+.intervention-card {
+  border-color: rgba(170, 180, 190, 0.16);
+  background:
+    linear-gradient(180deg, rgba(17, 22, 27, 0.96), rgba(11, 15, 19, 0.94));
+  box-shadow: var(--shadow-panel);
+}
+
+.ops-panel,
+.status-chip,
+.metric-cell,
+.telemetry-card,
+.zone-summary-card,
+.compact-list-block,
+.empty-state,
+.intervention-card,
+.workspace-nav__item,
+.command-button,
+.secondary-command-button,
+.workspace-menu-button,
+.workspace-drawer__close {
+  border-radius: 8px;
+}
+
+.brand-mark {
+  border-color: rgba(57, 255, 136, 0.34);
+  background:
+    linear-gradient(180deg, rgba(26, 52, 38, 0.96), rgba(16, 28, 22, 0.96));
+  box-shadow: 0 0 0 1px rgba(57, 255, 136, 0.18);
+}
+
+.workspace-nav__item {
+  min-height: 54px;
+  padding: 10px 11px;
+  background: linear-gradient(180deg, rgba(18, 24, 30, 0.82), rgba(11, 16, 20, 0.82));
+}
+
+.workspace-nav__item:hover {
+  transform: none;
+  border-color: rgba(57, 255, 136, 0.24);
+  background: linear-gradient(180deg, rgba(22, 30, 36, 0.94), rgba(12, 18, 23, 0.92));
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.workspace-nav__item--active {
+  border-color: rgba(57, 255, 136, 0.32);
+  border-left-color: var(--accent-green);
+  background:
+    linear-gradient(180deg, rgba(20, 35, 29, 0.94), rgba(12, 19, 16, 0.92));
+  box-shadow: inset 0 0 0 1px rgba(57, 255, 136, 0.12);
+}
+
+.command-button {
+  border-color: rgba(57, 255, 136, 0.28);
+  background: linear-gradient(180deg, rgba(27, 59, 43, 0.98), rgba(16, 37, 27, 0.98));
+  color: #effff7;
+}
+
+.secondary-command-button,
+.workspace-menu-button,
+.workspace-drawer__close {
+  border-color: rgba(170, 180, 190, 0.22);
+  background: linear-gradient(180deg, rgba(22, 29, 35, 0.96), rgba(14, 19, 24, 0.96));
+  color: var(--text-secondary);
+}
+
+.command-button:hover,
+.secondary-command-button:hover,
+.workspace-menu-button:hover {
+  transform: none;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 2.9vw, 2.6rem);
+  font-weight: 760;
+  line-height: 1.05;
+  color: #f9fcff;
+}
+
+h2 {
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 0.92rem;
+  font-weight: 680;
+}
+
+.workspace-nav__label,
+.status-chip strong,
+.metric-cell strong,
+.telemetry-card strong,
+.zone-summary-card strong {
+  color: #f9fcff;
+}
+
+.overview-pill--nominal,
+.status-dot--online,
+.status-dot--ready,
+.status-dot--normal,
+.status-dot--nominal {
+  color: var(--accent-green);
+}
+
+.status-dot,
+.status-chip,
+.overview-pill,
+.connector-status-pill,
+.sii-source-chip,
+.drift-row__flag {
+  box-shadow: none !important;
+}
+
+.top-status {
+  border-bottom-color: rgba(170, 180, 190, 0.12);
+  background: linear-gradient(180deg, rgba(10, 14, 17, 0.95), rgba(8, 11, 14, 0.93));
+}
+
+.data-table th {
+  background: rgba(13, 18, 22, 0.96);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(57, 255, 136, 0.05);
+}
+
+.mini-series__bar--online,
+.mini-series__bar--ready,
+.mini-series__bar--normal,
+.mini-series__bar--nominal {
+  background: linear-gradient(180deg, rgba(57, 255, 136, 0.98), rgba(35, 132, 82, 0.86));
+}
+
+@media (max-width: 760px) {
+  .ops-panel,
+  .workspace-grid--systems .ops-panel,
+  .workspace-grid--intake .ops-panel,
+  .workspace-grid--evidence .ops-panel,
+  .workspace-grid--console .ops-panel {
+    padding: 14px;
+  }
+
+  .workspace-nav__item,
+  .command-button,
+  .secondary-command-button,
+  .workspace-menu-button,
+  .workspace-drawer__close {
+    min-height: 48px;
+  }
+}
