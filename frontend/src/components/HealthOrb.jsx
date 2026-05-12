@@ -55,12 +55,12 @@ function clamp(value, min, max) {
 
 function toneMeta(systemState) {
   if (systemState === "drift") {
-    return { className: "health-orb--drift", hue: "#f3bb47", coreOpacity: 0.9 };
+    return { className: "health-orb--drift", hue: "#ffbf3f", coreOpacity: 0.9 };
   }
   if (systemState === "separation") {
-    return { className: "health-orb--separation", hue: "#ff4d52", coreOpacity: 0.94 };
+    return { className: "health-orb--separation", hue: "#ff3b46", coreOpacity: 0.94 };
   }
-  return { className: "health-orb--stable", hue: "#a7ff3c", coreOpacity: 0.88 };
+  return { className: "health-orb--stable", hue: "#b8ff36", coreOpacity: 0.88 };
 }
 
 function transformNode(node, systemState, intensity) {
