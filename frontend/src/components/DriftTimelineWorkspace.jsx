@@ -99,12 +99,12 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
             <strong>{liveOps.facilityStateLabel}</strong>
           </div>
           <div>
-            <span>Velocity</span>
-            <strong>{formatSigned(last.velocity)} sigma/step</strong>
+            <span>Rate of change</span>
+            <strong>{formatSigned(last.velocity)} baseline units/sample</strong>
           </div>
           <div>
-            <span>Acceleration</span>
-            <strong>{formatSigned(last.acceleration)} sigma/step^2</strong>
+            <span>Change in rate</span>
+            <strong>{formatSigned(last.acceleration)} baseline units/sample^2</strong>
           </div>
         </div>
         <div className="timeline-stats">
