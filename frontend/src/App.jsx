@@ -9,6 +9,7 @@ import EvidenceTrailWorkspace from "./components/EvidenceTrailWorkspace";
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
 import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
+import FleetWorkspace from "./components/FleetWorkspace";
 import {
   CompactList,
   EmptyState,
@@ -58,6 +59,12 @@ const WORKSPACES = [
     label: "Evidence Trail",
     eyebrow: "Run History",
     description: "Replay prior runs and export historical evidence reports.",
+  },
+  {
+    id: "fleet-view",
+    label: "Fleet View",
+    eyebrow: "Multi-Site Ops",
+    description: "Fleet-level status, priority queue, and replay escalation log.",
   },
 ];
 
@@ -135,6 +142,7 @@ function App() {
   const [latestUploadResult, setLatestUploadResult] = useState(null); 
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot()); 
   const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
+  const [preferredEvidenceRunId, setPreferredEvidenceRunId] = useState(null);
   const [selectedTopologyTarget, setSelectedTopologyTarget] = useState(null);
   const [driftHistory, setDriftHistory] = useState([]);
   const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
@@ -525,6 +533,25 @@ function App() {
           isDemoMode={isDemoMode}
           demoScenario={demoScenario}
           telemetryTick={telemetryTick}
+          preferredRunId={preferredEvidenceRunId}
+        />
+      );
+    }
+
+    if (activeWorkspace === "fleet-view") {
+      return (
+        <FleetWorkspace
+          liveOps={liveOps}
+          latestUploadSnapshot={latestUploadSnapshot}
+          driftHistory={driftHistory}
+          isDemoMode={isDemoMode}
+          demoScenario={demoScenario}
+          telemetryTick={telemetryTick}
+          onOpenFacility={(facility) => {
+            setPreferredEvidenceRunId(facility?.runId ?? null);
+            setActiveWorkspace("historical-replay");
+            setIsWorkspaceMenuOpen(false);
+          }}
         />
       );
     }

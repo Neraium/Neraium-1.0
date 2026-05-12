@@ -10398,3 +10398,87 @@ nav[aria-label="Workspaces"] a {
   font-size: 0.78rem;
   color: #effdf7;
 }
+
+/* Fleet view */
+.fleet-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fleet-card {
+  border: 1px solid rgba(160, 186, 176, 0.2);
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: rgba(13, 21, 18, 0.9);
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fleet-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.fleet-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fleet-card__top strong {
+  font-size: 0.88rem;
+}
+
+.fleet-card__top span {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(222, 242, 232, 0.85);
+}
+
+.fleet-card p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.fleet-card__meta {
+  color: rgba(188, 211, 201, 0.78);
+  font-size: 0.74rem !important;
+}
+
+.fleet-card--nominal {
+  border-color: rgba(129, 224, 179, 0.34);
+}
+
+.fleet-card--review {
+  border-color: rgba(242, 194, 116, 0.42);
+}
+
+.fleet-card--elevated,
+.fleet-card--unstable {
+  border-color: rgba(238, 120, 126, 0.5);
+}
+
+.fleet-log {
+  display: grid;
+  gap: 8px;
+}
+
+.fleet-log p {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(162, 185, 175, 0.18);
+  background: rgba(12, 19, 16, 0.82);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .fleet-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

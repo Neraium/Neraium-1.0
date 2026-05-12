@@ -80,6 +80,7 @@ export default function EvidenceTrailWorkspace({
   isDemoMode = false,
   demoScenario = "drift",
   telemetryTick = 0,
+  preferredRunId = null,
 }) {
   const [runs, setRuns] = useState([]);
   const [latestRun, setLatestRun] = useState(null);
@@ -87,6 +88,13 @@ export default function EvidenceTrailWorkspace({
   const [selectedRun, setSelectedRun] = useState(null);
   const [exportBody, setExportBody] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!preferredRunId) {
+      return;
+    }
+    setSelectedRunId(preferredRunId);
+  }, [preferredRunId]);
 
   useEffect(() => {
     if (!isDemoMode) {
