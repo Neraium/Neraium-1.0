@@ -59,6 +59,31 @@ function toneRank(tone) {
   return 0;
 }
 
+function detectChangePointWindows(history) {
+  if (!Array.isArray(history) || history.length < 4) {
+    return [];
+  }
+  const windows = [];
+  for (let idx = 2; idx < history.length; idx += 1) {
+    const current = history[idx];
+    const previous = history[idx - 1];
+    const prevToneRank = toneRank(previous?.tone);
+    const toneDelta = toneRank(current?.tone) - prevToneRank;
+    const velocity = Math.abs(toFinite(current?.velocity));
+    const acceleration = Math.abs(toFinite(current?.acceleration));
+    const isSharpShift = velocity >= 0.035 || acceleration >= 0.03;
+    if (toneDelta > 0 || isSharpShift) {
+      windows.push({
+        index: idx,
+        reason: toneDelta > 0
+          ? `Severity transition: ${modeFromTone(previous?.tone)} -> ${modeFromTone(current?.tone)}`
+          : `Change-point spike detected (|v|=${velocity.toFixed(3)}, |a|=${acceleration.toFixed(3)})`,
+      });
+    }
+  }
+  return windows;
+}
+
 export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoReplay }) {
   const [simTick, setSimTick] = useState(0);
   const [replayHistory, setReplayHistory] = useState(null);
@@ -91,6 +116,8 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
     let cancelled = false;
     let cursor = Math.min(3, source.length);
     let pauseUntil = 0;
+    const changeWindows = detectChangePointWindows(source);
+    let windowCursor = 0;
 
     function applyReplayFrame() {
       if (cancelled) {
@@ -118,20 +145,20 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
         return;
       }
 
-      const previous = source[cursor - 1];
       const next = source[cursor];
-      const prevRank = toneRank(previous?.tone);
-      const nextRank = toneRank(next?.tone);
       cursor += 1;
       applyReplayFrame();
 
-      if (nextRank > prevRank) {
-        const from = modeFromTone(previous?.tone);
-        const to = modeFromTone(next?.tone);
-        setReplaySignal(`Transition detected: ${from} -> ${to}. Pausing replay.`);
-        pauseUntil = Date.now() + 900;
+      const activeWindow = changeWindows[windowCursor];
+      if (activeWindow && cursor - 1 >= activeWindow.index) {
+        setReplaySignal(`${activeWindow.reason}. Pausing replay.`);
+        pauseUntil = Date.now() + 950;
+        windowCursor += 1;
       } else if (cursor >= source.length) {
         setReplaySignal("Replay complete (CSV-derived).");
+      } else if (toneRank(next?.tone) > toneRank(source[Math.max(0, cursor - 2)]?.tone)) {
+        setReplaySignal(`Severity transition detected at ${next?.stamp ?? "current sample"}.`);
+        pauseUntil = Date.now() + 900;
       } else {
         setReplaySignal("");
       }
