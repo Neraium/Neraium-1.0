@@ -525,7 +525,15 @@ function App() {
             <button
               className={`secondary-command-button mobile-demo-controls__toggle ${isDemoMode ? "is-active" : ""}`}
               type="button"
-              onClick={() => setIsDemoMode((current) => !current)}
+              onClick={() => {
+                setIsDemoMode((current) => {
+                  const next = !current;
+                  if (next) {
+                    setDemoScenario("stable");
+                  }
+                  return next;
+                });
+              }}
             >
               {isDemoMode ? "Sample On" : "Sample Off"}
             </button>
@@ -577,7 +585,15 @@ function App() {
           timeCoverage={timeCoverage} 
           liveOps={liveOps} 
           isDemoMode={isDemoMode}
-          onToggleDemoMode={() => setIsDemoMode((current) => !current)}
+          onToggleDemoMode={() => {
+            setIsDemoMode((current) => {
+              const next = !current;
+              if (next) {
+                setDemoScenario("stable");
+              }
+              return next;
+            });
+          }}
           demoScenario={demoScenario}
           onSetDemoScenario={setDemoScenario}
         /> 

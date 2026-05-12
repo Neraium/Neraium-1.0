@@ -10334,3 +10334,67 @@ nav[aria-label="Workspaces"] a {
     animation: none !important;
   }
 }
+
+/* Evidence technical tab */
+.evidence-tabs {
+  display: inline-flex;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.evidence-tab {
+  border: 1px solid rgba(163, 198, 185, 0.28);
+  background: rgba(15, 24, 21, 0.86);
+  color: #cfe7de;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.evidence-tab--active {
+  border-color: color-mix(in srgb, var(--accent-brand) 54%, transparent);
+  color: #ecfff8;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--accent-brand) 20%, transparent), transparent 58%),
+    linear-gradient(180deg, rgba(22, 35, 30, 0.96), rgba(12, 20, 17, 0.98));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.technical-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.technical-bars__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.1fr) minmax(0, 2fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.technical-bars__row span {
+  color: #c9ddd5;
+  font-size: 0.78rem;
+}
+
+.technical-bars__track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(115, 143, 131, 0.26);
+  overflow: hidden;
+}
+
+.technical-bars__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(162, 255, 221, 0.66), rgba(123, 224, 192, 0.92));
+}
+
+.technical-bars__row strong {
+  font-size: 0.78rem;
+  color: #effdf7;
+}
