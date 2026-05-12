@@ -7,33 +7,49 @@ from app.services.cultivation_mapping import category_for_column
 
 
 DRIVER_LABELS = {
-    "humidity_control": "Humidity control instability",
-    "hvac_instability": "Room temperature control instability",
-    "airflow_restriction": "Airflow restriction",
-    "irrigation_timing": "Irrigation timing response",
-    "lighting_schedule": "Lighting schedule influence",
-    "sensor_network": "Sensor network continuity",
-    "unknown_system_drift": "Unclear room system trend",
+    "moisture_control": "Moisture signal instability",
+    "thermal_control": "Thermal signal instability",
+    "flow_restriction": "Flow signal restriction",
+    "process_timing": "Process timing response",
+    "energy_schedule": "Energy/schedule influence",
+    "sensor_network": "Sensor/network continuity",
+    # legacy aliases kept for compatibility with existing downstream logic
+    "humidity_control": "Moisture signal instability",
+    "hvac_instability": "Thermal signal instability",
+    "airflow_restriction": "Flow signal restriction",
+    "irrigation_timing": "Process timing response",
+    "lighting_schedule": "Energy/schedule influence",
+    "unknown_system_drift": "Unclear system trend",
 }
 
 NEXT_MOVES = {
-    "humidity_control": "Check dehumidification, airflow, and room sealing",
-    "hvac_instability": "Check room temperature setpoints, HVAC activity, and recovery timing",
-    "airflow_restriction": "Check fans, filters, vents, and room pressure balance",
-    "irrigation_timing": "Check feed timing, runoff response, and post-feed room conditions",
-    "lighting_schedule": "Check photoperiod schedule, fixture timing, and heat response",
-    "sensor_network": "Check sensor sync, gateway status, and stale room readings",
-    "unknown_system_drift": "Collect more room telemetry before assigning a likely driver",
+    "moisture_control": "Check moisture control setpoints, environmental coupling, and recovery timing",
+    "thermal_control": "Check thermal control setpoints and recovery timing",
+    "flow_restriction": "Check circulation/flow paths, filters, and pressure balance",
+    "process_timing": "Check timing/scheduling around process transitions",
+    "energy_schedule": "Check schedule timing and correlated energy/thermal responses",
+    "sensor_network": "Check sensor sync, gateway status, and stale readings",
+    "humidity_control": "Check moisture control setpoints, environmental coupling, and recovery timing",
+    "hvac_instability": "Check thermal control setpoints and recovery timing",
+    "airflow_restriction": "Check circulation/flow paths, filters, and pressure balance",
+    "irrigation_timing": "Check timing/scheduling around process transitions",
+    "lighting_schedule": "Check schedule timing and correlated energy/thermal responses",
+    "unknown_system_drift": "Collect more telemetry coverage before assigning a likely driver",
 }
 
 CATEGORY_SIGNALS = {
-    "humidity_control": ["humidity", "HVAC", "airflow"],
-    "hvac_instability": ["temperature", "HVAC", "humidity"],
-    "airflow_restriction": ["airflow", "HVAC", "humidity"],
-    "irrigation_timing": ["irrigation", "humidity", "temperature"],
-    "lighting_schedule": ["lighting", "temperature"],
-    "sensor_network": ["sensor network", "timestamps", "room data"],
-    "unknown_system_drift": ["room telemetry"],
+    "moisture_control": ["moisture", "thermal", "flow"],
+    "thermal_control": ["thermal", "energy", "moisture"],
+    "flow_restriction": ["flow", "thermal", "moisture"],
+    "process_timing": ["timing", "flow", "thermal"],
+    "energy_schedule": ["energy", "timing"],
+    "sensor_network": ["network", "timestamps", "telemetry"],
+    "humidity_control": ["moisture", "thermal", "flow"],
+    "hvac_instability": ["thermal", "energy", "moisture"],
+    "airflow_restriction": ["flow", "thermal", "moisture"],
+    "irrigation_timing": ["timing", "flow", "thermal"],
+    "lighting_schedule": ["energy", "timing"],
+    "unknown_system_drift": ["telemetry"],
 }
 
 
@@ -146,17 +162,17 @@ def score_baseline_drift(
             persistent=persistent,
         )
 
-        if category == "humidity_control" and has_related_column(column_to_category, "HVAC"):
-            scores["hvac_instability"].add(
+        if category == "moisture_control" and has_related_column(column_to_category, "thermal"):
+            scores["thermal_control"].add(
                 0.75,
-                "Humidity movement overlaps with HVAC context",
-                "HVAC",
+                "Moisture movement overlaps with thermal context",
+                "thermal",
             )
-        if category == "hvac_instability" and has_related_column(column_to_category, "humidity"):
-            scores["humidity_control"].add(
+        if category == "thermal_control" and has_related_column(column_to_category, "moisture"):
+            scores["moisture_control"].add(
                 0.75,
-                "Room temperature movement overlaps with humidity context",
-                "humidity",
+                "Thermal movement overlaps with moisture context",
+                "moisture",
             )
 
 
@@ -188,15 +204,15 @@ def score_relationship_pair(
     categories: set[str],
     evidence: str,
 ) -> None:
-    if {"humidity_control", "hvac_instability"} <= categories:
-        scores["humidity_control"].add(2, "Humidity recovery is becoming less stable after environmental transitions", "humidity", relationship_change=True)
-        scores["hvac_instability"].add(1, evidence, "HVAC", relationship_change=True)
-    if {"airflow_restriction", "hvac_instability"} <= categories or {"airflow_restriction", "humidity_control"} <= categories:
-        scores["airflow_restriction"].add(2, "Air movement behavior became less consistent during changing room conditions", "airflow", relationship_change=True)
-    if "irrigation_timing" in categories and ("humidity_control" in categories or "hvac_instability" in categories):
-        scores["irrigation_timing"].add(2, "Room recovery behavior is changing around irrigation-related signals", "irrigation", relationship_change=True)
-    if {"lighting_schedule", "hvac_instability"} <= categories:
-        scores["lighting_schedule"].add(2, "Lighting and room temperature response became less consistent", "lighting", relationship_change=True)
+    if {"moisture_control", "thermal_control"} <= categories:
+        scores["moisture_control"].add(2, "Moisture recovery is becoming less stable after environmental transitions", "moisture", relationship_change=True)
+        scores["thermal_control"].add(1, evidence, "thermal", relationship_change=True)
+    if {"flow_restriction", "thermal_control"} <= categories or {"flow_restriction", "moisture_control"} <= categories:
+        scores["flow_restriction"].add(2, "Flow behavior became less consistent during changing conditions", "flow", relationship_change=True)
+    if "process_timing" in categories and ("moisture_control" in categories or "thermal_control" in categories):
+        scores["process_timing"].add(2, "Recovery behavior is changing around timing-related signals", "timing", relationship_change=True)
+    if {"energy_schedule", "thermal_control"} <= categories:
+        scores["energy_schedule"].add(2, "Energy/schedule and thermal response became less consistent", "energy", relationship_change=True)
 
 
 def score_sensor_network(
@@ -216,20 +232,20 @@ def score_sensor_network(
         sensor_score.add(2, readable_warning(warning), "timestamps")
     for warning in data_quality.get("warnings", []):
         if mentions_any(warning, ["missing", "timestamp", "stale", "parse", "sensor"]):
-            sensor_score.add(1.5, readable_warning(warning), "room data")
+            sensor_score.add(1.5, readable_warning(warning), "telemetry")
     for profile in numeric_profiles:
         if profile.get("missing_count", 0) > 0:
             sensor_score.add(
                 1.5,
-                f"{profile['column']} has missing room readings",
-                "room data",
+                f"{profile['column']} has missing readings",
+                "telemetry",
             )
     if baseline_analysis.get("warnings"):
         for warning in baseline_analysis["warnings"]:
             if mentions_any(warning, ["missing", "not enough", "numeric"]):
-                sensor_score.add(1, readable_warning(warning), "room data")
+                sensor_score.add(1, readable_warning(warning), "telemetry")
     if cultivation_mapping.get("unknown_column_count", 0) > 0:
-        sensor_score.add(0.75, "Some source columns are not mapped to cultivation systems", "room data")
+        sensor_score.add(0.75, "Some source columns are not mapped to generic signal categories", "telemetry")
 
 
 def unknown_attribution(
@@ -273,12 +289,18 @@ def build_column_category_lookup(cultivation_mapping: dict[str, Any]) -> dict[st
 def driver_category_for_column(column: str, column_to_category: dict[str, str]) -> str:
     source_category = column_to_category.get(column) or category_for_column(column)
     return {
-        "humidity": "humidity_control",
-        "temperature": "hvac_instability",
-        "HVAC": "hvac_instability",
-        "airflow": "airflow_restriction",
-        "irrigation": "irrigation_timing",
-        "lighting": "lighting_schedule",
+        "humidity": "moisture_control",
+        "thermal": "thermal_control",
+        "flow": "flow_restriction",
+        "chemical": "process_timing",
+        "energy": "energy_schedule",
+        "timing": "process_timing",
+        "location": "sensor_network",
+        "temperature": "thermal_control",
+        "HVAC": "thermal_control",
+        "airflow": "flow_restriction",
+        "irrigation": "process_timing",
+        "lighting": "energy_schedule",
         "sensor network": "sensor_network",
     }.get(source_category, "unknown_system_drift")
 
@@ -289,22 +311,22 @@ def has_related_column(column_to_category: dict[str, str], source_category: str)
 
 def signal_name_for_category(category: str) -> str:
     return {
-        "humidity_control": "humidity",
-        "hvac_instability": "HVAC",
-        "airflow_restriction": "airflow",
-        "irrigation_timing": "irrigation",
-        "lighting_schedule": "lighting",
+        "moisture_control": "moisture",
+        "thermal_control": "thermal",
+        "flow_restriction": "flow",
+        "process_timing": "timing",
+        "energy_schedule": "energy",
         "sensor_network": "sensor network",
-    }.get(category, "room telemetry")
+    }.get(category, "telemetry")
 
 
 def evidence_for_drift(category: str, column: str, persistent: bool) -> str:
     base = {
-        "humidity_control": "Humidity behavior moved away from baseline",
-        "hvac_instability": "Room temperature behavior moved away from baseline",
-        "airflow_restriction": "Air movement behavior moved away from baseline",
-        "irrigation_timing": "Irrigation response moved away from baseline",
-        "lighting_schedule": "Lighting-related readings moved away from baseline",
+        "moisture_control": "Moisture behavior moved away from baseline",
+        "thermal_control": "Thermal behavior moved away from baseline",
+        "flow_restriction": "Flow behavior moved away from baseline",
+        "process_timing": "Process timing behavior moved away from baseline",
+        "energy_schedule": "Energy/schedule-related readings moved away from baseline",
         "sensor_network": "Sensor readings moved away from expected continuity",
     }.get(category, f"{column} moved away from baseline")
     if persistent:
@@ -315,7 +337,7 @@ def evidence_for_drift(category: str, column: str, persistent: bool) -> str:
 def relationship_evidence(columns: list[str]) -> str:
     if len(columns) >= 2:
         return relationship_evidence_sentence(columns[0], columns[1])
-    return "Environmental coupling is less consistent than the room's recent baseline"
+    return "Signal coupling is less consistent than the recent baseline"
 
 
 def relationship_evidence_sentence(first_column: str, second_column: str) -> str:

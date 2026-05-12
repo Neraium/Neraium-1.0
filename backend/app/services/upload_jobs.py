@@ -621,7 +621,7 @@ def build_upload_result(
     if status_callback:
         status_callback("BASELINE_MODELING", rows_processed=total_rows, columns_detected=len(columns))
     baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
-    cultivation_mapping = map_cultivation_columns(columns)
+    schema_mapping = map_cultivation_columns(columns)
     room_summary = processing_stats.get("room_summary") or build_room_summary(columns, data_rows, total_rows)
     primary_room = primary_room_from_summary(room_summary)
     previous_upload_summary = read_upload_history(limit=1)[0] if read_upload_history(limit=1) else None
@@ -630,7 +630,7 @@ def build_upload_result(
         timestamp_profile=timestamp_profile,
         numeric_profiles=numeric_profiles,
         baseline_analysis=baseline_analysis,
-        cultivation_mapping=cultivation_mapping,
+        cultivation_mapping=schema_mapping,
     )
     if status_callback:
         status_callback("RUNNING_SII", rows_processed=total_rows, columns_detected=len(columns))
@@ -640,7 +640,7 @@ def build_upload_result(
         rows=data_rows,
         data_quality=data_quality,
         baseline_analysis=baseline_analysis,
-        cultivation_mapping=cultivation_mapping,
+        cultivation_mapping=schema_mapping,
         numeric_profiles=numeric_profiles,
     )
     processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
@@ -656,11 +656,11 @@ def build_upload_result(
             "numeric_profiles": numeric_profiles,
             "timestamp_profile": timestamp_profile,
             "data_quality": data_quality,
-            "cultivation_mapping": cultivation_mapping,
+            "cultivation_mapping": schema_mapping,
         },
         baseline_context={
             "baseline_analysis": baseline_analysis,
-            "cultivation_mapping": cultivation_mapping,
+            "cultivation_mapping": schema_mapping,
         },
         engine_result=engine_result,
     )
@@ -745,7 +745,8 @@ def build_upload_result(
         "timestamp_profile": timestamp_profile,
         "data_quality": data_quality,
         "baseline_analysis": baseline_analysis,
-        "cultivation_mapping": cultivation_mapping,
+        "cultivation_mapping": schema_mapping,
+        "schema_mapping": schema_mapping,
         "operator_report": operator_report,
         "engine_result": truncate_engine_result(engine_result),
         "driver_attribution": driver_attribution,

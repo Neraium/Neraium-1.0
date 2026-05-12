@@ -24,7 +24,7 @@ def build_operator_report(
     )
 
     return {
-        "title": "Cultivation Data Upload Report",
+        "title": "Telemetry Upload Report",
         "summary": report_summary(data_quality, baseline_analysis),
         "data_readiness": data_quality["readiness"],
         "time_coverage": {
@@ -66,18 +66,18 @@ def build_operator_report(
 def report_summary(data_quality: dict[str, Any], baseline_analysis: dict[str, Any]) -> str:
     if data_quality["readiness"] == "ready" and baseline_analysis["overall_assessment"] == "normal":
         return (
-            "The uploaded cultivation sensor export is usable for initial review. "
+            "The uploaded telemetry export is usable for initial review. "
             "Neraium found timestamp context, numeric readings, and no baseline "
             "comparison items requiring review."
         )
     if data_quality["readiness"] == "not_ready":
         return (
-            "The uploaded cultivation sensor export does not yet have enough usable "
+            "The uploaded telemetry export does not yet have enough usable "
             "structure for a reliable review. Address the listed warnings before "
             "using this file for operational comparison."
         )
     return (
-        "The uploaded cultivation sensor export can be reviewed, but one or more "
+        "The uploaded telemetry export can be reviewed, but one or more "
         "data quality or baseline comparison items need operator review."
     )
 
@@ -134,7 +134,7 @@ def key_observations(
             if category != "unknown" and mapped_columns
         ]
         observations.append(
-            "Cultivation mapping identified columns for: "
+            "Schema mapping identified columns for: "
             f"{', '.join(mapped_categories)}."
         )
 
@@ -191,7 +191,7 @@ def recommended_operator_checks(
     if timestamp_profile["warnings"]:
         checks.append("Review timestamp formatting and sampling consistency in the source export.")
     if data_quality["numeric_column_count"] == 0:
-        checks.append("Confirm the export includes numeric sensor readings such as temperature or humidity.")
+        checks.append("Confirm the export includes numeric signal readings.")
     if columns_requiring_review:
         column_names = ", ".join(item["column"] for item in columns_requiring_review)
         checks.append(f"Review source sensor channels for: {column_names}.")
@@ -211,7 +211,7 @@ def report_limitations(
     limitations = [
         "This report uses only the uploaded CSV profile and simple baseline comparison.",
         "No data is stored permanently and the Neraium engine has not been run.",
-        "This report does not identify root cause or predict crop stress, equipment failure, or yield impact.",
+        "This report does not identify root cause or predict downstream operational impact.",
     ]
     if data_quality["readiness"] != "ready":
         limitations.append("Evidence is limited because the upload has data quality items requiring review.")
