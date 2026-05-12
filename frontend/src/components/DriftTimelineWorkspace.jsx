@@ -28,6 +28,8 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
     return `${x},${y}`;
   }).join(" ");
   const recentSamples = history.slice(-6).reverse();
+  const lastUpdatedLabel = liveOps.connectionSummary || "Awaiting sync";
+  const pulseTone = hasSignal ? "nominal" : "info";
 
   return (
     <section className="drift-timeline">
@@ -68,6 +70,11 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
       </article>
 
       <article className="timeline-card">
+        <div className="topology-card__status">
+          <span className={`status-dot status-dot--${pulseTone}`} aria-hidden="true" />
+          <strong>Last updated</strong>
+          <span>{lastUpdatedLabel}</span>
+        </div>
         <div className="timeline-stats">
           {recentSamples.map((sample, index) => (
             <div key={`${sample.stamp}-${index}`}>
