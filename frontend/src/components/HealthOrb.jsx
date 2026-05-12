@@ -49,6 +49,14 @@ const FRAGMENT_SPARKS = [
   { x: 274, y: 174, r: 2.2 }, { x: 120, y: 236, r: 1.6 }, { x: 226, y: 238, r: 1.8 },
 ];
 
+const FRACTURE_RAYS = [
+  { x1: 170, y1: 132, x2: 76, y2: 88 },
+  { x1: 170, y1: 132, x2: 260, y2: 84 },
+  { x1: 170, y1: 132, x2: 92, y2: 182 },
+  { x1: 170, y1: 132, x2: 252, y2: 196 },
+  { x1: 170, y1: 132, x2: 170, y2: 238 },
+];
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -79,14 +87,14 @@ function transformNode(node, systemState, intensity) {
   }
 
   const outwardShift = node.g === "left"
-    ? { x: -46, y: 10 }
+    ? { x: -56, y: 14 }
     : node.g === "right"
-      ? { x: 48, y: 12 }
+      ? { x: 58, y: 16 }
       : node.g === "top"
-        ? { x: 0, y: -30 }
+        ? { x: 0, y: -38 }
         : node.g === "bottom"
-          ? { x: 0, y: 24 }
-          : { x: (node.x % 2 === 0 ? -10 : 12), y: (node.y % 2 === 0 ? 16 : -12) };
+          ? { x: 0, y: 30 }
+          : { x: (node.x % 2 === 0 ? -14 : 16), y: (node.y % 2 === 0 ? 20 : -16) };
 
   return {
     ...node,
@@ -105,7 +113,10 @@ function edgeVisibility(linkIndex, systemState) {
   if (linkIndex % 3 === 0) {
     return "broken";
   }
-  return linkIndex % 2 === 0 ? "faint" : "hidden";
+  if (linkIndex % 4 === 0) {
+    return "faint";
+  }
+  return "hidden";
 }
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
@@ -179,7 +190,23 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
         </g>
 
         {systemState === "separation" && (
-          <g className="health-orb__fragments">
+          <g className="health-orb__fractures">
+            {FRACTURE_RAYS.map((ray, index) => (
+              <line
+                key={`${ray.x1}-${ray.y1}-${ray.x2}-${ray.y2}`}
+                x1={ray.x1}
+                y1={ray.y1}
+                x2={ray.x2}
+                y2={ray.y2}
+                className="health-orb__fracture"
+                style={{ "--orb-delay": `${index * 120}ms` }}
+              />
+            ))}
+          </g>
+        )}
+
+        {systemState === "separation" && (
+          <g className="health-orb__fragments health-orb__fragments--separation">
             {FRAGMENT_SPARKS.map((spark, index) => (
               <circle
                 key={`${spark.x}-${spark.y}`}

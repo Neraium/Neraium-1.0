@@ -8613,6 +8613,15 @@ h1, h2, h3 {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--orb-hue) 56%, transparent));
 }
 
+.health-orb__fracture {
+  stroke: color-mix(in srgb, var(--orb-hue) 74%, white 8%);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 6 10;
+  opacity: 0.28;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--orb-hue) 50%, transparent));
+}
+
 .health-orb--stable {
   --orb-hue: #a7ff3c;
 }
@@ -8645,6 +8654,16 @@ h1, h2, h3 {
 
 .health-orb--separation.health-orb--animated .health-orb__link--broken {
   animation: healthOrbBreakPulse 1.4s linear infinite;
+}
+
+.health-orb--separation.health-orb--animated .health-orb__fracture {
+  animation: healthOrbFractureFlicker 1s steps(2, end) infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__fragments--separation .health-orb__spark {
+  animation: healthOrbSparkBurst 720ms steps(2, end) infinite;
+  animation-delay: var(--orb-delay, 0ms);
 }
 
 @keyframes healthOrbGlow {
@@ -8702,6 +8721,40 @@ h1, h2, h3 {
 
   100% {
     stroke-dashoffset: -18;
+  }
+}
+
+@keyframes healthOrbFractureFlicker {
+  0%,
+  100% {
+    opacity: 0.24;
+    stroke-dashoffset: 0;
+  }
+
+  35% {
+    opacity: 0.58;
+  }
+
+  50% {
+    opacity: 0.32;
+    stroke-dashoffset: -10;
+  }
+
+  75% {
+    opacity: 0.66;
+  }
+}
+
+@keyframes healthOrbSparkBurst {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: scale(0.84);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
   }
 }
 
