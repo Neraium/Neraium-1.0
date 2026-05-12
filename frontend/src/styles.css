@@ -8952,10 +8952,41 @@ p, span, li {
 
 .health-orb {
   max-width: 236px !important;
+  position: relative;
+  isolation: isolate;
   filter:
     drop-shadow(0 20px 30px rgba(0, 0, 0, 0.36))
     drop-shadow(0 34px 64px rgba(0, 0, 0, 0.34))
     drop-shadow(0 0 28px color-mix(in srgb, var(--orb-hue) 26%, transparent)) !important;
+}
+
+.health-orb::before {
+  content: "";
+  position: absolute;
+  inset: 8% 6%;
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      color-mix(in srgb, var(--orb-hue) 34%, white 6%) 56deg,
+      transparent 110deg,
+      color-mix(in srgb, var(--orb-hue) 22%, #8fe6ff 8%) 188deg,
+      transparent 250deg,
+      color-mix(in srgb, var(--orb-hue) 30%, white 10%) 320deg,
+      transparent 360deg
+    );
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 61%, #000 69%, transparent 72%);
+  mask: radial-gradient(circle, transparent 58%, #000 61%, #000 69%, transparent 72%);
+  opacity: 0.34;
+  transform-origin: 50% 50%;
+}
+
+.health-orb__svg {
+  position: relative;
+  z-index: 1;
 }
 
 .health-orb__aura {
@@ -9017,6 +9048,10 @@ p, span, li {
   animation: healthOrbSparkBlink 1.6s ease-in-out infinite;
 }
 
+.health-orb--animated::before {
+  animation: orbHaloRotate 18s linear infinite;
+}
+
 @media (max-width: 900px) {
   .integrity-hero__score-orb {
     width: min(204px, 58vw) !important;
@@ -9036,6 +9071,23 @@ p, span, li {
 
   .health-orb {
     max-width: min(176px, 62vw) !important;
+  }
+}
+
+@keyframes orbHaloRotate {
+  0% {
+    transform: rotate(0deg) scale(0.99);
+    opacity: 0.28;
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.01);
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: rotate(360deg) scale(0.99);
+    opacity: 0.28;
   }
 }
 
