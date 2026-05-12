@@ -61,11 +61,11 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
         ? "separation"
         : "stable";
   const simulatedHistory = buildSimulatedHistory(simulatedMode);
-  const history = driftHistory?.length
-    ? driftHistory
-    : hasSignal
-      ? [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }]
-      : simulatedHistory;
+  const history = hasSignal
+    ? (driftHistory?.length
+      ? driftHistory
+      : [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }])
+    : simulatedHistory;
   const last = history[history.length - 1];
   const scale = Math.max(...history.map((item) => Math.abs(toFinite(item.distance))), 0.01);
   const points = history.map((item, idx) => {
