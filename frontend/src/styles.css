@@ -8943,6 +8943,102 @@ p, span, li {
   }
 }
 
+/* Orb scale + premium visual pass */
+.integrity-hero__score-orb {
+  width: 236px !important;
+  height: 236px !important;
+  margin-bottom: 8px !important;
+}
+
+.health-orb {
+  max-width: 236px !important;
+  filter:
+    drop-shadow(0 20px 30px rgba(0, 0, 0, 0.36))
+    drop-shadow(0 34px 64px rgba(0, 0, 0, 0.34))
+    drop-shadow(0 0 28px color-mix(in srgb, var(--orb-hue) 26%, transparent)) !important;
+}
+
+.health-orb__aura {
+  opacity: 0.92;
+}
+
+.health-orb__shell {
+  stroke-width: 1.35;
+  opacity: 0.62;
+}
+
+.health-orb__base-ring,
+.health-orb__base-core {
+  stroke-width: 1.75;
+  opacity: 0.28;
+}
+
+.health-orb__link {
+  stroke-width: 1.8;
+  opacity: 0.78;
+}
+
+.health-orb__node {
+  opacity: 0.96;
+  filter:
+    drop-shadow(0 0 10px color-mix(in srgb, var(--orb-hue) 60%, transparent))
+    drop-shadow(0 0 20px color-mix(in srgb, var(--orb-hue) 38%, transparent));
+}
+
+.health-orb__node--core {
+  filter:
+    drop-shadow(0 0 14px color-mix(in srgb, var(--orb-hue) 74%, transparent))
+    drop-shadow(0 0 26px color-mix(in srgb, var(--orb-hue) 46%, transparent));
+}
+
+.health-orb__core {
+  opacity: 0.98;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--orb-hue) 42%, transparent));
+}
+
+.health-orb__core-hotspot {
+  opacity: 0.9;
+  filter: blur(1.6px);
+}
+
+.health-orb__spark {
+  opacity: 0.9;
+}
+
+.health-orb--animated .health-orb__aura {
+  animation: healthOrbGlow 3s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__node {
+  animation: healthOrbNodePulse 2.2s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__spark {
+  animation: healthOrbSparkBlink 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 900px) {
+  .integrity-hero__score-orb {
+    width: min(204px, 58vw) !important;
+    height: min(204px, 58vw) !important;
+  }
+
+  .health-orb {
+    max-width: min(204px, 58vw) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .integrity-hero__score-orb {
+    width: min(176px, 62vw) !important;
+    height: min(176px, 62vw) !important;
+  }
+
+  .health-orb {
+    max-width: min(176px, 62vw) !important;
+  }
+}
+
 .status-chip strong {
   margin-top: 2px;
 }
