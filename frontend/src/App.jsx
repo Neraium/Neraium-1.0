@@ -404,7 +404,7 @@ function App() {
       .filter((value) => Number.isFinite(value))
       .reduce((sum, value) => sum + Math.abs(value), 0);
     const baselineDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
-    const stamp = liveOps.connectionSummary || formatClockTime(new Date());
+    const stamp = formatClockTime(new Date());
 
     setDriftHistory((current) => {
       const velocity = current.length > 0
@@ -416,7 +416,7 @@ function App() {
       const next = [...current, { stamp, distance: baselineDistance, velocity, acceleration, tone: liveOps.facilityTone }];
       return next.slice(-48);
     });
-  }, [liveOps.connectionSummary, liveOps.driftRows, liveOps.facilityTone, liveOps.relationshipRows]);
+  }, [telemetryTick, liveOps.connectionSummary, liveOps.driftRows, liveOps.facilityTone, liveOps.relationshipRows]);
 
   useEffect(() => {
     if (workspaceRef.current) {
