@@ -137,6 +137,7 @@ function App() {
   const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
   const [selectedTopologyTarget, setSelectedTopologyTarget] = useState(null);
   const [driftHistory, setDriftHistory] = useState([]);
+  const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(() => {
     if (typeof window === "undefined") {
@@ -444,6 +445,9 @@ function App() {
 
   function handleWorkspaceSelect(workspaceId) {
     setActiveWorkspace(workspaceId);
+    if (workspaceId !== "drift-timeline" && autoReplay.active) {
+      setAutoReplay((current) => ({ ...current, active: false }));
+    }
     setIsWorkspaceMenuOpen(false);
   }
 
@@ -453,7 +457,7 @@ function App() {
     } 
  
     if (activeWorkspace === "drift-timeline") { 
-      return <DriftTimelineWorkspace liveOps={liveOps} driftHistory={driftHistory} />; 
+      return <DriftTimelineWorkspace liveOps={liveOps} driftHistory={driftHistory} autoReplay={autoReplay} />; 
     } 
 
     if (activeWorkspace === "data-connections") {
@@ -466,9 +470,17 @@ function App() {
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           onUploadComplete={async () => {
+            setIsDemoMode(false);
+            setDriftHistory([]);
             await loadLatestUploadState();
             await loadFacilitySystems();
             setEvidenceRefreshKey((current) => current + 1);
+            setActiveWorkspace("drift-timeline");
+            setAutoReplay((current) => ({
+              key: current.key + 1,
+              targetTone: "nominal",
+              active: true,
+            }));
           }}
           formatClockTime={formatClockTime}
         />

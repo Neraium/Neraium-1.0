@@ -47,12 +47,101 @@ function buildSimulatedHistory(mode, phase = 0) {
   return points;
 }
 
-export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
+function modeFromTone(tone) {
+  if (tone === "review") return "drift";
+  if (tone === "elevated" || tone === "unstable") return "separation";
+  return "stable";
+}
+
+function toneRank(tone) {
+  if (tone === "unstable" || tone === "elevated") return 2;
+  if (tone === "review") return 1;
+  return 0;
+}
+
+export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoReplay }) {
   const [simTick, setSimTick] = useState(0);
+  const [replayHistory, setReplayHistory] = useState(null);
+  const [replaySignal, setReplaySignal] = useState("");
+  const [replayModeLabel, setReplayModeLabel] = useState("");
+
   useEffect(() => {
     const timer = setInterval(() => setSimTick((value) => value + 1), 1200);
     return () => clearInterval(timer);
   }, []);
+
+  const replayTargetMode = modeFromTone(autoReplay?.targetTone ?? liveOps.facilityTone);
+
+  useEffect(() => {
+    if (!autoReplay?.active) {
+      setReplayHistory(null);
+      setReplaySignal("");
+      setReplayModeLabel("");
+      return;
+    }
+
+    const source = (driftHistory ?? []).slice(-36);
+    if (source.length < 2) {
+      setReplayHistory(null);
+      setReplayModeLabel(modeFromTone(liveOps.facilityTone));
+      setReplaySignal("Replay waiting for enough CSV-derived telemetry history.");
+      return;
+    }
+
+    let cancelled = false;
+    let cursor = Math.min(3, source.length);
+    let pauseUntil = 0;
+
+    function applyReplayFrame() {
+      if (cancelled) {
+        return;
+      }
+      const nextHistory = source.slice(0, cursor);
+      setReplayHistory(nextHistory);
+      setReplayModeLabel(modeFromTone(nextHistory[nextHistory.length - 1]?.tone));
+    }
+
+    applyReplayFrame();
+
+    const interval = setInterval(() => {
+      if (cancelled) {
+        return;
+      }
+
+      const now = Date.now();
+      if (pauseUntil > now) {
+        return;
+      }
+
+      if (cursor >= source.length) {
+        setReplaySignal("Replay complete (CSV-derived).");
+        return;
+      }
+
+      const previous = source[cursor - 1];
+      const next = source[cursor];
+      const prevRank = toneRank(previous?.tone);
+      const nextRank = toneRank(next?.tone);
+      cursor += 1;
+      applyReplayFrame();
+
+      if (nextRank > prevRank) {
+        const from = modeFromTone(previous?.tone);
+        const to = modeFromTone(next?.tone);
+        setReplaySignal(`Transition detected: ${from} -> ${to}. Pausing replay.`);
+        pauseUntil = Date.now() + 900;
+      } else if (cursor >= source.length) {
+        setReplaySignal("Replay complete (CSV-derived).");
+      } else {
+        setReplaySignal("");
+      }
+    }, 320);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [autoReplay?.active, autoReplay?.key, driftHistory, liveOps.facilityTone]);
 
   const relationshipMagnitude = (liveOps.relationshipRows ?? [])
     .map((row) => toFinite(row.pair_weight ?? row.change))
@@ -62,19 +151,14 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
     .reduce((sum, value) => sum + Math.abs(value), 0);
   const currentDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
   const hasSignal = relationshipMagnitude > 0 || driftMagnitude > 0;
-  const simulatedMode = liveOps.facilityTone === "nominal"
-    ? "stable"
-    : liveOps.facilityTone === "review"
-      ? "drift"
-      : liveOps.facilityTone === "elevated" || liveOps.facilityTone === "unstable"
-        ? "separation"
-        : "stable";
+  const simulatedMode = modeFromTone(liveOps.facilityTone);
   const simulatedHistory = buildSimulatedHistory(simulatedMode, simTick);
-  const history = hasSignal
+  const baseHistory = hasSignal
     ? (driftHistory?.length
       ? driftHistory
       : [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }])
     : simulatedHistory;
+  const history = replayHistory ?? baseHistory;
   const last = history[history.length - 1];
   const scale = Math.max(...history.map((item) => Math.abs(toFinite(item.distance))), 0.01);
   const points = history.map((item, idx) => {
@@ -84,7 +168,10 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
   }).join(" ");
   const recentSamples = history.slice(-6).reverse();
   const lastUpdatedLabel = liveOps.connectionSummary || "Awaiting sync";
-  const pulseTone = hasSignal ? "nominal" : "review";
+  const pulseTone = replayHistory ? "review" : (hasSignal ? "nominal" : "review");
+  const timelineSignalLabel = replayHistory
+    ? `Replay ${replayModeLabel || replayTargetMode} (CSV)`
+    : (hasSignal ? "Live" : `Simulated ${simulatedMode}`);
 
   return (
     <section className="drift-timeline">
@@ -119,7 +206,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
         <div className="timeline-stats">
           <div>
             <span>Timeline signal</span>
-            <strong>{hasSignal ? "Live" : `Simulated ${simulatedMode}`}</strong>
+            <strong>{timelineSignalLabel}</strong>
           </div>
         </div>
       </article>
@@ -138,9 +225,14 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
             </div>
           ))}
         </div>
-        {!hasSignal && (
+        {!hasSignal && !replayHistory && (
           <p className="timeline-item__time">
             Simulated trajectory is shown while telemetry is unavailable. Upload telemetry or run demo mode for live behavior.
+          </p>
+        )}
+        {replaySignal && (
+          <p className="timeline-item__time">
+            {replaySignal}
           </p>
         )}
       </article>
