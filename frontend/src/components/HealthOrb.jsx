@@ -55,10 +55,10 @@ function clamp(value, min, max) {
 
 function toneMeta(systemState) {
   if (systemState === "drift") {
-    return { className: "health-orb--drift", hue: "#ffbf3f", coreOpacity: 0.9 };
+    return { className: "health-orb--drift", hue: "#ffc94a", coreOpacity: 0.9 };
   }
   if (systemState === "separation") {
-    return { className: "health-orb--separation", hue: "#ff3b46", coreOpacity: 0.94 };
+    return { className: "health-orb--separation", hue: "#e2333f", coreOpacity: 0.94 };
   }
   return { className: "health-orb--stable", hue: "#b8ff36", coreOpacity: 0.88 };
 }
