@@ -8846,6 +8846,103 @@ p, span, li {
   border-bottom-color: rgba(162, 214, 197, 0.14);
 }
 
+/* Premium typography hierarchy pass */
+.top-status__title h1 {
+  font-size: clamp(2rem, 2.2vw, 2.8rem) !important;
+  line-height: 1.02 !important;
+  letter-spacing: 0.01em !important;
+  margin: 6px 0 10px !important;
+}
+
+.top-status__title p {
+  font-size: 0.98rem !important;
+  line-height: 1.6 !important;
+  max-width: 72ch;
+}
+
+.eyebrow,
+.sidebar-kicker,
+.section-token {
+  font-size: 0.68rem !important;
+  letter-spacing: 0.16em !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+}
+
+.ops-panel__header h2,
+.system-body__header h2,
+.drift-timeline__header h2,
+.evidence-console-view__header h2 {
+  font-size: clamp(1.25rem, 1.4vw, 1.85rem) !important;
+  line-height: 1.08 !important;
+  letter-spacing: 0.01em !important;
+  margin: 6px 0 8px !important;
+}
+
+.ops-panel__header {
+  gap: 8px !important;
+  padding-bottom: 12px !important;
+}
+
+.ops-panel__body {
+  gap: 14px;
+}
+
+.workspace-nav__label {
+  font-size: 0.96rem !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+.workspace-nav__detail {
+  font-size: 0.8rem !important;
+  line-height: 1.45 !important;
+  color: #bad7cb !important;
+}
+
+.metric-cell strong,
+.timeline-stats strong,
+.top-status__brief strong {
+  font-size: clamp(1rem, 1.1vw, 1.24rem) !important;
+  line-height: 1.12 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.metric-cell span,
+.timeline-stats span,
+.top-status__brief span {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+}
+
+.timeline-item p,
+.feed-item p,
+.evidence-block p,
+.evidence-block li {
+  font-size: 0.9rem !important;
+  line-height: 1.58 !important;
+}
+
+.platform-workspace {
+  padding-top: 26px !important;
+}
+
+@media (max-width: 900px) {
+  .top-status__title h1 {
+    font-size: clamp(1.65rem, 5.4vw, 2.1rem) !important;
+  }
+
+  .ops-panel__header h2,
+  .system-body__header h2,
+  .drift-timeline__header h2,
+  .evidence-console-view__header h2 {
+    font-size: clamp(1.1rem, 4.2vw, 1.45rem) !important;
+  }
+}
+
 .status-chip strong {
   margin-top: 2px;
 }
