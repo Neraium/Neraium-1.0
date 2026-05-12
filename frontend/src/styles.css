@@ -9799,3 +9799,12 @@ nav[aria-label="Workspaces"] a {
     overflow-x: hidden !important;
   }
 }
+
+/* Brand wordmark enhancement for top status bar */
+.mobile-status-bar__copy .brand-name.brand-name--hero {
+  font-size: clamp(1.15rem, 1rem + 0.9vw, 1.6rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}

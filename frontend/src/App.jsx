@@ -516,9 +516,8 @@ function App() {
       <div className="platform-main">
         <header className="mobile-status-bar">
           <div className="mobile-status-bar__brand">
-            <div className="brand-mark">N</div>
             <div className="mobile-status-bar__copy">
-              <p className="brand-name">Neraium</p>
+              <p className="brand-name brand-name--hero">Neraium</p>
               <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
             </div>
           </div>
