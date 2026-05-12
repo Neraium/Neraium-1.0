@@ -9150,6 +9150,10 @@ p, span, li {
   opacity: 0.78;
 }
 
+.health-orb--neutral .health-orb__aura {
+  opacity: 0.52;
+}
+
 .health-orb--drift .health-orb__aura {
   opacity: 0.94;
 }
@@ -9227,6 +9231,13 @@ p, span, li {
     !important;
 }
 
+.health-orb--neutral {
+  filter:
+    drop-shadow(0 12px 20px rgba(0, 0, 0, 0.24))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--orb-hue) 12%, transparent))
+    !important;
+}
+
 .health-orb--drift {
   filter:
     drop-shadow(0 20px 32px rgba(0, 0, 0, 0.36))
@@ -9243,6 +9254,10 @@ p, span, li {
 
 .health-orb--stable::before {
   opacity: 0.2;
+}
+
+.health-orb--neutral::before {
+  opacity: 0.14;
 }
 
 .health-orb--drift::before {

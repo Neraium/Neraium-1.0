@@ -62,6 +62,9 @@ function clamp(value, min, max) {
 }
 
 function toneMeta(systemState) {
+  if (systemState === "neutral") {
+    return { className: "health-orb--neutral", hue: "#9aa3ad", coreOpacity: 0.7 };
+  }
   if (systemState === "drift") {
     return { className: "health-orb--drift", hue: "#ffc94a", coreOpacity: 0.9 };
   }
@@ -72,7 +75,7 @@ function toneMeta(systemState) {
 }
 
 function transformNode(node, systemState, intensity) {
-  if (systemState === "stable") {
+  if (systemState === "stable" || systemState === "neutral") {
     return node;
   }
 
@@ -104,7 +107,7 @@ function transformNode(node, systemState, intensity) {
 }
 
 function edgeVisibility(linkIndex, systemState) {
-  if (systemState === "stable") {
+  if (systemState === "stable" || systemState === "neutral") {
     return "solid";
   }
   if (systemState === "drift") {
@@ -120,6 +123,9 @@ function edgeVisibility(linkIndex, systemState) {
 }
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
+  const isSeparation = systemState === "separation";
+  const isDrift = systemState === "drift";
+  const isStable = systemState === "stable" || systemState === "neutral";
   const normalizedIntensity = clamp(Number(intensity) || 0, 0, 1);
   const tone = toneMeta(systemState);
   const nodes = ORB_NODES.map((node) => transformNode(node, systemState, normalizedIntensity));
@@ -143,7 +149,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
             <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
           </radialGradient>
           <clipPath id="orbSphereMask">
-            <circle cx="170" cy="132" r={systemState === "separation" ? 92 : 88} />
+            <circle cx="170" cy="132" r={isSeparation ? 92 : 88} />
           </clipPath>
         </defs>
 
@@ -154,10 +160,10 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           <ellipse cx="170" cy="258" rx="138" ry="28" className="health-orb__base-ring" />
         </g>
 
-        <circle cx="170" cy="132" r={systemState === "separation" ? 98 : 92} className="health-orb__aura" />
-        <circle cx="170" cy="132" r={systemState === "stable" ? 89 : systemState === "drift" ? 92 : 96} className="health-orb__shell" />
+        <circle cx="170" cy="132" r={isSeparation ? 98 : 92} className="health-orb__aura" />
+        <circle cx="170" cy="132" r={isStable ? 89 : isDrift ? 92 : 96} className="health-orb__shell" />
 
-        <g className="health-orb__field" clipPath={systemState === "separation" ? undefined : "url(#orbSphereMask)"}>
+        <g className="health-orb__field" clipPath={isSeparation ? undefined : "url(#orbSphereMask)"}>
           {ORB_LINKS.map(([from, to], index) => {
             const n1 = nodeMap[from];
             const n2 = nodeMap[to];
@@ -189,7 +195,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           ))}
         </g>
 
-        {systemState === "separation" && (
+        {isSeparation && (
           <g className="health-orb__fractures">
             {FRACTURE_RAYS.map((ray, index) => (
               <line
@@ -205,7 +211,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           </g>
         )}
 
-        {systemState === "separation" && (
+        {isSeparation && (
           <g className="health-orb__fragments health-orb__fragments--separation">
             {FRAGMENT_SPARKS.map((spark, index) => (
               <circle

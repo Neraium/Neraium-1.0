@@ -35,6 +35,8 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     ? "stable"
     : liveOps.facilityTone === "review"
       ? "drift"
+      : liveOps.facilityTone === "info"
+        ? "neutral"
       : "separation";
   const findings = liveOps.findings?.slice(0, 2) ?? [];
   const primaryMessage = findings[0]?.detail ?? state.description;
