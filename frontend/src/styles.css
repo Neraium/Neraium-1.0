@@ -9091,6 +9091,36 @@ p, span, li {
   }
 }
 
+/* Drift timeline readability guardrails */
+.drift-timeline .drift-timeline__header h2 {
+  font-size: clamp(1.24rem, 1.35vw, 1.62rem) !important;
+  line-height: 1.12 !important;
+  letter-spacing: 0.008em !important;
+}
+
+.drift-timeline .drift-timeline__header p {
+  font-size: 0.9rem !important;
+  line-height: 1.5 !important;
+  color: #c7d8d1 !important;
+}
+
+.drift-timeline .timeline-stats span {
+  font-size: 0.7rem !important;
+  letter-spacing: 0.08em !important;
+}
+
+.drift-timeline .timeline-stats strong {
+  font-size: 0.96rem !important;
+  line-height: 1.2 !important;
+}
+
+.drift-timeline .timeline-item__time {
+  font-size: 0.84rem !important;
+  line-height: 1.45 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
 .status-chip strong {
   margin-top: 2px;
 }
