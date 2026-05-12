@@ -143,11 +143,21 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
             <stop offset="58%" stopColor="var(--orb-hue)" stopOpacity="0.1" />
             <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
           </radialGradient>
+          <radialGradient id="orbSpecularBloom" cx="34%" cy="24%" r="48%">
+            <stop offset="0%" stopColor="white" stopOpacity="0.28" />
+            <stop offset="52%" stopColor="white" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </radialGradient>
           <radialGradient id="orbCoreGlow" cx="50%" cy="50%" r="54%">
             <stop offset="0%" stopColor="white" stopOpacity="0.94" />
             <stop offset="18%" stopColor="var(--orb-hue)" stopOpacity="0.92" />
             <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
           </radialGradient>
+          <linearGradient id="orbRimLight" x1="18%" y1="10%" x2="84%" y2="86%">
+            <stop offset="0%" stopColor="white" stopOpacity="0.36" />
+            <stop offset="36%" stopColor="white" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
           <clipPath id="orbSphereMask">
             <circle cx="170" cy="132" r={isSeparation ? 92 : 88} />
           </clipPath>
@@ -162,6 +172,8 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
 
         <circle cx="170" cy="132" r={isSeparation ? 98 : 92} className="health-orb__aura" />
         <circle cx="170" cy="132" r={isStable ? 89 : isDrift ? 92 : 96} className="health-orb__shell" />
+        <circle cx="170" cy="132" r={isStable ? 86 : isDrift ? 89 : 93} className="health-orb__specular" />
+        <circle cx="170" cy="132" r={isStable ? 89 : isDrift ? 92 : 96} className="health-orb__rim" />
 
         <g className="health-orb__field" clipPath={isSeparation ? undefined : "url(#orbSphereMask)"}>
           {ORB_LINKS.map(([from, to], index) => {
@@ -227,6 +239,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
         )}
 
         <circle cx="170" cy="132" r="34" className="health-orb__core" />
+        <ellipse cx="154" cy="110" rx="20" ry="10" className="health-orb__core-sheen" />
         <circle cx="170" cy="132" r="14" className="health-orb__core-hotspot" />
       </svg>
     </div>

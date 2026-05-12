@@ -8555,6 +8555,18 @@ h1, h2, h3 {
   opacity: 0.48;
 }
 
+.health-orb__specular {
+  fill: url(#orbSpecularBloom);
+  opacity: 0.58;
+}
+
+.health-orb__rim {
+  fill: none;
+  stroke: url(#orbRimLight);
+  stroke-width: 1.15;
+  opacity: 0.62;
+}
+
 .health-orb__base-ring,
 .health-orb__base-core {
   fill: none;
@@ -8601,6 +8613,12 @@ h1, h2, h3 {
   opacity: var(--orb-core-opacity);
 }
 
+.health-orb__core-sheen {
+  fill: white;
+  opacity: 0.22;
+  filter: blur(1px);
+}
+
 .health-orb__core-hotspot {
   fill: white;
   opacity: 0.78;
@@ -8624,6 +8642,10 @@ h1, h2, h3 {
 
 .health-orb--animated .health-orb__aura {
   animation: healthOrbGlow 3.8s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__specular {
+  animation: orbSpecularShift 6.5s ease-in-out infinite;
 }
 
 .health-orb--animated .health-orb__base-ring {
@@ -8689,6 +8711,19 @@ h1, h2, h3 {
   50% {
     transform: scale(1.03);
     opacity: 1;
+  }
+}
+
+@keyframes orbSpecularShift {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translate(-1px, -1px) scale(0.995);
+  }
+
+  50% {
+    opacity: 0.68;
+    transform: translate(1px, 1px) scale(1.01);
   }
 }
 
@@ -9154,12 +9189,48 @@ p, span, li {
   opacity: 0.52;
 }
 
+.health-orb--neutral .health-orb__specular {
+  opacity: 0.34;
+}
+
+.health-orb--neutral .health-orb__rim {
+  opacity: 0.42;
+}
+
+.health-orb--neutral .health-orb__core-sheen {
+  opacity: 0.14;
+}
+
 .health-orb--drift .health-orb__aura {
   opacity: 0.94;
 }
 
+.health-orb--drift .health-orb__specular {
+  opacity: 0.74;
+}
+
+.health-orb--drift .health-orb__rim {
+  opacity: 0.72;
+}
+
+.health-orb--drift .health-orb__core-sheen {
+  opacity: 0.28;
+}
+
 .health-orb--separation .health-orb__aura {
   opacity: 1;
+}
+
+.health-orb--separation .health-orb__specular {
+  opacity: 0.62;
+}
+
+.health-orb--separation .health-orb__rim {
+  opacity: 0.84;
+}
+
+.health-orb--separation .health-orb__core-sheen {
+  opacity: 0.2;
 }
 
 .health-orb--animated .health-orb__aura {
@@ -9241,14 +9312,14 @@ p, span, li {
 .health-orb--drift {
   filter:
     drop-shadow(0 20px 32px rgba(0, 0, 0, 0.36))
-    drop-shadow(0 0 30px color-mix(in srgb, var(--orb-hue) 30%, transparent))
+    drop-shadow(0 0 34px color-mix(in srgb, var(--orb-hue) 36%, transparent))
     !important;
 }
 
 .health-orb--separation {
   filter:
     drop-shadow(0 24px 38px rgba(0, 0, 0, 0.4))
-    drop-shadow(0 0 42px color-mix(in srgb, var(--orb-hue) 44%, transparent))
+    drop-shadow(0 0 46px color-mix(in srgb, var(--orb-hue) 50%, transparent))
     !important;
 }
 
