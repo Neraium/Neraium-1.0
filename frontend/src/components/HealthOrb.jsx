@@ -183,7 +183,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
               cx={node.x}
               cy={node.y}
               r={node.g === "core" ? 4.6 : node.g === "top" || node.g === "bottom" ? 3.6 : 3.2}
-              className={`health-orb__node ${node.g === "core" ? "health-orb__node--core" : ""}`}
+              className={`health-orb__node health-orb__node--${node.g} ${node.g === "core" ? "health-orb__node--core" : ""}`}
               style={{ "--orb-delay": `${index * 80}ms` }}
             />
           ))}

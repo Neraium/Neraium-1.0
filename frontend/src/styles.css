@@ -8653,7 +8653,7 @@ h1, h2, h3 {
 }
 
 .health-orb--separation.health-orb--animated .health-orb__link--broken {
-  animation: healthOrbBreakPulse 1.4s linear infinite;
+  animation: healthOrbBreakSnap 1.2s steps(2, end) infinite;
 }
 
 .health-orb--separation.health-orb--animated .health-orb__fracture {
@@ -8663,6 +8663,31 @@ h1, h2, h3 {
 
 .health-orb--separation.health-orb--animated .health-orb__fragments--separation .health-orb__spark {
   animation: healthOrbSparkBurst 720ms steps(2, end) infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__node--left {
+  animation: healthOrbNodeDetachLeft 860ms ease-in-out infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__node--right {
+  animation: healthOrbNodeDetachRight 840ms ease-in-out infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__node--top {
+  animation: healthOrbNodeDetachTop 900ms ease-in-out infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__node--bottom {
+  animation: healthOrbNodeDetachBottom 920ms ease-in-out infinite;
+  animation-delay: var(--orb-delay, 0ms);
+}
+
+.health-orb--separation.health-orb--animated .health-orb__node--core {
+  animation: healthOrbNodeCoreRattle 700ms ease-in-out infinite;
   animation-delay: var(--orb-delay, 0ms);
 }
 
@@ -8724,6 +8749,33 @@ h1, h2, h3 {
   }
 }
 
+@keyframes healthOrbBreakSnap {
+  0% {
+    opacity: 0.34;
+    stroke-dashoffset: 0;
+  }
+
+  35% {
+    opacity: 0.7;
+  }
+
+  55% {
+    opacity: 0.22;
+    stroke-dashoffset: -12;
+  }
+
+  70%,
+  92% {
+    opacity: 0.03;
+    stroke-dashoffset: -28;
+  }
+
+  100% {
+    opacity: 0.36;
+    stroke-dashoffset: -34;
+  }
+}
+
 @keyframes healthOrbFractureFlicker {
   0%,
   100% {
@@ -8756,6 +8808,33 @@ h1, h2, h3 {
     opacity: 1;
     transform: scale(1.35);
   }
+}
+
+@keyframes healthOrbNodeDetachLeft {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-6px, 2px) scale(1.08); }
+}
+
+@keyframes healthOrbNodeDetachRight {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6px, 2px) scale(1.08); }
+}
+
+@keyframes healthOrbNodeDetachTop {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(0, -6px) scale(1.08); }
+}
+
+@keyframes healthOrbNodeDetachBottom {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(0, 6px) scale(1.08); }
+}
+
+@keyframes healthOrbNodeCoreRattle {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-2px, 1px) scale(1.06); }
+  50% { transform: translate(2px, -1px) scale(1.08); }
+  75% { transform: translate(-1px, 2px) scale(1.05); }
 }
 
 .integrity-hero__score span {
