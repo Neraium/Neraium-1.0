@@ -497,7 +497,7 @@ function App() {
 
   return (
     <AppErrorBoundary>
-    <main className="platform-shell">
+    <main className="neraium-sidebar-emergency-fix platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
         <WorkspaceNavigationContent
           activeWorkspace={activeWorkspace}

@@ -9331,3 +9331,56 @@ nav[aria-label="Workspaces"] a {
   }
 }
 
+
+/* Emergency sidebar fix */
+@media (min-width: 701px) {
+  #root {
+    overflow-x: hidden;
+  }
+
+  #root > div {
+    display: grid !important;
+    grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) !important;
+    gap: 16px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  #root > div > *:first-child {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 290px !important;
+    overflow-x: hidden !important;
+  }
+
+  #root > div > *:nth-child(2) {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  #root > div > *:first-child p,
+  #root > div > *:first-child span,
+  #root > div > *:first-child h1,
+  #root > div > *:first-child h2,
+  #root > div > *:first-child h3 {
+    overflow-wrap: anywhere !important;
+  }
+
+  #root > div > *:first-child p {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+}
+
+@media (max-width: 700px) {
+  #root > div {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+}
+
