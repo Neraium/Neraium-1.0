@@ -9260,3 +9260,74 @@ h1, h2, h3 {
     overflow-wrap: anywhere;
   }
 }
+
+/* ============================= */
+/* Neraium Sidebar Layout Fixes  */
+/* ============================= */
+
+.sidebar,
+.workspace-sidebar,
+aside,
+nav[aria-label="Workspaces"] {
+  width: clamp(260px, 24vw, 340px);
+  min-width: 260px;
+  max-width: 340px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar *,
+.workspace-sidebar *,
+aside *,
+nav[aria-label="Workspaces"] * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.sidebar button,
+.sidebar a,
+.workspace-sidebar button,
+.workspace-sidebar a,
+aside button,
+aside a,
+nav[aria-label="Workspaces"] button,
+nav[aria-label="Workspaces"] a {
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.sidebar h1,
+.sidebar h2,
+.sidebar h3,
+.workspace-sidebar h1,
+.workspace-sidebar h2,
+.workspace-sidebar h3 {
+  line-height: 1.1;
+}
+
+@media (max-width: 900px) {
+  .sidebar,
+  .workspace-sidebar,
+  aside,
+  nav[aria-label="Workspaces"] {
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
+  }
+}
+
+@media (max-width: 700px) {
+  .sidebar,
+  .workspace-sidebar,
+  aside,
+  nav[aria-label="Workspaces"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
