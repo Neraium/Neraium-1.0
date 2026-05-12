@@ -46,7 +46,11 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const awaitingLabel = liveOps.intelligenceMode === "processing" ? "SII analysis running" : "Awaiting SII analysis";
   const issueType = awaitingSii ? awaitingLabel : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
   const suspectedLocation = awaitingSii ? awaitingLabel : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Location not isolated");
-  const runway = awaitingSii ? awaitingLabel : (primaryItem?.projectedTimeToFailure ?? primaryItem?.window ?? liveOps.primaryWindow?.window ?? "Runway unavailable");
+  const runway = awaitingSii
+    ? awaitingLabel
+    : liveOps.facilityTone === "nominal"
+      ? "Stable - no immediate constraint"
+      : (primaryItem?.projectedTimeToFailure ?? primaryItem?.window ?? liveOps.primaryWindow?.window ?? "Runway unavailable");
   const urgency = awaitingSii ? awaitingLabel : (primaryItem?.status ?? liveOps.primaryWindow?.status ?? state.label);
   const confidence = awaitingSii
     ? awaitingLabel
