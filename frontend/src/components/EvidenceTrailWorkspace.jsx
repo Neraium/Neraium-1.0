@@ -21,6 +21,51 @@ function formatRunStatusTone(status) {
   }
 }
 
+function buildDemoEvidence(scenario = "drift", tick = 0) {
+  const now = Date.now();
+  const state = scenario === "stable" ? "Nominal environmental stability" : scenario === "separation" ? "Structural separation" : "Relationship drift";
+  const drift = scenario === "stable" ? "normal" : scenario === "separation" ? "elevated" : "watch";
+  const baseScore = scenario === "stable" ? 0.89 : scenario === "separation" ? 0.41 : 0.67;
+  const variance = ((tick % 6) - 2) * 0.01;
+  const score = Number(Math.max(0.08, Math.min(0.98, baseScore + variance)).toFixed(3));
+
+  const runs = Array.from({ length: 6 }).map((_, index) => {
+    const completedAt = new Date(now - index * 6 * 60 * 1000).toISOString();
+    const runScore = Number(Math.max(0.08, Math.min(0.98, score - index * 0.012)).toFixed(3));
+    return {
+      run_id: `demo-run-${tick}-${index + 1}`,
+      source_name: `Demo telemetry ${index + 1}`,
+      status: "completed",
+      completed_at: completedAt,
+      operating_state: state,
+      drift_status: drift,
+      neraium_score: runScore,
+      sensors_detected: 12 + (index % 3),
+      rows_accepted: 1400 - index * 47,
+      rows_rejected: Math.max(0, 16 - index * 2),
+      room: "Flower room 1",
+      initiated_by: "demo",
+      primary_drivers: scenario === "stable"
+        ? ["Temperature-humidity coupling remains stable.", "Airflow response remains within baseline."]
+        : scenario === "separation"
+          ? ["Airflow-pressure coupling diverged from baseline.", "Humidity recovery lag increased across the review window."]
+          : ["Humidity control drifted from baseline patterns.", "Irrigation response coupling changed during transition."],
+      warnings: scenario === "stable" ? [] : ["Synthetic alert: operator review recommended."],
+      errors: [],
+      evidence_summary: [
+        `Scenario: ${scenario}`,
+        `Neraium score ${runScore}`,
+        `Completed at ${completedAt}`,
+      ],
+      diff: {
+        neraium_score_delta: Number((index === 0 ? variance : -0.012).toFixed(3)),
+      },
+    };
+  });
+
+  return { latestRun: runs[0], runs };
+}
+
 export default function EvidenceTrailWorkspace({
   apiFetch,
   readJsonPayload,
@@ -32,6 +77,9 @@ export default function EvidenceTrailWorkspace({
   EmptyState,
   accessCode,
   refreshKey,
+  isDemoMode = false,
+  demoScenario = "drift",
+  telemetryTick = 0,
 }) {
   const [runs, setRuns] = useState([]);
   const [latestRun, setLatestRun] = useState(null);
@@ -41,6 +89,22 @@ export default function EvidenceTrailWorkspace({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!isDemoMode) {
+      return;
+    }
+    const demo = buildDemoEvidence(demoScenario, telemetryTick);
+    setRuns(demo.runs);
+    setLatestRun(demo.latestRun);
+    setSelectedRunId((current) => current ?? demo.runs[0]?.run_id ?? null);
+    setSelectedRun((current) => current ?? demo.runs[0] ?? null);
+    setExportBody("");
+    setError("");
+  }, [demoScenario, isDemoMode, telemetryTick]);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      return undefined;
+    }
     let cancelled = false;
     async function loadEvidence() {
       try {
@@ -69,9 +133,14 @@ export default function EvidenceTrailWorkspace({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [accessCode, apiFetch, normalizeErrorMessage, readJsonPayload, refreshKey, selectedRunId]);
+  }, [accessCode, apiFetch, isDemoMode, normalizeErrorMessage, readJsonPayload, refreshKey, selectedRunId]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      const match = runs.find((run) => run.run_id === selectedRunId) ?? null;
+      setSelectedRun(match);
+      return undefined;
+    }
     let cancelled = false;
     async function loadSelectedRun() {
       if (!selectedRunId) {
@@ -93,10 +162,22 @@ export default function EvidenceTrailWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [accessCode, apiFetch, normalizeErrorMessage, readJsonPayload, selectedRunId]);
+  }, [accessCode, apiFetch, isDemoMode, normalizeErrorMessage, readJsonPayload, runs, selectedRunId]);
 
   async function handleExport() {
     if (!selectedRunId) {
+      return;
+    }
+    if (isDemoMode) {
+      const active = runs.find((run) => run.run_id === selectedRunId) ?? latestRun;
+      setExportBody(JSON.stringify({
+        run_id: active?.run_id,
+        source: active?.source_name,
+        operating_state: active?.operating_state,
+        drift_status: active?.drift_status,
+        neraium_score: active?.neraium_score,
+        evidence_summary: active?.evidence_summary ?? [],
+      }, null, 2));
       return;
     }
     try {

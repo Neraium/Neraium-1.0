@@ -488,6 +488,9 @@ function App() {
           EmptyState={EmptyState}
           accessCode={apiAccessCode}
           refreshKey={evidenceRefreshKey}
+          isDemoMode={isDemoMode}
+          demoScenario={demoScenario}
+          telemetryTick={telemetryTick}
         />
       );
     }
