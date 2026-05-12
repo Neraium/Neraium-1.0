@@ -91,7 +91,9 @@ export default function DataConnectionsWorkspace({
   onUploadComplete,
   formatClockTime,
 }) {
+  const TABS = ["overview", "upload", "connections", "diagnostics"];
   const [selectedFile, setSelectedFile] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -376,7 +378,25 @@ export default function DataConnectionsWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--connections">
-      <Panel title="Data Connections" className="span-7 workspace-hero-panel">
+      <Panel title="Data Connections" className="span-12 workspace-hero-panel">
+        <div className="intake-flow__controls" role="tablist" aria-label="Data connections sections">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              className={activeTab === tab ? "command-button" : "secondary-command-button"}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab === "overview" ? "Overview" : tab === "upload" ? "Upload" : tab === "connections" ? "Connections" : "Diagnostics"}
+            </button>
+          ))}
+        </div>
+      </Panel>
+
+      {activeTab === "upload" && (
+      <Panel title="Upload Intake" className="span-7 workspace-hero-panel">
         <form className="intake-flow" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <h3>Upload Telemetry File</h3>
@@ -434,11 +454,16 @@ export default function DataConnectionsWorkspace({
           )}
         </div>
       </Panel>
+      )}
 
+      {activeTab === "upload" && (
       <Panel title="Ingestion State" className="span-5">
         <WorkflowStages items={intakeStages} />
       </Panel>
+      )}
 
+      {activeTab === "overview" && (
+      <>
       <Panel title="Latest Sync" className="span-7">
         <MetricGrid
           metrics={[
@@ -467,7 +492,10 @@ export default function DataConnectionsWorkspace({
         />
         <CompactList items={uploadDiffSummary.lines} emptyText="Waiting for a meaningful state change." />
       </Panel>
+      </>
+      )}
 
+      {activeTab === "connections" && (
       <Panel title="Telemetry Stream" className="span-12">
         {activeConnection ? (
           <>
@@ -554,7 +582,9 @@ export default function DataConnectionsWorkspace({
           <EmptyState title="No data connection registered" body="Register a REST telemetry source to keep the intake workspace ready for live data." compact />
         )}
       </Panel>
+      )}
 
+      {activeTab === "diagnostics" && (
       <Panel title="Advanced Diagnostics" className="span-12">
         <details className="technical-summary-panel">
           <summary>Show connection fleet, active result, and upload history</summary>
@@ -623,8 +653,9 @@ export default function DataConnectionsWorkspace({
           </Panel>
         </details>
       </Panel>
+      )}
 
-      {connectionError && (
+      {connectionError && activeTab !== "overview" && (
         <Panel title="Connection Response" className="span-12">
           <p className="form-error">{connectionError}</p>
         </Panel>
