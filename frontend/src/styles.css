@@ -9036,6 +9036,18 @@ p, span, li {
   opacity: 0.9;
 }
 
+.health-orb--stable .health-orb__aura {
+  opacity: 0.78;
+}
+
+.health-orb--drift .health-orb__aura {
+  opacity: 0.94;
+}
+
+.health-orb--separation .health-orb__aura {
+  opacity: 1;
+}
+
 .health-orb--animated .health-orb__aura {
   animation: healthOrbGlow 3s ease-in-out infinite;
 }
@@ -9049,7 +9061,86 @@ p, span, li {
 }
 
 .health-orb--animated::before {
-  animation: orbHaloRotate 18s linear infinite;
+  animation: orbHaloRotate 14s linear infinite;
+}
+
+.health-orb--animated {
+  animation: orbFloat 5.4s ease-in-out infinite;
+  transform-origin: 50% 58%;
+}
+
+.health-orb--animated .health-orb__svg {
+  animation: orbDrift 6.2s ease-in-out infinite;
+  transform-origin: 50% 54%;
+}
+
+.health-orb--stable.health-orb--animated {
+  animation-duration: 8.4s;
+}
+
+.health-orb--stable.health-orb--animated .health-orb__svg {
+  animation-duration: 9.2s;
+}
+
+.health-orb--stable.health-orb--animated::before {
+  animation-duration: 24s;
+}
+
+.health-orb--drift.health-orb--animated {
+  animation-duration: 6.4s;
+}
+
+.health-orb--drift.health-orb--animated .health-orb__svg {
+  animation-duration: 7.2s;
+}
+
+.health-orb--drift.health-orb--animated::before {
+  animation-duration: 16s;
+}
+
+.health-orb--separation.health-orb--animated {
+  animation-duration: 3.2s;
+}
+
+.health-orb--separation.health-orb--animated .health-orb__svg {
+  animation-duration: 3.8s;
+}
+
+.health-orb--separation.health-orb--animated::before {
+  animation-duration: 7.5s;
+}
+
+.health-orb--stable {
+  filter:
+    drop-shadow(0 14px 24px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 0 16px color-mix(in srgb, var(--orb-hue) 18%, transparent))
+    !important;
+}
+
+.health-orb--drift {
+  filter:
+    drop-shadow(0 20px 32px rgba(0, 0, 0, 0.36))
+    drop-shadow(0 0 30px color-mix(in srgb, var(--orb-hue) 30%, transparent))
+    !important;
+}
+
+.health-orb--separation {
+  filter:
+    drop-shadow(0 24px 38px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 0 42px color-mix(in srgb, var(--orb-hue) 44%, transparent))
+    !important;
+}
+
+.health-orb--stable::before {
+  opacity: 0.2;
+}
+
+.health-orb--drift::before {
+  opacity: 0.38;
+}
+
+.health-orb--separation::before {
+  opacity: 0.52;
 }
 
 @media (max-width: 900px) {
@@ -9088,6 +9179,112 @@ p, span, li {
   100% {
     transform: rotate(360deg) scale(0.99);
     opacity: 0.28;
+  }
+}
+
+@keyframes orbFloat {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-7px) scale(1.012);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes orbDrift {
+  0% {
+    transform: rotate(-0.6deg) translateX(0);
+  }
+
+  35% {
+    transform: rotate(0.8deg) translateX(1.5px);
+  }
+
+  70% {
+    transform: rotate(-0.4deg) translateX(-1px);
+  }
+
+  100% {
+    transform: rotate(-0.6deg) translateX(0);
+  }
+}
+
+.health-orb--stable.health-orb--animated {
+  animation-name: orbFloatMinimal;
+}
+
+.health-orb--stable.health-orb--animated .health-orb__svg {
+  animation-name: orbDriftMinimal;
+}
+
+.health-orb--drift.health-orb--animated {
+  animation-name: orbFloatCinematic;
+}
+
+.health-orb--drift.health-orb--animated .health-orb__svg {
+  animation-name: orbDriftCinematic;
+}
+
+.health-orb--separation.health-orb--animated {
+  animation-name: orbFloatEnergetic;
+}
+
+.health-orb--separation.health-orb--animated .health-orb__svg {
+  animation-name: orbDriftEnergetic;
+}
+
+@keyframes orbFloatMinimal {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.004); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes orbDriftMinimal {
+  0% { transform: rotate(-0.2deg) translateX(0); }
+  50% { transform: rotate(0.2deg) translateX(0.5px); }
+  100% { transform: rotate(-0.2deg) translateX(0); }
+}
+
+@keyframes orbFloatCinematic {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.014); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes orbDriftCinematic {
+  0% { transform: rotate(-0.7deg) translateX(0); }
+  35% { transform: rotate(0.9deg) translateX(1.8px); }
+  70% { transform: rotate(-0.45deg) translateX(-1.1px); }
+  100% { transform: rotate(-0.7deg) translateX(0); }
+}
+
+@keyframes orbFloatEnergetic {
+  0% { transform: translateY(0) scale(1); }
+  20% { transform: translateY(-5px) scale(1.018); }
+  45% { transform: translateY(1px) scale(0.996); }
+  70% { transform: translateY(-7px) scale(1.02); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes orbDriftEnergetic {
+  0% { transform: rotate(-1deg) translateX(0); }
+  25% { transform: rotate(1.3deg) translateX(2.1px); }
+  55% { transform: rotate(-0.9deg) translateX(-1.6px); }
+  80% { transform: rotate(0.8deg) translateX(1.2px); }
+  100% { transform: rotate(-1deg) translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-orb--animated,
+  .health-orb--animated .health-orb__svg,
+  .health-orb--animated::before {
+    animation: none !important;
+    transform: none !important;
   }
 }
 
