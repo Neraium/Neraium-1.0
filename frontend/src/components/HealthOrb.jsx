@@ -80,8 +80,8 @@ function transformNode(node, systemState, intensity) {
   }
 
   if (systemState === "drift") {
-    const horizontalShift = node.g === "left" ? -18 : node.g === "right" ? 18 : 0;
-    const verticalShift = node.g === "top" ? -10 : node.g === "bottom" ? 8 : ((node.x + node.y) % 3 - 1) * 5;
+    const horizontalShift = node.g === "left" ? -24 : node.g === "right" ? 24 : 0;
+    const verticalShift = node.g === "top" ? -14 : node.g === "bottom" ? 11 : ((node.x + node.y) % 3 - 1) * 7;
     return {
       ...node,
       x: clamp(node.x + horizontalShift * intensity, 66, 274),
@@ -111,7 +111,13 @@ function edgeVisibility(linkIndex, systemState) {
     return "solid";
   }
   if (systemState === "drift") {
-    return linkIndex % 5 === 0 ? "faint" : "solid";
+    if (linkIndex % 6 === 0) {
+      return "broken";
+    }
+    if (linkIndex % 3 === 0) {
+      return "faint";
+    }
+    return "solid";
   }
   if (linkIndex % 3 === 0) {
     return "broken";

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 function formatSigned(value) {
   const rounded = Number(value ?? 0).toFixed(3);
   return `${Number(rounded) >= 0 ? "+" : ""}${rounded}`;
@@ -8,7 +10,7 @@ function toFinite(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function buildSimulatedHistory(mode) {
+function buildSimulatedHistory(mode, phase = 0) {
   const samples = 24;
   const points = [];
   let previous = null;
@@ -16,14 +18,15 @@ function buildSimulatedHistory(mode) {
 
   for (let idx = 0; idx < samples; idx += 1) {
     const t = idx / (samples - 1);
+    const p = phase * 0.18;
     let distance;
 
     if (mode === "stable") {
-      distance = 0.075 + Math.sin(idx * 0.55) * 0.012 + Math.cos(idx * 0.18) * 0.006;
+      distance = 0.075 + Math.sin(idx * 0.55 + p) * 0.012 + Math.cos(idx * 0.18 + p * 0.5) * 0.006;
     } else if (mode === "drift") {
-      distance = 0.11 + t * 0.17 + Math.sin(idx * 0.5) * 0.022;
+      distance = 0.11 + t * 0.17 + Math.sin(idx * 0.5 + p) * 0.022;
     } else {
-      distance = 0.18 + t * t * 0.62 + Math.sin(idx * 0.72) * 0.03;
+      distance = 0.18 + t * t * 0.62 + Math.sin(idx * 0.72 + p) * 0.03;
     }
 
     const roundedDistance = Number(distance.toFixed(3));
@@ -45,6 +48,12 @@ function buildSimulatedHistory(mode) {
 }
 
 export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
+  const [simTick, setSimTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setSimTick((value) => value + 1), 1200);
+    return () => clearInterval(timer);
+  }, []);
+
   const relationshipMagnitude = (liveOps.relationshipRows ?? [])
     .map((row) => toFinite(row.pair_weight ?? row.change))
     .reduce((sum, value) => sum + Math.abs(value), 0);
@@ -60,7 +69,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
       : liveOps.facilityTone === "elevated" || liveOps.facilityTone === "unstable"
         ? "separation"
         : "stable";
-  const simulatedHistory = buildSimulatedHistory(simulatedMode);
+  const simulatedHistory = buildSimulatedHistory(simulatedMode, simTick);
   const history = hasSignal
     ? (driftHistory?.length
       ? driftHistory
@@ -92,7 +101,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
         <div className="timeline-stats">
           <div>
             <span>Baseline distance</span>
-            <strong>{toFinite(last.distance).toFixed(3)} sigma</strong>
+            <strong>{toFinite(last.distance).toFixed(3)} baseline units</strong>
           </div>
           <div>
             <span>Current state</span>
@@ -125,7 +134,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
           {recentSamples.map((sample, index) => (
             <div key={`${sample.stamp}-${index}`}>
               <span>{sample.stamp || "now"}</span>
-              <strong>{toFinite(sample.distance).toFixed(3)} sigma</strong>
+              <strong>{toFinite(sample.distance).toFixed(3)} baseline units</strong>
             </div>
           ))}
         </div>

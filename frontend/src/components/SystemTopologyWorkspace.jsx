@@ -87,6 +87,10 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
           </div>
 
           <div className="integrity-hero__metrics">
+            <article className="integrity-hero__metric integrity-hero__metric--priority">
+              <span>Operational runway</span>
+              <strong>{runway}</strong>
+            </article>
             <article className="integrity-hero__metric">
               <span>Issue type</span>
               <strong>{issueType}</strong>
@@ -94,10 +98,6 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
             <article className="integrity-hero__metric">
               <span>Suspected location</span>
               <strong>{suspectedLocation}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Operational runway</span>
-              <strong>{runway}</strong>
             </article>
             <article className="integrity-hero__metric">
               <span>Urgency</span>
