@@ -8,6 +8,42 @@ function toFinite(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function buildSimulatedHistory(mode) {
+  const samples = 24;
+  const points = [];
+  let previous = null;
+  let previousVelocity = 0;
+
+  for (let idx = 0; idx < samples; idx += 1) {
+    const t = idx / (samples - 1);
+    let distance;
+
+    if (mode === "stable") {
+      distance = 0.075 + Math.sin(idx * 0.55) * 0.012 + Math.cos(idx * 0.18) * 0.006;
+    } else if (mode === "drift") {
+      distance = 0.11 + t * 0.17 + Math.sin(idx * 0.5) * 0.022;
+    } else {
+      distance = 0.18 + t * t * 0.62 + Math.sin(idx * 0.72) * 0.03;
+    }
+
+    const roundedDistance = Number(distance.toFixed(3));
+    const velocity = previous == null ? 0 : Number((roundedDistance - previous).toFixed(3));
+    const acceleration = Number((velocity - previousVelocity).toFixed(3));
+
+    points.push({
+      stamp: `t-${samples - 1 - idx}`,
+      distance: roundedDistance,
+      velocity,
+      acceleration,
+    });
+
+    previous = roundedDistance;
+    previousVelocity = velocity;
+  }
+
+  return points;
+}
+
 export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
   const relationshipMagnitude = (liveOps.relationshipRows ?? [])
     .map((row) => toFinite(row.pair_weight ?? row.change))
@@ -17,9 +53,19 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
     .reduce((sum, value) => sum + Math.abs(value), 0);
   const currentDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
   const hasSignal = relationshipMagnitude > 0 || driftMagnitude > 0;
+  const simulatedMode = liveOps.facilityTone === "nominal"
+    ? "stable"
+    : liveOps.facilityTone === "review"
+      ? "drift"
+      : liveOps.facilityTone === "elevated" || liveOps.facilityTone === "unstable"
+        ? "separation"
+        : "stable";
+  const simulatedHistory = buildSimulatedHistory(simulatedMode);
   const history = driftHistory?.length
     ? driftHistory
-    : [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }];
+    : hasSignal
+      ? [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }]
+      : simulatedHistory;
   const last = history[history.length - 1];
   const scale = Math.max(...history.map((item) => Math.abs(toFinite(item.distance))), 0.01);
   const points = history.map((item, idx) => {
@@ -29,7 +75,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
   }).join(" ");
   const recentSamples = history.slice(-6).reverse();
   const lastUpdatedLabel = liveOps.connectionSummary || "Awaiting sync";
-  const pulseTone = hasSignal ? "nominal" : "info";
+  const pulseTone = hasSignal ? "nominal" : "review";
 
   return (
     <section className="drift-timeline">
@@ -64,7 +110,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
         <div className="timeline-stats">
           <div>
             <span>Timeline signal</span>
-            <strong>{hasSignal ? "Live" : "Waiting for upload"}</strong>
+            <strong>{hasSignal ? "Live" : `Simulated ${simulatedMode}`}</strong>
           </div>
         </div>
       </article>
@@ -85,7 +131,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory }) {
         </div>
         {!hasSignal && (
           <p className="timeline-item__time">
-            Upload telemetry in Data Connections to populate drift trajectory.
+            Simulated trajectory is shown while telemetry is unavailable. Upload telemetry or run demo mode for live behavior.
           </p>
         )}
       </article>
