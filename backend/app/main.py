@@ -19,17 +19,35 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
+    settings = app.state.settings
     init_runtime_db()
-    ensure_default_data_connection(app.state.settings)
-    start_upload_worker()
-    start_data_connection_poller()
-    logger.info("runtime_services_started")
+    ensure_default_data_connection(settings)
+
+    upload_worker_started = False
+    data_poller_started = False
+
+    if settings.start_background_workers:
+        start_upload_worker()
+        upload_worker_started = True
+
+    if settings.start_data_connection_poller:
+        start_data_connection_poller()
+        data_poller_started = True
+
+    logger.info(
+        "runtime_services_started process_role=%s upload_worker=%s data_poller=%s",
+        settings.process_role,
+        upload_worker_started,
+        data_poller_started,
+    )
     try:
         yield
     finally:
-        stop_data_connection_poller()
-        stop_upload_worker()
-        logger.info("runtime_services_stopped")
+        if data_poller_started:
+            stop_data_connection_poller()
+        if upload_worker_started:
+            stop_upload_worker()
+        logger.info("runtime_services_stopped process_role=%s", settings.process_role)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -57,7 +75,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request_id = getattr(request.state, "request_id", None)
         if request_id:
             response.headers["X-Request-Id"] = request_id
-        # Baseline browser hardening for operator UI/API surfaces.
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -119,6 +136,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ok",
             "docs": "/docs",
             "health": "/health",
+            "process_role": settings.process_role,
+            "background_workers": settings.start_background_workers,
+            "data_poller": settings.start_data_connection_poller,
+        }
+
+    @app.get("/health")
+    def health_check_alias():
+        return {
+            "status": "ok",
+            "service": "neraium-api",
+            "process_role": settings.process_role,
         }
 
     return app
@@ -197,13 +225,3 @@ def cors_error_headers(request: Request) -> dict[str, str]:
 
 
 app = create_app()
-
-
-@app.get("/health")
-def health_check_alias():
-    return {"status": "ok", "service": "neraium-api"}
-
-
-
-
-
