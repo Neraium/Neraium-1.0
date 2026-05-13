@@ -20,7 +20,9 @@ DEFAULT_CORS_ORIGINS = [
 ]
 DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?neraium\.com$"
 DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
-DEFAULT_MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
+# Allow larger historical telemetry uploads by default.
+# Override with NERAIUM_MAX_UPLOAD_SIZE_BYTES in production when needed.
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
 
 
