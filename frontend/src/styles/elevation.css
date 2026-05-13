@@ -3,9 +3,12 @@
   --surface-border-strong: rgba(138, 184, 196, 0.24);
   --surface-a: linear-gradient(180deg, rgba(18, 25, 30, 0.95), rgba(9, 14, 17, 0.93));
   --surface-b: linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95));
+  --surface-c: linear-gradient(180deg, rgba(20, 28, 33, 0.9), rgba(10, 16, 19, 0.92));
   --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.24);
   --shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 22px 56px rgba(0, 0, 0, 0.32);
   --motion-standard: 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-slow: 360ms cubic-bezier(0.2, 0.65, 0.2, 1);
 }
 
 .workspace-header,
@@ -38,4 +41,10 @@
   border-color: var(--surface-border-strong);
   box-shadow: var(--shadow-hover);
   transform: translateY(-1px);
+}
+
+.section-card:hover,
+.hero-panel:hover {
+  border-color: rgba(138, 184, 196, 0.22);
+  box-shadow: var(--shadow-hover);
 }

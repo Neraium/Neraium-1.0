@@ -4,6 +4,7 @@
   padding: var(--space-8) 0 var(--space-40);
   max-width: min(var(--panel-max-standard), 94vw);
   margin: 0 auto;
+  animation: sectionFadeIn var(--motion-slow) ease-out;
 }
 
 .system-body-orb-panel {
@@ -15,9 +16,10 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.24), transparent 42%),
-    radial-gradient(circle at 50% 60%, rgba(108, 186, 156, 0.12), transparent 36%),
+    radial-gradient(circle at 50% 26%, rgba(138, 184, 196, 0.26), transparent 43%),
+    radial-gradient(circle at 50% 58%, rgba(108, 186, 156, 0.14), transparent 38%),
     linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.97));
+  box-shadow: var(--shadow-float);
 }
 
 .system-body-orb-panel::after {
@@ -27,6 +29,19 @@
   height: 42%;
   background: radial-gradient(ellipse at center, rgba(108, 186, 156, 0.08), transparent 72%);
   pointer-events: none;
+  animation: orbAmbient 9s ease-in-out infinite;
+}
+
+.system-body-orb-panel::before {
+  content: "";
+  position: absolute;
+  inset: 6% 18% auto 18%;
+  height: 34%;
+  background: radial-gradient(circle at center, rgba(138, 184, 196, 0.18), transparent 70%);
+  filter: blur(8px);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: orbAmbientSoft 12s ease-in-out infinite;
 }
 
 .system-body-orb-panel__stage {
@@ -43,6 +58,7 @@
   line-height: 1.04;
   text-align: center;
   z-index: 1;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
 }
 
 .system-body-orb-panel p {
@@ -60,7 +76,7 @@
 
 .system-body-narrative-grid {
   display: grid;
-  gap: var(--space-14);
+  gap: var(--space-16);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -68,36 +84,59 @@
   display: grid;
   gap: var(--space-8);
   align-content: start;
+  padding: var(--space-12);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  background: linear-gradient(180deg, rgba(20, 30, 35, 0.56), rgba(11, 16, 20, 0.54));
 }
 
 .system-body-narrative-item p {
   margin: 0;
-  max-width: 42ch;
+  max-width: 44ch;
+  line-height: 1.62;
 }
 
 .system-body-metric {
-  min-height: 136px;
+  min-height: 142px;
   display: grid;
   align-content: center;
-  gap: var(--space-10);
+  gap: var(--space-12);
+  align-items: start;
+  transition: transform var(--motion-standard), border-color var(--motion-standard), box-shadow var(--motion-standard);
 }
 
 .system-body-metric--priority {
-  min-height: 154px;
+  min-height: 166px;
 }
 
 .system-body-metric strong {
-  font-size: var(--type-metric-lg, 1.08rem);
-  line-height: 1.28;
+  font-size: clamp(1.22rem, 1.75vw, 1.52rem);
+  line-height: 1.22;
 }
 
 .system-body-metric--priority strong {
-  font-size: clamp(1.22rem, 1.7vw, 1.5rem);
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+}
+
+.system-body-metric:hover {
+  transform: translateY(-1px);
+  border-color: rgba(138, 184, 196, 0.24);
+  box-shadow: var(--shadow-hover);
 }
 
 .system-body-evidence-block {
   display: grid;
-  gap: var(--space-18);
+  gap: var(--space-20);
+  position: relative;
+}
+
+.system-body-evidence-block::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-10) * -1) 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(138, 184, 196, 0.22), transparent);
+  pointer-events: none;
 }
 
 .system-body-evidence-grid {
@@ -107,7 +146,7 @@
 }
 
 .system-body-evidence-grid .section-card {
-  min-height: 156px;
+  min-height: 164px;
   display: grid;
   align-content: start;
 }
@@ -124,6 +163,7 @@
 
 .system-body-timeline-card {
   padding-top: var(--space-16);
+  background: var(--surface-c);
 }
 
 .system-body-timeline-list {
@@ -142,6 +182,23 @@
 .system-body-timeline-list strong {
   color: var(--text-primary);
   font-size: var(--type-body-md, 0.95rem);
+}
+
+@keyframes orbAmbient {
+  0% { opacity: 0.45; transform: translateY(0) scale(1); }
+  50% { opacity: 0.8; transform: translateY(-4px) scale(1.03); }
+  100% { opacity: 0.45; transform: translateY(0) scale(1); }
+}
+
+@keyframes orbAmbientSoft {
+  0% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.04); }
+  100% { opacity: 0.4; transform: scale(1); }
+}
+
+@keyframes sectionFadeIn {
+  0% { opacity: 0.85; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @media (min-width: 1101px) and (max-width: 1360px) {
@@ -175,6 +232,10 @@
 
   .system-body-metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .system-body-narrative-item {
+    padding: var(--space-10);
   }
 
   .system-body-evidence-grid {

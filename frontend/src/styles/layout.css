@@ -11,6 +11,18 @@
   border: 1px solid var(--surface-border, rgba(138, 184, 196, 0.14));
   border-radius: var(--radius-lg);
   background: var(--surface-a, linear-gradient(180deg, rgba(18, 25, 30, 0.94), rgba(10, 15, 18, 0.92)));
+  position: relative;
+  overflow: hidden;
+}
+
+.workspace-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(138, 184, 196, 0.28), transparent);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .workspace-header__kicker {
@@ -54,6 +66,7 @@
   border: 1px solid rgba(138, 184, 196, 0.18);
   border-radius: var(--radius-md);
   background: rgba(12, 19, 23, 0.82);
+  backdrop-filter: blur(2px);
 }
 
 .workspace-header__status strong {
@@ -87,11 +100,15 @@
 @media (min-width: 1101px) {
   .platform-main {
     overflow: hidden !important;
+    background:
+      radial-gradient(ellipse at top center, rgba(34, 56, 64, 0.18), transparent 44%),
+      linear-gradient(180deg, rgba(7, 10, 13, 0.95), rgba(6, 9, 11, 0.96));
   }
 
   .platform-workspace {
     padding: var(--workspace-gutter-desktop) !important;
     overflow: auto !important;
+    scroll-padding-top: var(--space-20);
   }
 }
 
