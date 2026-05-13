@@ -152,6 +152,203 @@
   min-width: 720px;
 }
 
+/* Desktop operator console tuning */
+@media (min-width: 1101px) {
+  :root {
+    --operator-card-radius: 14px;
+    --operator-card-shadow: 0 16px 42px rgba(0, 0, 0, 0.22);
+  }
+
+  .platform-shell {
+    grid-template-columns: 236px minmax(0, 1fr) !important;
+  }
+
+  .platform-sidebar {
+    gap: 10px !important;
+    padding: 12px 10px !important;
+  }
+
+  .sidebar-brand-shell {
+    padding: 12px !important;
+  }
+
+  .brand-mark {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .brand-name {
+    font-size: 0.78rem !important;
+    letter-spacing: 0.07em !important;
+  }
+
+  .brand-subtitle,
+  .sidebar-footer span,
+  .sidebar-telemetry span {
+    font-size: 0.66rem !important;
+  }
+
+  .workspace-nav {
+    gap: 6px !important;
+  }
+
+  .workspace-nav__item {
+    min-height: 66px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .workspace-nav__label {
+    font-size: 0.78rem !important;
+  }
+
+  .workspace-nav__detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.66rem !important;
+  }
+
+  .top-status {
+    align-items: start !important;
+    gap: 14px !important;
+    padding: 14px 18px 12px !important;
+  }
+
+  .top-status__title {
+    max-width: 520px !important;
+    gap: 6px !important;
+  }
+
+  h1 {
+    font-size: clamp(1.72rem, 2vw, 2.36rem) !important;
+    line-height: 0.96 !important;
+  }
+
+  h2 {
+    font-size: 0.9rem !important;
+  }
+
+  h3 {
+    font-size: 0.82rem !important;
+  }
+
+  .top-status__title p,
+  .top-status__meta-copy {
+    font-size: 0.72rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .status-rack {
+    grid-template-columns: repeat(4, minmax(118px, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .status-chip {
+    min-height: 58px !important;
+    padding: 9px 10px !important;
+  }
+
+  .status-chip span,
+  .metric-cell span,
+  .timeline-item__time,
+  .zone-summary-card span,
+  .telemetry-card span {
+    font-size: 0.58rem !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  .status-chip strong,
+  .metric-cell strong,
+  .zone-summary-card strong,
+  .telemetry-card strong,
+  .workflow-step strong,
+  .status-banner strong,
+  .empty-state strong,
+  .feed-item strong,
+  .timeline-item strong {
+    font-size: 0.72rem !important;
+  }
+
+  .platform-workspace {
+    padding: 14px 18px 22px !important;
+  }
+
+  .workspace-grid {
+    gap: 10px !important;
+  }
+
+  .panel,
+  .connector-status-card {
+    padding: 14px !important;
+  }
+
+  .workspace-hero-panel {
+    padding: 16px !important;
+  }
+
+  .metric-grid,
+  .top-status__brief {
+    gap: 8px !important;
+  }
+
+  .metric-cell,
+  .top-status__brief-item,
+  .workflow-step,
+  .timeline-item,
+  .feed-item,
+  .telemetry-card,
+  .zone-summary-card {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .system-orb,
+  .topology-orb,
+  .hero-orb,
+  .orb-stage {
+    max-height: 280px !important;
+  }
+
+  .command-button,
+  .secondary-command-button,
+  .workspace-menu-button {
+    min-height: 38px !important;
+    padding: 0 14px !important;
+    font-size: 0.72rem !important;
+  }
+
+  .intake-flow {
+    gap: 12px !important;
+  }
+
+  .intake-flow__controls .command-button,
+  .intake-flow__controls .secondary-command-button {
+    flex: 0 1 auto;
+    min-width: 160px;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1320px) {
+  .platform-shell {
+    grid-template-columns: 216px minmax(0, 1fr) !important;
+  }
+
+  .status-rack {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .top-status {
+    display: grid !important;
+    align-items: stretch !important;
+  }
+
+  .top-status__title {
+    max-width: none !important;
+  }
+}
+
 @media (max-width: 1100px) {
   .platform-shell {
     grid-template-columns: 1fr;
