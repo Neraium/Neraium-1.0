@@ -164,14 +164,14 @@
   }
 
   .platform-shell {
-    grid-template-columns: 260px minmax(0, 1fr) !important;
+    grid-template-columns: 320px minmax(0, 1fr) !important;
     height: 100vh !important;
     overflow: hidden !important;
   }
 
   .platform-sidebar {
     gap: 10px !important;
-    padding: 12px 10px !important;
+    padding: 12px !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     min-width: 0 !important;
@@ -189,15 +189,15 @@
 
   .sidebar-brand {
     display: grid !important;
-    grid-template-columns: 32px minmax(0, 1fr) !important;
+    grid-template-columns: 34px minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
   }
 
   .brand-mark {
-    width: 32px !important;
-    height: 32px !important;
-    flex: 0 0 32px !important;
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
   }
 
   .brand-name {
@@ -205,8 +205,8 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.07em !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.06em !important;
   }
 
   .brand-subtitle,
@@ -217,7 +217,7 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
-    font-size: 0.66rem !important;
+    font-size: 0.68rem !important;
   }
 
   .workspace-nav {
@@ -226,9 +226,9 @@
 
   .workspace-nav__item {
     width: 100% !important;
-    min-height: 64px !important;
-    padding: 10px 12px !important;
-    border-radius: 12px !important;
+    min-height: 74px !important;
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
     overflow: hidden !important;
     text-align: left !important;
   }
@@ -239,7 +239,7 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
-    font-size: 0.8rem !important;
+    font-size: 0.9rem !important;
     line-height: 1.2 !important;
   }
 
@@ -249,8 +249,9 @@
     -webkit-line-clamp: 2 !important;
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
-    font-size: 0.66rem !important;
-    line-height: 1.28 !important;
+    font-size: 0.72rem !important;
+    line-height: 1.32 !important;
+    overflow-wrap: anywhere !important;
   }
 
   .sidebar-section--terminal {
@@ -259,7 +260,7 @@
   }
 
   .sidebar-kicker {
-    font-size: 0.7rem !important;
+    font-size: 0.72rem !important;
     letter-spacing: 0.12em !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -506,7 +507,21 @@
 
 @media (min-width: 1101px) and (max-width: 1320px) {
   .platform-shell {
-    grid-template-columns: 238px minmax(0, 1fr) !important;
+    grid-template-columns: 300px minmax(0, 1fr) !important;
+  }
+
+  .workspace-nav__item {
+    min-height: 76px !important;
+    padding: 12px 14px !important;
+  }
+
+  .workspace-nav__label {
+    font-size: 0.88rem !important;
+  }
+
+  .workspace-nav__detail {
+    font-size: 0.7rem !important;
+    line-height: 1.32 !important;
   }
 
   .status-rack {
