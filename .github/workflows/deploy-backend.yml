@@ -52,10 +52,64 @@ jobs:
           docker build -f backend/Dockerfile -t "$IMAGE_URI" backend
           docker push "$IMAGE_URI"
 
-      - name: Force ECS new deployment
+      - name: Register task definition with new backend image
+        run: |
+          set -euo pipefail
+
+          SERVICE_JSON=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION")
+
+          CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
+          if [ -z "$CURRENT_TASK_DEF" ] || [ "$CURRENT_TASK_DEF" = "null" ]; then
+            echo "No task definition found for service $ECS_SERVICE"
+            exit 1
+          fi
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURRENT_TASK_DEF" \
+            --region "$AWS_REGION" \
+            --query taskDefinition > current-task-definition.json
+
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-task-definition.json)
+          echo "Updating container $CONTAINER_NAME to image $IMAGE_URI"
+
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+            ))
+            | del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+          ' current-task-definition.json > next-task-definition.json
+
+          NEXT_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://next-task-definition.json \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "NEXT_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
+
+      - name: Update ECS service to new task definition
         run: |
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_SERVICE" \
+            --task-definition "$NEXT_TASK_DEF" \
             --force-new-deployment \
+            --region "$AWS_REGION"
+
+      - name: Wait for ECS service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
             --region "$AWS_REGION"
