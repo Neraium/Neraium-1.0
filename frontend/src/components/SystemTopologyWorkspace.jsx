@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
+import { normalizeOperationalState, orbStateFromOperationalState } from "../viewModels/operationalUiState";
 
 const STATE = {
   nominal: {
@@ -26,18 +27,13 @@ const STATE = {
 
 export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSelectTarget }) {
   const state = STATE[liveOps.facilityTone] ?? STATE.info;
+  const uiState = normalizeOperationalState(liveOps.facilityTone);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
-  const systemState = liveOps.facilityTone === "nominal"
-    ? "stable"
-    : liveOps.facilityTone === "review"
-      ? "drift"
-      : liveOps.facilityTone === "info"
-        ? "neutral"
-      : "separation";
+  const systemState = orbStateFromOperationalState(uiState);
   const findings = liveOps.findings?.slice(0, 2) ?? [];
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
@@ -69,32 +65,33 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   void onSelectTarget;
 
   const metrics = [
-    { label: "Severity", value: liveOps.facilityStateLabel, priority: true },
-    { label: "Primary room", value: where },
-    { label: "Next inspect", value: liveOps.primaryWindow?.label ?? "Facility overview" },
-    { label: "What changed", value: issueType },
+    { label: "Severity", value: liveOps.facilityStateLabel, priority: true, state: uiState },
+    { label: "Primary room", value: where, state: uiState === "neutral" ? "neutral" : "stable" },
+    { label: "Next inspect", value: liveOps.primaryWindow?.label ?? "Facility overview", state: uiState === "stable" ? "stable" : "watch" },
+    { label: "What changed", value: issueType, state: uiState },
   ];
   const evidenceItems = [
-    { label: "Primary evidence", value: primaryEvidence },
-    { label: "Relationship evidence", value: relationshipEvidence },
-    { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.` },
+    { label: "Primary evidence", value: primaryEvidence, state: uiState },
+    { label: "Relationship evidence", value: relationshipEvidence, state: uiState === "stable" ? "watch" : uiState },
+    { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.`, state: "neutral" },
   ];
   const narrativeItems = [
-    { label: "What's wrong", value: primaryMessage },
-    { label: "Why we think that", value: whyWeThinkThat },
-    { label: "Human read", value: humanRead },
-    { label: "Where", value: where },
+    { label: "What's wrong", value: primaryMessage, state: uiState },
+    { label: "Why we think that", value: whyWeThinkThat, state: uiState === "stable" ? "watch" : uiState },
+    { label: "Human read", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
+    { label: "Where", value: where, state: "neutral" },
   ];
   const timelineItems = [
-    { label: "Latest update", value: lastUpdate },
-    { label: "Operational runway", value: runway },
-    { label: "Urgency", value: urgency },
-    { label: "Evidence quality", value: confidence },
+    { label: "Latest update", value: lastUpdate, state: "neutral" },
+    { label: "Operational runway", value: runway, state: uiState },
+    { label: "Urgency", value: urgency, state: uiState },
+    { label: "Evidence quality", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
   ];
 
   return (
     <SystemBodyWorkspace
       systemState={systemState}
+      uiState={uiState}
       coherence={coherence}
       stateLabel={state.label}
       subtitle={state.description}

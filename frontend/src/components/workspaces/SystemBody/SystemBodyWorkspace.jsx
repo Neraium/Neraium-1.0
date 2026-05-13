@@ -7,6 +7,7 @@ import SystemBodySkeleton from "../../loading/SystemBodySkeleton";
 
 export default function SystemBodyWorkspace({
   systemState,
+  uiState,
   coherence,
   stateLabel,
   subtitle,
@@ -32,7 +33,7 @@ export default function SystemBodyWorkspace({
 
   return (
     <PageContainer className="system-body system-body--orb-first">
-      <section className={`system-body-hero hero-panel system-body-hero--${systemState}`}>
+      <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
           <header className="system-body-hero__header">
             <p className="workspace-header__kicker">System Body</p>
@@ -47,16 +48,18 @@ export default function SystemBodyWorkspace({
             summaryKicker="Operational narrative"
             summaryTitle={summaryTitle}
             items={narrativeItems}
+            uiState={uiState}
           />
         </div>
         <SystemOrbPanel
           systemState={systemState}
+          uiState={uiState}
           coherence={coherence}
           stateLabel={stateLabel}
         />
       </section>
       <SystemMetricGrid metrics={metrics} />
-      <SystemEvidencePanel evidenceItems={evidenceItems} timelineItems={timelineItems} />
+      <SystemEvidencePanel evidenceItems={evidenceItems} timelineItems={timelineItems} uiState={uiState} />
     </PageContainer>
   );
 }

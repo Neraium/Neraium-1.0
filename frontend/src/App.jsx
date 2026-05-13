@@ -27,12 +27,12 @@ import {
   normalizeErrorMessage,
   readJsonPayload,
 } from "./viewModels/uploadFlow";
+import { normalizeOperationalState } from "./viewModels/operationalUiState";
 import * as uploadStateView from "./viewModels/uploadState";
 import useStableInterval from "./hooks/useStableInterval";
 import { fetchApiHealth } from "./services/api/healthApi";
 import { fetchEngineIdentity, fetchFacilitySystems as fetchSystemFacility } from "./services/api/systemApi";
 import { fetchLatestUploadState } from "./services/api/uploadApi";
-import "./styles.css";
 
 const WORKSPACES = [
   {
@@ -730,6 +730,8 @@ function WorkspaceNavigationContent({
   liveOps,
   onSelectWorkspace,
 }) {
+  const activeUiState = normalizeOperationalState(liveOps.facilityTone);
+
   return (
     <>
       <div className="sidebar-brand-shell"> 
@@ -748,20 +750,24 @@ function WorkspaceNavigationContent({
         <nav className="workspace-nav">
           {WORKSPACES.map((workspace) => (
             <button
-              className={`workspace-nav__item ${activeWorkspace === workspace.id ? "workspace-nav__item--active" : ""}`}
+              className={`workspace-nav__item ${activeWorkspace === workspace.id ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
               key={workspace.id}
               type="button"
               aria-current={activeWorkspace === workspace.id ? "page" : undefined}
               onClick={() => onSelectWorkspace(workspace.id)}
             >
-              <span className="workspace-nav__label">{workspace.label}</span>
+              <div className="workspace-nav__header">
+                <span className="workspace-nav__label">{workspace.label}</span>
+                <StatusDot tone={activeWorkspace === workspace.id ? liveOps.facilityTone : "muted"} />
+              </div>
+              <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
               <span className="workspace-nav__detail">{workspace.description}</span>
             </button>
           ))}
         </nav>
       </div>
 
-      <div className="sidebar-section sidebar-section--terminal">
+      <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
         <p className="sidebar-kicker">Persistent state</p>
         <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
         <SidebarTelemetry label="Primary room" value={roomContext.primary} />
@@ -796,6 +802,7 @@ function TopStatusBar({
 }) {
   const intelligenceLabel = formatIntelligenceSourceLabel(liveOps.intelligenceMode);
   const triageSummary = deriveTriageSummary(liveOps, roomContext);
+  const uiState = normalizeOperationalState(liveOps.facilityTone);
   return (
     <header className="top-status"> 
       <div className="top-status__title"> 
@@ -815,7 +822,7 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone}`}>
+      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
         <article className="top-status__brief-item">
           <span>What&apos;s wrong</span>
           <strong>{triageSummary.problem}</strong>
@@ -889,8 +896,10 @@ function StatusBanner({ title, subtitle, tone }) {
 }
 
 function StatusChip({ label, value, tone }) { 
+  const uiState = normalizeOperationalState(tone);
+
   return (
-    <div className={`status-chip status-chip--${tone}`}>
+    <div className={`status-chip status-chip--${tone} ui-state-surface ui-state-surface--${uiState}`}>
       <div className="status-chip__head">
         <StatusDot tone={tone} />
         <span>{label}</span>

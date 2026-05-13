@@ -11,7 +11,7 @@ export default function DesktopWorkspaceLayout({
   drawer,
 }) {
   return (
-    <main className="neraium-sidebar-emergency-fix platform-shell">
+    <main className="platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
         {navigation}
       </aside>

@@ -1,8 +1,8 @@
 import HealthOrb from "../../HealthOrb";
 
-export default function SystemOrbPanel({ systemState, coherence, stateLabel }) {
+export default function SystemOrbPanel({ systemState, uiState, coherence, stateLabel }) {
   return (
-    <aside className={`system-body-orb-panel system-body-orb-panel--${systemState}`} aria-label="Facility condition orb">
+    <aside className={`system-body-orb-panel system-body-orb-panel--${systemState} ui-state-indicator ui-state-indicator--${uiState}`} aria-label="Facility condition orb">
       <div className="system-body-orb-panel__halo system-body-orb-panel__halo--outer" />
       <div className="system-body-orb-panel__halo system-body-orb-panel__halo--inner" />
       <div className="system-body-orb-panel__depth" />
