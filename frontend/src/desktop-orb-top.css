@@ -1,46 +1,51 @@
-/* Desktop System Body command view with balanced spacing and visible orb. */
+/* Desktop System Body layout safety pass.
+   Keep the orb visible near the top of the System Body view without fixed positioning or overlap. */
 
 @media (min-width: 1101px) {
   .system-body {
     display: grid;
-    gap: 14px;
+    gap: 18px;
   }
 
   .system-body__header {
-    display: none !important;
+    display: grid !important;
+    gap: 6px !important;
   }
 
   .system-body .integrity-hero {
     display: grid !important;
-    grid-template-columns: 320px minmax(0, 1fr) !important;
+    grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr) !important;
     align-items: start !important;
-    gap: 16px !important;
-    padding: 16px !important;
-    min-height: unset !important;
+    gap: 18px !important;
+    padding: 18px !important;
+    min-height: auto !important;
+    overflow: visible !important;
   }
 
   .system-body .integrity-hero__score {
-    position: sticky !important;
-    top: 18px !important;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    z-index: auto !important;
     width: 100% !important;
     min-height: 420px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
+    max-height: none !important;
+    display: grid !important;
+    align-content: center !important;
+    justify-items: center !important;
     padding: 20px !important;
     border-radius: 18px !important;
     border: 1px solid rgba(138, 184, 196, 0.14) !important;
     background:
       radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.18), transparent 44%),
       linear-gradient(180deg, rgba(16, 24, 28, 0.95), rgba(8, 12, 15, 0.96)) !important;
-    box-shadow: 0 18px 48px rgba(0,0,0,0.34) !important;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32) !important;
   }
 
   .system-body .integrity-hero__score-orb {
     width: 260px !important;
     max-width: 260px !important;
-    margin-bottom: 18px !important;
+    margin: 0 auto 18px !important;
   }
 
   .system-body .integrity-hero__score-orb canvas,
@@ -56,16 +61,15 @@
   }
 
   .system-body .integrity-hero__score p {
+    max-width: 34ch !important;
     margin-top: 10px !important;
     font-size: 0.76rem !important;
     line-height: 1.45 !important;
     text-align: center !important;
-    max-width: 34ch !important;
   }
 
   .system-body .integrity-hero__meta {
-    display: flex !important;
-    flex-direction: column !important;
+    display: grid !important;
     gap: 14px !important;
     min-width: 0 !important;
   }
@@ -75,17 +79,6 @@
     border-radius: 16px !important;
   }
 
-  .system-body .integrity-hero__summary h3 {
-    font-size: 1rem !important;
-    line-height: 1.35 !important;
-  }
-
-  .system-body .integrity-hero__summary p:not(.integrity-hero__kicker) {
-    font-size: 0.78rem !important;
-    line-height: 1.5 !important;
-    margin-top: 8px !important;
-  }
-
   .system-body .integrity-hero__metrics {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -93,51 +86,36 @@
   }
 
   .system-body .integrity-hero__metric {
-    min-height: 100px !important;
+    min-height: 96px !important;
     padding: 14px !important;
     border-radius: 14px !important;
   }
 
   .system-body .integrity-hero__metric--priority {
     grid-column: 1 / -1 !important;
-    min-height: 110px !important;
-  }
-
-  .system-body .integrity-hero__metric strong {
-    font-size: 0.84rem !important;
-    line-height: 1.35 !important;
-  }
-
-  .system-body .integrity-hero__metric--priority strong {
-    font-size: 1.18rem !important;
+    min-height: 108px !important;
   }
 
   .system-body .integrity-hero__evidence {
-    display: flex !important;
-    flex-direction: column !important;
+    display: grid !important;
     gap: 12px !important;
   }
 
   .system-body .integrity-hero__evidence article {
-    min-height: 100px !important;
+    min-height: 96px !important;
     padding: 14px !important;
     border-radius: 14px !important;
-  }
-
-  .system-body .integrity-hero__evidence p {
-    font-size: 0.76rem !important;
-    line-height: 1.45 !important;
-    margin-top: 8px !important;
   }
 }
 
 @media (min-width: 1101px) and (max-width: 1320px) {
   .system-body .integrity-hero {
     grid-template-columns: 280px minmax(0, 1fr) !important;
+    gap: 14px !important;
   }
 
   .system-body .integrity-hero__score {
-    min-height: 380px !important;
+    min-height: 360px !important;
   }
 
   .system-body .integrity-hero__score-orb {
