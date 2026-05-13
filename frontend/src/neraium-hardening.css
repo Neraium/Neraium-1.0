@@ -473,24 +473,6 @@
     border-radius: 10px !important;
   }
 
-  .system-orb,
-  .topology-orb,
-  .hero-orb,
-  .orb-stage,
-  .system-health-orb,
-  .orb-container {
-    max-height: 210px !important;
-    min-height: 170px !important;
-  }
-
-  .system-orb canvas,
-  .topology-orb canvas,
-  .hero-orb canvas,
-  .orb-stage canvas,
-  .orb-container canvas {
-    max-height: 210px !important;
-  }
-
   .command-button,
   .secondary-command-button,
   .workspace-menu-button {

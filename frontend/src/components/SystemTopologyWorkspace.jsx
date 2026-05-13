@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import HealthOrb from "./HealthOrb";
+import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
 
 const STATE = {
   nominal: {
@@ -65,68 +65,30 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   void selectedTarget;
   void onSelectTarget;
 
+  const metrics = [
+    { label: "Operational runway", value: runway, priority: true },
+    { label: "Issue type", value: issueType },
+    { label: "Suspected location", value: suspectedLocation },
+    { label: "Urgency", value: urgency },
+    { label: "Evidence quality", value: confidence },
+    { label: "Latest update", value: lastUpdate },
+  ];
+  const evidenceItems = [
+    { label: "Primary evidence", value: primaryEvidence },
+    { label: "Relationship evidence", value: relationshipEvidence },
+    { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.` },
+  ];
+
   return (
-    <section className="system-body system-body--orb-first">
-      <div className="system-body-command">
-        <article className={`system-body-orb-panel system-body-orb-panel--${systemState}`}>
-          <div className="system-body-orb-panel__stage">
-            <HealthOrb systemState={systemState} intensity={1 - coherence} />
-          </div>
-          <span>Facility condition</span>
-          <strong>{state.label}</strong>
-          <p>{primaryMessage}</p>
-        </article>
-
-        <div className="system-body-command__content">
-          <article className="system-body-summary-card">
-            <p className="system-body-summary-card__kicker">System summary</p>
-            <h2>{state.description}</h2>
-            <p>{secondaryMessage}</p>
-          </article>
-
-          <div className="system-body-metric-grid">
-            <article className="system-body-metric system-body-metric--priority">
-              <span>Operational runway</span>
-              <strong>{runway}</strong>
-            </article>
-            <article className="system-body-metric">
-              <span>Issue type</span>
-              <strong>{issueType}</strong>
-            </article>
-            <article className="system-body-metric">
-              <span>Suspected location</span>
-              <strong>{suspectedLocation}</strong>
-            </article>
-            <article className="system-body-metric">
-              <span>Urgency</span>
-              <strong>{urgency}</strong>
-            </article>
-            <article className="system-body-metric">
-              <span>Evidence quality</span>
-              <strong>{confidence}</strong>
-            </article>
-            <article className="system-body-metric">
-              <span>Latest update</span>
-              <strong>{lastUpdate}</strong>
-            </article>
-          </div>
-        </div>
-      </div>
-
-      <div className="system-body-evidence-grid">
-        <article>
-          <span>Primary evidence</span>
-          <p>{primaryEvidence}</p>
-        </article>
-        <article>
-          <span>Relationship evidence</span>
-          <p>{relationshipEvidence}</p>
-        </article>
-        <article>
-          <span>Source of truth</span>
-          <p>{sourceLabel}. Operational conclusions remain backend/SII sourced.</p>
-        </article>
-      </div>
-    </section>
+    <SystemBodyWorkspace
+      systemState={systemState}
+      coherence={coherence}
+      stateLabel={state.label}
+      primaryMessage={primaryMessage}
+      summaryTitle={state.description}
+      summaryText={secondaryMessage}
+      metrics={metrics}
+      evidenceItems={evidenceItems}
+    />
   );
 }
