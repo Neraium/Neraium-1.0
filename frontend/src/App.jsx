@@ -11,12 +11,19 @@ import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
 import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
 import FleetWorkspace from "./components/FleetWorkspace";
 import {
+  SidebarNavigation as ShellSidebarNavigation,
+  TopStatusBar as ShellTopStatusBar,
+} from "./components/shell";
+import {
   CompactList,
   EmptyState,
   MetricGrid,
   Panel,
   StatusDot,
-} from "./components/workspacePrimitives";
+} from "./components/primitives";
+import { WORKSPACES } from "./config/workspaces";
+import { FALLBACK_SYSTEMS } from "./config/fallbackSystems";
+import { OPERATIONAL_CADENCE_MS, LIVE_REFRESH_INTERVAL_MS } from "./config/runtimeConstants";
 import {
   formatOperationalLabel,
 } from "./viewModels/operationalHelpers";
@@ -28,72 +35,11 @@ import {
 } from "./viewModels/uploadFlow";
 import * as uploadStateView from "./viewModels/uploadState";
 import "./styles.css";
-
-const WORKSPACES = [
-  {
-    id: "system-body",
-    label: "System Body",
-    eyebrow: "Topology View",
-    description: "Top-level facility health with one live structural orb.",
-  },
-  {
-    id: "drift-timeline",
-    label: "Drift Timeline",
-    eyebrow: "Temporal View",
-    description: "Trajectory of structural distance from stable baseline.",
-  },
-  {
-    id: "evidence-console",
-    label: "Evidence Console",
-    eyebrow: "Interpretability View",
-    description: "Why drift is flagged, which relationships shifted, and what to do next.",
-  },
-  {
-    id: "data-connections",
-    label: "Data Connections",
-    eyebrow: "Signal Intake",
-    description: "Upload telemetry files and manage the live intake endpoint.",
-  },
-  {
-    id: "historical-replay",
-    label: "Evidence Trail",
-    eyebrow: "Run History",
-    description: "Replay prior runs and export historical evidence reports.",
-  },
-  {
-    id: "fleet-view",
-    label: "Fleet View",
-    eyebrow: "Multi-Site Ops",
-    description: "Fleet-level status, priority queue, and replay escalation log.",
-  },
-];
-
-const FALLBACK_SYSTEMS = [
-  {
-    name: "HVAC",
-    scope: "Room temperature control, equipment activity, and zone balancing.",
-  },
-  {
-    name: "Humidity control",
-    scope: "Dehumidification, humidification, and moisture stability.",
-  },
-  {
-    name: "Airflow",
-    scope: "Circulation, pressure movement, and room exchange behavior.",
-  },
-  {
-    name: "Irrigation",
-    scope: "Irrigation timing, cycle review, and environmental response context.",
-  },
-  {
-    name: "Lighting",
-    scope: "Photoperiod windows, fixture response, and environmental coupling.",
-  },
-  {
-    name: "Sensor network",
-    scope: "Room sensors, gateway exports, and telemetry continuity.",
-  },
-];
+import "./styles/shell.css";
+import "./styles/sidebar.css";
+import "./styles/top-status.css";
+import "./styles/workspace-system-body.css";
+import "./styles/mobile.css";
 
 const INTAKE_STAGES = [
   "Batch receipt",
@@ -110,8 +56,6 @@ const REPORT_TEMPLATES = [
   "Grower Action Report",
 ];
 
-const OPERATIONAL_CADENCE_MS = 30000;
-const LIVE_REFRESH_INTERVAL_MS = 5000;
 
 function App() { 
   const hasAccess = true;
@@ -403,6 +347,11 @@ function App() {
   }); 
   const liveOps = isDemoMode ? buildDemoLiveOps(telemetryTick, demoScenario) : runtimeLiveOps;
 
+  const driftDependencyKey = JSON.stringify({
+    driftRows: (liveOps.driftRows ?? []).map((row) => Number(row?.absolute_change ?? 0)),
+    relationshipRows: (liveOps.relationshipRows ?? []).map((row) => Number(row?.pair_weight ?? row?.change ?? 0)),
+  });
+
   useEffect(() => {
     const relationshipMagnitude = (liveOps.relationshipRows ?? [])
       .map((row) => Number(row.pair_weight ?? row.change))
@@ -447,7 +396,7 @@ function App() {
       const next = [...current, { stamp, distance: baselineDistance, velocity, acceleration, tone: smoothedTone }];
       return next.slice(-48);
     });
-  }, [telemetryTick, liveOps.connectionSummary, liveOps.driftRows, liveOps.facilityTone, liveOps.relationshipRows]);
+  }, [telemetryTick, driftDependencyKey]);
 
   useEffect(() => {
     if (workspaceRef.current) {
@@ -563,14 +512,15 @@ function App() {
     <AppErrorBoundary>
     <main className="neraium-sidebar-emergency-fix platform-shell">
       <aside className="platform-sidebar" aria-label="Workspace navigation">
-        <WorkspaceNavigationContent
+        <ShellSidebarNavigation
+          workspaces={WORKSPACES}
           activeWorkspace={activeWorkspace}
-          apiStatus={apiStatus}
-          latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
           onSelectWorkspace={handleWorkspaceSelect}
+          StatusDot={StatusDot}
+          SidebarTelemetry={SidebarTelemetry}
         />
       </aside>
 
@@ -638,12 +588,10 @@ function App() {
           </button>
         </header>
 
-        <TopStatusBar 
+        <ShellTopStatusBar 
           activeConfig={activeConfig} 
-          apiStatus={apiStatus} 
           latestUploadResult={latestUploadResult} 
           roomContext={roomContext} 
-          timeCoverage={timeCoverage} 
           liveOps={liveOps} 
           isDemoMode={isDemoMode}
           onToggleDemoMode={() => {
@@ -657,6 +605,11 @@ function App() {
           }}
           demoScenario={demoScenario}
           onSetDemoScenario={setDemoScenario}
+          StatusDot={StatusDot}
+          StatusChip={StatusChip}
+          deriveTriageSummary={deriveTriageSummary}
+          formatIntelligenceSourceLabel={formatIntelligenceSourceLabel}
+          formatReadiness={formatReadiness}
         /> 
 
         <section
@@ -695,14 +648,15 @@ function App() {
             Close
           </button>
         </div>
-        <WorkspaceNavigationContent
+        <ShellSidebarNavigation
+          workspaces={WORKSPACES}
           activeWorkspace={activeWorkspace}
-          apiStatus={apiStatus}
-          latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
           onSelectWorkspace={handleWorkspaceSelect}
+          StatusDot={StatusDot}
+          SidebarTelemetry={SidebarTelemetry}
         />
       </aside>
     </main>

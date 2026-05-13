@@ -1,0 +1,1 @@
+.platform-workspace { padding: 24px 26px calc(32px + env(safe-area-inset-bottom, 0px)); } .integrity-hero--solo { grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); }

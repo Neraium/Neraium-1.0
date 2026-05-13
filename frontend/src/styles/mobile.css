@@ -1,0 +1,1 @@
+@media (max-width: 760px) { .platform-shell { grid-template-columns: minmax(0, 1fr); } .platform-sidebar { display: none; } .mobile-status-bar { display: grid; } }
