@@ -164,58 +164,128 @@
   }
 
   .platform-shell {
-    grid-template-columns: 186px minmax(0, 1fr) !important;
+    grid-template-columns: 260px minmax(0, 1fr) !important;
     height: 100vh !important;
     overflow: hidden !important;
   }
 
   .platform-sidebar {
-    gap: 8px !important;
-    padding: 10px 8px !important;
-    overflow: hidden auto !important;
+    gap: 10px !important;
+    padding: 12px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    min-width: 0 !important;
+  }
+
+  .platform-sidebar * {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
   }
 
   .sidebar-brand-shell {
-    padding: 10px !important;
+    padding: 12px !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar-brand {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 10px !important;
   }
 
   .brand-mark {
-    width: 26px !important;
-    height: 26px !important;
+    width: 32px !important;
+    height: 32px !important;
+    flex: 0 0 32px !important;
   }
 
   .brand-name {
-    font-size: 0.68rem !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.78rem !important;
     letter-spacing: 0.07em !important;
   }
 
   .brand-subtitle,
+  .brand-edition,
   .sidebar-footer span,
   .sidebar-telemetry span {
-    font-size: 0.58rem !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.66rem !important;
   }
 
   .workspace-nav {
-    gap: 5px !important;
+    gap: 8px !important;
   }
 
   .workspace-nav__item {
-    min-height: 52px !important;
-    padding: 8px 10px !important;
-    border-radius: 11px !important;
+    width: 100% !important;
+    min-height: 64px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    text-align: left !important;
   }
 
   .workspace-nav__label {
-    font-size: 0.68rem !important;
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 0.8rem !important;
+    line-height: 1.2 !important;
   }
 
   .workspace-nav__detail {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    font-size: 0.58rem !important;
-    line-height: 1.25 !important;
+    display: -webkit-box !important;
+    max-width: 100% !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    font-size: 0.66rem !important;
+    line-height: 1.28 !important;
+  }
+
+  .sidebar-section--terminal {
+    padding: 12px !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar-kicker {
+    font-size: 0.7rem !important;
+    letter-spacing: 0.12em !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .sidebar-telemetry {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+
+  .sidebar-telemetry strong,
+  .sidebar-telemetry span,
+  .sidebar-footer p,
+  .sidebar-footer span {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .sidebar-footer {
+    display: grid !important;
+    grid-template-columns: 16px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    align-items: center !important;
   }
 
   .platform-main {
@@ -436,7 +506,7 @@
 
 @media (min-width: 1101px) and (max-width: 1320px) {
   .platform-shell {
-    grid-template-columns: 172px minmax(0, 1fr) !important;
+    grid-template-columns: 238px minmax(0, 1fr) !important;
   }
 
   .status-rack {
