@@ -10,11 +10,15 @@ export default function SystemBodyWorkspace({
   systemState,
   coherence,
   stateLabel,
+  subtitle,
+  connectionStatus,
+  connectionTone,
   primaryMessage,
   summaryTitle,
-  summaryText,
+  narrativeItems,
   metrics,
   evidenceItems,
+  timelineItems,
   isLoading = false,
 }) {
   if (isLoading) {
@@ -23,7 +27,10 @@ export default function SystemBodyWorkspace({
         <WorkspaceHeader
           kicker="System Body"
           title={stateLabel}
+          subtitle={subtitle}
           description="Synchronizing facility telemetry and structural intelligence."
+          statusLabel={connectionStatus}
+          statusTone={connectionTone}
         />
         <SystemBodySkeleton />
       </PageContainer>
@@ -35,7 +42,10 @@ export default function SystemBodyWorkspace({
       <WorkspaceHeader
         kicker="System Body"
         title={stateLabel}
+        subtitle={subtitle}
         description={primaryMessage}
+        statusLabel={connectionStatus}
+        statusTone={connectionTone}
       />
       <SystemOrbPanel
         systemState={systemState}
@@ -46,10 +56,10 @@ export default function SystemBodyWorkspace({
       <SystemNarrativePanel
         summaryKicker="Operational summary"
         summaryTitle={summaryTitle}
-        summaryText={summaryText}
+        items={narrativeItems}
       />
       <SystemMetricGrid metrics={metrics} />
-      <SystemEvidencePanel evidenceItems={evidenceItems} />
+      <SystemEvidencePanel evidenceItems={evidenceItems} timelineItems={timelineItems} />
     </PageContainer>
   );
 }

@@ -62,21 +62,34 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     ? awaitingLabel
     : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
   const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
+  const whyWeThinkThat = secondaryMessage || relationshipEvidence;
+  const humanRead = liveOps.connectionActionHint || "Monitor relationship coherence and schedule operator review if drift persists.";
+  const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;
 
   const metrics = [
-    { label: "Operational runway", value: runway, priority: true },
-    { label: "Issue type", value: issueType },
-    { label: "Suspected location", value: suspectedLocation },
-    { label: "Urgency", value: urgency },
-    { label: "Evidence quality", value: confidence },
-    { label: "Latest update", value: lastUpdate },
+    { label: "Severity", value: liveOps.facilityStateLabel, priority: true },
+    { label: "Primary room", value: where },
+    { label: "Next inspect", value: liveOps.primaryWindow?.label ?? "Facility overview" },
+    { label: "What changed", value: issueType },
   ];
   const evidenceItems = [
     { label: "Primary evidence", value: primaryEvidence },
     { label: "Relationship evidence", value: relationshipEvidence },
     { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.` },
+  ];
+  const narrativeItems = [
+    { label: "What’s wrong", value: primaryMessage },
+    { label: "Why we think that", value: whyWeThinkThat },
+    { label: "Human read", value: humanRead },
+    { label: "Where", value: where },
+  ];
+  const timelineItems = [
+    { label: "Latest update", value: lastUpdate },
+    { label: "Operational runway", value: runway },
+    { label: "Urgency", value: urgency },
+    { label: "Evidence quality", value: confidence },
   ];
 
   return (
@@ -84,11 +97,15 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       systemState={systemState}
       coherence={coherence}
       stateLabel={state.label}
+      subtitle={state.description}
+      connectionStatus={liveOps.connectionStatusLine}
+      connectionTone={liveOps.connectionTone}
       primaryMessage={primaryMessage}
       summaryTitle={state.description}
-      summaryText={secondaryMessage}
+      narrativeItems={narrativeItems}
       metrics={metrics}
       evidenceItems={evidenceItems}
+      timelineItems={timelineItems}
       isLoading={awaitingSii}
     />
   );

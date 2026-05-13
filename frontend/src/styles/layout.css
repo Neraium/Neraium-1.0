@@ -6,7 +6,7 @@
 
 .workspace-header {
   display: grid;
-  gap: var(--space-12);
+  gap: var(--space-14);
   padding: var(--panel-padding-large);
   border: 1px solid var(--surface-border, rgba(138, 184, 196, 0.14));
   border-radius: var(--radius-lg);
@@ -34,6 +34,48 @@
   color: var(--text-secondary);
   max-width: 74ch;
   font-size: var(--type-body-md, 0.95rem);
+}
+
+.workspace-header__subtitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(1.02rem, 1.25vw, 1.2rem);
+  line-height: 1.35;
+}
+
+.workspace-header__status {
+  display: grid;
+  gap: var(--space-6);
+  justify-items: start;
+  width: fit-content;
+  min-width: 260px;
+  margin-top: var(--space-8);
+  padding: var(--space-12) var(--space-14);
+  border: 1px solid rgba(138, 184, 196, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(12, 19, 23, 0.82);
+}
+
+.workspace-header__status strong {
+  color: var(--text-primary);
+  font-size: var(--type-body-sm, 0.86rem);
+  line-height: 1.4;
+}
+
+.workspace-header__status--online,
+.workspace-header__status--nominal {
+  border-color: rgba(108, 186, 156, 0.3);
+}
+
+.workspace-header__status--review,
+.workspace-header__status--info {
+  border-color: rgba(188, 170, 112, 0.28);
+}
+
+.workspace-header__status--offline,
+.workspace-header__status--elevated,
+.workspace-header__status--unstable {
+  border-color: rgba(209, 123, 115, 0.3);
 }
 
 .layout-metric-grid {
