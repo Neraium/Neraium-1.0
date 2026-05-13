@@ -17,7 +17,7 @@ env:
   ECR_REPOSITORY: neraium-backend
   ECS_CLUSTER: default
   ECS_API_SERVICE: neraium-api-service-3z8k8vz1
-  ECS_WORKER_SERVICE: neraium-worker-service
+  ECS_WORKER_SERVICE: neraium-prod-worker-service
 
 jobs:
   deploy-backend:
