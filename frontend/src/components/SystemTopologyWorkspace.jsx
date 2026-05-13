@@ -66,74 +66,67 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   void onSelectTarget;
 
   return (
-    <section className="system-body">
-      <div className="system-body__header">
-        <p className="system-body__kicker">System Body</p>
-        <h2>System Health</h2>
-        <p>{liveOps.heroSubline}</p>
-      </div>
-
-      <div className={`integrity-hero integrity-hero--solo integrity-hero--${systemState}`}>
-        <div className="integrity-hero__score">
-          <div className="integrity-hero__score-orb">
+    <section className="system-body system-body--orb-first">
+      <div className="system-body-command">
+        <article className={`system-body-orb-panel system-body-orb-panel--${systemState}`}>
+          <div className="system-body-orb-panel__stage">
             <HealthOrb systemState={systemState} intensity={1 - coherence} />
           </div>
           <span>Facility condition</span>
           <strong>{state.label}</strong>
           <p>{primaryMessage}</p>
-        </div>
+        </article>
 
-        <div className="integrity-hero__meta">
-          <div className="integrity-hero__summary">
-            <p className="integrity-hero__kicker">System summary</p>
-            <h3>{state.description}</h3>
+        <div className="system-body-command__content">
+          <article className="system-body-summary-card">
+            <p className="system-body-summary-card__kicker">System summary</p>
+            <h2>{state.description}</h2>
             <p>{secondaryMessage}</p>
-          </div>
+          </article>
 
-          <div className="integrity-hero__metrics">
-            <article className="integrity-hero__metric integrity-hero__metric--priority">
+          <div className="system-body-metric-grid">
+            <article className="system-body-metric system-body-metric--priority">
               <span>Operational runway</span>
               <strong>{runway}</strong>
             </article>
-            <article className="integrity-hero__metric">
+            <article className="system-body-metric">
               <span>Issue type</span>
               <strong>{issueType}</strong>
             </article>
-            <article className="integrity-hero__metric">
+            <article className="system-body-metric">
               <span>Suspected location</span>
               <strong>{suspectedLocation}</strong>
             </article>
-            <article className="integrity-hero__metric">
+            <article className="system-body-metric">
               <span>Urgency</span>
               <strong>{urgency}</strong>
             </article>
-            <article className="integrity-hero__metric">
+            <article className="system-body-metric">
               <span>Evidence quality</span>
               <strong>{confidence}</strong>
             </article>
-            <article className="integrity-hero__metric">
+            <article className="system-body-metric">
               <span>Latest update</span>
               <strong>{lastUpdate}</strong>
             </article>
           </div>
-
-          <div className="integrity-hero__evidence">
-            <article>
-              <span>Primary evidence</span>
-              <p>{primaryEvidence}</p>
-            </article>
-            <article>
-              <span>Relationship evidence</span>
-              <p>{relationshipEvidence}</p>
-            </article>
-            <article>
-              <span>Source of truth</span>
-              <p>{sourceLabel}. Operational conclusions remain backend/SII sourced.</p>
-            </article>
-          </div>
         </div>
+      </div>
+
+      <div className="system-body-evidence-grid">
+        <article>
+          <span>Primary evidence</span>
+          <p>{primaryEvidence}</p>
+        </article>
+        <article>
+          <span>Relationship evidence</span>
+          <p>{relationshipEvidence}</p>
+        </article>
+        <article>
+          <span>Source of truth</span>
+          <p>{sourceLabel}. Operational conclusions remain backend/SII sourced.</p>
+        </article>
       </div>
     </section>
   );
 }
-
