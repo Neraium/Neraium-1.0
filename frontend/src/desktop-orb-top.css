@@ -1,0 +1,171 @@
+/* Desktop System Body command view: bring the structural orb to the top of the workspace. */
+
+@media (min-width: 1101px) {
+  .system-body {
+    display: grid;
+    gap: 8px;
+  }
+
+  .system-body__header {
+    display: none !important;
+  }
+
+  .system-body .integrity-hero {
+    display: grid !important;
+    grid-template-columns: minmax(260px, 0.68fr) minmax(0, 1.32fr) !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 10px !important;
+  }
+
+  .system-body .integrity-hero__score {
+    order: 0 !important;
+    display: grid !important;
+    align-content: center !important;
+    justify-items: center !important;
+    min-height: 300px !important;
+    padding: 12px !important;
+    border: 1px solid rgba(138, 184, 196, 0.12);
+    border-radius: 12px;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(138, 184, 196, 0.12), transparent 42%),
+      linear-gradient(180deg, rgba(18, 28, 32, 0.68), rgba(7, 12, 15, 0.64));
+  }
+
+  .system-body .integrity-hero__score-orb {
+    width: min(100%, 250px) !important;
+    max-width: 250px !important;
+    margin: 0 auto 8px !important;
+  }
+
+  .system-body .integrity-hero__score-orb canvas,
+  .system-body .integrity-hero__score-orb svg {
+    max-width: 250px !important;
+    max-height: 250px !important;
+  }
+
+  .system-body .integrity-hero__score span {
+    margin-top: 2px !important;
+    color: var(--text-muted) !important;
+    font-size: 0.54rem !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+  }
+
+  .system-body .integrity-hero__score strong {
+    color: var(--text-primary) !important;
+    font-size: clamp(1.1rem, 1.55vw, 1.8rem) !important;
+    line-height: 1.05 !important;
+    text-align: center !important;
+  }
+
+  .system-body .integrity-hero__score p {
+    max-width: 36ch !important;
+    margin: 0 !important;
+    color: var(--text-secondary) !important;
+    font-size: 0.68rem !important;
+    line-height: 1.35 !important;
+    text-align: center !important;
+  }
+
+  .system-body .integrity-hero__meta {
+    order: 1 !important;
+    display: grid !important;
+    grid-template-rows: auto auto minmax(0, 1fr) !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+  }
+
+  .system-body .integrity-hero__summary {
+    padding: 10px !important;
+    border: 1px solid rgba(176, 191, 185, 0.1);
+    border-radius: 12px;
+    background: rgba(6, 10, 12, 0.42);
+  }
+
+  .system-body .integrity-hero__summary h3 {
+    font-size: 0.82rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .system-body .integrity-hero__summary p:not(.integrity-hero__kicker) {
+    margin: 4px 0 0 !important;
+    font-size: 0.66rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .system-body .integrity-hero__metrics {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .system-body .integrity-hero__metric {
+    min-height: 66px !important;
+    padding: 9px !important;
+    border-radius: 10px !important;
+  }
+
+  .system-body .integrity-hero__metric--priority {
+    grid-column: span 3 !important;
+    min-height: 72px !important;
+  }
+
+  .system-body .integrity-hero__metric span,
+  .system-body .integrity-hero__evidence span,
+  .system-body .integrity-hero__kicker {
+    font-size: 0.52rem !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  .system-body .integrity-hero__metric strong {
+    font-size: 0.72rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .system-body .integrity-hero__metric--priority strong {
+    font-size: 1.02rem !important;
+  }
+
+  .system-body .integrity-hero__evidence {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .system-body .integrity-hero__evidence article {
+    min-height: 80px !important;
+    padding: 9px !important;
+    border-radius: 10px !important;
+  }
+
+  .system-body .integrity-hero__evidence p {
+    margin: 4px 0 0 !important;
+    font-size: 0.64rem !important;
+    line-height: 1.32 !important;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1320px) {
+  .system-body .integrity-hero {
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr) !important;
+  }
+
+  .system-body .integrity-hero__score {
+    min-height: 260px !important;
+  }
+
+  .system-body .integrity-hero__score-orb {
+    max-width: 210px !important;
+  }
+
+  .system-body .integrity-hero__metrics,
+  .system-body .integrity-hero__evidence {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .system-body .integrity-hero__metric--priority {
+    grid-column: span 2 !important;
+  }
+}
