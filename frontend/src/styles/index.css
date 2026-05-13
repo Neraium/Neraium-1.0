@@ -1,0 +1,7 @@
+/* Centralized frontend stylesheet entrypoint.
+   Keep CSS import order here so main.jsx stays clean and layout overrides remain predictable. */
+
+@import "../styles.css";
+@import "../neraium-hardening.css";
+@import "../desktop-orb-top.css";
+@import "../mobile-restore.css";
