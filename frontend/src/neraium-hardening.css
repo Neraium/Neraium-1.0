@@ -155,51 +155,58 @@
 /* Desktop operator console tuning */
 @media (min-width: 1101px) {
   :root {
-    --operator-card-radius: 14px;
-    --operator-card-shadow: 0 16px 42px rgba(0, 0, 0, 0.22);
+    --operator-card-radius: 12px;
+    --operator-card-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  body {
+    overflow: hidden;
   }
 
   .platform-shell {
-    grid-template-columns: 236px minmax(0, 1fr) !important;
+    grid-template-columns: 186px minmax(0, 1fr) !important;
+    height: 100vh !important;
+    overflow: hidden !important;
   }
 
   .platform-sidebar {
-    gap: 10px !important;
-    padding: 12px 10px !important;
+    gap: 8px !important;
+    padding: 10px 8px !important;
+    overflow: hidden auto !important;
   }
 
   .sidebar-brand-shell {
-    padding: 12px !important;
+    padding: 10px !important;
   }
 
   .brand-mark {
-    width: 30px !important;
-    height: 30px !important;
+    width: 26px !important;
+    height: 26px !important;
   }
 
   .brand-name {
-    font-size: 0.78rem !important;
+    font-size: 0.68rem !important;
     letter-spacing: 0.07em !important;
   }
 
   .brand-subtitle,
   .sidebar-footer span,
   .sidebar-telemetry span {
-    font-size: 0.66rem !important;
+    font-size: 0.58rem !important;
   }
 
   .workspace-nav {
-    gap: 6px !important;
+    gap: 5px !important;
   }
 
   .workspace-nav__item {
-    min-height: 66px !important;
-    padding: 10px 12px !important;
-    border-radius: 12px !important;
+    min-height: 52px !important;
+    padding: 8px 10px !important;
+    border-radius: 11px !important;
   }
 
   .workspace-nav__label {
-    font-size: 0.78rem !important;
+    font-size: 0.68rem !important;
   }
 
   .workspace-nav__detail {
@@ -207,47 +214,63 @@
     -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    font-size: 0.66rem !important;
+    font-size: 0.58rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .platform-main {
+    min-height: 0 !important;
+    overflow: hidden !important;
   }
 
   .top-status {
-    align-items: start !important;
-    gap: 14px !important;
-    padding: 14px 18px 12px !important;
+    display: grid !important;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.45fr) !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 10px 14px !important;
+    min-height: 116px !important;
+    max-height: 128px !important;
   }
 
   .top-status__title {
-    max-width: 520px !important;
-    gap: 6px !important;
+    max-width: none !important;
+    gap: 5px !important;
+  }
+
+  .top-status__title .section-token,
+  .section-token {
+    font-size: 0.55rem !important;
+    letter-spacing: 0.12em !important;
   }
 
   h1 {
-    font-size: clamp(1.72rem, 2vw, 2.36rem) !important;
+    font-size: clamp(1.52rem, 1.8vw, 2.08rem) !important;
     line-height: 0.96 !important;
   }
 
   h2 {
-    font-size: 0.9rem !important;
+    font-size: 0.82rem !important;
   }
 
   h3 {
-    font-size: 0.82rem !important;
+    font-size: 0.74rem !important;
   }
 
   .top-status__title p,
   .top-status__meta-copy {
-    font-size: 0.72rem !important;
-    line-height: 1.35 !important;
+    font-size: 0.66rem !important;
+    line-height: 1.28 !important;
   }
 
   .status-rack {
-    grid-template-columns: repeat(4, minmax(118px, 1fr)) !important;
-    gap: 8px !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 7px !important;
   }
 
   .status-chip {
-    min-height: 58px !important;
-    padding: 9px 10px !important;
+    min-height: 48px !important;
+    padding: 8px 9px !important;
   }
 
   .status-chip span,
@@ -255,7 +278,7 @@
   .timeline-item__time,
   .zone-summary-card span,
   .telemetry-card span {
-    font-size: 0.58rem !important;
+    font-size: 0.52rem !important;
     letter-spacing: 0.08em !important;
   }
 
@@ -268,29 +291,73 @@
   .empty-state strong,
   .feed-item strong,
   .timeline-item strong {
-    font-size: 0.72rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.25 !important;
   }
 
   .platform-workspace {
-    padding: 14px 18px 22px !important;
+    height: calc(100vh - 128px) !important;
+    padding: 10px 14px 14px !important;
+    overflow: auto !important;
   }
 
   .workspace-grid {
-    gap: 10px !important;
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-auto-rows: minmax(72px, auto) !important;
+    gap: 8px !important;
+    align-items: start !important;
   }
 
   .panel,
   .connector-status-card {
-    padding: 14px !important;
+    padding: 10px !important;
   }
 
   .workspace-hero-panel {
-    padding: 16px !important;
+    padding: 12px !important;
+  }
+
+  .workspace-hero-panel:first-child,
+  .workspace-grid > .panel:first-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  .workspace-grid > .span-12.workspace-hero-panel:not(:first-child),
+  .workspace-grid > .span-12:not(:first-child) {
+    grid-column: span 7 !important;
+  }
+
+  .workspace-grid > .span-7 {
+    grid-column: span 7 !important;
+  }
+
+  .workspace-grid > .span-6 {
+    grid-column: span 6 !important;
+  }
+
+  .workspace-grid > .span-5 {
+    grid-column: span 5 !important;
+  }
+
+  .workspace-grid > .span-4,
+  .workspace-grid > .span-3 {
+    grid-column: span 4 !important;
+  }
+
+  .workspace-grid > .span-12:first-child + .span-12,
+  .workspace-grid > .span-12:first-child + .span-7,
+  .workspace-grid > .span-12:first-child + .span-6 {
+    grid-column: span 7 !important;
   }
 
   .metric-grid,
   .top-status__brief {
-    gap: 8px !important;
+    gap: 7px !important;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 
   .metric-cell,
@@ -300,39 +367,76 @@
   .feed-item,
   .telemetry-card,
   .zone-summary-card {
-    padding: 10px !important;
-    border-radius: 12px !important;
+    padding: 8px !important;
+    border-radius: 10px !important;
   }
 
   .system-orb,
   .topology-orb,
   .hero-orb,
-  .orb-stage {
-    max-height: 280px !important;
+  .orb-stage,
+  .system-health-orb,
+  .orb-container {
+    max-height: 210px !important;
+    min-height: 170px !important;
+  }
+
+  .system-orb canvas,
+  .topology-orb canvas,
+  .hero-orb canvas,
+  .orb-stage canvas,
+  .orb-container canvas {
+    max-height: 210px !important;
   }
 
   .command-button,
   .secondary-command-button,
   .workspace-menu-button {
-    min-height: 38px !important;
-    padding: 0 14px !important;
-    font-size: 0.72rem !important;
+    min-height: 34px !important;
+    padding: 0 12px !important;
+    font-size: 0.66rem !important;
   }
 
   .intake-flow {
-    gap: 12px !important;
+    gap: 10px !important;
   }
 
   .intake-flow__controls .command-button,
   .intake-flow__controls .secondary-command-button {
     flex: 0 1 auto;
-    min-width: 160px;
+    min-width: 150px;
+  }
+
+  .status-banner,
+  .evidence-summary,
+  .operator-report,
+  .technical-summary-panel,
+  .empty-state {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .compact-list,
+  .workflow-stages,
+  .timeline-list,
+  .feed-list {
+    gap: 6px !important;
+  }
+
+  .panel p,
+  .panel li,
+  .compact-list li,
+  .feed-item p,
+  .timeline-item p,
+  .empty-state p {
+    font-size: 0.66rem !important;
+    line-height: 1.32 !important;
   }
 }
 
 @media (min-width: 1101px) and (max-width: 1320px) {
   .platform-shell {
-    grid-template-columns: 216px minmax(0, 1fr) !important;
+    grid-template-columns: 172px minmax(0, 1fr) !important;
   }
 
   .status-rack {
@@ -340,12 +444,16 @@
   }
 
   .top-status {
-    display: grid !important;
-    align-items: stretch !important;
+    grid-template-columns: 1fr !important;
+    max-height: none !important;
   }
 
   .top-status__title {
     max-width: none !important;
+  }
+
+  .platform-workspace {
+    height: calc(100vh - 188px) !important;
   }
 }
 
