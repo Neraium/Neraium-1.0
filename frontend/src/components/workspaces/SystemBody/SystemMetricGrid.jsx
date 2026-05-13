@@ -1,15 +1,18 @@
+import MetricGrid from "../../layout/MetricGrid";
+import SectionCard from "../../layout/SectionCard";
+
 export default function SystemMetricGrid({ metrics }) {
   return (
-    <div className="system-body-metric-grid">
+    <MetricGrid className="system-body-metric-grid">
       {metrics.map((metric) => (
-        <article
+        <SectionCard
           className={`system-body-metric${metric.priority ? " system-body-metric--priority" : ""}`}
           key={metric.label}
         >
           <span>{metric.label}</span>
           <strong>{metric.value}</strong>
-        </article>
+        </SectionCard>
       ))}
-    </div>
+    </MetricGrid>
   );
 }

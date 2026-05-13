@@ -1,0 +1,32 @@
+@media (min-width: 1101px) {
+  .platform-shell {
+    grid-template-columns: 320px minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  .platform-sidebar {
+    padding: var(--space-16) !important;
+    gap: var(--space-12) !important;
+  }
+
+  .sidebar-brand-shell {
+    border-radius: var(--radius-lg) !important;
+    min-height: 84px !important;
+    padding: var(--space-14) !important;
+  }
+
+  .workspace-nav {
+    gap: var(--space-10) !important;
+  }
+
+  .workspace-nav__item {
+    min-height: 84px !important;
+    padding: var(--space-14) var(--space-16) !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .sidebar-section--terminal {
+    padding: var(--space-14) !important;
+    border-radius: var(--radius-md) !important;
+  }
+}

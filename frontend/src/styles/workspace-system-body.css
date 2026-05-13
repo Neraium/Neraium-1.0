@@ -1,104 +1,107 @@
-@media (min-width: 1101px) {
-  .system-body.system-body--orb-first {
-    display: grid;
-    gap: 18px;
-    max-width: 1320px;
-    margin: 0 auto;
-    padding-bottom: 28px;
-  }
+.system-body.system-body--orb-first {
+  display: grid;
+  gap: var(--workspace-rhythm-wide);
+  padding-bottom: var(--space-28);
+}
 
-  .system-body-orb-panel,
-  .system-body-summary-card,
-  .system-body-metric,
-  .system-body-evidence-grid article {
-    border: 1px solid rgba(138, 184, 196, 0.16);
-    background: linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95));
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-    border-radius: 18px;
+.system-body-orb-panel {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-12);
+  min-height: 520px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.24), transparent 42%),
+    radial-gradient(circle at 50% 60%, rgba(108, 186, 156, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.97));
+}
+
+.system-body-orb-panel__stage {
+  width: min(100%, 360px);
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+
+.system-body-orb-panel strong {
+  max-width: 16ch;
+  font-size: clamp(1.65rem, 2.2vw, 2.35rem);
+  line-height: 1.04;
+  text-align: center;
+}
+
+.system-body-orb-panel p {
+  margin: 0;
+  max-width: 56ch;
+  text-align: center;
+}
+
+.system-body-summary-card h2 {
+  margin: var(--space-8) 0 0;
+  font-size: clamp(1.2rem, 1.55vw, 1.72rem);
+  line-height: 1.18;
+}
+
+.system-body-summary-card p {
+  margin: var(--space-10) 0 0;
+}
+
+.system-body-metric {
+  min-height: 126px;
+  display: grid;
+  align-content: center;
+  gap: var(--space-8);
+}
+
+.system-body-metric--priority {
+  grid-column: 1 / -1;
+  min-height: 148px;
+}
+
+.system-body-metric strong {
+  font-size: 1rem;
+  line-height: 1.28;
+}
+
+.system-body-metric--priority strong {
+  font-size: 1.22rem;
+}
+
+.system-body-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-14);
+}
+
+.system-body-evidence-grid .section-card {
+  min-height: 148px;
+}
+
+.system-body-evidence-grid p {
+  margin: var(--space-10) 0 0;
+  line-height: 1.5;
+}
+
+@media (min-width: 1101px) and (max-width: 1360px) {
+  .system-body-evidence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .system-body.system-body--orb-first {
+    gap: var(--workspace-rhythm-base);
   }
 
   .system-body-orb-panel {
     min-height: 420px;
-    display: grid;
-    justify-items: center;
-    align-content: center;
-    gap: 10px;
-    padding: 24px;
-    background:
-      radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.24), transparent 42%),
-      radial-gradient(circle at 50% 60%, rgba(108, 186, 156, 0.12), transparent 36%),
-      linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.97));
   }
 
   .system-body-orb-panel__stage {
     width: min(100%, 300px);
     min-height: 260px;
-    display: grid;
-    place-items: center;
   }
 
-  .system-body-orb-panel strong {
-    color: var(--text-primary);
-    font-size: clamp(1.5rem, 2vw, 2.2rem);
-    line-height: 1.05;
-    text-align: center;
-  }
-
-  .system-body-orb-panel p {
-    margin: 0;
-    max-width: 48ch;
-    color: var(--text-secondary);
-    text-align: center;
-  }
-
-  .system-body-summary-card {
-    padding: 22px;
-  }
-
-  .system-body-summary-card h2 {
-    margin: 8px 0 0;
-    color: var(--text-primary);
-    font-size: clamp(1.15rem, 1.5vw, 1.65rem);
-    line-height: 1.2;
-  }
-
-  .system-body-summary-card p {
-    margin: 10px 0 0;
-    color: var(--text-secondary);
-  }
-
-  .system-body-metric-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .system-body-metric {
-    min-height: 106px;
-    display: grid;
-    align-content: center;
-    gap: 8px;
-    padding: 14px;
-  }
-
-  .system-body-metric--priority {
-    grid-column: 1 / -1;
-    min-height: 120px;
-  }
-
-  .system-body-evidence-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .system-body-evidence-grid article {
-    min-height: 122px;
-    padding: 16px;
-  }
-}
-
-@media (min-width: 1101px) and (max-width: 1240px) {
   .system-body-evidence-grid {
     grid-template-columns: 1fr;
   }
