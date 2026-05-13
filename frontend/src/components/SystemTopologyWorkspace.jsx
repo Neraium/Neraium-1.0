@@ -25,9 +25,17 @@ const STATE = {
   },
 };
 
+const FALLBACK_STATE = {
+  label: "Awaiting baseline",
+  description: "No telemetry baseline is available yet. The orb remains visible so operators can confirm structural health mode and wait for live evidence.",
+  mode: "no-data",
+};
+
 export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSelectTarget }) {
-  const state = STATE[liveOps.facilityTone] ?? STATE.info;
-  const uiState = normalizeOperationalState(liveOps.facilityTone);
+  const rawUiState = normalizeOperationalState(liveOps.facilityTone);
+  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
+  const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
+  const state = awaitingSii || uiState === "neutral" ? FALLBACK_STATE : (STATE[liveOps.facilityTone] ?? STATE.info);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
@@ -38,7 +46,6 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
   const sourceLabel = liveOps.dataSourceLabel ?? "Awaiting data";
-  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
   const awaitingLabel = liveOps.intelligenceMode === "processing" ? "SII analysis running" : "Awaiting SII analysis";
   const issueType = awaitingSii ? awaitingLabel : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
   const suspectedLocation = awaitingSii ? awaitingLabel : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Location not isolated");
@@ -58,8 +65,12 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     ? awaitingLabel
     : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
   const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
-  const whyWeThinkThat = secondaryMessage || relationshipEvidence;
-  const humanRead = liveOps.connectionActionHint || "Monitor relationship coherence and schedule operator review if drift persists.";
+  const whyWeThinkThat = awaitingSii || uiState === "neutral"
+    ? "The workspace is waiting for a usable telemetry baseline or backend evidence stream."
+    : (secondaryMessage || relationshipEvidence);
+  const humanRead = awaitingSii || uiState === "neutral"
+    ? "No upload is required for the orb to render. It stays visible as the neutral structural placeholder until live evidence arrives."
+    : (liveOps.connectionActionHint || "Monitor relationship coherence and schedule operator review if drift persists.");
   const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;

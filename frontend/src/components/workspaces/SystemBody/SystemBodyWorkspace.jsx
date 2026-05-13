@@ -3,7 +3,6 @@ import SystemNarrativePanel from "./SystemNarrativePanel";
 import SystemMetricGrid from "./SystemMetricGrid";
 import SystemEvidencePanel from "./SystemEvidencePanel";
 import PageContainer from "../../layout/PageContainer";
-import SystemBodySkeleton from "../../loading/SystemBodySkeleton";
 
 export default function SystemBodyWorkspace({
   systemState,
@@ -22,14 +21,7 @@ export default function SystemBodyWorkspace({
   isLoading = false,
 }) {
   void primaryMessage;
-
-  if (isLoading) {
-    return (
-      <PageContainer className="system-body system-body--orb-first">
-        <SystemBodySkeleton />
-      </PageContainer>
-    );
-  }
+  void isLoading;
 
   return (
     <PageContainer className="system-body system-body--orb-first">

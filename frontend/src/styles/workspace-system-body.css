@@ -1,7 +1,7 @@
 .system-body.system-body--orb-first {
   display: grid;
-  gap: clamp(24px, 3vw, 36px);
-  padding: var(--space-12) 0 var(--space-40);
+  gap: clamp(28px, 3.5vw, 44px);
+  padding: var(--space-16) 0 calc(var(--space-40) + var(--space-12));
   max-width: min(1440px, 96vw);
   margin: 0 auto;
 }
@@ -11,8 +11,8 @@
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
   gap: clamp(24px, 3vw, 40px);
   align-items: stretch;
-  min-height: clamp(620px, 70vh, 760px);
-  padding: clamp(28px, 3vw, 44px);
+  min-height: clamp(660px, 76vh, 860px);
+  padding: clamp(32px, 3.4vw, 52px);
   background:
     radial-gradient(circle at 78% 24%, rgba(138, 184, 196, 0.16), transparent 28%),
     radial-gradient(circle at 18% 18%, rgba(108, 186, 156, 0.06), transparent 24%),
@@ -28,10 +28,10 @@
 }
 
 .system-body-hero__copy {
- display: grid;
- grid-template-rows: auto 1fr;
- gap: clamp(22px, 2.5vw, 32px);
- min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: clamp(24px, 2.8vw, 36px);
+  min-width: 0;
 }
 
 .system-body-hero__header {
@@ -82,29 +82,31 @@
 }
 
 .system-body-orb-panel {
- position: relative;
- display: grid;
- align-content: center;
- justify-items: end;
- min-height: 100%;
- min-width: 0;
- overflow: hidden;
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  min-height: clamp(420px, 46vw, 680px);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .system-body-orb-panel__stage {
- position: relative;
- z-index: 2;
- width: min(100%, clamp(360px, 36vw, 620px));
- min-height: clamp(360px, 44vw, 620px);
- display: grid;
- place-items: center;
- justify-self: end;
- filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.28));
+  position: relative;
+  z-index: 2;
+  width: min(100%, clamp(420px, 38vw, 660px));
+  min-width: min(100%, 340px);
+  min-height: clamp(420px, 46vw, 660px);
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.28));
 }
 
 .system-body-orb-panel__stage .health-orb {
- width: 100%;
- max-width: 620px;
+  width: 100%;
+  min-width: min(100%, 320px);
+  max-width: 660px;
 }
 
 .system-body-orb-panel__halo,
@@ -156,8 +158,8 @@
 }
 
 .system-body-metric-grid {
- grid-template-columns: repeat(2, minmax(0, 1fr));
- gap: var(--space-18);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-20);
 }
 
 .system-body-metric {
@@ -196,7 +198,7 @@
 
 .system-body-evidence-block {
   display: grid;
-  gap: var(--space-20);
+  gap: var(--space-24);
 }
 
 .system-body-evidence-grid {
@@ -255,11 +257,11 @@
 
 .system-body--loading {
   display: grid;
-  gap: clamp(24px, 3vw, 36px);
+  gap: clamp(28px, 3.5vw, 44px);
 }
 
 .system-body-hero--loading {
-  min-height: clamp(620px, 70vh, 760px);
+  min-height: clamp(660px, 76vh, 860px);
 }
 
 .system-body-orb-panel--loading {
@@ -307,13 +309,14 @@
   .system-body-orb-panel {
     order: 0;
     justify-items: center;
-    min-height: 420px;
+    min-height: 460px;
   }
 
   .system-body-orb-panel__stage {
     justify-self: center;
-    width: min(100%, 420px);
-    min-height: 320px;
+    width: min(100%, 460px);
+    min-width: 280px;
+    min-height: 360px;
   }
 
   .system-body-orb-panel__halo--outer {
@@ -345,12 +348,12 @@
 
 @media (max-width: 720px) {
   .system-body.system-body--orb-first {
-    padding-bottom: var(--space-28);
+    padding-bottom: calc(var(--space-28) + var(--space-8));
   }
 
   .system-body-hero {
-    padding: 20px;
-    gap: 20px;
+    padding: 22px 20px 24px;
+    gap: 22px;
   }
 
   .system-body-summary-card--primary {
@@ -370,11 +373,12 @@
   }
 
   .system-body-orb-panel {
-    min-height: 340px;
+    min-height: 360px;
   }
 
   .system-body-orb-panel__stage {
-    width: min(100%, 320px);
-    min-height: 260px;
+    width: min(100%, 340px);
+    min-width: 240px;
+    min-height: 300px;
   }
 }
