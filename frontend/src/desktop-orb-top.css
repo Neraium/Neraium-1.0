@@ -1,9 +1,9 @@
-/* Desktop System Body command view: force the structural orb into the top viewport. */
+/* Desktop System Body command view with balanced spacing and visible orb. */
 
 @media (min-width: 1101px) {
   .system-body {
     display: grid;
-    gap: 8px;
+    gap: 14px;
   }
 
   .system-body__header {
@@ -12,175 +12,140 @@
 
   .system-body .integrity-hero {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-columns: 320px minmax(0, 1fr) !important;
     align-items: start !important;
-    gap: 8px !important;
-    min-height: 0 !important;
-    padding: 8px !important;
-    padding-right: 316px !important;
-    position: relative !important;
+    gap: 16px !important;
+    padding: 16px !important;
+    min-height: unset !important;
   }
 
   .system-body .integrity-hero__score {
-    position: fixed !important;
-    top: 112px !important;
-    right: 18px !important;
-    z-index: 25 !important;
-    width: 282px !important;
-    min-height: 338px !important;
-    max-height: calc(100vh - 150px) !important;
-    display: grid !important;
-    align-content: center !important;
-    justify-items: center !important;
-    padding: 12px !important;
-    border: 1px solid rgba(138, 184, 196, 0.16);
-    border-radius: 14px;
+    position: sticky !important;
+    top: 18px !important;
+    width: 100% !important;
+    min-height: 420px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 20px !important;
+    border-radius: 18px !important;
+    border: 1px solid rgba(138, 184, 196, 0.14) !important;
     background:
-      radial-gradient(circle at 50% 26%, rgba(138, 184, 196, 0.16), transparent 42%),
-      radial-gradient(circle at 50% 58%, rgba(108, 186, 156, 0.1), transparent 38%),
-      linear-gradient(180deg, rgba(18, 28, 32, 0.96), rgba(7, 12, 15, 0.94));
-    box-shadow:
-      0 24px 70px rgba(0, 0, 0, 0.42),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.025);
-    backdrop-filter: blur(14px);
+      radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.18), transparent 44%),
+      linear-gradient(180deg, rgba(16, 24, 28, 0.95), rgba(8, 12, 15, 0.96)) !important;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.34) !important;
   }
 
   .system-body .integrity-hero__score-orb {
-    width: 220px !important;
-    max-width: 220px !important;
-    margin: 0 auto 8px !important;
+    width: 260px !important;
+    max-width: 260px !important;
+    margin-bottom: 18px !important;
   }
 
   .system-body .integrity-hero__score-orb canvas,
   .system-body .integrity-hero__score-orb svg {
-    max-width: 220px !important;
-    max-height: 220px !important;
-  }
-
-  .system-body .integrity-hero__score span {
-    margin-top: 2px !important;
-    color: var(--text-muted) !important;
-    font-size: 0.54rem !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
+    max-width: 260px !important;
+    max-height: 260px !important;
   }
 
   .system-body .integrity-hero__score strong {
-    color: var(--text-primary) !important;
-    font-size: clamp(1.1rem, 1.45vw, 1.6rem) !important;
-    line-height: 1.05 !important;
+    font-size: clamp(1.3rem, 1.6vw, 1.9rem) !important;
+    line-height: 1.08 !important;
     text-align: center !important;
   }
 
   .system-body .integrity-hero__score p {
-    max-width: 34ch !important;
-    margin: 0 !important;
-    color: var(--text-secondary) !important;
-    font-size: 0.66rem !important;
-    line-height: 1.35 !important;
+    margin-top: 10px !important;
+    font-size: 0.76rem !important;
+    line-height: 1.45 !important;
     text-align: center !important;
+    max-width: 34ch !important;
   }
 
   .system-body .integrity-hero__meta {
-    display: grid !important;
-    grid-template-rows: auto auto minmax(0, 1fr) !important;
-    gap: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
     min-width: 0 !important;
   }
 
   .system-body .integrity-hero__summary {
-    padding: 10px !important;
-    border: 1px solid rgba(176, 191, 185, 0.1);
-    border-radius: 12px;
-    background: rgba(6, 10, 12, 0.42);
+    padding: 18px !important;
+    border-radius: 16px !important;
   }
 
   .system-body .integrity-hero__summary h3 {
-    font-size: 0.82rem !important;
-    line-height: 1.25 !important;
+    font-size: 1rem !important;
+    line-height: 1.35 !important;
   }
 
   .system-body .integrity-hero__summary p:not(.integrity-hero__kicker) {
-    margin: 4px 0 0 !important;
-    font-size: 0.66rem !important;
-    line-height: 1.35 !important;
+    font-size: 0.78rem !important;
+    line-height: 1.5 !important;
+    margin-top: 8px !important;
   }
 
   .system-body .integrity-hero__metrics {
     display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 7px !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
   }
 
   .system-body .integrity-hero__metric {
-    min-height: 62px !important;
-    padding: 9px !important;
-    border-radius: 10px !important;
+    min-height: 100px !important;
+    padding: 14px !important;
+    border-radius: 14px !important;
   }
 
   .system-body .integrity-hero__metric--priority {
-    grid-column: span 3 !important;
-    min-height: 68px !important;
-  }
-
-  .system-body .integrity-hero__metric span,
-  .system-body .integrity-hero__evidence span,
-  .system-body .integrity-hero__kicker {
-    font-size: 0.52rem !important;
-    letter-spacing: 0.1em !important;
+    grid-column: 1 / -1 !important;
+    min-height: 110px !important;
   }
 
   .system-body .integrity-hero__metric strong {
-    font-size: 0.7rem !important;
-    line-height: 1.25 !important;
+    font-size: 0.84rem !important;
+    line-height: 1.35 !important;
   }
 
   .system-body .integrity-hero__metric--priority strong {
-    font-size: 0.96rem !important;
+    font-size: 1.18rem !important;
   }
 
   .system-body .integrity-hero__evidence {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
   }
 
   .system-body .integrity-hero__evidence article {
-    min-height: 76px !important;
-    padding: 9px !important;
-    border-radius: 10px !important;
+    min-height: 100px !important;
+    padding: 14px !important;
+    border-radius: 14px !important;
   }
 
   .system-body .integrity-hero__evidence p {
-    margin: 4px 0 0 !important;
-    font-size: 0.62rem !important;
-    line-height: 1.32 !important;
+    font-size: 0.76rem !important;
+    line-height: 1.45 !important;
+    margin-top: 8px !important;
   }
 }
 
 @media (min-width: 1101px) and (max-width: 1320px) {
   .system-body .integrity-hero {
-    padding-right: 260px !important;
+    grid-template-columns: 280px minmax(0, 1fr) !important;
   }
 
   .system-body .integrity-hero__score {
-    top: 104px !important;
-    right: 12px !important;
-    width: 238px !important;
-    min-height: 292px !important;
+    min-height: 380px !important;
   }
 
   .system-body .integrity-hero__score-orb {
-    width: 178px !important;
-    max-width: 178px !important;
+    width: 220px !important;
+    max-width: 220px !important;
   }
 
-  .system-body .integrity-hero__metrics,
-  .system-body .integrity-hero__evidence {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .system-body .integrity-hero__metric--priority {
-    grid-column: span 2 !important;
+  .system-body .integrity-hero__metrics {
+    grid-template-columns: 1fr !important;
   }
 }
