@@ -15,8 +15,9 @@ permissions:
 env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: neraium-backend
-  ECS_CLUSTER: default
-  ECS_SERVICE: neraium-api-service-3z8k8vz1
+  ECS_CLUSTER: neraium-prod-cluster
+  ECS_SERVICE: neraium-prod-api-service
+  ECS_WORKER_SERVICE: neraium-prod-worker-service
 
 jobs:
   deploy-backend:
