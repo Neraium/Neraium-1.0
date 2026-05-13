@@ -19,9 +19,6 @@
   .workspace-grid,.workspace-grid--connections{display:grid!important;grid-template-columns:1fr!important;gap:14px!important;width:100%!important;}
   .span-12,.span-7,.span-6,.span-5,.span-4,.span-3,.workspace-grid>*{grid-column:1/-1!important;width:100%!important;min-width:0!important;}
   .panel,.workspace-hero-panel,.connector-status-card,.access-panel{width:100%!important;min-width:0!important;max-width:100%!important;padding:16px!important;overflow:hidden!important;}
-  .system-body--orb-first,.system-body-command,.system-body-command__content,.system-body-metric-grid,.system-body-evidence-grid{display:grid!important;grid-template-columns:1fr!important;gap:14px!important;width:100%!important;max-width:100%!important;}
-  .system-body-orb-panel{min-height:420px!important;width:100%!important;}
-  .system-body-orb-panel__stage{width:100%!important;min-height:230px!important;display:grid!important;place-items:center!important;}
   .metric-grid,.connector-rest-grid,.intake-flow__controls,.connector-form__actions,.connector-json-hint__actions{display:grid!important;grid-template-columns:1fr!important;gap:10px!important;width:100%!important;}
   .command-button,.secondary-command-button{width:100%!important;min-height:50px!important;justify-content:center!important;}
 }

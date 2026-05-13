@@ -2,5 +2,9 @@
    Keep CSS import order here so main.jsx stays clean and layout overrides remain predictable. */
 
 @import "../styles.css";
+@import "./elevation.css";
+@import "./panels.css";
+@import "./layout.css";
+@import "./workspace-system-body.css";
 @import "../neraium-hardening.css";
 @import "../mobile-restore.css";

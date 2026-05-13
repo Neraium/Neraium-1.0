@@ -2,7 +2,7 @@ import SectionCard from "../../layout/SectionCard";
 
 export default function SystemNarrativePanel({ summaryKicker, summaryTitle, items }) {
   return (
-    <SectionCard className="system-body-summary-card">
+    <SectionCard className="system-body-summary-card system-body-summary-card--primary">
       <p className="system-body-summary-card__kicker section-label">{summaryKicker}</p>
       <h2 className="panel-title">{summaryTitle}</h2>
       <div className="system-body-narrative-grid">

@@ -1,9 +1,20 @@
 .section-card,
 .hero-panel {
-  border: 1px solid var(--surface-border, rgba(138, 184, 196, 0.16));
+  border: 1px solid var(--surface-border, rgba(138, 184, 196, 0.12));
   background: var(--surface-b, linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95)));
-  box-shadow: var(--shadow-soft, 0 14px 34px rgba(0, 0, 0, 0.24));
+  box-shadow: var(--shadow-soft, 0 16px 36px rgba(0, 0, 0, 0.22));
   border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.section-card::before,
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .section-card {
@@ -24,12 +35,14 @@
 }
 
 .section-card strong,
-.hero-panel strong {
+.hero-panel strong,
+.panel-title {
   color: var(--text-primary);
 }
 
 .section-card p,
-.hero-panel p {
+.hero-panel p,
+.narrative-text {
   color: var(--text-secondary);
 }
 
@@ -61,8 +74,8 @@
 }
 
 .loading-orb {
-  width: 260px;
-  height: 260px;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
   border-radius: 999px;
 }
 

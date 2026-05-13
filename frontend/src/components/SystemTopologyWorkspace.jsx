@@ -80,7 +80,7 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.` },
   ];
   const narrativeItems = [
-    { label: "What’s wrong", value: primaryMessage },
+    { label: "What's wrong", value: primaryMessage },
     { label: "Why we think that", value: whyWeThinkThat },
     { label: "Human read", value: humanRead },
     { label: "Where", value: where },
@@ -110,3 +110,5 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     />
   );
 }
+
+

@@ -5,7 +5,7 @@ export default function SystemEvidencePanel({ evidenceItems, timelineItems }) {
     <section className="system-body-evidence-block">
       <div className="system-body-evidence-grid">
         {evidenceItems.map((item) => (
-          <SectionCard key={item.label}>
+          <SectionCard className="system-body-evidence-card" key={item.label}>
             <span className="section-label">{item.label}</span>
             <p className="narrative-text">{item.value}</p>
           </SectionCard>
