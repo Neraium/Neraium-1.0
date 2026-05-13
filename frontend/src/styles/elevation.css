@@ -1,0 +1,41 @@
+:root {
+  --surface-border: rgba(138, 184, 196, 0.16);
+  --surface-border-strong: rgba(138, 184, 196, 0.24);
+  --surface-a: linear-gradient(180deg, rgba(18, 25, 30, 0.95), rgba(9, 14, 17, 0.93));
+  --surface-b: linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95));
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.24);
+  --shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.3);
+  --motion-standard: 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.workspace-header,
+.section-card,
+.hero-panel,
+.sidebar-brand-shell,
+.sidebar-section--terminal,
+.workspace-nav__item {
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-soft);
+  transition:
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard),
+    background-color var(--motion-standard),
+    opacity var(--motion-standard);
+}
+
+.section-card,
+.hero-panel {
+  background: var(--surface-b);
+}
+
+.workspace-header {
+  background: var(--surface-a);
+}
+
+.workspace-nav__item:hover,
+.workspace-nav__item:focus-visible {
+  border-color: var(--surface-border-strong);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-1px);
+}

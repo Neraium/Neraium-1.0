@@ -7,9 +7,9 @@ export default function SystemOrbPanel({ systemState, coherence, stateLabel, pri
       <div className="system-body-orb-panel__stage">
         <HealthOrb systemState={systemState} intensity={1 - coherence} />
       </div>
-      <span>Facility condition</span>
-      <strong>{stateLabel}</strong>
-      <p>{primaryMessage}</p>
+      <span className="section-label">Facility condition</span>
+      <strong className="panel-title">{stateLabel}</strong>
+      <p className="narrative-text">{primaryMessage}</p>
     </HeroPanel>
   );
 }

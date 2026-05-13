@@ -2,6 +2,7 @@
   display: grid;
   gap: var(--workspace-rhythm-wide);
   padding-bottom: var(--space-28);
+  max-width: var(--panel-max-standard);
 }
 
 .system-body-orb-panel {
@@ -9,7 +10,7 @@
   justify-items: center;
   align-content: center;
   gap: var(--space-12);
-  min-height: 520px;
+  min-height: 500px;
   background:
     radial-gradient(circle at 50% 28%, rgba(138, 184, 196, 0.24), transparent 42%),
     radial-gradient(circle at 50% 60%, rgba(108, 186, 156, 0.12), transparent 36%),
@@ -17,8 +18,8 @@
 }
 
 .system-body-orb-panel__stage {
-  width: min(100%, 360px);
-  min-height: 320px;
+  width: min(100%, 340px);
+  min-height: 300px;
   display: grid;
   place-items: center;
 }
@@ -32,7 +33,7 @@
 
 .system-body-orb-panel p {
   margin: 0;
-  max-width: 56ch;
+  max-width: 60ch;
   text-align: center;
 }
 
@@ -44,6 +45,7 @@
 
 .system-body-summary-card p {
   margin: var(--space-10) 0 0;
+  max-width: 68ch;
 }
 
 .system-body-metric {
@@ -59,12 +61,12 @@
 }
 
 .system-body-metric strong {
-  font-size: 1rem;
+  font-size: var(--type-metric-lg, 1.08rem);
   line-height: 1.28;
 }
 
 .system-body-metric--priority strong {
-  font-size: 1.22rem;
+  font-size: clamp(1.22rem, 1.7vw, 1.5rem);
 }
 
 .system-body-evidence-grid {
@@ -75,6 +77,8 @@
 
 .system-body-evidence-grid .section-card {
   min-height: 148px;
+  display: grid;
+  align-content: start;
 }
 
 .system-body-evidence-grid p {
@@ -82,7 +86,16 @@
   line-height: 1.5;
 }
 
+.system-body--loading {
+  display: grid;
+  gap: var(--workspace-rhythm-wide);
+}
+
 @media (min-width: 1101px) and (max-width: 1360px) {
+  .system-body.system-body--orb-first {
+    max-width: 1100px;
+  }
+
   .system-body-evidence-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

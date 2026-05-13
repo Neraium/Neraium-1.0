@@ -4,6 +4,7 @@ import SystemMetricGrid from "./SystemMetricGrid";
 import SystemEvidencePanel from "./SystemEvidencePanel";
 import PageContainer from "../../layout/PageContainer";
 import WorkspaceHeader from "../../layout/WorkspaceHeader";
+import SystemBodySkeleton from "../../loading/SystemBodySkeleton";
 
 export default function SystemBodyWorkspace({
   systemState,
@@ -14,7 +15,21 @@ export default function SystemBodyWorkspace({
   summaryText,
   metrics,
   evidenceItems,
+  isLoading = false,
 }) {
+  if (isLoading) {
+    return (
+      <PageContainer className="system-body system-body--orb-first">
+        <WorkspaceHeader
+          kicker="System Body"
+          title={stateLabel}
+          description="Synchronizing facility telemetry and structural intelligence."
+        />
+        <SystemBodySkeleton />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="system-body system-body--orb-first">
       <WorkspaceHeader

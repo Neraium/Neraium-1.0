@@ -89,6 +89,7 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       summaryText={secondaryMessage}
       metrics={metrics}
       evidenceItems={evidenceItems}
+      isLoading={awaitingSii}
     />
   );
 }

@@ -1,8 +1,8 @@
 .section-card,
 .hero-panel {
-  border: 1px solid rgba(138, 184, 196, 0.16);
-  background: linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95));
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--surface-border, rgba(138, 184, 196, 0.16));
+  background: var(--surface-b, linear-gradient(180deg, rgba(16, 24, 28, 0.96), rgba(8, 12, 15, 0.95)));
+  box-shadow: var(--shadow-soft, 0 14px 34px rgba(0, 0, 0, 0.24));
   border-radius: var(--radius-lg);
 }
 
@@ -31,4 +31,43 @@
 .section-card p,
 .hero-panel p {
   color: var(--text-secondary);
+}
+
+.loading-panel {
+  display: grid;
+  gap: var(--space-10);
+  min-height: 140px;
+}
+
+.loading-pulse {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, rgba(67, 92, 99, 0.26), rgba(112, 140, 148, 0.34), rgba(67, 92, 99, 0.26));
+  background-size: 220% 100%;
+  animation: pulseShift 1.8s ease-in-out infinite;
+}
+
+.loading-line {
+  height: 12px;
+  width: 100%;
+}
+
+.loading-line--sm {
+  width: 34%;
+}
+
+.loading-line--lg {
+  width: 72%;
+  height: 16px;
+}
+
+.loading-orb {
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+}
+
+@keyframes pulseShift {
+  0% { background-position: 100% 0; opacity: 0.58; }
+  50% { background-position: 0 0; opacity: 0.92; }
+  100% { background-position: -100% 0; opacity: 0.58; }
 }

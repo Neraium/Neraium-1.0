@@ -9,8 +9,8 @@ export default function SystemMetricGrid({ metrics }) {
           className={`system-body-metric${metric.priority ? " system-body-metric--priority" : ""}`}
           key={metric.label}
         >
-          <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
+          <span className="section-label">{metric.label}</span>
+          <strong className={`metric-value${metric.priority ? " metric-value--priority" : ""}`}>{metric.value}</strong>
         </SectionCard>
       ))}
     </MetricGrid>
