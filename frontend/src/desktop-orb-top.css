@@ -1,7 +1,18 @@
 /* Stable desktop System Body layout.
-   Targets the simplified orb-first component classes directly. */
+   Targets the simplified orb-first component classes directly.
+   Critical: hide the generic TopStatusBar on desktop so System Body starts with the orb, not the old summary slab. */
 
 @media (min-width: 1101px) {
+  .platform-main > .top-status {
+    display: none !important;
+  }
+
+  .platform-workspace {
+    height: 100vh !important;
+    padding: 18px 22px 36px !important;
+    overflow: auto !important;
+  }
+
   .system-body--orb-first {
     display: grid !important;
     gap: 20px !important;
