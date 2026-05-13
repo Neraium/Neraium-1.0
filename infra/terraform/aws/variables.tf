@@ -61,13 +61,31 @@ variable "backend_cpu" {
 variable "backend_memory" {
   type        = number
   description = "Fargate task memory (MiB)."
-  default     = 1024
+  default     = 2048
 }
 
 variable "backend_desired_count" {
   type        = number
   description = "Desired ECS service task count."
   default     = 2
+}
+
+variable "worker_cpu" {
+  type        = number
+  description = "Fargate worker task CPU units."
+  default     = 1024
+}
+
+variable "worker_memory" {
+  type        = number
+  description = "Fargate worker task memory (MiB)."
+  default     = 4096
+}
+
+variable "worker_desired_count" {
+  type        = number
+  description = "Desired ECS worker service task count."
+  default     = 1
 }
 
 variable "api_token_secret_arn" {

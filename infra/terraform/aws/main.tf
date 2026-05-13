@@ -151,6 +151,11 @@ resource "aws_cloudwatch_log_group" "backend" {
   retention_in_days = 30
 }
 
+resource "aws_cloudwatch_log_group" "worker" {
+  name              = "/ecs/${local.name_prefix}-worker"
+  retention_in_days = 30
+}
+
 resource "aws_lb" "api" {
   name               = "${local.name_prefix}-api-alb"
   internal           = false
@@ -269,6 +274,7 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "APP_ENV", value = var.environment },
         { name = "BACKEND_HOST", value = "0.0.0.0" },
         { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
+        { name = "NERAIUM_PROCESS_ROLE", value = "api" },
       ]
       secrets = [
         { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }
@@ -277,6 +283,40 @@ resource "aws_ecs_task_definition" "backend" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.backend.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "worker" {
+  family                   = "${local.name_prefix}-worker"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = tostring(var.worker_cpu)
+  memory                   = tostring(var.worker_memory)
+  execution_role_arn       = aws_iam_role.task_execution.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "worker"
+      image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
+      essential = true
+      environment = [
+        { name = "APP_ENV", value = var.environment },
+        { name = "BACKEND_HOST", value = "0.0.0.0" },
+        { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
+        { name = "NERAIUM_PROCESS_ROLE", value = "worker" },
+      ]
+      secrets = [
+        { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.worker.name
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"
         }
@@ -305,6 +345,20 @@ resource "aws_ecs_service" "backend" {
   }
 
   depends_on = [aws_lb_listener.http]
+}
+
+resource "aws_ecs_service" "worker" {
+  name            = "${local.name_prefix}-worker-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.worker.arn
+  desired_count   = var.worker_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    assign_public_ip = false
+    security_groups  = [aws_security_group.ecs_service.id]
+    subnets          = aws_subnet.private[*].id
+  }
 }
 
 resource "aws_appautoscaling_target" "ecs_service" {

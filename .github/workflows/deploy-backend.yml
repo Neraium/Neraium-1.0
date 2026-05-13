@@ -16,7 +16,8 @@ env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: neraium-backend
   ECS_CLUSTER: default
-  ECS_SERVICE: neraium-api-service-3z8k8vz1
+  ECS_API_SERVICE: neraium-api-service-3z8k8vz1
+  ECS_WORKER_SERVICE: neraium-worker-service
 
 jobs:
   deploy-backend:
@@ -54,8 +55,15 @@ jobs:
 
       - name: Force ECS new deployment
         run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --force-new-deployment \
-            --region "$AWS_REGION"
+          update_ecs_service() {
+            local service_name="$1"
+
+            aws ecs update-service \
+              --cluster "$ECS_CLUSTER" \
+              --service "$service_name" \
+              --force-new-deployment \
+              --region "$AWS_REGION"
+          }
+
+          update_ecs_service "$ECS_API_SERVICE"
+          update_ecs_service "$ECS_WORKER_SERVICE"
