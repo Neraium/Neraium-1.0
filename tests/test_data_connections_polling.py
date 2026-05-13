@@ -39,7 +39,7 @@ def telemetry_payload(timestamp: str, *, tick: int = 1) -> dict:
 @pytest.fixture()
 def isolated_runtime(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
-    runtime_dir.mkdir()
+    runtime_dir.mkdir(exist_ok=True)
 
     monkeypatch.setattr(runtime_db, "RUNTIME_DIR", runtime_dir)
     monkeypatch.setattr(runtime_db, "DB_PATH", runtime_dir / "runtime.db")
@@ -183,6 +183,7 @@ def test_reset_baseline_starts_clean_and_rebuilds_on_next_poll(isolated_runtime)
     rebuilt_poll = data_connections.poll_data_connection_once(data_connections.DEFAULT_CONNECTION_ID, transport=transport)
     assert rebuilt_poll["connection"]["baseline_status"] == "building"
     assert rebuilt_poll["connection"]["baseline_samples_collected"] == 1
+
 
 def test_timeout_error_clears_after_next_successful_poll(isolated_runtime, monkeypatch):
     warmup_transport = mock_transport([telemetry_payload("2026-05-10T16:00:00Z", tick=4)])
