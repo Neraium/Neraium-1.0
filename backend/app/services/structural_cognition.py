@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from cognition.cognition_confidence_engine import CognitionConfidenceEngine
+from evidence.evidence_lineage_engine import EvidenceLineageEngine
 from engines.counterfactual_engine import CounterfactualEngine
 from engines.facility_cognition_engine import FacilityCognitionEngine
 from engines.structural_causality_engine import StructuralCausalityEngine
@@ -24,6 +26,8 @@ def build_structural_cognition(
     archetype_classifier = StructuralArchetypeClassifier()
     counterfactual_engine = CounterfactualEngine()
     explanation_engine = OperatorExplanationEngine()
+    lineage_engine = EvidenceLineageEngine()
+    confidence_engine = CognitionConfidenceEngine()
 
     fingerprint = memory_engine.build_fingerprint(
         baseline_analysis=baseline_analysis,
@@ -72,6 +76,35 @@ def build_structural_cognition(
         causality_graph=causality_graph,
         urgency=urgency,
     )
+    evidence_lineage = lineage_engine.build(
+        intelligence={
+            **driver_attribution,
+            **{
+                "supporting_evidence": driver_attribution.get("supporting_evidence", []),
+                "relationship_evidence": [
+                    edge.get("explanation")
+                    for edge in causality_graph.get("edges", [])
+                    if edge.get("explanation")
+                ][:4],
+                "facility_cognition": facility_cognition,
+                "causality_graph": causality_graph,
+                "structural_memory": memory_retrieval,
+                "active_archetypes": archetypes,
+                "urgency": urgency,
+            },
+        },
+        engine_result=engine_result,
+    )
+    cognition_confidence = confidence_engine.calibrate(
+        intelligence={
+            "facility_cognition": facility_cognition,
+            "causality_graph": causality_graph,
+            "structural_memory": memory_retrieval,
+            "active_archetypes": archetypes,
+        },
+        evidence_lineage=evidence_lineage,
+        engine_result=engine_result,
+    )
     operator_explanation = explanation_engine.build(
         driver_attribution=driver_attribution,
         archetypes=archetypes,
@@ -87,5 +120,7 @@ def build_structural_cognition(
         "causality_graph": causality_graph,
         "counterfactuals": counterfactuals,
         "facility_cognition": facility_cognition,
+        "evidence_lineage": evidence_lineage,
+        "cognition_confidence": cognition_confidence,
         "operator_explanation_v2": operator_explanation,
     }

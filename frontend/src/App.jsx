@@ -5,7 +5,7 @@ import {
  API_CONFIG_WARNING,
 } from "./config";
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
-import EvidenceTrailWorkspace from "./components/EvidenceTrailWorkspace";
+import StructuralReplayWorkspace from "./components/StructuralReplayWorkspace";
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
 import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
@@ -495,21 +495,14 @@ function App() {
 
     if (activeWorkspace === "historical-replay") {
       return (
-        <EvidenceTrailWorkspace
+        <StructuralReplayWorkspace
           apiFetch={apiFetch}
-          readJsonPayload={readJsonPayload}
+          accessCode={apiAccessCode}
           normalizeErrorMessage={normalizeErrorMessage}
           formatClockTime={formatClockTime}
           Panel={Panel}
           MetricGrid={MetricGrid}
-          CompactList={CompactList}
           EmptyState={EmptyState}
-          accessCode={apiAccessCode}
-          refreshKey={evidenceRefreshKey}
-          isDemoMode={isDemoMode}
-          demoScenario={demoScenario}
-          telemetryTick={telemetryTick}
-          preferredRunId={preferredEvidenceRunId}
         />
       );
     }

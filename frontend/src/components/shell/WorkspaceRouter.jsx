@@ -3,7 +3,7 @@ import SystemTopologyWorkspace from '../SystemTopologyWorkspace';
 import DriftTimelineWorkspace from '../DriftTimelineWorkspace';
 import EvidenceConsoleWorkspace from '../EvidenceConsoleWorkspace';
 import DataConnectionsWorkspace from '../DataConnectionsWorkspace';
-import EvidenceTrailWorkspace from '../EvidenceTrailWorkspace';
+import StructuralReplayWorkspace from '../StructuralReplayWorkspace';
 import FleetWorkspace from '../FleetWorkspace';
 
 export default function WorkspaceRouter(props) {
@@ -29,7 +29,7 @@ export default function WorkspaceRouter(props) {
     return <DataConnectionsWorkspace {...dataConnectionsProps} />;
   }
   if (activeWorkspace === 'historical-replay') {
-    return <EvidenceTrailWorkspace {...evidenceTrailProps} />;
+    return <StructuralReplayWorkspace {...evidenceTrailProps} />;
   }
   if (activeWorkspace === 'fleet-view') {
     return <FleetWorkspace {...fleetProps} />;

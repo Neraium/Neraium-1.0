@@ -25,9 +25,9 @@ export const WORKSPACES = [
   },
   {
     id: 'historical-replay',
-    label: 'Evidence Trail',
-    eyebrow: 'Run History',
-    description: 'Replay prior runs and export historical evidence reports.',
+    label: 'Structural Replay',
+    eyebrow: 'Cognition Replay',
+    description: 'Scrub structural evolution, propagation pathways, and evidence lineage over time.',
   },
   {
     id: 'fleet-view',
