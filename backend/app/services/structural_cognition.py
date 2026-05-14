@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from audit.operational_audit_engine import OperationalAuditEngine
 from benchmarking.structural_benchmark_engine import StructuralBenchmarkEngine
+from case_studies.case_studies import load_case_studies
 from cognition.cognition_confidence_engine import CognitionConfidenceEngine
 from cognition.deterioration_library import CANONICAL_DETERIORATION_SEQUENCES, sequence_similarity
 from cognition.multi_facility_cognition_engine import MultiFacilityCognitionEngine
 from cognition.operational_time_engine import OperationalTimeEngine
 from cognition.structural_stability_index import StructuralStabilityIndex
+from datasets.structural_progression_dataset import build_structural_progression_dataset
 from digital_twin.behavioral_twin_engine import BehavioralTwinEngine
 from domain_packs import resolve_domain_pack
 from evidence.evidence_lineage_engine import EvidenceLineageEngine
@@ -22,6 +25,10 @@ from human_factors.operator_interaction_engine import OperatorInteractionEngine
 from ontology.structural_ontology import build_structural_ontology
 from ontology.archetypes import StructuralArchetypeClassifier
 from replay.structural_replay_engine import StructuralReplayEngine
+from sii_standard.standard import build_sii_standard
+from simulation.operational_cognition_simulator import OperationalCognitionSimulator
+from trust.institutional_trust_framework import InstitutionalTrustFramework
+from validation.cognition_validation_framework import CognitionValidationFramework
 
 
 def build_structural_cognition(
@@ -49,6 +56,10 @@ def build_structural_cognition(
     multi_facility_engine = MultiFacilityCognitionEngine()
     operator_interaction_engine = OperatorInteractionEngine()
     behavioral_twin_engine = BehavioralTwinEngine()
+    validation_engine = CognitionValidationFramework()
+    audit_engine = OperationalAuditEngine()
+    simulator = OperationalCognitionSimulator()
+    trust_framework = InstitutionalTrustFramework()
 
     fingerprint = memory_engine.build_fingerprint(
         baseline_analysis=baseline_analysis,
@@ -191,6 +202,47 @@ def build_structural_cognition(
     ontology = build_structural_ontology()
     facilities = build_facility_samples(room_summary, archetypes, observed_paths, stability_index)
     multi_facility = multi_facility_engine.build_graph(facilities=facilities)
+    validation = validation_engine.validate(
+        intelligence={
+            "causality_graph": causality_graph,
+            "facility_cognition": facility_cognition,
+            "active_archetypes": archetypes,
+        },
+        replay_timeline=replay_frames,
+        evidence_lineage=evidence_lineage,
+    )
+    simulation = simulator.simulate(
+        intelligence={
+            "causality_graph": causality_graph,
+            "structural_compression": structural_compression,
+            "recovery_convergence": recovery_convergence,
+        },
+    )
+    structural_dataset = build_structural_progression_dataset(
+        intelligence={
+            "primary_room": driver_attribution.get("room"),
+            "causality_graph": causality_graph,
+            "active_archetypes": archetypes,
+            "counterfactuals": counterfactuals,
+            "recovery_convergence": recovery_convergence,
+            "operational_time_intelligence": operational_time,
+            "structural_stability_index": stability_index,
+        },
+        replay_timeline=replay_frames,
+    )
+    audit = audit_engine.build_record(
+        session_id="latest",
+        intelligence={
+            "facility_state": driver_attribution.get("state", "Monitoring"),
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+            "counterfactuals": counterfactuals,
+            "evidence_lineage": evidence_lineage,
+            "facility_cognition": facility_cognition,
+            "structural_memory": memory_retrieval,
+        },
+        replay_timeline=replay_frames,
+    )
     operator_interactions = operator_interaction_engine.analyze(
         interventions=build_operator_interventions(room_summary),
         intelligence={"recovery_convergence": recovery_convergence},
@@ -203,6 +255,10 @@ def build_structural_cognition(
             "causality_graph": causality_graph,
             "recovery_convergence": recovery_convergence,
             "operational_time_intelligence": operational_time,
+            "operational_cognition_simulation": simulation,
+            "structural_ontology": ontology,
+            "evidence_lineage": evidence_lineage,
+            "deterioration_library_matches": deterioration_library_matches,
         },
         replay_timeline=replay_frames,
         benchmark=benchmark,
@@ -215,6 +271,16 @@ def build_structural_cognition(
         counterfactuals=counterfactuals,
         facility_cognition=facility_cognition,
     )
+    trust = trust_framework.assess(
+        intelligence={
+            "evidence_lineage": evidence_lineage,
+            "operator_explanation_v2": operator_explanation,
+        },
+        validation=validation,
+        audit=audit,
+    )
+    sii_standard = build_sii_standard()
+    case_studies = load_case_studies()
     return {
         "structural_memory": memory_retrieval,
         "active_fingerprint": fingerprint,
@@ -231,6 +297,13 @@ def build_structural_cognition(
         "domain_cognition_pack": domain_pack,
         "structural_ontology": ontology,
         "structural_benchmark": benchmark,
+        "cognition_validation": validation,
+        "operational_audit": audit,
+        "domain_validation_case_studies": case_studies,
+        "sii_standard": sii_standard,
+        "structural_progression_dataset": structural_dataset,
+        "operational_cognition_simulation": simulation,
+        "institutional_trust": trust,
         "multi_facility_cognition": multi_facility,
         "operator_interaction_model": operator_interactions,
         "behavioral_infrastructure_twin": behavioral_twin,
