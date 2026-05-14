@@ -16,37 +16,75 @@ from app.services.upload_worker import start_upload_worker, stop_upload_worker
 
 logger = logging.getLogger(__name__)
 
+STARTUP_STATUS: dict[str, Any] = {
+    "startup_complete": False,
+    "failed_modules": [],
+    "runtime_db_ready": False,
+    "default_connection_ready": False,
+    "upload_worker_started": False,
+    "data_poller_started": False,
+}
+
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     settings = app.state.settings
-    init_runtime_db()
-    ensure_default_data_connection(settings)
-
     upload_worker_started = False
     data_poller_started = False
 
+    try:
+        init_runtime_db()
+        STARTUP_STATUS["runtime_db_ready"] = True
+    except Exception as error:
+        STARTUP_STATUS["failed_modules"].append(f"runtime_db: {error}")
+        logger.exception("runtime_db_startup_failure")
+
+    try:
+        ensure_default_data_connection(settings)
+        STARTUP_STATUS["default_connection_ready"] = True
+    except Exception as error:
+        STARTUP_STATUS["failed_modules"].append(f"default_connection: {error}")
+        logger.exception("default_connection_startup_failure")
+
     if settings.start_background_workers:
-        start_upload_worker()
-        upload_worker_started = True
+        try:
+            start_upload_worker()
+            upload_worker_started = True
+            STARTUP_STATUS["upload_worker_started"] = True
+        except Exception as error:
+            STARTUP_STATUS["failed_modules"].append(f"upload_worker: {error}")
+            logger.exception("upload_worker_startup_failure")
 
     if settings.start_data_connection_poller:
-        start_data_connection_poller()
-        data_poller_started = True
+        try:
+            start_data_connection_poller()
+            data_poller_started = True
+            STARTUP_STATUS["data_poller_started"] = True
+        except Exception as error:
+            STARTUP_STATUS["failed_modules"].append(f"data_poller: {error}")
+            logger.exception("data_poller_startup_failure")
 
+    STARTUP_STATUS["startup_complete"] = True
     logger.info(
         "runtime_services_started process_role=%s upload_worker=%s data_poller=%s",
         settings.process_role,
         upload_worker_started,
         data_poller_started,
     )
+
     try:
         yield
     finally:
         if data_poller_started:
-            stop_data_connection_poller()
+            try:
+                stop_data_connection_poller()
+            except Exception:
+                logger.exception("data_poller_shutdown_failure")
         if upload_worker_started:
-            stop_upload_worker()
+            try:
+                stop_upload_worker()
+            except Exception:
+                logger.exception("upload_worker_shutdown_failure")
         logger.info("runtime_services_stopped process_role=%s", settings.process_role)
 
 
@@ -152,6 +190,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ok",
             "service": "neraium-api",
             "process_role": settings.process_role,
+        }
+
+    @app.get("/api/ready")
+    def read_api_ready():
+        return STARTUP_STATUS
+
+    @app.get("/api/startup-status")
+    def read_startup_status():
+        return STARTUP_STATUS
+
+    @app.get("/api/routes/debug")
+    def read_route_debug():
+        return {
+            "mounted": True,
+            "route_count": len(app.routes),
+            "routes": [
+                {
+                    "path": route.path,
+                    "name": route.name,
+                    "methods": sorted(route.methods) if getattr(route, "methods", None) else [],
+                }
+                for route in app.routes
+            ],
         }
 
     return app
