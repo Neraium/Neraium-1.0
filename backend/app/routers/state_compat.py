@@ -7,6 +7,8 @@ router = APIRouter(tags=["facility"])
 
 @router.get("/facility/cognition-state")
 @router.get("/facility/cognition-state/")
+@router.get("/cognition-state")
+@router.get("/cognition-state/")
 def facility_state_compat(mode: str = "live") -> dict[str, Any]:
     return {
         "cognition_state": "Drift observed",
