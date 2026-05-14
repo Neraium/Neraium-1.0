@@ -8,13 +8,20 @@ from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.upload_jobs import read_latest_upload_result
+from behavior_science.behavioral_taxonomy import build_behavioral_taxonomy
+from behavior_science.long_horizon_memory import build_long_horizon_memory
+from behavior_science.structural_evolution_theory import EvolutionTheoryEngine
 from cognition_graph.persistent_graph_memory import PersistentCognitionGraphMemory
 from cognition_graph.structural_cognition_graph import build_structural_cognition_graph
 from cross_domain.cross_domain_intelligence_engine import CrossDomainIntelligenceEngine
 from exchange.sii_graph_exchange import build_graph_exchange_packet
 from federation.federated_cognition_exchange import build_federated_exchange_payload
+from federation.infrastructure_cognition_federation import build_infrastructure_cognition_federation
 from governance.distributed_cognition_governance import build_governance_record
+from laboratory.behavioral_infrastructure_lab import run_behavior_lab
 from ontology.evolving_ontology_engine import EvolvingOntologyEngine
+from explainability.structural_explainability_standard import build_explainability_standard
+from research.behavior_research_engine import run_behavior_research
 from search.structural_evolution_search import BehavioralSimilaritySearch, StructuralEvolutionQuery
 from training.operator_cognition_training import build_training_payload
 
@@ -95,8 +102,47 @@ def distributed_governance() -> dict[str, Any]:
     return build_governance_record(intelligence)
 
 
+@router.get("/distributed/science/memory")
+def behavior_science_memory() -> dict[str, Any]:
+    return build_long_horizon_memory(current_intelligence())
+
+
+@router.get("/distributed/science/taxonomy")
+def behavior_science_taxonomy() -> dict[str, Any]:
+    return build_behavioral_taxonomy(current_intelligence())
+
+
+@router.get("/distributed/science/evolution-theory")
+def behavior_science_evolution_theory() -> dict[str, Any]:
+    intelligence = current_intelligence()
+    engine = EvolutionTheoryEngine()
+    return {
+        "rules": engine.rules(),
+        "evaluations": engine.evaluate(intelligence),
+    }
+
+
+@router.get("/distributed/science/research")
+def behavior_science_research() -> dict[str, Any]:
+    return run_behavior_research(current_intelligence())
+
+
+@router.get("/distributed/science/explainability")
+def behavior_science_explainability() -> dict[str, Any]:
+    return build_explainability_standard(current_intelligence())
+
+
+@router.get("/distributed/science/laboratory")
+def behavior_science_laboratory() -> dict[str, Any]:
+    return run_behavior_lab(current_intelligence())
+
+
+@router.get("/distributed/science/federation")
+def behavior_science_federation() -> dict[str, Any]:
+    return build_infrastructure_cognition_federation(current_intelligence())
+
+
 def current_intelligence() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result)
     return intelligence or build_sample_intelligence()
-

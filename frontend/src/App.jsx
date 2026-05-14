@@ -14,6 +14,7 @@ import StructuralOntologyWorkspace from "./components/StructuralOntologyWorkspac
 import EcosystemWorkspace from "./components/EcosystemWorkspace";
 import DistributedCognitionWorkspace from "./components/DistributedCognitionWorkspace";
 import OperatorTrainingWorkspace from "./components/OperatorTrainingWorkspace";
+import InfrastructureBehaviorScienceWorkspace from "./components/InfrastructureBehaviorScienceWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -98,6 +99,12 @@ const WORKSPACES = [
     label: "Operator Training",
     eyebrow: "Cognition Training",
     description: "Replay-backed operator cognition training for structural evolution interpretation.",
+  },
+  {
+    id: "behavior-science",
+    label: "Behavior Science",
+    eyebrow: "Research Layer",
+    description: "Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.",
   },
 ];
 
@@ -589,6 +596,17 @@ function App() {
     if (activeWorkspace === "operator-training") {
       return (
         <OperatorTrainingWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "behavior-science") {
+      return (
+        <InfrastructureBehaviorScienceWorkspace
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           Panel={Panel}

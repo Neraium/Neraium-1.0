@@ -8,6 +8,7 @@ import FleetWorkspace from '../FleetWorkspace';
 import EcosystemWorkspace from '../EcosystemWorkspace';
 import DistributedCognitionWorkspace from '../DistributedCognitionWorkspace';
 import OperatorTrainingWorkspace from '../OperatorTrainingWorkspace';
+import InfrastructureBehaviorScienceWorkspace from '../InfrastructureBehaviorScienceWorkspace';
 
 export default function WorkspaceRouter(props) {
   const {
@@ -23,6 +24,7 @@ export default function WorkspaceRouter(props) {
     ecosystemProps,
     distributedCognitionProps,
     operatorTrainingProps,
+    behaviorScienceProps,
   } = props;
 
   if (activeWorkspace === 'system-body') {
@@ -48,6 +50,9 @@ export default function WorkspaceRouter(props) {
   }
   if (activeWorkspace === 'operator-training') {
     return <OperatorTrainingWorkspace {...operatorTrainingProps} />;
+  }
+  if (activeWorkspace === 'behavior-science') {
+    return <InfrastructureBehaviorScienceWorkspace {...behaviorScienceProps} />;
   }
   return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />;
 }

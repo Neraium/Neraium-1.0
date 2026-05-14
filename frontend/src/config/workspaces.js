@@ -59,4 +59,10 @@ export const WORKSPACES = [
     eyebrow: 'Cognition Training',
     description: 'Replay-backed operator cognition training for structural evolution interpretation.',
   },
+  {
+    id: 'behavior-science',
+    label: 'Behavior Science',
+    eyebrow: 'Research Layer',
+    description: 'Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.',
+  },
 ];
