@@ -144,11 +144,12 @@ jobs:
             --force-new-deployment \
             --region "$AWS_REGION"
 
-      - name: Wait for ECS services stability
+      - name: Show ECS service rollout status
         run: |
           set -euo pipefail
 
-          aws ecs wait services-stable \
+          aws ecs describe-services \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
-            --region "$AWS_REGION"
+            --region "$AWS_REGION" \
+            --query 'services[*].{name:serviceName,status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}'
