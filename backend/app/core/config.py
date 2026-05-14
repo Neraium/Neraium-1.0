@@ -52,7 +52,6 @@ def get_settings() -> Settings:
         backend_host=os.getenv("BACKEND_HOST", DEFAULT_BACKEND_HOST),
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
         cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
-        process_role=process_role,
         start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"monolith", "worker"}),
         start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), process_role in {"monolith", "worker"}),
         default_telemetry_url=parse_default_telemetry_url(os.getenv("NERAIUM_DEFAULT_TELEMETRY_URL"), app_env),
