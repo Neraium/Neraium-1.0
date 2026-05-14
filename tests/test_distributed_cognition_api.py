@@ -57,3 +57,40 @@ def test_behavior_science_endpoints_return_payloads() -> None:
     federation = client.get("/api/distributed/science/federation")
     assert federation.status_code == 200
     assert federation.json().get("exchange_payload")
+
+
+def test_universal_framework_endpoints_return_payloads() -> None:
+    write_latest_sii_state(build_sample_intelligence())
+    client = TestClient(create_app())
+
+    primitives = client.get("/api/distributed/framework/primitives")
+    assert primitives.status_code == 200
+    assert primitives.json().get("primitive_count", 0) >= 10
+
+    mathematics = client.get("/api/distributed/framework/mathematics")
+    assert mathematics.status_code == 200
+    assert mathematics.json().get("topology_transition")
+
+    governance = client.get("/api/distributed/framework/ontology-governance")
+    assert governance.status_code == 200
+    assert governance.json().get("promotion_queue")
+
+    training = client.get("/api/distributed/framework/training-curriculum")
+    assert training.status_code == 200
+    assert training.json().get("modules")
+
+    extreme = client.get("/api/distributed/framework/extreme-environment")
+    assert extreme.status_code == 200
+    assert extreme.json().get("contexts")
+
+    archive = client.get("/api/distributed/framework/archive")
+    assert archive.status_code == 200
+    assert archive.json().get("replay_sequences")
+
+    research = client.get("/api/distributed/framework/research-ecosystem")
+    assert research.status_code == 200
+    assert research.json().get("primitive_dataset")
+
+    reasoning = client.get("/api/distributed/framework/reasoning-substrate")
+    assert reasoning.status_code == 200
+    assert reasoning.json().get("trace")

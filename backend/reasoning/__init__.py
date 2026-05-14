@@ -1,0 +1,2 @@
+"""Foundational structural reasoning substrate."""
+

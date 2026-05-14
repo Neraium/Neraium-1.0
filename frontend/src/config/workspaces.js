@@ -65,4 +65,16 @@ export const WORKSPACES = [
     eyebrow: 'Research Layer',
     description: 'Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.',
   },
+  {
+    id: 'operator-cognition-training',
+    label: 'Operator Curriculum',
+    eyebrow: 'Training System',
+    description: 'Replay-based operator cognition curriculum for structural interpretation exercises.',
+  },
+  {
+    id: 'structural-cognition-research',
+    label: 'Research Workspace',
+    eyebrow: 'Framework Layer',
+    description: 'Universal primitives, structural evolution mathematics, governance queue, archives, and reasoning traces.',
+  },
 ];

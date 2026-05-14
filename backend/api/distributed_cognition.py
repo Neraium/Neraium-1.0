@@ -8,21 +8,29 @@ from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.upload_jobs import read_latest_upload_result
+from archives.infrastructure_behavioral_archive import build_infrastructure_behavior_archive
 from behavior_science.behavioral_taxonomy import build_behavioral_taxonomy
 from behavior_science.long_horizon_memory import build_long_horizon_memory
 from behavior_science.structural_evolution_theory import EvolutionTheoryEngine
 from cognition_graph.persistent_graph_memory import PersistentCognitionGraphMemory
 from cognition_graph.structural_cognition_graph import build_structural_cognition_graph
 from cross_domain.cross_domain_intelligence_engine import CrossDomainIntelligenceEngine
+from domain_packs.extreme_environment_pack import build_extreme_environment_cognition_profile
 from exchange.sii_graph_exchange import build_graph_exchange_packet
+from explainability.structural_explainability_standard import build_explainability_standard
 from federation.federated_cognition_exchange import build_federated_exchange_payload
 from federation.infrastructure_cognition_federation import build_infrastructure_cognition_federation
+from governance.autonomous_ontology_governance import build_autonomous_ontology_governance
 from governance.distributed_cognition_governance import build_governance_record
 from laboratory.behavioral_infrastructure_lab import run_behavior_lab
+from mathematics.structural_evolution_math import build_structural_evolution_metrics
 from ontology.evolving_ontology_engine import EvolvingOntologyEngine
-from explainability.structural_explainability_standard import build_explainability_standard
+from primitives.universal_structural_primitives import build_universal_structural_primitives
+from reasoning.foundational_reasoning_substrate import build_foundational_reasoning_substrate
 from research.behavior_research_engine import run_behavior_research
+from research.sii_research_ecosystem import build_sii_research_ecosystem_export
 from search.structural_evolution_search import BehavioralSimilaritySearch, StructuralEvolutionQuery
+from training.operator_cognition_curriculum import build_operator_cognition_curriculum
 from training.operator_cognition_training import build_training_payload
 
 router = APIRouter(tags=["distributed-cognition"], dependencies=[Depends(require_api_access)])
@@ -140,6 +148,64 @@ def behavior_science_laboratory() -> dict[str, Any]:
 @router.get("/distributed/science/federation")
 def behavior_science_federation() -> dict[str, Any]:
     return build_infrastructure_cognition_federation(current_intelligence())
+
+
+@router.get("/distributed/framework/primitives")
+def framework_primitives() -> dict[str, Any]:
+    return build_universal_structural_primitives()
+
+
+@router.get("/distributed/framework/mathematics")
+def framework_mathematics() -> dict[str, Any]:
+    return build_structural_evolution_metrics(current_intelligence())
+
+
+@router.get("/distributed/framework/ontology-governance")
+def framework_ontology_governance() -> dict[str, Any]:
+    return build_autonomous_ontology_governance(current_intelligence())
+
+
+@router.get("/distributed/framework/training-curriculum")
+def framework_training_curriculum() -> dict[str, Any]:
+    return build_operator_cognition_curriculum(current_intelligence())
+
+
+@router.get("/distributed/framework/extreme-environment")
+def framework_extreme_environment() -> dict[str, Any]:
+    return build_extreme_environment_cognition_profile()
+
+
+@router.get("/distributed/framework/archive")
+def framework_archive() -> dict[str, Any]:
+    return build_infrastructure_behavior_archive(current_intelligence())
+
+
+@router.get("/distributed/framework/research-ecosystem")
+def framework_research_ecosystem() -> dict[str, Any]:
+    intelligence = current_intelligence()
+    primitives = build_universal_structural_primitives()
+    metrics = build_structural_evolution_metrics(intelligence)
+    archive = build_infrastructure_behavior_archive(intelligence)
+    return build_sii_research_ecosystem_export(
+        primitives=primitives,
+        metrics=metrics,
+        archive=archive,
+        intelligence=intelligence,
+    )
+
+
+@router.get("/distributed/framework/reasoning-substrate")
+def framework_reasoning_substrate() -> dict[str, Any]:
+    intelligence = current_intelligence()
+    primitives = build_universal_structural_primitives()
+    metrics = build_structural_evolution_metrics(intelligence)
+    archive = build_infrastructure_behavior_archive(intelligence)
+    return build_foundational_reasoning_substrate(
+        primitives=primitives,
+        metrics=metrics,
+        archive=archive,
+        intelligence=intelligence,
+    )
 
 
 def current_intelligence() -> dict[str, Any]:

@@ -15,6 +15,8 @@ import EcosystemWorkspace from "./components/EcosystemWorkspace";
 import DistributedCognitionWorkspace from "./components/DistributedCognitionWorkspace";
 import OperatorTrainingWorkspace from "./components/OperatorTrainingWorkspace";
 import InfrastructureBehaviorScienceWorkspace from "./components/InfrastructureBehaviorScienceWorkspace";
+import OperatorCognitionTrainingWorkspace from "./components/OperatorCognitionTrainingWorkspace";
+import StructuralCognitionResearchWorkspace from "./components/StructuralCognitionResearchWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -105,6 +107,18 @@ const WORKSPACES = [
     label: "Behavior Science",
     eyebrow: "Research Layer",
     description: "Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.",
+  },
+  {
+    id: "operator-cognition-training",
+    label: "Operator Curriculum",
+    eyebrow: "Training System",
+    description: "Replay-based operator cognition curriculum for structural interpretation exercises.",
+  },
+  {
+    id: "structural-cognition-research",
+    label: "Research Workspace",
+    eyebrow: "Framework Layer",
+    description: "Universal primitives, structural evolution mathematics, governance queue, archives, and reasoning traces.",
   },
 ];
 
@@ -607,6 +621,28 @@ function App() {
     if (activeWorkspace === "behavior-science") {
       return (
         <InfrastructureBehaviorScienceWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "operator-cognition-training") {
+      return (
+        <OperatorCognitionTrainingWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "structural-cognition-research") {
+      return (
+        <StructuralCognitionResearchWorkspace
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           Panel={Panel}

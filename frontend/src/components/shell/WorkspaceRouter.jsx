@@ -9,6 +9,8 @@ import EcosystemWorkspace from '../EcosystemWorkspace';
 import DistributedCognitionWorkspace from '../DistributedCognitionWorkspace';
 import OperatorTrainingWorkspace from '../OperatorTrainingWorkspace';
 import InfrastructureBehaviorScienceWorkspace from '../InfrastructureBehaviorScienceWorkspace';
+import OperatorCognitionTrainingWorkspace from '../OperatorCognitionTrainingWorkspace';
+import StructuralCognitionResearchWorkspace from '../StructuralCognitionResearchWorkspace';
 
 export default function WorkspaceRouter(props) {
   const {
@@ -25,6 +27,8 @@ export default function WorkspaceRouter(props) {
     distributedCognitionProps,
     operatorTrainingProps,
     behaviorScienceProps,
+    operatorCognitionTrainingProps,
+    structuralCognitionResearchProps,
   } = props;
 
   if (activeWorkspace === 'system-body') {
@@ -53,6 +57,12 @@ export default function WorkspaceRouter(props) {
   }
   if (activeWorkspace === 'behavior-science') {
     return <InfrastructureBehaviorScienceWorkspace {...behaviorScienceProps} />;
+  }
+  if (activeWorkspace === 'operator-cognition-training') {
+    return <OperatorCognitionTrainingWorkspace {...operatorCognitionTrainingProps} />;
+  }
+  if (activeWorkspace === 'structural-cognition-research') {
+    return <StructuralCognitionResearchWorkspace {...structuralCognitionResearchProps} />;
   }
   return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />;
 }
