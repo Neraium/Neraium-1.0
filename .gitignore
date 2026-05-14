@@ -56,3 +56,4 @@ backend/app/runtime/uploads/
 backend/app/runtime/jobs/
 backend/app/runtime/*
 !backend/app/runtime/.gitkeep
+.aider*

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import HealthOrb from "./HealthOrb";
+import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
+import { normalizeOperationalState, orbStateFromOperationalState } from "../viewModels/operationalUiState";
 
 const STATE = {
   nominal: {
@@ -24,25 +25,27 @@ const STATE = {
   },
 };
 
+const FALLBACK_STATE = {
+  label: "Awaiting baseline",
+  description: "No telemetry baseline is available yet. The orb remains visible so operators can confirm structural health mode and wait for live evidence.",
+  mode: "no-data",
+};
+
 export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSelectTarget }) {
-  const state = STATE[liveOps.facilityTone] ?? STATE.info;
+  const rawUiState = normalizeOperationalState(liveOps.facilityTone);
+  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
+  const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
+  const state = awaitingSii || uiState === "neutral" ? FALLBACK_STATE : (STATE[liveOps.facilityTone] ?? STATE.info);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
-  const systemState = liveOps.facilityTone === "nominal"
-    ? "stable"
-    : liveOps.facilityTone === "review"
-      ? "drift"
-      : liveOps.facilityTone === "info"
-        ? "neutral"
-      : "separation";
+  const systemState = orbStateFromOperationalState(uiState);
   const findings = liveOps.findings?.slice(0, 2) ?? [];
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
   const sourceLabel = liveOps.dataSourceLabel ?? "Awaiting data";
-  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
   const awaitingLabel = liveOps.intelligenceMode === "processing" ? "SII analysis running" : "Awaiting SII analysis";
   const issueType = awaitingSii ? awaitingLabel : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
   const suspectedLocation = awaitingSii ? awaitingLabel : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Location not isolated");
@@ -62,78 +65,58 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     ? awaitingLabel
     : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
   const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
+  const whyWeThinkThat = awaitingSii || uiState === "neutral"
+    ? "The workspace is waiting for a usable telemetry baseline or backend evidence stream."
+    : (secondaryMessage || relationshipEvidence);
+  const humanRead = awaitingSii || uiState === "neutral"
+    ? "No upload is required for the orb to render. It stays visible as the neutral structural placeholder until live evidence arrives."
+    : (liveOps.connectionActionHint || "Monitor relationship coherence and schedule operator review if drift persists.");
+  const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;
 
+  const metrics = [
+    { label: "Severity", value: liveOps.facilityStateLabel, priority: true, state: uiState },
+    { label: "Primary room", value: where, state: uiState === "neutral" ? "neutral" : "stable" },
+    { label: "Next inspect", value: liveOps.primaryWindow?.label ?? "Facility overview", state: uiState === "stable" ? "stable" : "watch" },
+    { label: "What changed", value: issueType, state: uiState },
+  ];
+  const evidenceItems = [
+    { label: "Primary evidence", value: primaryEvidence, state: uiState },
+    { label: "Relationship evidence", value: relationshipEvidence, state: uiState === "stable" ? "watch" : uiState },
+    { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.`, state: "neutral" },
+  ];
+  const narrativeItems = [
+    { label: "What's wrong", value: primaryMessage, state: uiState },
+    { label: "Why we think that", value: whyWeThinkThat, state: uiState === "stable" ? "watch" : uiState },
+    { label: "Human read", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
+    { label: "Where", value: where, state: "neutral" },
+  ];
+  const timelineItems = [
+    { label: "Latest update", value: lastUpdate, state: "neutral" },
+    { label: "Operational runway", value: runway, state: uiState },
+    { label: "Urgency", value: urgency, state: uiState },
+    { label: "Evidence quality", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
+  ];
+
   return (
-    <section className="system-body">
-      <div className="system-body__header">
-        <p className="system-body__kicker">System Body</p>
-        <h2>System Health</h2>
-        <p>{liveOps.heroSubline}</p>
-      </div>
-
-      <div className={`integrity-hero integrity-hero--solo integrity-hero--${systemState}`}>
-        <div className="integrity-hero__score">
-          <div className="integrity-hero__score-orb">
-            <HealthOrb systemState={systemState} intensity={1 - coherence} />
-          </div>
-          <span>Facility condition</span>
-          <strong>{state.label}</strong>
-          <p>{primaryMessage}</p>
-        </div>
-
-        <div className="integrity-hero__meta">
-          <div className="integrity-hero__summary">
-            <p className="integrity-hero__kicker">System summary</p>
-            <h3>{state.description}</h3>
-            <p>{secondaryMessage}</p>
-          </div>
-
-          <div className="integrity-hero__metrics">
-            <article className="integrity-hero__metric integrity-hero__metric--priority">
-              <span>Operational runway</span>
-              <strong>{runway}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Issue type</span>
-              <strong>{issueType}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Suspected location</span>
-              <strong>{suspectedLocation}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Urgency</span>
-              <strong>{urgency}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Evidence quality</span>
-              <strong>{confidence}</strong>
-            </article>
-            <article className="integrity-hero__metric">
-              <span>Latest update</span>
-              <strong>{lastUpdate}</strong>
-            </article>
-          </div>
-
-          <div className="integrity-hero__evidence">
-            <article>
-              <span>Primary evidence</span>
-              <p>{primaryEvidence}</p>
-            </article>
-            <article>
-              <span>Relationship evidence</span>
-              <p>{relationshipEvidence}</p>
-            </article>
-            <article>
-              <span>Source of truth</span>
-              <p>{sourceLabel}. Operational conclusions remain backend/SII sourced.</p>
-            </article>
-          </div>
-        </div>
-      </div>
-    </section>
+    <SystemBodyWorkspace
+      systemState={systemState}
+      uiState={uiState}
+      coherence={coherence}
+      stateLabel={state.label}
+      subtitle={state.description}
+      connectionStatus={liveOps.connectionStatusLine}
+      connectionTone={liveOps.connectionTone}
+      primaryMessage={primaryMessage}
+      summaryTitle={state.description}
+      narrativeItems={narrativeItems}
+      metrics={metrics}
+      evidenceItems={evidenceItems}
+      timelineItems={timelineItems}
+      isLoading={awaitingSii}
+    />
   );
 }
+
 

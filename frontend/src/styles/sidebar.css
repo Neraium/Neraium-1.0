@@ -1,0 +1,198 @@
+.platform-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100dvh;
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+  border-right: 1px solid rgba(138, 184, 196, 0.07);
+  background:
+    radial-gradient(circle at top left, rgba(99, 188, 211, 0.05), transparent 24%),
+    linear-gradient(180deg, rgba(58, 178, 138, 0.025), transparent 20%),
+    linear-gradient(180deg, rgba(12, 17, 20, 0.98), rgba(7, 10, 13, 0.98));
+}
+
+.sidebar-brand-shell {
+  display: grid;
+  gap: 10px;
+  min-height: 92px;
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(138, 184, 196, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(22, 30, 35, 0.74), rgba(10, 14, 17, 0.74));
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.brand-name {
+  font-size: 0.88rem;
+  letter-spacing: 0.12em;
+}
+
+.brand-subtitle {
+  color: rgba(201, 221, 225, 0.74);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.brand-edition {
+  padding: 0 7px;
+  border: 1px solid rgba(138, 184, 196, 0.08);
+  background: rgba(12, 18, 21, 0.82);
+  color: rgba(218, 231, 235, 0.82);
+  letter-spacing: 0.14em;
+}
+
+.sidebar-section {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-kicker {
+  color: rgba(160, 178, 184, 0.76);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+}
+
+.workspace-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-nav__item {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 78px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid rgba(138, 184, 196, 0.05);
+  border-left: 1px solid transparent;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(18, 24, 28, 0.62), rgba(10, 13, 16, 0.56));
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.workspace-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-nav__label {
+  color: rgba(238, 244, 246, 0.96);
+  font-size: 0.89rem;
+  font-weight: 620;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.workspace-nav__eyebrow {
+  color: rgba(138, 184, 196, 0.72);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workspace-nav__detail {
+  margin: 0;
+  color: rgba(194, 208, 213, 0.76);
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.workspace-nav__item:hover,
+.workspace-nav__item:focus-visible {
+  border-color: rgba(138, 184, 196, 0.1);
+  background:
+    linear-gradient(180deg, rgba(22, 29, 34, 0.7), rgba(11, 15, 18, 0.62));
+}
+
+.workspace-nav__item--active {
+  border-color: rgba(138, 184, 196, 0.1);
+  background:
+    linear-gradient(180deg, rgba(26, 35, 41, 0.82), rgba(12, 17, 20, 0.74));
+}
+
+.workspace-nav__item--active::before {
+  content: "";
+  position: absolute;
+  inset: 14px auto 14px 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(var(--state-accent-rgb), 0.9);
+}
+
+.workspace-nav__item--active .workspace-nav__label {
+  color: #f5f8f9;
+}
+
+.sidebar-section--terminal {
+  margin-top: auto;
+  padding: 14px 14px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(138, 184, 196, 0.07);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 28, 0.68), rgba(10, 13, 16, 0.62));
+}
+
+.sidebar-telemetry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(138, 184, 196, 0.06);
+}
+
+.sidebar-telemetry:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.sidebar-telemetry strong {
+  color: rgba(244, 247, 248, 0.94);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+.sidebar-footer {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-top: 12px;
+  border-top: 1px solid rgba(138, 184, 196, 0.07);
+}
+
+.sidebar-footer p {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 1100px) {
+  .workspace-drawer .sidebar-brand-shell {
+    min-height: auto;
+  }
+
+  .workspace-drawer .workspace-nav__item {
+    min-height: 74px;
+  }
+
+  .workspace-drawer .sidebar-section--terminal {
+    margin-top: 16px;
+  }
+}

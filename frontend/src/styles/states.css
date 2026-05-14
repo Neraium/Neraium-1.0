@@ -1,0 +1,163 @@
+:root {
+  --state-neutral-accent: #8a9aa6;
+  --state-neutral-rgb: 138, 154, 166;
+  --state-stable-accent: #6cba9c;
+  --state-stable-rgb: 108, 186, 156;
+  --state-watch-accent: #8ab8c4;
+  --state-watch-rgb: 138, 184, 196;
+  --state-warning-accent: #c8a06a;
+  --state-warning-rgb: 200, 160, 106;
+  --state-critical-accent: #d17b73;
+  --state-critical-rgb: 209, 123, 115;
+}
+
+.ui-state-surface {
+  --state-accent: var(--state-neutral-accent);
+  --state-accent-rgb: var(--state-neutral-rgb);
+}
+
+.ui-state-surface--neutral,
+.ui-state-indicator--neutral,
+.status-dot--state-neutral {
+  --state-accent: var(--state-neutral-accent);
+  --state-accent-rgb: var(--state-neutral-rgb);
+}
+
+.ui-state-surface--stable,
+.ui-state-indicator--stable,
+.status-dot--state-stable,
+.health-orb--stable {
+  --state-accent: var(--state-stable-accent);
+  --state-accent-rgb: var(--state-stable-rgb);
+}
+
+.ui-state-surface--watch,
+.ui-state-indicator--watch,
+.status-dot--state-watch,
+.health-orb--watch {
+  --state-accent: var(--state-watch-accent);
+  --state-accent-rgb: var(--state-watch-rgb);
+}
+
+.ui-state-surface--warning,
+.ui-state-indicator--warning,
+.status-dot--state-warning,
+.health-orb--warning {
+  --state-accent: var(--state-warning-accent);
+  --state-accent-rgb: var(--state-warning-rgb);
+}
+
+.ui-state-surface--critical,
+.ui-state-indicator--critical,
+.status-dot--state-critical,
+.health-orb--critical {
+  --state-accent: var(--state-critical-accent);
+  --state-accent-rgb: var(--state-critical-rgb);
+}
+
+.ui-state-surface {
+  border-color: rgba(var(--state-accent-rgb), 0.16);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--state-accent-rgb), 0.05),
+    0 16px 36px rgba(0, 0, 0, 0.22);
+}
+
+.ui-state-surface--stable,
+.ui-state-surface--watch,
+.ui-state-surface--warning,
+.ui-state-surface--critical {
+  background-image:
+    linear-gradient(180deg, rgba(var(--state-accent-rgb), 0.06), rgba(var(--state-accent-rgb), 0.01)),
+    linear-gradient(180deg, rgba(15, 22, 27, 0.94), rgba(9, 13, 16, 0.94));
+}
+
+.workspace-nav__item--state-neutral {
+  border-left-color: transparent;
+}
+
+.workspace-nav__item--state-stable,
+.workspace-nav__item--state-watch,
+.workspace-nav__item--state-warning,
+.workspace-nav__item--state-critical,
+.system-body-metric--stable,
+.system-body-metric--watch,
+.system-body-metric--warning,
+.system-body-metric--critical {
+  border-left-color: rgba(var(--state-accent-rgb), 0.9);
+}
+
+.status-chip.ui-state-surface strong,
+.system-body-summary-card.ui-state-surface .panel-title,
+.system-body-timeline-card.ui-state-surface strong {
+  color: rgba(255, 255, 255, 0.97);
+}
+
+.status-chip.ui-state-surface span,
+.system-body-summary-card.ui-state-surface .section-label,
+.system-body-evidence-card.ui-state-surface .section-label {
+  color: rgba(var(--state-accent-rgb), 0.92);
+}
+
+.ui-state-indicator {
+  position: relative;
+}
+
+.ui-state-indicator::before {
+  content: ;
+ position: absolute;
+ inset: 14px auto 14px 0;
+ width: 2px;
+ border-radius: 999px;
+ background: rgba(var(--state-accent-rgb), 0.88);
+ opacity: 0.92;
+}
+
+.status-dot {
+ display: inline-grid;
+ place-items: center;
+ width: 14px;
+ height: 14px;
+ position: relative;
+}
+
+.status-dot__halo,
+.status-dot__ring,
+.status-dot__core {
+ position: absolute;
+ border-radius: 999px;
+}
+
+.status-dot__halo {
+ inset: -4px;
+ background: radial-gradient(circle, rgba(var(--state-accent-rgb), 0.18), transparent 72%);
+}
+
+.status-dot__ring {
+ inset: 1px;
+ border: 1px solid rgba(var(--state-accent-rgb), 0.44);
+}
+
+.status-dot__core {
+ inset: 4px;
+ background: rgb(var(--state-accent-rgb));
+ box-shadow: 0 0 12px rgba(var(--state-accent-rgb), 0.18);
+}
+
+.status-chip.ui-state-surface,
+.top-status__brief.ui-state-surface,
+.sidebar-section--terminal.ui-state-surface {
+ backdrop-filter: blur(8px);
+}
+
+.health-orb--neutral { --orb-hue: #9aa3ad; }
+.health-orb--stable { --orb-hue: #6cba9c; }
+.health-orb--watch { --orb-hue: #8ab8c4; }
+.health-orb--warning { --orb-hue: #c8a06a; }
+.health-orb--critical { --orb-hue: #d17b73; }
+
+.health-orb--watch .health-orb__core,
+.health-orb--warning .health-orb__core,
+.health-orb--critical .health-orb__core,
+.health-orb--stable .health-orb__core {
+ filter: drop-shadow(0 0 12px rgba(var(--state-accent-rgb), 0.16));
+}

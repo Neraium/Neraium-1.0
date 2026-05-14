@@ -1,0 +1,64 @@
+:root {
+  --surface-border: rgba(138, 184, 196, 0.12);
+  --surface-border-strong: rgba(138, 184, 196, 0.22);
+  --surface-divider: rgba(138, 184, 196, 0.08);
+  --surface-a: linear-gradient(180deg, rgba(18, 25, 30, 0.96), rgba(10, 15, 18, 0.95));
+  --surface-b: linear-gradient(180deg, rgba(15, 22, 27, 0.94), rgba(9, 13, 16, 0.94));
+  --surface-c: linear-gradient(180deg, rgba(20, 28, 33, 0.82), rgba(11, 16, 20, 0.84));
+  --surface-d: linear-gradient(180deg, rgba(25, 34, 39, 0.52), rgba(12, 18, 22, 0.6));
+  --shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.22);
+  --shadow-hover: 0 20px 48px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 28px 72px rgba(0, 0, 0, 0.34);
+  --shadow-orb: 0 32px 90px rgba(0, 0, 0, 0.44);
+  --shadow-active: 0 16px 42px rgba(0, 0, 0, 0.28);
+  --motion-standard: 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-slow: 360ms cubic-bezier(0.2, 0.65, 0.2, 1);
+}
+
+.workspace-header,
+.section-card,
+.hero-panel,
+.sidebar-brand-shell,
+.sidebar-section--terminal,
+.workspace-nav__item,
+.status-chip,
+.top-status__brief,
+.workspace-drawer {
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-soft);
+  transition:
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard),
+    background-color var(--motion-standard),
+    opacity var(--motion-standard);
+}
+
+.section-card,
+.hero-panel,
+.status-chip,
+.top-status__brief,
+.sidebar-brand-shell,
+.sidebar-section--terminal,
+.workspace-drawer {
+  background: var(--surface-b);
+}
+
+.workspace-header {
+  background: var(--surface-a);
+}
+
+.workspace-nav__item:hover,
+.workspace-nav__item:focus-visible,
+.section-card:hover,
+.hero-panel:hover,
+.status-chip:hover {
+  border-color: rgba(138, 184, 196, 0.18);
+  box-shadow: var(--shadow-hover);
+}
+
+.workspace-nav__item--active,
+.status-chip.ui-state-surface,
+.top-status__brief.ui-state-surface {
+  box-shadow: var(--shadow-active);
+}

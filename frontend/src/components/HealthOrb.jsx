@@ -65,11 +65,14 @@ function toneMeta(systemState) {
   if (systemState === "neutral") {
     return { className: "health-orb--neutral", hue: "#9aa3ad", coreOpacity: 0.7 };
   }
-  if (systemState === "drift") {
-    return { className: "health-orb--drift", hue: "#ffc94a", coreOpacity: 0.9 };
+  if (systemState === "watch") {
+    return { className: "health-orb--watch health-orb--drift", hue: "#b8c4d6", coreOpacity: 0.84 };
   }
-  if (systemState === "separation") {
-    return { className: "health-orb--separation", hue: "#e2333f", coreOpacity: 0.94 };
+  if (systemState === "warning") {
+    return { className: "health-orb--warning health-orb--drift", hue: "#c8a06a", coreOpacity: 0.9 };
+  }
+  if (systemState === "critical") {
+    return { className: "health-orb--critical health-orb--separation", hue: "#d17b73", coreOpacity: 0.94 };
   }
   return { className: "health-orb--stable", hue: "#b8ff36", coreOpacity: 0.88 };
 }
@@ -79,9 +82,10 @@ function transformNode(node, systemState, intensity) {
     return node;
   }
 
-  if (systemState === "drift") {
-    const horizontalShift = node.g === "left" ? -24 : node.g === "right" ? 24 : 0;
-    const verticalShift = node.g === "top" ? -14 : node.g === "bottom" ? 11 : ((node.x + node.y) % 3 - 1) * 7;
+  if (systemState === "watch" || systemState === "warning") {
+    const shiftScale = systemState === "watch" ? 0.52 : 0.92;
+    const horizontalShift = (node.g === "left" ? -24 : node.g === "right" ? 24 : 0) * shiftScale;
+    const verticalShift = (node.g === "top" ? -14 : node.g === "bottom" ? 11 : ((node.x + node.y) % 3 - 1) * 7) * shiftScale;
     return {
       ...node,
       x: clamp(node.x + horizontalShift * intensity, 66, 274),
@@ -110,7 +114,13 @@ function edgeVisibility(linkIndex, systemState) {
   if (systemState === "stable" || systemState === "neutral") {
     return "solid";
   }
-  if (systemState === "drift") {
+  if (systemState === "watch") {
+    if (linkIndex % 8 === 0) {
+      return "faint";
+    }
+    return "solid";
+  }
+  if (systemState === "warning") {
     if (linkIndex % 6 === 0) {
       return "broken";
     }
@@ -129,8 +139,9 @@ function edgeVisibility(linkIndex, systemState) {
 }
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
-  const isSeparation = systemState === "separation";
-  const isDrift = systemState === "drift";
+  const isCritical = systemState === "critical";
+  const isWarning = systemState === "warning";
+  const isWatch = systemState === "watch";
   const isStable = systemState === "stable" || systemState === "neutral";
   const normalizedIntensity = clamp(Number(intensity) || 0, 0, 1);
   const tone = toneMeta(systemState);
@@ -165,7 +176,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
             <stop offset="100%" stopColor="white" stopOpacity="0" />
           </linearGradient>
           <clipPath id="orbSphereMask">
-            <circle cx="170" cy="132" r={isSeparation ? 92 : 88} />
+            <circle cx="170" cy="132" r={isCritical ? 92 : isWarning ? 90 : 88} />
           </clipPath>
         </defs>
 
@@ -176,12 +187,12 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           <ellipse cx="170" cy="258" rx="138" ry="28" className="health-orb__base-ring" />
         </g>
 
-        <circle cx="170" cy="132" r={isSeparation ? 98 : 92} className="health-orb__aura" />
-        <circle cx="170" cy="132" r={isStable ? 89 : isDrift ? 92 : 96} className="health-orb__shell" />
-        <circle cx="170" cy="132" r={isStable ? 86 : isDrift ? 89 : 93} className="health-orb__specular" />
-        <circle cx="170" cy="132" r={isStable ? 89 : isDrift ? 92 : 96} className="health-orb__rim" />
+        <circle cx="170" cy="132" r={isCritical ? 98 : isWarning ? 95 : isWatch ? 93 : 92} className="health-orb__aura" />
+        <circle cx="170" cy="132" r={isStable ? 89 : isWatch ? 91 : isWarning ? 93 : 96} className="health-orb__shell" />
+        <circle cx="170" cy="132" r={isStable ? 86 : isWatch ? 88 : isWarning ? 90 : 93} className="health-orb__specular" />
+        <circle cx="170" cy="132" r={isStable ? 89 : isWatch ? 91 : isWarning ? 93 : 96} className="health-orb__rim" />
 
-        <g className="health-orb__field" clipPath={isSeparation ? undefined : "url(#orbSphereMask)"}>
+        <g className="health-orb__field" clipPath={isCritical ? undefined : "url(#orbSphereMask)"}>
           {ORB_LINKS.map(([from, to], index) => {
             const n1 = nodeMap[from];
             const n2 = nodeMap[to];
@@ -213,7 +224,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           ))}
         </g>
 
-        {isSeparation && (
+        {isCritical && (
           <g className="health-orb__fractures">
             {FRACTURE_RAYS.map((ray, index) => (
               <line
@@ -229,7 +240,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           </g>
         )}
 
-        {isSeparation && (
+        {isCritical && (
           <g className="health-orb__fragments health-orb__fragments--separation">
             {FRAGMENT_SPARKS.map((spark, index) => (
               <circle

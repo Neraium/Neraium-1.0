@@ -1,0 +1,124 @@
+:root {
+  --motion-fade-in: sectionFadeIn 360ms cubic-bezier(0.2, 0.65, 0.2, 1) both;
+  --motion-slide-in: sectionRiseIn 380ms cubic-bezier(0.2, 0.65, 0.2, 1) both;
+}
+
+.system-body,
+.top-status,
+.platform-sidebar,
+.workspace-drawer {
+  animation: var(--motion-fade-in);
+}
+
+.workspace-nav__item,
+.section-card,
+.hero-panel,
+.status-chip,
+.top-status__brief,
+.sidebar-telemetry,
+.system-body-timeline-list li {
+  transition:
+    transform var(--motion-standard),
+    box-shadow var(--motion-standard),
+    border-color var(--motion-standard),
+    background-color var(--motion-standard),
+    opacity var(--motion-standard);
+}
+
+.workspace-nav__item:hover,
+.workspace-nav__item:focus-visible,
+.section-card:hover,
+.status-chip:hover,
+.system-body-metric:hover {
+  transform: translateY(-2px);
+}
+
+.system-body-orb-panel__halo--outer,
+.system-body-orb-panel__halo--inner,
+.health-orb--animated {
+  will-change: transform, opacity;
+}
+
+.system-body-orb-panel__depth {
+  animation: depthDrift 14s ease-in-out infinite;
+}
+
+.health-orb--animated {
+  animation: orbFloat 10s ease-in-out infinite;
+}
+
+.workspace-nav__item--active,
+.status-dot__core,
+.top-status__signal,
+.workspace-header__status {
+  transition: box-shadow var(--motion-slow), transform var(--motion-standard), opacity var(--motion-standard);
+}
+
+.system-body-metric,
+.system-body-evidence-card,
+.system-body-summary-card,
+.system-body-timeline-card,
+.sidebar-section--terminal {
+  animation: var(--motion-slide-in);
+}
+
+.system-body-metric:nth-child(2),
+.system-body-evidence-card:nth-child(2),
+.system-body-timeline-list li:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.system-body-metric:nth-child(3),
+.system-body-evidence-card:nth-child(3),
+.system-body-timeline-list li:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.system-body-metric:nth-child(4),
+.system-body-timeline-list li:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.workspace-drawer-backdrop,
+.workspace-drawer {
+  transition: opacity var(--motion-standard), transform var(--motion-slow);
+}
+
+.loading-panel,
+.loading-pulse,
+.system-body-orb-panel--loading {
+  transition: opacity var(--motion-standard), transform var(--motion-standard);
+}
+
+@keyframes orbFloat {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes depthDrift {
+  0% { transform: translateX(0) scale(1); opacity: 0.6; }
+  50% { transform: translateX(6px) scale(1.02); opacity: 0.82; }
+  100% { transform: translateX(0) scale(1); opacity: 0.6; }
+}
+
+@keyframes sectionFadeIn {
+  0% { opacity: 0.82; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sectionRiseIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
