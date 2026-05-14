@@ -53,6 +53,7 @@ class StructuralReplayEngine:
                 "replay_compression": compression,
                 "playback_speeds": [0.5, 1.0, 1.5, 2.0, 4.0],
                 "supported_intervals": ["30s", "1m", "5m", "15m", "1h"],
+                "canonical_flow": canonical_flow(),
             },
             "timeline": [frame.to_dict() for frame in frames],
         }
@@ -105,6 +106,10 @@ class StructuralReplayEngine:
         counterfactuals = intelligence.get("counterfactuals", {})
         confidence = intelligence.get("cognition_confidence", {})
         lineage = intelligence.get("evidence_lineage", {})
+        stability = intelligence.get("structural_stability_index", {})
+        recovery = intelligence.get("recovery_convergence", {})
+        compression = intelligence.get("structural_compression", {})
+        time_intel = intelligence.get("operational_time_intelligence", {})
         base_time = parse_dt(intelligence.get("last_updated"))
         pressure = facility.get("subsystem_pressure", {})
         pressure_score = float(pressure.get("pressure_score", 0.22))
@@ -117,7 +122,7 @@ class StructuralReplayEngine:
         for index in range(intervals):
             t = index / max(intervals - 1, 1)
             ts = base_time - timedelta(minutes=(intervals - index) * replay_compression * 4)
-            phase = "deterioration_progression" if t < 0.65 else "continuation_pressure"
+            phase = phase_for_t(t)
             frame_pressure = round(min(max(pressure_score * (0.6 + t * 0.7), 0.0), 1.0), 4)
             frame_volatility = round(min(max(volatility * (0.5 + t * 0.9), 0.0), 1.0), 4)
             active_slice = max(1, min(len(archetypes), int(round((t * len(archetypes)) + 0.2)))) if archetypes else 0
@@ -127,17 +132,24 @@ class StructuralReplayEngine:
                     topology_state={
                         "phase": phase,
                         "drift_index": round(min(0.12 + (t * 0.88), 1.0), 4),
-                        "fragmentation_indicator": round(min(frame_pressure * 0.92, 1.0), 4),
+                        "fragmentation_indicator": round(
+                            min(frame_pressure * 0.92 + (0.08 if phase in {"structural_fragmentation", "continuation_pathways"} else 0.0), 1.0),
+                            4,
+                        ),
+                        "stability_state": stability.get("state", "WATCH"),
                     },
                     subsystem_pressure={
                         "pressure_score": frame_pressure,
                         "volatility_index": frame_volatility,
                         "subsystems": pressure.get("subsystems", {}),
+                        "compression_intensity": compression.get("compression_intensity", "LOW_COMPRESSION"),
                     },
                     active_archetypes=archetypes[:active_slice],
                     propagation_state={
                         "dominant_paths": dominant_paths[: max(1, min(len(dominant_paths), 1 + int(t * 3)))],
                         "activation_intensity": round(min(0.18 + (t * 0.82), 1.0), 4),
+                        "propagation_acceleration": round(min(0.1 + t * 0.9, 1.0), 4),
+                        "recovery_convergence": recovery.get("convergence_quality", "LOW_CONVERGENCE"),
                     },
                     evidence_state={
                         "corroboration_strength": confidence.get("corroboration_strength", "MODERATE"),
@@ -147,11 +159,14 @@ class StructuralReplayEngine:
                         "facility_state": facility.get("facility_cognition_state", intelligence.get("facility_state", "Monitoring")),
                         "confidence_tier": confidence.get("confidence_tier", "MODERATE_EVIDENCE"),
                         "state_evolution": f"frame_{index + 1}_of_{intervals}",
+                        "canonical_phase": phase,
+                        "operational_phase": time_intel.get("operational_progression_phase", "stable_topology"),
                     },
                     memory_similarity=memory_matches[: max(1, min(len(memory_matches), 1 + int(t * 2)))],
                     continuation_window={
                         "active_scenario": progression[0]["name"] if progression else "Continuation tracking",
                         "window": progression[0]["window"] if progression else intelligence.get("intervention_window", "Monitoring"),
+                        "timing_window": time_intel.get("timing_windows", {}).get("continuation_acceleration_window", "n/a"),
                     },
                 )
             )
@@ -174,3 +189,22 @@ def parse_ts(value: str) -> float:
 
 def ts_iso(value: float) -> str:
     return datetime.fromtimestamp(value, tz=UTC).isoformat()
+
+
+def canonical_flow() -> list[str]:
+    return [
+        "stable_topology",
+        "relationship_weakening",
+        "pressure_migration",
+        "archetype_emergence",
+        "propagation_activation",
+        "structural_fragmentation",
+        "continuation_pathways",
+        "recovery_or_escalation",
+    ]
+
+
+def phase_for_t(t: float) -> str:
+    phases = canonical_flow()
+    idx = min(len(phases) - 1, int(t * len(phases)))
+    return phases[idx]

@@ -14,6 +14,7 @@ def test_replay_timeline_returns_structural_frames() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["meta"]["frame_count"] >= 6
+    assert payload["meta"]["canonical_flow"]
     assert len(payload["timeline"]) >= 6
     first = payload["timeline"][0]
     assert "topology_state" in first
@@ -22,6 +23,7 @@ def test_replay_timeline_returns_structural_frames() -> None:
     assert "propagation_state" in first
     assert "evidence_state" in first
     assert "cognition_state" in first
+    assert "canonical_phase" in first["cognition_state"]
 
 
 def test_replay_frame_and_range_endpoints() -> None:
