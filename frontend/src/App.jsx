@@ -1231,6 +1231,21 @@ function normalizeFacilityIntelligence(intelligence) {
     projected_time_to_failure_hours: null,
     last_updated: new Date().toISOString(),
     rooms: [],
+    structural_memory: { memory_matches: [], active_fingerprint: null, retrieval_status: "pending" },
+    active_fingerprint: null,
+    active_archetypes: [],
+    causality_graph: { nodes: [], edges: [], dominant_pathways: [], source_localization: null },
+    counterfactuals: { progression_scenarios: [], uncertainty_ranges: {}, structural_continuation_pathways: [] },
+    facility_cognition: { facility_cognition_state: "Awaiting facility cognition", global_structural_pressure_score: 0, subsystem_pressure: { subsystems: {} } },
+    operator_explanation_v2: {
+      summary: "Awaiting structural cognition output.",
+      active_archetypes: [],
+      propagation_pathways: [],
+      structural_memory_matches: [],
+      subsystem_causality_summary: [],
+      counterfactual_continuation_windows: {},
+      recovery_convergence_indicators: [],
+    },
   };
   if (!intelligence || typeof intelligence !== "object") {
     return safe;
@@ -1248,6 +1263,7 @@ function normalizeFacilityIntelligence(intelligence) {
     relationship_evidence: Array.isArray(intelligence.relationship_evidence) ? intelligence.relationship_evidence : safe.relationship_evidence,
     structural_explanation: Array.isArray(intelligence.structural_explanation) ? intelligence.structural_explanation : safe.structural_explanation,
     what_to_check: Array.isArray(intelligence.what_to_check) ? intelligence.what_to_check : safe.what_to_check,
+    active_archetypes: Array.isArray(intelligence.active_archetypes) ? intelligence.active_archetypes : safe.active_archetypes,
   };
 }
 

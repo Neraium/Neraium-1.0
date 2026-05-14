@@ -64,13 +64,28 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const relationshipEvidence = awaitingSii
     ? awaitingLabel
     : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
+  const activeArchetype = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ") ?? "Archetype still forming");
+  const propagationPath = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ") ?? "Propagation pathway not isolated");
+  const memoryMatch = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.structuralMemoryMatches?.[0]?.label ?? "No close structural memory match");
+  const continuationWindow = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.continuationWindow ?? "Monitoring");
+  const facilityCognitionState = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.facilityCognitionState ?? liveOps.heroSubline);
   const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
   const whyWeThinkThat = awaitingSii || uiState === "neutral"
     ? "The workspace is waiting for a usable telemetry baseline or backend evidence stream."
-    : (secondaryMessage || relationshipEvidence);
+    : (facilityCognitionState || secondaryMessage || relationshipEvidence);
   const humanRead = awaitingSii || uiState === "neutral"
     ? "No upload is required for the orb to render. It stays visible as the neutral structural placeholder until live evidence arrives."
-    : (liveOps.connectionActionHint || "Monitor relationship coherence and schedule operator review if drift persists.");
+    : (liveOps.connectionActionHint || `Monitor ${propagationPath} and schedule operator review if structural pressure persists.`);
   const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;
@@ -84,17 +99,21 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const evidenceItems = [
     { label: "Primary evidence", value: primaryEvidence, state: uiState },
     { label: "Relationship evidence", value: relationshipEvidence, state: uiState === "stable" ? "watch" : uiState },
+    { label: "Active archetype", value: activeArchetype, state: uiState === "neutral" ? "neutral" : "watch" },
+    { label: "Memory match", value: memoryMatch, state: uiState === "neutral" ? "neutral" : "stable" },
     { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.`, state: "neutral" },
   ];
   const narrativeItems = [
     { label: "What's wrong", value: primaryMessage, state: uiState },
     { label: "Why we think that", value: whyWeThinkThat, state: uiState === "stable" ? "watch" : uiState },
     { label: "Human read", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
+    { label: "Propagation", value: propagationPath, state: uiState === "neutral" ? "neutral" : uiState },
     { label: "Where", value: where, state: "neutral" },
   ];
   const timelineItems = [
     { label: "Latest update", value: lastUpdate, state: "neutral" },
     { label: "Operational runway", value: runway, state: uiState },
+    { label: "Continuation window", value: continuationWindow, state: uiState },
     { label: "Urgency", value: urgency, state: uiState },
     { label: "Evidence quality", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
   ];

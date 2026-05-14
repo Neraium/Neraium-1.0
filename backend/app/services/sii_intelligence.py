@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.structural_cognition import build_structural_cognition
+
 
 REQUIRED_INTELLIGENCE_FIELDS = [
     "facility_state",
@@ -102,6 +104,38 @@ def build_sample_intelligence() -> dict[str, Any]:
             "confidence": 74,
         },
     ]
+    structural_cognition = build_structural_cognition(
+        baseline_analysis={
+            "column_drift": [
+                {"column": "humidity", "percent_change": 18, "drift_flag": "review"},
+                {"column": "temperature", "percent_change": 11, "drift_flag": "watch"},
+            ]
+        },
+        engine_result={
+            "system_evidence": {
+                "corroboration_level": "strong",
+                "categories_showing_meaningful_change": 3,
+                "categories": {
+                    "moisture_control": {"signals": [1, 2], "evidence": [1]},
+                    "thermal_control": {"signals": [1], "evidence": [1]},
+                    "flow_restriction": {"signals": [1], "evidence": [1]},
+                },
+            },
+            "evidence": [
+                {"type": "relationship_change", "columns": ["airflow", "humidity"], "change": 0.82},
+                {"type": "relationship_change", "columns": ["temperature", "humidity"], "change": 0.76},
+            ],
+            "persistence_assessment": {"persistent_columns": ["humidity", "temperature"]},
+        },
+        driver_attribution={
+            "likely_driver": rooms[0]["primary_driver"],
+            "driver_category": "humidity_control",
+            "supporting_evidence": rooms[0]["supporting_evidence"],
+        },
+        room_summary={"room_count": len(rooms), "rooms": [{"room": room["room"]} for room in rooms]},
+        urgency="review",
+    )
+    operator_explanation = structural_cognition["operator_explanation_v2"]
     return {
         "source": "sii_engine",
         "mode": "sample",
@@ -125,6 +159,11 @@ def build_sample_intelligence() -> dict[str, Any]:
         "projected_time_to_failure_hours": rooms[0]["projected_time_to_failure_hours"],
         "last_updated": last_updated,
         "rooms": rooms,
+        **structural_cognition,
+        "structural_explanation": [
+            operator_explanation["summary"],
+            *rooms[0]["structural_explanation"][:2],
+        ],
     }
 
 
@@ -165,6 +204,18 @@ def build_upload_intelligence(
         driver_attribution=driver_attribution,
     )
     projected_time_to_failure = format_projected_time_to_failure(projected_time_to_failure_hours)
+    structural_cognition = build_structural_cognition(
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        room_summary=room_summary,
+        urgency=urgency,
+    )
+    operator_explanation = structural_cognition["operator_explanation_v2"]
+    structural_explanation = [
+        operator_explanation["summary"],
+        *structural_explanation[:2],
+    ]
 
     room_records = build_upload_room_records(
         room_summary=room_summary,
@@ -217,6 +268,7 @@ def build_upload_intelligence(
         "room_summary": room_summary or {},
         "rooms": room_records,
         "source_metadata": source_metadata or {},
+        **structural_cognition,
     }
 
 

@@ -770,6 +770,13 @@ function buildUploadedInterventionItems(result, roomContext, telemetryCards, fac
 
 function buildSiiInterventionItems(intelligence, deps) {
   const rooms = Array.isArray(intelligence.rooms) && intelligence.rooms.length > 0 ? intelligence.rooms : [intelligence];
+  const archetypes = Array.isArray(intelligence.active_archetypes) ? intelligence.active_archetypes : [];
+  const memoryMatches = intelligence.structural_memory?.memory_matches ?? [];
+  const propagationPathways = intelligence.operator_explanation_v2?.propagation_pathways ?? intelligence.causality_graph?.dominant_pathways ?? [];
+  const accelerationWindowDays = intelligence.counterfactuals?.uncertainty_ranges?.instability_acceleration_window_days;
+  const continuationWindow = intelligence.counterfactuals?.progression_scenarios?.[0]?.window
+    ?? (Array.isArray(accelerationWindowDays) ? `${accelerationWindowDays.join("-")} operational days` : "Monitoring");
+  const facilityCognitionState = intelligence.facility_cognition?.facility_cognition_state ?? "Facility cognition building";
   return rooms.map((room, index) => {
     const tone = deps.mapSiiUrgency(room.urgency ?? intelligence.urgency);
     const rawSupportingEvidence = room.supporting_evidence ?? intelligence.supporting_evidence ?? [];
@@ -811,6 +818,11 @@ function buildSiiInterventionItems(intelligence, deps) {
       relationshipEvidence: translation.relationshipEvidence,
       structuralExplanation: (room.structural_explanation ?? intelligence.structural_explanation ?? [])
         .map((line) => deps.translateEvidenceLine(line, translation.category)),
+      activeArchetypes: archetypes,
+      structuralMemoryMatches: memoryMatches,
+      propagationPathways,
+      continuationWindow,
+      facilityCognitionState,
       confidenceBasis: translation.confidenceBasis,
       technicalDetails: translation.technicalDetails,
       guidance,

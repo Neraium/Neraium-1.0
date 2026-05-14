@@ -17,7 +17,7 @@ export default function DesktopWorkspaceLayout({
       </aside>
       <div className="platform-main">
         <MobileWorkspaceLayout header={mobileHeader} drawer={drawer}>
-          {topStatus}
+          {activeWorkspace === "system-body" ? topStatus : null}
           <WorkspaceContentRegion activeWorkspace={activeWorkspace} workspaceRef={workspaceRef}>
             {children}
           </WorkspaceContentRegion>
