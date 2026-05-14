@@ -14,6 +14,14 @@ output "ecs_service_name" {
   value = aws_ecs_service.backend.name
 }
 
+output "ecs_api_service_name" {
+  value = aws_ecs_service.backend.name
+}
+
+output "ecs_worker_service_name" {
+  value = aws_ecs_service.worker.name
+}
+
 output "api_url" {
   value = var.api_domain_name != "" ? "https://${var.api_domain_name}" : "http://${aws_lb.api.dns_name}"
 }

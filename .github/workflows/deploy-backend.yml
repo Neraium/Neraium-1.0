@@ -16,7 +16,7 @@ env:
   AWS_REGION: us-east-2
   ECR_REPOSITORY: neraium-backend
   ECS_CLUSTER: neraium-prod-cluster
-  ECS_SERVICE: neraium-prod-api-service
+  ECS_API_SERVICE: neraium-prod-api-service
   ECS_WORKER_SERVICE: neraium-prod-worker-service
 
 jobs:
@@ -53,18 +53,18 @@ jobs:
           docker build -f backend/Dockerfile -t "$IMAGE_URI" backend
           docker push "$IMAGE_URI"
 
-      - name: Register task definition with new backend image
+      - name: Register API task definition with new backend image
         run: |
           set -euo pipefail
 
           SERVICE_JSON=$(aws ecs describe-services \
             --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
+            --services "$ECS_API_SERVICE" \
             --region "$AWS_REGION")
 
           CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
           if [ -z "$CURRENT_TASK_DEF" ] || [ "$CURRENT_TASK_DEF" = "null" ]; then
-            echo "No task definition found for service $ECS_SERVICE"
+            echo "No task definition found for service $ECS_API_SERVICE"
             exit 1
           fi
 
@@ -97,20 +97,73 @@ jobs:
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "NEXT_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
+          echo "API_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
 
-      - name: Update ECS service to new task definition
+      - name: Register worker task definition with new backend image
+        run: |
+          set -euo pipefail
+
+          SERVICE_JSON=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_WORKER_SERVICE" \
+            --region "$AWS_REGION")
+
+          CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
+          if [ -z "$CURRENT_TASK_DEF" ] || [ "$CURRENT_TASK_DEF" = "null" ]; then
+            echo "No task definition found for service $ECS_WORKER_SERVICE"
+            exit 1
+          fi
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURRENT_TASK_DEF" \
+            --region "$AWS_REGION" \
+            --query taskDefinition > current-worker-task-definition.json
+
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
+          echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
+
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+            ))
+            | del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+          ' current-worker-task-definition.json > next-worker-task-definition.json
+
+          NEXT_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://next-worker-task-definition.json \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "WORKER_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
+
+      - name: Update ECS services to new task definitions
         run: |
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "$NEXT_TASK_DEF" \
+            --service "$ECS_API_SERVICE" \
+            --task-definition "$API_TASK_DEF" \
             --force-new-deployment \
             --region "$AWS_REGION"
 
-      - name: Wait for ECS service stability
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_WORKER_SERVICE" \
+            --task-definition "$WORKER_TASK_DEF" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
+
+      - name: Wait for ECS services stability
         run: |
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
+            --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
             --region "$AWS_REGION"

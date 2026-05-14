@@ -70,6 +70,24 @@ variable "backend_desired_count" {
   default     = 2
 }
 
+variable "worker_cpu" {
+  type        = number
+  description = "Fargate worker task CPU units."
+  default     = 512
+}
+
+variable "worker_memory" {
+  type        = number
+  description = "Fargate worker task memory (MiB)."
+  default     = 1024
+}
+
+variable "worker_desired_count" {
+  type        = number
+  description = "Desired ECS worker service task count."
+  default     = 1
+}
+
 variable "api_token_secret_arn" {
   type        = string
   description = "AWS Secrets Manager ARN containing NERAIUM_API_TOKEN value."
