@@ -18,7 +18,7 @@ function apiBaseCandidates() {
     isProductionBuild && !configuredApiBaseUrl ? PRODUCTION_API_FALLBACK : "",
   ];
 
-  return candidates.filter((value, index, list) => value !== null && value !== undefined && list.indexOf(value) === index);
+  return candidates.filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
 }
 
 function isCrossOriginApiTarget(apiBaseUrl = API_BASE_URL) {
