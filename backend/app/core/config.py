@@ -1,14 +1,14 @@
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from dataclasses import field
+from pathlib import Path
 
 DEFAULT_APP_ENV = "development"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
 DEFAULT_BACKEND_PORT = 8010
 DEFAULT_LOCAL_TELEMETRY_URL = "http://127.0.0.1:1880/telemetry/latest"
 DEFAULT_PRODUCTION_TELEMETRY_URL = "http://18.216.253.180:1880/telemetry/latest"
-DEFAULT_PROCESS_ROLE = "api"
+DEFAULT_PROCESS_ROLE = "all"
 DEFAULT_CORS_ORIGINS = [
     "http://127.0.0.1:3010",
     "http://127.0.0.1:5173",
@@ -24,7 +24,6 @@ DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
 # Override with NERAIUM_MAX_UPLOAD_SIZE_BYTES in production when needed.
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
-DEFAULT_PROCESS_ROLE = "all"
 
 
 @dataclass(frozen=True)
@@ -41,7 +40,6 @@ class Settings:
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
     max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
-    process_role: str = DEFAULT_PROCESS_ROLE
 
 
 def get_settings() -> Settings:
@@ -52,20 +50,22 @@ def get_settings() -> Settings:
         backend_host=os.getenv("BACKEND_HOST", DEFAULT_BACKEND_HOST),
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
         cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
-        start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"monolith", "worker"}),
-        start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), process_role in {"monolith", "worker"}),
+        process_role=process_role,
+        start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"all", "worker"}),
+        start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), process_role in {"all", "worker"}),
         default_telemetry_url=parse_default_telemetry_url(os.getenv("NERAIUM_DEFAULT_TELEMETRY_URL"), app_env),
         cors_origin_regex=parse_cors_origin_regex(os.getenv("CORS_ORIGIN_REGEX")),
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
         max_upload_size_bytes=parse_positive_int(os.getenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES"), DEFAULT_MAX_UPLOAD_SIZE_BYTES),
         max_pending_upload_jobs=parse_positive_int(os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"), DEFAULT_MAX_PENDING_UPLOAD_JOBS),
-        process_role=parse_process_role(os.getenv("NERAIUM_PROCESS_ROLE")),
     )
 
 
 def parse_process_role(raw_value: str | None) -> str:
-    normalized = (raw_value or DEFAULT_PROCESS_ROLE).strip().lower()
-    if normalized in {"api", "worker", "monolith"}:
+    if raw_value is None or raw_value.strip() == "":
+        return DEFAULT_PROCESS_ROLE
+    normalized = raw_value.strip().lower()
+    if normalized in {"api", "worker", "all"}:
         return normalized
     return DEFAULT_PROCESS_ROLE
 
@@ -117,12 +117,3 @@ def parse_positive_int(raw_value: str | None, default: int) -> int:
         return default
     value = int(raw_value)
     return value if value > 0 else default
-
-
-def parse_process_role(raw_value: str | None) -> str:
-    if raw_value is None or raw_value.strip() == "":
-        return DEFAULT_PROCESS_ROLE
-    normalized = raw_value.strip().lower()
-    if normalized in {"api", "worker", "all"}:
-        return normalized
-    return DEFAULT_PROCESS_ROLE
