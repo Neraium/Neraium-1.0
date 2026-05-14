@@ -7,8 +7,9 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 120000);
 const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
+const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? PRODUCTION_API_FALLBACK : "http://127.0.0.1:8010");
 
-export const API_BASE_URL = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
+export const API_BASE_URL = productionDefaultApiBaseUrl;
 
 function apiBaseCandidates() {
   const candidates = [
@@ -114,7 +115,7 @@ export async function apiFetch(path, options = {}) {
 export const API_CONFIG_WARNING = configuredApiBaseUrl
   ? ""
   : isProductionBuild
-    ? "VITE_API_BASE_URL is not configured for this production build. Using same-origin API with fallback endpoint."
+    ? "VITE_API_BASE_URL is not configured for this production build. Using production API endpoint directly."
     : "VITE_API_BASE_URL is not configured. Using local development API.";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
