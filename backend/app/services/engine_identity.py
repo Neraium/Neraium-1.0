@@ -29,12 +29,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 VALIDATION_PROVENANCE = {
     "cmapss_supported": True,
     "known_validation_result": "707 units, 687 detected, 97.2% coverage, average lead time 198.4 cycles",
-    "validation_source": "local validation results / repo validation runner",
+    "validation_source": "legacy validation harness metadata only",
     "same_engine_family": True,
     "same_exact_validation_runner": False,
     "note": (
-        "Production uploads use SIIEngineAdapter backed by SIIEngine. "
-        "FD004ValidationRunner remains a validation harness."
+        "Production runtime uses the in-repo backend SII runner. "
+        "Legacy FD004 validation remains isolated from production imports."
     ),
 }
 
@@ -48,7 +48,7 @@ def build_engine_identity() -> dict[str, Any]:
     real_runner_identity = runner_identity()
     return {
         "engine_name": "Neraium SII",
-        "engine_version": "neraium-core 0.1.0",
+        "engine_version": ENGINE_VERSION,
         "engine_module": RUNNER_MODULE,
         "engine_class_or_function": RUNNER_CALLABLE,
         "git_commit": git_commit(),
@@ -67,8 +67,8 @@ def build_engine_identity() -> dict[str, Any]:
         "same_engine_family_as_validation": True,
         "same_exact_fd004_validation_runner": False,
         "note": (
-            "Production uploads use SIIEngineAdapter backed by SIIEngine. "
-            "FD004ValidationRunner remains a validation harness."
+            "Production runtime uses the in-repo backend SII runner. "
+            "Legacy FD004 validation remains isolated from production imports."
         ),
         "import_error": runner_import_error(),
         "actual_imports": {

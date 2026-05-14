@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
-import os
 import inspect
-import sys
+import json
 import time
+from collections import deque
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,11 +14,15 @@ from app.core.config import get_settings
 import numpy as np
 
 
-RUNNER_MODULE = "neraium_core.sii_engine_adapter.SIIEngineAdapter"
-RUNNER_CALLABLE = "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
-CORE_ENGINE = "neraium_core.sii_engine_unified.SIIEngine"
-VALIDATION_RUNNER = "neraium_core.sii_fd004_validation.FD004ValidationRunner"
+RUNNER_MODULE = "app.services.sii_runner.BackendSiiRunner"
+RUNNER_CALLABLE = "app.services.sii_runner.BackendSiiRunner.ingest"
+CORE_ENGINE = "app.engine.analysis.run_engine_analysis"
+VALIDATION_RUNNER = "legacy.validation.fd004.FD004ValidationRunner"
 STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
+LEGACY_VALIDATION_FILE = next(
+    (path for path in Path(__file__).resolve().parents[2].glob("*/sii_fd004_validation.py") if path.is_file()),
+    None,
+)
 STATE_REQUIRED_FIELDS = {
     "facility_state",
     "rooms",
@@ -35,27 +38,93 @@ STATE_REQUIRED_FIELDS = {
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
-_FD004_VALIDATION_RUNNER: Any = None
+
+
+class BackendSiiRunner:
+    """Backend-native telemetry runner used by production uploads and readiness checks."""
+
+    def __init__(self, *, baseline_window: int = 12, recent_window: int = 12) -> None:
+        self.baseline_window = max(2, baseline_window)
+        self.recent_window = max(2, recent_window)
+        self._history: list[np.ndarray] = []
+        self._instability_history: deque[float] = deque(maxlen=20)
+        self._velocity_history: deque[float] = deque(maxlen=20)
+        self._regime_history: deque[str] = deque(maxlen=20)
+
+    def ingest(
+        self,
+        *,
+        sensor_vector: np.ndarray,
+        timestamp: float,
+        asset_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        vector = np.asarray(sensor_vector, dtype=float)
+        self._history.append(vector)
+
+        baseline_vectors, recent_vectors = self._windowed_history()
+        baseline_mean = np.nan_to_num(np.nanmean(baseline_vectors, axis=0), nan=0.0)
+        recent_mean = np.nan_to_num(np.nanmean(recent_vectors, axis=0), nan=0.0)
+        safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
+        normalized_delta = np.abs(recent_mean - baseline_mean) / safe_baseline
+        structural_drift = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 1.5))
+
+        if len(self._history) >= 2:
+            last_step = np.abs(self._history[-1] - self._history[-2]) / safe_baseline
+            transition_pressure = float(np.clip(np.nan_to_num(np.nanmean(last_step), nan=0.0), 0.0, 1.5))
+        else:
+            transition_pressure = 0.0
+
+        variability = float(np.nan_to_num(np.nanstd(recent_vectors), nan=0.0)) if recent_vectors.size else 0.0
+        variability_pressure = float(np.clip(variability / max(float(np.nanmean(safe_baseline)), 1.0), 0.0, 1.0))
+        instability_score = float(
+            np.clip(structural_drift * 0.55 + transition_pressure * 0.3 + variability_pressure * 0.15, 0.0, 1.0)
+        )
+        velocity = instability_score - (self._instability_history[-1] if self._instability_history else instability_score)
+
+        regime, urgency = classify_state(len(self._history), instability_score, transition_pressure)
+        confidence = confidence_from_history(len(self._history), vector)
+
+        self._instability_history.append(instability_score)
+        self._velocity_history.append(float(velocity))
+        self._regime_history.append(regime)
+
+        return {
+            "asset_id": asset_id,
+            "run_id": run_id,
+            "timestamp": timestamp,
+            "regime": regime,
+            "urgency": urgency,
+            "instability_score": round(instability_score, 6),
+            "structural_drift": round(structural_drift, 6),
+            "transition_pressure": round(transition_pressure, 6),
+            "confidence": round(confidence, 6),
+            "instability_history": [round(value, 6) for value in self._instability_history],
+            "velocity_history": [round(value, 6) for value in self._velocity_history],
+            "regime_history": list(self._regime_history),
+        }
+
+    def _windowed_history(self) -> tuple[np.ndarray, np.ndarray]:
+        if len(self._history) == 1:
+            only = np.vstack(self._history)
+            return only, only
+
+        recent_count = min(self.recent_window, len(self._history))
+        recent_vectors = np.vstack(self._history[-recent_count:])
+        baseline_source = self._history[:-recent_count]
+        if not baseline_source:
+            split_index = max(1, len(self._history) // 2)
+            baseline_source = self._history[:split_index]
+        baseline_vectors = np.vstack(baseline_source[-self.baseline_window :])
+        return baseline_vectors, recent_vectors
 
 
 def _try_import_runner() -> None:
-    global _IMPORT_ERROR, _SII_ENGINE_ADAPTER, _FD004_VALIDATION_RUNNER
+    global _IMPORT_ERROR, _SII_ENGINE_ADAPTER
     if _SII_ENGINE_ADAPTER is not None or _IMPORT_ERROR is not None:
         return
 
-    local_core_path = os.getenv("NERAIUM_CORE_PATH")
-    if local_core_path and local_core_path not in sys.path:
-        sys.path.insert(0, local_core_path)
-
-    try:
-        from neraium_core.sii_engine_adapter import SIIEngineAdapter
-        from neraium_core.sii_fd004_validation import FD004ValidationRunner
-    except Exception as exc:  # pragma: no cover - exercised through status payloads
-        _IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
-        return
-
-    _SII_ENGINE_ADAPTER = SIIEngineAdapter
-    _FD004_VALIDATION_RUNNER = FD004ValidationRunner
+    _SII_ENGINE_ADAPTER = BackendSiiRunner
     _IMPORT_ERROR = None
 
 
@@ -86,8 +155,8 @@ def build_runner_status() -> dict[str, Any]:
         "same_engine_family_as_validation": True,
         "same_exact_fd004_validation_runner": False,
         "note": (
-            "Production uploads use SIIEngineAdapter backed by SIIEngine. "
-            "FD004ValidationRunner remains a validation harness."
+            "Production uploads use the backend-native SII runner. "
+            "Legacy FD004 validation remains isolated from production imports."
         ),
         "import_error": runner_import_error(),
     }
@@ -99,13 +168,11 @@ def runner_identity() -> dict[str, str | None]:
     if _SII_ENGINE_ADAPTER is not None:
         runner_file = inspect.getsourcefile(_SII_ENGINE_ADAPTER)
         try:
-            from neraium_core.sii_engine_unified import SIIEngine
-
-            core_file = inspect.getsourcefile(SIIEngine)
+            core_file = inspect.getsourcefile(BackendSiiRunner)
         except Exception:
             core_file = None
-    if _FD004_VALIDATION_RUNNER is not None:
-        validation_file = inspect.getsourcefile(_FD004_VALIDATION_RUNNER)
+    if LEGACY_VALIDATION_FILE is not None and LEGACY_VALIDATION_FILE.exists():
+        validation_file = str(LEGACY_VALIDATION_FILE)
     return {
         "runner_module": RUNNER_MODULE,
         "runner_callable": RUNNER_CALLABLE,
@@ -353,8 +420,8 @@ def build_runner_evidence(
     engine_result: dict[str, Any],
 ) -> list[str]:
     evidence = [
-        f"SIIEngineAdapter ingested {len(columns_used)} numeric telemetry channels.",
-        f"Unified SII core reported {latest_state.get('regime', 'unknown')} regime and {latest_state.get('urgency', 'unknown')} urgency.",
+        f"Backend SII runner ingested {len(columns_used)} numeric telemetry channels.",
+        f"Backend SII runner reported {latest_state.get('regime', 'unknown')} regime and {latest_state.get('urgency', 'unknown')} urgency.",
         f"Instability score {round(float(latest_state.get('instability_score', 0.0)), 4)} with structural drift {round(float(latest_state.get('structural_drift', 0.0)), 4)}.",
     ]
     if driver_attribution.get("driver_category"):
@@ -419,6 +486,24 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def classify_state(history_length: int, instability_score: float, transition_pressure: float) -> tuple[str, str]:
+    if history_length < 3:
+        return "WARMUP", "NOMINAL"
+    if instability_score >= 0.72 or transition_pressure >= 0.9:
+        return "LOCK_IN", "CRITICAL"
+    if instability_score >= 0.52 or transition_pressure >= 0.62:
+        return "UNSTABLE", "ALERT"
+    if instability_score >= 0.24 or transition_pressure >= 0.28:
+        return "TRANSITION", "WATCH"
+    return "STABLE", "NOMINAL"
+
+
+def confidence_from_history(history_length: int, vector: np.ndarray) -> float:
+    completeness = float(np.mean(~np.isnan(vector))) if vector.size else 0.0
+    history_factor = min(history_length / 12, 1.0)
+    return max(0.35, min(0.94, 0.4 + history_factor * 0.35 + completeness * 0.19))
+
+
 def normalize_urgency(urgency: str) -> str:
     normalized = urgency.lower()
     if normalized == "critical":
@@ -459,7 +544,7 @@ def next_move_from_urgency(urgency: str) -> str:
 
 def confidence_basis(latest_state: dict[str, Any]) -> str:
     confidence = round(float(latest_state.get("confidence", 0.0)) * 100)
-    return f"Unified SII core confidence {confidence}% from baseline and telemetry history depth."
+    return f"Backend SII runner confidence {confidence}% from baseline and telemetry history depth."
 
 
 def project_time_to_failure_hours_from_state(latest_state: dict[str, Any]) -> int:

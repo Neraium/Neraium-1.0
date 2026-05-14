@@ -5,7 +5,7 @@ import time
 
 from app.core.config import Settings
 from app.main import create_app
-from app.services.sii_runner import STATE_PATH
+from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, STATE_PATH
 from app.services import upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
@@ -136,7 +136,6 @@ def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
         runtime_dir=tmp_path,
         max_upload_size_bytes=16,
     )
-    monkeypatch.setattr("app.routers.data.get_settings", lambda: settings)
     client = TestClient(create_app(settings))
 
     response = client.post(
@@ -160,7 +159,6 @@ def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:
         runtime_dir=tmp_path,
         max_pending_upload_jobs=1,
     )
-    monkeypatch.setattr("app.routers.data.get_settings", lambda: settings)
     monkeypatch.setattr("app.routers.data.queue_metrics", lambda: {"pending": 1, "processing": 0})
     client = TestClient(create_app(settings))
 
@@ -253,8 +251,8 @@ def test_upload_status_recovers_from_latest_completed_summary() -> None:
             "chunk_count": 30,
             "last_processed_at": "2026-05-10T00:00:00+00:00",
             "runner_used": True,
-            "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
-            "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+            "runner_module": RUNNER_MODULE,
+            "core_engine": CORE_ENGINE,
         },
     )
 
@@ -293,8 +291,8 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     assert payload["rows_processed"] == 8
     assert payload["columns_detected"] == 4
     assert payload["runner_used"] is True
-    assert payload["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
-    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
+    assert payload["runner_module"] == RUNNER_MODULE
+    assert payload["core_engine"] == CORE_ENGINE
     assert payload["error"] is None
     assert payload["result_summary"]["filename"] == "ready-report.csv"
     assert STATE_PATH.exists()
@@ -548,7 +546,7 @@ def test_facility_systems_uses_latest_state_after_upload() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["intelligence"]["source"] == "uploaded"
-    assert payload["intelligence"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
+    assert payload["intelligence"]["runner_module"] == RUNNER_MODULE
 
 
 def test_facility_systems_recovers_from_persisted_upload_result_when_state_missing() -> None:
@@ -624,9 +622,9 @@ def test_one_column_csv_reports_runner_error_without_failed_job() -> None:
     upload = post_csv(client, "one-column.csv", f"timestamp,temperature\n{rows}")
     payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
     assert payload["status"] == "COMPLETE"
-    assert payload["runner_used"] is False
+    assert payload["runner_used"] is True
     assert payload["error"] is None
-    assert payload["result_summary"]["runner_errors"]
+    assert payload["result_summary"]["runner_errors"] == []
 
 
 def test_upload_rejects_invalid_extension() -> None:
@@ -699,7 +697,7 @@ def test_processing_helper_preserves_profile_metadata() -> None:
     assert result["detected_timestamp_column"] == "timestamp"
     assert profiles["temperature"]["average"] == 76.6667
     assert result["data_quality"]["readiness"] == "ready"
-    assert result["sii_runner_result"]["runner_module"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter"
+    assert result["sii_runner_result"]["runner_module"] == RUNNER_MODULE
 
 
 def test_processing_helper_detects_multiple_uploaded_rooms() -> None:
@@ -831,8 +829,8 @@ def test_upload_polling_reads_persisted_job_state() -> None:
         "rows_processed": 300_000,
         "columns_detected": 26,
         "runner_used": False,
-        "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
-        "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+        "runner_module": RUNNER_MODULE,
+        "core_engine": CORE_ENGINE,
         "started_at": "2026-05-08T00:00:00+00:00",
         "completed_at": None,
         "error": None,

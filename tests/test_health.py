@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from app.services.sii_runner import RUNNER_MODULE, STATE_PATH, write_latest_sii_state
+from app.services.sii_runner import CORE_ENGINE, RUNNER_CALLABLE, RUNNER_MODULE, STATE_PATH, VALIDATION_RUNNER, write_latest_sii_state
 
 
 def test_root_endpoint_returns_service_metadata() -> None:
@@ -11,12 +11,11 @@ def test_root_endpoint_returns_service_metadata() -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "service": "neraium-api",
-        "status": "ok",
-        "docs": "/docs",
-        "health": "/health",
-    }
+    payload = response.json()
+    assert payload["service"] == "neraium-api"
+    assert payload["status"] == "ok"
+    assert payload["docs"] == "/docs"
+    assert payload["health"] == "/health"
 
 
 def test_health_endpoint_returns_ok() -> None:
@@ -71,18 +70,18 @@ def test_engine_identity_endpoint_returns_actual_engine_metadata() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["engine_name"] == "Neraium SII"
-    assert payload["engine_version"] == "neraium-core 0.1.0"
+    assert payload["engine_version"] == "neraium-cultivation-v1"
     assert payload["engine_module"] == RUNNER_MODULE
-    assert payload["engine_class_or_function"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
+    assert payload["engine_class_or_function"] == RUNNER_CALLABLE
     assert payload["git_commit"]
     assert payload["deployment_mode"] == "production"
     assert payload["validation_engine_path_present"] is True
     assert payload["cmapss_validation_supported"] is True
     assert payload["driver_attribution_supported"] is True
     assert payload["sii_pipeline_supported"] is True
-    assert payload["production_runner"] == "neraium_core.sii_engine_adapter.SIIEngineAdapter.ingest"
-    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
-    assert payload["validation_runner"] == "neraium_core.sii_fd004_validation.FD004ValidationRunner"
+    assert payload["production_runner"] == RUNNER_CALLABLE
+    assert payload["core_engine"] == CORE_ENGINE
+    assert payload["validation_runner"] == VALIDATION_RUNNER
     assert payload["same_engine_family_as_validation"] is True
     assert payload["same_exact_fd004_validation_runner"] is False
     assert payload["actual_imports"]["upload_processing"]["module"] == RUNNER_MODULE
@@ -100,8 +99,8 @@ def test_runner_status_endpoint_reports_real_adapter() -> None:
     payload = response.json()
     assert payload["runner_available"] is True
     assert payload["runner_module"] == RUNNER_MODULE
-    assert payload["core_engine"] == "neraium_core.sii_engine_unified.SIIEngine"
-    assert payload["validation_runner"] == "neraium_core.sii_fd004_validation.FD004ValidationRunner"
+    assert payload["core_engine"] == CORE_ENGINE
+    assert payload["validation_runner"] == VALIDATION_RUNNER
     assert payload["same_engine_family_as_validation"] is True
     assert payload["same_exact_fd004_validation_runner"] is False
     assert payload["source"] == "none"
