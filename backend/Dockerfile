@@ -10,6 +10,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY api ./api
 
 EXPOSE 80
 
