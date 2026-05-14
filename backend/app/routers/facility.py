@@ -5,7 +5,6 @@ from app.core.security import require_api_access
 from api.cognition_contracts import build_canonical_cognition_state_response
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
-from app.services.sii_intelligence import build_sample_intelligence
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 from app.services.upload_jobs import read_latest_upload_result
 
@@ -65,14 +64,25 @@ def read_intelligence_status() -> dict[str, Any]:
 
 
 @router.get("/facility/cognition-state")
-def read_cognition_state(mode: str = "live") -> dict[str, Any]:
-    if mode == "demo":
-        intelligence = build_sample_intelligence()
-    else:
-        latest_result = read_latest_upload_result()
-        intelligence = resolve_uploaded_intelligence(latest_result) or build_sample_intelligence()
+def read_cognition_state() -> dict[str, Any]:
+    latest_result = read_latest_upload_result()
+    intelligence = resolve_uploaded_intelligence(latest_result)
+    if not intelligence:
+        return {
+            "cognition_state": "Monitoring",
+            "structural_stability": "WATCH",
+            "active_archetypes": [],
+            "propagation_pathways": [],
+            "evidence_lineage": {},
+            "structural_memory_matches": [],
+            "continuation_windows": {"window": "Monitoring", "structural_pathways": [], "uncertainty_range": []},
+            "replay_summary": {"frame_count": 0, "canonical_flow": [], "active_frame": {}},
+            "recovery_convergence": {},
+            "operator_explanation": "No uploaded structural cognition state is available yet.",
+            "source_mode": "live",
+        }
     response = build_canonical_cognition_state_response(intelligence)
-    response["source_mode"] = mode
+    response["source_mode"] = "live"
     return response
 
 

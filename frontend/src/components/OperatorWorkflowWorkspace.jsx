@@ -6,7 +6,6 @@ import EvidenceLineagePanel from "./EvidenceLineagePanel";
 export default function OperatorWorkflowWorkspace({
   apiFetch,
   accessCode,
-  isDemoMode,
   Panel,
   EmptyState,
   MetricGrid,
@@ -23,7 +22,6 @@ export default function OperatorWorkflowWorkspace({
         const result = await fetchCanonicalCognitionState({
           apiFetch,
           accessCode,
-          mode: isDemoMode ? "demo" : "live",
         });
         if (!cancelled) {
           setPayload(result);
@@ -39,7 +37,7 @@ export default function OperatorWorkflowWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [accessCode, apiFetch, isDemoMode, normalizeErrorMessage]);
+  }, [accessCode, apiFetch, normalizeErrorMessage]);
 
   if (error) {
     return <EmptyState title="Cognition state unavailable" body={error} />;
@@ -117,4 +115,3 @@ export default function OperatorWorkflowWorkspace({
     </div>
   );
 }
-

@@ -20,6 +20,7 @@ import StructuralCognitionResearchWorkspace from "./components/StructuralCogniti
 import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
 import CultivationMissionControl from "./components/cultivation/CultivationMissionControl";
 import CultivationEvidenceWorkspace from "./components/cultivation/CultivationEvidenceWorkspace";
+import PropagationWorkspace from "./components/PropagationWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -46,34 +47,16 @@ import { fetchLatestUploadState } from "./services/api/uploadApi";
 
 const WORKSPACES = [
   {
-    id: "operator-workflow",
-    label: "Operator Workflow",
-    eyebrow: "Primary Flow",
-    description: "Canonical operator flow from cognition state through replay, evidence lineage, continuation, and convergence review.",
-  },
-  {
     id: "cultivation-mission-control",
     label: "Cultivation Mission Control",
     eyebrow: "Cultivation Primary",
     description: "Canonical cultivation structural cognition interface for facility state, replay, pathways, and convergence.",
   },
   {
-    id: "cultivation-evidence",
-    label: "Cultivation Evidence",
-    eyebrow: "Cultivation Evidence",
-    description: "Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.",
-  },
-  {
-    id: "system-body",
-    label: "Current Cognition State",
-    eyebrow: "State View",
-    description: "Facility cognition state, structural stability, and active pathways.",
-  },
-  {
-    id: "drift-timeline",
-    label: "Drift Timeline",
-    eyebrow: "Temporal View",
-    description: "Trajectory of structural distance from stable baseline.",
+    id: "historical-replay",
+    label: "Structural Replay",
+    eyebrow: "Replay First",
+    description: "Timeline scrub, propagation pathways, evidence by frame, and continuation windows.",
   },
   {
     id: "evidence-console",
@@ -82,16 +65,40 @@ const WORKSPACES = [
     description: "Inspect why structural cognition outputs are supported by subsystem and topology evidence.",
   },
   {
+    id: "propagation-map",
+    label: "Propagation Map",
+    eyebrow: "Spread View",
+    description: "Environmental topology spread view for room-to-room structural pathway propagation.",
+  },
+  {
     id: "data-connections",
     label: "Data Connections",
     eyebrow: "Signal Intake",
     description: "Upload telemetry files and manage the live intake endpoint.",
   },
   {
-    id: "historical-replay",
-    label: "Structural Replay",
-    eyebrow: "Replay First",
-    description: "Timeline scrub, propagation pathways, evidence by frame, and continuation windows.",
+    id: "operator-workflow",
+    label: "Operator Workflow",
+    eyebrow: "Expert View",
+    description: "Canonical full operator workflow from cognition state through replay and convergence review.",
+  },
+  {
+    id: "cultivation-evidence",
+    label: "Cultivation Evidence",
+    eyebrow: "Expert View",
+    description: "Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.",
+  },
+  {
+    id: "system-body",
+    label: "Current Cognition State",
+    eyebrow: "Expert View",
+    description: "Facility cognition state, structural stability, and active pathways.",
+  },
+  {
+    id: "drift-timeline",
+    label: "Drift Timeline",
+    eyebrow: "Expert View",
+    description: "Trajectory of structural distance from stable baseline.",
   },
   {
     id: "fleet-view",
@@ -187,17 +194,34 @@ const REPORT_TEMPLATES = [
 
 const OPERATIONAL_CADENCE_MS = 30000;
 const LIVE_REFRESH_INTERVAL_MS = 5000;
+const DEFAULT_WORKSPACE_ID = "cultivation-mission-control";
+const PRIMARY_WORKSPACE_ORDER = [
+  "cultivation-mission-control",
+  "historical-replay",
+  "evidence-console",
+  "propagation-map",
+  "data-connections",
+];
+const EXPERT_WORKSPACE_IDS = new Set(
+  WORKSPACES.map((workspace) => workspace.id).filter((id) => !PRIMARY_WORKSPACE_ORDER.includes(id)),
+);
 
 function App() { 
   const hasAccess = true;
   const apiAccessCode = "";
   const [activeWorkspace, setActiveWorkspace] = useState(() => {
     if (typeof window === "undefined") {
-      return "operator-workflow";
+      return DEFAULT_WORKSPACE_ID;
     }
     const params = new URLSearchParams(window.location.search);
     const requestedWorkspace = params.get("workspace");
-    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : "operator-workflow";
+    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : DEFAULT_WORKSPACE_ID;
+  });
+  const [expertMode, setExpertMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.localStorage.getItem("neraium:expert-mode") === "true";
   });
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
@@ -229,6 +253,17 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get("demo") === "1";
   });
+  const visibleWorkspaces = useMemo(() => {
+    const base = WORKSPACES.filter((workspace) => expertMode || !EXPERT_WORKSPACE_IDS.has(workspace.id));
+    return base.sort((a, b) => {
+      const ai = PRIMARY_WORKSPACE_ORDER.indexOf(a.id);
+      const bi = PRIMARY_WORKSPACE_ORDER.indexOf(b.id);
+      if (ai >= 0 && bi >= 0) return ai - bi;
+      if (ai >= 0) return -1;
+      if (bi >= 0) return 1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [expertMode]);
   const workspaceRef = useRef(null); 
   const workspaceDrawerRef = useRef(null);
   const healthCheckAttemptsRef = useRef(0);
@@ -378,9 +413,22 @@ function App() {
     loadFacilitySystems();
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("neraium:expert-mode", String(expertMode));
+    }
+  }, [expertMode]);
+
+  useEffect(() => {
+    const activeIsHidden = !visibleWorkspaces.some((workspace) => workspace.id === activeWorkspace);
+    if (activeIsHidden) {
+      setActiveWorkspace(DEFAULT_WORKSPACE_ID);
+    }
+  }, [activeWorkspace, visibleWorkspaces]);
+
   const activeConfig = useMemo(
-    () => WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0],
-    [activeWorkspace],
+    () => visibleWorkspaces.find((workspace) => workspace.id === activeWorkspace) ?? visibleWorkspaces[0] ?? WORKSPACES[0],
+    [activeWorkspace, visibleWorkspaces],
   );
   const roomContext = useMemo(() => uploadStateView.deriveRoomContext(latestUploadResult), [latestUploadResult]);
   const timeCoverage = useMemo(() => uploadStateView.deriveTimeCoverage(latestUploadResult), [latestUploadResult]);
@@ -552,12 +600,24 @@ function App() {
       );
     }
 
+    if (activeWorkspace === "propagation-map") {
+      return (
+        <PropagationWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          isDemoMode={isDemoMode}
+          normalizeErrorMessage={normalizeErrorMessage}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
     if (activeWorkspace === "operator-workflow") {
       return (
         <OperatorWorkflowWorkspace
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
-          isDemoMode={isDemoMode}
           normalizeErrorMessage={normalizeErrorMessage}
           formatClockTime={formatClockTime}
           Panel={Panel}
@@ -722,6 +782,9 @@ function App() {
         navigation={(
           <WorkspaceNavigationContent
             activeWorkspace={activeWorkspace}
+            workspaces={visibleWorkspaces}
+            expertMode={expertMode}
+            onToggleExpertMode={() => setExpertMode((current) => !current)}
             apiStatus={apiStatus}
             latestUploadResult={latestUploadResult}
             roomContext={roomContext}
@@ -846,6 +909,9 @@ function App() {
               </div>
               <WorkspaceNavigationContent
                 activeWorkspace={activeWorkspace}
+                workspaces={visibleWorkspaces}
+                expertMode={expertMode}
+                onToggleExpertMode={() => setExpertMode((current) => !current)}
                 apiStatus={apiStatus}
                 latestUploadResult={latestUploadResult}
                 roomContext={roomContext}
@@ -904,6 +970,9 @@ class AppErrorBoundary extends Component {
 
 function WorkspaceNavigationContent({
   activeWorkspace,
+  workspaces,
+  expertMode,
+  onToggleExpertMode,
   roomContext,
   timeCoverage,
   liveOps,
@@ -926,8 +995,15 @@ function WorkspaceNavigationContent({
 
       <div className="sidebar-section">
         <p className="sidebar-kicker">Workspaces</p>
+        <button
+          type="button"
+          className={`secondary-command-button ${expertMode ? "is-active" : ""}`}
+          onClick={onToggleExpertMode}
+        >
+          {expertMode ? "Expert Mode On" : "Expert Mode Off"}
+        </button>
         <nav className="workspace-nav">
-          {WORKSPACES.map((workspace) => (
+          {workspaces.map((workspace) => (
             <button
               className={`workspace-nav__item ${activeWorkspace === workspace.id ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
               key={workspace.id}
