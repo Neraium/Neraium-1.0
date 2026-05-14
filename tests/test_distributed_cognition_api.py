@@ -94,3 +94,36 @@ def test_universal_framework_endpoints_return_payloads() -> None:
     reasoning = client.get("/api/distributed/framework/reasoning-substrate")
     assert reasoning.status_code == 200
     assert reasoning.json().get("trace")
+
+
+def test_cultivation_cognition_endpoints_return_payloads() -> None:
+    write_latest_sii_state(build_sample_intelligence())
+    client = TestClient(create_app())
+
+    ontology = client.get("/api/distributed/cultivation/ontology")
+    assert ontology.status_code == 200
+    assert ontology.json().get("count", 0) >= 10
+
+    vpd = client.get("/api/distributed/cultivation/vpd")
+    assert vpd.status_code == 200
+    assert vpd.json().get("coupling_drift")
+
+    multi_room = client.get("/api/distributed/cultivation/multi-room")
+    assert multi_room.status_code == 200
+    assert multi_room.json().get("pathways") is not None
+
+    masking = client.get("/api/distributed/cultivation/compensation-masking")
+    assert masking.status_code == 200
+    assert masking.json().get("latent_pressure_profile")
+
+    replays = client.get("/api/distributed/cultivation/replays")
+    assert replays.status_code == 200
+    assert len(replays.json().get("scenarios", [])) >= 8
+
+    pre_visibility = client.get("/api/distributed/cultivation/pre-visibility")
+    assert pre_visibility.status_code == 200
+    assert pre_visibility.json().get("structural_lead_window")
+
+    pilot = client.get("/api/distributed/cultivation/pilot-mode")
+    assert pilot.status_code == 200
+    assert pilot.json().get("weekly_cognition_summary")
