@@ -1,0 +1,109 @@
+{
+  "source": "uploaded",
+  "mode": "live",
+  "facility_state": "Needs review",
+  "room_state": "Needs review",
+  "urgency": "unstable",
+  "intervention_window": "8 hours",
+  "neraium_score": 0,
+  "primary_room": "Cultivation Rooms",
+  "priority_room": "Cultivation Rooms",
+  "primary_driver": "Process timing response",
+  "supporting_evidence": [
+    "Process timing behavior moved away from baseline and persisted across recent readings",
+    "Environmental coupling is less consistent than the room's recent baseline",
+    "Recovery behavior is changing around timing-related signals",
+    "Air movement behavior is diverging from this room's recent operating pattern"
+  ],
+  "relationship_evidence": [
+    "Humidity recovery is becoming less stable after environmental transitions.",
+    "Environmental coupling is less consistent than the room's recent baseline.",
+    "Environmental coupling is less consistent than the room's recent baseline.",
+    "Air movement behavior is diverging from this room's recent operating pattern."
+  ],
+  "structural_explanation": [
+    "Humidity recovery is becoming less stable after environmental transitions.",
+    "Environmental coupling is less consistent than the room's recent baseline.",
+    "Environmental coupling is less consistent than the room's recent baseline."
+  ],
+  "confidence_basis": "Persistent multi-signal drift with relationship-change support",
+  "recommended_operator_review": "Check timing/scheduling around process transitions",
+  "what_to_check": [
+    "Review timestamp formatting and sampling consistency in the source export.",
+    "Review source sensor channels for: co2, hvac_runtime, dehumidifier_runtime, irrigation_event, irrigation_volume, substrate_moisture, light_intensity, power_draw, recovery_time_minutes, structural_drift_score, intervention_window_hours, relationship_stability_score.",
+    "Compare the baseline and recent windows against facility logs for the same period."
+  ],
+  "why_flagged": "Process timing behavior moved away from baseline and persisted across recent readings",
+  "baseline_comparison": "hvac_runtime moved away from recent baseline.",
+  "observed_persistence": "Observed across persistent readings for hvac_runtime",
+  "projected_time_to_failure": "Approximately 2 days at current trajectory",
+  "projected_time_to_failure_hours": 36,
+  "last_updated": "2026-05-13T09:08:14.262591+00:00",
+  "filename": "neraium_100k_cultivation_telemetry.csv",
+  "row_count": 99999,
+  "timestamp_coverage": {
+    "detected_timestamp_column": "timestamp",
+    "first_timestamp": "2026-01-01T00:00:00",
+    "last_timestamp": "2026-01-24T03:32:00",
+    "estimated_sample_interval": null,
+    "warnings": [
+      "Timestamp intervals are inconsistent."
+    ]
+  },
+  "room_summary": {
+    "room_count": 1,
+    "rooms": [
+      {
+        "room": "Cultivation Rooms",
+        "row_count": 99999
+      }
+    ],
+    "total_rows": 99999,
+    "unassigned_rows": 0
+  },
+  "rooms": [
+    {
+      "room": "Cultivation Rooms",
+      "room_state": "Needs review",
+      "urgency": "unstable",
+      "intervention_window": "8 hours",
+      "primary_driver": "Process timing response",
+      "supporting_evidence": [
+        "Process timing behavior moved away from baseline and persisted across recent readings",
+        "Environmental coupling is less consistent than the room's recent baseline",
+        "Recovery behavior is changing around timing-related signals",
+        "Air movement behavior is diverging from this room's recent operating pattern"
+      ],
+      "relationship_evidence": [
+        "Humidity recovery is becoming less stable after environmental transitions.",
+        "Environmental coupling is less consistent than the room's recent baseline.",
+        "Environmental coupling is less consistent than the room's recent baseline.",
+        "Air movement behavior is diverging from this room's recent operating pattern."
+      ],
+      "structural_explanation": [
+        "Humidity recovery is becoming less stable after environmental transitions.",
+        "Environmental coupling is less consistent than the room's recent baseline.",
+        "Environmental coupling is less consistent than the room's recent baseline."
+      ],
+      "confidence_basis": "Persistent multi-signal drift with relationship-change support",
+      "recommended_operator_review": "Check timing/scheduling around process transitions",
+      "what_to_check": [
+        "Review timestamp formatting and sampling consistency in the source export.",
+        "Review source sensor channels for: co2, hvac_runtime, dehumidifier_runtime, irrigation_event, irrigation_volume, substrate_moisture, light_intensity, power_draw, recovery_time_minutes, structural_drift_score, intervention_window_hours, relationship_stability_score.",
+        "Compare the baseline and recent windows against facility logs for the same period."
+      ],
+      "why_flagged": "Process timing behavior moved away from baseline and persisted across recent readings",
+      "baseline_comparison": "hvac_runtime moved away from recent baseline.",
+      "observed_persistence": "Observed across persistent readings for hvac_runtime",
+      "projected_time_to_failure": "Approximately 2 days at current trajectory",
+      "projected_time_to_failure_hours": 36,
+      "last_updated": "2026-05-13T09:08:14.262591+00:00",
+      "confidence": 88
+    }
+  ],
+  "source_metadata": {},
+  "runner_module": "neraium_core.sii_engine_adapter.SIIEngineAdapter",
+  "core_engine": "neraium_core.sii_engine_unified.SIIEngine",
+  "runner_used": true,
+  "last_processed_at": "2026-05-13T09:08:18.771071+00:00"
+}

@@ -1,4 +1,5 @@
 import { formatOperatorActionLabel } from "../viewModels/operationalHelpers";
+import { normalizeOperationalState } from "../viewModels/operationalUiState";
 
 export function Panel({ title, subtitle, className = "", children }) {
   const heading = subtitle || title;
@@ -682,8 +683,10 @@ export function EmptyState({ title, body, compact = false }) {
 }
 
 export function StatusDot({ tone }) {
+  const uiState = normalizeOperationalState(tone);
+
   return (
-    <span className={`status-dot status-dot--${tone}`}>
+    <span className={`status-dot status-dot--${tone} status-dot--state-${uiState}`}>
       <span className="status-dot__halo" />
       <span className="status-dot__ring" />
       <span className="status-dot__core" />

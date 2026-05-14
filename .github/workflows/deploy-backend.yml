@@ -14,10 +14,12 @@ permissions:
 
 env:
   AWS_REGION: us-east-2
-  ECR_REPOSITORY: neraium-backend
-  ECS_CLUSTER: default
-  ECS_API_SERVICE: neraium-api-service-3z8k8vz1
+  ECR_REPOSITORY: neraium-prod-api
+  ECS_CLUSTER: neraium-prod-cluster
+  ECS_API_SERVICE: neraium-prod-api-service
   ECS_WORKER_SERVICE: neraium-prod-worker-service
+  API_TASK_FAMILY: neraium-prod-api
+  WORKER_TASK_FAMILY: neraium-prod-worker
 
 jobs:
   deploy-backend:
@@ -48,22 +50,105 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          set -euo pipefail
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
           docker build -f backend/Dockerfile -t "$IMAGE_URI" backend
           docker push "$IMAGE_URI"
 
-      - name: Force ECS new deployment
+      - name: Register API task definition with new backend image
         run: |
-          update_ecs_service() {
-            local service_name="$1"
+          set -euo pipefail
 
-            aws ecs update-service \
-              --cluster "$ECS_CLUSTER" \
-              --service "$service_name" \
-              --force-new-deployment \
-              --region "$AWS_REGION"
-          }
+          aws ecs describe-task-definition \
+            --task-definition "$API_TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query taskDefinition > current-api-task-definition.json
 
-          update_ecs_service "$ECS_API_SERVICE"
-          update_ecs_service "$ECS_WORKER_SERVICE"
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
+          echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
+
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+            ))
+            | del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+          ' current-api-task-definition.json > next-api-task-definition.json
+
+          API_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://next-api-task-definition.json \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "API_TASK_DEF=$API_TASK_DEF" >> "$GITHUB_ENV"
+
+      - name: Register worker task definition with new backend image
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-task-definition \
+            --task-definition "$WORKER_TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query taskDefinition > current-worker-task-definition.json
+
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
+          echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
+
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+            ))
+            | del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+          ' current-worker-task-definition.json > next-worker-task-definition.json
+
+          WORKER_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://next-worker-task-definition.json \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "WORKER_TASK_DEF=$WORKER_TASK_DEF" >> "$GITHUB_ENV"
+
+      - name: Update ECS services to new task definitions
+        run: |
+          set -euo pipefail
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_API_SERVICE" \
+            --task-definition "$API_TASK_DEF" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_WORKER_SERVICE" \
+            --task-definition "$WORKER_TASK_DEF" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
+
+      - name: Wait for ECS services stability
+        run: |
+          set -euo pipefail
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
+            --region "$AWS_REGION"

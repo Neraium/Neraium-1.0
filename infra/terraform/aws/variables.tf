@@ -61,7 +61,7 @@ variable "backend_cpu" {
 variable "backend_memory" {
   type        = number
   description = "Fargate task memory (MiB)."
-  default     = 2048
+  default     = 1024
 }
 
 variable "backend_desired_count" {
@@ -73,13 +73,13 @@ variable "backend_desired_count" {
 variable "worker_cpu" {
   type        = number
   description = "Fargate worker task CPU units."
-  default     = 1024
+  default     = 512
 }
 
 variable "worker_memory" {
   type        = number
   description = "Fargate worker task memory (MiB)."
-  default     = 4096
+  default     = 1024
 }
 
 variable "worker_desired_count" {

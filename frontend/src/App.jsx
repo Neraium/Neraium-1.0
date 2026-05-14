@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
  API_BASE_URL,
  apiFetch,
@@ -10,20 +10,14 @@ import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
 import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
 import FleetWorkspace from "./components/FleetWorkspace";
-import {
-  SidebarNavigation as ShellSidebarNavigation,
-  TopStatusBar as ShellTopStatusBar,
-} from "./components/shell";
+import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
   EmptyState,
   MetricGrid,
   Panel,
   StatusDot,
-} from "./components/primitives";
-import { WORKSPACES } from "./config/workspaces";
-import { FALLBACK_SYSTEMS } from "./config/fallbackSystems";
-import { OPERATIONAL_CADENCE_MS, LIVE_REFRESH_INTERVAL_MS } from "./config/runtimeConstants";
+} from "./components/workspacePrimitives";
 import {
   formatOperationalLabel,
 } from "./viewModels/operationalHelpers";
@@ -33,13 +27,78 @@ import {
   normalizeErrorMessage,
   readJsonPayload,
 } from "./viewModels/uploadFlow";
+import { normalizeOperationalState } from "./viewModels/operationalUiState";
 import * as uploadStateView from "./viewModels/uploadState";
-import "./styles.css";
-import "./styles/shell.css";
-import "./styles/sidebar.css";
-import "./styles/top-status.css";
-import "./styles/workspace-system-body.css";
-import "./styles/mobile.css";
+import useStableInterval from "./hooks/useStableInterval";
+import { fetchApiHealth } from "./services/api/healthApi";
+import { fetchEngineIdentity, fetchFacilitySystems as fetchSystemFacility } from "./services/api/systemApi";
+import { fetchLatestUploadState } from "./services/api/uploadApi";
+
+const WORKSPACES = [
+  {
+    id: "system-body",
+    label: "System Body",
+    eyebrow: "Topology View",
+    description: "Top-level facility health with one live structural orb.",
+  },
+  {
+    id: "drift-timeline",
+    label: "Drift Timeline",
+    eyebrow: "Temporal View",
+    description: "Trajectory of structural distance from stable baseline.",
+  },
+  {
+    id: "evidence-console",
+    label: "Evidence Console",
+    eyebrow: "Interpretability View",
+    description: "Why drift is flagged, which relationships shifted, and what to do next.",
+  },
+  {
+    id: "data-connections",
+    label: "Data Connections",
+    eyebrow: "Signal Intake",
+    description: "Upload telemetry files and manage the live intake endpoint.",
+  },
+  {
+    id: "historical-replay",
+    label: "Evidence Trail",
+    eyebrow: "Run History",
+    description: "Replay prior runs and export historical evidence reports.",
+  },
+  {
+    id: "fleet-view",
+    label: "Fleet View",
+    eyebrow: "Multi-Site Ops",
+    description: "Fleet-level status, priority queue, and replay escalation log.",
+  },
+];
+
+const FALLBACK_SYSTEMS = [
+  {
+    name: "HVAC",
+    scope: "Room temperature control, equipment activity, and zone balancing.",
+  },
+  {
+    name: "Humidity control",
+    scope: "Dehumidification, humidification, and moisture stability.",
+  },
+  {
+    name: "Airflow",
+    scope: "Circulation, pressure movement, and room exchange behavior.",
+  },
+  {
+    name: "Irrigation",
+    scope: "Irrigation timing, cycle review, and environmental response context.",
+  },
+  {
+    name: "Lighting",
+    scope: "Photoperiod windows, fixture response, and environmental coupling.",
+  },
+  {
+    name: "Sensor network",
+    scope: "Room sensors, gateway exports, and telemetry continuity.",
+  },
+];
 
 const INTAKE_STAGES = [
   "Batch receipt",
@@ -56,6 +115,8 @@ const REPORT_TEMPLATES = [
   "Grower Action Report",
 ];
 
+const OPERATIONAL_CADENCE_MS = 30000;
+const LIVE_REFRESH_INTERVAL_MS = 5000;
 
 function App() { 
   const hasAccess = true;
@@ -113,15 +174,7 @@ function App() {
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
-      const response = await apiFetch("/api/health", { accessCode: apiAccessCode });
-      if (!response.ok) {
-        throw new Error(`Unexpected response: ${response.status}`);
-      }
-
-      const payload = await response.json();
-      if (payload.status !== "ok") {
-        throw new Error("Health response was not ok.");
-      }
+      await fetchApiHealth({ apiFetch, accessCode: apiAccessCode });
 
       setApiStatus({
         state: "online",
@@ -157,24 +210,18 @@ function App() {
     }
 
     try {
-      const response = await apiFetch("/api/facility/systems", { accessCode: apiAccessCode });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error(await buildProtectedRequestMessage(response));
-        }
-        throw new Error(`Unexpected response: ${response.status}`);
-      }
-
-      const payload = await response.json();
-      if (Array.isArray(payload.systems)) {
-        setSystems(payload.systems);
-        setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
-        setSystemsState("ready");
-        setBackendError(API_CONFIG_WARNING);
-        return true;
-      }
-      throw new Error("Facility systems payload was incomplete.");
+      const payload = await fetchSystemFacility({ apiFetch, accessCode: apiAccessCode });
+      setSystems(payload.systems);
+      setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
+      setSystemsState("ready");
+      setBackendError(API_CONFIG_WARNING);
+      return true;
     } catch (error) {
+      if (error instanceof Response && (error.status === 401 || error.status === 403)) {
+        const authMessage = await buildProtectedRequestMessage(error);
+        setBackendError(authMessage);
+        return false;
+      }
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
       const lowerMessage = String(normalizedMessage || "").toLowerCase();
       if (
@@ -206,20 +253,10 @@ function App() {
     }
 
     try {
-      const response = await apiFetch("/api/data/latest-upload", { accessCode: apiAccessCode });
-      if (!response.ok) {
-        throw new Error(`Unexpected response: ${response.status}`);
-      }
-
-      const payload = await response.json();
-      setLatestUploadSnapshot(payload ?? uploadStateView.buildEmptyLatestUploadSnapshot());
-      const latestResult = payload?.latest_result;
-      if (uploadStateView.hasFullUploadResult(latestResult)) {
-        setLatestUploadResult(latestResult);
-        return true;
-      }
-      setLatestUploadResult(null);
-      return false;
+      const payload = await fetchLatestUploadState({ apiFetch, accessCode: apiAccessCode });
+      setLatestUploadSnapshot(payload.snapshot);
+      setLatestUploadResult(payload.latestResult);
+      return Boolean(payload.latestResult);
     } catch {
       setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
       setLatestUploadResult(null);
@@ -237,30 +274,10 @@ function App() {
 
   useEffect(() => {
     if (!hasAccess) {
-      return undefined;
+      return;
     }
-
     checkApiHealth("startup");
-    const intervalId = window.setInterval(() => {
-      checkApiHealth("interval");
-    }, 20000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
   }, [checkApiHealth, hasAccess]);
-
-  useEffect(() => {
-    if (!hasAccess) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setTelemetryTick((current) => current + 1);
-    }, OPERATIONAL_CADENCE_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [hasAccess]);
 
   useEffect(() => {
     if (!hasAccess) {
@@ -275,26 +292,29 @@ function App() {
     if (!hasAccess) {
       return;
     }
-    apiFetch("/api/intelligence/engine-identity", { accessCode: apiAccessCode }).catch(() => {});
+    fetchEngineIdentity({ apiFetch, accessCode: apiAccessCode }).catch(() => {});
   }, [apiAccessCode, hasAccess]);
 
-  useEffect(() => {
-    if (!hasAccess) {
-      return undefined;
-    }
+  useStableInterval(() => {
+    checkApiHealth("interval");
+  }, 20000, hasAccess);
 
-    const intervalId = window.setInterval(() => {
-      loadLatestUploadState();
-      loadFacilitySystems();
-    }, LIVE_REFRESH_INTERVAL_MS);
+  useStableInterval(() => {
+    setTelemetryTick((current) => current + 1);
+  }, OPERATIONAL_CADENCE_MS, hasAccess);
 
-    return () => window.clearInterval(intervalId);
-  }, [hasAccess, loadFacilitySystems, loadLatestUploadState]);
+  useStableInterval(() => {
+    loadLatestUploadState();
+    loadFacilitySystems();
+  }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
-  const activeConfig = WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0];
-  const roomContext = uploadStateView.deriveRoomContext(latestUploadResult);
-  const timeCoverage = uploadStateView.deriveTimeCoverage(latestUploadResult);
-  const runtimeLiveOps = buildFacilityOperationalState({ 
+  const activeConfig = useMemo(
+    () => WORKSPACES.find((workspace) => workspace.id === activeWorkspace) ?? WORKSPACES[0],
+    [activeWorkspace],
+  );
+  const roomContext = useMemo(() => uploadStateView.deriveRoomContext(latestUploadResult), [latestUploadResult]);
+  const timeCoverage = useMemo(() => uploadStateView.deriveTimeCoverage(latestUploadResult), [latestUploadResult]);
+  const runtimeLiveOps = useMemo(() => buildFacilityOperationalState({ 
     result: latestUploadResult,
     latestUploadSnapshot,
     apiStatus,
@@ -344,24 +364,31 @@ function App() {
     translateEvidenceLine,
     windowLabelFromTone,
     buildWindowContext, 
-  }); 
-  const liveOps = isDemoMode ? buildDemoLiveOps(telemetryTick, demoScenario) : runtimeLiveOps;
-
-  const driftDependencyKey = JSON.stringify({
-    driftRows: (liveOps.driftRows ?? []).map((row) => Number(row?.absolute_change ?? 0)),
-    relationshipRows: (liveOps.relationshipRows ?? []).map((row) => Number(row?.pair_weight ?? row?.change ?? 0)),
-  });
-
-  useEffect(() => {
-    const relationshipMagnitude = (liveOps.relationshipRows ?? [])
+  }), [apiStatus, intelligenceStatus, latestUploadResult, latestUploadSnapshot, roomContext, systems, systemsState, telemetryTick]); 
+  const liveOps = useMemo(
+    () => (isDemoMode ? buildDemoLiveOps(telemetryTick, demoScenario) : runtimeLiveOps),
+    [demoScenario, isDemoMode, runtimeLiveOps, telemetryTick],
+  );
+  const relationshipMagnitude = useMemo(
+    () => (liveOps.relationshipRows ?? [])
       .map((row) => Number(row.pair_weight ?? row.change))
       .filter((value) => Number.isFinite(value))
-      .reduce((sum, value) => sum + Math.abs(value), 0);
-    const driftMagnitude = (liveOps.driftRows ?? [])
+      .reduce((sum, value) => sum + Math.abs(value), 0),
+    [liveOps.relationshipRows],
+  );
+  const driftMagnitude = useMemo(
+    () => (liveOps.driftRows ?? [])
       .map((row) => Number(row.absolute_change))
       .filter((value) => Number.isFinite(value))
-      .reduce((sum, value) => sum + Math.abs(value), 0);
-    const baselineDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
+      .reduce((sum, value) => sum + Math.abs(value), 0),
+    [liveOps.driftRows],
+  );
+  const baselineDistance = useMemo(
+    () => Number((relationshipMagnitude + driftMagnitude).toFixed(3)),
+    [driftMagnitude, relationshipMagnitude],
+  );
+
+  useEffect(() => {
     const stamp = formatClockTime(new Date());
 
     setDriftHistory((current) => {
@@ -396,7 +423,7 @@ function App() {
       const next = [...current, { stamp, distance: baselineDistance, velocity, acceleration, tone: smoothedTone }];
       return next.slice(-48);
     });
-  }, [telemetryTick, driftDependencyKey]);
+  }, [baselineDistance, liveOps.connectionSummary, telemetryTick]);
 
   useEffect(() => {
     if (workspaceRef.current) {
@@ -510,22 +537,22 @@ function App() {
 
   return (
     <AppErrorBoundary>
-    <main className="neraium-sidebar-emergency-fix platform-shell">
-      <aside className="platform-sidebar" aria-label="Workspace navigation">
-        <ShellSidebarNavigation
-          workspaces={WORKSPACES}
-          activeWorkspace={activeWorkspace}
-          roomContext={roomContext}
-          timeCoverage={timeCoverage}
-          liveOps={liveOps}
-          onSelectWorkspace={handleWorkspaceSelect}
-          StatusDot={StatusDot}
-          SidebarTelemetry={SidebarTelemetry}
-        />
-      </aside>
-
-      <div className="platform-main">
-        <header className="mobile-status-bar">
+      <DesktopWorkspaceLayout
+        activeWorkspace={activeWorkspace}
+        workspaceRef={workspaceRef}
+        navigation={(
+          <WorkspaceNavigationContent
+            activeWorkspace={activeWorkspace}
+            apiStatus={apiStatus}
+            latestUploadResult={latestUploadResult}
+            roomContext={roomContext}
+            timeCoverage={timeCoverage}
+            liveOps={liveOps}
+            onSelectWorkspace={handleWorkspaceSelect}
+          />
+        )}
+        mobileHeader={(
+          <header className="mobile-status-bar">
           <div className="mobile-status-bar__brand">
             <div className="mobile-status-bar__copy">
               <p className="brand-name brand-name--hero">Neraium</p>
@@ -586,12 +613,15 @@ function App() {
             </span>
             <span>Menu</span>
           </button>
-        </header>
-
-        <ShellTopStatusBar 
+          </header>
+        )}
+        topStatus={(
+          <TopStatusBar 
           activeConfig={activeConfig} 
+          apiStatus={apiStatus} 
           latestUploadResult={latestUploadResult} 
           roomContext={roomContext} 
+          timeCoverage={timeCoverage} 
           liveOps={liveOps} 
           isDemoMode={isDemoMode}
           onToggleDemoMode={() => {
@@ -605,61 +635,51 @@ function App() {
           }}
           demoScenario={demoScenario}
           onSetDemoScenario={setDemoScenario}
-          StatusDot={StatusDot}
-          StatusChip={StatusChip}
-          deriveTriageSummary={deriveTriageSummary}
-          formatIntelligenceSourceLabel={formatIntelligenceSourceLabel}
-          formatReadiness={formatReadiness}
-        /> 
-
-        <section
-          key={activeWorkspace}
-          ref={workspaceRef}
-          className="platform-workspace"
-          aria-labelledby="page-title"
-        >
-          {renderActiveWorkspace()}
-        </section>
-      </div>
-
-      <div
-        className={`workspace-drawer-backdrop ${isWorkspaceMenuOpen ? "workspace-drawer-backdrop--open" : ""}`}
-        hidden={!isWorkspaceMenuOpen}
-        onClick={() => setIsWorkspaceMenuOpen(false)}
-      />
-      <aside
-        ref={workspaceDrawerRef}
-        className={`workspace-drawer ${isWorkspaceMenuOpen ? "workspace-drawer--open" : ""}`}
-        id="mobile-workspace-drawer"
-        aria-label="Workspace drawer"
-        aria-hidden={!isWorkspaceMenuOpen}
+          /> 
+        )}
+        drawer={(
+          <>
+            <div
+              className={`workspace-drawer-backdrop ${isWorkspaceMenuOpen ? "workspace-drawer-backdrop--open" : ""}`}
+              hidden={!isWorkspaceMenuOpen}
+              onClick={() => setIsWorkspaceMenuOpen(false)}
+            />
+            <aside
+              ref={workspaceDrawerRef}
+              className={`workspace-drawer ${isWorkspaceMenuOpen ? "workspace-drawer--open" : ""}`}
+              id="mobile-workspace-drawer"
+              aria-label="Workspace drawer"
+              aria-hidden={!isWorkspaceMenuOpen}
+            >
+              <div className="workspace-drawer__header">
+                <div>
+                  <p className="sidebar-kicker">Navigation</p>
+                  <strong>{activeConfig.label}</strong>
+                </div>
+                <button
+                  className="workspace-drawer__close"
+                  type="button"
+                  aria-label="Close workspace menu"
+                  onClick={() => setIsWorkspaceMenuOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <WorkspaceNavigationContent
+                activeWorkspace={activeWorkspace}
+                apiStatus={apiStatus}
+                latestUploadResult={latestUploadResult}
+                roomContext={roomContext}
+                timeCoverage={timeCoverage}
+                liveOps={liveOps}
+                onSelectWorkspace={handleWorkspaceSelect}
+              />
+            </aside>
+          </>
+        )}
       >
-        <div className="workspace-drawer__header">
-          <div>
-            <p className="sidebar-kicker">Navigation</p>
-            <strong>{activeConfig.label}</strong>
-          </div>
-          <button
-            className="workspace-drawer__close"
-            type="button"
-            aria-label="Close workspace menu"
-            onClick={() => setIsWorkspaceMenuOpen(false)}
-          >
-            Close
-          </button>
-        </div>
-        <ShellSidebarNavigation
-          workspaces={WORKSPACES}
-          activeWorkspace={activeWorkspace}
-          roomContext={roomContext}
-          timeCoverage={timeCoverage}
-          liveOps={liveOps}
-          onSelectWorkspace={handleWorkspaceSelect}
-          StatusDot={StatusDot}
-          SidebarTelemetry={SidebarTelemetry}
-        />
-      </aside>
-    </main>
+        {renderActiveWorkspace()}
+      </DesktopWorkspaceLayout>
     </AppErrorBoundary>
   );
 }
@@ -710,6 +730,8 @@ function WorkspaceNavigationContent({
   liveOps,
   onSelectWorkspace,
 }) {
+  const activeUiState = normalizeOperationalState(liveOps.facilityTone);
+
   return (
     <>
       <div className="sidebar-brand-shell"> 
@@ -728,20 +750,24 @@ function WorkspaceNavigationContent({
         <nav className="workspace-nav">
           {WORKSPACES.map((workspace) => (
             <button
-              className={`workspace-nav__item ${activeWorkspace === workspace.id ? "workspace-nav__item--active" : ""}`}
+              className={`workspace-nav__item ${activeWorkspace === workspace.id ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
               key={workspace.id}
               type="button"
               aria-current={activeWorkspace === workspace.id ? "page" : undefined}
               onClick={() => onSelectWorkspace(workspace.id)}
             >
-              <span className="workspace-nav__label">{workspace.label}</span>
+              <div className="workspace-nav__header">
+                <span className="workspace-nav__label">{workspace.label}</span>
+                <StatusDot tone={activeWorkspace === workspace.id ? liveOps.facilityTone : "muted"} />
+              </div>
+              <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
               <span className="workspace-nav__detail">{workspace.description}</span>
             </button>
           ))}
         </nav>
       </div>
 
-      <div className="sidebar-section sidebar-section--terminal">
+      <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
         <p className="sidebar-kicker">Persistent state</p>
         <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
         <SidebarTelemetry label="Primary room" value={roomContext.primary} />
@@ -776,6 +802,7 @@ function TopStatusBar({
 }) {
   const intelligenceLabel = formatIntelligenceSourceLabel(liveOps.intelligenceMode);
   const triageSummary = deriveTriageSummary(liveOps, roomContext);
+  const uiState = normalizeOperationalState(liveOps.facilityTone);
   return (
     <header className="top-status"> 
       <div className="top-status__title"> 
@@ -795,7 +822,7 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone}`}>
+      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
         <article className="top-status__brief-item">
           <span>What&apos;s wrong</span>
           <strong>{triageSummary.problem}</strong>
@@ -869,8 +896,10 @@ function StatusBanner({ title, subtitle, tone }) {
 }
 
 function StatusChip({ label, value, tone }) { 
+  const uiState = normalizeOperationalState(tone);
+
   return (
-    <div className={`status-chip status-chip--${tone}`}>
+    <div className={`status-chip status-chip--${tone} ui-state-surface ui-state-surface--${uiState}`}>
       <div className="status-chip__head">
         <StatusDot tone={tone} />
         <span>{label}</span>

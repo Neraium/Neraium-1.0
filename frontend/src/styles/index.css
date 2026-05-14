@@ -1,0 +1,12 @@
+/* Centralized frontend stylesheet entrypoint.
+   Keep CSS import order here so main.jsx stays clean and layout overrides remain predictable. */
+
+@import "../styles.css";
+@import "../neraium-hardening.css";
+@import "./elevation.css";
+@import "./panels.css";
+@import "./layout.css";
+@import "./motion.css";
+@import "./states.css";
+@import "./workspace-system-body.css";
+@import "./sidebar.css";
