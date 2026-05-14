@@ -16,6 +16,14 @@ class StructuralArchetypeName(StrEnum):
     RECOVERY_CONVERGENCE = "RECOVERY_CONVERGENCE"
     STRUCTURAL_COMPRESSION = "STRUCTURAL_COMPRESSION"
     VOLATILITY_CLUSTERING = "VOLATILITY_CLUSTERING"
+    TOPOLOGY_FRAGMENTATION = "TOPOLOGY_FRAGMENTATION"
+    LATENT_PRESSURE_ACCUMULATION = "LATENT_PRESSURE_ACCUMULATION"
+    DELAYED_DIVERGENCE = "DELAYED_DIVERGENCE"
+    SUBSYSTEM_DESYNCHRONIZATION = "SUBSYSTEM_DESYNCHRONIZATION"
+    THERMAL_PROPAGATION = "THERMAL_PROPAGATION"
+    RESPONSE_LAG = "RESPONSE_LAG"
+    CASCADING_COMPENSATION = "CASCADING_COMPENSATION"
+    RECOVERY_RECONVERGENCE = "RECOVERY_RECONVERGENCE"
 
 
 @dataclass(frozen=True)
@@ -151,6 +159,78 @@ ARCHETYPES: tuple[StructuralArchetype, ...] = (
         persistence_conditions=["same nodes remain active across windows"],
         recovery_indicators=["cluster concentration drops", "pressure redistributes or settles"],
     ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.TOPOLOGY_FRAGMENTATION,
+        description="Topology coherence is fragmenting across previously coupled subsystems.",
+        structural_indicators=["cross-subsystem decoupling", "path divergence", "fragmentation pressure"],
+        required_evidence=["multi-path propagation", "subsystem disagreement", "topology support"],
+        propagation_characteristics=["pressure spreads along multiple divergent pathways"],
+        persistence_conditions=["fragmentation appears across more than one subsystem boundary"],
+        recovery_indicators=["path collapse and reconvergence"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.LATENT_PRESSURE_ACCUMULATION,
+        description="Hidden structural pressure is accumulating before overt fragmentation emerges.",
+        structural_indicators=["compressed variability", "subtle drift persistence", "masked divergence"],
+        required_evidence=["compression indicators", "persistent weak drift", "lineage consistency"],
+        propagation_characteristics=["delayed activation followed by concentrated propagation"],
+        persistence_conditions=["low amplitude deviations persist across windows"],
+        recovery_indicators=["compression release without divergence"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.DELAYED_DIVERGENCE,
+        description="Divergence is delayed but structurally accumulating toward future instability expression.",
+        structural_indicators=["response delay", "continued pressure migration", "late pathway expansion"],
+        required_evidence=["operational timing evidence", "continuation pathway persistence"],
+        propagation_characteristics=["progression remains muted before visible spread"],
+        persistence_conditions=["timing windows stretch while pressure remains active"],
+        recovery_indicators=["delay resolves with convergence instead of spread"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.SUBSYSTEM_DESYNCHRONIZATION,
+        description="Subsystems are operating out of structural sync under shared load conditions.",
+        structural_indicators=["desynchronized response", "relationship lag", "timing misalignment"],
+        required_evidence=["relationship change evidence", "timing mismatch", "subsystem agreement loss"],
+        propagation_characteristics=["lag cascades across dependent subsystems"],
+        persistence_conditions=["timing mismatch persists across transitions"],
+        recovery_indicators=["resynchronized subsystem timing"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.THERMAL_PROPAGATION,
+        description="Thermal pressure is propagating across adjacent subsystem relationships.",
+        structural_indicators=["thermal lag", "downstream coupling strain", "cross-domain spread"],
+        required_evidence=["thermal drift evidence", "relationship propagation"],
+        propagation_characteristics=["thermal source pressure migrates into dependent subsystems"],
+        persistence_conditions=["thermal lag remains active across windows"],
+        recovery_indicators=["thermal response recovery and pathway decay"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.RESPONSE_LAG,
+        description="Operational response timing lags structural demand and amplifies pathway instability.",
+        structural_indicators=["load-response mismatch", "delayed convergence", "timing compression"],
+        required_evidence=["timing evidence", "baseline lag", "continuation support"],
+        propagation_characteristics=["lag delays recovery and extends continuation pathways"],
+        persistence_conditions=["response lag remains under repeated load cycles"],
+        recovery_indicators=["lag contraction and timing normalization"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.CASCADING_COMPENSATION,
+        description="Compensation behavior cascades across subsystems and redistributes instability pressure.",
+        structural_indicators=["cross-subsystem compensation", "pressure migration", "masked divergence"],
+        required_evidence=["multi-subsystem pressure evidence", "propagation confirmations"],
+        propagation_characteristics=["compensation shifts instability without immediate stabilization"],
+        persistence_conditions=["compensation pathways remain active"],
+        recovery_indicators=["compensation unwind and convergence"],
+    ),
+    StructuralArchetype(
+        name=StructuralArchetypeName.RECOVERY_RECONVERGENCE,
+        description="Fragmented pathways are reconverging toward coherent operational structure.",
+        structural_indicators=["pathway decay", "reduced persistence", "coherence restoration"],
+        required_evidence=["recovery lineage", "declining propagation intensity", "topology recoupling"],
+        propagation_characteristics=["active pathways collapse and converge"],
+        persistence_conditions=["recovery trend persists across windows"],
+        recovery_indicators=["stable topology and lowered fragmentation pressure"],
+    ),
 )
 
 
@@ -281,4 +361,3 @@ def default_rationale(
         archetype.description,
         f"Active categories: {category_count}, persistent columns: {persistent_count}, relationship shifts: {relationship_count}.",
     ]
-

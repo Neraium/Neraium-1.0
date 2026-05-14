@@ -10,6 +10,7 @@ import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DriftTimelineWorkspace from "./components/DriftTimelineWorkspace";
 import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
 import FleetWorkspace from "./components/FleetWorkspace";
+import StructuralOntologyWorkspace from "./components/StructuralOntologyWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -70,6 +71,12 @@ const WORKSPACES = [
     label: "Fleet View",
     eyebrow: "Multi-Site Ops",
     description: "Fleet-level status, priority queue, and replay escalation log.",
+  },
+  {
+    id: "structural-ontology",
+    label: "Structural Ontology",
+    eyebrow: "Ontology View",
+    description: "Visualize archetype primitives, ontology relationships, and domain cognition mappings.",
   },
 ];
 
@@ -521,6 +528,16 @@ function App() {
             setActiveWorkspace("historical-replay");
             setIsWorkspaceMenuOpen(false);
           }}
+        />
+      );
+    }
+
+    if (activeWorkspace === "structural-ontology") {
+      return (
+        <StructuralOntologyWorkspace
+          intelligence={latestUploadResult?.sii_intelligence ?? null}
+          Panel={Panel}
+          EmptyState={EmptyState}
         />
       );
     }
