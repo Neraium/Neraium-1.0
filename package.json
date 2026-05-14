@@ -1,0 +1,25 @@
+{
+  "name": "neraium-1.0",
+  "version": "1.0.0",
+  "description": "Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes visible crop stress.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Neraium/Neraium-1.0.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Neraium/Neraium-1.0/issues"
+  },
+  "homepage": "https://github.com/Neraium/Neraium-1.0#readme"
+}
