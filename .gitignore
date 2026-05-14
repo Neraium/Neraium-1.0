@@ -57,3 +57,6 @@ backend/app/runtime/jobs/
 backend/app/runtime/*
 !backend/app/runtime/.gitkeep
 .aider*
+.terraform/
+*.tfstate
+*.tfstate.backup
