@@ -10,12 +10,16 @@ from cognition.cognition_confidence_engine import CognitionConfidenceEngine
 from cognition.deterioration_library import CANONICAL_DETERIORATION_SEQUENCES, sequence_similarity
 from cognition.multi_facility_cognition_engine import MultiFacilityCognitionEngine
 from cognition.multi_site_cognition_network import build_multi_site_cognition_network
+from cognition_graph.persistent_graph_memory import PersistentCognitionGraphMemory
 from cognition.operational_time_engine import OperationalTimeEngine
+from cross_domain.cross_domain_intelligence_engine import CrossDomainIntelligenceEngine
 from cognition.structural_stability_index import StructuralStabilityIndex
 from datasets.structural_progression_dataset import build_structural_progression_dataset
 from digital_twin.behavioral_twin_engine import BehavioralTwinEngine
 from domain_packs import resolve_domain_pack
 from evidence.evidence_lineage_engine import EvidenceLineageEngine
+from exchange.sii_graph_exchange import build_graph_exchange_packet
+from federation.federated_cognition_exchange import build_federated_exchange_payload
 from engines.counterfactual_engine import CounterfactualEngine
 from engines.facility_cognition_engine import FacilityCognitionEngine
 from engines.recovery_convergence_engine import RecoveryConvergenceEngine
@@ -26,17 +30,21 @@ from explanations.operator_explanation_engine import OperatorExplanationEngine
 from human_factors.operator_interaction_engine import OperatorInteractionEngine
 from api.cognition_contracts import build_cognition_contract_snapshot
 from ontology.corpus import build_ontology_corpus
+from ontology.evolving_ontology_engine import EvolvingOntologyEngine
 from ontology.structural_ontology import build_structural_ontology
 from ontology.archetypes import StructuralArchetypeClassifier
 from replay.structural_replay_engine import StructuralReplayEngine
 from sii_reference_architecture.sii_architecture_contracts import build_sii_architecture_contracts
 from sii_reference_architecture.sii_reference_model import build_sii_reference_model
 from sii_standard.standard import build_sii_standard
+from search.structural_evolution_search import BehavioralSimilaritySearch, StructuralEvolutionQuery
 from sii_standard.operational_language import operational_language_standard
+from training.operator_cognition_training import build_training_payload
 from simulation.operational_cognition_simulator import OperationalCognitionSimulator
 from trust.institutional_trust_framework import InstitutionalTrustFramework
 from validation.cognition_validation_framework import CognitionValidationFramework
 from validation.institutional_validation_layer import InstitutionalValidationLayer
+from governance.distributed_cognition_governance import build_governance_record
 
 
 def build_structural_cognition(
@@ -198,6 +206,10 @@ def build_structural_cognition(
         replay_compression=1,
     )
     replay_frames = replay_timeline.get("timeline", [])
+    replay_timeline_wrapped = {
+        "meta": replay_timeline.get("meta", {}),
+        "timeline": replay_frames,
+    }
     benchmark = benchmark_engine.benchmark(
         intelligence={
             "evidence_lineage": evidence_lineage,
@@ -209,6 +221,12 @@ def build_structural_cognition(
     observed_paths = causality_graph.get("dominant_pathways", [])
     deterioration_library_matches = sequence_similarity(observed_archetypes, observed_paths)
     ontology = build_structural_ontology()
+    evolving_ontology_engine = EvolvingOntologyEngine()
+    ontology_extension_candidates = evolving_ontology_engine.propose_candidates(
+        {
+            "active_archetypes": archetypes,
+        }
+    )
     facilities = build_facility_samples(room_summary, archetypes, observed_paths, stability_index)
     multi_facility = multi_facility_engine.build_graph(facilities=facilities)
     multi_site_network = build_multi_site_cognition_network(facilities)
@@ -307,10 +325,69 @@ def build_structural_cognition(
     architecture_contracts = build_sii_architecture_contracts()
     ontology_corpus = build_ontology_corpus()
     case_studies = load_case_studies()
-    replay_timeline_wrapped = {
-        "meta": replay_timeline.get("meta", {}),
-        "timeline": replay_frames,
-    }
+    persistent_graph_memory = PersistentCognitionGraphMemory()
+    graph_snapshot = build_cognition_graph_snapshot(archetypes, observed_paths, now_iso_from_driver(driver_attribution))
+    persistent_snapshot = persistent_graph_memory.append_graph_snapshot(
+        facility_id="facility-primary",
+        graph_snapshot=graph_snapshot,
+        intelligence={
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+            "recovery_convergence": recovery_convergence,
+            "operator_interaction_model": operator_interactions,
+            "domain_cognition_pack": domain_pack,
+            "structural_stability_index": stability_index,
+            "evidence_lineage": evidence_lineage,
+            "last_updated": now_iso_from_driver(driver_attribution),
+        },
+    )
+    cross_domain_report = CrossDomainIntelligenceEngine().build_report(
+        {
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+        }
+    )
+    distributed_training = build_training_payload(
+        {
+            "replay_timeline": replay_timeline_wrapped,
+        }
+    )
+    distributed_exchange = build_graph_exchange_packet(
+        {
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+            "recovery_convergence": recovery_convergence,
+            "evidence_lineage": evidence_lineage,
+            "ontology_extension_candidates": ontology_extension_candidates,
+        }
+    )
+    federated_exchange = build_federated_exchange_payload(
+        {
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+            "structural_stability_index": stability_index,
+            "evidence_lineage": evidence_lineage,
+        }
+    )
+    distributed_governance = build_governance_record(
+        {
+            "evidence_lineage": evidence_lineage,
+            "replay_timeline": replay_timeline_wrapped,
+        }
+    )
+    structural_evolution_search = BehavioralSimilaritySearch().search(
+        StructuralEvolutionQuery(
+            text="find propagation patterns involving airflow and thermal lag",
+            archetypes=["COMPENSATION_MASKING", "PROPAGATION_ACCELERATION"],
+            pathways=["airflow", "thermal", "lag"],
+            convergence_terms=["delayed_recovery"],
+        ),
+        {
+            "active_archetypes": archetypes,
+            "causality_graph": causality_graph,
+            "replay_timeline": replay_timeline_wrapped,
+        },
+    )
     cognition_contracts = build_cognition_contract_snapshot(
         {
             "facility_state": driver_attribution.get("state", "Monitoring"),
@@ -345,6 +422,7 @@ def build_structural_cognition(
             "architecture_contracts": architecture_contracts,
         },
         "structural_ontology": ontology,
+        "ontology_extension_candidates": ontology_extension_candidates,
         "ontology_corpus": ontology_corpus,
         "structural_benchmark": benchmark,
         "cognition_validation": validation,
@@ -361,6 +439,17 @@ def build_structural_cognition(
         "multi_facility_cognition": multi_facility,
         "multi_site_cognition_network": multi_site_network,
         "operator_interaction_model": operator_interactions,
+        "persistent_cognition_graph_memory": {
+            "latest_snapshot": persistent_snapshot.to_dict(),
+            "recurring_propagation_paths": persistent_graph_memory.query_recurring_propagation_paths().to_dict(),
+            "recovery_patterns": persistent_graph_memory.query_recovery_patterns().to_dict(),
+        },
+        "federated_cognition_exchange": federated_exchange,
+        "cross_domain_structural_intelligence": cross_domain_report,
+        "structural_evolution_search": structural_evolution_search.to_dict(),
+        "operator_cognition_training": distributed_training,
+        "sii_graph_exchange": distributed_exchange,
+        "distributed_cognition_governance": distributed_governance,
         "replay_timeline": replay_timeline_wrapped,
         "behavioral_infrastructure_twin": behavioral_twin,
         "evidence_lineage": evidence_lineage,
@@ -407,3 +496,11 @@ def build_operator_interventions(room_summary: dict[str, Any] | None) -> list[di
         }
         for idx in range(min(count, 4))
     ]
+
+
+def build_cognition_graph_snapshot(archetypes: list[dict[str, Any]], paths: list[str], timestamp: str) -> dict[str, Any]:
+    return {
+        "timestamp": timestamp,
+        "nodes": [f"arch:{item.get('name', '')}" for item in archetypes] + [f"path:{idx}" for idx, _ in enumerate(paths)],
+        "edges": [f"{item.get('name', '')}->{path}" for item, path in zip(archetypes, paths)],
+    }

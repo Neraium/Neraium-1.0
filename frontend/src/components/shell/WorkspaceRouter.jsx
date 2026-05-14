@@ -6,6 +6,8 @@ import DataConnectionsWorkspace from '../DataConnectionsWorkspace';
 import StructuralReplayWorkspace from '../StructuralReplayWorkspace';
 import FleetWorkspace from '../FleetWorkspace';
 import EcosystemWorkspace from '../EcosystemWorkspace';
+import DistributedCognitionWorkspace from '../DistributedCognitionWorkspace';
+import OperatorTrainingWorkspace from '../OperatorTrainingWorkspace';
 
 export default function WorkspaceRouter(props) {
   const {
@@ -19,6 +21,8 @@ export default function WorkspaceRouter(props) {
     evidenceTrailProps,
     fleetProps,
     ecosystemProps,
+    distributedCognitionProps,
+    operatorTrainingProps,
   } = props;
 
   if (activeWorkspace === 'system-body') {
@@ -38,6 +42,12 @@ export default function WorkspaceRouter(props) {
   }
   if (activeWorkspace === 'ecosystem-workspace') {
     return <EcosystemWorkspace {...ecosystemProps} />;
+  }
+  if (activeWorkspace === 'distributed-cognition') {
+    return <DistributedCognitionWorkspace {...distributedCognitionProps} />;
+  }
+  if (activeWorkspace === 'operator-training') {
+    return <OperatorTrainingWorkspace {...operatorTrainingProps} />;
   }
   return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />;
 }

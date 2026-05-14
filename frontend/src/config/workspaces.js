@@ -47,4 +47,16 @@ export const WORKSPACES = [
     eyebrow: 'SII Runtime',
     description: 'Read-only integration posture, cognition state export, and structural graph ecosystem context.',
   },
+  {
+    id: 'distributed-cognition',
+    label: 'Distributed Cognition',
+    eyebrow: 'Cognition Fabric',
+    description: 'Federated structural cognition, persistent graph memory, ontology evolution, and governance.',
+  },
+  {
+    id: 'operator-training',
+    label: 'Operator Training',
+    eyebrow: 'Cognition Training',
+    description: 'Replay-backed operator cognition training for structural evolution interpretation.',
+  },
 ];

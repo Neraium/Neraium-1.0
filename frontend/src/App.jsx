@@ -12,6 +12,8 @@ import EvidenceConsoleWorkspace from "./components/EvidenceConsoleWorkspace";
 import FleetWorkspace from "./components/FleetWorkspace";
 import StructuralOntologyWorkspace from "./components/StructuralOntologyWorkspace";
 import EcosystemWorkspace from "./components/EcosystemWorkspace";
+import DistributedCognitionWorkspace from "./components/DistributedCognitionWorkspace";
+import OperatorTrainingWorkspace from "./components/OperatorTrainingWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -84,6 +86,18 @@ const WORKSPACES = [
     label: "Ecosystem Layer",
     eyebrow: "SII Runtime",
     description: "Read-only integration posture, cognition state export, and structural graph ecosystem context.",
+  },
+  {
+    id: "distributed-cognition",
+    label: "Distributed Cognition",
+    eyebrow: "Cognition Fabric",
+    description: "Federated structural cognition, persistent graph memory, ontology evolution, and governance.",
+  },
+  {
+    id: "operator-training",
+    label: "Operator Training",
+    eyebrow: "Cognition Training",
+    description: "Replay-backed operator cognition training for structural evolution interpretation.",
   },
 ];
 
@@ -555,6 +569,28 @@ function App() {
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           formatClockTime={formatClockTime}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "distributed-cognition") {
+      return (
+        <DistributedCognitionWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "operator-training") {
+      return (
+        <OperatorTrainingWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
           Panel={Panel}
           EmptyState={EmptyState}
         />
