@@ -1,6 +1,28 @@
-export async function fetchCanonicalCognitionState({ apiFetch, accessCode, mode = "live" }) {
+export async function fetchCanonicalCognitionState({ apiFetch, accessCode }) {
+  const emptyCanonicalState = {
+    cognition_state: "Monitoring",
+    structural_stability: "WATCH",
+    active_archetypes: [],
+    propagation_pathways: [],
+    evidence_lineage: {},
+    structural_memory_matches: [],
+    continuation_windows: {
+      window: "Monitoring",
+      structural_pathways: [],
+      uncertainty_range: [],
+    },
+    replay_summary: {
+      frame_count: 0,
+      canonical_flow: [],
+      active_frame: {},
+    },
+    recovery_convergence: {},
+    operator_explanation: "No structural cognition payload is available yet. Upload or connect telemetry to initialize operator workflow context.",
+    source_mode: "live",
+  };
+
   const response = await apiFetch(
-    `/api/facility/cognition-state?mode=${encodeURIComponent(mode)}`,
+    "/api/facility/cognition-state",
     { accessCode },
   );
   if (response.ok) {
@@ -9,10 +31,12 @@ export async function fetchCanonicalCognitionState({ apiFetch, accessCode, mode 
 
   // Backward compatibility for deployments that have /facility/systems
   // but have not yet rolled out /facility/cognition-state.
-  if (response.status === 404) {
+  if (response.status === 404 || response.status >= 500) {
     const fallback = await apiFetch("/api/facility/systems", { accessCode });
     if (!fallback.ok) {
-      throw new Error(`Unexpected response: ${fallback.status}`);
+      // If both endpoints are unavailable on this deployment revision,
+      // return a safe empty canonical state instead of breaking workflow UI.
+      return emptyCanonicalState;
     }
     const payload = await fallback.json();
     const intelligence = payload?.intelligence ?? {};
@@ -46,9 +70,9 @@ export async function fetchCanonicalCognitionState({ apiFetch, accessCode, mode 
         intelligence?.operator_explanation_v2?.narrative
         ?? intelligence?.operator_explanation_v2?.summary
         ?? "Evidence-backed structural cognition is available for operator review.",
-      source_mode: mode,
+      source_mode: "live",
     };
   }
 
-  throw new Error(`Unexpected response: ${response.status}`);
+  return emptyCanonicalState;
 }
