@@ -6,6 +6,18 @@ export const WORKSPACES = [
     description: 'Canonical operator flow from cognition state through replay, evidence lineage, continuation, and convergence review.',
   },
   {
+    id: 'cultivation-mission-control',
+    label: 'Cultivation Mission Control',
+    eyebrow: 'Cultivation Primary',
+    description: 'Canonical cultivation structural cognition interface for facility state, replay, pathways, and convergence.',
+  },
+  {
+    id: 'cultivation-evidence',
+    label: 'Cultivation Evidence',
+    eyebrow: 'Cultivation Evidence',
+    description: 'Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.',
+  },
+  {
     id: 'historical-replay',
     label: 'Structural Replay',
     eyebrow: 'Replay First',

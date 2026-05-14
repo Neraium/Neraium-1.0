@@ -18,6 +18,8 @@ import InfrastructureBehaviorScienceWorkspace from "./components/InfrastructureB
 import OperatorCognitionTrainingWorkspace from "./components/OperatorCognitionTrainingWorkspace";
 import StructuralCognitionResearchWorkspace from "./components/StructuralCognitionResearchWorkspace";
 import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
+import CultivationMissionControl from "./components/cultivation/CultivationMissionControl";
+import CultivationEvidenceWorkspace from "./components/cultivation/CultivationEvidenceWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -48,6 +50,18 @@ const WORKSPACES = [
     label: "Operator Workflow",
     eyebrow: "Primary Flow",
     description: "Canonical operator flow from cognition state through replay, evidence lineage, continuation, and convergence review.",
+  },
+  {
+    id: "cultivation-mission-control",
+    label: "Cultivation Mission Control",
+    eyebrow: "Cultivation Primary",
+    description: "Canonical cultivation structural cognition interface for facility state, replay, pathways, and convergence.",
+  },
+  {
+    id: "cultivation-evidence",
+    label: "Cultivation Evidence",
+    eyebrow: "Cultivation Evidence",
+    description: "Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.",
   },
   {
     id: "system-body",
@@ -514,6 +528,30 @@ function App() {
   }
 
   function renderActiveWorkspace() { 
+    if (activeWorkspace === "cultivation-mission-control") {
+      return (
+        <CultivationMissionControl
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          isDemoMode={isDemoMode}
+          Panel={Panel}
+          MetricGrid={MetricGrid}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "cultivation-evidence") {
+      return (
+        <CultivationEvidenceWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
     if (activeWorkspace === "operator-workflow") {
       return (
         <OperatorWorkflowWorkspace

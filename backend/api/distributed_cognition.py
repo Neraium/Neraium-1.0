@@ -15,6 +15,13 @@ from behavior_science.structural_evolution_theory import EvolutionTheoryEngine
 from cognition_graph.persistent_graph_memory import PersistentCognitionGraphMemory
 from cognition_graph.structural_cognition_graph import build_structural_cognition_graph
 from cross_domain.cross_domain_intelligence_engine import CrossDomainIntelligenceEngine
+from cultivation.canonical_replays.scenarios import build_cultivation_replay_scenarios
+from cultivation.compensation_masking_engine import detect_compensation_masking
+from cultivation.multi_room_cognition_engine import build_multi_room_cognition
+from cultivation.pilot_validation_mode import build_cultivation_pilot_validation_payload
+from cultivation.pre_visibility_engine import build_pre_visibility_state
+from cultivation.vpd_relationship_engine import build_vpd_relationship_state
+from domain_packs.cultivation.cultivation_ontology import build_cultivation_ontology
 from domain_packs.extreme_environment_pack import build_extreme_environment_cognition_profile
 from exchange.sii_graph_exchange import build_graph_exchange_packet
 from explainability.structural_explainability_standard import build_explainability_standard
@@ -206,6 +213,41 @@ def framework_reasoning_substrate() -> dict[str, Any]:
         archive=archive,
         intelligence=intelligence,
     )
+
+
+@router.get("/distributed/cultivation/ontology")
+def cultivation_ontology() -> dict[str, Any]:
+    return build_cultivation_ontology()
+
+
+@router.get("/distributed/cultivation/vpd")
+def cultivation_vpd() -> dict[str, Any]:
+    return build_vpd_relationship_state(current_intelligence())
+
+
+@router.get("/distributed/cultivation/multi-room")
+def cultivation_multi_room() -> dict[str, Any]:
+    return build_multi_room_cognition(current_intelligence())
+
+
+@router.get("/distributed/cultivation/compensation-masking")
+def cultivation_compensation_masking() -> dict[str, Any]:
+    return detect_compensation_masking(current_intelligence())
+
+
+@router.get("/distributed/cultivation/replays")
+def cultivation_replays() -> dict[str, Any]:
+    return build_cultivation_replay_scenarios()
+
+
+@router.get("/distributed/cultivation/pre-visibility")
+def cultivation_pre_visibility() -> dict[str, Any]:
+    return build_pre_visibility_state()
+
+
+@router.get("/distributed/cultivation/pilot-mode")
+def cultivation_pilot_mode() -> dict[str, Any]:
+    return build_cultivation_pilot_validation_payload(current_intelligence())
 
 
 def current_intelligence() -> dict[str, Any]:
