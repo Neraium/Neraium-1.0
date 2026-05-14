@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
+from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay, state_compat
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
 from app.services.runtime_db import init_runtime_db
@@ -64,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(app_info.router, prefix="/api")
     app.include_router(connectors.router, prefix="/api")
     app.include_router(data_connections.router, prefix="/api")
+    app.include_router(state_compat.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
