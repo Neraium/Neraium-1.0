@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -105,6 +107,46 @@ def test_runner_status_endpoint_reports_real_adapter() -> None:
     assert payload["same_engine_family_as_validation"] is True
     assert payload["same_exact_fd004_validation_runner"] is False
     assert payload["source"] == "none"
+    assert payload["state_available"] is False
+    assert payload["state_timestamp_valid"] is True
+    assert payload["state_age_seconds"] is None
+
+
+def test_runner_status_endpoint_reports_state_age_when_latest_state_exists() -> None:
+    write_latest_sii_state(
+        {
+            "source": "uploaded",
+            "mode": "live",
+            "facility_state": "Runner facility state",
+            "room_state": "Runner room state",
+            "urgency": "review",
+            "intervention_window": "6 days",
+            "neraium_score": 91,
+            "primary_room": "Runner Room",
+            "priority_room": "Runner Room",
+            "primary_driver": "Runner driver",
+            "supporting_evidence": ["Runner evidence"],
+            "relationship_evidence": ["Runner relationship"],
+            "structural_explanation": ["Runner explanation"],
+            "confidence_basis": "Runner confidence",
+            "recommended_operator_review": "Runner move",
+            "what_to_check": ["Runner check"],
+            "why_flagged": "Runner reason",
+            "baseline_comparison": "Runner baseline",
+            "observed_persistence": "Runner persistence",
+            "last_updated": datetime.now(UTC).isoformat(),
+            "last_processed_at": datetime.now(UTC).isoformat(),
+            "rooms": [],
+        }
+    )
+    client = TestClient(create_app())
+
+    payload = client.get("/api/intelligence/runner-status").json()
+
+    assert payload["state_available"] is True
+    assert payload["state_timestamp_valid"] is True
+    assert isinstance(payload["state_age_seconds"], int)
+    assert payload["state_age_seconds"] >= 0
 
 
 def test_facility_systems_prefers_latest_sii_state_when_present() -> None:

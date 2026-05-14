@@ -6,7 +6,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from fastapi.responses import JSONResponse
 
 from app.core.security import require_api_access
-from app.core.config import get_settings
 from app.models.api_models import LatestUploadResponse, UploadAcceptedResponse, UploadStatusResponse
 from app.services.data_connections import read_connection_status
 from app.services.runtime_db import record_audit_event
@@ -108,7 +107,7 @@ async def upload_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    settings = get_settings()
+    settings = request.app.state.settings
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -172,7 +171,8 @@ async def upload_csv(
         delete_upload_file(metadata)
         raise HTTPException(status_code=400, detail=f"{extension.upper().lstrip('.')} file is empty.")
 
-    background_tasks.add_task(process_next_queued_upload_job)
+    if settings.process_role in {"all", "worker"}:
+        background_tasks.add_task(process_next_queued_upload_job)
     logger.info(
         "upload_job_accepted job_id=%s returned_job_id=%s filename=%s size_bytes=%s auth_subject=%s auth_source=%s metadata_exists=%s",
         metadata["job_id"],

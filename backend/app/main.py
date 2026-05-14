@@ -21,15 +21,20 @@ logger = logging.getLogger(__name__)
 async def app_lifespan(app: FastAPI):
     init_runtime_db()
     ensure_default_data_connection(app.state.settings)
-    start_upload_worker()
-    start_data_connection_poller()
-    logger.info("runtime_services_started")
+    process_role = app.state.settings.process_role
+    if process_role in {"all", "worker"}:
+        start_upload_worker()
+        start_data_connection_poller()
+        logger.info("runtime_services_started process_role=%s", process_role)
+    else:
+        logger.info("runtime_background_services_skipped process_role=%s", process_role)
     try:
         yield
     finally:
-        stop_data_connection_poller()
-        stop_upload_worker()
-        logger.info("runtime_services_stopped")
+        if process_role in {"all", "worker"}:
+            stop_data_connection_poller()
+            stop_upload_worker()
+            logger.info("runtime_services_stopped process_role=%s", process_role)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

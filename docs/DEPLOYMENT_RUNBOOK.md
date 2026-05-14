@@ -17,6 +17,8 @@ For production smoke tests:
 BASE_URL=https://app.neraium.com node scripts/smoke-production.js
 ```
 
+The production smoke script now performs the basic API probes plus a tiny telemetry upload that must reach `COMPLETE`, use the SII runner, and advance the visible runtime state.
+
 If metrics requires auth:
 
 ```bash
@@ -73,16 +75,18 @@ gh run watch --repo Neraium/Neraium-1.0
 
 1. `GET /api/health`.
 2. `GET /api/ready`.
-3. `GET /api/observability/metrics` with auth if required.
-4. Upload a small CSV.
-5. Test Connection.
-6. Poll Once.
-7. Start Polling, confirm state, then stop polling.
-8. Evidence Trail.
-9. Historical Replay.
-10. Export Evidence.
-11. 413 oversize upload guardrail.
-12. 503 queue saturation guardrail in staging or documented safe local test.
+3. `GET /api/intelligence/runner-status`.
+4. `GET /api/observability/metrics` with auth if required.
+5. Upload a small CSV and confirm the queued job reaches `COMPLETE`.
+6. Verify `latest-upload` and runner state advanced to the smoke file.
+7. Test Connection.
+8. Poll Once.
+9. Start Polling, confirm state, then stop polling.
+10. Evidence Trail.
+11. Historical Replay.
+12. Export Evidence.
+13. 413 oversize upload guardrail.
+14. 503 queue saturation guardrail in staging or documented safe local test.
 
 ## Watch And Logs
 

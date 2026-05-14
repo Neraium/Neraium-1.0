@@ -21,6 +21,7 @@ DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?neraium\.com$"
 DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024
 DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
+DEFAULT_PROCESS_ROLE = "all"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class Settings:
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
     max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
+    process_role: str = DEFAULT_PROCESS_ROLE
 
 
 def get_settings() -> Settings:
@@ -48,6 +50,7 @@ def get_settings() -> Settings:
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
         max_upload_size_bytes=parse_positive_int(os.getenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES"), DEFAULT_MAX_UPLOAD_SIZE_BYTES),
         max_pending_upload_jobs=parse_positive_int(os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"), DEFAULT_MAX_PENDING_UPLOAD_JOBS),
+        process_role=parse_process_role(os.getenv("NERAIUM_PROCESS_ROLE")),
     )
 
 
@@ -92,3 +95,12 @@ def parse_positive_int(raw_value: str | None, default: int) -> int:
         return default
     value = int(raw_value)
     return value if value > 0 else default
+
+
+def parse_process_role(raw_value: str | None) -> str:
+    if raw_value is None or raw_value.strip() == "":
+        return DEFAULT_PROCESS_ROLE
+    normalized = raw_value.strip().lower()
+    if normalized in {"api", "worker", "all"}:
+        return normalized
+    return DEFAULT_PROCESS_ROLE

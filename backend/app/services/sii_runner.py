@@ -72,6 +72,11 @@ def runner_import_error() -> str | None:
 def build_runner_status() -> dict[str, Any]:
     state = read_latest_sii_state()
     identity = runner_identity()
+    last_processed_at = state.get("last_processed_at") if state else None
+    parsed_last_processed_at = parse_state_timestamp(last_processed_at)
+    state_age_seconds = None
+    if parsed_last_processed_at is not None:
+        state_age_seconds = max(0, int((datetime.now(UTC) - parsed_last_processed_at).total_seconds()))
     return {
         "runner_available": runner_available(),
         "runner_module": identity["runner_module"],
@@ -81,7 +86,9 @@ def build_runner_status() -> dict[str, Any]:
         "validation_runner": identity["validation_runner"],
         "validation_runner_file": identity["validation_runner_file"],
         "state_available": state is not None,
-        "last_processed_at": state.get("last_processed_at") if state else None,
+        "last_processed_at": last_processed_at,
+        "state_timestamp_valid": last_processed_at is None or parsed_last_processed_at is not None,
+        "state_age_seconds": state_age_seconds,
         "source": state.get("source") if state else "none",
         "same_engine_family_as_validation": True,
         "same_exact_fd004_validation_runner": False,
@@ -417,6 +424,18 @@ def to_plain_dict(value: Any) -> dict[str, Any]:
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def parse_state_timestamp(raw_value: Any) -> datetime | None:
+    if not raw_value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw_value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def normalize_urgency(urgency: str) -> str:

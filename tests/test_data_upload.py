@@ -111,6 +111,30 @@ def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
     assert payload["job_id"]
 
 
+def test_upload_stays_pending_in_api_role_without_worker_service(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+        process_role="api",
+    )
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        files={"file": ("sensor-export.csv", "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58", "text/csv")},
+    )
+
+    assert response.status_code == 202
+    status = client.get(response.json()["status_url"])
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["status"] == "PENDING"
+    assert payload["runner_used"] is False
+
+
 def test_create_upload_job_enforces_streaming_size_limit() -> None:
     class FakeUploadFile:
         filename = "oversize.csv"
