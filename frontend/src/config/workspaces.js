@@ -41,4 +41,10 @@ export const WORKSPACES = [
     eyebrow: 'Ontology View',
     description: 'Visualize archetype primitives, ontology relationships, and domain cognition mappings.',
   },
+  {
+    id: 'ecosystem-workspace',
+    label: 'Ecosystem Layer',
+    eyebrow: 'SII Runtime',
+    description: 'Read-only integration posture, cognition state export, and structural graph ecosystem context.',
+  },
 ];

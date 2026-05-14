@@ -5,6 +5,7 @@ import EvidenceConsoleWorkspace from '../EvidenceConsoleWorkspace';
 import DataConnectionsWorkspace from '../DataConnectionsWorkspace';
 import StructuralReplayWorkspace from '../StructuralReplayWorkspace';
 import FleetWorkspace from '../FleetWorkspace';
+import EcosystemWorkspace from '../EcosystemWorkspace';
 
 export default function WorkspaceRouter(props) {
   const {
@@ -17,6 +18,7 @@ export default function WorkspaceRouter(props) {
     dataConnectionsProps,
     evidenceTrailProps,
     fleetProps,
+    ecosystemProps,
   } = props;
 
   if (activeWorkspace === 'system-body') {
@@ -33,6 +35,9 @@ export default function WorkspaceRouter(props) {
   }
   if (activeWorkspace === 'fleet-view') {
     return <FleetWorkspace {...fleetProps} />;
+  }
+  if (activeWorkspace === 'ecosystem-workspace') {
+    return <EcosystemWorkspace {...ecosystemProps} />;
   }
   return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />;
 }
