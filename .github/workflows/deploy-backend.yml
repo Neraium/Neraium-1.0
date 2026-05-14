@@ -14,10 +14,12 @@ permissions:
 
 env:
   AWS_REGION: us-east-2
-  ECR_REPOSITORY: neraium-backend
+  ECR_REPOSITORY: neraium-prod-api
   ECS_CLUSTER: neraium-prod-cluster
   ECS_API_SERVICE: neraium-prod-api-service
   ECS_WORKER_SERVICE: neraium-prod-worker-service
+  API_TASK_FAMILY: neraium-prod-api
+  WORKER_TASK_FAMILY: neraium-prod-worker
 
 jobs:
   deploy-backend:
@@ -48,6 +50,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          set -euo pipefail
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
           docker build -f backend/Dockerfile -t "$IMAGE_URI" backend
@@ -57,24 +60,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          SERVICE_JSON=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_API_SERVICE" \
-            --region "$AWS_REGION")
-
-          CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
-          if [ -z "$CURRENT_TASK_DEF" ] || [ "$CURRENT_TASK_DEF" = "null" ]; then
-            echo "No task definition found for service $ECS_API_SERVICE"
-            exit 1
-          fi
-
           aws ecs describe-task-definition \
-            --task-definition "$CURRENT_TASK_DEF" \
+            --task-definition "$API_TASK_FAMILY" \
             --region "$AWS_REGION" \
-            --query taskDefinition > current-task-definition.json
+            --query taskDefinition > current-api-task-definition.json
 
-          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-task-definition.json)
-          echo "Updating container $CONTAINER_NAME to image $IMAGE_URI"
+          CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
+          echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
           jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
             .containerDefinitions = (.containerDefinitions | map(
@@ -89,30 +81,22 @@ jobs:
                 .registeredAt,
                 .registeredBy
               )
-          ' current-task-definition.json > next-task-definition.json
+          ' current-api-task-definition.json > next-api-task-definition.json
 
-          NEXT_TASK_DEF=$(aws ecs register-task-definition \
-            --cli-input-json file://next-task-definition.json \
+          API_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://next-api-task-definition.json \
             --region "$AWS_REGION" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "API_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
+          echo "API_TASK_DEF=$API_TASK_DEF" >> "$GITHUB_ENV"
 
       - name: Register worker task definition with new backend image
         run: |
           set -euo pipefail
 
-          CURRENT_TASK_DEF=$(aws ecs describe-task-definition \
-  --task-definition neraium-prod-worker \
-  --region "$AWS_REGION" \
-  --query 'taskDefinition.taskDefinitionArn' \
-  --output text)
-
-echo "Using worker task definition: $CURRENT_TASK_DEF"
-
           aws ecs describe-task-definition \
-            --task-definition "$CURRENT_TASK_DEF" \
+            --task-definition "$WORKER_TASK_FAMILY" \
             --region "$AWS_REGION" \
             --query taskDefinition > current-worker-task-definition.json
 
@@ -134,16 +118,18 @@ echo "Using worker task definition: $CURRENT_TASK_DEF"
               )
           ' current-worker-task-definition.json > next-worker-task-definition.json
 
-          NEXT_TASK_DEF=$(aws ecs register-task-definition \
+          WORKER_TASK_DEF=$(aws ecs register-task-definition \
             --cli-input-json file://next-worker-task-definition.json \
             --region "$AWS_REGION" \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "WORKER_TASK_DEF=$NEXT_TASK_DEF" >> "$GITHUB_ENV"
+          echo "WORKER_TASK_DEF=$WORKER_TASK_DEF" >> "$GITHUB_ENV"
 
       - name: Update ECS services to new task definitions
         run: |
+          set -euo pipefail
+
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_API_SERVICE" \
@@ -160,6 +146,8 @@ echo "Using worker task definition: $CURRENT_TASK_DEF"
 
       - name: Wait for ECS services stability
         run: |
+          set -euo pipefail
+
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
