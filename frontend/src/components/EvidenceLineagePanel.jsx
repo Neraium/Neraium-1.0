@@ -17,24 +17,39 @@ function renderLineageItem(label, value) {
   );
 }
 
-export default function EvidenceLineagePanel({ frame }) {
-  const lineageEvents = frame?.evidence_state?.lineage_events ?? [];
+function normalizeTier(value) {
+  const normalized = String(value ?? "").toUpperCase();
+  if (["LOW_EVIDENCE", "MODERATE_EVIDENCE", "HIGH_EVIDENCE", "STRONG_CONVERGENCE"].includes(normalized)) {
+    return normalized;
+  }
+  if (normalized.includes("LOW")) return "LOW_EVIDENCE";
+  if (normalized.includes("HIGH")) return "HIGH_EVIDENCE";
+  if (normalized.includes("STRONG")) return "STRONG_CONVERGENCE";
+  return "MODERATE_EVIDENCE";
+}
+
+export default function EvidenceLineagePanel({ frame, lineage = null }) {
+  const lineageEvents = lineage?.lineages ?? frame?.evidence_state?.lineage_events ?? [];
   const first = lineageEvents[0] ?? null;
   if (!first) {
     return <p className="narrative-text">Evidence lineage is initializing.</p>;
   }
   const confidence = first.confidence_factors ?? {};
   const sources = first.evidence_sources ?? {};
+  const confidenceTier = normalizeTier(confidence.confidence_tier ?? confidence.evidence_density ?? confidence.corroboration_strength);
   return (
     <div className="evidence-lineage-panel">
       <p className="evidence-lineage-panel__title">{first.target ?? "Lineage Target"}</p>
       <ul className="system-body-timeline-list">
-        {renderLineageItem("Signals", sources.supporting_signals ?? [])}
+        {renderLineageItem("Contributing relationships", sources.supporting_signals ?? [])}
+        {renderLineageItem("Subsystem corroboration", sources.subsystem_corroboration ?? [])}
+        {renderLineageItem("Topology evidence", sources.topology_evidence ?? [])}
         {renderLineageItem("Persistence", sources.persistence_evidence ?? [])}
-        {renderLineageItem("Topology", sources.topology_evidence ?? [])}
-        {renderLineageItem("Memory", sources.historical_memory_references ?? [])}
-        {renderLineageItem("Corroboration", confidence.corroboration_strength)}
-        {renderLineageItem("Evidence Density", confidence.evidence_density)}
+        {renderLineageItem("Propagation evidence", sources.propagation_evidence ?? [])}
+        {renderLineageItem("Structural memory evidence", sources.historical_memory_references ?? [])}
+        {renderLineageItem("Replay support", sources.replay_support ?? [])}
+        {renderLineageItem("Confidence basis", confidence.corroboration_strength ?? confidence.evidence_density)}
+        {renderLineageItem("Confidence tier", confidenceTier)}
       </ul>
     </div>
   );

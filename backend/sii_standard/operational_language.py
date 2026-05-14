@@ -41,6 +41,7 @@ def operational_language_standard() -> dict[str, Any]:
             "automated action",
             "bot/copilot",
             "magic insight",
+            "generic alert",
         ],
         "replacement_terminology": {
             "anomaly score": "structural evidence confidence",
@@ -53,4 +54,3 @@ def operational_language_standard() -> dict[str, Any]:
             "Continuation window remains {window} while structural convergence state is {state}.",
         ],
     }
-

@@ -13,6 +13,7 @@ export default function StructuralReplayWorkspace({
   Panel,
   MetricGrid,
   EmptyState,
+  mode = "live",
 }) {
   const [timeline, setTimeline] = useState([]);
   const [comparisonTimeline, setComparisonTimeline] = useState([]);
@@ -30,8 +31,8 @@ export default function StructuralReplayWorkspace({
     async function loadReplay() {
       try {
         const [primary, comparison] = await Promise.all([
-          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression }),
-          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4) }),
+          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode }),
+          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode }),
         ]);
         if (cancelled) {
           return;
@@ -52,7 +53,7 @@ export default function StructuralReplayWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [accessCode, apiFetch, normalizeErrorMessage, replayCompression]);
+  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression]);
 
   useEffect(() => {
     if (!isPlaying || timeline.length === 0) {
@@ -83,6 +84,7 @@ export default function StructuralReplayWorkspace({
           startTimestamp: start,
           endTimestamp: end,
           intervals: timeline.length,
+          mode,
         });
         setRangePreviewCount(preview.frame_count ?? 0);
       } catch {
@@ -90,7 +92,7 @@ export default function StructuralReplayWorkspace({
       }
     }
     loadRangePreview();
-  }, [accessCode, apiFetch, frameIndex, timeline]);
+  }, [accessCode, apiFetch, frameIndex, mode, timeline]);
 
   const activeFrame = timeline[frameIndex] ?? null;
   const comparisonFrame = comparisonTimeline[frameIndex] ?? null;

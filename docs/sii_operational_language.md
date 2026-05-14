@@ -29,4 +29,15 @@ Neraium standardizes a fixed operational vocabulary for Systemic Infrastructure 
 - automated action
 - bot/copilot
 - magic insight
+- generic alert
 
+## Canonical Workflow Labels
+
+1. Current Cognition State  
+2. Structural Replay  
+3. Propagation Pathway  
+4. Evidence Lineage  
+5. Structural Memory Match  
+6. Continuation Window  
+7. Recovery / Convergence State  
+8. Operator Review

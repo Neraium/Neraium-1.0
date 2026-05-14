@@ -60,6 +60,20 @@ class AuditRecordResponse:
     evidence_traceability: str
 
 
+@dataclass(frozen=True)
+class CognitionStateCanonicalResponse:
+    cognition_state: str
+    structural_stability: str
+    active_archetypes: list[str]
+    propagation_pathways: list[str]
+    evidence_lineage: dict[str, Any]
+    structural_memory_matches: list[dict[str, Any]]
+    continuation_windows: dict[str, Any]
+    replay_summary: dict[str, Any]
+    recovery_convergence: dict[str, Any]
+    operator_explanation: str
+
+
 def build_cognition_contract_snapshot(intelligence: dict[str, Any]) -> dict[str, Any]:
     frame = (intelligence.get("replay_timeline", {}) or {}).get("timeline", [{}])[-1] if intelligence.get("replay_timeline") else {}
     cognition_state = CognitionStateResponse(
@@ -114,3 +128,38 @@ def build_cognition_contract_snapshot(intelligence: dict[str, Any]) -> dict[str,
         "AuditRecordResponse": audit.__dict__,
     }
 
+
+def build_canonical_cognition_state_response(intelligence: dict[str, Any]) -> dict[str, Any]:
+    replay = intelligence.get("replay_timeline", {}) or {}
+    timeline = replay.get("timeline", [])
+    active_frame = timeline[-1] if timeline else {}
+    continuation = intelligence.get("counterfactuals", {}) or {}
+    progression = continuation.get("progression_scenarios", [{}])
+    structural_memory = intelligence.get("structural_memory", {}) or {}
+    evidence_lineage = intelligence.get("evidence_lineage", {}) or {}
+    operator_explanation = intelligence.get("operator_explanation_v2", {}) or {}
+    payload = CognitionStateCanonicalResponse(
+        cognition_state=str(intelligence.get("facility_state", "Monitoring")),
+        structural_stability=str(intelligence.get("structural_stability_index", {}).get("state", "WATCH")),
+        active_archetypes=[item.get("name", "") for item in intelligence.get("active_archetypes", [])],
+        propagation_pathways=intelligence.get("causality_graph", {}).get("dominant_pathways", []),
+        evidence_lineage=evidence_lineage,
+        structural_memory_matches=structural_memory.get("matches", []),
+        continuation_windows={
+            "window": str(progression[0].get("window", "Monitoring")),
+            "structural_pathways": continuation.get("structural_continuation_pathways", []),
+            "uncertainty_range": continuation.get("progression_scenarios", []),
+        },
+        replay_summary={
+            "frame_count": replay.get("meta", {}).get("frame_count", len(timeline)),
+            "canonical_flow": replay.get("meta", {}).get("canonical_flow", []),
+            "active_frame": active_frame,
+        },
+        recovery_convergence=intelligence.get("recovery_convergence", {}),
+        operator_explanation=str(
+            operator_explanation.get("narrative")
+            or operator_explanation.get("summary")
+            or "Evidence-backed structural cognition is available for operator review."
+        ),
+    )
+    return payload.__dict__

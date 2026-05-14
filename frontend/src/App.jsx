@@ -17,6 +17,7 @@ import OperatorTrainingWorkspace from "./components/OperatorTrainingWorkspace";
 import InfrastructureBehaviorScienceWorkspace from "./components/InfrastructureBehaviorScienceWorkspace";
 import OperatorCognitionTrainingWorkspace from "./components/OperatorCognitionTrainingWorkspace";
 import StructuralCognitionResearchWorkspace from "./components/StructuralCognitionResearchWorkspace";
+import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
 import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
 import {
   CompactList,
@@ -43,10 +44,16 @@ import { fetchLatestUploadState } from "./services/api/uploadApi";
 
 const WORKSPACES = [
   {
+    id: "operator-workflow",
+    label: "Operator Workflow",
+    eyebrow: "Primary Flow",
+    description: "Canonical operator flow from cognition state through replay, evidence lineage, continuation, and convergence review.",
+  },
+  {
     id: "system-body",
-    label: "Topology Cognition",
-    eyebrow: "Topology View",
-    description: "Operational topology cognition state and structural coherence context.",
+    label: "Current Cognition State",
+    eyebrow: "State View",
+    description: "Facility cognition state, structural stability, and active pathways.",
   },
   {
     id: "drift-timeline",
@@ -56,9 +63,9 @@ const WORKSPACES = [
   },
   {
     id: "evidence-console",
-    label: "Evidence Console",
-    eyebrow: "Evidence Lineage",
-    description: "Evidence lineage and operator-facing structural reasoning context.",
+    label: "Evidence Lineage",
+    eyebrow: "Evidence First",
+    description: "Inspect why structural cognition outputs are supported by subsystem and topology evidence.",
   },
   {
     id: "data-connections",
@@ -69,31 +76,31 @@ const WORKSPACES = [
   {
     id: "historical-replay",
     label: "Structural Replay",
-    eyebrow: "Replay Fidelity",
-    description: "Scrub structural evolution, propagation pathways, and evidence lineage over time.",
+    eyebrow: "Replay First",
+    description: "Timeline scrub, propagation pathways, evidence by frame, and continuation windows.",
   },
   {
     id: "fleet-view",
     label: "Multi-Site Cognition",
-    eyebrow: "Cognition Network",
+    eyebrow: "Expert View",
     description: "Cross-site structural cognition network and recurring archetype clusters.",
   },
   {
     id: "structural-ontology",
     label: "Structural Ontology",
-    eyebrow: "Ontology View",
+    eyebrow: "Expert View",
     description: "Visualize archetype primitives, ontology relationships, and domain cognition mappings.",
   },
   {
     id: "ecosystem-workspace",
     label: "Ecosystem Layer",
-    eyebrow: "SII Runtime",
+    eyebrow: "Expert View",
     description: "Read-only integration posture, cognition state export, and structural graph ecosystem context.",
   },
   {
     id: "distributed-cognition",
     label: "Distributed Cognition",
-    eyebrow: "Cognition Fabric",
+    eyebrow: "Expert View",
     description: "Federated structural cognition, persistent graph memory, ontology evolution, and governance.",
   },
   {
@@ -172,11 +179,11 @@ function App() {
   const apiAccessCode = "";
   const [activeWorkspace, setActiveWorkspace] = useState(() => {
     if (typeof window === "undefined") {
-      return "system-body";
+      return "operator-workflow";
     }
     const params = new URLSearchParams(window.location.search);
     const requestedWorkspace = params.get("workspace");
-    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : "system-body";
+    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : "operator-workflow";
   });
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [telemetryTick, setTelemetryTick] = useState(0);
@@ -507,6 +514,21 @@ function App() {
   }
 
   function renderActiveWorkspace() { 
+    if (activeWorkspace === "operator-workflow") {
+      return (
+        <OperatorWorkflowWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          isDemoMode={isDemoMode}
+          normalizeErrorMessage={normalizeErrorMessage}
+          formatClockTime={formatClockTime}
+          Panel={Panel}
+          MetricGrid={MetricGrid}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
     if (activeWorkspace === "system-body") { 
       return <SystemTopologyWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} onSelectTarget={setSelectedTopologyTarget} />; 
     } 
