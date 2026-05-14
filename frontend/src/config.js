@@ -7,7 +7,7 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 120000);
 const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
-const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? PRODUCTION_API_FALLBACK : "http://127.0.0.1:8010");
+const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 
@@ -15,7 +15,7 @@ function apiBaseCandidates() {
   const candidates = [
     API_BASE_URL,
     configuredFallbackApiBaseUrl,
-    isProductionBuild && !configuredApiBaseUrl ? PRODUCTION_API_FALLBACK : "",
+    isProductionBuild ? PRODUCTION_API_FALLBACK : "",
   ];
 
   return candidates.filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
@@ -46,6 +46,16 @@ function shouldRetryAgainstFallback(error) {
   return error instanceof TypeError || error?.name === "ApiNetworkError";
 }
 
+function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
+  if (status >= 500) {
+    return true;
+  }
+  if (status === 404 && isProductionBuild && !apiBaseUrl && String(path || "").startsWith("/api/")) {
+    return true;
+  }
+  return false;
+}
+
 export function buildAccessHeaders() {
   return {};
 }
@@ -72,7 +82,7 @@ export async function apiFetch(path, options = {}) {
     const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget(apiBaseUrl);
 
     try {
-      return await fetch(buildUrl(apiBaseUrl, path), {
+      const response = await fetch(buildUrl(apiBaseUrl, path), {
         method: normalizedMethod,
         ...requestOptions,
         credentials: "include",
@@ -86,6 +96,11 @@ export async function apiFetch(path, options = {}) {
         },
         signal: controller.signal,
       });
+      const hasNextCandidate = apiBaseUrl !== candidates[candidates.length - 1];
+      if (hasNextCandidate && shouldRetryOnHttpStatus({ status: response.status, apiBaseUrl, path })) {
+        continue;
+      }
+      return response;
     } catch (error) {
       if (error?.name === "AbortError") {
         const timeoutError = new Error(timeoutMessage(effectiveTimeoutMs, path));
@@ -115,7 +130,7 @@ export async function apiFetch(path, options = {}) {
 export const API_CONFIG_WARNING = configuredApiBaseUrl
   ? ""
   : isProductionBuild
-    ? "VITE_API_BASE_URL is not configured for this production build. Using production API endpoint directly."
+    ? "VITE_API_BASE_URL is not configured for this production build. Using same-origin /api first, then production API fallback."
     : "VITE_API_BASE_URL is not configured. Using local development API.";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
