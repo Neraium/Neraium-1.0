@@ -103,16 +103,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          SERVICE_JSON=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_WORKER_SERVICE" \
-            --region "$AWS_REGION")
+          CURRENT_TASK_DEF=$(aws ecs describe-task-definition \
+  --task-definition neraium-prod-worker \
+  --region "$AWS_REGION" \
+  --query 'taskDefinition.taskDefinitionArn' \
+  --output text)
 
-          CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
-          if [ -z "$CURRENT_TASK_DEF" ] || [ "$CURRENT_TASK_DEF" = "null" ]; then
-            echo "No task definition found for service $ECS_WORKER_SERVICE"
-            exit 1
-          fi
+echo "Using worker task definition: $CURRENT_TASK_DEF"
 
           aws ecs describe-task-definition \
             --task-definition "$CURRENT_TASK_DEF" \
