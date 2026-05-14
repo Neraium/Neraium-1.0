@@ -1,9 +1,9 @@
 export const WORKSPACES = [
   {
     id: 'system-body',
-    label: 'System Body',
+    label: 'Topology Cognition',
     eyebrow: 'Topology View',
-    description: 'Top-level facility health with one live structural orb.',
+    description: 'Operational topology cognition state and structural coherence context.',
   },
   {
     id: 'drift-timeline',
@@ -14,8 +14,8 @@ export const WORKSPACES = [
   {
     id: 'evidence-console',
     label: 'Evidence Console',
-    eyebrow: 'Interpretability View',
-    description: 'Why drift is flagged, which relationships shifted, and what to do next.',
+    eyebrow: 'Evidence Lineage',
+    description: 'Evidence lineage and operator-facing structural reasoning context.',
   },
   {
     id: 'data-connections',
@@ -26,14 +26,14 @@ export const WORKSPACES = [
   {
     id: 'historical-replay',
     label: 'Structural Replay',
-    eyebrow: 'Cognition Replay',
+    eyebrow: 'Replay Fidelity',
     description: 'Scrub structural evolution, propagation pathways, and evidence lineage over time.',
   },
   {
     id: 'fleet-view',
-    label: 'Fleet View',
-    eyebrow: 'Multi-Site Ops',
-    description: 'Fleet-level status, priority queue, and replay escalation log.',
+    label: 'Multi-Site Cognition',
+    eyebrow: 'Cognition Network',
+    description: 'Cross-site structural cognition network and recurring archetype clusters.',
   },
   {
     id: 'structural-ontology',

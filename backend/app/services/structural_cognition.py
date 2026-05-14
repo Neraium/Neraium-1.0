@@ -5,9 +5,11 @@ from typing import Any
 from audit.operational_audit_engine import OperationalAuditEngine
 from benchmarking.structural_benchmark_engine import StructuralBenchmarkEngine
 from case_studies.case_studies import load_case_studies
+from certification import build_certification_packs
 from cognition.cognition_confidence_engine import CognitionConfidenceEngine
 from cognition.deterioration_library import CANONICAL_DETERIORATION_SEQUENCES, sequence_similarity
 from cognition.multi_facility_cognition_engine import MultiFacilityCognitionEngine
+from cognition.multi_site_cognition_network import build_multi_site_cognition_network
 from cognition.operational_time_engine import OperationalTimeEngine
 from cognition.structural_stability_index import StructuralStabilityIndex
 from datasets.structural_progression_dataset import build_structural_progression_dataset
@@ -22,13 +24,19 @@ from engines.structural_causality_engine import StructuralCausalityEngine
 from engines.structural_memory_engine import StructuralMemoryEngine
 from explanations.operator_explanation_engine import OperatorExplanationEngine
 from human_factors.operator_interaction_engine import OperatorInteractionEngine
+from api.cognition_contracts import build_cognition_contract_snapshot
+from ontology.corpus import build_ontology_corpus
 from ontology.structural_ontology import build_structural_ontology
 from ontology.archetypes import StructuralArchetypeClassifier
 from replay.structural_replay_engine import StructuralReplayEngine
+from sii_reference_architecture.sii_architecture_contracts import build_sii_architecture_contracts
+from sii_reference_architecture.sii_reference_model import build_sii_reference_model
 from sii_standard.standard import build_sii_standard
+from sii_standard.operational_language import operational_language_standard
 from simulation.operational_cognition_simulator import OperationalCognitionSimulator
 from trust.institutional_trust_framework import InstitutionalTrustFramework
 from validation.cognition_validation_framework import CognitionValidationFramework
+from validation.institutional_validation_layer import InstitutionalValidationLayer
 
 
 def build_structural_cognition(
@@ -60,6 +68,7 @@ def build_structural_cognition(
     audit_engine = OperationalAuditEngine()
     simulator = OperationalCognitionSimulator()
     trust_framework = InstitutionalTrustFramework()
+    institutional_validation_layer = InstitutionalValidationLayer()
 
     fingerprint = memory_engine.build_fingerprint(
         baseline_analysis=baseline_analysis,
@@ -202,6 +211,7 @@ def build_structural_cognition(
     ontology = build_structural_ontology()
     facilities = build_facility_samples(room_summary, archetypes, observed_paths, stability_index)
     multi_facility = multi_facility_engine.build_graph(facilities=facilities)
+    multi_site_network = build_multi_site_cognition_network(facilities)
     validation = validation_engine.validate(
         intelligence={
             "causality_graph": causality_graph,
@@ -279,8 +289,43 @@ def build_structural_cognition(
         validation=validation,
         audit=audit,
     )
+    certification = build_certification_packs()
+    institutional_validation = institutional_validation_layer.build(
+        intelligence={
+            "structural_progression_dataset": structural_dataset,
+            "operational_audit": audit,
+            "evidence_lineage": evidence_lineage,
+            "structural_ontology": ontology,
+            "industry_certification_packs": certification,
+        },
+        validation=validation,
+        trust=trust,
+    )
     sii_standard = build_sii_standard()
+    language_standard = operational_language_standard()
+    reference_model = build_sii_reference_model()
+    architecture_contracts = build_sii_architecture_contracts()
+    ontology_corpus = build_ontology_corpus()
     case_studies = load_case_studies()
+    replay_timeline_wrapped = {
+        "meta": replay_timeline.get("meta", {}),
+        "timeline": replay_frames,
+    }
+    cognition_contracts = build_cognition_contract_snapshot(
+        {
+            "facility_state": driver_attribution.get("state", "Monitoring"),
+            "cognition_confidence": cognition_confidence,
+            "cognition_validation": validation,
+            "causality_graph": causality_graph,
+            "evidence_lineage": evidence_lineage,
+            "counterfactuals": counterfactuals,
+            "active_archetypes": archetypes,
+            "structural_ontology": ontology,
+            "operational_audit": audit,
+            "institutional_trust": trust,
+            "replay_timeline": replay_timeline_wrapped,
+        }
+    )
     return {
         "structural_memory": memory_retrieval,
         "active_fingerprint": fingerprint,
@@ -295,17 +340,28 @@ def build_structural_cognition(
         "canonical_deterioration_library": [item.to_dict() for item in CANONICAL_DETERIORATION_SEQUENCES],
         "deterioration_library_matches": deterioration_library_matches,
         "domain_cognition_pack": domain_pack,
+        "sii_reference_architecture": {
+            "reference_model": reference_model,
+            "architecture_contracts": architecture_contracts,
+        },
         "structural_ontology": ontology,
+        "ontology_corpus": ontology_corpus,
         "structural_benchmark": benchmark,
         "cognition_validation": validation,
+        "institutional_validation": institutional_validation,
         "operational_audit": audit,
         "domain_validation_case_studies": case_studies,
+        "industry_certification_packs": certification,
         "sii_standard": sii_standard,
+        "operational_language_standard": language_standard,
+        "structural_cognition_api_contracts": cognition_contracts,
         "structural_progression_dataset": structural_dataset,
         "operational_cognition_simulation": simulation,
         "institutional_trust": trust,
         "multi_facility_cognition": multi_facility,
+        "multi_site_cognition_network": multi_site_network,
         "operator_interaction_model": operator_interactions,
+        "replay_timeline": replay_timeline_wrapped,
         "behavioral_infrastructure_twin": behavioral_twin,
         "evidence_lineage": evidence_lineage,
         "cognition_confidence": cognition_confidence,
