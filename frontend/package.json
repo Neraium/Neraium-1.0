@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3010",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 3010"
+    "preview": "vite preview --host 127.0.0.1 --port 3010",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@vitejs/plugin-react": "latest",
     "vite": "latest"
   }
