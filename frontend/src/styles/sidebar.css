@@ -8,9 +8,9 @@
   padding: calc(18px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
   border-right: 1px solid rgba(138, 184, 196, 0.05);
   background:
-    radial-gradient(circle at top left, rgba(99, 188, 211, 0.05), transparent 24%),
-    linear-gradient(180deg, rgba(58, 178, 138, 0.025), transparent 20%),
-    linear-gradient(180deg, rgba(12, 17, 20, 0.98), rgba(7, 10, 13, 0.98));
+    radial-gradient(circle at top left, rgba(99, 188, 211, 0.03), transparent 24%),
+    linear-gradient(180deg, rgba(58, 178, 138, 0.015), transparent 20%),
+    linear-gradient(180deg, rgba(11, 15, 18, 0.97), rgba(7, 10, 13, 0.97));
 }
 
 .sidebar-brand-shell {
@@ -80,7 +80,7 @@
   border-left: 1px solid transparent;
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(18, 24, 28, 0.62), rgba(10, 13, 16, 0.56));
+    linear-gradient(180deg, rgba(16, 21, 25, 0.56), rgba(9, 12, 15, 0.52));
   color: var(--text-secondary);
   text-align: left;
 }
@@ -123,7 +123,7 @@
 .workspace-nav__item:focus-visible {
   border-color: rgba(138, 184, 196, 0.1);
   background:
-    linear-gradient(180deg, rgba(22, 29, 34, 0.7), rgba(11, 15, 18, 0.62));
+    linear-gradient(180deg, rgba(19, 26, 31, 0.64), rgba(10, 14, 17, 0.58));
 }
 
 .workspace-nav__item--active {

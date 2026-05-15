@@ -158,6 +158,33 @@
  letter-spacing: 0.12em;
 }
 
+.top-status--minimal {
+  padding-top: 14px;
+  padding-bottom: 12px;
+  gap: clamp(12px, 1.5vw, 18px);
+}
+
+.top-status--minimal .top-status__title {
+  gap: 6px;
+}
+
+.top-status__title-compact {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  color: rgba(224, 239, 235, 0.9);
+}
+
+.top-status--minimal .top-status__brief {
+  padding: 14px;
+}
+
+.top-status--minimal .top-status__brief-item strong,
+.top-status--minimal .top-status__brief-item p {
+  line-height: 1.4;
+}
+
 .status-rack {
  display: grid;
  grid-template-columns: repeat(2, minmax(160px, 1fr));
@@ -295,7 +322,7 @@
 }
 
 .cultivation-mission-grid--clean {
-  gap: 24px;
+  gap: 20px;
 }
 
 .cultivation-hero-panel .ops-panel__header h2 {

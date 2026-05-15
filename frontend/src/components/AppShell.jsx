@@ -103,6 +103,7 @@ export default function AppShell({
       )}
       topStatus={(
         <TopStatusBar
+          activeWorkspace={activeWorkspace}
           activeConfig={activeConfig}
           apiStatus={apiStatus}
           latestUploadResult={latestUploadResult}
@@ -243,6 +244,7 @@ function WorkspaceNavigationContent({
 }
 
 function TopStatusBar({
+  activeWorkspace,
   activeConfig,
   apiStatus,
   latestUploadResult,
@@ -260,12 +262,15 @@ function TopStatusBar({
   const triageSummary = deriveTriageSummary(liveOps, roomContext);
   const uiState = normalizeOperationalState(liveOps.facilityTone);
   const degradedMode = apiStatus?.state === "offline";
+  const minimalCultivationHeader = activeWorkspace === "cultivation-mission-control";
   return (
-    <header className="top-status">
+    <header className={`top-status ${minimalCultivationHeader ? "top-status--minimal" : ""}`}>
       <div className="top-status__title">
         <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
-        <h1 id="page-title">{activeConfig.label}</h1>
-        <p>{activeConfig.description}</p>
+        <h1 id="page-title" className={minimalCultivationHeader ? "top-status__title-compact" : ""}>
+          {activeConfig.label}
+        </h1>
+        {!minimalCultivationHeader ? <p>{activeConfig.description}</p> : null}
         <div className="top-status__meta">
           <span className={`top-status__signal top-status__signal--${liveOps.connectionTone}`} aria-label={liveOps.connectionStatusLine}>
             <StatusDot tone={liveOps.connectionTone} />
