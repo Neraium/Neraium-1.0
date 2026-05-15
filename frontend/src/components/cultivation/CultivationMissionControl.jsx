@@ -60,32 +60,35 @@ export default function CultivationMissionControl({
   ];
 
   return (
-    <div className="workspace-grid workspace-grid--console">
-      <Panel title="Cultivation Mission Control" className="span-12 workspace-hero-panel" subtitle="Environmental mission-control cognition for coupled temperature, humidity, airflow, and VPD structural evolution.">
+    <div className="workspace-grid workspace-grid--console cultivation-mission-grid">
+      <Panel
+        title="Cultivation Mission Control"
+        className="span-12 workspace-hero-panel cultivation-hero-panel"
+        subtitle="Environmental mission-control cognition for coupled temperature, humidity, airflow, and VPD structural evolution."
+      >
         <MetricGrid metrics={metrics} />
         <p className="narrative-text">{cognition.operator_explanation}</p>
       </Panel>
-      <Panel title="Propagation Pathways" className="span-6">
+      <Panel title="Propagation Pathways" className="span-6 cultivation-list-panel" subtitle="Where structural pressure is currently spreading.">
         <ul className="system-body-timeline-list">
           {(cognition.propagation_pathways ?? []).map((path) => (
             <li key={path}><span className="metadata-text">Pathway</span><strong>{path}</strong></li>
           ))}
         </ul>
       </Panel>
-      <Panel title="Active Cultivation Archetypes" className="span-6">
+      <Panel title="Active Cultivation Archetypes" className="span-6 cultivation-list-panel" subtitle="Structural behaviors active in the current facility state.">
         <ul className="system-body-timeline-list">
           {(cognition.active_archetypes ?? []).map((item) => (
             <li key={item}><span className="metadata-text">Archetype</span><strong>{item}</strong></li>
           ))}
         </ul>
       </Panel>
-      <Panel title="Structural Replay" className="span-12">
+      <Panel title="Structural Replay" className="span-12 cultivation-code-panel" subtitle="Recent replay frames for operator review and timeline inspection.">
         <pre className="code-surface">{JSON.stringify(replay.timeline?.slice(0, 8) ?? [], null, 2)}</pre>
       </Panel>
-      <Panel title="Cultivation Structural Ontology" className="span-12">
+      <Panel title="Cultivation Structural Ontology" className="span-12 cultivation-code-panel" subtitle="Domain structural primitives and archetype definitions in active use.">
         <pre className="code-surface">{JSON.stringify(ontology ?? {}, null, 2)}</pre>
       </Panel>
     </div>
   );
 }
-

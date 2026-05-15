@@ -113,7 +113,7 @@
  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
  align-items: end;
  gap: clamp(16px, 2vw, 24px);
- padding: 18px 22px 16px;
+ padding: 20px 24px 18px;
  border-bottom: 1px solid var(--surface-divider);
  background: linear-gradient(180deg, rgba(12, 16, 19, 0.94), rgba(10, 14, 16, 0.88));
  backdrop-filter: blur(12px);
@@ -136,9 +136,10 @@
  display: grid;
  grid-template-columns: repeat(2, minmax(0, 1fr));
  gap: 12px;
- padding: 16px;
+ padding: 18px;
  border-radius: var(--radius-lg);
  border: 1px solid var(--surface-border);
+ box-shadow: inset 0 1px 0 rgba(160, 210, 223, 0.08);
 }
 
 .top-status__brief-item {
@@ -162,6 +163,7 @@
  grid-template-columns: repeat(2, minmax(160px, 1fr));
  gap: 10px;
  align-self: stretch;
+ min-width: min(100%, 380px);
 }
 
 .status-chip {
@@ -171,6 +173,7 @@
  padding: 14px 16px;
  border-radius: var(--radius-md);
  border: 1px solid var(--surface-border);
+ transition: border-color 160ms ease, background 160ms ease;
 }
 
 .status-chip__head {
@@ -188,7 +191,7 @@
 .mobile-status-bar {
  align-items: center;
  gap: 12px;
- padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+ padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
  border-bottom: 1px solid var(--surface-divider);
  background: rgba(10, 14, 16, 0.96);
  backdrop-filter: blur(12px);
@@ -216,6 +219,16 @@
  border-radius: var(--radius-md);
  background: linear-gradient(180deg, rgba(15, 23, 28, 0.98), rgba(9, 13, 16, 0.96));
  color: var(--text-primary);
+ transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.workspace-menu-button:hover {
+ border-color: rgba(145, 220, 182, 0.55);
+ background: linear-gradient(180deg, rgba(20, 30, 36, 0.98), rgba(10, 15, 18, 0.97));
+}
+
+.workspace-menu-button:active {
+ transform: translateY(1px);
 }
 
 .workspace-menu-button__icon {
@@ -241,6 +254,7 @@
  background: linear-gradient(180deg, rgba(13, 18, 22, 0.98), rgba(8, 11, 14, 0.98));
  overflow: auto;
  transform: translateY(100%);
+ box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.45);
 }
 
 .workspace-drawer__header {
@@ -258,6 +272,46 @@
  border-radius: var(--radius-md);
  background: rgba(16, 24, 28, 0.9);
  color: var(--text-primary);
+ transition: border-color 160ms ease, background 160ms ease;
+}
+
+.workspace-drawer__close:hover {
+ border-color: rgba(145, 220, 182, 0.5);
+ background: rgba(20, 30, 36, 0.95);
+}
+
+.workspace-nav__item,
+.secondary-command-button {
+ transition: transform 140ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.workspace-nav__item:hover,
+.secondary-command-button:hover {
+ transform: translateY(-1px);
+}
+
+.cultivation-mission-grid {
+  gap: 18px;
+}
+
+.cultivation-hero-panel .narrative-text {
+  margin-top: 14px;
+  max-width: 92ch;
+  line-height: 1.6;
+  color: rgba(220, 235, 230, 0.9);
+}
+
+.cultivation-list-panel .system-body-timeline-list {
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.cultivation-code-panel .code-surface {
+  max-height: 340px;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 1100px) {
