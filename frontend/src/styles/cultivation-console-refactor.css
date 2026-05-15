@@ -1,0 +1,132 @@
+/* Final layout authority for cultivation-first operator console.
+   Loaded last to neutralize legacy overlap rules from older style layers. */
+
+.platform-main {
+  overflow: hidden;
+}
+
+.platform-workspace {
+  position: relative;
+  overflow: auto;
+}
+
+.top-status {
+  position: static !important;
+  z-index: 1 !important;
+}
+
+.top-status--minimal {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.top-status--minimal .top-status__title {
+  max-width: none;
+}
+
+.top-status--minimal .status-rack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.top-status--minimal .status-rack .status-chip {
+  display: none;
+}
+
+.top-status--minimal .top-status__brief {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.top-status--minimal .top-status__brief-item {
+  min-height: 86px;
+  align-content: start;
+}
+
+.top-status--minimal .top-status__brief-item--wide {
+  grid-column: auto;
+}
+
+.top-status--minimal .top-status__brief-item:nth-of-type(4) {
+  display: none;
+}
+
+.workspace-view--cultivation-mission-control .workspace-grid {
+  align-items: start;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-mission-grid--clean {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-12 {
+  grid-column: 1 / -1;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-7 {
+  grid-column: 1 / span 7;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-5 {
+  grid-column: 8 / -1;
+}
+
+.workspace-view--cultivation-mission-control .ops-panel {
+  overflow: hidden;
+}
+
+.workspace-view--cultivation-mission-control .ops-panel__header h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.2vw, 2.2rem);
+  line-height: 1.14;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.workspace-view--cultivation-mission-control .ops-panel__header p {
+  margin-top: 8px;
+  line-height: 1.55;
+}
+
+.workspace-view--cultivation-mission-control .ops-panel__body {
+  overflow: hidden;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-right-stack {
+  align-content: start;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-compact-list {
+  margin: 0;
+}
+
+.workspace-view--cultivation-mission-control .cultivation-compact-list li strong {
+  overflow-wrap: anywhere;
+}
+
+.platform-sidebar {
+  background:
+    linear-gradient(180deg, rgba(10, 14, 17, 0.98), rgba(7, 10, 13, 0.98));
+}
+
+@media (max-width: 1100px) {
+  .top-status--minimal .top-status__brief {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-view--cultivation-mission-control .cultivation-mission-grid--clean {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-7,
+  .workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-5,
+  .workspace-view--cultivation-mission-control .cultivation-mission-grid--clean > .span-12 {
+    grid-column: 1 / -1;
+  }
+}

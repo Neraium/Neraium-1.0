@@ -3,7 +3,7 @@ export default function WorkspaceContentRegion({ activeWorkspace, workspaceRef, 
     <section
       key={activeWorkspace}
       ref={workspaceRef}
-      className="platform-workspace"
+      className={`platform-workspace workspace-view workspace-view--${activeWorkspace}`}
       aria-labelledby="page-title"
     >
       {children}
