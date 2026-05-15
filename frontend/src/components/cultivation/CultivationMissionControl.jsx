@@ -20,11 +20,14 @@ export default function CultivationMissionControl({
     async function load() {
       try {
         const mode = isDemoMode ? "demo" : "live";
-        const [state, timeline, onto] = await Promise.all([
+        const [stateResult, timelineResult, ontologyResult] = await Promise.allSettled([
           fetchCanonicalCognitionState({ apiFetch, accessCode, mode }),
           fetchReplayTimeline({ apiFetch, accessCode, intervals: 24, mode }),
-          apiFetch("/api/distributed/cultivation/ontology", { headers: accessCode ? { "X-Api-Key": accessCode } : {} }).then((r) => r.json()),
+          loadOntology({ apiFetch, accessCode }),
         ]);
+        const state = stateResult.status === "fulfilled" ? stateResult.value : buildFallbackCognitionState();
+        const timeline = timelineResult.status === "fulfilled" ? timelineResult.value : buildFallbackReplayTimeline();
+        const onto = ontologyResult.status === "fulfilled" ? ontologyResult.value : {};
         if (!cancelled) {
           setCognition(state);
           setReplay(timeline);
@@ -174,4 +177,38 @@ function exportPilotReport(reportBody) {
   anchor.download = `neraium-weekly-pilot-report-${new Date().toISOString().slice(0, 10)}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+async function loadOntology({ apiFetch, accessCode }) {
+  const response = await apiFetch("/api/distributed/cultivation/ontology", {
+    headers: accessCode ? { "X-Api-Key": accessCode } : {},
+  });
+  if (!response.ok) {
+    return {};
+  }
+  return response.json();
+}
+
+function buildFallbackCognitionState() {
+  return {
+    cognition_state: "Monitoring",
+    structural_stability: "WATCH",
+    active_archetypes: [],
+    propagation_pathways: [],
+    evidence_lineage: {},
+    continuation_windows: { window: "Monitoring" },
+    replay_summary: { frame_count: 0, canonical_flow: [] },
+    recovery_convergence: {},
+    operator_explanation: "Cognition payload is temporarily unavailable. Structural monitoring context remains active.",
+  };
+}
+
+function buildFallbackReplayTimeline() {
+  return {
+    timeline: [],
+    meta: {
+      frame_count: 0,
+      canonical_flow: [],
+    },
+  };
 }
