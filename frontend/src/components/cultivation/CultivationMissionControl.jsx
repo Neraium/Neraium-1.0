@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchCanonicalCognitionState } from "../../services/api/cognitionApi";
 import { fetchReplayTimeline } from "../../services/api/replayApi";
+import HealthOrb from "../HealthOrb";
 
 export default function CultivationMissionControl({
   apiFetch,
@@ -55,6 +56,7 @@ export default function CultivationMissionControl({
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
   const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
+  const orbState = deriveOrbState(cognition, isDemoMode);
 
   const topSummaryCards = [
     {
@@ -107,6 +109,15 @@ export default function CultivationMissionControl({
       {activeTab === "overview" && (
         <>
           <Panel title="Overview" className="span-12 cultivation-list-panel" subtitle="Current facility-level structural cognition summary.">
+            <div className="cultivation-overview-orb-wrap">
+              <div className="cultivation-overview-orb">
+                <HealthOrb systemState={orbState} intensity={orbStateIntensity(orbState)} />
+              </div>
+              <div className="cultivation-overview-orb-meta">
+                <span>Structural condition</span>
+                <strong>{formatOrbLabel(orbState)}</strong>
+              </div>
+            </div>
             <div className="cultivation-top-summary-grid">
               <article className="cultivation-top-summary-card">
                 <span>Facility cognition state</span>
@@ -331,4 +342,44 @@ function summarizeFrame(frame) {
     return `Propagation: ${humanizePathway(pathway)}`;
   }
   return "Structural state captured for operator review.";
+}
+
+function deriveOrbState(cognition, isDemoMode) {
+  if (!cognition) return "unknown";
+  const hasSignals = Boolean(
+    (cognition.propagation_pathways?.length ?? 0) > 0
+    || (cognition.active_archetypes?.length ?? 0) > 0
+    || cognition.operator_explanation
+  );
+  if (!hasSignals && !isDemoMode) return "unknown";
+
+  const recovery = String(cognition.recovery_convergence?.convergence_quality ?? "").toLowerCase();
+  if (recovery.includes("recover") || recovery.includes("converg")) return "recovery";
+
+  const pathways = cognition.propagation_pathways?.length ?? 0;
+  if (pathways > 1) return "propagation_active";
+  if (pathways === 1) return "drift";
+
+  const stability = String(cognition.structural_stability ?? "").toUpperCase();
+  if (stability.includes("FRAGMENTING")) return "propagation_active";
+  if (stability.includes("DETERIORATING") || stability.includes("WATCH")) return "watching";
+  return "stable";
+}
+
+function orbStateIntensity(state) {
+  if (state === "propagation_active") return 0.95;
+  if (state === "drift") return 0.74;
+  if (state === "watching") return 0.56;
+  if (state === "recovery") return 0.42;
+  if (state === "unknown") return 0.2;
+  return 0.3;
+}
+
+function formatOrbLabel(state) {
+  if (state === "propagation_active") return "Propagation active";
+  if (state === "drift") return "Structural drift";
+  if (state === "watching") return "Watching";
+  if (state === "recovery") return "Recovery / convergence";
+  if (state === "unknown") return "No upload / unknown";
+  return "Stable";
 }

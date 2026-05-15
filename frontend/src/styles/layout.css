@@ -349,6 +349,48 @@
   margin-top: 8px;
 }
 
+.cultivation-overview-orb-wrap {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.cultivation-overview-orb {
+  display: grid;
+  place-items: center;
+  min-height: 176px;
+  border-radius: 14px;
+  border: 1px solid rgba(138, 184, 196, 0.2);
+  background: linear-gradient(180deg, rgba(17, 23, 27, 0.88), rgba(9, 13, 16, 0.84));
+  overflow: hidden;
+}
+
+.cultivation-overview-orb .health-orb {
+  width: min(100%, 208px);
+  max-width: 208px;
+}
+
+.cultivation-overview-orb-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.cultivation-overview-orb-meta span {
+  color: rgba(168, 196, 201, 0.84);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cultivation-overview-orb-meta strong {
+  color: rgba(238, 248, 246, 0.96);
+  font-size: 1.04rem;
+  line-height: 1.35;
+  font-weight: 560;
+}
+
 .cultivation-top-summary-card {
   display: grid;
   gap: 8px;
@@ -514,6 +556,10 @@
  }
 
  .cultivation-top-summary-grid {
+ grid-template-columns: 1fr;
+ }
+
+ .cultivation-overview-orb-wrap {
  grid-template-columns: 1fr;
  }
 
