@@ -21,5 +21,8 @@
   "bugs": {
     "url": "https://github.com/Neraium/Neraium-1.0/issues"
   },
-  "homepage": "https://github.com/Neraium/Neraium-1.0#readme"
+  "homepage": "https://github.com/Neraium/Neraium-1.0#readme",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
 }
