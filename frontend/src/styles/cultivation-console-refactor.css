@@ -129,3 +129,118 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Operational orb state system (cultivation mission-control palette) */
+.health-orb {
+  transition:
+    filter 520ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 520ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.health-orb__aura,
+.health-orb__shell,
+.health-orb__specular,
+.health-orb__rim,
+.health-orb__core,
+.health-orb__node,
+.health-orb__link,
+.health-orb__spark,
+.health-orb__fracture {
+  transition:
+    fill 520ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    stroke 520ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 520ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    filter 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.health-orb--state-stable {
+  --orb-hue: #2f8f66;
+  filter: drop-shadow(0 0 20px rgba(47, 143, 102, 0.2));
+}
+
+.health-orb--state-watching {
+  --orb-hue: #b08a4b;
+  filter: drop-shadow(0 0 22px rgba(176, 138, 75, 0.22));
+}
+
+.health-orb--state-drift {
+  --orb-hue: #c77335;
+  filter: drop-shadow(0 0 30px rgba(199, 115, 53, 0.3));
+}
+
+.health-orb--state-propagation {
+  --orb-hue: #9c3f45;
+  filter: drop-shadow(0 0 36px rgba(156, 63, 69, 0.34));
+}
+
+.health-orb--state-recovery {
+  --orb-hue: #3f9fa0;
+  filter: drop-shadow(0 0 24px rgba(63, 159, 160, 0.24));
+}
+
+.health-orb--state-unknown {
+  --orb-hue: #6e7d8a;
+  filter: drop-shadow(0 0 16px rgba(110, 125, 138, 0.18));
+  opacity: 0.92;
+}
+
+.health-orb--state-stable.health-orb--animated {
+  animation-duration: 7.8s;
+}
+
+.health-orb--state-watching.health-orb--animated {
+  animation-duration: 6.8s;
+}
+
+.health-orb--state-drift.health-orb--animated {
+  animation-duration: 5.2s;
+}
+
+.health-orb--state-propagation.health-orb--animated {
+  animation-duration: 4.4s;
+}
+
+.health-orb--state-recovery.health-orb--animated {
+  animation-duration: 6.2s;
+}
+
+.health-orb--state-unknown.health-orb--animated {
+  animation-duration: 8.4s;
+}
+
+.health-orb--state-watching.health-orb--animated::before {
+  animation: orbHaloRotate 18s linear infinite;
+}
+
+.health-orb--state-drift.health-orb--animated::before {
+  animation: orbHaloRotate 13s linear infinite;
+}
+
+.health-orb--state-propagation.health-orb--animated::before {
+  animation: orbHaloRotate 9s linear infinite;
+}
+
+.health-orb--state-recovery.health-orb--animated::before {
+  animation: orbHaloRotate 15s linear infinite reverse;
+}
+
+.health-orb--state-unknown.health-orb--animated::before {
+  animation: orbHaloRotate 22s linear infinite;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-orb,
+  .health-orb__aura,
+  .health-orb__shell,
+  .health-orb__specular,
+  .health-orb__rim,
+  .health-orb__core,
+  .health-orb__node,
+  .health-orb__link,
+  .health-orb__spark,
+  .health-orb__fracture {
+    transition: none !important;
+  }
+}

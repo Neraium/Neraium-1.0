@@ -61,29 +61,45 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeOrbState(systemState) {
+  const value = String(systemState ?? "").toLowerCase();
+  if (["unknown", "neutral", "none", "no_upload"].includes(value)) return "unknown";
+  if (["watching", "watch"].includes(value)) return "watching";
+  if (["drift", "warning"].includes(value)) return "drift";
+  if (["propagation_active", "propagation", "critical"].includes(value)) return "propagation_active";
+  if (["recovery", "recovering", "convergence"].includes(value)) return "recovery";
+  return "stable";
+}
+
 function toneMeta(systemState) {
-  if (systemState === "neutral") {
-    return { className: "health-orb--neutral", hue: "#9aa3ad", coreOpacity: 0.7 };
+  const mode = normalizeOrbState(systemState);
+  if (mode === "unknown") {
+    return { className: "health-orb--neutral health-orb--state-unknown", hue: "#6e7d8a", coreOpacity: 0.66 };
   }
-  if (systemState === "watch") {
-    return { className: "health-orb--watch health-orb--drift", hue: "#b8c4d6", coreOpacity: 0.84 };
+  if (mode === "watching") {
+    return { className: "health-orb--watch health-orb--state-watching", hue: "#b08a4b", coreOpacity: 0.78 };
   }
-  if (systemState === "warning") {
-    return { className: "health-orb--warning health-orb--drift", hue: "#c8a06a", coreOpacity: 0.9 };
+  if (mode === "drift") {
+    return { className: "health-orb--warning health-orb--drift health-orb--state-drift", hue: "#c77335", coreOpacity: 0.88 };
   }
-  if (systemState === "critical") {
-    return { className: "health-orb--critical health-orb--separation", hue: "#d17b73", coreOpacity: 0.94 };
+  if (mode === "propagation_active") {
+    return { className: "health-orb--critical health-orb--separation health-orb--state-propagation", hue: "#9c3f45", coreOpacity: 0.94 };
   }
-  return { className: "health-orb--stable", hue: "#b8ff36", coreOpacity: 0.88 };
+  if (mode === "recovery") {
+    return { className: "health-orb--stable health-orb--state-recovery", hue: "#3f9fa0", coreOpacity: 0.82 };
+  }
+  return { className: "health-orb--stable health-orb--state-stable", hue: "#2f8f66", coreOpacity: 0.8 };
 }
 
 function transformNode(node, systemState, intensity) {
-  if (systemState === "stable" || systemState === "neutral") {
+  const mode = normalizeOrbState(systemState);
+
+  if (mode === "stable" || mode === "unknown") {
     return node;
   }
 
-  if (systemState === "watch" || systemState === "warning") {
-    const shiftScale = systemState === "watch" ? 0.52 : 0.92;
+  if (mode === "watching" || mode === "drift" || mode === "recovery") {
+    const shiftScale = mode === "watching" ? 0.42 : mode === "recovery" ? 0.34 : 0.86;
     const horizontalShift = (node.g === "left" ? -24 : node.g === "right" ? 24 : 0) * shiftScale;
     const verticalShift = (node.g === "top" ? -14 : node.g === "bottom" ? 11 : ((node.x + node.y) % 3 - 1) * 7) * shiftScale;
     return {
@@ -111,16 +127,17 @@ function transformNode(node, systemState, intensity) {
 }
 
 function edgeVisibility(linkIndex, systemState) {
-  if (systemState === "stable" || systemState === "neutral") {
+  const mode = normalizeOrbState(systemState);
+  if (mode === "stable" || mode === "unknown" || mode === "recovery") {
     return "solid";
   }
-  if (systemState === "watch") {
+  if (mode === "watching") {
     if (linkIndex % 8 === 0) {
       return "faint";
     }
     return "solid";
   }
-  if (systemState === "warning") {
+  if (mode === "drift") {
     if (linkIndex % 6 === 0) {
       return "broken";
     }
@@ -139,10 +156,11 @@ function edgeVisibility(linkIndex, systemState) {
 }
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
-  const isCritical = systemState === "critical";
-  const isWarning = systemState === "warning";
-  const isWatch = systemState === "watch";
-  const isStable = systemState === "stable" || systemState === "neutral";
+  const mode = normalizeOrbState(systemState);
+  const isCritical = mode === "propagation_active";
+  const isWarning = mode === "drift";
+  const isWatch = mode === "watching" || mode === "recovery";
+  const isStable = mode === "stable" || mode === "unknown";
   const normalizedIntensity = clamp(Number(intensity) || 0, 0, 1);
   const tone = toneMeta(systemState);
   const nodes = ORB_NODES.map((node) => transformNode(node, systemState, normalizedIntensity));

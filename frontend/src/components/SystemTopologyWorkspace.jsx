@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
-import { normalizeOperationalState, orbStateFromOperationalState } from "../viewModels/operationalUiState";
+import { normalizeOperationalState } from "../viewModels/operationalUiState";
 
 const STATE = {
   nominal: {
@@ -41,7 +41,12 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     const total = (liveOps.relationshipRows ?? []).reduce((sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)), 0);
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
-  const systemState = orbStateFromOperationalState(uiState);
+  const systemState = deriveOrbOperationalState({
+    awaitingSii,
+    uiState,
+    liveOps,
+    primaryItem,
+  });
   const findings = liveOps.findings?.slice(0, 2) ?? [];
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
@@ -136,6 +141,49 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       isLoading={awaitingSii}
     />
   );
+}
+
+function deriveOrbOperationalState({ awaitingSii, uiState, liveOps, primaryItem }) {
+  if (awaitingSii || uiState === "neutral") {
+    return "unknown";
+  }
+
+  const convergenceSignal = String(
+    primaryItem?.recoveryConvergence
+    ?? liveOps.primaryWindow?.recoveryConvergence
+    ?? liveOps.heroSubline
+    ?? "",
+  ).toLowerCase();
+  if (
+    convergenceSignal.includes("recover")
+    || convergenceSignal.includes("convergen")
+    || convergenceSignal.includes("stabiliz")
+  ) {
+    return "recovery";
+  }
+
+  const propagationSignal = String(
+    primaryItem?.propagationPathways?.[0]
+    ?? liveOps.relationshipRows?.[0]?.detail
+    ?? "",
+  ).toLowerCase();
+  const hasPropagation = propagationSignal.includes("propagation")
+    || propagationSignal.includes("spread")
+    || propagationSignal.includes("pathway");
+
+  if ((uiState === "critical" || uiState === "warning") && hasPropagation) {
+    return "propagation_active";
+  }
+
+  if (uiState === "critical" || uiState === "warning") {
+    return "drift";
+  }
+
+  if (uiState === "watch") {
+    return "watching";
+  }
+
+  return "stable";
 }
 
 
