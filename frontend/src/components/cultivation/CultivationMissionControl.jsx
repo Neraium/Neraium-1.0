@@ -58,20 +58,6 @@ export default function CultivationMissionControl({
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
   const orbState = deriveOrbState(cognition, isDemoMode);
 
-  const topSummaryCards = [
-    {
-      label: "What's changing",
-      value: summarizeChange(cognition),
-    },
-    {
-      label: "Where it's spreading",
-      value: summarizeSpread(cognition),
-    },
-    {
-      label: "Why trust this",
-      value: summarizeTrust(cognition, evidenceSummary),
-    },
-  ];
   const reportExport = buildWeeklyPilotReport({
     cognition,
     replay,
@@ -108,34 +94,55 @@ export default function CultivationMissionControl({
       </Panel>
       {activeTab === "overview" && (
         <>
-          <Panel title="Overview" className="span-12 cultivation-list-panel" subtitle="Current facility-level structural cognition summary.">
-            <div className="cultivation-overview-orb-wrap">
-              <div className="cultivation-overview-orb">
-                <HealthOrb systemState={orbState} intensity={orbStateIntensity(orbState)} />
-              </div>
-              <div className="cultivation-overview-orb-meta">
-                <span>Structural condition</span>
-                <strong>{formatOrbLabel(orbState)}</strong>
-              </div>
-            </div>
-            <div className="cultivation-top-summary-grid">
-              <article className="cultivation-top-summary-card">
-                <span>Facility cognition state</span>
-                <strong>{cognition.cognition_state ?? "Monitoring"}</strong>
-              </article>
-              {topSummaryCards.map((card) => (
-                <article key={card.label} className="cultivation-top-summary-card">
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
+          <Panel title="Overview" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--overview" subtitle="Current facility-level structural cognition summary.">
+            <div className="cultivation-overview-grid">
+              <section className="cultivation-overview-left">
+                <div className="cultivation-overview-orb-wrap">
+                  <div className="cultivation-overview-orb">
+                    <div className="cultivation-overview-orb-field" aria-hidden="true" />
+                    <HealthOrb systemState={orbState} intensity={orbStateIntensity(orbState)} />
+                  </div>
+                  <div className="cultivation-overview-orb-meta">
+                    <span>Structural condition</span>
+                    <strong>{formatOrbLabel(orbState)}</strong>
+                  </div>
+                </div>
+                <div className="cultivation-overview-left-metrics">
+                  <article className="cultivation-overview-pill">
+                    <span>Cognition state</span>
+                    <strong>{cognition.cognition_state ?? "Monitoring"}</strong>
+                  </article>
+                  <article className="cultivation-overview-pill">
+                    <span>Continuation window</span>
+                    <strong>{continuationWindow}</strong>
+                  </article>
+                  <article className="cultivation-overview-pill">
+                    <span>Recovery / convergence</span>
+                    <strong>{cognition.recovery_convergence?.convergence_quality ?? "developing"}</strong>
+                  </article>
+                </div>
+              </section>
+              <section className="cultivation-overview-right">
+                <article className="cultivation-top-summary-card">
+                  <span>What's changing</span>
+                  <strong>{summarizeChange(cognition)}</strong>
                 </article>
-              ))}
-              <article className="cultivation-top-summary-card">
-                <span>Continuation / recovery</span>
-                <strong>{`${continuationWindow} | ${cognition.recovery_convergence?.convergence_quality ?? "developing"}`}</strong>
-              </article>
+                <article className="cultivation-top-summary-card">
+                  <span>Where it's spreading</span>
+                  <strong>{summarizeSpread(cognition)}</strong>
+                </article>
+                <article className="cultivation-top-summary-card">
+                  <span>Why trust this</span>
+                  <strong>{summarizeTrust(cognition, evidenceSummary)}</strong>
+                </article>
+                <article className="cultivation-top-summary-card">
+                  <span>Active archetypes</span>
+                  <strong>{summarizeArchetypes(cognition.active_archetypes)}</strong>
+                </article>
+              </section>
             </div>
           </Panel>
-          <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel" subtitle="Exportable operator-ready summary from current structural cognition state.">
+          <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Exportable operator-ready summary from current structural cognition state.">
             <button type="button" className="secondary-command-button" onClick={() => exportPilotReport(reportExport)}>
               Export Weekly Pilot Report
             </button>
@@ -146,7 +153,7 @@ export default function CultivationMissionControl({
 
       {activeTab === "replay" && (
         <>
-          <Panel title="Structural Replay" className="span-12 cultivation-replay-panel" subtitle="Replay timeline and environmental topology progression context.">
+          <Panel title="Structural Replay" className="span-12 cultivation-replay-panel cultivation-view-panel cultivation-view-panel--replay" subtitle="Replay timeline and environmental topology progression context.">
             <ul className="system-body-timeline-list cultivation-compact-list">
               {replayFrames.length === 0 && (
                 <li><span className="metadata-text">Replay</span><strong>No replay frames available.</strong></li>
@@ -159,7 +166,7 @@ export default function CultivationMissionControl({
               ))}
             </ul>
           </Panel>
-          <Panel title="Continuation Window Context" className="span-12 cultivation-list-panel" subtitle="Continuation window framing during replay review.">
+          <Panel title="Continuation Window Context" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--context" subtitle="Continuation window framing during replay review.">
             <div className="cultivation-summary-callouts">
               <p><strong>Continuation window:</strong> {continuationWindow}</p>
               <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
@@ -171,14 +178,14 @@ export default function CultivationMissionControl({
 
       {activeTab === "evidence" && (
         <>
-          <Panel title="Evidence Lineage" className="span-12 cultivation-list-panel" subtitle="Evidence sources, confidence basis, and relationship corroboration.">
+          <Panel title="Evidence Lineage" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--evidence" subtitle="Evidence sources, confidence basis, and relationship corroboration.">
             <ul className="system-body-timeline-list cultivation-compact-list">
               {evidenceSummary.map((item) => (
                 <li key={item}><span className="metadata-text">Evidence source</span><strong>{item}</strong></li>
               ))}
             </ul>
           </Panel>
-          <Panel title="Confidence Basis" className="span-12 cultivation-list-panel" subtitle="Operational confidence grounded in corroboration and persistence.">
+          <Panel title="Confidence Basis" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--confidence" subtitle="Operational confidence grounded in corroboration and persistence.">
             <div className="cultivation-summary-callouts">
               <p><strong>Confidence basis:</strong> Evidence density + subsystem corroboration + persistence consistency.</p>
               <p><strong>Subsystem corroboration:</strong> {(cognition.propagation_pathways ?? []).length > 0 ? "present" : "limited"}</p>
@@ -190,7 +197,10 @@ export default function CultivationMissionControl({
 
       {activeTab === "propagation" && (
         <>
-          <Panel title="Propagation Pathways" className="span-7 cultivation-list-panel" subtitle="Environmental pressure movement and room-to-room pathway context.">
+          <Panel title="Propagation Pathways" className="span-7 cultivation-list-panel cultivation-view-panel cultivation-view-panel--propagation" subtitle="Environmental pressure movement and room-to-room pathway context.">
+            <div className="cultivation-propagation-map-wrap">
+              <PropagationPulseMap state={orbState} pathways={cognition.propagation_pathways ?? []} />
+            </div>
             <ul className="system-body-timeline-list cultivation-compact-list">
               {(cognition.propagation_pathways ?? []).map((path) => (
                 <li key={path}><span className="metadata-text">Pathway</span><strong>{humanizePathway(path)}</strong></li>
@@ -382,4 +392,57 @@ function formatOrbLabel(state) {
   if (state === "recovery") return "Recovery / convergence";
   if (state === "unknown") return "No upload / unknown";
   return "Stable";
+}
+
+function summarizeArchetypes(archetypes = []) {
+  if (!archetypes.length) return "No active archetypes.";
+  if (archetypes.length === 1) return archetypes[0];
+  return `${archetypes[0]}, ${archetypes[1]}${archetypes.length > 2 ? "..." : ""}`;
+}
+
+function PropagationPulseMap({ state, pathways }) {
+  const active = pathways.length > 0;
+  const pathText = active ? pathways[0].replaceAll("_", " -> ") : "No active pathway";
+  return (
+    <div className={`propagation-map ${active ? "is-active" : "is-idle"} state-${state}`}>
+      <svg viewBox="0 0 760 250" role="img" aria-label="Propagation pathway map">
+        <defs>
+          <linearGradient id="prop-line" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgba(110,160,174,0.2)" />
+            <stop offset="50%" stopColor="rgba(142,226,205,0.74)" />
+            <stop offset="100%" stopColor="rgba(110,160,174,0.2)" />
+          </linearGradient>
+          <radialGradient id="prop-node" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stopColor="rgba(237,252,246,0.95)" />
+            <stop offset="50%" stopColor="rgba(130,220,196,0.74)" />
+            <stop offset="100%" stopColor="rgba(130,220,196,0)" />
+          </radialGradient>
+        </defs>
+        <g className="propagation-map__field">
+          <ellipse cx="112" cy="126" rx="88" ry="44" className="propagation-map__zone" />
+          <ellipse cx="292" cy="92" rx="90" ry="42" className="propagation-map__zone" />
+          <ellipse cx="468" cy="158" rx="95" ry="48" className="propagation-map__zone" />
+          <ellipse cx="648" cy="112" rx="82" ry="38" className="propagation-map__zone" />
+        </g>
+        <g className="propagation-map__paths">
+          <path d="M116 126 C170 126, 216 104, 292 94" className="propagation-map__path" />
+          <path d="M292 94 C348 94, 390 126, 468 154" className="propagation-map__path" />
+          <path d="M468 154 C540 154, 574 128, 648 112" className="propagation-map__path" />
+        </g>
+        <g className="propagation-map__nodes">
+          <circle cx="112" cy="126" r="14" className="propagation-map__node" />
+          <circle cx="292" cy="94" r="14" className="propagation-map__node" />
+          <circle cx="468" cy="154" r="14" className="propagation-map__node" />
+          <circle cx="648" cy="112" r="14" className="propagation-map__node" />
+        </g>
+        <g className="propagation-map__pulse">
+          <circle cx="112" cy="126" r="9" className="propagation-map__pulse-node" />
+          <circle cx="292" cy="94" r="9" className="propagation-map__pulse-node" />
+          <circle cx="468" cy="154" r="9" className="propagation-map__pulse-node" />
+          <circle cx="648" cy="112" r="9" className="propagation-map__pulse-node" />
+        </g>
+      </svg>
+      <p className="propagation-map__caption">{pathText}</p>
+    </div>
+  );
 }

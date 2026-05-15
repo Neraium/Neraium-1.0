@@ -267,7 +267,7 @@ function TopStatusBar({
   const degradedMode = apiStatus?.state === "offline";
   const minimalCultivationHeader = activeWorkspace === "cultivation-mission-control";
   return (
-    <header className={`top-status ${minimalCultivationHeader ? "top-status--minimal" : ""}`}>
+    <header className={`top-status ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
       <div className="top-status__title">
         <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
         <h1 id="page-title" className={minimalCultivationHeader ? "sr-only" : ""}>

@@ -6,7 +6,7 @@
   gap: 12px;
   height: 100dvh;
   padding: calc(18px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
-  border-right: 1px solid rgba(138, 184, 196, 0.05);
+  border-right: 1px solid rgba(138, 184, 196, 0.028);
   background:
     radial-gradient(circle at top left, rgba(99, 188, 211, 0.03), transparent 24%),
     linear-gradient(180deg, rgba(58, 178, 138, 0.015), transparent 20%),
@@ -18,7 +18,7 @@
   gap: 10px;
   min-height: 92px;
   padding: 16px 16px 14px;
-  border: 1px solid rgba(138, 184, 196, 0.08);
+  border: 1px solid rgba(138, 184, 196, 0.06);
   border-radius: 20px;
   background:
     linear-gradient(180deg, rgba(22, 30, 35, 0.74), rgba(10, 14, 17, 0.74));
@@ -76,7 +76,7 @@
   width: 100%;
   min-height: 66px;
   padding: 10px 12px 10px 16px;
-  border: 1px solid rgba(138, 184, 196, 0.035);
+  border: 1px solid rgba(138, 184, 196, 0.024);
   border-left: 1px solid transparent;
   border-radius: 16px;
   background:
@@ -127,13 +127,13 @@
 
 .workspace-nav__item:hover,
 .workspace-nav__item:focus-visible {
-  border-color: rgba(138, 184, 196, 0.1);
+  border-color: rgba(138, 184, 196, 0.07);
   background:
     linear-gradient(180deg, rgba(19, 26, 31, 0.64), rgba(10, 14, 17, 0.58));
 }
 
 .workspace-nav__item--active {
-  border-color: rgba(138, 184, 196, 0.16);
+  border-color: rgba(138, 184, 196, 0.1);
   background:
     linear-gradient(180deg, rgba(24, 34, 40, 0.88), rgba(12, 17, 20, 0.76));
 }

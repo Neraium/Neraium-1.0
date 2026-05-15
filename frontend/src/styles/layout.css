@@ -114,8 +114,8 @@
  align-items: end;
  gap: clamp(16px, 2vw, 24px);
  padding: 20px 24px 18px;
- border-bottom: 1px solid var(--surface-divider);
- background: linear-gradient(180deg, rgba(12, 16, 19, 0.94), rgba(10, 14, 16, 0.88));
+ border-bottom: 1px solid rgba(138, 184, 196, 0.07);
+ background: linear-gradient(180deg, rgba(10, 15, 19, 0.88), rgba(9, 13, 17, 0.76));
  backdrop-filter: blur(12px);
 }
 
@@ -271,7 +271,8 @@
 .mobile-status-bar__workspace {
  margin: 0;
  color: var(--text-secondary);
- font-size: 0.72rem;
+ font-size: 0.84rem;
+ line-height: 1.35;
 }
 
 .workspace-menu-button {
@@ -279,13 +280,38 @@
  align-items: center;
  justify-content: center;
  gap: 8px;
- min-height: 44px;
+ min-height: 48px;
  padding: 0 14px;
  border: 1px solid var(--surface-border-strong);
  border-radius: var(--radius-md);
  background: linear-gradient(180deg, rgba(15, 23, 28, 0.98), rgba(9, 13, 16, 0.96));
  color: var(--text-primary);
  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.mobile-demo-controls {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ flex-wrap: wrap;
+}
+
+.mobile-demo-controls__toggle {
+ min-height: 42px;
+ padding: 0 12px;
+ font-size: 0.82rem;
+}
+
+.mobile-demo-controls__scenarios {
+ display: flex;
+ gap: 6px;
+ flex-wrap: wrap;
+}
+
+.mobile-demo-controls__scenarios .secondary-command-button {
+ min-height: 38px;
+ padding: 0 10px;
+ font-size: 0.78rem;
 }
 
 .workspace-menu-button:hover {
@@ -357,11 +383,11 @@
 }
 
 .cultivation-mission-grid {
-  gap: 18px;
+  gap: 22px;
 }
 
 .cultivation-mission-grid--clean {
-  gap: 20px;
+  gap: 24px;
 }
 
 .cultivation-hero-panel .ops-panel__header h2 {
@@ -384,6 +410,19 @@
   margin-top: 8px;
 }
 
+.cultivation-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.05fr);
+  gap: 20px;
+}
+
+.cultivation-overview-left,
+.cultivation-overview-right {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
 .cultivation-overview-orb-wrap {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
@@ -397,9 +436,54 @@
   place-items: center;
   min-height: 214px;
   border-radius: 14px;
-  border: 1px solid rgba(138, 184, 196, 0.2);
-  background: linear-gradient(180deg, rgba(17, 23, 27, 0.88), rgba(9, 13, 16, 0.84));
+  border: 1px solid rgba(138, 184, 196, 0.1);
+  background:
+    radial-gradient(circle at 52% 34%, rgba(129, 196, 193, 0.12), transparent 44%),
+    radial-gradient(circle at 50% 78%, rgba(124, 167, 178, 0.08), transparent 58%),
+    linear-gradient(180deg, rgba(16, 22, 27, 0.9), rgba(8, 12, 15, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(219, 244, 238, 0.08),
+    0 20px 46px rgba(0, 0, 0, 0.28);
   overflow: hidden;
+  position: relative;
+}
+
+.cultivation-overview-orb-field {
+  position: absolute;
+  inset: 16px 16px 14px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center, rgba(132, 222, 201, 0.14), transparent 58%),
+    conic-gradient(from 32deg, rgba(126, 192, 188, 0.1), transparent 24%, rgba(126, 192, 188, 0.1), transparent 62%, rgba(126, 192, 188, 0.1), transparent);
+  opacity: 0.54;
+  animation: cultivationOrbField 18s linear infinite;
+}
+
+.cultivation-overview-left-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.cultivation-overview-pill {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(138, 184, 196, 0.11);
+  background: linear-gradient(180deg, rgba(14, 21, 25, 0.78), rgba(9, 13, 17, 0.68));
+}
+
+.cultivation-overview-pill span {
+  color: rgba(176, 203, 208, 0.88);
+  font-size: 0.76rem;
+  letter-spacing: 0.035em;
+}
+
+.cultivation-overview-pill strong {
+  color: rgba(238, 248, 246, 0.96);
+  font-size: 1.03rem;
+  line-height: 1.45;
+  font-weight: 560;
 }
 
 .cultivation-overview-orb .health-orb {
@@ -429,10 +513,13 @@
   display: grid;
   gap: 8px;
   min-height: 118px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border-radius: 14px;
-  border: 1px solid rgba(138, 184, 196, 0.2);
-  background: linear-gradient(180deg, rgba(17, 23, 27, 0.88), rgba(9, 13, 16, 0.84));
+  border: 1px solid rgba(138, 184, 196, 0.11);
+  background:
+    radial-gradient(circle at 80% 14%, rgba(119, 185, 177, 0.1), transparent 58%),
+    linear-gradient(180deg, rgba(16, 22, 27, 0.84), rgba(9, 13, 17, 0.76));
+  box-shadow: inset 0 1px 0 rgba(211, 238, 231, 0.07);
 }
 
 .cultivation-top-summary-card span {
@@ -516,12 +603,17 @@
   font-size: 0.84rem;
   font-weight: 530;
   letter-spacing: 0.015em;
+  transition: border-color 240ms ease, background 240ms ease, color 240ms ease, transform 220ms ease;
 }
 
 .cultivation-tab.is-active {
   border-color: rgba(114, 208, 183, 0.6);
   color: rgba(236, 247, 243, 0.97);
   background: linear-gradient(180deg, rgba(24, 37, 36, 0.92), rgba(10, 19, 18, 0.9));
+}
+
+.cultivation-tab:hover {
+  transform: translateY(-1px);
 }
 
 .cultivation-summary-callouts {
@@ -535,6 +627,82 @@
 .cultivation-summary-callouts p {
   margin: 0;
   line-height: 1.52;
+}
+
+.cultivation-view-panel .ops-panel__body {
+  animation: cultivationTabReveal 300ms ease both;
+}
+
+.cultivation-propagation-map-wrap {
+  margin: 2px 0 14px;
+}
+
+.propagation-map {
+  position: relative;
+  padding: 14px 16px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(138, 184, 196, 0.1);
+  background:
+    radial-gradient(circle at 62% 32%, rgba(126, 201, 190, 0.12), transparent 56%),
+    linear-gradient(180deg, rgba(13, 20, 24, 0.88), rgba(9, 14, 18, 0.8));
+  overflow: hidden;
+}
+
+.propagation-map svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.propagation-map__caption {
+  margin: 6px 4px 2px;
+  color: rgba(199, 220, 224, 0.86);
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
+.propagation-map__zone {
+  fill: rgba(92, 137, 148, 0.12);
+  stroke: rgba(122, 184, 177, 0.24);
+  stroke-width: 1;
+}
+
+.propagation-map__path {
+  fill: none;
+  stroke: url(#prop-line);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 10 10;
+  animation: propagationFlow 4.8s linear infinite;
+}
+
+.propagation-map__node {
+  fill: url(#prop-node);
+}
+
+.propagation-map__pulse-node {
+  fill: rgba(206, 241, 233, 0.9);
+  opacity: 0.4;
+  animation: propagationPulse 2.6s ease-in-out infinite;
+}
+
+.propagation-map__pulse-node:nth-child(2) { animation-delay: 240ms; }
+.propagation-map__pulse-node:nth-child(3) { animation-delay: 480ms; }
+.propagation-map__pulse-node:nth-child(4) { animation-delay: 720ms; }
+
+.propagation-map.is-idle .propagation-map__path {
+  opacity: 0.45;
+  stroke-dasharray: 5 13;
+  animation-duration: 8s;
+}
+
+.propagation-map.state-recovery .propagation-map__path {
+  stroke: rgba(103, 198, 195, 0.64);
+}
+
+.propagation-map.state-propagation_active .propagation-map__path,
+.propagation-map.state-drift .propagation-map__path {
+  stroke-width: 3.8;
 }
 
 .top-status__degraded {
@@ -593,6 +761,10 @@
  grid-template-columns: 1fr;
  }
 
+ .cultivation-overview-grid {
+ grid-template-columns: 1fr;
+ }
+
  .cultivation-overview-orb-wrap {
  grid-template-columns: 1fr;
  }
@@ -611,10 +783,24 @@
 
  .mobile-status-bar {
  display: grid;
- grid-template-columns: minmax(0, 1fr) auto;
+ grid-template-columns: minmax(0, 1fr);
  position: sticky;
  top: 0;
  z-index: 60;
+ gap: 10px;
+ }
+
+ .workspace-menu-button {
+ width: 100%;
+ justify-content: center;
+ }
+
+ .mobile-demo-controls {
+ justify-content: space-between;
+ }
+
+ .mobile-demo-controls__scenarios {
+ width: 100%;
  }
 
  .workspace-drawer,
@@ -630,4 +816,89 @@
  .workspace-drawer--open {
  transform: translateY(0);
  }
+}
+
+@media (max-width: 760px) {
+ .top-status--cultivation {
+ display: none;
+ }
+
+ .platform-workspace {
+ padding: 12px 10px 22px;
+ }
+
+ .workspace-drawer {
+ max-height: 88vh;
+ padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+ border-radius: 18px 18px 0 0;
+ }
+
+ .workspace-drawer__close,
+ .secondary-command-button {
+ min-height: 44px;
+ }
+
+ .cultivation-hero-panel .ops-panel__header h2 {
+ font-size: clamp(1.75rem, 7.8vw, 2.2rem);
+ line-height: 1.14;
+ }
+
+ .cultivation-hero-panel .ops-panel__header p {
+ font-size: 0.96rem;
+ line-height: 1.58;
+ }
+
+ .cultivation-tabs {
+ flex-wrap: nowrap;
+ overflow-x: auto;
+ padding-bottom: 2px;
+ scrollbar-width: thin;
+ }
+
+ .cultivation-tab {
+ flex: 0 0 auto;
+ min-height: 44px;
+ padding: 0 14px;
+ font-size: 0.82rem;
+ }
+
+ .cultivation-overview-orb {
+ min-height: 186px;
+ }
+
+ .cultivation-overview-orb .health-orb {
+ width: min(100%, 198px);
+ max-width: 198px;
+ }
+
+ .cultivation-top-summary-card {
+ min-height: 98px;
+ padding: 12px 14px;
+ }
+
+ .cultivation-top-summary-card strong {
+ font-size: 1rem;
+ line-height: 1.5;
+ }
+}
+
+@keyframes cultivationTabReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cultivationOrbField {
+  from { transform: rotate(0deg); opacity: 0.46; }
+  50% { opacity: 0.58; }
+  to { transform: rotate(360deg); opacity: 0.46; }
+}
+
+@keyframes propagationFlow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -120; }
+}
+
+@keyframes propagationPulse {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50% { transform: scale(1.38); opacity: 0.8; }
 }
