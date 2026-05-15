@@ -294,36 +294,115 @@
   gap: 18px;
 }
 
-.cultivation-hero-panel .narrative-text {
-  margin-top: 14px;
-  max-width: 92ch;
-  line-height: 1.6;
-  color: rgba(220, 235, 230, 0.9);
+.cultivation-mission-grid--clean {
+  gap: 24px;
 }
 
-.cultivation-list-panel .system-body-timeline-list {
-  max-height: 260px;
+.cultivation-hero-panel .ops-panel__header h2 {
+  font-size: clamp(1.9rem, 2.7vw, 2.8rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.cultivation-hero-panel .ops-panel__header p {
+  max-width: 70ch;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: rgba(208, 226, 220, 0.9);
+}
+
+.cultivation-top-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.cultivation-top-summary-card {
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(138, 184, 196, 0.2);
+  background: linear-gradient(180deg, rgba(17, 23, 27, 0.88), rgba(9, 13, 16, 0.84));
+}
+
+.cultivation-top-summary-card span {
+  color: rgba(168, 196, 201, 0.84);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cultivation-top-summary-card strong {
+  color: rgba(238, 248, 246, 0.96);
+  font-size: 0.97rem;
+  line-height: 1.46;
+  font-weight: 560;
+}
+
+.cultivation-list-panel .system-body-timeline-list,
+.cultivation-replay-panel .system-body-timeline-list {
+  max-height: 276px;
   overflow: auto;
-  padding-right: 6px;
+  padding-right: 8px;
+}
+
+.cultivation-compact-list li {
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.cultivation-replay-panel .metadata-text,
+.cultivation-list-panel .metadata-text {
+  font-size: 0.63rem;
+}
+
+.cultivation-replay-panel strong,
+.cultivation-list-panel strong {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.cultivation-right-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.cultivation-stack-panel {
+  min-height: 0;
 }
 
 .cultivation-code-panel .code-surface {
-  max-height: 340px;
+  max-height: 300px;
   overflow: auto;
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.54;
+}
+
+.cultivation-report-panel .secondary-command-button {
+  margin-bottom: 10px;
+}
+
+.cultivation-report-surface {
+  margin-top: 6px;
+}
+
+.cultivation-ontology-note {
+  margin: 0;
 }
 
 .cultivation-summary-callouts {
   margin-top: 10px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   color: rgba(215, 233, 226, 0.9);
 }
 
 .cultivation-summary-callouts p {
   margin: 0;
-  line-height: 1.45;
+  line-height: 1.52;
 }
 
 .top-status__degraded {
@@ -376,6 +455,18 @@
  .top-status {
  gap: 14px;
  padding: 14px 12px;
+ }
+
+ .cultivation-top-summary-grid {
+ grid-template-columns: 1fr;
+ }
+
+ .cultivation-top-summary-card {
+ min-height: 88px;
+ }
+
+ .cultivation-right-stack {
+ grid-template-columns: 1fr;
  }
 
  .mobile-status-bar {

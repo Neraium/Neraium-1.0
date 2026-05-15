@@ -7,7 +7,6 @@ export default function CultivationMissionControl({
   accessCode,
   isDemoMode,
   Panel,
-  MetricGrid,
   EmptyState,
 }) {
   const [cognition, setCognition] = useState(null);
@@ -54,15 +53,21 @@ export default function CultivationMissionControl({
   }
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
   const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
-  const replayFrames = replay.timeline?.slice(0, 8) ?? [];
+  const replayFrames = replay.timeline?.slice(0, 6) ?? [];
 
-  const metrics = [
-    { label: "Facility Cognition State", value: cognition.cognition_state },
-    { label: "Structural Stability", value: cognition.structural_stability },
-    { label: "Active Pathways", value: (cognition.propagation_pathways ?? []).length },
-    { label: "Continuation Window", value: cognition.continuation_windows?.window ?? "Monitoring" },
-    { label: "Replay Frames", value: replay.meta?.frame_count ?? 0 },
-    { label: "Recovery State", value: cognition.recovery_convergence?.convergence_quality ?? "developing" },
+  const topSummaryCards = [
+    {
+      label: "What's changing",
+      value: summarizeChange(cognition),
+    },
+    {
+      label: "Where it's spreading",
+      value: summarizeSpread(cognition),
+    },
+    {
+      label: "Why trust this",
+      value: summarizeTrust(cognition, evidenceSummary),
+    },
   ];
   const reportExport = buildWeeklyPilotReport({
     cognition,
@@ -72,52 +77,84 @@ export default function CultivationMissionControl({
   });
 
   return (
-    <div className="workspace-grid workspace-grid--console cultivation-mission-grid">
+    <div className="workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean">
       <Panel
         title="Cultivation Mission Control"
         className="span-12 workspace-hero-panel cultivation-hero-panel"
-        subtitle="Environmental mission-control cognition for coupled temperature, humidity, airflow, and VPD structural evolution."
+        subtitle="Environmental structural cognition for controlled cultivation."
       >
-        <MetricGrid metrics={metrics} />
-        <p className="narrative-text">{cognition.operator_explanation}</p>
-        <div className="cultivation-summary-callouts">
-          <p><strong>Propagation pathway:</strong> {humanizePathway(cognition.propagation_pathways?.[0])}</p>
-          <p><strong>Continuation window:</strong> {continuationWindow}</p>
-          <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
+        <div className="cultivation-top-summary-grid">
+          {topSummaryCards.map((card) => (
+            <article key={card.label} className="cultivation-top-summary-card">
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </article>
+          ))}
         </div>
       </Panel>
-      <Panel title="Propagation Pathways" className="span-6 cultivation-list-panel" subtitle="Where structural pressure is currently spreading in plain operator language.">
-        <ul className="system-body-timeline-list">
-          {(cognition.propagation_pathways ?? []).map((path) => (
-            <li key={path}><span className="metadata-text">Pathway</span><strong>{humanizePathway(path)}</strong></li>
+
+      <Panel title="Structural Replay" className="span-7 cultivation-replay-panel" subtitle="Replay evidence of environmental topology progression.">
+        <ul className="system-body-timeline-list cultivation-compact-list">
+          {replayFrames.length === 0 && (
+            <li><span className="metadata-text">Replay</span><strong>No replay frames available.</strong></li>
+          )}
+          {replayFrames.map((frame, index) => (
+            <li key={`${frame.timestamp ?? "frame"}-${index}`}>
+              <span className="metadata-text">{frame.timestamp ? new Date(frame.timestamp).toLocaleString() : `Frame ${index + 1}`}</span>
+              <strong>{summarizeFrame(frame)}</strong>
+            </li>
           ))}
         </ul>
       </Panel>
-      <Panel title="Evidence Lineage Summary" className="span-6 cultivation-list-panel" subtitle="Why structural drift was flagged for operator review.">
-        <ul className="system-body-timeline-list">
+
+      <Panel title="Evidence Lineage" className="span-5 cultivation-list-panel" subtitle="Why structural drift is supported for operator review.">
+        <ul className="system-body-timeline-list cultivation-compact-list">
           {evidenceSummary.map((item) => (
             <li key={item}><span className="metadata-text">Evidence</span><strong>{item}</strong></li>
           ))}
         </ul>
       </Panel>
-      <Panel title="Active Cultivation Archetypes" className="span-6 cultivation-list-panel" subtitle="Structural behaviors active in the current facility state.">
-        <ul className="system-body-timeline-list">
-          {(cognition.active_archetypes ?? []).map((item) => (
-            <li key={item}><span className="metadata-text">Archetype</span><strong>{item}</strong></li>
+
+      <Panel title="Propagation Pathways" className="span-7 cultivation-list-panel" subtitle="Where structural pressure is moving in plain operator language.">
+        <ul className="system-body-timeline-list cultivation-compact-list">
+          {(cognition.propagation_pathways ?? []).map((path) => (
+            <li key={path}><span className="metadata-text">Pathway</span><strong>{humanizePathway(path)}</strong></li>
           ))}
+          {(cognition.propagation_pathways ?? []).length === 0 && (
+            <li><span className="metadata-text">Pathway</span><strong>No active propagation pathway.</strong></li>
+          )}
         </ul>
       </Panel>
-      <Panel title="Structural Replay" className="span-12 cultivation-code-panel" subtitle="Recent replay frames for operator review and timeline inspection.">
-        <pre className="code-surface">{JSON.stringify(replayFrames, null, 2)}</pre>
-      </Panel>
-      <Panel title="Cultivation Structural Ontology" className="span-12 cultivation-code-panel" subtitle="Domain structural primitives and archetype definitions in active use.">
-        <pre className="code-surface">{JSON.stringify(ontology ?? {}, null, 2)}</pre>
-      </Panel>
-      <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel" subtitle="Exportable operator-ready summary from current structural cognition state.">
+
+      <div className="span-5 cultivation-right-stack">
+        <Panel title="Active Cultivation Archetypes" className="cultivation-list-panel cultivation-stack-panel" subtitle="Structural behaviors active in the current state.">
+          <ul className="system-body-timeline-list cultivation-compact-list">
+            {(cognition.active_archetypes ?? []).map((item) => (
+              <li key={item}><span className="metadata-text">Archetype</span><strong>{item}</strong></li>
+            ))}
+            {(cognition.active_archetypes ?? []).length === 0 && (
+              <li><span className="metadata-text">Archetype</span><strong>No active archetypes.</strong></li>
+            )}
+          </ul>
+        </Panel>
+
+        <Panel title="Continuation Window" className="cultivation-list-panel cultivation-stack-panel" subtitle="Current continuation and convergence/recovery context.">
+          <div className="cultivation-summary-callouts">
+            <p><strong>Continuation window:</strong> {continuationWindow}</p>
+            <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
+            <p><strong>Topology context:</strong> {cognition.cognition_state ?? "Monitoring"}</p>
+          </div>
+        </Panel>
+      </div>
+
+      <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel" subtitle="Exportable operator-ready summary from current structural cognition state.">
         <button type="button" className="secondary-command-button" onClick={() => exportPilotReport(reportExport)}>
           Export Weekly Pilot Report
         </button>
-        <pre className="code-surface">{reportExport}</pre>
+        <p className="metadata-text cultivation-ontology-note">
+          Ontology snapshot: {Boolean(ontology && Object.keys(ontology).length > 0) ? "available" : "unavailable"}
+        </p>
+        <pre className="code-surface cultivation-report-surface">{reportExport}</pre>
       </Panel>
     </div>
   );
@@ -211,4 +248,33 @@ function buildFallbackReplayTimeline() {
       canonical_flow: [],
     },
   };
+}
+
+function summarizeChange(cognition) {
+  return cognition.cognition_state
+    ? `${cognition.cognition_state}.`
+    : "No active structural change detected.";
+}
+
+function summarizeSpread(cognition) {
+  const firstPath = cognition.propagation_pathways?.[0];
+  return firstPath ? humanizePathway(firstPath) : "No active propagation pathway.";
+}
+
+function summarizeTrust(cognition, evidenceSummary) {
+  return evidenceSummary[0]
+    ?? cognition.operator_explanation
+    ?? "Evidence lineage is building from current telemetry context.";
+}
+
+function summarizeFrame(frame) {
+  const archetypes = frame?.active_archetypes ?? [];
+  if (archetypes.length > 0) {
+    return `Active archetypes: ${archetypes.slice(0, 2).join(", ")}${archetypes.length > 2 ? "..." : ""}`;
+  }
+  const pathway = frame?.propagation_state?.dominant_pathway ?? frame?.propagation_state?.pathway;
+  if (pathway) {
+    return `Propagation: ${humanizePathway(pathway)}`;
+  }
+  return "Structural state captured for operator review.";
 }

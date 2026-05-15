@@ -3,10 +3,10 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   height: 100dvh;
   padding: calc(18px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
-  border-right: 1px solid rgba(138, 184, 196, 0.07);
+  border-right: 1px solid rgba(138, 184, 196, 0.05);
   background:
     radial-gradient(circle at top left, rgba(99, 188, 211, 0.05), transparent 24%),
     linear-gradient(180deg, rgba(58, 178, 138, 0.025), transparent 20%),
@@ -72,11 +72,11 @@
 .workspace-nav__item {
   position: relative;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   width: 100%;
-  min-height: 78px;
-  padding: 12px 14px 12px 18px;
-  border: 1px solid rgba(138, 184, 196, 0.05);
+  min-height: 66px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid rgba(138, 184, 196, 0.035);
   border-left: 1px solid transparent;
   border-radius: 16px;
   background:
@@ -94,7 +94,7 @@
 
 .workspace-nav__label {
   color: rgba(238, 244, 246, 0.96);
-  font-size: 0.89rem;
+  font-size: 0.86rem;
   font-weight: 620;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -110,8 +110,13 @@
 .workspace-nav__detail {
   margin: 0;
   color: rgba(194, 208, 213, 0.76);
-  font-size: 0.72rem;
-  line-height: 1.42;
+  font-size: 0.7rem;
+  line-height: 1.34;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .workspace-nav__item:hover,
@@ -122,15 +127,15 @@
 }
 
 .workspace-nav__item--active {
-  border-color: rgba(138, 184, 196, 0.1);
+  border-color: rgba(138, 184, 196, 0.16);
   background:
-    linear-gradient(180deg, rgba(26, 35, 41, 0.82), rgba(12, 17, 20, 0.74));
+    linear-gradient(180deg, rgba(24, 34, 40, 0.88), rgba(12, 17, 20, 0.76));
 }
 
 .workspace-nav__item--active::before {
   content: "";
   position: absolute;
-  inset: 14px auto 14px 7px;
+  inset: 11px auto 11px 7px;
   width: 2px;
   border-radius: 999px;
   background: rgba(var(--state-accent-rgb), 0.9);
@@ -141,10 +146,10 @@
 }
 
 .sidebar-section--terminal {
-  margin-top: auto;
+  margin-top: 8px;
   padding: 14px 14px 12px;
   border-radius: 18px;
-  border: 1px solid rgba(138, 184, 196, 0.07);
+  border: 1px solid rgba(138, 184, 196, 0.055);
   background:
     linear-gradient(180deg, rgba(18, 24, 28, 0.68), rgba(10, 13, 16, 0.62));
 }
@@ -190,6 +195,10 @@
 
   .workspace-drawer .workspace-nav__item {
     min-height: 74px;
+  }
+
+  .workspace-drawer .workspace-nav__detail {
+    -webkit-line-clamp: 2;
   }
 
   .workspace-drawer .sidebar-section--terminal {
