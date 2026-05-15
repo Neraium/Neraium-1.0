@@ -30,6 +30,7 @@
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+  margin-top: 2px;
 }
 
 .top-status--minimal .status-rack .status-chip {
@@ -55,6 +56,29 @@
 
 .workspace-view--cultivation-mission-control .workspace-grid {
   align-items: start;
+}
+
+.workspace-view--cultivation-mission-control .platform-sidebar {
+  border-right-color: rgba(138, 184, 196, 0.04);
+  background: linear-gradient(180deg, rgba(9, 13, 16, 0.95), rgba(7, 10, 13, 0.95));
+}
+
+.workspace-view--cultivation-mission-control .sidebar-brand-shell {
+  opacity: 0.9;
+}
+
+.workspace-view--cultivation-mission-control .workspace-nav {
+  gap: 7px;
+}
+
+.workspace-view--cultivation-mission-control .workspace-nav__item {
+  min-height: 58px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.workspace-view--cultivation-mission-control .workspace-nav__detail {
+  display: none !important;
 }
 
 .workspace-view--cultivation-mission-control .cultivation-mission-grid--clean {

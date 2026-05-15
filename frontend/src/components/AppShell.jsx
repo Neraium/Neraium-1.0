@@ -180,6 +180,7 @@ function WorkspaceNavigationContent({
   onSelectWorkspace,
 }) {
   const activeUiState = normalizeOperationalState(liveOps.facilityTone);
+  const cultivationFocused = activeWorkspace === "cultivation-mission-control";
   return (
     <>
       <div className="sidebar-brand-shell">
@@ -222,15 +223,17 @@ function WorkspaceNavigationContent({
         </nav>
       </div>
 
-      <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
-        <p className="sidebar-kicker">Persistent state</p>
-        <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
-        <SidebarTelemetry label="Primary room" value={roomContext.primary} />
-        <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-        <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
-        <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
-        <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
-      </div>
+      {!cultivationFocused ? (
+        <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
+          <p className="sidebar-kicker">Persistent state</p>
+          <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
+          <SidebarTelemetry label="Primary room" value={roomContext.primary} />
+          <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
+          <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
+          <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
+          <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
+        </div>
+      ) : null}
 
       <div className="sidebar-footer">
         <StatusDot tone={liveOps.connectionTone} />
@@ -284,24 +287,41 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
-        <article className="top-status__brief-item">
-          <span>What's changing</span>
-          <strong>{triageSummary.problem}</strong>
-        </article>
-        <article className="top-status__brief-item">
-          <span>Where it is spreading</span>
-          <strong>{triageSummary.where}</strong>
-        </article>
-        <article className="top-status__brief-item top-status__brief-item--wide">
-          <span>Why trust this</span>
-          <p>{triageSummary.why}</p>
-        </article>
-        <article className="top-status__brief-item top-status__brief-item--wide">
-          <span>What to inspect</span>
-          <p>{triageSummary.human}</p>
-        </article>
-      </div>
+      {!minimalCultivationHeader ? (
+        <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
+          <article className="top-status__brief-item">
+            <span>What's changing</span>
+            <strong>{triageSummary.problem}</strong>
+          </article>
+          <article className="top-status__brief-item">
+            <span>Where it is spreading</span>
+            <strong>{triageSummary.where}</strong>
+          </article>
+          <article className="top-status__brief-item top-status__brief-item--wide">
+            <span>Why trust this</span>
+            <p>{triageSummary.why}</p>
+          </article>
+          <article className="top-status__brief-item top-status__brief-item--wide">
+            <span>What to inspect</span>
+            <p>{triageSummary.human}</p>
+          </article>
+        </div>
+      ) : (
+        <div className="top-status__compact">
+          <article className="top-status__compact-item">
+            <span>Structural condition</span>
+            <strong>{liveOps.facilityStateLabel}</strong>
+          </article>
+          <article className="top-status__compact-item">
+            <span>Primary room</span>
+            <strong>{roomContext.primary}</strong>
+          </article>
+          <article className="top-status__compact-item">
+            <span>Next inspect</span>
+            <strong>{liveOps.primaryWindow?.label ?? "Facility overview"}</strong>
+          </article>
+        </div>
+      )}
       {degradedMode ? (
         <div className="top-status__degraded">
           <strong>Degraded Mode Active</strong>
