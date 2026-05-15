@@ -213,15 +213,15 @@
 
 .top-status__compact-item span {
   color: var(--text-muted);
-  font-size: 0.64rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
 .top-status__compact-item strong {
   color: var(--text-primary);
-  font-size: 0.88rem;
-  line-height: 1.4;
+  font-size: 1.02rem;
+  line-height: 1.45;
+  font-weight: 560;
 }
 
 .status-rack {
@@ -365,15 +365,15 @@
 }
 
 .cultivation-hero-panel .ops-panel__header h2 {
-  font-size: clamp(1.9rem, 2.7vw, 2.8rem);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
+  font-size: clamp(2.1rem, 3.1vw, 3.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.018em;
 }
 
 .cultivation-hero-panel .ops-panel__header p {
   max-width: 70ch;
-  font-size: 0.95rem;
-  line-height: 1.55;
+  font-size: 1.04rem;
+  line-height: 1.62;
   color: rgba(208, 226, 220, 0.9);
 }
 
@@ -414,15 +414,14 @@
 
 .cultivation-overview-orb-meta span {
   color: rgba(168, 196, 201, 0.84);
-  font-size: 0.66rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
 }
 
 .cultivation-overview-orb-meta strong {
   color: rgba(238, 248, 246, 0.96);
-  font-size: 1.04rem;
-  line-height: 1.35;
+  font-size: 1.22rem;
+  line-height: 1.4;
   font-weight: 560;
 }
 
@@ -438,15 +437,14 @@
 
 .cultivation-top-summary-card span {
   color: rgba(168, 196, 201, 0.84);
-  font-size: 0.66rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
 }
 
 .cultivation-top-summary-card strong {
   color: rgba(238, 248, 246, 0.96);
-  font-size: 0.97rem;
-  line-height: 1.46;
+  font-size: 1.08rem;
+  line-height: 1.52;
   font-weight: 560;
 }
 
@@ -509,15 +507,15 @@
 }
 
 .cultivation-tab {
-  min-height: 38px;
-  padding: 0 12px;
-  border-radius: 10px;
+  min-height: 42px;
+  padding: 0 15px;
+  border-radius: 12px;
   border: 1px solid rgba(138, 184, 196, 0.2);
   background: linear-gradient(180deg, rgba(14, 21, 26, 0.88), rgba(9, 13, 17, 0.86));
   color: rgba(214, 233, 228, 0.88);
-  font-size: 0.73rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.84rem;
+  font-weight: 530;
+  letter-spacing: 0.015em;
 }
 
 .cultivation-tab.is-active {
@@ -531,6 +529,7 @@
   display: grid;
   gap: 8px;
   color: rgba(215, 233, 226, 0.9);
+  font-size: 1rem;
 }
 
 .cultivation-summary-callouts p {

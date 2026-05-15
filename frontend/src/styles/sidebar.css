@@ -35,14 +35,14 @@
 }
 
 .brand-name {
-  font-size: 0.88rem;
-  letter-spacing: 0.12em;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
 }
 
 .brand-subtitle {
   color: rgba(201, 221, 225, 0.74);
-  font-size: 0.72rem;
-  line-height: 1.45;
+  font-size: 0.79rem;
+  line-height: 1.5;
 }
 
 .brand-edition {
@@ -60,8 +60,8 @@
 
 .sidebar-kicker {
   color: rgba(160, 178, 184, 0.76);
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
 }
 
 .workspace-nav {
@@ -94,16 +94,16 @@
 
 .workspace-nav__label {
   color: rgba(238, 244, 246, 0.96);
-  font-size: 0.86rem;
+  font-size: 0.98rem;
   font-weight: 620;
-  line-height: 1.2;
+  line-height: 1.28;
   letter-spacing: -0.01em;
 }
 
 .workspace-nav__eyebrow {
   color: rgba(138, 184, 196, 0.72);
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
