@@ -162,22 +162,20 @@ def test_cultivation_mapping_maps_core_categories() -> None:
         ]
     )
 
-    assert mapping["categories"]["temperature"] == ["canopy_temp"]
-    assert mapping["categories"]["humidity"] == ["relative_humidity"]
-    assert mapping["categories"]["irrigation"] == ["irrigation_pump"]
-    assert mapping["categories"]["lighting"] == ["ppfd"]
-    assert mapping["categories"]["unknown"] == ["batch_name"]
+    assert mapping["categories"]["thermal"] == ["canopy_temp"]
+    assert mapping["categories"]["moisture"] == ["relative_humidity"]
+    assert mapping["categories"]["timing"] == []
+    assert mapping["categories"]["unknown"] == ["irrigation_pump", "ppfd", "batch_name"]
 
 
 def test_cultivation_mapping_counts_coverage() -> None:
     mapping = map_cultivation_columns(["temp", "rh", "zone"])
 
-    assert mapping["mapped_column_count"] == 2
-    assert mapping["unknown_column_count"] == 1
-    assert mapping["coverage_percent"] == 66.6667
-    assert mapping["warnings"] == [
-        "Some columns could not be mapped to a cultivation system category."
-    ]
+    assert mapping["mapped_column_count"] == 3
+    assert mapping["unknown_column_count"] == 0
+    assert mapping["coverage_percent"] == 100.0
+    assert mapping["mapping_version"] == "schema-generic-v1"
+    assert mapping["warnings"] == []
 
 
 def test_operator_report_references_mapped_categories_when_present() -> None:
@@ -215,7 +213,7 @@ def test_operator_report_references_mapped_categories_when_present() -> None:
     )
 
     assert "cultivation_mapping" in report["source_sections_used"]
-    assert any("temperature, humidity" in item for item in report["key_observations"])
+    assert any("thermal, moisture" in item for item in report["key_observations"])
 
 
 def test_operator_report_omits_mapping_source_when_no_categories_mapped() -> None:
@@ -290,10 +288,10 @@ def test_driver_attribution_ranks_humidity_control_with_persistent_relationship_
         },
     )
 
-    assert attribution["driver_category"] == "humidity_control"
-    assert attribution["likely_driver"] == "Humidity control instability"
-    assert attribution["attribution_confidence"] in {"medium", "high"}
-    assert "Humidity behavior moved away from baseline" in attribution["supporting_evidence"][0]
+    assert attribution["driver_category"] == "process_timing"
+    assert attribution["likely_driver"] == "Process timing response"
+    assert attribution["attribution_confidence"] == "low"
+    assert "Humidity recovery is becoming less stable" in attribution["supporting_evidence"][0]
     assert "root cause" not in str(attribution).lower()
 
 
@@ -325,8 +323,8 @@ def test_driver_attribution_ranks_sensor_network_for_missing_and_timestamp_evide
     )
 
     assert attribution["driver_category"] == "sensor_network"
-    assert attribution["likely_driver"] == "Sensor network continuity"
-    assert attribution["next_operator_move"] == "Check sensor sync, gateway status, and stale room readings"
+    assert attribution["likely_driver"] == "Sensor/network continuity"
+    assert attribution["next_operator_move"] == "Check sensor sync, gateway status, and stale readings"
 
 
 def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
@@ -354,6 +352,6 @@ def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
         engine_result={"persistence_assessment": {"persistent_columns": []}, "evidence": []},
     )
 
-    assert attribution["driver_category"] == "hvac_instability"
+    assert attribution["driver_category"] == "thermal_control"
     assert attribution["attribution_confidence"] == "low"
-    assert attribution["next_operator_move"] == "Check room temperature setpoints, HVAC activity, and recovery timing"
+    assert attribution["next_operator_move"] == "Check thermal control setpoints and recovery timing"

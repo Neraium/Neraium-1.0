@@ -3,12 +3,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
+WORKSPACES_CONFIG = ROOT / "frontend" / "src" / "config" / "workspaces.js"
 DATA_CONNECTIONS_WORKSPACE = ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx"
 EVIDENCE_WORKSPACE = ROOT / "frontend" / "src" / "components" / "EvidenceTrailWorkspace.jsx"
 EVIDENCE_API = ROOT / "frontend" / "src" / "services" / "evidenceApi.js"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
 UPLOAD_FLOW = ROOT / "frontend" / "src" / "viewModels" / "uploadFlow.js"
 UPLOAD_STATE = ROOT / "frontend" / "src" / "viewModels" / "uploadState.js"
+USE_FACILITY_RUNTIME = ROOT / "frontend" / "src" / "hooks" / "useFacilityRuntime.js"
+HEALTH_API = ROOT / "frontend" / "src" / "services" / "api" / "healthApi.js"
 
 
 def read_frontend(path: Path) -> str:
@@ -31,8 +34,8 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 
     assert 'trim().replace(/\\/+$/, "")' in source
     assert 'credentials: "include"' in source
-    assert "return fetch(`${API_BASE_URL}${path}`" in source
-    assert "const { accessCode, headers, ...rest } = options;" in source
+    assert "const response = await fetch(buildUrl(apiBaseUrl, path), {" in source
+    assert "const { accessCode, headers, timeoutMs, ...rest } = options;" in source
     assert "...(headers ?? {})" in source
     assert "return {};" in source
     assert "Authorization: `Bearer ${resolvedAccessCode}`" not in source
@@ -41,6 +44,7 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 
 def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
     source = read_upload_surface()
+    app_source = read_frontend(APP_JSX)
     evidence_source = read_frontend(EVIDENCE_WORKSPACE)
     evidence_api_source = read_frontend(EVIDENCE_API)
 
@@ -48,12 +52,10 @@ def test_upload_and_polling_use_shared_credentialed_api_helper() -> None:
         'apiFetch("/api/data/upload"',
         "apiFetch(`/api/data/upload-status/${pollingJobId}`",
         'apiFetch("/api/data/latest-upload"',
-        'apiFetch("/api/facility/systems"',
-        'apiFetch("/api/intelligence/engine-identity"',
-        'apiFetch("/api/health"',
-        'apiFetch("/api/data/latest-upload"',
     ):
         assert endpoint in source
+    assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
+    assert 'apiFetch("/api/facility/systems"' in read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "systemApi.js")
     for endpoint in (
         'apiFetch("/api/evidence/latest"',
         'apiFetch("/api/evidence/runs"',
@@ -121,9 +123,10 @@ def test_object_errors_render_through_normalized_messages() -> None:
 
 def test_protected_route_errors_use_generic_session_copy() -> None:
     source = read_upload_surface()
+    app_source = read_frontend(APP_JSX)
 
     assert "Session expired. Refresh workspace." in source
-    assert "await buildProtectedRequestMessage(response)" in source
+    assert "await buildProtectedRequestMessage(error)" in read_frontend(USE_FACILITY_RUNTIME)
     assert "function formatAuthDiagnosticMessage(diagnostic)" not in source
     assert "[object Object]" not in source
     assert "Upload processing interrupted." in source
@@ -141,12 +144,11 @@ def test_upload_errors_do_not_preserve_shared_secret_diagnostics() -> None:
 
 
 def test_public_health_check_does_not_clear_protected_route_errors() -> None:
-    source = read_frontend(APP_JSX)
-    health_start = source.index('const response = await apiFetch("/api/health"')
-    health_end = source.index("return true;", health_start)
+    source = read_frontend(USE_FACILITY_RUNTIME)
+    health_start = source.index("await fetchApiHealth({")
+    health_end = source.index("setApiStatus({", health_start)
     health_success_block = source[health_start:health_end]
 
-    assert "setApiStatus({" in health_success_block
     assert "setBackendError(API_CONFIG_WARNING)" not in health_success_block
 
 
@@ -157,23 +159,23 @@ def test_upload_failure_console_log_uses_readable_fields() -> None:
 
 
 def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> None:
-    source = read_frontend(APP_JSX)
+    source = read_frontend(USE_FACILITY_RUNTIME)
 
     assert "const [latestUploadResult, setLatestUploadResult] = useState(null);" in source
     assert "const loadLatestUploadState = useCallback(async () => {" in source
-    assert "setLatestUploadSnapshot(payload ?? uploadStateView.buildEmptyLatestUploadSnapshot());" in source
-    assert "const latestResult = payload?.latest_result;" in source
-    assert "setLatestUploadResult(latestResult);" in source
+    assert "setLatestUploadSnapshot(payload.snapshot);" in source
+    assert "setLatestUploadResult(payload.latestResult);" in source
     assert "window.localStorage" not in source
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
+    workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
     assert 'label: "Telemetry Intake"' not in source
     assert 'title="Telemetry intake"' not in source
-    assert 'label: "Data Connections"' in read_frontend(APP_JSX)
+    assert 'label: "Data Connections"' in workspaces_source
     assert 'Upload Telemetry File' in source
     assert 'title="Upload History"' in source
     assert 'title="Change Summary"' in source
-    assert 'label: "Evidence Trail"' in source
+    assert 'label: "Evidence Lineage"' in workspaces_source
