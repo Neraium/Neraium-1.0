@@ -119,6 +119,12 @@
   text-overflow: ellipsis;
 }
 
+@media (min-width: 1101px) {
+  .workspace-nav__detail {
+    display: none;
+  }
+}
+
 .workspace-nav__item:hover,
 .workspace-nav__item:focus-visible {
   border-color: rgba(138, 184, 196, 0.1);

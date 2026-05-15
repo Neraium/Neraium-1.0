@@ -37,8 +37,7 @@
 }
 
 .top-status--minimal .top-status__brief {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  display: none;
 }
 
 .top-status--minimal .top-status__brief-item {

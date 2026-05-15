@@ -344,7 +344,7 @@
 
 .cultivation-top-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin-top: 8px;
 }
@@ -422,6 +422,31 @@
 
 .cultivation-ontology-note {
   margin: 0;
+}
+
+.cultivation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.cultivation-tab {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(138, 184, 196, 0.2);
+  background: linear-gradient(180deg, rgba(14, 21, 26, 0.88), rgba(9, 13, 17, 0.86));
+  color: rgba(214, 233, 228, 0.88);
+  font-size: 0.73rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cultivation-tab.is-active {
+  border-color: rgba(114, 208, 183, 0.6);
+  color: rgba(236, 247, 243, 0.97);
+  background: linear-gradient(180deg, rgba(24, 37, 36, 0.92), rgba(10, 19, 18, 0.9));
 }
 
 .cultivation-summary-callouts {
