@@ -45,7 +45,16 @@ export default function StructuralReplayWorkspace({
         setError("");
       } catch (loadError) {
         if (!cancelled) {
-          setError(normalizeErrorMessage(loadError?.message ?? loadError));
+          if (mode === "demo") {
+            const demoPayload = buildCultivationReplayDemo();
+            setTimeline(demoPayload.timeline);
+            setComparisonTimeline(demoPayload.timeline);
+            setMeta(demoPayload.meta);
+            setFrameIndex(Math.max(0, demoPayload.timeline.length - 1));
+            setError("");
+          } else {
+            setError(normalizeErrorMessage(loadError?.message ?? loadError));
+          }
         }
       }
     }
@@ -212,4 +221,55 @@ export default function StructuralReplayWorkspace({
       ) : null}
     </div>
   );
+}
+
+function buildCultivationReplayDemo() {
+  const now = Date.now();
+  const timeline = [
+    {
+      timestamp: new Date(now - 1000 * 60 * 60 * 6).toISOString(),
+      topology_state: { stability_state: "STABLE", fragmentation_indicator: "low", phase: "stable_topology" },
+      propagation_state: { propagation_acceleration: "low", dominant_paths: ["airflow_balance"], recovery_convergence: "stable" },
+      cognition_state: { canonical_phase: "stable_topology", confidence_tier: "HIGH_EVIDENCE", operational_phase: "monitoring", facility_state: "Monitoring" },
+      continuation_window: { window: "14 operational days", timing_window: "low urgency" },
+      subsystem_pressure: { compression_intensity: "low" },
+      evidence_state: { lineage_events: [{ target: "airflow_balance", evidence_sources: { topology_evidence: ["Room synchronization stable"] } }] },
+    },
+    {
+      timestamp: new Date(now - 1000 * 60 * 60 * 4).toISOString(),
+      topology_state: { stability_state: "WATCH", fragmentation_indicator: "moderate", phase: "relationship_weakening" },
+      propagation_state: { propagation_acceleration: "moderate", dominant_paths: ["airflow_imbalance_to_thermal_lag"], recovery_convergence: "monitoring" },
+      cognition_state: { canonical_phase: "propagation_activation", confidence_tier: "MODERATE_EVIDENCE", operational_phase: "drift_review", facility_state: "Drift observed" },
+      continuation_window: { window: "7 to 12 operational days", timing_window: "compression emerging" },
+      subsystem_pressure: { compression_intensity: "moderate" },
+      evidence_state: { lineage_events: [{ target: "compensation_masking", evidence_sources: { propagation_evidence: ["HVAC response lag", "Humidity compensation rise"] } }] },
+    },
+    {
+      timestamp: new Date(now - 1000 * 60 * 60 * 2).toISOString(),
+      topology_state: { stability_state: "DETERIORATING", fragmentation_indicator: "high", phase: "structural_fragmentation" },
+      propagation_state: { propagation_acceleration: "high", dominant_paths: ["airflow_imbalance_to_thermal_lag_to_vpd_drift"], recovery_convergence: "delayed" },
+      cognition_state: { canonical_phase: "continuation_pathways", confidence_tier: "HIGH_EVIDENCE", operational_phase: "operator_review", facility_state: "Escalation watch" },
+      continuation_window: { window: "3 to 6 operational days", timing_window: "elevated urgency" },
+      subsystem_pressure: { compression_intensity: "high" },
+      evidence_state: { lineage_events: [{ target: "vpd_decoupling", evidence_sources: { persistence_evidence: ["VPD coupling drift persisted across replay frames"] } }] },
+    },
+  ];
+  return {
+    timeline,
+    meta: {
+      frame_count: timeline.length,
+      intervals: timeline.length,
+      replay_compression: 1,
+      canonical_flow: [
+        "stable_topology",
+        "relationship_weakening",
+        "pressure_migration",
+        "archetype_emergence",
+        "propagation_activation",
+        "structural_fragmentation",
+        "continuation_pathways",
+        "recovery_or_escalation",
+      ],
+    },
+  };
 }

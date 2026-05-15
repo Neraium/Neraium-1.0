@@ -102,7 +102,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(app_info.router, prefix="/api")
     app.include_router(connectors.router, prefix="/api")
     app.include_router(data_connections.router, prefix="/api")
-    app.include_router(state_compat.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
@@ -111,6 +110,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(audit.router, prefix="/api")
     app.include_router(ecosystem.router, prefix="/api")
     app.include_router(distributed_cognition.router, prefix="/api")
+    # Keep compatibility routes mounted after canonical routers so they do not
+    # override pilot contracts used by operator workflows and smoke tests.
+    app.include_router(state_compat.router, prefix="/api")
 
     @app.middleware("http")
     async def add_request_id_header(request: Request, call_next):

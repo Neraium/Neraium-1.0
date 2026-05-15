@@ -104,6 +104,7 @@ export default function AppShell({
       topStatus={(
         <TopStatusBar
           activeConfig={activeConfig}
+          apiStatus={apiStatus}
           latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           liveOps={liveOps}
@@ -243,6 +244,7 @@ function WorkspaceNavigationContent({
 
 function TopStatusBar({
   activeConfig,
+  apiStatus,
   latestUploadResult,
   roomContext,
   liveOps,
@@ -257,10 +259,11 @@ function TopStatusBar({
   const intelligenceLabel = formatIntelligenceSourceLabel(liveOps.intelligenceMode);
   const triageSummary = deriveTriageSummary(liveOps, roomContext);
   const uiState = normalizeOperationalState(liveOps.facilityTone);
+  const degradedMode = apiStatus?.state === "offline";
   return (
     <header className="top-status">
       <div className="top-status__title">
-        <p className="eyebrow">Neraium Command • {activeConfig.eyebrow}</p>
+        <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
         <h1 id="page-title">{activeConfig.label}</h1>
         <p>{activeConfig.description}</p>
         <div className="top-status__meta">
@@ -294,6 +297,15 @@ function TopStatusBar({
           <p>{triageSummary.human}</p>
         </article>
       </div>
+      {degradedMode ? (
+        <div className="top-status__degraded">
+          <strong>Degraded Mode Active</strong>
+          <p>
+            Backend connectivity is unavailable. Neraium is preserving structural cognition context for operator review while
+            live route data reconnects.
+          </p>
+        </div>
+      ) : null}
 
       <div className="status-rack">
         <StatusChip label="Severity" value={liveOps.facilityStateLabel} tone={liveOps.facilityTone} />
