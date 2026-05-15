@@ -2,7 +2,6 @@
    Keep CSS import order here so main.jsx stays clean and layout overrides remain predictable. */
 
 @import "../styles.css";
-@import "../neraium-hardening.css";
 @import "./tokens.css";
 @import "./typography.css";
 @import "./elevation.css";
@@ -15,4 +14,3 @@
 @import "./mobile.css";
 @import "./top-status.css";
 @import "./shell.css";
-@import "./cultivation-console-refactor.css";
