@@ -267,7 +267,7 @@ function TopStatusBar({
     <header className={`top-status ${minimalCultivationHeader ? "top-status--minimal" : ""}`}>
       <div className="top-status__title">
         <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
-        <h1 id="page-title" className={minimalCultivationHeader ? "top-status__title-compact" : ""}>
+        <h1 id="page-title" className={minimalCultivationHeader ? "sr-only" : ""}>
           {activeConfig.label}
         </h1>
         {!minimalCultivationHeader ? <p>{activeConfig.description}</p> : null}
