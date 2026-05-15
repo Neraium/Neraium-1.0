@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
  API_BASE_URL,
  apiFetch,
@@ -21,9 +21,9 @@ import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
 import CultivationMissionControl from "./components/cultivation/CultivationMissionControl";
 import CultivationEvidenceWorkspace from "./components/cultivation/CultivationEvidenceWorkspace";
 import PropagationWorkspace from "./components/PropagationWorkspace";
-import DesktopWorkspaceLayout from "./components/shell/layout/DesktopWorkspaceLayout";
+import AppShell from "./components/AppShell";
+import AppErrorBoundary from "./components/AppErrorBoundary";
 import {
-  CompactList,
   EmptyState,
   MetricGrid,
   Panel,
@@ -36,400 +36,60 @@ import { buildOperationalContext as buildFacilityOperationalState } from "./view
 import {
   buildIntakeStages,
   normalizeErrorMessage,
-  readJsonPayload,
 } from "./viewModels/uploadFlow";
 import { normalizeOperationalState } from "./viewModels/operationalUiState";
 import * as uploadStateView from "./viewModels/uploadState";
-import useStableInterval from "./hooks/useStableInterval";
-import { fetchApiHealth } from "./services/api/healthApi";
-import { fetchEngineIdentity, fetchFacilitySystems as fetchSystemFacility } from "./services/api/systemApi";
-import { fetchLatestUploadState } from "./services/api/uploadApi";
-
-const WORKSPACES = [
-  {
-    id: "cultivation-mission-control",
-    label: "Cultivation Mission Control",
-    eyebrow: "Cultivation Primary",
-    description: "Canonical cultivation structural cognition interface for facility state, replay, pathways, and convergence.",
-  },
-  {
-    id: "historical-replay",
-    label: "Structural Replay",
-    eyebrow: "Replay First",
-    description: "Timeline scrub, propagation pathways, evidence by frame, and continuation windows.",
-  },
-  {
-    id: "evidence-console",
-    label: "Evidence Lineage",
-    eyebrow: "Evidence First",
-    description: "Inspect why structural cognition outputs are supported by subsystem and topology evidence.",
-  },
-  {
-    id: "propagation-map",
-    label: "Propagation Map",
-    eyebrow: "Spread View",
-    description: "Environmental topology spread view for room-to-room structural pathway propagation.",
-  },
-  {
-    id: "data-connections",
-    label: "Data Connections",
-    eyebrow: "Signal Intake",
-    description: "Upload telemetry files and manage the live intake endpoint.",
-  },
-  {
-    id: "operator-workflow",
-    label: "Operator Workflow",
-    eyebrow: "Expert View",
-    description: "Canonical full operator workflow from cognition state through replay and convergence review.",
-  },
-  {
-    id: "cultivation-evidence",
-    label: "Cultivation Evidence",
-    eyebrow: "Expert View",
-    description: "Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.",
-  },
-  {
-    id: "system-body",
-    label: "Current Cognition State",
-    eyebrow: "Expert View",
-    description: "Facility cognition state, structural stability, and active pathways.",
-  },
-  {
-    id: "drift-timeline",
-    label: "Drift Timeline",
-    eyebrow: "Expert View",
-    description: "Trajectory of structural distance from stable baseline.",
-  },
-  {
-    id: "fleet-view",
-    label: "Multi-Site Cognition",
-    eyebrow: "Expert View",
-    description: "Cross-site structural cognition network and recurring archetype clusters.",
-  },
-  {
-    id: "structural-ontology",
-    label: "Structural Ontology",
-    eyebrow: "Expert View",
-    description: "Visualize archetype primitives, ontology relationships, and domain cognition mappings.",
-  },
-  {
-    id: "ecosystem-workspace",
-    label: "Ecosystem Layer",
-    eyebrow: "Expert View",
-    description: "Read-only integration posture, cognition state export, and structural graph ecosystem context.",
-  },
-  {
-    id: "distributed-cognition",
-    label: "Distributed Cognition",
-    eyebrow: "Expert View",
-    description: "Federated structural cognition, persistent graph memory, ontology evolution, and governance.",
-  },
-  {
-    id: "operator-training",
-    label: "Operator Training",
-    eyebrow: "Cognition Training",
-    description: "Replay-backed operator cognition training for structural evolution interpretation.",
-  },
-  {
-    id: "behavior-science",
-    label: "Behavior Science",
-    eyebrow: "Research Layer",
-    description: "Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.",
-  },
-  {
-    id: "operator-cognition-training",
-    label: "Operator Curriculum",
-    eyebrow: "Training System",
-    description: "Replay-based operator cognition curriculum for structural interpretation exercises.",
-  },
-  {
-    id: "structural-cognition-research",
-    label: "Research Workspace",
-    eyebrow: "Framework Layer",
-    description: "Universal primitives, structural evolution mathematics, governance queue, archives, and reasoning traces.",
-  },
-];
-
-const FALLBACK_SYSTEMS = [
-  {
-    name: "HVAC",
-    scope: "Room temperature control, equipment activity, and zone balancing.",
-  },
-  {
-    name: "Humidity control",
-    scope: "Dehumidification, humidification, and moisture stability.",
-  },
-  {
-    name: "Airflow",
-    scope: "Circulation, pressure movement, and room exchange behavior.",
-  },
-  {
-    name: "Irrigation",
-    scope: "Irrigation timing, cycle review, and environmental response context.",
-  },
-  {
-    name: "Lighting",
-    scope: "Photoperiod windows, fixture response, and environmental coupling.",
-  },
-  {
-    name: "Sensor network",
-    scope: "Room sensors, gateway exports, and telemetry continuity.",
-  },
-];
-
-const INTAKE_STAGES = [
-  "Batch receipt",
-  "Header and schema detection",
-  "Timestamp and room context review",
-  "SII engine processing",
-  "Evidence and state write",
-  "Complete",
-];
-
-const REPORT_TEMPLATES = [
-  "Room Climate Trend Summary",
-  "System Coupling Review",
-  "Grower Action Report",
-];
-
-const OPERATIONAL_CADENCE_MS = 30000;
-const LIVE_REFRESH_INTERVAL_MS = 5000;
-const DEFAULT_WORKSPACE_ID = "cultivation-mission-control";
-const PRIMARY_WORKSPACE_ORDER = [
-  "cultivation-mission-control",
-  "historical-replay",
-  "evidence-console",
-  "propagation-map",
-  "data-connections",
-];
-const EXPERT_WORKSPACE_IDS = new Set(
-  WORKSPACES.map((workspace) => workspace.id).filter((id) => !PRIMARY_WORKSPACE_ORDER.includes(id)),
-);
+import { INTAKE_STAGES, REPORT_TEMPLATES } from "./config/workspaces";
+import useWorkspaceNavigation from "./hooks/useWorkspaceNavigation";
+import useFacilityRuntime from "./hooks/useFacilityRuntime";
 
 function App() { 
   const hasAccess = true;
   const apiAccessCode = "";
-  const [activeWorkspace, setActiveWorkspace] = useState(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_WORKSPACE_ID;
-    }
-    const params = new URLSearchParams(window.location.search);
-    const requestedWorkspace = params.get("workspace");
-    return WORKSPACES.some((workspace) => workspace.id === requestedWorkspace) ? requestedWorkspace : DEFAULT_WORKSPACE_ID;
-  });
-  const [expertMode, setExpertMode] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return window.localStorage.getItem("neraium:expert-mode") === "true";
-  });
-  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
-  const [telemetryTick, setTelemetryTick] = useState(0);
-  const [apiStatus, setApiStatus] = useState({
-    state: "checking",
-    label: "Sync pending",
-    detail: "Establishing facility sync.",
-    checkedAt: null,
-    attemptCount: 0,
-    endpoint: formatEndpoint(API_BASE_URL),
-    message: "",
-  });
-  const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
-  const [systemsState, setSystemsState] = useState("loading");
-  const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
-  const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
-  const [latestUploadResult, setLatestUploadResult] = useState(null); 
-  const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot()); 
   const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
   const [preferredEvidenceRunId, setPreferredEvidenceRunId] = useState(null);
   const [selectedTopologyTarget, setSelectedTopologyTarget] = useState(null);
   const [driftHistory, setDriftHistory] = useState([]);
   const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
-  const [demoScenario, setDemoScenario] = useState("drift");
-  const [isDemoMode, setIsDemoMode] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    const params = new URLSearchParams(window.location.search);
-    return params.get("demo") === "1";
+  const {
+    telemetryTick,
+    apiStatus,
+    systems,
+    systemsState,
+    intelligenceStatus,
+    latestUploadResult,
+    latestUploadSnapshot,
+    demoScenario,
+    setDemoScenario,
+    isDemoMode,
+    setIsDemoMode,
+    loadFacilitySystems,
+    loadLatestUploadState,
+  } = useFacilityRuntime({
+    hasAccess,
+    accessCode: apiAccessCode,
+    formatClockTime,
+    formatEndpoint,
+    buildProtectedRequestMessage,
   });
-  const visibleWorkspaces = useMemo(() => {
-    const base = WORKSPACES.filter((workspace) => expertMode || !EXPERT_WORKSPACE_IDS.has(workspace.id));
-    return base.sort((a, b) => {
-      const ai = PRIMARY_WORKSPACE_ORDER.indexOf(a.id);
-      const bi = PRIMARY_WORKSPACE_ORDER.indexOf(b.id);
-      if (ai >= 0 && bi >= 0) return ai - bi;
-      if (ai >= 0) return -1;
-      if (bi >= 0) return 1;
-      return a.label.localeCompare(b.label);
-    });
-  }, [expertMode]);
-  const workspaceRef = useRef(null); 
-  const workspaceDrawerRef = useRef(null);
-  const healthCheckAttemptsRef = useRef(0);
-  const facilitySystemsFetchDisabledRef = useRef(false);
-
-  const checkApiHealth = useCallback(async (trigger = "scheduled") => {
-    if (!hasAccess) {
-      return false;
+  const onWorkspaceSelect = useCallback((workspaceId) => {
+    if (workspaceId !== "drift-timeline" && autoReplay.active) {
+      setAutoReplay((current) => ({ ...current, active: false }));
     }
-
-    const checkTime = new Date();
-    const attemptCount = healthCheckAttemptsRef.current + 1;
-    healthCheckAttemptsRef.current = attemptCount;
-
-    try {
-      await fetchApiHealth({ apiFetch, accessCode: apiAccessCode });
-
-      setApiStatus({
-        state: "online",
-        label: "API Connected",
-        detail: `Last sync ${formatClockTime(checkTime)} CT.`,
-        checkedAt: checkTime.toISOString(),
-        attemptCount,
-        endpoint: formatEndpoint(API_BASE_URL),
-        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
-      });
-      return true;
-    } catch {
-      setApiStatus({
-        state: "offline",
-        label: "API Offline",
-        detail: "Backend connection unavailable. System data could not be loaded.",
-        checkedAt: checkTime.toISOString(),
-        attemptCount,
-        endpoint: formatEndpoint(API_BASE_URL),
-        message: "Backend connection unavailable. System data could not be loaded.",
-      });
-      setBackendError("Backend connection unavailable. System data could not be loaded.");
-      return false;
-    }
-  }, [apiAccessCode, hasAccess]);
-
-  const loadFacilitySystems = useCallback(async () => {
-    if (!hasAccess) {
-      return false;
-    }
-    if (facilitySystemsFetchDisabledRef.current) {
-      return false;
-    }
-
-    try {
-      const payload = await fetchSystemFacility({ apiFetch, accessCode: apiAccessCode });
-      setSystems(payload.systems);
-      setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
-      setSystemsState("ready");
-      setBackendError(API_CONFIG_WARNING);
-      return true;
-    } catch (error) {
-      if (error instanceof Response && (error.status === 401 || error.status === 403)) {
-        const authMessage = await buildProtectedRequestMessage(error);
-        setBackendError(authMessage);
-        return false;
-      }
-      const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
-      const lowerMessage = String(normalizedMessage || "").toLowerCase();
-      if (
-        lowerMessage.includes("failed to fetch")
-        || lowerMessage.includes("networkerror")
-        || lowerMessage.includes("cors")
-      ) {
-        facilitySystemsFetchDisabledRef.current = true;
-      }
-      setSystems(FALLBACK_SYSTEMS);
-      setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
-      setSystemsState("fallback");
-      setBackendError((current) => {
-        if (normalizedMessage === "Session expired. Refresh workspace.") {
-          return normalizedMessage;
-        }
-        if (apiStatus.state === "offline") {
-          return "Backend connection unavailable. System data could not be loaded.";
-        }
-        return current || API_CONFIG_WARNING;
-      });
-      return false;
-    }
-  }, [apiAccessCode, apiStatus.state, hasAccess]);
-
-  const loadLatestUploadState = useCallback(async () => {
-    if (!hasAccess) {
-      return false;
-    }
-
-    try {
-      const payload = await fetchLatestUploadState({ apiFetch, accessCode: apiAccessCode });
-      setLatestUploadSnapshot(payload.snapshot);
-      setLatestUploadResult(payload.latestResult);
-      return Boolean(payload.latestResult);
-    } catch {
-      setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
-      setLatestUploadResult(null);
-      return false;
-    }
-  }, [apiAccessCode, hasAccess]);
-
-  const retryBackendConnection = useCallback(async () => {
-    const isHealthy = await checkApiHealth("retry");
-    if (isHealthy) {
-      facilitySystemsFetchDisabledRef.current = false;
-      await loadFacilitySystems();
-    }
-  }, [checkApiHealth, loadFacilitySystems]);
-
-  useEffect(() => {
-    if (!hasAccess) {
-      return;
-    }
-    checkApiHealth("startup");
-  }, [checkApiHealth, hasAccess]);
-
-  useEffect(() => {
-    if (!hasAccess) {
-      return;
-    }
-
-    loadFacilitySystems();
-    loadLatestUploadState();
-  }, [hasAccess, loadFacilitySystems, loadLatestUploadState]);
-
-  useEffect(() => {
-    if (!hasAccess) {
-      return;
-    }
-    fetchEngineIdentity({ apiFetch, accessCode: apiAccessCode }).catch(() => {});
-  }, [apiAccessCode, hasAccess]);
-
-  useStableInterval(() => {
-    checkApiHealth("interval");
-  }, 20000, hasAccess);
-
-  useStableInterval(() => {
-    setTelemetryTick((current) => current + 1);
-  }, OPERATIONAL_CADENCE_MS, hasAccess);
-
-  useStableInterval(() => {
-    loadLatestUploadState();
-    loadFacilitySystems();
-  }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("neraium:expert-mode", String(expertMode));
-    }
-  }, [expertMode]);
-
-  useEffect(() => {
-    const activeIsHidden = !visibleWorkspaces.some((workspace) => workspace.id === activeWorkspace);
-    if (activeIsHidden) {
-      setActiveWorkspace(DEFAULT_WORKSPACE_ID);
-    }
-  }, [activeWorkspace, visibleWorkspaces]);
-
-  const activeConfig = useMemo(
-    () => visibleWorkspaces.find((workspace) => workspace.id === activeWorkspace) ?? visibleWorkspaces[0] ?? WORKSPACES[0],
-    [activeWorkspace, visibleWorkspaces],
-  );
+  }, [autoReplay.active]);
+  const {
+    activeWorkspace,
+    setActiveWorkspace,
+    activeConfig,
+    expertMode,
+    setExpertMode,
+    visibleWorkspaces,
+    isWorkspaceMenuOpen,
+    setIsWorkspaceMenuOpen,
+    workspaceRef,
+    workspaceDrawerRef,
+    handleWorkspaceSelect,
+  } = useWorkspaceNavigation({ onWorkspaceSelect });
   const roomContext = useMemo(() => uploadStateView.deriveRoomContext(latestUploadResult), [latestUploadResult]);
   const timeCoverage = useMemo(() => uploadStateView.deriveTimeCoverage(latestUploadResult), [latestUploadResult]);
   const runtimeLiveOps = useMemo(() => buildFacilityOperationalState({ 
@@ -542,38 +202,6 @@ function App() {
       return next.slice(-48);
     });
   }, [baselineDistance, liveOps.connectionSummary, telemetryTick]);
-
-  useEffect(() => {
-    if (workspaceRef.current) {
-      workspaceRef.current.scrollTo({ top: 0, behavior: "auto" });
-    }
-  }, [activeWorkspace]);
-
-  useEffect(() => {
-    if (!isWorkspaceMenuOpen) {
-      return undefined;
-    }
-    if (workspaceDrawerRef.current) {
-      workspaceDrawerRef.current.scrollTop = 0;
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setIsWorkspaceMenuOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isWorkspaceMenuOpen]);
-
-  function handleWorkspaceSelect(workspaceId) {
-    setActiveWorkspace(workspaceId);
-    if (workspaceId !== "drift-timeline" && autoReplay.active) {
-      setAutoReplay((current) => ({ ...current, active: false }));
-    }
-    setIsWorkspaceMenuOpen(false);
-  }
 
   function renderActiveWorkspace() { 
     if (activeWorkspace === "cultivation-mission-control") {
@@ -776,270 +404,40 @@ function App() {
 
   return (
     <AppErrorBoundary>
-      <DesktopWorkspaceLayout
+      <AppShell
         activeWorkspace={activeWorkspace}
         workspaceRef={workspaceRef}
-        navigation={(
-          <WorkspaceNavigationContent
-            activeWorkspace={activeWorkspace}
-            workspaces={visibleWorkspaces}
-            expertMode={expertMode}
-            onToggleExpertMode={() => setExpertMode((current) => !current)}
-            apiStatus={apiStatus}
-            latestUploadResult={latestUploadResult}
-            roomContext={roomContext}
-            timeCoverage={timeCoverage}
-            liveOps={liveOps}
-            onSelectWorkspace={handleWorkspaceSelect}
-          />
-        )}
-        mobileHeader={(
-          <header className="mobile-status-bar">
-          <div className="mobile-status-bar__brand">
-            <div className="mobile-status-bar__copy">
-              <p className="brand-name brand-name--hero">Neraium</p>
-              <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
-            </div>
-          </div>
-          <div className="mobile-demo-controls" aria-label="Sample controls">
-            <button
-              className={`secondary-command-button mobile-demo-controls__toggle ${isDemoMode ? "is-active" : ""}`}
-              type="button"
-              onClick={() => {
-                setIsDemoMode((current) => {
-                  const next = !current;
-                  if (next) {
-                    setDemoScenario("stable");
-                  }
-                  return next;
-                });
-              }}
-            >
-              {isDemoMode ? "Sample On" : "Sample Off"}
-            </button>
-            {isDemoMode && (
-              <div className="mobile-demo-controls__scenarios" role="group" aria-label="Sample scenario">
-                <button
-                  className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => setDemoScenario("stable")}
-                >
-                  Stable
-                </button>
-                <button
-                  className={`secondary-command-button ${demoScenario === "drift" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => setDemoScenario("drift")}
-                >
-                  Drift
-                </button>
-                <button
-                  className={`secondary-command-button ${demoScenario === "separation" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => setDemoScenario("separation")}
-                >
-                  Separation
-                </button>
-              </div>
-            )}
-          </div>
-          <button
-            className="workspace-menu-button"
-            type="button"
-            aria-expanded={isWorkspaceMenuOpen}
-            aria-controls="mobile-workspace-drawer"
-            onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
-          >
-            <span className="workspace-menu-button__icon" aria-hidden="true">
-              |||
-            </span>
-            <span>Menu</span>
-          </button>
-          </header>
-        )}
-        topStatus={(
-          <TopStatusBar 
-          activeConfig={activeConfig} 
-          apiStatus={apiStatus} 
-          latestUploadResult={latestUploadResult} 
-          roomContext={roomContext} 
-          timeCoverage={timeCoverage} 
-          liveOps={liveOps} 
-          isDemoMode={isDemoMode}
-          onToggleDemoMode={() => {
-            setIsDemoMode((current) => {
-              const next = !current;
-              if (next) {
-                setDemoScenario("stable");
-              }
-              return next;
-            });
-          }}
-          demoScenario={demoScenario}
-          onSetDemoScenario={setDemoScenario}
-          /> 
-        )}
-        drawer={(
-          <>
-            <div
-              className={`workspace-drawer-backdrop ${isWorkspaceMenuOpen ? "workspace-drawer-backdrop--open" : ""}`}
-              hidden={!isWorkspaceMenuOpen}
-              onClick={() => setIsWorkspaceMenuOpen(false)}
-            />
-            <aside
-              ref={workspaceDrawerRef}
-              className={`workspace-drawer ${isWorkspaceMenuOpen ? "workspace-drawer--open" : ""}`}
-              id="mobile-workspace-drawer"
-              aria-label="Workspace drawer"
-              aria-hidden={!isWorkspaceMenuOpen}
-            >
-              <div className="workspace-drawer__header">
-                <div>
-                  <p className="sidebar-kicker">Navigation</p>
-                  <strong>{activeConfig.label}</strong>
-                </div>
-                <button
-                  className="workspace-drawer__close"
-                  type="button"
-                  aria-label="Close workspace menu"
-                  onClick={() => setIsWorkspaceMenuOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-              <WorkspaceNavigationContent
-                activeWorkspace={activeWorkspace}
-                workspaces={visibleWorkspaces}
-                expertMode={expertMode}
-                onToggleExpertMode={() => setExpertMode((current) => !current)}
-                apiStatus={apiStatus}
-                latestUploadResult={latestUploadResult}
-                roomContext={roomContext}
-                timeCoverage={timeCoverage}
-                liveOps={liveOps}
-                onSelectWorkspace={handleWorkspaceSelect}
-              />
-            </aside>
-          </>
-        )}
-      >
-        {renderActiveWorkspace()}
-      </DesktopWorkspaceLayout>
+        workspaceDrawerRef={workspaceDrawerRef}
+        visibleWorkspaces={visibleWorkspaces}
+        expertMode={expertMode}
+        onToggleExpertMode={() => setExpertMode((current) => !current)}
+        activeConfig={activeConfig}
+        apiStatus={apiStatus}
+        latestUploadResult={latestUploadResult}
+        roomContext={roomContext}
+        timeCoverage={timeCoverage}
+        liveOps={liveOps}
+        onSelectWorkspace={handleWorkspaceSelect}
+        isWorkspaceMenuOpen={isWorkspaceMenuOpen}
+        setIsWorkspaceMenuOpen={setIsWorkspaceMenuOpen}
+        isDemoMode={isDemoMode}
+        onToggleDemoMode={() => {
+          setIsDemoMode((current) => {
+            const next = !current;
+            if (next) {
+              setDemoScenario("stable");
+            }
+            return next;
+          });
+        }}
+        demoScenario={demoScenario}
+        onSetDemoScenario={setDemoScenario}
+        renderActiveWorkspace={renderActiveWorkspace}
+        formatReadiness={formatReadiness}
+        formatIntelligenceSourceLabel={formatIntelligenceSourceLabel}
+        deriveTriageSummary={deriveTriageSummary}
+      />
     </AppErrorBoundary>
-  );
-}
-
-class AppErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error) {
-    console.error("Neraium UI recovered from render error", error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <main className="access-shell">
-          <section className="access-panel" aria-labelledby="recovery-title">
-            <div className="access-brand">
-              <div className="brand-mark">N</div>
-              <span>System recovery</span>
-            </div>
-            <div className="access-copy">
-              <p className="eyebrow">Neraium</p>
-              <h1 id="recovery-title">System view is recovering.</h1>
-              <p>Backend processing is still available. Refresh the page to reload the latest stable state.</p>
-            </div>
-            <button className="command-button" type="button" onClick={() => window.location.reload()}>
-              Refresh view
-            </button>
-          </section>
-        </main>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function WorkspaceNavigationContent({
-  activeWorkspace,
-  workspaces,
-  expertMode,
-  onToggleExpertMode,
-  roomContext,
-  timeCoverage,
-  liveOps,
-  onSelectWorkspace,
-}) {
-  const activeUiState = normalizeOperationalState(liveOps.facilityTone);
-
-  return (
-    <>
-      <div className="sidebar-brand-shell"> 
-        <div className="sidebar-brand"> 
-          <div className="brand-mark">N</div> 
-          <div> 
-            <p className="brand-name">NERAIUM // OPS</p> 
-            <p className="brand-subtitle">Structural Intelligence Control Plane</p> 
-          </div> 
-        </div> 
-        <span className="brand-edition">Enterprise Command</span> 
-      </div> 
-
-      <div className="sidebar-section">
-        <p className="sidebar-kicker">Workspaces</p>
-        <button
-          type="button"
-          className={`secondary-command-button ${expertMode ? "is-active" : ""}`}
-          onClick={onToggleExpertMode}
-        >
-          {expertMode ? "Expert Mode On" : "Expert Mode Off"}
-        </button>
-        <nav className="workspace-nav">
-          {workspaces.map((workspace) => (
-            <button
-              className={`workspace-nav__item ${activeWorkspace === workspace.id ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
-              key={workspace.id}
-              type="button"
-              aria-current={activeWorkspace === workspace.id ? "page" : undefined}
-              onClick={() => onSelectWorkspace(workspace.id)}
-            >
-              <div className="workspace-nav__header">
-                <span className="workspace-nav__label">{workspace.label}</span>
-                <StatusDot tone={activeWorkspace === workspace.id ? liveOps.facilityTone : "muted"} />
-              </div>
-              <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
-              <span className="workspace-nav__detail">{workspace.description}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
-        <p className="sidebar-kicker">Persistent state</p>
-        <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
-        <SidebarTelemetry label="Primary room" value={roomContext.primary} />
-        <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-        <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
-        <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
-        <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
-      </div>
-
-      <div className="sidebar-footer">
-        <StatusDot tone={liveOps.connectionTone} />
-        <div>
-          <p>{liveOps.connectionStatusLine}</p>
-          <span>{liveOps.connectionActionHint}</span>
-        </div>
-      </div>
-    </>
   );
 }
 
@@ -1135,41 +533,6 @@ function TopStatusBar({
         )}
       </div>
     </header>
-  );
-}
-
-function StatusBanner({ title, subtitle, tone }) {
-  return (
-    <div className={`status-banner status-banner--${tone}`}>
-      <StatusDot tone={tone} />
-      <div>
-        <strong>{title}</strong>
-        <p>{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatusChip({ label, value, tone }) { 
-  const uiState = normalizeOperationalState(tone);
-
-  return (
-    <div className={`status-chip status-chip--${tone} ui-state-surface ui-state-surface--${uiState}`}>
-      <div className="status-chip__head">
-        <StatusDot tone={tone} />
-        <span>{label}</span>
-      </div>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function SidebarTelemetry({ label, value }) {
-  return (
-    <div className="sidebar-telemetry">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
