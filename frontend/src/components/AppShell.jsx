@@ -137,7 +137,7 @@ export default function AppShell({
             <div className="workspace-drawer__header">
               <div className="workspace-drawer__brand">
                 <div className="workspace-drawer__title-block">
-                  <strong>Neraium</strong>
+                  <strong>NERAIUM</strong>
                   <span>Structural Intelligence</span>
                 </div>
               </div>
@@ -147,7 +147,8 @@ export default function AppShell({
                 aria-label="Close workspace menu"
                 onClick={() => setIsWorkspaceMenuOpen(false)}
               >
-                ×
+                <span aria-hidden="true">×</span>
+                <span>Close</span>
               </button>
             </div>
             <WorkspaceNavigationContent
@@ -224,7 +225,7 @@ function WorkspaceNavigationContent({
                 <StatusDot tone={activeWorkspace === workspace.id ? liveOps.facilityTone : "muted"} />
               </div>
               <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
-              <span className="workspace-nav__detail">{workspace.description}</span>
+              {!isDrawer ? <span className="workspace-nav__detail">{workspace.description}</span> : null}
             </button>
           ))}
         </nav>
