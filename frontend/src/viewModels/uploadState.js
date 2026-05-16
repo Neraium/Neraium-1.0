@@ -1,7 +1,32 @@
 import { NO_DATA_LABEL, noDataGuidance } from "./uiStateText";
 
 export function hasFullUploadResult(result) {
-  return Boolean(result?.data_quality && result?.engine_result && result?.cultivation_mapping);
+  return Boolean(
+    result
+    && (
+      result.engine_result
+      || result.sii_intelligence
+      || result.operator_report
+      || result.room_summary
+      || result.data_quality
+      || result.processing_trace
+      || result.row_count
+      || result.rows_processed
+    )
+  );
+}
+
+export function hasActiveTelemetrySnapshot(snapshot) {
+  const status = String(snapshot?.status ?? "").toLowerCase();
+  return Boolean(
+    status === "active"
+    || status === "baseline_active"
+    || snapshot?.latest_result
+    || snapshot?.state_available
+    || (snapshot?.rows_processed ?? 0) > 0
+    || (snapshot?.columns_detected ?? 0) > 0
+    || snapshot?.last_filename
+  );
 }
 
 export function buildEmptyLatestUploadSnapshot() {
@@ -263,22 +288,11 @@ function normalizeUploadStatus(status) {
 }
 
 function isUploadProcessing(status) {
-  return ["uploading", "pending", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalizeUploadStatus(status));
+  const normalized = normalizeUploadStatus(status);
+  return ["uploading", "pending", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalized);
 }
 
-function normalizeErrorMessage(error) {
-  if (!error) {
-    return "";
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
+function normalizeErrorMessage(message) {
+  if (message == null) return "Upload failed.";
+  return String(message);
 }
