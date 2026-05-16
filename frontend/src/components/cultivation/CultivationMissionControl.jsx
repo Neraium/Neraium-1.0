@@ -19,6 +19,8 @@ export default function CultivationMissionControl({
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [isReportExpanded, setIsReportExpanded] = useState(false);
+  const [pilotDemoActive, setPilotDemoActive] = useState(false);
+  const [pilotDemoPhase, setPilotDemoPhase] = useState("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +53,35 @@ export default function CultivationMissionControl({
     };
   }, [accessCode, apiFetch, isDemoMode]);
 
+  useEffect(() => {
+    if (!pilotDemoActive) {
+      return undefined;
+    }
+
+    const timeline = [
+      { delayMs: 900, tab: "overview", phase: "watching" },
+      { delayMs: 2600, tab: "propagation", phase: "propagation_active" },
+      { delayMs: 4300, tab: "evidence", phase: "recovery" },
+      { delayMs: 5900, tab: "replay", phase: "recovery" },
+      { delayMs: 7600, tab: "reports", phase: "stable" },
+    ];
+
+    const timers = timeline.map((entry) => window.setTimeout(() => {
+      setActiveTab(entry.tab);
+      setPilotDemoPhase(entry.phase);
+    }, entry.delayMs));
+
+    const endTimer = window.setTimeout(() => {
+      setPilotDemoActive(false);
+      setPilotDemoPhase("idle");
+    }, 9000);
+
+    return () => {
+      timers.forEach((timerId) => window.clearTimeout(timerId));
+      window.clearTimeout(endTimer);
+    };
+  }, [pilotDemoActive]);
+
   if (error) {
     return <EmptyState title="Cultivation mission control unavailable" body={error} />;
   }
@@ -74,7 +105,12 @@ export default function CultivationMissionControl({
   }
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
-  const orbState = deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry);
+  const orbState = deriveOrbState(cognition, {
+    isDemoMode,
+    hasUploadedTelemetry,
+    pilotDemoActive,
+    pilotDemoPhase,
+  });
   const isNoDataState = orbState === "unknown";
   const continuationWindow = isNoDataState ? "Replay unavailable until timeline data is connected" : (cognition.continuation_windows?.window ?? "Monitoring");
   const severityState = deriveCultivationSeverity(cognition, orbState);
@@ -117,6 +153,8 @@ export default function CultivationMissionControl({
             type="button"
             className="command-button"
             onClick={() => {
+              setPilotDemoActive(true);
+              setPilotDemoPhase("watching");
               onRunPilotDemo?.();
               setActiveTab("overview");
             }}
@@ -127,6 +165,8 @@ export default function CultivationMissionControl({
             type="button"
             className="secondary-command-button"
             onClick={() => {
+              setPilotDemoActive(true);
+              setPilotDemoPhase("watching");
               onRunPilotDemo?.();
               setActiveTab("overview");
             }}
@@ -505,9 +545,20 @@ function summarizeFrame(frame) {
   return "Structural state captured for operator review.";
 }
 
-function deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry) {
+function deriveOrbState(cognition, options) {
+  const { isDemoMode, hasUploadedTelemetry, pilotDemoActive, pilotDemoPhase } = options;
   if (!cognition) return "unknown";
-  if (!hasUploadedTelemetry && !isDemoMode) return "unknown";
+
+  // Keep no-upload behavior deterministic unless the operator explicitly starts the pilot demo.
+  if (!hasUploadedTelemetry && !pilotDemoActive) return "unknown";
+
+  if (pilotDemoActive) {
+    if (pilotDemoPhase === "watching") return "watching";
+    if (pilotDemoPhase === "propagation_active") return "propagation_active";
+    if (pilotDemoPhase === "recovery") return "recovery";
+    if (pilotDemoPhase === "stable") return "stable";
+  }
+
   const hasSignals = Boolean(
     (cognition.propagation_pathways?.length ?? 0) > 0
     || (cognition.active_archetypes?.length ?? 0) > 0
