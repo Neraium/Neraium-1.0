@@ -1,3 +1,5 @@
+import { AWAITING_TELEMETRY_LABEL, NO_DATA_LABEL } from "./uiStateText";
+
 const TELEMETRY_CHANNELS = [
   "temperature",
   "humidity",
@@ -236,13 +238,13 @@ function buildEmptyOperationalContext(state, deps) {
     connectionActionHint,
   } = state;
 
-  const message = latestUploadSnapshot?.message ?? "No data connected yet.";
+  const message = latestUploadSnapshot?.message ?? `${NO_DATA_LABEL}.`;
   const items = [{
     id: "connect-data",
     label: "Connect telemetry",
     detail: "Start live polling or upload a telemetry file in Data Connections to activate dashboard values.",
     tone: "info",
-    window: "Awaiting telemetry",
+    window: AWAITING_TELEMETRY_LABEL,
     impact: "No active result",
     actions: ["Connect"],
     technicalDetails: [
@@ -255,8 +257,8 @@ function buildEmptyOperationalContext(state, deps) {
     useDemoTelemetry: false,
     intelligenceMode: "empty",
     facilityTone: "info",
-    facilityStateLabel: "No data connected yet",
-    heroTag: "Awaiting telemetry",
+    facilityStateLabel: NO_DATA_LABEL,
+    heroTag: AWAITING_TELEMETRY_LABEL,
     heroHeadline: "Connect telemetry to activate live facility intelligence.",
     heroSubline: message,
     readinessLabel: "No active telemetry",
@@ -266,7 +268,7 @@ function buildEmptyOperationalContext(state, deps) {
     connectionSummary,
     connectionStatusLine,
     connectionActionHint,
-    dataSourceLabel: "Awaiting telemetry",
+    dataSourceLabel: AWAITING_TELEMETRY_LABEL,
     neraiumScore: null,
     scoreNarrative: "Neraium score will appear after a live baseline or completed upload is available.",
     scoreContext: "No completed telemetry result is available yet.",
@@ -275,7 +277,7 @@ function buildEmptyOperationalContext(state, deps) {
     interventionItems: items,
     actionQueue: [],
     topologyNodes: [],
-    alerts: [{ title: "No data connected yet", detail: message, tone: "info" }],
+    alerts: [{ title: NO_DATA_LABEL, detail: message, tone: "info" }],
     findings: [{ title: "Telemetry required", detail: "Dashboard cards will update when live telemetry or an uploaded file finishes processing.", tone: "info" }],
     timeline: buildConnectionEvents(apiStatus, deps),
     telemetryCards: buildEmptyTelemetryCards(),
@@ -304,7 +306,7 @@ function buildEmptyOperationalContext(state, deps) {
       "event.awaiting_telemetry=true",
     ],
     observations: [message],
-    reportNotes: ["No data connected yet", "Live telemetry or an uploaded file is required before facility intelligence can run"],
+    reportNotes: [NO_DATA_LABEL, "Live telemetry or an uploaded file is required before facility intelligence can run"],
     connectionEvents: buildConnectionEvents(apiStatus, deps),
   };
 }
@@ -1004,7 +1006,7 @@ function buildSiiConsoleEvents(intelligence, apiStatus) {
 function buildEmptyTelemetryCards() {
   return [
     { label: "Neraium Score", primary: "No active result", secondary: "Complete an upload to calculate a score.", series: [], tone: "info" },
-    { label: "Operating State", primary: "No data connected yet", secondary: "This updates from the latest completed upload.", series: [], tone: "info" },
+    { label: "Operating State", primary: NO_DATA_LABEL, secondary: "This updates from the latest completed upload.", series: [], tone: "info" },
     { label: "Primary Room", primary: "Awaiting upload", secondary: "Room context appears after ingestion completes.", series: [], tone: "info" },
     { label: "Drift", primary: "Awaiting upload", secondary: "Drift and alerts appear after a completed upload.", series: [], tone: "info" },
   ];
@@ -1012,7 +1014,7 @@ function buildEmptyTelemetryCards() {
 
 function buildEmptyOverviewMetrics(systems, systemsState) {
   return [
-    { label: "Facility Stability", value: "No data connected yet" },
+    { label: "Facility Stability", value: NO_DATA_LABEL },
     { label: "Rooms Under Review", value: 0 },
     { label: "Telemetry Cadence", value: "Awaiting upload" },
     { label: "Systems in Scope", value: systemsState === "ready" ? `${systems.length} monitored` : `${systems.length} defined` },

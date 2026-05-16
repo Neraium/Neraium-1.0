@@ -1,16 +1,18 @@
 /* Centralized frontend stylesheet entrypoint.
    Keep CSS import order here so main.jsx stays clean and layout overrides remain predictable. */
 
-@import "../styles.css";
-@import "./tokens.css";
-@import "./typography.css";
-@import "./elevation.css";
-@import "./panels.css";
-@import "./layout.css";
-@import "./motion.css";
-@import "./states.css";
-@import "./workspace-system-body.css";
-@import "./sidebar.css";
-@import "./top-status.css";
-@import "./shell.css";
-@import "./mobile-premium.css";
+@layer reset, tokens, base, components, layout, motion, states, overrides;
+
+@import "../styles.css" layer(reset);
+@import "./tokens.css" layer(tokens);
+@import "./typography.css" layer(base);
+@import "./elevation.css" layer(base);
+@import "./panels.css" layer(components);
+@import "./layout.css" layer(layout);
+@import "./motion.css" layer(motion);
+@import "./states.css" layer(states);
+@import "./workspace-system-body.css" layer(components);
+@import "./sidebar.css" layer(components);
+@import "./top-status.css" layer(layout);
+@import "./shell.css" layer(layout);
+@import "./mobile-premium.css" layer(overrides);

@@ -1,3 +1,5 @@
+import { NO_DATA_LABEL, noDataGuidance } from "./uiStateText";
+
 export function hasFullUploadResult(result) {
   return Boolean(result?.data_quality && result?.engine_result && result?.cultivation_mapping);
 }
@@ -6,7 +8,7 @@ export function buildEmptyLatestUploadSnapshot() {
   return {
     status: "empty",
     source: "none",
-    message: "No data connected yet.",
+    message: `${NO_DATA_LABEL}.`,
     last_filename: null,
     rows_processed: 0,
     columns_detected: 0,
@@ -52,8 +54,8 @@ export function deriveRoomContext(result) {
       };
     }
       return {
-        primary: "No data connected yet",
-        secondary: "Connect live telemetry or upload a telemetry file to activate room context",
+        primary: NO_DATA_LABEL,
+        secondary: noDataGuidance(),
         cycle: "Cycle metadata unavailable",
         irrigation: "Irrigation context unavailable",
         uploadedRooms: [],
@@ -121,7 +123,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
     : "Waiting for live telemetry samples.";
   return [
     {
-      title: "No data connected yet",
+      title: NO_DATA_LABEL,
       detail: latestStatus === "empty" && baselineStatus === "none"
         ? "No telemetry source is active yet."
         : "A data source is connected or a result is already active.",
@@ -188,7 +190,7 @@ export function connectionStateLabel(latestStatus, uploadState, uploadError) {
   if (normalizedLatestStatus === "active") {
     return "Latest result active";
   }
-  return "No data connected yet";
+  return NO_DATA_LABEL;
 }
 
 export function buildUploadHistoryRows(history = []) {
@@ -212,7 +214,7 @@ export function buildUploadDiffSummary(history = []) {
   if (!current) {
     return {
       title: "No active result",
-      lines: ["Connect live telemetry or upload a telemetry file to start building a baseline."],
+      lines: [noDataGuidance()],
     };
   }
   const delta = current.diff?.neraium_score_delta;
