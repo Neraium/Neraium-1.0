@@ -76,6 +76,8 @@ export default function useWorkspaceNavigation({
     const previousBodyOverflow = document.body.style.overflow;
     const previousBodyOverscroll = document.body.style.overscrollBehavior;
     const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.classList.add("workspace-menu-is-open");
+    document.documentElement.classList.add("workspace-menu-is-open");
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
     document.documentElement.style.overflow = "hidden";
@@ -88,6 +90,8 @@ export default function useWorkspaceNavigation({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      document.body.classList.remove("workspace-menu-is-open");
+      document.documentElement.classList.remove("workspace-menu-is-open");
       document.body.style.overflow = previousBodyOverflow;
       document.body.style.overscrollBehavior = previousBodyOverscroll;
       document.documentElement.style.overflow = previousHtmlOverflow;

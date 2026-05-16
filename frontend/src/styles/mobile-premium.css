@@ -979,3 +979,162 @@
     max-width: 320px;
   }
 }
+
+/* Stable mobile workspace menu: one opaque overlay, no layered/glass drawer effects. */
+@media (max-width: 900px) {
+  html.workspace-menu-is-open,
+  body.workspace-menu-is-open {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+  }
+
+  body.workspace-menu-is-open .mobile-status-bar,
+  body.workspace-menu-is-open .top-status,
+  body.workspace-menu-is-open .platform-workspace {
+    visibility: hidden;
+  }
+
+  .workspace-drawer-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1000 !important;
+    display: block !important;
+    visibility: hidden;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    background: #030608 !important;
+    opacity: 0;
+    pointer-events: none;
+    transition: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .workspace-drawer-backdrop--open {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .workspace-drawer {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1001 !important;
+    display: flex !important;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 16px;
+    width: 100vw !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(22px + env(safe-area-inset-bottom, 0px)) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #05080b !important;
+    box-shadow: none !important;
+    opacity: 0;
+    visibility: hidden;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspace-drawer--open {
+    opacity: 1;
+    visibility: visible;
+    transform: none !important;
+  }
+
+  .workspace-drawer__header {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 !important;
+    padding: 0 0 14px !important;
+    border-bottom: 1px solid rgba(177, 211, 206, 0.16);
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .workspace-drawer__title-block strong {
+    color: #f7fbfa;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+  }
+
+  .workspace-drawer__title-block span {
+    color: rgba(191, 208, 204, 0.8);
+  }
+
+  .workspace-drawer__close {
+    width: auto !important;
+    min-width: 86px !important;
+    min-height: 40px !important;
+    justify-content: center;
+    border: 1px solid rgba(177, 211, 206, 0.22) !important;
+    border-radius: 999px !important;
+    background: #10171b !important;
+    color: #f7fbfa !important;
+    box-shadow: none !important;
+  }
+
+  .workspace-drawer .sidebar-section {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .workspace-drawer .sidebar-kicker {
+    color: rgba(191, 208, 204, 0.82);
+  }
+
+  .workspace-drawer .secondary-command-button {
+    min-height: 42px;
+    background: #11191d !important;
+    box-shadow: none !important;
+  }
+
+  .workspace-drawer .workspace-nav {
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-drawer .workspace-nav__item {
+    min-height: 56px;
+    padding: 12px;
+    border-radius: 14px;
+    background: #0b1114 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .workspace-drawer .workspace-nav__item:hover,
+  .workspace-drawer .workspace-nav__item:focus-visible {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .workspace-drawer .workspace-nav__item--active {
+    background: #122027 !important;
+  }
+
+  .workspace-drawer .workspace-nav__detail,
+  .workspace-drawer .sidebar-section--terminal,
+  .workspace-drawer .sidebar-footer {
+    display: none !important;
+  }
+}
