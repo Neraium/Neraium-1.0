@@ -136,10 +136,9 @@ export default function AppShell({
           >
             <div className="workspace-drawer__header">
               <div className="workspace-drawer__brand">
-                <span className="brand-mark brand-mark--drawer" aria-hidden="true">N</span>
                 <div className="workspace-drawer__title-block">
-                  <p className="sidebar-kicker">Neraium navigation</p>
-                  <strong>{activeConfig.label}</strong>
+                  <strong>Neraium</strong>
+                  <span>Structural Intelligence</span>
                 </div>
               </div>
               <button
@@ -148,10 +147,11 @@ export default function AppShell({
                 aria-label="Close workspace menu"
                 onClick={() => setIsWorkspaceMenuOpen(false)}
               >
-                Close
+                ×
               </button>
             </div>
             <WorkspaceNavigationContent
+              variant="drawer"
               activeWorkspace={activeWorkspace}
               workspaces={visibleWorkspaces}
               expertMode={expertMode}
@@ -173,6 +173,7 @@ export default function AppShell({
 }
 
 function WorkspaceNavigationContent({
+  variant = "sidebar",
   activeWorkspace,
   workspaces,
   expertMode,
@@ -184,18 +185,21 @@ function WorkspaceNavigationContent({
 }) {
   const activeUiState = normalizeOperationalState(liveOps.facilityTone);
   const cultivationFocused = activeWorkspace === "cultivation-mission-control";
+  const isDrawer = variant === "drawer";
   return (
     <>
-      <div className="sidebar-brand-shell">
-        <div className="sidebar-brand">
-          <div className="brand-mark">N</div>
-          <div>
-            <p className="brand-name">NERAIUM // OPS</p>
-            <p className="brand-subtitle">Structural Intelligence Control Plane</p>
+      {!isDrawer ? (
+        <div className="sidebar-brand-shell">
+          <div className="sidebar-brand">
+            <div className="brand-mark">N</div>
+            <div>
+              <p className="brand-name">NERAIUM // OPS</p>
+              <p className="brand-subtitle">Structural Intelligence Control Plane</p>
+            </div>
           </div>
+          <span className="brand-edition">Enterprise Command</span>
         </div>
-        <span className="brand-edition">Enterprise Command</span>
-      </div>
+      ) : null}
 
       <div className="sidebar-section">
         <p className="sidebar-kicker">Workspaces</p>
@@ -226,7 +230,7 @@ function WorkspaceNavigationContent({
         </nav>
       </div>
 
-      {!cultivationFocused ? (
+      {!isDrawer && !cultivationFocused ? (
         <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
           <p className="sidebar-kicker">Persistent state</p>
           <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
@@ -238,13 +242,15 @@ function WorkspaceNavigationContent({
         </div>
       ) : null}
 
-      <div className="sidebar-footer">
-        <StatusDot tone={liveOps.connectionTone} />
-        <div>
-          <p>{liveOps.connectionStatusLine}</p>
-          <span>{liveOps.connectionActionHint}</span>
+      {!isDrawer ? (
+        <div className="sidebar-footer">
+          <StatusDot tone={liveOps.connectionTone} />
+          <div>
+            <p>{liveOps.connectionStatusLine}</p>
+            <span>{liveOps.connectionActionHint}</span>
+          </div>
         </div>
-      </div>
+      ) : null}
     </>
   );
 }
