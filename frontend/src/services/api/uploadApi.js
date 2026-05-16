@@ -9,9 +9,39 @@ export async function fetchLatestUploadState({ apiFetch, accessCode }) {
 
   const payload = await response.json();
   const latestResult = payload?.latest_result;
+  const snapshotIsActive = uploadStateView.hasActiveTelemetrySnapshot(payload);
+  const hydratedSnapshotResult = snapshotIsActive
+    ? {
+        filename: payload?.last_filename ?? "Active telemetry import",
+        row_count: payload?.rows_processed ?? 0,
+        column_count: payload?.columns_detected ?? 0,
+        rows_processed: payload?.rows_processed ?? 0,
+        columns_detected: payload?.columns_detected ?? 0,
+        room_summary: {
+          rooms: [
+            {
+              room: "Cultivation Rooms",
+            },
+          ],
+        },
+        processing_trace: {
+          completed_at: payload?.last_processed_at ?? null,
+          source: payload?.source ?? payload?.result_source ?? "uploaded",
+        },
+        sii_intelligence: {
+          source: payload?.source ?? payload?.result_source ?? "uploaded",
+          last_updated: payload?.last_processed_at ?? null,
+        },
+      }
+    : null;
+
+  const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult)
+    ? latestResult
+    : hydratedSnapshotResult;
+
   return {
     snapshot: payload ?? uploadStateView.buildEmptyLatestUploadSnapshot(),
-    latestResult: uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null,
+    latestResult: normalizedLatestResult,
   };
 }
 
