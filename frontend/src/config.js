@@ -83,6 +83,10 @@ function buildUrl(apiBaseUrl, path) {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
+export function buildApiUrl(path) {
+  return buildUrl(API_BASE_URL, path);
+}
+
 function shouldRetryAgainstFallback(error) {
   return error instanceof TypeError || error?.name === "ApiNetworkError";
 }

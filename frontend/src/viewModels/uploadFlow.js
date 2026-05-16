@@ -1,16 +1,18 @@
 const INTAKE_STAGES = [
-  "Batch receipt",
-  "Header and schema detection",
-  "Timestamp and room context review",
-  "SII engine processing",
-  "Evidence and state write",
-  "Complete",
+  "Uploading telemetry export",
+  "Validating schema",
+  "Parsing signal matrix",
+  "Building relational baseline",
+  "Computing structural drift",
+  "Generating replay frames",
+  "Preparing operator cognition",
+  "Ready",
 ];
 
 export function buildIntakeStages(result, uploadState, roomContext, job = null) {
   const activeIndex = uploadStageIndex(uploadState);
   return INTAKE_STAGES.map((stage, index) => {
-    if (job || [...["failed"], ...["uploading", "queued", "parsing", "baseline_modeling", "running_sii", "writing_state"]].includes(normalizeUploadStatus(uploadState))) {
+    if (job || [...["failed"], ...["uploading", "queued", "validating_schema", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
       return {
         title: stage,
@@ -36,9 +38,11 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
     const details = [
       `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
       `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
+      `${result.row_count ?? result.rows_processed ?? 0} rows parsed from the signal matrix.`,
       `Room context resolved as ${roomContext.primary}.`,
-      "SII engine processing complete.",
-      "Evidence and facility state were written.",
+      "Structural drift scoring complete.",
+      "Replay/evidence generation complete or available in the evidence workspace.",
+      "Operator cognition prepared from the latest uploaded state.",
       "Facility Command refreshed from latest uploaded state.",
     ];
 
@@ -56,9 +60,13 @@ export function normalizeUploadStatus(status) {
   const aliases = {
     pending: "queued",
     queued: "queued",
+    validating_schema: "validating_schema",
     parsing: "parsing",
     baseline_modeling: "baseline_modeling",
-    running_sii: "running_sii",
+    running_sii: "structural_scoring",
+    structural_scoring: "structural_scoring",
+    cognition_ready: "cognition_ready",
+    generating_replay: "generating_replay",
     generating_evidence: "writing_state",
     writing_state: "writing_state",
     complete: "complete",
@@ -69,7 +77,7 @@ export function normalizeUploadStatus(status) {
 }
 
 export function isUploadProcessing(status) {
-  return ["uploading", "queued", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalizeUploadStatus(status));
+  return ["uploading", "queued", "validating_schema", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"].includes(normalizeUploadStatus(status));
 }
 
 export async function readJsonPayload(response) {
@@ -194,14 +202,23 @@ export function uploadStateMessage(uploadState) {
   if (normalized === "queued") {
     return "Processing queued";
   }
+  if (normalized === "validating_schema") {
+    return "Validating schema";
+  }
   if (normalized === "parsing") {
-    return "Header and schema detection";
+    return "Parsing signal matrix";
   }
   if (normalized === "baseline_modeling") {
-    return "Baseline modeling";
+    return "Building relational baseline";
   }
-  if (normalized === "running_sii") {
-    return "Telemetry batch processing in progress";
+  if (normalized === "structural_scoring") {
+    return "Computing structural drift";
+  }
+  if (normalized === "cognition_ready") {
+    return "Cognition ready";
+  }
+  if (normalized === "generating_replay") {
+    return "Generating replay frames";
   }
   if (normalized === "writing_state") {
     return "Writing facility state";
@@ -219,13 +236,16 @@ function uploadStageIndex(uploadState) {
   return {
     uploading: 0,
     queued: 0,
-    parsing: 1,
-    baseline_modeling: 2,
-    running_sii: 3,
-    writing_state: 4,
-    complete: 5,
-    failed: 4,
-  }[uploadState] ?? 0;
+    validating_schema: 1,
+    parsing: 2,
+    baseline_modeling: 3,
+    structural_scoring: 4,
+    generating_replay: 5,
+    cognition_ready: 6,
+    writing_state: 6,
+    complete: 7,
+    failed: 6,
+  }[normalizeUploadStatus(uploadState)] ?? 0;
 }
 
 function uploadStageDetail(stage, index, job, roomContext) {
@@ -234,16 +254,18 @@ function uploadStageDetail(stage, index, job, roomContext) {
     return job.error ?? "Telemetry processing failed.";
   }
   if (jobStatus === "complete") {
-    return index === 5
+    return index === 7
       ? "Facility Command is using the latest uploaded runner state."
       : "Stage complete.";
   }
   const details = [
-    job?.message ?? "Telemetry batch received.",
-    jobStatus === "parsing" ? job.progress_label : "Waiting for header and schema detection.",
+    job?.message ?? "Telemetry batch upload starts after operator confirmation.",
+    jobStatus === "validating_schema" ? job.progress_label : "Waiting for schema validation.",
+    jobStatus === "parsing" ? job.progress_label : "Parser will stream the signal matrix without loading the full export into memory.",
     jobStatus === "baseline_modeling" ? job.progress_label : `Room context will resolve against ${roomContext.primary}.`,
-    jobStatus === "running_sii" ? job.progress_label : "Telemetry processing will continue after baseline modeling.",
-    jobStatus === "writing_state" ? job.progress_label : "Facility state will be written after telemetry processing.",
+    jobStatus === "structural_scoring" ? job.progress_label : "Structural drift scoring starts after baseline modeling.",
+    jobStatus === "generating_replay" ? job.progress_label : "Replay frames are deferred until first cognition state is ready.",
+    ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Operator cognition becomes usable before all downstream artifacts finish.",
     "Completion will refresh Facility Command.",
   ];
   return details[index] ?? stage;
