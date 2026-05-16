@@ -1,43 +1,24 @@
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-COPY requirements.txt ./requirements.txt
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt .
 
-COPY app ./app
-COPY api ./api
-COPY audit ./audit
-COPY benchmarking ./benchmarking
-COPY case_studies ./case_studies
-COPY certification ./certification
-COPY cognition ./cognition
-COPY cognition_graph ./cognition_graph
-COPY cross_domain ./cross_domain
-COPY datasets ./datasets
-COPY digital_twin ./digital_twin
-COPY domain_packs ./domain_packs
-COPY evidence ./evidence
-COPY exchange ./exchange
-COPY federation ./federation
-COPY engines ./engines
-COPY explanations ./explanations
-COPY governance ./governance
-COPY human_factors ./human_factors
-COPY ontology ./ontology
-COPY replay ./replay
-COPY search ./search
-COPY sii_reference_architecture ./sii_reference_architecture
-COPY sii_standard ./sii_standard
-COPY simulation ./simulation
-COPY training ./training
-COPY trust ./trust
-COPY validation ./validation
+RUN python -m pip install --upgrade pip && \
+    python -m pip install -r requirements.txt
+
+COPY backend/app ./app
+COPY backend/api ./api
+COPY backend/audit ./audit
+COPY backend/engines ./engines
 
 EXPOSE 80
 
-CMD ["sh", "-c", "python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-80}"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import requests; requests.get('http://localhost/health', timeout=5)" || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]

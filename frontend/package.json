@@ -7,15 +7,22 @@
     "dev": "vite --host 127.0.0.1 --port 3010",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3010",
-    "test:e2e": "echo \"Playwright e2e tests are temporarily disabled.\""
+    "lint": "eslint src --ext .jsx,.js",
+    "test": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest"
+    "@playwright/test": "^1.41.1",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-config-react-app": "^7.0.1",
+    "vite": "^5.0.8",
+    "vitest": "^1.1.0"
   }
 }

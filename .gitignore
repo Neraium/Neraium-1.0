@@ -60,3 +60,40 @@ backend/app/runtime/*
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+.npm
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime
+backend/app/runtime/
+*.db
