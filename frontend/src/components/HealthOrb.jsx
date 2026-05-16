@@ -63,9 +63,9 @@ function clamp(value, min, max) {
 
 function normalizeOrbState(systemState) {
   const value = String(systemState ?? "").toLowerCase();
-  if (["unknown", "neutral", "none", "no_upload"].includes(value)) return "unknown";
+  if (["unknown", "neutral", "none", "no_upload", "disconnected"].includes(value)) return "unknown";
   if (["watching", "watch"].includes(value)) return "watching";
-  if (["drift", "warning"].includes(value)) return "drift";
+  if (["drift", "warning", "alert"].includes(value)) return "drift";
   if (["propagation_active", "propagation", "critical"].includes(value)) return "propagation_active";
   if (["recovery", "recovering", "convergence"].includes(value)) return "recovery";
   return "stable";
@@ -74,21 +74,21 @@ function normalizeOrbState(systemState) {
 function toneMeta(systemState) {
   const mode = normalizeOrbState(systemState);
   if (mode === "unknown") {
-    return { className: "health-orb--neutral health-orb--state-unknown", hue: "#6e7d8a", coreOpacity: 0.66 };
+    return { className: "health-orb--neutral health-orb--state-unknown", hue: "#6e7d8a", coreOpacity: 0.52, pulse: 0.18 };
   }
   if (mode === "watching") {
-    return { className: "health-orb--watch health-orb--state-watching", hue: "#b08a4b", coreOpacity: 0.78 };
+    return { className: "health-orb--watch health-orb--state-watching", hue: "#c8a06a", coreOpacity: 0.78, pulse: 0.48 };
   }
   if (mode === "drift") {
-    return { className: "health-orb--warning health-orb--drift health-orb--state-drift", hue: "#c77335", coreOpacity: 0.88 };
+    return { className: "health-orb--warning health-orb--drift health-orb--state-drift", hue: "#d28a52", coreOpacity: 0.88, pulse: 0.72 };
   }
   if (mode === "propagation_active") {
-    return { className: "health-orb--critical health-orb--separation health-orb--state-propagation", hue: "#9c3f45", coreOpacity: 0.94 };
+    return { className: "health-orb--critical health-orb--separation health-orb--state-propagation", hue: "#d46b5f", coreOpacity: 0.94, pulse: 0.92 };
   }
   if (mode === "recovery") {
-    return { className: "health-orb--stable health-orb--state-recovery", hue: "#3f9fa0", coreOpacity: 0.82 };
+    return { className: "health-orb--stable health-orb--recovery health-orb--state-recovery", hue: "#3f9fa0", coreOpacity: 0.82, pulse: 0.38 };
   }
-  return { className: "health-orb--stable health-orb--state-stable", hue: "#2f8f66", coreOpacity: 0.8 };
+  return { className: "health-orb--stable health-orb--state-stable", hue: "#6cba9c", coreOpacity: 0.8, pulse: 0.3 };
 }
 
 function transformNode(node, systemState, intensity) {
@@ -169,7 +169,7 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
   return (
     <div
       className={`health-orb ${tone.className} ${animated ? "health-orb--animated" : ""}`}
-      style={{ "--orb-hue": tone.hue, "--orb-core-opacity": tone.coreOpacity }}
+      style={{ "--orb-hue": tone.hue, "--orb-core-opacity": tone.coreOpacity, "--orb-pulse": tone.pulse }}
     >
       <svg className="health-orb__svg" viewBox="0 0 340 300" role="img" aria-label="System health orb">
         <defs>
@@ -205,10 +205,17 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           <ellipse cx="170" cy="258" rx="138" ry="28" className="health-orb__base-ring" />
         </g>
 
+        <circle cx="170" cy="132" r={isCritical ? 118 : isWarning ? 110 : isWatch ? 104 : 100} className="health-orb__propagation health-orb__propagation--outer" />
+        <circle cx="170" cy="132" r={isCritical ? 100 : isWarning ? 96 : isWatch ? 92 : 88} className="health-orb__propagation health-orb__propagation--inner" />
         <circle cx="170" cy="132" r={isCritical ? 98 : isWarning ? 95 : isWatch ? 93 : 92} className="health-orb__aura" />
         <circle cx="170" cy="132" r={isStable ? 89 : isWatch ? 91 : isWarning ? 93 : 96} className="health-orb__shell" />
         <circle cx="170" cy="132" r={isStable ? 86 : isWatch ? 88 : isWarning ? 90 : 93} className="health-orb__specular" />
         <circle cx="170" cy="132" r={isStable ? 89 : isWatch ? 91 : isWarning ? 93 : 96} className="health-orb__rim" />
+
+        <g className="health-orb__scan" clipPath="url(#orbSphereMask)">
+          <line x1="82" y1="96" x2="258" y2="96" className="health-orb__scan-line" />
+          <line x1="92" y1="168" x2="248" y2="168" className="health-orb__scan-line health-orb__scan-line--delayed" />
+        </g>
 
         <g className="health-orb__field" clipPath={isCritical ? undefined : "url(#orbSphereMask)"}>
           {ORB_LINKS.map(([from, to], index) => {

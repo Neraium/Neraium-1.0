@@ -96,10 +96,10 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   void onSelectTarget;
 
   const metrics = [
-    { label: "Severity", value: liveOps.facilityStateLabel, priority: true, state: uiState },
-    { label: "Primary room", value: where, state: uiState === "neutral" ? "neutral" : "stable" },
-    { label: "Next inspect", value: liveOps.primaryWindow?.label ?? "Facility overview", state: uiState === "stable" ? "stable" : "watch" },
-    { label: "What changed", value: issueType, state: uiState },
+    { label: "Structural pressure", value: runway, priority: true, state: uiState },
+    { label: "Affected environment", value: where, state: uiState === "neutral" ? "neutral" : "stable" },
+    { label: "Inspection focus", value: liveOps.primaryWindow?.label ?? "Facility overview", state: uiState === "stable" ? "stable" : "watch" },
+    { label: "Dominant change", value: issueType, state: uiState },
   ];
   const evidenceItems = [
     { label: "Primary evidence", value: primaryEvidence, state: uiState },
@@ -138,6 +138,8 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       metrics={metrics}
       evidenceItems={evidenceItems}
       timelineItems={timelineItems}
+      lastUpdate={lastUpdate}
+      focusLabel={where}
       isLoading={awaitingSii}
     />
   );
