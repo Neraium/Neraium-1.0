@@ -3316,4 +3316,66 @@
   .cultivation-awareness-feed__body p {
     color: rgba(238, 247, 246, 0.96) !important;
   }
+
+  .cultivation-overview-orb-meta strong {
+    font-size: 1.08rem !important;
+    letter-spacing: 0.01em !important;
+  }
+}
+
+/* Tablet cleanup: reduce top-stack competition and prioritize primary content. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .mobile-workspace-pills {
+    display: none !important;
+  }
+
+  .mobile-command-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1px !important;
+    overflow: hidden !important;
+    border-radius: 14px !important;
+  }
+
+  .mobile-command-strip__cell:nth-child(n + 4) {
+    display: none !important;
+  }
+
+  .mobile-status-bar {
+    gap: 7px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .cultivation-tabs {
+    margin-top: 0 !important;
+  }
+}
+
+/* Mobile entry cleanup: keep orientation header visible and reduce initial crowding. */
+@media (max-width: 760px) {
+  .mobile-status-bar__topline {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+
+  .mobile-status-bar .brand-name--hero {
+    display: block !important;
+    opacity: 0.9 !important;
+  }
+
+  .mobile-status-bar__workspace {
+    display: block !important;
+  }
+
+  .platform-workspace {
+    padding-top: 12px !important;
+  }
+
+  .mobile-command-strip {
+    margin-bottom: 8px !important;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-left {
+    padding-top: 10px !important;
+  }
 }
