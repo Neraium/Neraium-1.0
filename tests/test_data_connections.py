@@ -6,7 +6,7 @@ from app.core.config import Settings
 from app.main import create_app
 
 BASELINE_SAMPLE_COUNT = 6
-TEST_DEFAULT_TELEMETRY_URL = "http://127.0.0.1:1880/telemetry/latest"
+TEST_DEFAULT_TELEMETRY_URL = ""
 
 
 def build_client(tmp_path) -> TestClient:
@@ -24,7 +24,7 @@ def build_client(tmp_path) -> TestClient:
 
 def payload_for(*, tick: int, timestamp: str, temperature: float, humidity: float, airflow: float, scenario: str = "airflow_drift") -> dict:
     return {
-        "source_id": "node-red-sim-api-001",
+        "source_id": "rest-sim-api-001",
         "source_type": "external_rest_api",
         "facility_id": "cultivation-facility-001",
         "room_id": "flower-room-1",
@@ -60,7 +60,7 @@ def payload_for(*, tick: int, timestamp: str, temperature: float, humidity: floa
     }
 
 
-def test_data_connections_endpoint_lists_default_node_red_connection(tmp_path) -> None:
+def test_data_connections_endpoint_lists_default_rest_connection(tmp_path) -> None:
     client = build_client(tmp_path)
 
     response = client.get("/api/data-connections")
@@ -68,7 +68,7 @@ def test_data_connections_endpoint_lists_default_node_red_connection(tmp_path) -
     assert response.status_code == 200
     payload = response.json()
     assert payload["connections"]
-    assert payload["connections"][0]["name"] == "Node-RED Cultivation Telemetry"
+    assert payload["connections"][0]["name"] == "REST Telemetry Intake"
     assert payload["connections"][0]["url"] == TEST_DEFAULT_TELEMETRY_URL
 
 
@@ -79,7 +79,7 @@ def test_connection_test_failure_returns_clean_json(monkeypatch, tmp_path) -> No
         lambda connection, transport=None: (_ for _ in ()).throw(ValueError("External telemetry response did not include any readings.")),
     )
 
-    response = client.post("/api/data-connections/node-red-cultivation-telemetry/test")
+    response = client.post("/api/data-connections/rest-telemetry-intake/test")
 
     assert response.status_code == 200
     payload = response.json()
@@ -105,11 +105,11 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     monkeypatch.setattr("app.services.data_connections.fetch_connection_payload", lambda connection, transport=None: next(payload_iter))
 
     for _ in range(BASELINE_SAMPLE_COUNT - 1):
-        response = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+        response = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
         assert response.status_code == 200
 
     building_latest = client.get("/api/data/latest-upload")
-    building_status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
+    building_status = client.get("/api/data-connections/rest-telemetry-intake/status")
     facility_before_active = client.get("/api/facility/systems")
 
     assert building_latest.status_code == 200
@@ -119,13 +119,13 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     if building_latest.json()["latest_result"] is None:
         assert facility_before_active.json()["intelligence_status"]["status"] == "no_data"
 
-    activation = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+    activation = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
     activation_latest = client.get("/api/data/latest-upload")
-    active_poll = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+    active_poll = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
     latest = client.get("/api/data/latest-upload")
     facility = client.get("/api/facility/systems")
     evidence = client.get("/api/evidence/latest")
-    status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
+    status = client.get("/api/data-connections/rest-telemetry-intake/status")
 
     assert activation.status_code == 200
     assert active_poll.status_code == 200
@@ -146,7 +146,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     assert facility_payload["intelligence"]["primary_room"] == "flower-room-1"
 
     evidence_payload = evidence.json()
-    assert evidence_payload["run"]["source_name"] == "Node-RED Cultivation Telemetry"
+    assert evidence_payload["run"]["source_name"] == "REST Telemetry Intake"
     assert evidence_payload["run"]["source_type"] == "external_rest_api"
 
     status_payload = status.json()
@@ -172,7 +172,7 @@ def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monke
     payload_iter = iter(payloads)
     monkeypatch.setattr("app.services.data_connections.fetch_connection_payload", lambda connection, transport=None: next(payload_iter))
     for _ in range(BASELINE_SAMPLE_COUNT + 1):
-        success = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+        success = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
         assert success.status_code == 200
 
     monkeypatch.setattr(
@@ -180,10 +180,10 @@ def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monke
         lambda connection, transport=None: (_ for _ in ()).throw(ValueError("REST API could not be reached. Check the endpoint and network path.")),
     )
 
-    failed = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+    failed = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
     facility = client.get("/api/facility/systems")
     evidence_runs = client.get("/api/evidence/runs")
-    status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
+    status = client.get("/api/data-connections/rest-telemetry-intake/status")
 
     assert failed.status_code == 200
     assert failed.json()["connection"]["status"] == "error"
@@ -210,14 +210,14 @@ def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_p
     payload_iter = iter(payloads)
     monkeypatch.setattr("app.services.data_connections.fetch_connection_payload", lambda connection, transport=None: next(payload_iter))
     for _ in range(BASELINE_SAMPLE_COUNT):
-        response = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
+        response = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
         assert response.status_code == 200
 
-    reset = client.post("/api/data-connections/node-red-cultivation-telemetry/reset-baseline")
+    reset = client.post("/api/data-connections/rest-telemetry-intake/reset-baseline")
     latest = client.get("/api/data/latest-upload")
-    status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
-    post_reset_poll = client.post("/api/data-connections/node-red-cultivation-telemetry/poll-once")
-    post_reset_status = client.get("/api/data-connections/node-red-cultivation-telemetry/status")
+    status = client.get("/api/data-connections/rest-telemetry-intake/status")
+    post_reset_poll = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
+    post_reset_status = client.get("/api/data-connections/rest-telemetry-intake/status")
 
     assert reset.status_code == 200
     assert reset.json()["connection"]["baseline_source"] == "live_rest"

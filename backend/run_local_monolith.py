@@ -8,7 +8,7 @@ os.environ.setdefault("BACKEND_HOST", "127.0.0.1")
 os.environ.setdefault("BACKEND_PORT", "8010")
 os.environ.setdefault("NERAIUM_PROCESS_ROLE", "monolith")
 os.environ.setdefault("NERAIUM_START_BACKGROUND_WORKERS", "true")
-os.environ.setdefault("NERAIUM_START_DATA_POLLER", "true")
+os.environ.setdefault("NERAIUM_START_DATA_POLLER", "false")
 os.environ.setdefault("NERAIUM_RUNTIME_DIR", "./runtime")
 
 

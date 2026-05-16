@@ -22,6 +22,8 @@ def test_settings_use_local_defaults(monkeypatch) -> None:
     assert settings.backend_port == 8010
     assert settings.cors_origins == DEFAULT_CORS_ORIGINS
     assert settings.cors_origin_regex == DEFAULT_CORS_ORIGIN_REGEX
+    assert settings.default_telemetry_url == ""
+    assert settings.start_data_connection_poller is False
 
 
 def test_settings_read_environment_values(monkeypatch) -> None:
@@ -37,6 +39,8 @@ def test_settings_read_environment_values(monkeypatch) -> None:
     assert settings.backend_host == "0.0.0.0"
     assert settings.backend_port == 8080
     assert settings.cors_origin_regex == "^https://([a-z0-9-]+\\.)?example\\.com$"
+    assert settings.default_telemetry_url == ""
+    assert settings.start_data_connection_poller is False
     assert settings.cors_origins == [
         "https://app.example.com",
         "https://admin.example.com",

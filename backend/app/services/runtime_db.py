@@ -345,6 +345,15 @@ def upsert_data_connection(payload: dict[str, Any]) -> None:
         )
 
 
+def delete_data_connection(connection_id: str) -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute(
+            "DELETE FROM data_connections WHERE connection_id = ?",
+            (connection_id,),
+        )
+
+
 def read_data_connection(connection_id: str) -> dict[str, Any] | None:
     init_runtime_db()
     with db_connection() as connection:
