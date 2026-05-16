@@ -219,6 +219,8 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           <path d="M60 116 C98 54 234 44 284 108" className="health-orb__directional-aura health-orb__directional-aura--upper" />
           <path d="M48 158 C96 226 236 232 296 158" className="health-orb__directional-aura health-orb__directional-aura--lower" />
           <path d="M82 132 C126 102 210 104 258 132" className="health-orb__telemetry-trace" />
+          <path d="M76 88 C132 68 212 68 266 91" className="health-orb__telemetry-trace health-orb__telemetry-trace--slow" />
+          <path d="M70 188 C124 214 220 214 274 188" className="health-orb__telemetry-trace health-orb__telemetry-trace--reverse" />
         </g>
         <circle cx="170" cy="132" r={isCritical ? 118 : isWarning ? 110 : isWatch ? 104 : 100} className="health-orb__propagation health-orb__propagation--outer" />
         <circle cx="170" cy="132" r={isCritical ? 100 : isWarning ? 96 : isWatch ? 92 : 88} className="health-orb__propagation health-orb__propagation--inner" />
@@ -230,6 +232,13 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
         <g className="health-orb__scan" clipPath="url(#orbSphereMask)">
           <line x1="82" y1="96" x2="258" y2="96" className="health-orb__scan-line" />
           <line x1="92" y1="168" x2="248" y2="168" className="health-orb__scan-line health-orb__scan-line--delayed" />
+          <line x1="112" y1="74" x2="228" y2="194" className="health-orb__scan-line health-orb__scan-line--diagonal" />
+        </g>
+
+        <g className="health-orb__cognition-rings" aria-hidden="true">
+          <ellipse cx="170" cy="132" rx="104" ry="36" className="health-orb__cognition-ring health-orb__cognition-ring--equator" />
+          <ellipse cx="170" cy="132" rx="44" ry="102" className="health-orb__cognition-ring health-orb__cognition-ring--meridian" />
+          <ellipse cx="170" cy="132" rx="72" ry="92" className="health-orb__cognition-ring health-orb__cognition-ring--tilt" />
         </g>
 
         <g className="health-orb__field" clipPath={isCritical ? undefined : "url(#orbSphereMask)"}>

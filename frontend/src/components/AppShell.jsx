@@ -170,22 +170,30 @@ function MobileOperationalHeader({
         </button>
       </div>
 
-      <div className="mobile-command-strip" aria-label="Operational command state">
+      <div className="mobile-command-strip mobile-command-strip--deployment" aria-label="Active deployment bar">
         <div className="mobile-command-strip__cell mobile-command-strip__cell--primary">
           <span>Deployment</span>
           <strong>{liveOps.facilityStateLabel}</strong>
         </div>
         <div className="mobile-command-strip__cell">
-          <span>Ops time</span>
-          <strong>{operationalTimestamp}</strong>
-        </div>
-        <div className="mobile-command-strip__cell">
-          <span>Sync</span>
+          <span>Telemetry</span>
           <strong>{telemetryState}</strong>
         </div>
         <div className="mobile-command-strip__cell">
-          <span>Focus</span>
+          <span>Cognition</span>
+          <strong>{liveOps.dataSourceLabel}</strong>
+        </div>
+        <div className="mobile-command-strip__cell">
+          <span>Replay</span>
+          <strong>{liveOps.relationshipRows?.length ? `${liveOps.relationshipRows.length} paths` : "Standby"}</strong>
+        </div>
+        <div className="mobile-command-strip__cell">
+          <span>Facility</span>
           <strong>{roomContext.primary || "Facility"}</strong>
+        </div>
+        <div className="mobile-command-strip__cell">
+          <span>Update</span>
+          <strong>{operationalTimestamp}</strong>
         </div>
       </div>
 
@@ -198,8 +206,10 @@ function MobileOperationalHeader({
             aria-current={activeWorkspace === workspace.id ? "page" : undefined}
             onClick={() => onSelectWorkspace(workspace.id)}
           >
+            <span className="mobile-workspace-pill__status" aria-hidden="true" />
             <span>{workspace.eyebrow}</span>
             <strong>{workspace.label}</strong>
+            <em>{activeWorkspace === workspace.id ? "Live cognition" : "Linked module"}</em>
           </button>
         ))}
       </nav>
@@ -246,22 +256,32 @@ function WorkspaceNavigationContent({
           {expertMode ? "Expert Mode On" : "Expert Mode Off"}
         </button>
         <nav className="workspace-nav">
-          {workspaces.map((workspace) => (
-            <button
-              className={`workspace-nav__item ${activeWorkspace === workspace.id ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
-              key={workspace.id}
-              type="button"
-              aria-current={activeWorkspace === workspace.id ? "page" : undefined}
-              onClick={() => onSelectWorkspace(workspace.id)}
-            >
-              <div className="workspace-nav__header">
-                <span className="workspace-nav__label">{workspace.label}</span>
-                <StatusDot tone={activeWorkspace === workspace.id ? liveOps.facilityTone : "muted"} />
-              </div>
-              <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
-              {!isDrawer ? <span className="workspace-nav__detail">{workspace.description}</span> : null}
-            </button>
-          ))}
+          {workspaces.map((workspace, index) => {
+            const isActive = activeWorkspace === workspace.id;
+            const tier = index < 3 ? "primary" : index < 6 ? "secondary" : "tertiary";
+            const statusText = isActive ? "Active cognition" : tier === "primary" ? "Hot standby" : tier === "secondary" ? "Synchronized" : "Archive-ready";
+            return (
+              <button
+                className={`workspace-nav__item workspace-nav__item--tier-${tier} ${isActive ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
+                key={workspace.id}
+                type="button"
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => onSelectWorkspace(workspace.id)}
+              >
+                <span className="workspace-nav__pulse" aria-hidden="true" />
+                <div className="workspace-nav__header">
+                  <span className="workspace-nav__label">{workspace.label}</span>
+                  <StatusDot tone={isActive ? liveOps.facilityTone : tier === "primary" ? "info" : "muted"} />
+                </div>
+                <span className="workspace-nav__eyebrow">{workspace.eyebrow}</span>
+                <span className="workspace-nav__activity">
+                  <span>{statusText}</span>
+                  <i aria-hidden="true" />
+                </span>
+                {!isDrawer ? <span className="workspace-nav__detail">{workspace.description}</span> : null}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
@@ -310,8 +330,18 @@ function TopStatusBar({
   const uiState = normalizeOperationalState(liveOps.facilityTone);
   const degradedMode = apiStatus?.state === "offline";
   const minimalCultivationHeader = activeWorkspace === "cultivation-mission-control";
+  const deploymentMetrics = [
+    { label: "Deployment", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
+    { label: "Telemetry sync", value: liveOps.connectionTone === "nominal" ? "Synchronized" : liveOps.connectionStatusLine, tone: liveOps.connectionTone },
+    { label: "Cognition", value: intelligenceLabel, tone: liveOps.facilityTone },
+    { label: "Replay", value: liveOps.relationshipRows?.length ? `${liveOps.relationshipRows.length} structural paths` : "Standby", tone: liveOps.primaryWindow?.tone ?? "info" },
+    { label: "Active facility", value: roomContext.primary || "Facility envelope", tone: liveOps.facilityTone },
+    { label: "Ingestion", value: latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel, tone: latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone },
+    { label: "Last update", value: liveOps.connectionSummary || "Awaiting sync", tone: liveOps.connectionTone },
+    { label: "Connected systems", value: liveOps.overviewMetrics?.find((metric) => metric.label === "Systems in scope" || metric.label === "Systems in Scope")?.value ?? "Systems mapped", tone: liveOps.connectionTone },
+  ];
   return (
-    <header className={`top-status ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
+    <header className={`top-status top-status--deployment ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
       <div className="top-status__title">
         <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
         <h1 id="page-title" className={minimalCultivationHeader ? "sr-only" : ""}>
@@ -328,6 +358,22 @@ function TopStatusBar({
           {liveOps.connectionActionHint && (
             <span className="top-status__meta-copy top-status__meta-copy--actionable">{liveOps.connectionActionHint}</span>
           )}
+        </div>
+      </div>
+
+      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Active deployment telemetry">
+        <div className="active-deployment-bar__header">
+          <span className="active-deployment-bar__beacon" aria-hidden="true" />
+          <strong>Active Deployment Bar</strong>
+          <em>{activeConfig.eyebrow}</em>
+        </div>
+        <div className="active-deployment-bar__grid">
+          {deploymentMetrics.map((metric) => (
+            <div className={`active-deployment-bar__metric active-deployment-bar__metric--${metric.tone}`} key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
         </div>
       </div>
 

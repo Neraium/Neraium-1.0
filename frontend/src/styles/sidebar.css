@@ -211,3 +211,99 @@
     margin-top: 16px;
   }
 }
+
+/* Operational workspace cards: status-bearing control surfaces, not generic navigation buttons. */
+.workspace-nav__item {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.workspace-nav__item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 0 36%, rgba(235, 250, 246, 0.045) 48%, transparent 60% 100%);
+  transform: translate3d(-115%, 0, 0);
+  opacity: 0;
+}
+
+.workspace-nav__item--tier-primary {
+  border-color: rgba(138, 184, 196, 0.055);
+}
+
+.workspace-nav__item--tier-secondary {
+  opacity: 0.92;
+}
+
+.workspace-nav__item--tier-tertiary {
+  min-height: 58px;
+  opacity: 0.78;
+}
+
+.workspace-nav__pulse {
+  position: absolute;
+  inset: 12px auto auto 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(138, 184, 196, 0.38);
+  box-shadow: 0 0 10px rgba(138, 184, 196, 0.16);
+}
+
+.workspace-nav__item--active .workspace-nav__pulse,
+.workspace-nav__item--tier-primary .workspace-nav__pulse {
+  background: rgb(var(--state-accent-rgb, 138, 184, 196));
+  box-shadow: 0 0 18px rgba(var(--state-accent-rgb, 138, 184, 196), 0.52);
+  animation: workspaceCognitionPulse 2.6s ease-in-out infinite;
+}
+
+.workspace-nav__activity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: rgba(169, 194, 197, 0.72);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workspace-nav__activity i {
+  flex: 1;
+  height: 1px;
+  min-width: 22px;
+  background: linear-gradient(90deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.42), transparent);
+  transform-origin: left;
+  animation: telemetryLineSync 3.8s ease-in-out infinite;
+}
+
+.workspace-nav__item--active {
+  transform: translateX(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(228, 247, 242, 0.07),
+    0 16px 34px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(var(--state-accent-rgb, 138, 184, 196), 0.1);
+}
+
+.workspace-nav__item--active::after,
+.workspace-nav__item--tier-primary:hover::after {
+  opacity: 1;
+  animation: workspaceTelemetryShimmer 4.8s ease-in-out infinite;
+}
+
+@keyframes workspaceTelemetryShimmer {
+  0%, 18% { transform: translate3d(-115%, 0, 0); }
+  62%, 100% { transform: translate3d(115%, 0, 0); }
+}
+
+@keyframes workspaceCognitionPulse {
+  0%, 100% { opacity: 0.52; transform: scale(0.86); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes telemetryLineSync {
+  0%, 100% { opacity: 0.36; transform: scaleX(0.36); }
+  52% { opacity: 0.85; transform: scaleX(1); }
+}

@@ -151,13 +151,22 @@ export default function CultivationMissionControl({
               </section>
             </div>
           </Panel>
-          <Panel title="Operational Awareness Queue" className="span-12 cultivation-list-panel cultivation-awareness-panel cultivation-view-panel cultivation-view-panel--awareness" subtitle="Live operator focus before historical reporting and exports.">
-            <div className="cultivation-awareness-grid">
-              {operationalAwareness.map((item) => (
-                <article className={`cultivation-awareness-card cultivation-awareness-card--${item.tone}`} key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                  <p>{item.detail}</p>
+          <Panel title="Operational Awareness Feed" className="span-12 cultivation-list-panel cultivation-awareness-panel cultivation-view-panel cultivation-view-panel--awareness" subtitle="Live operator focus before historical reporting and exports.">
+            <div className="cultivation-awareness-feed" role="list">
+              {operationalAwareness.map((item, index) => (
+                <article className={`cultivation-awareness-feed__item cultivation-awareness-feed__item--${item.tone} cultivation-awareness-feed__item--severity-${item.severity}`} key={item.label} role="listitem">
+                  <div className="cultivation-awareness-feed__index">
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <i aria-hidden="true" />
+                  </div>
+                  <div className="cultivation-awareness-feed__body">
+                    <div className="cultivation-awareness-feed__header">
+                      <span>{item.label}</span>
+                      <em>{item.marker}</em>
+                    </div>
+                    <strong>{item.value}</strong>
+                    <p>{item.detail}</p>
+                  </div>
                 </article>
               ))}
             </div>
@@ -405,30 +414,40 @@ function buildOperationalAwarenessQueue({ cognition, evidenceSummary, replayFram
       value: cognition.operator_explanation ?? summarizeChange(cognition),
       detail: `Continuation window: ${continuationWindow}.`,
       tone: "focus",
+      severity: "high",
+      marker: "Operator priority",
     },
     {
       label: "Propagation state",
       value: summarizeSpread(cognition),
       detail: propagationCount > 0 ? `${propagationCount} active pathway${propagationCount === 1 ? "" : "s"} requiring watch.` : "No active propagation pathway in current state.",
       tone: propagationCount > 0 ? "watch" : "stable",
+      severity: propagationCount > 0 ? "high" : "low",
+      marker: propagationCount > 0 ? "Structural marker" : "Holding",
     },
     {
       label: "Evidence / trust",
       value: summarizeTrust(cognition, evidenceSummary),
       detail: `${evidenceSummary.length} evidence signal${evidenceSummary.length === 1 ? "" : "s"} surfaced for operator confidence.`,
       tone: "trust",
+      severity: evidenceSummary.length > 1 ? "medium" : "low",
+      marker: "Evidence linked",
     },
     {
       label: "Replay indicators",
       value: replayCount > 0 ? summarizeFrame(replayFrames[0]) : "No replay frames available.",
       detail: replayCount > 0 ? `${replayCount} recent frame${replayCount === 1 ? "" : "s"} ready for review.` : "Replay context will appear after timeline data loads.",
       tone: "replay",
+      severity: replayCount > 0 ? "medium" : "low",
+      marker: replayCount > 0 ? "Replay active" : "Replay idle",
     },
     {
       label: "Actionable intelligence",
       value: buildActionableIntelligence(cognition, propagationCount),
       detail: "Live operational awareness remains ahead of reports and export workflows.",
       tone: "action",
+      severity: propagationCount > 0 ? "high" : "medium",
+      marker: "Next move",
     },
   ];
 }

@@ -1,1 +1,181 @@
 .top-status { position: static; } .top-status__brief { width: 100%; }
+
+/* Active deployment bar: dense operational telemetry above workspace content. */
+.top-status--deployment {
+  grid-template-columns: minmax(260px, 0.58fr) minmax(520px, 1.42fr);
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px 18px 12px;
+  position: relative !important;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.055), transparent 32%),
+    linear-gradient(180deg, rgba(8, 13, 16, 0.94), rgba(6, 10, 13, 0.86));
+}
+
+.top-status--deployment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(138, 184, 196, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(138, 184, 196, 0.03) 1px, transparent 1px);
+  background-size: 72px 28px;
+  opacity: 0.36;
+  transform: translate3d(0, 0, 0);
+  animation: deploymentGridDrift 28s linear infinite;
+}
+
+.top-status--deployment .top-status__title,
+.top-status--deployment .active-deployment-bar,
+.top-status--deployment .top-status__brief,
+.top-status--deployment .top-status__compact,
+.top-status--deployment .status-rack,
+.top-status--deployment .top-status__degraded {
+  position: relative;
+  z-index: 1;
+}
+
+.top-status--deployment .top-status__title {
+  align-content: start;
+  gap: 6px;
+  max-width: none;
+}
+
+.top-status--deployment .top-status__title h1 {
+  margin: 0;
+  font-size: clamp(1.42rem, 2.2vw, 2.35rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.top-status--deployment .top-status__title > p:not(.eyebrow) {
+  margin: 0;
+  color: rgba(194, 210, 213, 0.78);
+  font-size: 0.78rem;
+  line-height: 1.36;
+  max-width: 54ch;
+}
+
+.active-deployment-bar {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.16);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(12, 18, 22, 0.82), rgba(5, 9, 12, 0.72));
+  box-shadow: inset 0 1px 0 rgba(222, 247, 242, 0.06);
+}
+
+.active-deployment-bar__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(232, 242, 241, 0.94);
+  font-size: 0.68rem;
+  font-weight: 840;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.active-deployment-bar__header em {
+  margin-left: auto;
+  color: rgba(167, 191, 195, 0.72);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.active-deployment-bar__beacon {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgb(var(--state-accent-rgb, 138, 184, 196));
+  box-shadow: 0 0 16px rgba(var(--state-accent-rgb, 138, 184, 196), 0.55);
+  animation: telemetryHeartbeat 2.4s ease-in-out infinite;
+}
+
+.active-deployment-bar__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(138, 184, 196, 0.12);
+  border: 1px solid rgba(138, 184, 196, 0.08);
+}
+
+.active-deployment-bar__metric {
+  display: grid;
+  gap: 4px;
+  min-height: 54px;
+  padding: 8px 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.045), transparent 72%),
+    rgba(5, 9, 12, 0.88);
+}
+
+.active-deployment-bar__metric span {
+  color: rgba(166, 191, 195, 0.7);
+  font-size: 0.58rem;
+  font-weight: 820;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.active-deployment-bar__metric strong {
+  overflow: hidden;
+  color: rgba(244, 250, 249, 0.95);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 520;
+  line-height: 1.24;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-status--deployment .top-status__brief,
+.top-status--deployment .top-status__compact,
+.top-status--deployment .status-rack,
+.top-status--deployment .top-status__degraded {
+  grid-column: 1 / -1;
+}
+
+.top-status--deployment .top-status__brief {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  border-radius: 0;
+  background: rgba(138, 184, 196, 0.1);
+}
+
+.top-status--deployment .top-status__brief-item,
+.top-status--deployment .top-status__brief-item--wide {
+  grid-column: auto;
+  min-height: 66px;
+  padding: 10px 12px;
+  background: rgba(7, 11, 14, 0.82);
+}
+
+.top-status--deployment .top-status__brief-item strong,
+.top-status--deployment .top-status__brief-item p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.32;
+}
+
+.top-status--deployment .status-rack {
+  display: none;
+}
+
+@keyframes deploymentGridDrift {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(72px, 28px, 0); }
+}
+
+@media (max-width: 1100px) {
+  .top-status--deployment {
+    display: none;
+  }
+}

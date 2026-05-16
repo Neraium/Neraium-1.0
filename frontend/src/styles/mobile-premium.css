@@ -2757,3 +2757,313 @@
     min-width: 280px !important;
   }
 }
+
+/* Mobile operational density pass: live cognition appears immediately with less vertical dead space. */
+@media (max-width: 760px) {
+  .platform-main {
+    min-height: 100dvh;
+  }
+
+  .platform-workspace {
+    padding: 8px 8px calc(18px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-top: 8px;
+  }
+
+  .mobile-status-bar {
+    display: grid;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
+    background:
+      linear-gradient(90deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.08), transparent 44%),
+      rgba(6, 10, 12, 0.94);
+  }
+
+  .mobile-status-bar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 0 42%, rgba(255, 255, 255, 0.035) 50%, transparent 58% 100%);
+    transform: translate3d(-120%, 0, 0);
+    animation: workspaceTelemetryShimmer 6.2s ease-in-out infinite;
+  }
+
+  .mobile-status-bar__topline {
+    gap: 8px;
+  }
+
+  .brand-name--hero {
+    font-size: 0.74rem;
+    letter-spacing: 0.12em;
+  }
+
+  .mobile-status-bar__workspace {
+    font-size: 0.64rem;
+    line-height: 1.2;
+  }
+
+  .workspace-menu-button {
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+  }
+
+  .mobile-command-strip--deployment {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    border: 1px solid rgba(138, 184, 196, 0.1);
+    background: rgba(138, 184, 196, 0.09);
+  }
+
+  .mobile-command-strip__cell {
+    min-height: 46px;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 0;
+    background: rgba(5, 9, 12, 0.8);
+  }
+
+  .mobile-command-strip__cell span {
+    font-size: 0.54rem;
+    letter-spacing: 0.09em;
+  }
+
+  .mobile-command-strip__cell strong {
+    display: block;
+    overflow: hidden;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.63rem;
+    line-height: 1.16;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-workspace-pills {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(116px, 34vw);
+    gap: 6px;
+    margin: 0 -2px;
+    padding: 0 2px 1px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .mobile-workspace-pill {
+    position: relative;
+    display: grid;
+    gap: 2px;
+    min-height: 52px;
+    padding: 8px 8px 7px 18px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .mobile-workspace-pill__status {
+    position: absolute;
+    left: 8px;
+    top: 11px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(138, 184, 196, 0.5);
+  }
+
+  .mobile-workspace-pill--active .mobile-workspace-pill__status {
+    background: rgb(var(--state-accent-rgb, 138, 184, 196));
+    box-shadow: 0 0 14px rgba(var(--state-accent-rgb, 138, 184, 196), 0.58);
+    animation: workspaceCognitionPulse 2.4s ease-in-out infinite;
+  }
+
+  .mobile-workspace-pill span:not(.mobile-workspace-pill__status) {
+    font-size: 0.52rem;
+  }
+
+  .mobile-workspace-pill strong {
+    overflow: hidden;
+    font-size: 0.7rem;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-workspace-pill em {
+    overflow: hidden;
+    color: rgba(180, 204, 207, 0.66);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.5rem;
+    font-style: normal;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .system-body.system-body--orb-first {
+    gap: 8px;
+    padding-bottom: 18px;
+  }
+
+  .system-body-hero {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .system-body-orb-panel {
+    min-height: 318px;
+  }
+
+  .system-body-orb-panel__stage {
+    width: min(100%, 318px);
+    min-width: 220px;
+    min-height: 260px;
+  }
+
+  .system-body-hero__copy {
+    gap: 10px;
+  }
+
+  .system-body-hero__header {
+    gap: 6px;
+  }
+
+  .system-body-hero__header .workspace-header__title {
+    font-size: clamp(1.42rem, 8vw, 2.35rem);
+    line-height: 0.96;
+  }
+
+  .system-body-hero__header .workspace-header__subtitle {
+    font-size: 0.78rem;
+    line-height: 1.36;
+  }
+
+  .system-body-hero__header .workspace-header__status {
+    margin-top: 0;
+    padding: 7px 9px;
+  }
+
+  .system-body-orb-panel__meta {
+    top: 8px;
+    right: 8px;
+    max-width: 46%;
+    padding: 7px 8px;
+  }
+
+  .system-body-orb-panel__meta strong {
+    font-size: 1rem;
+  }
+
+  .system-body-orb-panel__telemetry {
+    left: 7px;
+    bottom: 46px;
+    width: min(210px, 58%);
+  }
+
+  .system-body-orb-panel__telemetry div:nth-child(n+4) {
+    display: none;
+  }
+
+  .system-body-orb-panel__sync {
+    left: 7px;
+    right: 7px;
+    bottom: 7px;
+    padding: 7px 9px;
+  }
+
+  .system-body-metric {
+    min-height: 84px;
+    padding: 12px 12px 12px 16px;
+  }
+
+  .system-body-evidence-card,
+  .system-body-timeline-card {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .system-body-timeline-list li {
+    min-height: 0;
+    padding: 9px 10px;
+  }
+
+  .cultivation-mission-grid {
+    gap: 8px;
+  }
+
+  .cultivation-hero-panel .ops-panel__body,
+  .cultivation-view-panel .ops-panel__body {
+    gap: 8px;
+  }
+
+  .cultivation-tabs {
+    gap: 5px;
+  }
+
+  .cultivation-tab {
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 0.62rem;
+  }
+
+  .cultivation-overview-grid,
+  .cultivation-overview-left,
+  .cultivation-overview-right {
+    gap: 8px;
+  }
+
+  .cultivation-overview-orb-wrap {
+    grid-template-columns: minmax(136px, 0.72fr) minmax(0, 1fr);
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .cultivation-overview-orb {
+    min-height: 156px;
+  }
+
+  .cultivation-overview-orb .health-orb {
+    max-width: 168px;
+  }
+
+  .cultivation-overview-orb-meta strong {
+    font-size: 0.95rem;
+    line-height: 1.22;
+  }
+
+  .cultivation-overview-left-metrics {
+    gap: 6px;
+  }
+
+  .cultivation-overview-pill,
+  .cultivation-intelligence-row {
+    padding: 8px 9px;
+  }
+
+  .cultivation-awareness-feed__item {
+    grid-template-columns: 44px minmax(0, 1fr);
+    min-height: 64px;
+  }
+
+  .cultivation-awareness-feed__index {
+    padding: 8px 6px;
+    font-size: 0.62rem;
+  }
+
+  .cultivation-awareness-feed__body {
+    padding: 8px 10px;
+  }
+
+  .cultivation-awareness-feed__header em {
+    display: none;
+  }
+
+  .cultivation-awareness-feed__body strong {
+    font-size: 0.76rem;
+  }
+
+  .cultivation-awareness-feed__body p {
+    font-size: 0.66rem;
+  }
+}
