@@ -47,6 +47,14 @@
   animation: orbFloat 10s ease-in-out infinite;
 }
 
+.health-orb--animated .health-orb__specular {
+  animation: orbSpecularGlint 7.8s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__rim {
+  animation: orbRimBreath 6.4s ease-in-out infinite;
+}
+
 .workspace-nav__item--active,
 .status-dot__core,
 .top-status__signal,
@@ -242,4 +250,14 @@
 @keyframes orbCognitionPulse {
   0%, 100% { opacity: calc(0.42 + (var(--orb-pulse, 0.3) * 0.18)); transform: scale(0.992); }
   50% { opacity: calc(0.58 + (var(--orb-pulse, 0.3) * 0.24)); transform: scale(1.012); }
+}
+
+@keyframes orbSpecularGlint {
+  0%, 100% { opacity: 0.48; transform: scale(1); }
+  50% { opacity: 0.74; transform: scale(1.014); }
+}
+
+@keyframes orbRimBreath {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.76; }
 }

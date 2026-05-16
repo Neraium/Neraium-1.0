@@ -155,6 +155,41 @@
 .health-orb--warning { --orb-hue: #c8a06a; }
 .health-orb--critical { --orb-hue: #d17b73; }
 
+.health-orb {
+  --orb-premium-shadow-soft: color-mix(in srgb, var(--orb-hue) 20%, transparent);
+  --orb-premium-shadow-core: color-mix(in srgb, var(--orb-hue) 34%, transparent);
+  --orb-premium-rim: color-mix(in srgb, var(--orb-hue) 48%, rgba(255, 255, 255, 0.12));
+  filter:
+    drop-shadow(0 18px 28px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 0 18px var(--orb-premium-shadow-soft))
+    drop-shadow(0 0 42px var(--orb-premium-shadow-core));
+}
+
+.health-orb__shell {
+  stroke: var(--orb-premium-rim);
+  stroke-width: 1.35;
+}
+
+.health-orb__rim {
+  opacity: 0.56;
+  stroke: color-mix(in srgb, var(--orb-hue) 62%, rgba(255, 255, 255, 0.24));
+}
+
+.health-orb__core {
+  filter:
+    drop-shadow(0 0 14px color-mix(in srgb, var(--orb-hue) 42%, transparent))
+    drop-shadow(0 0 30px color-mix(in srgb, var(--orb-hue) 26%, transparent));
+}
+
+.health-orb__core-hotspot {
+  opacity: calc(0.72 + (var(--orb-pulse, 0.3) * 0.2));
+}
+
+.health-orb--neutral {
+  --orb-premium-shadow-soft: rgba(128, 139, 151, 0.12);
+  --orb-premium-shadow-core: rgba(128, 139, 151, 0.2);
+}
+
 .health-orb--watch .health-orb__core,
 .health-orb--warning .health-orb__core,
 .health-orb--critical .health-orb__core,
