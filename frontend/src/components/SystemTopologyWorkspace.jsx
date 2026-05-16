@@ -27,7 +27,7 @@ const STATE = {
 
 const FALLBACK_STATE = {
   label: "Awaiting baseline",
-  description: "No telemetry baseline is available yet. The orb remains visible so operators can confirm structural health mode and wait for live evidence.",
+  description: "Telemetry baseline pending. The orb remains in standby until live infrastructure evidence arrives.",
   mode: "no-data",
 };
 
@@ -65,63 +65,56 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
     : (Number.isFinite(primaryItem?.confidence) ? `${primaryItem.confidence}% evidence quality` : (liveOps.readinessLabel ?? "Evidence building"));
   const primaryEvidence = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.supportingEvidence?.[0] ?? findings[0]?.detail ?? "No active SII evidence yet");
+    : (primaryItem?.supportingEvidence?.[0] ?? findings[0]?.detail ?? "Baseline relationships are being monitored for early divergence.");
   const relationshipEvidence = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Relationship evidence not isolated yet");
+    : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Infrastructure relationships are currently holding within the observed envelope.");
   const activeArchetype = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ") ?? "Archetype still forming");
+    : (primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ") ?? "Stable operating pattern");
   const propagationPath = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ") ?? "Propagation pathway not isolated");
+    : (primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ") ?? "No escalation pathway currently active.");
   const memoryMatch = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.structuralMemoryMatches?.[0]?.label ?? "No close structural memory match");
+    : (primaryItem?.structuralMemoryMatches?.[0]?.label ?? "Current pattern remains within recent operating memory.");
   const continuationWindow = awaitingSii
     ? awaitingLabel
     : (primaryItem?.continuationWindow ?? "Monitoring");
   const facilityCognitionState = awaitingSii
     ? awaitingLabel
     : (primaryItem?.facilityCognitionState ?? liveOps.heroSubline);
-  const lastUpdate = liveOps.connectionSummary ?? "No confirmed update";
+  const lastUpdate = liveOps.connectionSummary ?? "Awaiting confirmed update";
   const whyWeThinkThat = awaitingSii || uiState === "neutral"
     ? "The workspace is waiting for a usable telemetry baseline or backend evidence stream."
     : (facilityCognitionState || secondaryMessage || relationshipEvidence);
   const humanRead = awaitingSii || uiState === "neutral"
-    ? "No upload is required for the orb to render. It stays visible as the neutral structural placeholder until live evidence arrives."
+    ? "The structural view is in standby while Neraium waits for a confirmed telemetry baseline."
     : (liveOps.connectionActionHint || `Monitor ${propagationPath} and schedule operator review if structural pressure persists.`);
   const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;
 
-  const metrics = [
-    { label: "Structural pressure", value: runway, priority: true, state: uiState },
-    { label: "Affected environment", value: where, state: uiState === "neutral" ? "neutral" : "stable" },
-    { label: "Inspection focus", value: liveOps.primaryWindow?.label ?? "Facility overview", state: uiState === "stable" ? "stable" : "watch" },
-    { label: "Dominant change", value: issueType, state: uiState },
-  ];
-  const evidenceItems = [
-    { label: "Primary evidence", value: primaryEvidence, state: uiState },
-    { label: "Relationship evidence", value: relationshipEvidence, state: uiState === "stable" ? "watch" : uiState },
-    { label: "Active archetype", value: activeArchetype, state: uiState === "neutral" ? "neutral" : "watch" },
-    { label: "Memory match", value: memoryMatch, state: uiState === "neutral" ? "neutral" : "stable" },
-    { label: "Source of truth", value: `${sourceLabel}. Operational conclusions remain backend/SII sourced.`, state: "neutral" },
-  ];
-  const narrativeItems = [
-    { label: "What's wrong", value: primaryMessage, state: uiState },
-    { label: "Why we think that", value: whyWeThinkThat, state: uiState === "stable" ? "watch" : uiState },
-    { label: "Human read", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
-    { label: "Propagation", value: propagationPath, state: uiState === "neutral" ? "neutral" : uiState },
-    { label: "Where", value: where, state: "neutral" },
-  ];
-  const timelineItems = [
-    { label: "Latest update", value: lastUpdate, state: "neutral" },
-    { label: "Operational runway", value: runway, state: uiState },
-    { label: "Continuation window", value: continuationWindow, state: uiState },
-    { label: "Urgency", value: urgency, state: uiState },
-    { label: "Evidence quality", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
-  ];
+  const metrics = compactOperationalItems([
+    { label: "Time to consequence", value: runway, priority: true, state: uiState },
+    { label: "Operational focus", value: liveOps.primaryWindow?.label ?? where, state: uiState === "stable" ? "stable" : "watch" },
+  ]);
+  const evidenceItems = compactOperationalItems([
+    { label: "Why Neraium flagged this", value: primaryEvidence, state: uiState },
+    { label: "Infrastructure relationships", value: relationshipEvidence, state: uiState === "stable" ? "stable" : uiState },
+    { label: "Structural drivers", value: activeArchetype, state: uiState === "neutral" ? "neutral" : "watch" },
+  ]);
+  const narrativeItems = compactOperationalItems([
+    { label: "Escalation direction", value: issueType, state: uiState },
+    { label: "Primary driver", value: whyWeThinkThat, state: uiState === "stable" ? "stable" : uiState },
+    { label: "Operator focus", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
+  ]);
+  const timelineItems = compactOperationalItems([
+    { label: "Instability began", value: lastUpdate, state: "neutral" },
+    { label: "Persistence", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
+    { label: "Escalation window", value: continuationWindow, state: uiState },
+    { label: "Relationship spread", value: propagationPath || memoryMatch, state: uiState === "neutral" ? "neutral" : uiState },
+  ]);
 
   return (
     <SystemBodyWorkspace
@@ -143,6 +136,12 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
       isLoading={awaitingSii}
     />
   );
+}
+function compactOperationalItems(items) {
+  return items.filter((item) => {
+    const value = String(item?.value ?? "").trim().toLowerCase();
+    return value && value !== "none" && value !== "n/a" && value !== "na";
+  });
 }
 
 function deriveOrbOperationalState({ awaitingSii, uiState, liveOps, primaryItem }) {

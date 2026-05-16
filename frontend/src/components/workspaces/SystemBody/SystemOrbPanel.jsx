@@ -82,7 +82,7 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
   return (
     <aside
       className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState}`}
-      aria-label="Canonical facility condition orb"
+      aria-label="Primary infrastructure condition orb"
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (
@@ -96,40 +96,14 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
         <HealthOrb systemState={resolvedSystemState} intensity={instability} />
       </div>
       <div className="system-body-orb-panel__meta">
-        <span className="section-label">Canonical health instrument</span>
+        <span className="section-label">Structural State</span>
         <strong>{copy.code}</strong>
         <em>{resolvedLabel}</em>
       </div>
-      <div className="system-body-orb-panel__telemetry" aria-label="Orb telemetry coupling state">
-        <div>
-          <span className="metadata-text">Focus</span>
-          <strong>{normalizedFocus}</strong>
-        </div>
-        <div>
-          <span className="metadata-text">Structural condition</span>
-          <strong>{copy.structural}</strong>
-        </div>
-        <div>
-          <span className="metadata-text">Telemetry state</span>
-          <strong>{copy.telemetry}</strong>
-        </div>
-        <div>
-          <span className="metadata-text">Progression severity</span>
-          <strong>{copy.progression}</strong>
-        </div>
-        <div>
-          <span className="metadata-text">Environmental stability</span>
-          <strong>{copy.environment}</strong>
-        </div>
-        <div>
-          <span className="metadata-text">Attention level</span>
-          <strong>{copy.attention}</strong>
-        </div>
-      </div>
       <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
         <span />
-        <strong>{lastUpdate || "No confirmed update"}</strong>
-        <em>Instability field {instabilityDisplay}</em>
+        <strong>{lastUpdate || "Awaiting confirmed update"}</strong>
+        <em>Structural pressure {instabilityDisplay}</em>
       </div>
     </aside>
   );

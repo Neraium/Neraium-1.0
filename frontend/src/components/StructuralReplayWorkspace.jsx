@@ -125,7 +125,7 @@ export default function StructuralReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Replay Snapshot" className="span-12 workspace-hero-panel" subtitle="Operational progression view for escalation and recovery.">
+      <Panel title="Infrastructure Diagnostics" className="span-12 workspace-hero-panel" subtitle="Technical replay, topology, and evidence overlays separated from the operator flow.">
         <MetricGrid metrics={metrics} />
         {expertMode ? (
           <div className="structural-replay-controls">
@@ -165,7 +165,7 @@ export default function StructuralReplayWorkspace({
           </div>
         )}
         <p className="metadata-text">
-          Active timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : "model-generated continuity frame"}
+          Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : "model-generated continuity frame"}
         </p>
         <ReplayCognitionField
           timeline={operativeTimeline}
@@ -177,7 +177,7 @@ export default function StructuralReplayWorkspace({
       </Panel>
 
       {expertMode ? (
-        <Panel title="Cognition Phase Rail" className="span-12 replay-phase-panel">
+        <Panel title="State-Space Progression" className="span-12 replay-phase-panel">
           <div className="canonical-flow">
             {canonicalFlow.map((phase) => {
               const active = shownFrame?.cognition_state?.canonical_phase === phase;
@@ -191,11 +191,11 @@ export default function StructuralReplayWorkspace({
         </Panel>
       ) : null}
 
-      <Panel title="Propagation Map" className="span-6">
+      <Panel title="Topology Graph" className="span-6">
         <PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} />
       </Panel>
 
-      <Panel title={expertMode ? "Evidence Interaction Layer" : "Evidence Summary"} className="span-6">
+      <Panel title={expertMode ? "Evidence Diagnostics" : "Why Neraium Flagged This"} className="span-6">
         {expertMode ? (
           <EvidenceInteractionPanel frame={shownFrame} />
         ) : (
@@ -211,12 +211,12 @@ export default function StructuralReplayWorkspace({
         <ul className="system-body-timeline-list">
           <li><span className="metadata-text">Convergence Signal</span><strong>{shownFrame?.propagation_state?.recovery_convergence ?? "tracking"}</strong></li>
           <li><span className="metadata-text">Fragmentation Indicator</span><strong>{shownFrame?.topology_state?.fragmentation_indicator ?? "low"}</strong></li>
-          <li><span className="metadata-text">Facility Cognition State</span><strong>{strengthenReplayState(shownFrame?.cognition_state?.facility_state)}</strong></li>
+          <li><span className="metadata-text">Facility State</span><strong>{strengthenReplayState(shownFrame?.cognition_state?.facility_state)}</strong></li>
         </ul>
       </Panel>
       {expertMode ? (
         <>
-          <Panel title="Structural Memory Replay" className="span-6">
+          <Panel title="Historical Pattern Memory" className="span-6">
             <StructuralMemoryPanel frame={shownFrame} />
           </Panel>
 
@@ -226,7 +226,7 @@ export default function StructuralReplayWorkspace({
 
           <Panel title="Operational Time Intelligence" className="span-6">
             <ul className="system-body-timeline-list">
-              <li><span className="metadata-text">Canonical Phase</span><strong>{shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? "baseline continuity"}</strong></li>
+              <li><span className="metadata-text">State-space phase</span><strong>{shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? "baseline continuity"}</strong></li>
               <li><span className="metadata-text">Propagation Acceleration</span><strong>{shownFrame?.propagation_state?.propagation_acceleration ?? "watching"}</strong></li>
               <li><span className="metadata-text">Structural Compression</span><strong>{shownFrame?.subsystem_pressure?.compression_intensity ?? "adaptive"}</strong></li>
               <li><span className="metadata-text">Continuation Window</span><strong>{shownFrame?.continuation_window?.window ?? "model-derived watch"}</strong></li>

@@ -137,7 +137,7 @@ function MobileOperationalHeader({
   setIsWorkspaceMenuOpen,
   onSelectWorkspace,
 }) {
-  const missionLabel = activeWorkspace === "cultivation-mission-control" ? "Active Deployment" : "Operational Command";
+  const missionLabel = activeWorkspace === "cultivation-mission-control" ? "Active Deployment" : "Command";
   const hudMetrics = buildOperationalHudMetrics(liveOps);
 
   return (
@@ -145,7 +145,7 @@ function MobileOperationalHeader({
       <div className="mobile-status-bar__topline">
         <div className="mobile-status-bar__brand">
           <div className="mobile-status-bar__copy">
-            <p className="brand-name brand-name--hero">Neraium // OPS</p>
+            <p className="brand-name brand-name--hero">Neraium</p>
             <p className="mobile-status-bar__workspace">{missionLabel} · {activeConfig.label}</p>
           </div>
         </div>
@@ -163,10 +163,10 @@ function MobileOperationalHeader({
         </button>
       </div>
 
-      <div className={`mobile-command-strip mobile-command-strip--deployment mobile-command-strip--${liveOps.facilityTone}`} aria-label="Live structural cognition ribbon">
+      <div className={`mobile-command-strip mobile-command-strip--deployment mobile-command-strip--${liveOps.facilityTone}`} aria-label="Mobile operational summary">
         <div className="mobile-command-strip__cell mobile-command-strip__cell--identity">
-          <span>Cultivation Primary</span>
-          <strong>Live Structural Cognition Active</strong>
+          <span>Structural state</span>
+          <strong>Infrastructure relationships under review</strong>
         </div>
         {hudMetrics.map((metric, index) => (
           <div className={`mobile-command-strip__cell ${index === 0 ? "mobile-command-strip__cell--primary" : ""}`} key={metric.label}>
@@ -192,7 +192,7 @@ function MobileOperationalHeader({
             <span className="mobile-workspace-pill__status" aria-hidden="true" />
             <span>{workspace.eyebrow}</span>
             <strong>{workspace.label}</strong>
-            <em>{activeWorkspace === workspace.id ? "Live cognition" : "Linked module"}</em>
+            <em>{activeWorkspace === workspace.id ? "Active" : "Available"}</em>
           </button>
         ))}
       </nav>
@@ -220,11 +220,11 @@ function WorkspaceNavigationContent({
           <div className="sidebar-brand">
             <div className="brand-mark">N</div>
             <div>
-              <p className="brand-name">NERAIUM // OPS</p>
-              <p className="brand-subtitle">Structural Intelligence Control Plane</p>
+              <p className="brand-name">NERAIUM</p>
+              <p className="brand-subtitle">Operational Intelligence</p>
             </div>
           </div>
-          <span className="brand-edition">Operational Command</span>
+          <span className="brand-edition">Command</span>
         </div>
       ) : null}
 
@@ -234,7 +234,7 @@ function WorkspaceNavigationContent({
           {workspaces.map((workspace, index) => {
             const isActive = activeWorkspace === workspace.id;
             const tier = index < 3 ? "primary" : index < 6 ? "secondary" : "tertiary";
-            const statusText = isActive ? "Active cognition" : tier === "primary" ? "Hot standby" : tier === "secondary" ? "Synchronized" : "Archive-ready";
+            const statusText = isActive ? "Active" : tier === "primary" ? "Ready" : tier === "secondary" ? "Available" : "Diagnostics";
             return (
               <button
                 className={`workspace-nav__item workspace-nav__item--tier-${tier} ${isActive ? `workspace-nav__item--active workspace-nav__item--state-${activeUiState}` : "workspace-nav__item--state-neutral"}`}
@@ -262,13 +262,10 @@ function WorkspaceNavigationContent({
 
       {!isDrawer && !cultivationFocused ? (
         <div className={`sidebar-section sidebar-section--terminal ui-state-surface ui-state-surface--${activeUiState}`}>
-          <p className="sidebar-kicker">Persistent state</p>
-          <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
-          <SidebarTelemetry label="Primary room" value={roomContext.primary} />
-          <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-          <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
-          <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
-          <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
+          <p className="sidebar-kicker">System state</p>
+          <SidebarTelemetry label="State" value={liveOps.facilityStateLabel} />
+          <SidebarTelemetry label="Focus" value={roomContext.primary} />
+          <SidebarTelemetry label="Updated" value={liveOps.connectionSummary} />
         </div>
       ) : null}
 
@@ -311,7 +308,7 @@ function TopStatusBar({
   return (
     <header className={`top-status top-status--deployment ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
       <div className="top-status__title">
-        <p className="eyebrow">Neraium Command | {activeConfig.eyebrow}</p>
+        <p className="eyebrow">Neraium Command · {activeConfig.eyebrow}</p>
         <h1 id="page-title" className={minimalCultivationHeader ? "sr-only" : ""}>
           {activeConfig.label}
         </h1>
@@ -329,12 +326,12 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Live structural cognition operational ribbon">
+      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Operational intelligence ribbon">
         <div className="active-deployment-bar__header">
           <span className="active-deployment-bar__beacon" aria-hidden="true" />
           <div className="active-deployment-bar__identity">
-            <strong>Live Structural Cognition</strong>
-            <em>Cultivation Primary · Live Structural Cognition Active</em>
+            <strong>Operational Intelligence</strong>
+            <em>Infrastructure relationships under review</em>
           </div>
           <span className="active-deployment-bar__mode">{activeConfig.eyebrow}</span>
         </div>
@@ -394,21 +391,14 @@ function TopStatusBar({
       ) : null}
 
       <div className="status-rack">
-        <StatusChip label="Severity" value={liveOps.facilityStateLabel} tone={liveOps.facilityTone} />
-        <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
-        <StatusChip label="Next inspect" value={liveOps.primaryWindow?.label ?? "Facility overview"} tone={liveOps.primaryWindow?.tone ?? "info"} />
-        <StatusChip label="Lead time" value={liveOps.primaryWindow?.window ?? "Monitoring"} tone={liveOps.primaryWindow?.tone ?? liveOps.connectionTone} />
-        <StatusChip label="Evidence confidence" value={liveOps.interventionItems?.[0]?.confidence ? `${liveOps.interventionItems[0].confidence}%` : "Building"} tone={liveOps.facilityTone} />
-        <StatusChip
-          label="What changed"
-          value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
-          tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
-        />
+        <StatusChip label="State" value={liveOps.facilityStateLabel} tone={liveOps.facilityTone} />
+        <StatusChip label="Focus" value={roomContext.primary} tone={liveOps.facilityTone} />
+        <StatusChip label="Time to consequence" value={liveOps.primaryWindow?.window ?? "Monitoring"} tone={liveOps.primaryWindow?.tone ?? liveOps.connectionTone} />
         <button className="secondary-command-button" type="button" onClick={onToggleExpertMode}>
-          {expertMode ? "Expert On" : "Pilot Mode"}
+          {expertMode ? "Diagnostics On" : "Operator View"}
         </button>
         <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
-          {isDemoMode ? "Sample On" : "Sample Off"}
+          {isDemoMode ? "Demo On" : "Demo Off"}
         </button>
         {isDemoMode && (
           <>
@@ -435,16 +425,10 @@ function buildOperationalHudMetrics(liveOps) {
   const propagationValue = ["elevated", "unstable", "offline"].includes(liveOps.facilityTone)
     ? "Watch active"
     : "Localized";
-  const syncValue = liveOps.intelligenceMode === "empty"
-    ? "Awaiting telemetry"
-    : "Live telemetry";
-
   return [
     { label: "State", value: structuralState, tone: liveOps.facilityTone },
     { label: "Lead time", value: liveOps.primaryWindow?.window ?? "Monitoring", tone: liveOps.primaryWindow?.tone ?? "info" },
-    { label: "Propagation", value: propagationValue, tone: liveOps.facilityTone },
-    { label: "Sync", value: syncValue, tone: liveOps.connectionTone },
-    { label: "Updated", value: liveOps.connectionSummary || "Awaiting synchronization", tone: liveOps.connectionTone },
+    { label: "Escalation", value: propagationValue, tone: liveOps.facilityTone },
   ];
 }
 

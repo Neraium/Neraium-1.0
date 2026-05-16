@@ -30,7 +30,7 @@ export default function SystemBodyWorkspace({
       <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
           <header className="system-body-hero__header">
-            <p className="workspace-header__kicker">System Body</p>
+            <p className="workspace-header__kicker">Primary System State</p>
             <h2 className="workspace-header__title">{stateLabel}</h2>
             <p className="workspace-header__subtitle">{subtitle}</p>
             <div className={`workspace-header__status workspace-header__status--${connectionTone}`}>
@@ -39,7 +39,7 @@ export default function SystemBodyWorkspace({
             </div>
           </header>
           <SystemNarrativePanel
-            summaryKicker="Operational narrative"
+            summaryKicker="Operational Summary"
             summaryTitle={summaryTitle}
             items={narrativeItems}
             uiState={uiState}
