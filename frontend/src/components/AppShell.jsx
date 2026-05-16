@@ -7,8 +7,6 @@ export default function AppShell({
   workspaceRef,
   workspaceDrawerRef,
   visibleWorkspaces,
-  expertMode,
-  onToggleExpertMode,
   activeConfig,
   apiStatus,
   latestUploadResult,
@@ -35,10 +33,6 @@ export default function AppShell({
         <WorkspaceNavigationContent
           activeWorkspace={activeWorkspace}
           workspaces={visibleWorkspaces}
-          expertMode={expertMode}
-          onToggleExpertMode={onToggleExpertMode}
-          apiStatus={apiStatus}
-          latestUploadResult={latestUploadResult}
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
@@ -111,10 +105,6 @@ export default function AppShell({
               variant="drawer"
               activeWorkspace={activeWorkspace}
               workspaces={visibleWorkspaces}
-              expertMode={expertMode}
-              onToggleExpertMode={onToggleExpertMode}
-              apiStatus={apiStatus}
-              latestUploadResult={latestUploadResult}
               roomContext={roomContext}
               timeCoverage={timeCoverage}
               liveOps={liveOps}
@@ -202,8 +192,6 @@ function WorkspaceNavigationContent({
   variant = "sidebar",
   activeWorkspace,
   workspaces,
-  expertMode,
-  onToggleExpertMode,
   roomContext,
   timeCoverage,
   liveOps,
@@ -229,13 +217,6 @@ function WorkspaceNavigationContent({
 
       <div className="sidebar-section">
         <p className="sidebar-kicker">Workspaces</p>
-        <button
-          type="button"
-          className={`secondary-command-button ${expertMode ? "is-active" : ""}`}
-          onClick={onToggleExpertMode}
-        >
-          {expertMode ? "Expert Mode On" : "Expert Mode Off"}
-        </button>
         <nav className="workspace-nav">
           {workspaces.map((workspace, index) => {
             const isActive = activeWorkspace === workspace.id;
