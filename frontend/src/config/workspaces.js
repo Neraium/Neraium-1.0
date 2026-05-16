@@ -29,78 +29,6 @@ export const WORKSPACES = [
     eyebrow: "Signal Intake",
     description: "Upload telemetry files and manage the live intake endpoint.",
   },
-  {
-    id: "operator-workflow",
-    label: "Operator Workflow",
-    eyebrow: "Expert View",
-    description: "Canonical full operator workflow from cognition state through replay and convergence review.",
-  },
-  {
-    id: "cultivation-evidence",
-    label: "Cultivation Evidence",
-    eyebrow: "Expert View",
-    description: "Evidence-first cultivation workspace for VPD relationships, compensation masking, and room synchronization drift.",
-  },
-  {
-    id: "system-body",
-    label: "Current Cognition State",
-    eyebrow: "Expert View",
-    description: "Facility cognition state, structural stability, and active pathways.",
-  },
-  {
-    id: "drift-timeline",
-    label: "Drift Timeline",
-    eyebrow: "Expert View",
-    description: "Trajectory of structural distance from stable baseline.",
-  },
-  {
-    id: "fleet-view",
-    label: "Multi-Site Cognition",
-    eyebrow: "Expert View",
-    description: "Cross-site structural cognition network and recurring archetype clusters.",
-  },
-  {
-    id: "structural-ontology",
-    label: "Structural Ontology",
-    eyebrow: "Expert View",
-    description: "Visualize archetype primitives, ontology relationships, and domain cognition mappings.",
-  },
-  {
-    id: "ecosystem-workspace",
-    label: "Ecosystem Layer",
-    eyebrow: "Expert View",
-    description: "Read-only integration posture, cognition state export, and structural graph ecosystem context.",
-  },
-  {
-    id: "distributed-cognition",
-    label: "Distributed Cognition",
-    eyebrow: "Expert View",
-    description: "Federated structural cognition, persistent graph memory, ontology evolution, and governance.",
-  },
-  {
-    id: "operator-training",
-    label: "Operator Training",
-    eyebrow: "Cognition Training",
-    description: "Replay-backed operator cognition training for structural evolution interpretation.",
-  },
-  {
-    id: "behavior-science",
-    label: "Behavior Science",
-    eyebrow: "Research Layer",
-    description: "Long-horizon structural behavior science, taxonomy, evolution theory, and explainability standards.",
-  },
-  {
-    id: "operator-cognition-training",
-    label: "Operator Curriculum",
-    eyebrow: "Training System",
-    description: "Replay-based operator cognition curriculum for structural interpretation exercises.",
-  },
-  {
-    id: "structural-cognition-research",
-    label: "Research Workspace",
-    eyebrow: "Framework Layer",
-    description: "Universal primitives, structural evolution mathematics, governance queue, archives, and reasoning traces.",
-  },
 ];
 
 export const FALLBACK_SYSTEMS = [
@@ -147,14 +75,6 @@ export const REPORT_TEMPLATES = [
 
 export const DEFAULT_WORKSPACE_ID = "cultivation-mission-control";
 
-export const PRIMARY_WORKSPACE_ORDER = [
-  "cultivation-mission-control",
-  "historical-replay",
-  "evidence-console",
-  "propagation-map",
-  "data-connections",
-];
+export const PRIMARY_WORKSPACE_ORDER = WORKSPACES.map((workspace) => workspace.id);
 
-export const EXPERT_WORKSPACE_IDS = new Set(
-  WORKSPACES.map((workspace) => workspace.id).filter((id) => !PRIMARY_WORKSPACE_ORDER.includes(id)),
-);
+export const EXPERT_WORKSPACE_IDS = new Set();
