@@ -11337,3 +11337,429 @@ nav[aria-label="Workspaces"] a {
   0%, 100% { transform: rotate(-0.18deg) scale(0.998); }
   50% { transform: rotate(0.22deg) scale(1.004); }
 }
+
+/* Cinematic uploaded-data replay cognition system. */
+.replay-cognition-field {
+  position: relative;
+  isolation: isolate;
+  margin-top: clamp(18px, 2.2vw, 28px);
+  padding: clamp(16px, 2vw, 24px);
+  overflow: hidden;
+  border: 1px solid rgba(138, 184, 196, 0.2);
+  background:
+    radial-gradient(circle at 72% 24%, rgba(138, 184, 196, calc(0.08 + var(--replay-divergence) * 0.16)), transparent 30%),
+    radial-gradient(circle at 28% 68%, rgba(108, 186, 156, calc(0.05 + var(--replay-recovery) * 0.11)), transparent 34%),
+    linear-gradient(180deg, rgba(8, 13, 17, 0.92), rgba(4, 7, 10, 0.98));
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.replay-cognition-field::before,
+.replay-cognition-field::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  z-index: -1;
+}
+
+.replay-cognition-field::before {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 58px 58px;
+  mask-image: radial-gradient(circle at 52% 48%, #000 0 44%, transparent 78%);
+  opacity: 0.54;
+}
+
+.replay-cognition-field::after {
+  background: linear-gradient(100deg, transparent 0%, rgba(138, 184, 196, 0.08) 42%, transparent 64%);
+  transform: translateX(-45%);
+  animation: replaySignalSweep 9s ease-in-out infinite;
+}
+
+.replay-cognition-field__header,
+.replay-cognition-field__footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.replay-cognition-field__header {
+  align-items: flex-start;
+  margin-bottom: var(--space-12);
+}
+
+.replay-cognition-field__header h3 {
+  margin: 0;
+  max-width: 12ch;
+  font-size: clamp(1.8rem, 4vw, 4.8rem);
+  line-height: 0.88;
+  letter-spacing: -0.07em;
+  text-transform: uppercase;
+}
+
+.replay-cognition-field__header span,
+.replay-cognition-field__footer span,
+.replay-cognition-field__state span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.replay-cognition-field__state {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-4);
+  padding: 12px 14px;
+  border: 1px solid rgba(138, 184, 196, 0.18);
+  background: rgba(4, 8, 11, 0.46);
+}
+
+.replay-cognition-field__state strong {
+  font-size: clamp(1.5rem, 3vw, 3rem);
+  letter-spacing: -0.06em;
+  color: rgba(203, 229, 230, 0.96);
+}
+
+.replay-cognition-field__svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  min-height: clamp(300px, 45vw, 560px);
+  filter: drop-shadow(0 22px 42px rgba(0, 0, 0, 0.3));
+}
+
+.replay-cognition-field__backdrop {
+  fill: rgba(3, 8, 11, 0.72);
+  stroke: rgba(138, 184, 196, 0.11);
+}
+
+.replay-cognition-field__drift-field {
+  opacity: calc(0.38 + var(--replay-divergence) * 0.34);
+  animation: replayBreathingField 7s ease-in-out infinite;
+}
+
+.replay-cognition-field__field-line {
+  fill: none;
+  stroke: rgba(138, 184, 196, 0.11);
+  stroke-width: 1;
+  stroke-dasharray: 8 18;
+  animation: replayFieldFlow 14s linear infinite;
+  animation-delay: calc(var(--line-index) * -900ms);
+}
+
+.replay-cognition-field__link {
+  stroke: rgba(138, 184, 196, 0.2);
+  stroke-width: 1.2;
+  transition: all 260ms ease;
+}
+
+.replay-cognition-field__link.is-hot {
+  stroke: rgba(138, 184, 196, calc(0.38 + var(--replay-propagation) * 0.38));
+  stroke-width: calc(1.4px + var(--replay-propagation) * 1.7px);
+}
+
+.replay-cognition-field__link-pulse {
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 18 210;
+  animation: replayRelationshipPulse 2.8s ease-in-out infinite;
+  animation-delay: calc(var(--link-index) * -160ms);
+}
+
+.replay-cognition-field__trajectory {
+  fill: none;
+  stroke: url(#replayTraceGradient);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 980;
+  stroke-dashoffset: 0;
+  animation: replayTrajectoryAlive 5.8s ease-in-out infinite;
+}
+
+.replay-cognition-field__trajectory--ghost {
+  stroke: rgba(138, 184, 196, 0.16);
+  stroke-width: 1.4;
+  stroke-dasharray: 7 12;
+  animation: none;
+}
+
+.replay-cognition-field__trajectory-node {
+  fill: rgba(138, 184, 196, 0.22);
+  stroke: rgba(138, 184, 196, 0.32);
+}
+
+.replay-cognition-field__trajectory-node.is-active {
+  fill: rgba(138, 184, 196, 0.78);
+}
+
+.replay-cognition-field__trajectory-node.is-current {
+  fill: #f5ffff;
+  stroke: rgba(212, 107, 95, 0.78);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px rgba(138, 184, 196, 0.88));
+}
+
+.replay-cognition-field__node-group {
+  animation: replayNodeOrbit 6s ease-in-out infinite;
+  animation-delay: calc(var(--node-index) * -540ms);
+}
+
+.replay-cognition-field__node-halo {
+  fill: rgba(138, 184, 196, calc(0.08 + var(--node-activity) * 0.15));
+  stroke: rgba(138, 184, 196, 0.2);
+  animation: replayNodeHalo 3.8s ease-in-out infinite;
+  animation-delay: calc(var(--node-index) * -220ms);
+}
+
+.replay-cognition-field__node {
+  fill: rgba(203, 229, 230, 0.92);
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 1.2;
+}
+
+.replay-cognition-field__node--propagation,
+.replay-cognition-field__node--environment {
+  fill: rgba(212, 138, 82, 0.96);
+}
+
+.replay-cognition-field__node--recovery {
+  fill: rgba(108, 186, 156, 0.96);
+}
+
+.replay-cognition-field__node-label {
+  fill: rgba(217, 231, 232, 0.78);
+  font-size: 12px;
+  text-anchor: middle;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.replay-cognition-field__structural-pulse {
+  fill: none;
+  stroke: rgba(212, 107, 95, calc(0.18 + var(--replay-propagation) * 0.34));
+  stroke-width: 2;
+  stroke-dasharray: 10 16;
+  animation: replayStructuralPulse 3.6s ease-in-out infinite;
+}
+
+.replay-cognition-field__footer {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: var(--space-10);
+  border-top: 1px solid rgba(138, 184, 196, 0.12);
+  padding-top: var(--space-12);
+}
+
+.replay-cognition-field__footer div {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.replay-cognition-field__footer strong {
+  color: var(--text-primary);
+  line-height: 1.25;
+  text-transform: capitalize;
+}
+
+.replay-cognition-field--playing .replay-cognition-field__state,
+.replay-cognition-field--playing .replay-cognition-field__header h3 {
+  text-shadow: 0 0 22px rgba(138, 184, 196, 0.26);
+}
+
+.replay-phase-panel .canonical-flow__step {
+  background: linear-gradient(180deg, rgba(14, 22, 27, 0.72), rgba(6, 10, 13, 0.84));
+}
+
+@keyframes replaySignalSweep {
+  0%, 18% { transform: translateX(-58%); opacity: 0; }
+  38% { opacity: 0.8; }
+  72%, 100% { transform: translateX(62%); opacity: 0; }
+}
+
+@keyframes replayBreathingField {
+  0%, 100% { transform: scale(0.98); opacity: 0.38; }
+  50% { transform: scale(1.04); opacity: 0.82; }
+}
+
+@keyframes replayFieldFlow {
+  to { stroke-dashoffset: -180; }
+}
+
+@keyframes replayRelationshipPulse {
+  0% { stroke-dashoffset: 210; opacity: 0; }
+  18% { opacity: 0.92; }
+  100% { stroke-dashoffset: -80; opacity: 0; }
+}
+
+@keyframes replayTrajectoryAlive {
+  0%, 100% { stroke-width: 3.8; opacity: 0.74; }
+  50% { stroke-width: 6; opacity: 1; }
+}
+
+@keyframes replayNodeOrbit {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -5px, 0); }
+}
+
+@keyframes replayNodeHalo {
+  0%, 100% { transform: scale(0.96); opacity: 0.62; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes replayStructuralPulse {
+  0% { transform: scale(0.82); opacity: 0; }
+  34% { opacity: 0.9; }
+  100% { transform: scale(1.24); opacity: 0; }
+}
+
+@media (max-width: 760px) {
+  .structural-replay-controls {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    background: rgba(5, 9, 12, 0.72);
+    backdrop-filter: blur(14px);
+    padding: 10px;
+    border: 1px solid rgba(138, 184, 196, 0.12);
+  }
+
+  .structural-replay-controls input[type="range"] {
+    grid-column: 1 / -1;
+  }
+
+  .replay-cognition-field {
+    margin-left: -8px;
+    margin-right: -8px;
+    padding: 14px;
+  }
+
+  .replay-cognition-field__header {
+    display: grid;
+  }
+
+  .replay-cognition-field__state {
+    justify-items: start;
+  }
+
+  .replay-cognition-field__svg {
+    min-height: 360px;
+    transform: scale(1.08);
+    transform-origin: center;
+  }
+
+  .replay-cognition-field__footer {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.health-orb__signal-packet {
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 10 170;
+  opacity: 0;
+  animation: healthOrbSignalPacket var(--orb-signal-duration, 3.4s) ease-in-out infinite;
+  animation-delay: var(--orb-delay);
+  filter: drop-shadow(0 0 6px var(--orb-hue));
+}
+
+.health-orb--critical .health-orb__signal-packet,
+.health-orb--warning .health-orb__signal-packet {
+  stroke-width: 2.2;
+}
+
+.health-orb--animated .health-orb__node {
+  transform-origin: center;
+  animation-name: healthOrbNodeCognition;
+  animation-duration: var(--orb-node-duration, 4.8s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-delay: var(--orb-delay);
+}
+
+@keyframes healthOrbSignalPacket {
+  0% { stroke-dashoffset: 170; opacity: 0; }
+  24% { opacity: 0.88; }
+  100% { stroke-dashoffset: -80; opacity: 0; }
+}
+
+@keyframes healthOrbNodeCognition {
+  0%, 100% { opacity: 0.62; filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 7px var(--orb-hue)); }
+}
+
+.uploaded-intelligence-panel,
+.upload-cognition-state,
+.upload-ops-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.uploaded-intelligence-panel::before,
+.upload-cognition-state::before,
+.upload-ops-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 78% 16%, rgba(138, 184, 196, 0.13), transparent 34%),
+    linear-gradient(110deg, transparent 0%, rgba(108, 186, 156, 0.05) 46%, transparent 72%);
+  opacity: 0.86;
+}
+
+.uploaded-intelligence-panel .metric-card,
+.upload-cognition-state .workflow-stage,
+.upload-ops-panel .upload-file-card,
+.upload-ops-panel .intake-flow__status {
+  position: relative;
+  z-index: 1;
+}
+
+.upload-cognition-state .workflow-stage {
+  transform: translateZ(0);
+  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
+.upload-cognition-state .workflow-stage--active,
+.upload-flow-rail__step--active {
+  box-shadow: 0 0 34px rgba(138, 184, 196, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.upload-progress-meter span {
+  background: linear-gradient(90deg, rgba(108, 186, 156, 0.86), rgba(138, 184, 196, 0.98), rgba(255, 255, 255, 0.88));
+  box-shadow: 0 0 18px rgba(138, 184, 196, 0.34);
+}
+
+@media (max-width: 760px) {
+  .workspace-grid--connections {
+    scroll-snap-type: y proximity;
+  }
+
+  .workspace-grid--connections > .panel,
+  .workspace-grid--connections > .workspace-hero-panel {
+    scroll-snap-align: start;
+  }
+
+  .intake-flow__controls {
+    position: sticky;
+    top: 0;
+    z-index: 7;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px;
+    background: rgba(5, 9, 12, 0.78);
+    backdrop-filter: blur(16px);
+  }
+}

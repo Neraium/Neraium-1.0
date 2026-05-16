@@ -109,7 +109,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
     if (source.length < 2) {
       setReplayHistory(null);
       setReplayModeLabel(modeFromTone(liveOps.facilityTone));
-      setReplaySignal("Replay waiting for enough CSV-derived telemetry history.");
+      setReplaySignal("Replay is building enough operational telemetry history to animate structural evolution.");
       return;
     }
 
@@ -141,7 +141,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
       }
 
       if (cursor >= source.length) {
-        setReplaySignal("Replay complete (CSV-derived).");
+        setReplaySignal("Replay complete with operational telemetry-derived structural evolution.");
         return;
       }
 
@@ -155,7 +155,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
         pauseUntil = Date.now() + 950;
         windowCursor += 1;
       } else if (cursor >= source.length) {
-        setReplaySignal("Replay complete (CSV-derived).");
+        setReplaySignal("Replay complete with operational telemetry-derived structural evolution.");
       } else if (toneRank(next?.tone) > toneRank(source[Math.max(0, cursor - 2)]?.tone)) {
         setReplaySignal(`Severity transition detected at ${next?.stamp ?? "current sample"}.`);
         pauseUntil = Date.now() + 900;

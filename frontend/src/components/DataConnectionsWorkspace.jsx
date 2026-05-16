@@ -67,7 +67,7 @@ function isLargeOperationalUpload(file) {
 
 function uploadReadinessMessage(file) {
   if (!file) {
-    return "Choose a CSV or JSON export to activate validation and processing.";
+    return "Choose an operational telemetry export to begin intelligence construction.";
   }
   if (isLargeOperationalUpload(file)) {
     return "Large operational telemetry detected. The export will be transferred securely, queued for background intake, and processed through schema detection, baseline modeling, SII analysis, and evidence writing.";
@@ -520,10 +520,10 @@ export default function DataConnectionsWorkspace({
     return uploadResult ? "complete" : isUploadProcessing(uploadState) ? "active" : "pending";
   };
   const uploadFlowSteps = [
-    { key: "select", label: "Select File", value: selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename || "CSV / JSON" },
-    { key: "validate", label: "Validate", value: selectedFile ? selectedFileSize : "Schema + columns" },
-    { key: "process", label: "Process", value: isUploadProcessing(uploadState) ? "SII running" : uploadJob?.status || "Ready" },
-    { key: "status", label: "Status", value: uploadError ? "Review" : uploadResult ? "Complete" : "Standby" },
+    { key: "select", label: "Acquire Telemetry", value: selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename || "Operational source" },
+    { key: "validate", label: "Resolve Signal Schema", value: selectedFile ? selectedFileSize : "sensor matrix" },
+    { key: "process", label: "Construct Intelligence Model", value: isUploadProcessing(uploadState) ? "baseline + replay generation" : uploadJob?.status || "Ready" },
+    { key: "status", label: "Activate Cognition", value: uploadError ? "Operator attention" : uploadResult ? "Active" : "Standby" },
   ];
 
   const baselineStatusLabel = formatBaselineStatus(activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status);
@@ -563,10 +563,10 @@ export default function DataConnectionsWorkspace({
         <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <div>
-              <p className="section-token">Upload Telemetry File</p>
-              <h3>Select File → Validate → Process → Status</h3>
+              <p className="section-token">Telemetry Intelligence Constructor</p>
+              <h3>Acquire → Resolve → Model → Activate</h3>
             </div>
-            <p>Use a CSV or JSON telemetry export to establish a file-based baseline, with live REST telemetry remaining visible for continuity.</p>
+            <p>Neraium constructs a structural intelligence model from telemetry: schema resolution, relational baseline computation, replay generation, and active cognition handoff.</p>
           </div>
 
           <ol className="upload-flow-rail" aria-label="Upload progress">
@@ -592,9 +592,9 @@ export default function DataConnectionsWorkspace({
 
           <div className="upload-file-card">
             <div className="upload-file-card__main">
-              <span className="upload-file-card__label">Selected telemetry</span>
+              <span className="upload-file-card__label">Telemetry source</span>
               <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose a CSV or JSON export to activate validation and processing."}</p>
+              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose an operational telemetry export to begin intelligence construction."}</p>
               <p>{uploadGuidance}</p>
             </div>
             <div className="upload-file-card__actions">
@@ -624,9 +624,9 @@ export default function DataConnectionsWorkspace({
           </div>
 
           <div className="intake-flow__guidance" role="status" aria-live="polite">
-            <strong>{selectedFileIsLarge ? "High-volume export identified" : "Operational intake guidance"}</strong>
+            <strong>{selectedFileIsLarge ? "High-volume telemetry field identified" : "Intelligence construction guidance"}</strong>
             <span>{intakeStateEstimate}</span>
-            <span>No synthetic progress is shown; transfer percentage and speed come from browser upload events, then backend stages come from intake job status.</span>
+            <span>Progress tracks transfer, schema resolution, baseline modeling, structural scoring, replay frame generation, and active cognition handoff.</span>
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} transferred at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
           </div>
 
@@ -661,36 +661,36 @@ export default function DataConnectionsWorkspace({
       )}
 
       {activeTab === "upload" && (
-      <Panel title="Ingestion State" className="span-5">
+      <Panel title="Model Construction State" className="span-5 upload-cognition-state">
         <WorkflowStages items={intakeStages} />
       </Panel>
       )}
 
       {activeTab === "overview" && (
       <>
-      <Panel title="Latest Sync" className="span-7">
+      <Panel title="Active Structural Intelligence" className="span-7 uploaded-intelligence-panel">
         <MetricGrid
           metrics={[
-            { label: "State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
-            { label: "Backend", value: apiStatus.label },
-            { label: "Latest Sync", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No data connected yet" },
-            { label: "Source", value: latestUploadSnapshot?.result_source === "rest_poll" ? "REST Poll" : latestUploadSnapshot?.result_source ? "File Upload" : "Awaiting Data" },
-            { label: "Baseline", value: baselineMessage },
-            { label: "Connection", value: activeConnection?.name ?? "Awaiting source" },
-            { label: "Primary Room", value: roomContext.primary },
-            { label: "Scenario", value: activeConnection?.current_scenario ?? "Awaiting telemetry" },
-            { label: "Tick", value: activeConnection?.current_tick ?? "n/a" },
+            { label: "Cognition State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
+            { label: "Control Plane", value: apiStatus.label },
+            { label: "Model Updated", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "Awaiting first intelligence model" },
+            { label: "Signal Origin", value: latestUploadSnapshot?.result_source === "rest_poll" ? "Live telemetry stream" : latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting telemetry" },
+            { label: "Relational Baseline", value: baselineMessage },
+            { label: "Active Source", value: activeConnection?.name ?? "Awaiting source" },
+            { label: "Primary Environment", value: roomContext.primary },
+            { label: "Operating Scenario", value: activeConnection?.current_scenario ?? "Awaiting telemetry" },
+            { label: "Temporal Index", value: activeConnection?.current_tick ?? "Tracking on activation" },
           ]}
         />
       </Panel>
 
-      <Panel title="Change Summary" className="span-5">
+      <Panel title="Structural Delta" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <MetricGrid
           metrics={[
-            { label: "Current Result", value: latestUploadSnapshot?.history?.[0]?.filename ?? activeConnection?.name ?? "No active result" },
-            { label: "Previous Result", value: latestUploadSnapshot?.history?.[1]?.filename ?? "None" },
-            { label: "Score Delta", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "n/a" },
-            { label: "Result", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting data" },
+            { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? activeConnection?.name ?? "Model pending" },
+            { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "First baseline forming" },
+            { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "Awaiting second frame" },
+            { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting telemetry" },
           ]}
           compact
         />
