@@ -15,6 +15,7 @@ export default function CultivationMissionControl({
   const [ontology, setOntology] = useState(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [isReportExpanded, setIsReportExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +66,12 @@ export default function CultivationMissionControl({
     ontology,
     evidenceSummary,
   });
+  const operationalAwareness = buildOperationalAwarenessQueue({
+    cognition,
+    evidenceSummary,
+    replayFrames,
+    continuationWindow,
+  });
 
   return (
     <div className={`workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean cultivation-mission-grid--${severityState}`}>
@@ -79,6 +86,7 @@ export default function CultivationMissionControl({
             { id: "replay", label: "Replay" },
             { id: "evidence", label: "Evidence" },
             { id: "propagation", label: "Propagation" },
+            { id: "reports", label: "Reports" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -143,35 +151,70 @@ export default function CultivationMissionControl({
               </section>
             </div>
           </Panel>
-          <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Operator-ready summary from current structural cognition state.">
-            <div className="cultivation-report-actions">
+          <Panel title="Operational Awareness Queue" className="span-12 cultivation-list-panel cultivation-awareness-panel cultivation-view-panel cultivation-view-panel--awareness" subtitle="Live operator focus before historical reporting and exports.">
+            <div className="cultivation-awareness-grid">
+              {operationalAwareness.map((item) => (
+                <article className={`cultivation-awareness-card cultivation-awareness-card--${item.tone}`} key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
+            </div>
+          </Panel>
+        </>
+      )}
+
+
+      {activeTab === "reports" && (
+        <Panel title="Export Center" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Weekly Pilot Report is archived reporting workflow, collapsed by default so live operations stay primary.">
+          <div className="cultivation-report-collapsed-shell">
+            <div className="cultivation-report-summary-card">
+              <p className="cultivation-report-operator__eyebrow">Weekly Pilot Report</p>
+              <h3>{report.headline}</h3>
+              <p>Formatted operator report, raw payload, and expert mode export tools are available as a secondary workflow.</p>
+            </div>
+            <div className="cultivation-report-actions cultivation-report-actions--center">
               <button type="button" className="secondary-command-button" onClick={() => exportPilotReport(report.formatted)}>
                 Export Operator Report
               </button>
+              <button
+                type="button"
+                className="secondary-command-button"
+                aria-expanded={isReportExpanded}
+                aria-controls="weekly-pilot-report-body"
+                onClick={() => setIsReportExpanded((current) => !current)}
+              >
+                {isReportExpanded ? "Collapse Report" : "Open Report Module"}
+              </button>
             </div>
-            <article className="cultivation-report-operator">
-              <p className="cultivation-report-operator__eyebrow">Formatted operator report</p>
-              <h3>{report.headline}</h3>
-              <div className="cultivation-report-operator__grid">
-                {report.sections.map((section) => (
-                  <section key={section.label}>
-                    <span>{section.label}</span>
-                    <strong>{section.value}</strong>
-                  </section>
-                ))}
-              </div>
-              <div className="cultivation-report-operator__notes">
-                {report.notes.map((note) => (
-                  <p key={note}>{note}</p>
-                ))}
-              </div>
-            </article>
-            <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
-              <summary>View Raw Payload (Expert)</summary>
-              <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
-            </details>
-          </Panel>
-        </>
+          </div>
+          {isReportExpanded && (
+            <div id="weekly-pilot-report-body" className="cultivation-report-expanded-flow">
+              <article className="cultivation-report-operator">
+                <p className="cultivation-report-operator__eyebrow">Formatted operator report</p>
+                <h3>{report.headline}</h3>
+                <div className="cultivation-report-operator__grid">
+                  {report.sections.map((section) => (
+                    <section key={section.label}>
+                      <span>{section.label}</span>
+                      <strong>{section.value}</strong>
+                    </section>
+                  ))}
+                </div>
+                <div className="cultivation-report-operator__notes">
+                  {report.notes.map((note) => (
+                    <p key={note}>{note}</p>
+                  ))}
+                </div>
+              </article>
+              <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
+                <summary>View Raw Payload (Expert)</summary>
+                <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
+              </details>
+            </div>
+          )}
+        </Panel>
       )}
 
       {activeTab === "replay" && (
@@ -350,6 +393,54 @@ function buildWeeklyPilotReport({ cognition, replay, ontology, evidenceSummary }
     formatted,
     raw: JSON.stringify(payload, null, 2),
   };
+}
+
+
+function buildOperationalAwarenessQueue({ cognition, evidenceSummary, replayFrames, continuationWindow }) {
+  const replayCount = replayFrames.length;
+  const propagationCount = cognition.propagation_pathways?.length ?? 0;
+  return [
+    {
+      label: "Operator focus",
+      value: cognition.operator_explanation ?? summarizeChange(cognition),
+      detail: `Continuation window: ${continuationWindow}.`,
+      tone: "focus",
+    },
+    {
+      label: "Propagation state",
+      value: summarizeSpread(cognition),
+      detail: propagationCount > 0 ? `${propagationCount} active pathway${propagationCount === 1 ? "" : "s"} requiring watch.` : "No active propagation pathway in current state.",
+      tone: propagationCount > 0 ? "watch" : "stable",
+    },
+    {
+      label: "Evidence / trust",
+      value: summarizeTrust(cognition, evidenceSummary),
+      detail: `${evidenceSummary.length} evidence signal${evidenceSummary.length === 1 ? "" : "s"} surfaced for operator confidence.`,
+      tone: "trust",
+    },
+    {
+      label: "Replay indicators",
+      value: replayCount > 0 ? summarizeFrame(replayFrames[0]) : "No replay frames available.",
+      detail: replayCount > 0 ? `${replayCount} recent frame${replayCount === 1 ? "" : "s"} ready for review.` : "Replay context will appear after timeline data loads.",
+      tone: "replay",
+    },
+    {
+      label: "Actionable intelligence",
+      value: buildActionableIntelligence(cognition, propagationCount),
+      detail: "Live operational awareness remains ahead of reports and export workflows.",
+      tone: "action",
+    },
+  ];
+}
+
+function buildActionableIntelligence(cognition, propagationCount) {
+  if (propagationCount > 0) {
+    return "Inspect linked rooms and verify environmental compensation before symptoms appear.";
+  }
+  if ((cognition.active_archetypes?.length ?? 0) > 0) {
+    return "Track active archetypes and confirm room behavior remains synchronized.";
+  }
+  return "Maintain monitoring cadence and capture fresh telemetry if conditions change.";
 }
 
 function exportPilotReport(reportBody) {
