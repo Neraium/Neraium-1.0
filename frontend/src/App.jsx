@@ -268,7 +268,16 @@ function App() {
     } 
  
     if (activeWorkspace === "drift-timeline") { 
-      return <DriftTimelineWorkspace liveOps={liveOps} driftHistory={driftHistory} autoReplay={autoReplay} />; 
+      return (
+        <DriftTimelineWorkspace
+          liveOps={liveOps}
+          driftHistory={driftHistory}
+          autoReplay={autoReplay}
+          latestUploadResult={latestUploadResult}
+          latestUploadSnapshot={latestUploadSnapshot}
+          isDemoMode={isDemoMode}
+        />
+      ); 
     } 
 
     if (activeWorkspace === "data-connections") {
