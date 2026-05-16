@@ -211,6 +211,11 @@ function App() {
           accessCode={apiAccessCode}
           isDemoMode={isDemoMode}
           expertMode={expertMode}
+          onRunPilotDemo={() => {
+            setIsDemoMode(true);
+            setDemoScenario("drift");
+            setActiveWorkspace("cultivation-mission-control");
+          }}
           hasUploadedTelemetry={uploadStateView.hasFullUploadResult(latestUploadResult)}
           Panel={Panel}
           MetricGrid={MetricGrid}

@@ -8,6 +8,7 @@ export default function CultivationMissionControl({
   accessCode,
   isDemoMode,
   expertMode = false,
+  onRunPilotDemo,
   hasUploadedTelemetry = false,
   Panel,
   EmptyState,
@@ -90,6 +91,14 @@ export default function CultivationMissionControl({
     replayFrames,
     continuationWindow,
   });
+  const pilotFlowSteps = [
+    { id: "overview", label: "Facility status", detail: "Confirm structural state and continuation window." },
+    { id: "overview", label: "Active change", detail: "Read what is changing and where attention should go." },
+    { id: "propagation", label: "Propagation map", detail: "See where pressure is spreading or stabilizing." },
+    { id: "evidence", label: "Evidence summary", detail: "Review confidence-backed support in plain language." },
+    { id: "replay", label: "Replay snapshot", detail: "Check simplified progression and recovery posture." },
+    { id: "reports", label: "Weekly pilot report", detail: "Export concise operator-ready report." },
+  ];
 
   return (
     <div className={`workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean cultivation-mission-grid--${severityState}`}>
@@ -104,7 +113,7 @@ export default function CultivationMissionControl({
             { id: "propagation", label: "Propagation" },
             { id: "replay", label: "Replay Snapshot" },
             { id: "evidence", label: "Evidence Summary" },
-            ...(expertMode ? [{ id: "reports", label: "Reports" }] : []),
+            { id: "reports", label: "Reports" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -116,6 +125,60 @@ export default function CultivationMissionControl({
             >
               {tab.label}
             </button>
+          ))}
+        </div>
+        <div className="cultivation-report-actions">
+          <button
+            type="button"
+            className="command-button"
+            onClick={() => {
+              onRunPilotDemo?.();
+              setActiveTab("overview");
+            }}
+          >
+            Run Pilot Demo
+          </button>
+          <button
+            type="button"
+            className="secondary-command-button"
+            onClick={() => {
+              onRunPilotDemo?.();
+              setActiveTab("overview");
+            }}
+          >
+            Load Sample Cultivation Data
+          </button>
+        </div>
+      </Panel>
+      <Panel
+        title="Pilot Demo Path"
+        className="span-12 cultivation-list-panel cultivation-view-panel"
+        subtitle="One guided operator flow from facility status through report export."
+      >
+        <div className="cultivation-awareness-feed" role="list">
+          {pilotFlowSteps.map((step, index) => (
+            <article className="cultivation-awareness-feed__item cultivation-awareness-feed__item--trust cultivation-awareness-feed__item--severity-low" key={`${step.label}-${index}`} role="listitem">
+              <div className="cultivation-awareness-feed__index">
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <i aria-hidden="true" />
+              </div>
+              <div className="cultivation-awareness-feed__body">
+                <div className="cultivation-awareness-feed__header">
+                  <span>{step.label}</span>
+                  <em>{activeTab === step.id ? "Current" : "Open"}</em>
+                </div>
+                <p>{step.detail}</p>
+                <div className="cultivation-report-actions">
+                  <button
+                    type="button"
+                    className="secondary-command-button"
+                    onClick={() => setActiveTab(step.id)}
+                  >
+                    {step.id === "reports" ? "Open Report" : "Open Step"}
+                  </button>
+                </div>
+              </div>
+            </article>
           ))}
         </div>
       </Panel>
@@ -235,10 +298,12 @@ export default function CultivationMissionControl({
                   ))}
                 </div>
               </article>
-              <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
-                <summary>View Raw Payload (Expert)</summary>
-                <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
-              </details>
+              {expertMode ? (
+                <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
+                  <summary>View Raw Payload (Expert)</summary>
+                  <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
+                </details>
+              ) : null}
             </div>
           )}
         </Panel>
