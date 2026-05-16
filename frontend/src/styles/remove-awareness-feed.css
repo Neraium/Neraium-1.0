@@ -1,0 +1,6 @@
+/* Remove the Operational Awareness Feed from the customer UI.
+   The overview orb and intelligence summary are the primary operator surface. */
+
+.cultivation-awareness-panel {
+  display: none !important;
+}
