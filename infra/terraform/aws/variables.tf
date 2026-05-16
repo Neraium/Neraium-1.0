@@ -70,6 +70,12 @@ variable "backend_desired_count" {
   default     = 2
 }
 
+variable "max_upload_size_bytes" {
+  type        = number
+  description = "Maximum telemetry upload payload size accepted by the API. Defaults to 250 MiB for mobile operational exports."
+  default     = 262144000
+}
+
 variable "worker_cpu" {
   type        = number
   description = "Fargate worker task CPU units."

@@ -26,6 +26,13 @@ from app.services.upload_jobs import (
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
 DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
+MULTIPART_ENVELOPE_ALLOWANCE_BYTES = 5 * 1024 * 1024
+
+
+def format_upload_capacity(size_bytes: int) -> str:
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes} bytes"
+    return f"{size_bytes / (1024 * 1024):.0f} MB"
 
 
 def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = None) -> dict[str, Any]:
@@ -112,12 +119,16 @@ async def upload_csv(
     if content_length:
         try:
             size_bytes = int(content_length)
-            if size_bytes > settings.max_upload_size_bytes:
+            if size_bytes > settings.max_upload_size_bytes + MULTIPART_ENVELOPE_ALLOWANCE_BYTES:
                 raise HTTPException(
                     status_code=413,
                     detail={
                         "error_type": "upload_too_large",
-                        "message": f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                        "message": (
+                            "High-volume export identified above configured operational intake capacity "
+                            f"({format_upload_capacity(settings.max_upload_size_bytes)}). "
+                            "Use a partitioned export or enterprise batch intake path."
+                        ),
                         "max_upload_size_bytes": settings.max_upload_size_bytes,
                     },
                 )
@@ -163,7 +174,11 @@ async def upload_csv(
             status_code=413,
             detail={
                 "error_type": "upload_too_large",
-                "message": f"Upload exceeds max allowed size ({settings.max_upload_size_bytes} bytes).",
+                "message": (
+                    "High-volume export identified above configured operational intake capacity "
+                    f"({format_upload_capacity(settings.max_upload_size_bytes)}). "
+                    "Use a partitioned export or enterprise batch intake path."
+                ),
                 "max_upload_size_bytes": settings.max_upload_size_bytes,
             },
         ) from None
@@ -198,7 +213,7 @@ async def upload_csv(
         "processing_state": "pending",
         "error_type": None,
         "filename": metadata["filename"],
-        "message": "Telemetry batch received. Processing started.",
+        "message": "Preparing telemetry intake. Upload received and queued for background processing.",
         "status_url": f"/api/data/upload-status/{metadata['job_id']}",
         "file_size_bytes": metadata["file_size_bytes"],
     }

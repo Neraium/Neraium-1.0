@@ -36,14 +36,40 @@ const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
   ]
 }`;
 
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
+const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
+const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "Awaiting file";
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${Math.max(bytes / 1024, 1).toFixed(1)} KB`;
+}
+
+function isLargeOperationalUpload(file) {
+  return (file?.size ?? 0) >= LARGE_OPERATIONAL_UPLOAD_BYTES;
+}
+
+function uploadReadinessMessage(file) {
+  if (!file) {
+    return "Choose a CSV or JSON export to activate validation and processing.";
+  }
+  if (isLargeOperationalUpload(file)) {
+    return "Large operational telemetry detected. The export will be transferred securely, queued for background intake, and processed through schema detection, baseline modeling, SII analysis, and evidence writing.";
+  }
+  return "Telemetry export ready for secure intake and background processing.";
+}
 
 function validateTelemetryFile(file, kind) {
   if (!file) {
     return "Choose a CSV or JSON telemetry file to upload.";
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return "File exceeds the 25 MB mobile intake limit. Use a smaller operational export.";
+    return `High-volume export identified above the configured ${formatFileSize(MAX_UPLOAD_BYTES)} operational intake target. Use a partitioned export or route through the enterprise batch intake path.`;
   }
 
   const filename = String(file.name ?? "").toLowerCase();
@@ -218,6 +244,7 @@ export default function DataConnectionsWorkspace({
         accessCode,
         method: "POST",
         body: formData,
+        timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
       });
       const payload = await readJsonPayload(response);
 
@@ -255,6 +282,19 @@ export default function DataConnectionsWorkspace({
     setSelectedFile(nextFile);
     setUploadError(validationError);
     setUploadState(validationError ? "validation_error" : nextFile ? "validated" : "idle");
+    if (nextFile && !validationError) {
+      setUploadJob({
+        job_id: null,
+        status: "validated",
+        progress_label: isLargeOperationalUpload(nextFile)
+          ? "Large operational telemetry detected. Preparing telemetry intake."
+          : "Telemetry export validated. Ready for intake.",
+        message: uploadReadinessMessage(nextFile),
+        file_size_bytes: nextFile.size,
+      });
+    } else {
+      setUploadJob(null);
+    }
   }
 
   function handleRetryUpload() {
@@ -409,12 +449,15 @@ export default function DataConnectionsWorkspace({
       || latestUploadSnapshot?.message
       || uploadStateMessage(uploadState),
   );
-  const selectedFileSize = selectedFile
-    ? selectedFile.size >= 1024 * 1024
-      ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
-      : `${Math.max(selectedFile.size / 1024, 1).toFixed(1)} KB`
-    : "Awaiting file";
-  const uploadProgressLabel = uploadJob?.progress_label || (isUploadProcessing(uploadState) ? "Processing telemetry through SII" : latestMessage);
+  const selectedFileSize = formatFileSize(selectedFile?.size ?? 0);
+  const selectedFileIsLarge = isLargeOperationalUpload(selectedFile);
+  const uploadGuidance = uploadReadinessMessage(selectedFile);
+  const intakeStateEstimate = selectedFileIsLarge
+    ? "Estimated intake state: high-volume export will remain in background processing while the workspace polls for live status."
+    : selectedFile
+      ? "Estimated intake state: standard telemetry export will queue for background processing after transfer."
+      : "Estimated intake state appears after file selection.";
+  const uploadProgressLabel = uploadJob?.progress_label || (isUploadProcessing(uploadState) ? "Preparing telemetry intake" : latestMessage);
   const uploadPhaseState = (phase) => {
     if (phase === "select") {
       return selectedFile || uploadResult ? "complete" : "active";
@@ -507,6 +550,7 @@ export default function DataConnectionsWorkspace({
               <span className="upload-file-card__label">Selected telemetry</span>
               <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
               <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose a CSV or JSON export to activate validation and processing."}</p>
+              <p>{uploadGuidance}</p>
             </div>
             <div className="upload-file-card__actions">
               <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>
@@ -527,6 +571,12 @@ export default function DataConnectionsWorkspace({
               {uploadProgressLabel}
             </span>
             <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
+          </div>
+
+          <div className="intake-flow__guidance" role="status" aria-live="polite">
+            <strong>{selectedFileIsLarge ? "High-volume export identified" : "Operational intake guidance"}</strong>
+            <span>{intakeStateEstimate}</span>
+            <span>No synthetic progress is shown; state updates reflect transfer completion and backend processing milestones.</span>
           </div>
 
           {uploadError && <span className="sr-only">{normalizeErrorMessage(uploadError)}</span>}

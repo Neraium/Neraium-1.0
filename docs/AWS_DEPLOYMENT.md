@@ -49,11 +49,13 @@ NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime
 NERAIUM_UPLOAD_CHUNK_SIZE_ROWS=10000
 NERAIUM_MAX_ANALYSIS_ROWS=20000
 NERAIUM_MAX_SII_ROWS=5000
-NERAIUM_MAX_UPLOAD_SIZE_BYTES=26214400
+NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000
 NERAIUM_MAX_PENDING_UPLOAD_JOBS=50
 ```
 
 Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, AI/LLM configuration, or shared access-code configuration. Add user identity and server-side sessions before broader customer access.
+
+Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, Terraform passes `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000`, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
 
 For production ECS, mount `NERAIUM_RUNTIME_DIR` to durable shared storage such as EFS if upload job status and latest SII state must survive task replacement or multiple replicas. A single ephemeral container filesystem is acceptable only for local development and throwaway demos.
 
