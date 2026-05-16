@@ -788,3 +788,297 @@
     font-size: clamp(1.8rem, 10vw, 3.1rem);
   }
 }
+
+/* Institutional operator hierarchy refinement */
+.system-body.system-body--orb-first {
+  max-width: min(1500px, 94vw);
+  gap: clamp(22px, 2.6vw, 34px);
+}
+
+.system-body-hero {
+  grid-template-columns: minmax(360px, 0.82fr) minmax(520px, 1.18fr);
+  min-height: clamp(620px, 74vh, 820px);
+  border: 1px solid rgba(143, 168, 164, 0.1);
+  border-radius: 28px;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.36);
+  background:
+    radial-gradient(circle at 68% 42%, rgba(var(--state-accent-rgb), 0.14), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(11, 18, 22, 0.96), transparent 44%),
+    linear-gradient(135deg, rgba(18, 25, 29, 0.98), rgba(5, 8, 11, 0.98));
+}
+
+.system-body-hero__header .workspace-header__title {
+  max-width: 10ch;
+  font-size: clamp(3rem, 6.8vw, 7.2rem);
+  line-height: 0.9;
+  letter-spacing: -0.075em;
+}
+
+.system-body-hero__header .workspace-header__subtitle {
+  max-width: 54ch;
+  color: rgba(226, 238, 235, 0.74);
+  font-size: clamp(1rem, 1.2vw, 1.18rem);
+  line-height: 1.7;
+}
+
+.system-body-summary-card--primary {
+  border: 0;
+  border-top: 1px solid rgba(143, 168, 164, 0.12);
+  border-radius: 0;
+  padding: clamp(22px, 2.2vw, 30px) 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.system-body-summary-card h2 {
+  max-width: 24ch;
+  font-size: clamp(1.65rem, 2.4vw, 2.7rem);
+}
+
+.system-body-narrative-grid {
+  grid-template-columns: 1fr;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(143, 168, 164, 0.1);
+  border-radius: 18px;
+  background: rgba(143, 168, 164, 0.08);
+}
+
+.system-body-narrative-item {
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(6, 10, 13, 0.52);
+}
+
+.system-body-narrative-item p {
+  max-width: 58ch;
+  color: rgba(226, 238, 235, 0.84);
+}
+
+.system-body-orb-panel {
+  justify-items: center;
+  border-left: 1px solid rgba(143, 168, 164, 0.08);
+}
+
+.system-body-orb-panel__stage {
+  justify-self: center;
+  width: min(100%, clamp(560px, 48vw, 820px));
+  min-height: clamp(520px, 52vw, 760px);
+  filter: drop-shadow(0 28px 54px rgba(0, 0, 0, 0.34));
+}
+
+.system-body-orb-panel__stage .health-orb {
+  max-width: min(820px, 100%) !important;
+}
+
+.system-body-orb-panel__lattice {
+  opacity: 0.2;
+}
+
+.system-body-orb-panel__halo--outer {
+  inset: 6% 2% 10%;
+  filter: blur(22px);
+  opacity: 0.72;
+}
+
+.system-body-orb-panel__halo--inner {
+  inset: 24% 24% 28%;
+  filter: blur(18px);
+  opacity: 0.54;
+}
+
+.system-body-orb-panel__meta,
+.system-body-orb-panel__sync {
+  border-radius: 14px;
+  border: 1px solid rgba(143, 168, 164, 0.1);
+  background: rgba(4, 8, 10, 0.52);
+}
+
+.system-body-orb-panel__meta {
+  top: clamp(18px, 2vw, 30px);
+}
+
+.system-body-orb-panel__sync {
+  right: 50%;
+  bottom: clamp(18px, 2vw, 30px);
+  transform: translateX(50%);
+  width: min(420px, calc(100% - 40px));
+  max-width: none;
+}
+
+.system-body-metric-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.system-body-metric {
+  min-height: 118px;
+}
+
+.system-body-evidence-block {
+  grid-template-columns: minmax(360px, 0.85fr) minmax(520px, 1.15fr);
+  align-items: stretch;
+  border: 0;
+  gap: clamp(18px, 2vw, 28px);
+  background: transparent;
+}
+
+.system-body-evidence-grid {
+  display: none;
+}
+
+.system-body-evidence-card--drivers,
+.system-body-timeline-card {
+  border: 1px solid rgba(143, 168, 164, 0.1);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(13, 19, 23, 0.84), rgba(7, 11, 14, 0.88));
+  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.24);
+}
+
+.system-body-driver-list {
+  display: grid;
+  gap: 1px;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(143, 168, 164, 0.08);
+  border-radius: 16px;
+  background: rgba(143, 168, 164, 0.08);
+}
+
+.system-body-driver {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  background: rgba(4, 8, 10, 0.48);
+}
+
+.system-body-driver span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.system-body-driver p {
+  margin: 0;
+  color: rgba(226, 238, 235, 0.86);
+  line-height: 1.58;
+}
+
+.system-body-timeline-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(143, 168, 164, 0.08);
+  border-radius: 16px;
+  background: rgba(143, 168, 164, 0.08);
+}
+
+.system-body-timeline-list li {
+  min-height: 112px;
+  padding: 16px;
+  border-top: 2px solid rgba(var(--state-accent-rgb), 0.32);
+  background: rgba(4, 8, 10, 0.48);
+}
+
+@media (max-width: 1280px) {
+  .system-body-hero,
+  .system-body-evidence-block {
+    grid-template-columns: 1fr;
+  }
+
+  .system-body-orb-panel {
+    border-left: 0;
+    border-top: 1px solid rgba(143, 168, 164, 0.08);
+  }
+}
+
+@media (max-width: 720px) {
+  .system-body.system-body--orb-first {
+    max-width: 100%;
+    gap: 14px;
+    padding-bottom: 22px;
+  }
+
+  .system-body-hero {
+    border-radius: 0 0 22px 22px;
+    padding: 20px 16px;
+  }
+
+  .system-body-hero__header .workspace-header__title {
+    max-width: 12ch;
+    font-size: clamp(2.5rem, 15vw, 4.2rem);
+  }
+
+  .system-body-orb-panel {
+    min-height: 360px;
+  }
+
+  .system-body-orb-panel__stage {
+    width: min(100%, 360px);
+    min-height: 300px;
+  }
+
+  .system-body-orb-panel__meta {
+    position: relative;
+    top: auto;
+    right: auto;
+    justify-self: stretch;
+    max-width: none;
+    justify-items: start;
+    text-align: left;
+    order: -1;
+  }
+
+  .system-body-orb-panel__sync {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    width: 100%;
+  }
+
+  .system-body-metric-grid,
+  .system-body-evidence-block,
+  .system-body-timeline-list {
+    grid-template-columns: 1fr;
+  }
+
+  .system-body-metric:nth-child(n + 3),
+  .system-body-driver:nth-child(n + 4),
+  .system-body-timeline-list li:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+/* Restrained orb motion for institutional command use. */
+.system-body-orb-panel .health-orb--animated,
+.cultivation-overview-orb .health-orb--animated {
+  animation-duration: 24s !important;
+  filter: saturate(0.86) brightness(0.92);
+}
+
+.system-body-orb-panel .health-orb--animated .health-orb__svg,
+.cultivation-overview-orb .health-orb--animated .health-orb__svg {
+  animation-duration: 18s !important;
+}
+
+.system-body-orb-panel .health-orb__propagation,
+.system-body-orb-panel .health-orb__scan-line,
+.system-body-orb-panel .health-orb__signal-packet,
+.cultivation-overview-orb .health-orb__propagation,
+.cultivation-overview-orb .health-orb__scan-line,
+.cultivation-overview-orb .health-orb__signal-packet {
+  opacity: 0.34;
+}
+
+.system-body-orb-panel .health-orb__spark,
+.system-body-orb-panel .health-orb__fracture,
+.cultivation-overview-orb .health-orb__spark,
+.cultivation-overview-orb .health-orb__fracture {
+  opacity: 0.42;
+}

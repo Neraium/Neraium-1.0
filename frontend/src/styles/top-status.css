@@ -432,3 +432,43 @@
   font-size: clamp(0.72rem, 0.86vw, 0.82rem);
   animation: none;
 }
+
+/* Operator refinement: keep global status calm and secondary to the workspace state. */
+.top-status--deployment {
+  gap: 14px;
+  padding-bottom: 16px;
+}
+
+.top-status--deployment .active-deployment-bar {
+  display: none;
+}
+
+.top-status__brief {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.top-status__brief-item:nth-child(n + 3) {
+  display: none;
+}
+
+.status-rack {
+  gap: 8px;
+}
+
+.status-chip {
+  min-height: 74px;
+}
+
+@media (max-width: 720px) {
+  .mobile-command-strip__cell:nth-child(n + 5),
+  .mobile-workspace-pill:nth-child(n + 5) {
+    display: none;
+  }
+
+  .mobile-workspace-pills {
+    gap: 8px;
+  }
+}

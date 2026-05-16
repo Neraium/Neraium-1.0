@@ -1,33 +1,27 @@
 export const WORKSPACES = [
   {
-    id: "cultivation-mission-control",
-    label: "Cultivation Mission Control",
-    eyebrow: "Cultivation Primary",
-    description: "Canonical cultivation structural cognition interface for facility state, replay, pathways, and convergence.",
+    id: "system-body",
+    label: "Structural State",
+    eyebrow: "Operator View",
+    description: "Primary infrastructure condition, escalation direction, and operational focus.",
   },
   {
-    id: "historical-replay",
-    label: "Structural Replay",
-    eyebrow: "Replay First",
-    description: "Timeline scrub, propagation pathways, evidence by frame, and continuation windows.",
-  },
-  {
-    id: "evidence-console",
-    label: "Evidence Lineage",
-    eyebrow: "Evidence First",
-    description: "Inspect why structural cognition outputs are supported by subsystem and topology evidence.",
-  },
-  {
-    id: "propagation-map",
-    label: "Propagation Map",
-    eyebrow: "Spread View",
-    description: "Environmental topology spread view for room-to-room structural pathway propagation.",
+    id: "drift-timeline",
+    label: "Escalation Timeline",
+    eyebrow: "Progression",
+    description: "When instability began, how it persisted, and where consequence is increasing.",
   },
   {
     id: "data-connections",
     label: "Data Connections",
-    eyebrow: "Signal Intake",
-    description: "Upload telemetry files and manage the live intake endpoint.",
+    eyebrow: "Intake",
+    description: "Upload telemetry and manage the live evidence stream.",
+  },
+  {
+    id: "historical-replay",
+    label: "Infrastructure Diagnostics",
+    eyebrow: "Technical",
+    description: "Advanced replay internals, evidence lineage, topology, and diagnostic overlays.",
   },
 ];
 
@@ -73,11 +67,8 @@ export const REPORT_TEMPLATES = [
   "Grower Action Report",
 ];
 
-export const DEFAULT_WORKSPACE_ID = "cultivation-mission-control";
+export const DEFAULT_WORKSPACE_ID = "system-body";
 
 export const PRIMARY_WORKSPACE_ORDER = WORKSPACES.map((workspace) => workspace.id);
 
-export const EXPERT_WORKSPACE_IDS = new Set([
-  "historical-replay",
-  "evidence-console",
-]);
+export const EXPERT_WORKSPACE_IDS = new Set([]);
