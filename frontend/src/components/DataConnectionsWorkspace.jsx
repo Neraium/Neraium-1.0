@@ -36,6 +36,30 @@ const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
   ]
 }`;
 
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+function validateTelemetryFile(file, kind) {
+  if (!file) {
+    return "Choose a CSV or JSON telemetry file to upload.";
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return "File exceeds the 25 MB mobile intake limit. Use a smaller operational export.";
+  }
+
+  const filename = String(file.name ?? "").toLowerCase();
+  const mime = String(file.type ?? "").toLowerCase();
+  const looksJson = filename.endsWith(".json") || mime.includes("json");
+  const looksCsv = filename.endsWith(".csv") || mime.includes("csv") || mime === "text/plain" || mime === "";
+
+  if (kind === "json" && !looksJson) {
+    return "Selected file does not look like JSON telemetry. Choose a .json export or switch to CSV.";
+  }
+  if (kind === "csv" && !looksCsv) {
+    return "Selected file does not look like CSV telemetry. Choose a .csv export or switch to JSON.";
+  }
+  return "";
+}
+
 function connectionTone(status) {
   const normalized = String(status ?? "").toLowerCase();
   if (normalized === "online") {
@@ -173,8 +197,10 @@ export default function DataConnectionsWorkspace({
 
   async function handleUpload(event) {
     event.preventDefault();
-    if (!selectedFile) {
-      setUploadError("Choose a CSV or JSON telemetry file to upload.");
+    const validationError = validateTelemetryFile(selectedFile, pendingUploadKind);
+    if (validationError) {
+      setUploadError(validationError);
+      setUploadState("validation_error");
       return;
     }
 
@@ -220,6 +246,27 @@ export default function DataConnectionsWorkspace({
       uploadInputRef.current.value = "";
       uploadInputRef.current.accept = kind === "json" ? ".json,application/json" : ".csv,text/csv";
       uploadInputRef.current.click();
+    }
+  }
+
+  function handleFileSelection(event) {
+    const nextFile = event.target.files?.[0] ?? null;
+    const validationError = validateTelemetryFile(nextFile, pendingUploadKind);
+    setSelectedFile(nextFile);
+    setUploadError(validationError);
+    setUploadState(validationError ? "validation_error" : nextFile ? "validated" : "idle");
+  }
+
+  function handleRetryUpload() {
+    if (uploadJobIdRef.current && isUploadProcessing(uploadState)) {
+      pollUploadStatus(uploadJobIdRef.current);
+      return;
+    }
+    if (uploadInputRef.current && selectedFile) {
+      setUploadError("");
+      setUploadState("validated");
+    } else {
+      openFilePicker(pendingUploadKind);
     }
   }
 
@@ -452,10 +499,7 @@ export default function DataConnectionsWorkspace({
             id="csv-upload"
             type="file"
             className="intake-flow__input"
-            onChange={(event) => {
-              setSelectedFile(event.target.files?.[0] ?? null);
-              setUploadError("");
-            }}
+            onChange={handleFileSelection}
           />
 
           <div className="upload-file-card">
@@ -490,6 +534,9 @@ export default function DataConnectionsWorkspace({
             <div className="form-error form-error--professional" role="status" aria-live="polite">
               <strong>Upload requires attention</strong>
               <span>{normalizeErrorMessage(uploadError || displayUploadError)}</span>
+              <button className="secondary-command-button" type="button" onClick={handleRetryUpload}>
+                Retry intake
+              </button>
             </div>
           )}
         </form>

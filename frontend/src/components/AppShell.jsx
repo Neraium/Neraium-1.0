@@ -46,60 +46,16 @@ export default function AppShell({
         />
       )}
       mobileHeader={(
-        <header className="mobile-status-bar">
-          <div className="mobile-status-bar__brand">
-            <div className="mobile-status-bar__copy">
-              <p className="brand-name brand-name--hero">Neraium</p>
-              <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
-            </div>
-          </div>
-          <div className="mobile-demo-controls" aria-label="Sample controls">
-            <button
-              className={`secondary-command-button mobile-demo-controls__toggle ${isDemoMode ? "is-active" : ""}`}
-              type="button"
-              onClick={onToggleDemoMode}
-            >
-              {isDemoMode ? "Sample On" : "Sample Off"}
-            </button>
-            {isDemoMode && (
-              <div className="mobile-demo-controls__scenarios" role="group" aria-label="Sample scenario">
-                <button
-                  className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => onSetDemoScenario("stable")}
-                >
-                  Stable
-                </button>
-                <button
-                  className={`secondary-command-button ${demoScenario === "drift" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => onSetDemoScenario("drift")}
-                >
-                  Drift
-                </button>
-                <button
-                  className={`secondary-command-button ${demoScenario === "separation" ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => onSetDemoScenario("separation")}
-                >
-                  Separation
-                </button>
-              </div>
-            )}
-          </div>
-          <button
-            className="workspace-menu-button"
-            type="button"
-            aria-expanded={isWorkspaceMenuOpen}
-            aria-controls="mobile-workspace-drawer"
-            onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
-          >
-            <span className="workspace-menu-button__icon" aria-hidden="true">
-              |||
-            </span>
-            <span>Menu</span>
-          </button>
-        </header>
+        <MobileOperationalHeader
+          activeConfig={activeConfig}
+          activeWorkspace={activeWorkspace}
+          visibleWorkspaces={visibleWorkspaces}
+          liveOps={liveOps}
+          roomContext={roomContext}
+          isWorkspaceMenuOpen={isWorkspaceMenuOpen}
+          setIsWorkspaceMenuOpen={setIsWorkspaceMenuOpen}
+          onSelectWorkspace={onSelectWorkspace}
+        />
       )}
       topStatus={(
         <TopStatusBar
@@ -170,6 +126,72 @@ export default function AppShell({
     >
       {renderActiveWorkspace()}
     </DesktopWorkspaceLayout>
+  );
+}
+
+function MobileOperationalHeader({
+  activeConfig,
+  activeWorkspace,
+  visibleWorkspaces,
+  liveOps,
+  roomContext,
+  isWorkspaceMenuOpen,
+  setIsWorkspaceMenuOpen,
+  onSelectWorkspace,
+}) {
+  const compactWorkspaces = visibleWorkspaces.slice(0, 5);
+  return (
+    <header className={`mobile-status-bar mobile-status-bar--${liveOps.facilityTone}`}>
+      <div className="mobile-status-bar__topline">
+        <div className="mobile-status-bar__brand">
+          <div className="mobile-status-bar__copy">
+            <p className="brand-name brand-name--hero">Neraium // OPS</p>
+            <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
+          </div>
+        </div>
+        <button
+          className="workspace-menu-button"
+          type="button"
+          aria-expanded={isWorkspaceMenuOpen}
+          aria-controls="mobile-workspace-drawer"
+          onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
+        >
+          <span className="workspace-menu-button__icon" aria-hidden="true">
+            |||
+          </span>
+          <span>Menu</span>
+        </button>
+      </div>
+
+      <div className="mobile-condition-rack" aria-label="Current operational condition">
+        <div className="mobile-condition-rack__primary">
+          <span>Structural condition</span>
+          <strong>{liveOps.facilityStateLabel}</strong>
+        </div>
+        <div>
+          <span>Room</span>
+          <strong>{roomContext.primary}</strong>
+        </div>
+        <div>
+          <span>Next inspect</span>
+          <strong>{liveOps.primaryWindow?.label ?? "Facility"}</strong>
+        </div>
+      </div>
+
+      <nav className="mobile-workspace-pills" aria-label="Priority workspace shortcuts">
+        {compactWorkspaces.map((workspace) => (
+          <button
+            key={workspace.id}
+            type="button"
+            className={`mobile-workspace-pill ${activeWorkspace === workspace.id ? "mobile-workspace-pill--active" : ""}`}
+            aria-current={activeWorkspace === workspace.id ? "page" : undefined}
+            onClick={() => onSelectWorkspace(workspace.id)}
+          >
+            {workspace.label}
+          </button>
+        ))}
+      </nav>
+    </header>
   );
 }
 

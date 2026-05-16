@@ -304,7 +304,17 @@ export default function EvidenceTrailWorkspace({
           </button>
         </div>
         {exportBody ? (
-          <pre className="evidence-console evidence-console--static">{exportBody}</pre>
+          <div className="operator-report-shell">
+            <div className="operator-report-summary">
+              <p className="section-token">Operator report ready</p>
+              <strong>{selectedRun?.source_name ?? selectedRun?.run_id ?? "Evidence run"}</strong>
+              <span>{selectedRun?.operating_state ?? "Operational state recorded"} · Score {selectedRun?.neraium_score ?? "n/a"}</span>
+            </div>
+            <details className="technical-summary-panel technical-summary-panel--raw">
+              <summary>Expert mode: raw export payload</summary>
+              <pre className="evidence-console evidence-console--static">{exportBody}</pre>
+            </details>
+          </div>
         ) : (
           <p className="empty-copy">Generate a customer-ready report for the selected run.</p>
         )}
