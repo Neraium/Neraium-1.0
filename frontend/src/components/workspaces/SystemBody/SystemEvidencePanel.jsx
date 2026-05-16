@@ -8,7 +8,7 @@ export default function SystemEvidencePanel({ evidenceItems, timelineItems, uiSt
     <section className="system-body-evidence-block" aria-label="Evidence and progression">
       {visibleEvidence.length > 0 ? (
         <SectionCard className={`system-body-evidence-card system-body-evidence-card--drivers ui-state-surface ui-state-surface--${uiState}`}>
-          <span className="section-label">Structural Drivers</span>
+          <span className="section-label">Primary Changes</span>
           <div className="system-body-driver-list">
             {visibleEvidence.map((item) => (
               <article className={`system-body-driver ui-state-indicator ui-state-indicator--${item.state ?? uiState}`} key={item.label}>
@@ -22,11 +22,13 @@ export default function SystemEvidencePanel({ evidenceItems, timelineItems, uiSt
 
       {visibleTimeline.length > 0 ? (
         <SectionCard className={`system-body-timeline-card ui-state-surface ui-state-surface--${uiState}`}>
-          <span className="section-label">System Progression</span>
+          <span className="section-label">Structural Progression</span>
           <ul className="system-body-timeline-list">
-            {visibleTimeline.map((item) => (
+            {visibleTimeline.map((item, index) => (
               <li className={`ui-state-indicator ui-state-indicator--${item.state ?? uiState}`} key={item.label}>
-                <span className="metadata-text">{item.label}</span>
+                <span className="metadata-text">Phase {index + 1}</span>
+                <em className="system-body-timeline-list__annotation">{timelineAnnotation(item.label, index)}</em>
+                <p>{item.label}</p>
                 <strong>{item.value}</strong>
               </li>
             ))}
@@ -40,4 +42,13 @@ export default function SystemEvidencePanel({ evidenceItems, timelineItems, uiSt
 function hasOperatorValue(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return Boolean(normalized && normalized !== "none" && normalized !== "n/a" && normalized !== "na");
+}
+
+function timelineAnnotation(label, index) {
+  const text = String(label ?? "").toLowerCase();
+  if (text.includes("initial") || text.includes("began")) return "Initial signal";
+  if (text.includes("persistence")) return "Persistence checkpoint";
+  if (text.includes("divergence")) return "Divergence trend";
+  if (text.includes("escalation") || text.includes("pressure")) return "Escalation marker";
+  return `Progression marker ${index + 1}`;
 }

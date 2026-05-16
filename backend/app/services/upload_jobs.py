@@ -1011,8 +1011,13 @@ def build_evidence_record(
 
 
 def latest_completed_job_summary() -> dict[str, Any] | None:
+    reset_marker = read_latest_payload("latest_upload_reset_at")
+    reset_at = parse_timestamp(reset_marker) if isinstance(reset_marker, str) else None
     latest = read_latest_upload_summary()
     if latest:
+        latest_completed_at = parse_timestamp(str(latest.get("last_processed_at") or latest.get("completed_at") or ""))
+        if reset_at and (latest_completed_at is None or latest_completed_at <= reset_at):
+            return None
         return latest
     completed_jobs: list[dict[str, Any]] = [
         metadata for metadata in list_upload_jobs(status="COMPLETE", limit=100)
@@ -1030,12 +1035,21 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
         return None
     completed_jobs.sort(key=lambda item: item.get("completed_at") or "", reverse=True)
     latest_job = completed_jobs[0]
-    return latest_job.get("result_summary")
+    result_summary = latest_job.get("result_summary")
+    if not isinstance(result_summary, dict):
+        return None
+    summary_completed_at = parse_timestamp(
+        str(result_summary.get("last_processed_at") or latest_job.get("completed_at") or ""),
+    )
+    if reset_at and (summary_completed_at is None or summary_completed_at <= reset_at):
+        return None
+    return result_summary
 
 
 def reset_latest_upload_state() -> None:
     """Clear persisted latest upload summary/result/history for runtime reset flows."""
     ensure_runtime_dirs()
+    upsert_latest_payload("latest_upload_reset_at", now_iso())
     upsert_latest_payload("latest_upload_summary", None)
     upsert_latest_payload("latest_upload_result", None)
     atomic_write_json_list(latest_upload_history_path(), [])
@@ -1101,6 +1115,15 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "connection_id": result.get("connection_id"),
         "validation_provenance": result.get("validation_provenance", {}),
     }
+
+
+def parse_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:

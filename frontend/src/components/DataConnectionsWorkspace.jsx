@@ -162,6 +162,7 @@ export default function DataConnectionsWorkspace({
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [connectionError, setConnectionError] = useState("");
+  const [connectionNotice, setConnectionNotice] = useState("");
   const [connections, setConnections] = useState([]);
   const [connectionBusy, setConnectionBusy] = useState("");
   const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
@@ -435,6 +436,7 @@ export default function DataConnectionsWorkspace({
   async function handleSaveConnection() {
     setConnectionBusy(`${connectionForm.connection_id}:save`);
     setConnectionError("");
+    setConnectionNotice("");
     try {
       const response = await apiFetch("/api/data-connections", {
         accessCode,
@@ -452,6 +454,7 @@ export default function DataConnectionsWorkspace({
         throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
       }
       await loadConnections();
+      setConnectionNotice(payload?.message ?? "Connection saved.");
     } catch (error) {
       setConnectionError(normalizeErrorMessage(error?.message ?? error));
     } finally {
@@ -468,6 +471,7 @@ export default function DataConnectionsWorkspace({
     }
     setConnectionBusy("reset-all");
     setConnectionError("");
+    setConnectionNotice("");
     try {
       const response = await apiFetch("/api/data-connections/reset-all", {
         accessCode,
@@ -480,7 +484,7 @@ export default function DataConnectionsWorkspace({
       setConnections(payload?.connections ?? []);
       setUploadResult(null);
       await loadConnections();
-      setConnectionError(payload?.message ?? "All telemetry connections were reset.");
+      setConnectionNotice(payload?.message ?? "All telemetry connections were reset.");
     } catch (error) {
       setConnectionError(normalizeErrorMessage(error?.message ?? error));
     } finally {
@@ -894,6 +898,12 @@ export default function DataConnectionsWorkspace({
           </Panel>
         </details>
       </Panel>
+      )}
+
+      {connectionNotice && activeTab !== "overview" && (
+        <Panel title="Connection Response" className="span-12">
+          <p role="status" aria-live="polite">{connectionNotice}</p>
+        </Panel>
       )}
 
       {connectionError && activeTab !== "overview" && (

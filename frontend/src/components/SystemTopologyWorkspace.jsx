@@ -4,30 +4,30 @@ import { normalizeOperationalState } from "../viewModels/operationalUiState";
 
 const STATE = {
   nominal: {
-    label: "Stable structure",
-    description: "Core system relationships are holding steady across the facility.",
+    label: "Stable",
+    description: "Infrastructure relationships are stable across the facility envelope.",
   },
   review: {
-    label: "Relationship drift",
-    description: "The structure is still intact, but system relationships are starting to pull out of alignment.",
+    label: "Emerging Structural Drift",
+    description: "Escalation pressure is increasing as relationships begin to move out of alignment.",
   },
   elevated: {
-    label: "Structural separation",
-    description: "Facility systems are fragmenting and need attention before signal thresholds fail harder.",
+    label: "Escalating Instability",
+    description: "Relationship divergence is visible and now requires focused operator review.",
   },
   unstable: {
-    label: "Structural separation",
-    description: "Facility systems are fragmenting and need attention before signal thresholds fail harder.",
+    label: "Critical Divergence",
+    description: "Cross-system coupling stress is rising and consequence windows are narrowing.",
   },
   info: {
-    label: "Awaiting baseline",
-    description: "Connect telemetry or upload a baseline source to activate live structural health.",
+    label: "Baseline Pending",
+    description: "Telemetry baseline required before structural deviation assessment is available.",
   },
 };
 
 const FALLBACK_STATE = {
-  label: "Awaiting baseline",
-  description: "Telemetry baseline pending. The orb remains in standby until live infrastructure evidence arrives.",
+  label: "Baseline Pending",
+  description: "Telemetry baseline pending. Structural deviation assessment is not yet available.",
   mode: "no-data",
 };
 
@@ -50,70 +50,80 @@ export default function SystemTopologyWorkspace({ liveOps, selectedTarget, onSel
   const findings = liveOps.findings?.slice(0, 2) ?? [];
   const primaryMessage = findings[0]?.detail ?? state.description;
   const secondaryMessage = findings[1]?.detail ?? liveOps.heroSubline;
-  const sourceLabel = liveOps.dataSourceLabel ?? "Awaiting data";
-  const awaitingLabel = liveOps.intelligenceMode === "processing" ? "SII analysis running" : "Awaiting SII analysis";
-  const issueType = awaitingSii ? awaitingLabel : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
-  const suspectedLocation = awaitingSii ? awaitingLabel : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Location not isolated");
+  const awaitingLabel = liveOps.intelligenceMode === "processing"
+    ? "Telemetry processing in progress"
+    : "Awaiting baseline telemetry";
+  const issueType = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.title ?? findings[0]?.title ?? liveOps.facilityStateLabel ?? state.label);
+  const suspectedLocation = awaitingSii
+    ? awaitingLabel
+    : (primaryItem?.label ?? liveOps.primaryWindow?.label ?? "Facility scope");
   const runway = awaitingSii
     ? awaitingLabel
     : liveOps.facilityTone === "nominal"
-      ? "Stable - no immediate constraint"
-      : (primaryItem?.projectedTimeToFailure ?? primaryItem?.window ?? liveOps.primaryWindow?.window ?? "Runway unavailable");
-  const urgency = awaitingSii ? awaitingLabel : (primaryItem?.status ?? liveOps.primaryWindow?.status ?? state.label);
+      ? "No elevated progression observed"
+      : (primaryItem?.window ?? liveOps.primaryWindow?.window ?? "Progression rate under review");
   const confidence = awaitingSii
     ? awaitingLabel
-    : (Number.isFinite(primaryItem?.confidence) ? `${primaryItem.confidence}% evidence quality` : (liveOps.readinessLabel ?? "Evidence building"));
+    : (primaryItem?.supportingEvidence?.length || liveOps.relationshipRows?.length)
+      ? "Multi-signal corroboration observed"
+      : "Corroboration still developing";
   const primaryEvidence = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.supportingEvidence?.[0] ?? findings[0]?.detail ?? "Baseline relationships are being monitored for early divergence.");
+    : (primaryItem?.supportingEvidence?.[0] ?? findings[0]?.detail ?? "Environmental control relationships diverging from baseline.");
   const relationshipEvidence = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Infrastructure relationships are currently holding within the observed envelope.");
+    : (primaryItem?.relationshipEvidence?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "Subsystem telemetry relationships shifting relative to baseline.");
   const activeArchetype = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ") ?? "Stable operating pattern");
+    : (primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ") ?? "Primary contributing signal under review");
   const propagationPath = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ") ?? "No escalation pathway currently active.");
+    : (primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ") ?? "No cross-subsystem spread confirmed.");
   const memoryMatch = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.structuralMemoryMatches?.[0]?.label ?? "Current pattern remains within recent operating memory.");
+    : (primaryItem?.structuralMemoryMatches?.[0]?.label ?? "Historical reference match not yet established.");
   const continuationWindow = awaitingSii
     ? awaitingLabel
-    : (primaryItem?.continuationWindow ?? "Monitoring");
-  const facilityCognitionState = awaitingSii
+    : (primaryItem?.continuationWindow ?? "Progression window under monitoring");
+  const facilitySummary = awaitingSii
     ? awaitingLabel
+    // TODO(engine-binding): replace heroSubline fallback with an explicit engine output field for baseline divergence/persistence.
     : (primaryItem?.facilityCognitionState ?? liveOps.heroSubline);
   const lastUpdate = liveOps.connectionSummary ?? "Awaiting confirmed update";
   const whyWeThinkThat = awaitingSii || uiState === "neutral"
-    ? "The workspace is waiting for a usable telemetry baseline or backend evidence stream."
-    : (facilityCognitionState || secondaryMessage || relationshipEvidence);
+    ? "Telemetry baseline not available; structural deviation assessment is deferred."
+    : (facilitySummary || secondaryMessage || relationshipEvidence);
   const humanRead = awaitingSii || uiState === "neutral"
-    ? "The structural view is in standby while Neraium waits for a confirmed telemetry baseline."
-    : (liveOps.connectionActionHint || `Monitor ${propagationPath} and schedule operator review if structural pressure persists.`);
+    ? "Collect additional telemetry windows to establish baseline and persistence context."
+    // TODO(engine-binding): liveOps.connectionActionHint is currently a mixed-source hint; replace with deterministic operator action outputs from engine.
+    : (liveOps.connectionActionHint || `Review ${propagationPath}; confirm persistence across successive windows.`);
   const where = suspectedLocation;
   void selectedTarget;
   void onSelectTarget;
 
   const metrics = compactOperationalItems([
-    { label: "Time to consequence", value: runway, priority: true, state: uiState },
+    { label: "Progression window", value: runway, priority: true, state: uiState },
+    { label: "Current structural state", value: issueType, state: uiState },
     { label: "Operational focus", value: liveOps.primaryWindow?.label ?? where, state: uiState === "stable" ? "stable" : "watch" },
+    { label: "Corroboration", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
   ]);
   const evidenceItems = compactOperationalItems([
-    { label: "Why Neraium flagged this", value: primaryEvidence, state: uiState },
-    { label: "Infrastructure relationships", value: relationshipEvidence, state: uiState === "stable" ? "stable" : uiState },
-    { label: "Structural drivers", value: activeArchetype, state: uiState === "neutral" ? "neutral" : "watch" },
+    { label: "Observed structural deviations", value: primaryEvidence, state: uiState },
+    { label: "Subsystem relationship changes", value: relationshipEvidence, state: uiState === "stable" ? "stable" : uiState },
+    { label: "Primary contributing signals", value: activeArchetype, state: uiState === "neutral" ? "neutral" : "watch" },
   ]);
   const narrativeItems = compactOperationalItems([
-    { label: "Escalation direction", value: issueType, state: uiState },
-    { label: "Primary driver", value: whyWeThinkThat, state: uiState === "stable" ? "stable" : uiState },
-    { label: "Operator focus", value: humanRead, state: uiState === "critical" ? "warning" : "stable" },
+    { label: "Primary changes", value: concise(whyWeThinkThat, 92), state: uiState === "stable" ? "stable" : uiState },
+    { label: "Infrastructure areas", value: concise(where, 68), state: uiState === "critical" ? "warning" : uiState },
+    { label: "Operational focus", value: concise(humanRead, 96), state: uiState === "critical" ? "warning" : "stable" },
   ]);
   const timelineItems = compactOperationalItems([
-    { label: "Instability began", value: lastUpdate, state: "neutral" },
-    { label: "Persistence", value: confidence, state: uiState === "neutral" ? "neutral" : "stable" },
-    { label: "Escalation window", value: continuationWindow, state: uiState },
-    { label: "Relationship spread", value: propagationPath || memoryMatch, state: uiState === "neutral" ? "neutral" : uiState },
+    { label: "Initial deviation detected", value: concise(lastUpdate, 54), state: "neutral" },
+    { label: "Persistence signal", value: concise(confidence, 58), state: uiState === "neutral" ? "neutral" : "stable" },
+    { label: "Divergence increasing", value: concise(continuationWindow, 58), state: uiState },
+    { label: "Cross-subsystem spread", value: concise(propagationPath || memoryMatch, 66), state: uiState === "neutral" ? "neutral" : uiState },
   ]);
 
   return (
@@ -142,6 +152,12 @@ function compactOperationalItems(items) {
     const value = String(item?.value ?? "").trim().toLowerCase();
     return value && value !== "none" && value !== "n/a" && value !== "na";
   });
+}
+
+function concise(value, max = 80) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
 }
 
 function deriveOrbOperationalState({ awaitingSii, uiState, liveOps, primaryItem }) {

@@ -4,41 +4,41 @@ const STATE_COPY = {
   stable: {
     code: "STABLE",
     attention: "Low attention",
-    structural: "Relationships holding",
-    telemetry: "Continuous baseline lock",
-    progression: "No active escalation",
+    structural: "Relationships within baseline",
+    telemetry: "Baseline telemetry aligned",
+    progression: "No elevated drift persistence",
     environment: "Envelope steady",
   },
   watching: {
     code: "WATCH",
     attention: "Planned attention",
-    structural: "Minor drift forming",
-    telemetry: "Telemetry coupled",
-    progression: "Escalation watch",
+    structural: "Early relational drift",
+    telemetry: "Telemetry consistency changing",
+    progression: "Persistence under review",
     environment: "Directional variance",
   },
   drift: {
     code: "ALERT",
     attention: "Operator attention",
-    structural: "Relationship separation",
-    telemetry: "Pressure signal active",
-    progression: "Severity increasing",
+    structural: "Relational instability detected",
+    telemetry: "Baseline divergence sustained",
+    progression: "Deviation persistence increasing",
     environment: "Instability vector",
   },
   propagation_active: {
     code: "ALERT",
     attention: "Immediate review",
-    structural: "Propagation active",
-    telemetry: "Threshold signal active",
-    progression: "Containment window",
+    structural: "Cross-subsystem spread observed",
+    telemetry: "Multi-signal deviation corroborated",
+    progression: "Progression rate elevated",
     environment: "Multi-zone coupling",
   },
   recovery: {
     code: "RECOVERING",
     attention: "Verify cooling",
-    structural: "Convergence forming",
-    telemetry: "Stabilizing signal",
-    progression: "Severity receding",
+    structural: "Relational recovery observed",
+    telemetry: "Baseline re-alignment increasing",
+    progression: "Deviation persistence decreasing",
     environment: "Envelope cooling",
   },
   unknown: {
@@ -73,7 +73,7 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
   const resolvedSystemState = normalizePanelState(systemState);
   const resolvedUiState = uiState || "neutral";
   const resolvedCoherence = Number.isFinite(coherence) ? coherence : 1;
-  const resolvedLabel = stateLabel || "Awaiting baseline";
+  const resolvedLabel = stateLabel || "Baseline Pending";
   const copy = STATE_COPY[resolvedSystemState] ?? STATE_COPY.unknown;
   const instability = Math.max(0, Math.min(1, 1 - resolvedCoherence));
   const instabilityDisplay = `${Math.round(instability * 100)}%`;

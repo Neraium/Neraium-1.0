@@ -94,7 +94,7 @@ export default function AppShell({
               <div className="workspace-drawer__brand">
                 <div className="workspace-drawer__title-block">
                   <strong>NERAIUM</strong>
-                  <span>Structural Intelligence</span>
+                  <span>Structural Monitoring</span>
                 </div>
               </div>
               <button
@@ -139,6 +139,7 @@ function MobileOperationalHeader({
 }) {
   const missionLabel = activeWorkspace === "cultivation-mission-control" ? "Active Deployment" : "Command";
   const hudMetrics = buildOperationalHudMetrics(liveOps);
+  const operatorStateLabel = getOperatorStateLabel(liveOps.facilityTone);
 
   return (
     <header className={`mobile-status-bar mobile-status-bar--${liveOps.facilityTone}`}>
@@ -166,7 +167,7 @@ function MobileOperationalHeader({
       <div className={`mobile-command-strip mobile-command-strip--deployment mobile-command-strip--${liveOps.facilityTone}`} aria-label="Mobile operational summary">
         <div className="mobile-command-strip__cell mobile-command-strip__cell--identity">
           <span>Structural state</span>
-          <strong>Infrastructure relationships under review</strong>
+          <strong>{operatorStateLabel}</strong>
         </div>
         {hudMetrics.map((metric, index) => (
           <div className={`mobile-command-strip__cell ${index === 0 ? "mobile-command-strip__cell--primary" : ""}`} key={metric.label}>
@@ -221,7 +222,7 @@ function WorkspaceNavigationContent({
             <div className="brand-mark">N</div>
             <div>
               <p className="brand-name">NERAIUM</p>
-              <p className="brand-subtitle">Operational Intelligence</p>
+              <p className="brand-subtitle">Operational Monitoring</p>
             </div>
           </div>
           <span className="brand-edition">Command</span>
@@ -326,11 +327,11 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Operational intelligence ribbon">
+      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Operational monitoring ribbon">
         <div className="active-deployment-bar__header">
           <span className="active-deployment-bar__beacon" aria-hidden="true" />
           <div className="active-deployment-bar__identity">
-            <strong>Operational Intelligence</strong>
+            <strong>Operational Monitoring</strong>
             <em>Infrastructure relationships under review</em>
           </div>
           <span className="active-deployment-bar__mode">{activeConfig.eyebrow}</span>
@@ -384,8 +385,7 @@ function TopStatusBar({
         <div className="top-status__degraded">
           <strong>Degraded Mode Active</strong>
           <p>
-            Backend connectivity is unavailable. Neraium is preserving structural cognition context for operator review while
-            live route data reconnects.
+            Backend connectivity is unavailable. Last validated structural state is preserved while live telemetry reconnects.
           </p>
         </div>
       ) : null}
@@ -419,9 +419,7 @@ function TopStatusBar({
 }
 
 function buildOperationalHudMetrics(liveOps) {
-  const structuralState = ["nominal", "online", "stable"].includes(liveOps.facilityTone)
-    ? "Stable"
-    : "Monitoring";
+  const structuralState = getOperatorStateLabel(liveOps.facilityTone);
   const propagationValue = ["elevated", "unstable", "offline"].includes(liveOps.facilityTone)
     ? "Watch active"
     : "Localized";
@@ -430,6 +428,14 @@ function buildOperationalHudMetrics(liveOps) {
     { label: "Lead time", value: liveOps.primaryWindow?.window ?? "Monitoring", tone: liveOps.primaryWindow?.tone ?? "info" },
     { label: "Escalation", value: propagationValue, tone: liveOps.facilityTone },
   ];
+}
+
+function getOperatorStateLabel(tone) {
+  if (["nominal", "stable", "online"].includes(tone)) return "Stable";
+  if (tone === "review" || tone === "watch") return "Emerging Structural Drift";
+  if (tone === "elevated" || tone === "warning") return "Escalating Instability";
+  if (tone === "unstable" || tone === "critical" || tone === "offline") return "Critical Divergence";
+  return "Structural Deviation";
 }
 
 function StatusChip({ label, value, tone }) {

@@ -1,7 +1,7 @@
 import SystemOrbPanel from "./SystemOrbPanel";
 import SystemNarrativePanel from "./SystemNarrativePanel";
-import SystemMetricGrid from "./SystemMetricGrid";
 import SystemEvidencePanel from "./SystemEvidencePanel";
+import SystemDiagnosticsPanel from "./SystemDiagnosticsPanel";
 import PageContainer from "../../layout/PageContainer";
 
 export default function SystemBodyWorkspace({
@@ -34,12 +34,16 @@ export default function SystemBodyWorkspace({
             <h2 className="workspace-header__title">{stateLabel}</h2>
             <p className="workspace-header__subtitle">{subtitle}</p>
             <div className={`workspace-header__status workspace-header__status--${connectionTone}`}>
-              <span className="metadata-text">Connection status</span>
-              <strong>{connectionStatus}</strong>
+              <span className="metadata-text">Operational focus</span>
+              <strong>{focusLabel || "Facility scope"}</strong>
+            </div>
+            <div className="workspace-header__status">
+              <span className="metadata-text">Updated</span>
+              <strong>{lastUpdate || connectionStatus}</strong>
             </div>
           </header>
           <SystemNarrativePanel
-            summaryKicker="Operational Summary"
+            summaryKicker="Operational Interpretation"
             summaryTitle={summaryTitle}
             items={narrativeItems}
             uiState={uiState}
@@ -54,8 +58,8 @@ export default function SystemBodyWorkspace({
           focusLabel={focusLabel}
         />
       </section>
-      <SystemMetricGrid metrics={metrics} />
       <SystemEvidencePanel evidenceItems={evidenceItems} timelineItems={timelineItems} uiState={uiState} />
+      <SystemDiagnosticsPanel metrics={metrics} uiState={uiState} />
     </PageContainer>
   );
 }
