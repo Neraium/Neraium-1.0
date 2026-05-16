@@ -367,7 +367,7 @@ function decisionLabelFromTone(tone, index = 0) {
 
 function humanizeDriverCategory(value) {
   if (!value) {
-    return "Environmental coupling needs review.";
+    return "Environmental Coupling Shift";
   }
   return value
     .split("_")

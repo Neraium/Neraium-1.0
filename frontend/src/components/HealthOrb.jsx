@@ -169,7 +169,13 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
   return (
     <div
       className={`health-orb ${tone.className} ${animated ? "health-orb--animated" : ""}`}
-      style={{ "--orb-hue": tone.hue, "--orb-core-opacity": tone.coreOpacity, "--orb-pulse": tone.pulse }}
+      style={{
+        "--orb-hue": tone.hue,
+        "--orb-core-opacity": tone.coreOpacity,
+        "--orb-pulse": tone.pulse,
+        "--orb-signal-duration": `${(3.8 - tone.pulse * 1.6).toFixed(2)}s`,
+        "--orb-node-duration": `${(5.4 - tone.pulse * 2).toFixed(2)}s`,
+      }}
     >
       <svg className="health-orb__svg" viewBox="0 0 340 300" role="img" aria-label="System health orb">
         <defs>
@@ -250,14 +256,25 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
               return null;
             }
             return (
-              <line
-                key={`${from}-${to}`}
-                x1={n1.x}
-                y1={n1.y}
-                x2={n2.x}
-                y2={n2.y}
-                className={`health-orb__link health-orb__link--${visibility}`}
-              />
+              <g key={`${from}-${to}`}>
+                <line
+                  x1={n1.x}
+                  y1={n1.y}
+                  x2={n2.x}
+                  y2={n2.y}
+                  className={`health-orb__link health-orb__link--${visibility}`}
+                />
+                {(mode !== "unknown" && index % (isCritical ? 2 : isWarning ? 3 : 5) === 0) ? (
+                  <line
+                    x1={n1.x}
+                    y1={n1.y}
+                    x2={n2.x}
+                    y2={n2.y}
+                    className="health-orb__signal-packet"
+                    style={{ "--orb-delay": `${index * 70}ms` }}
+                  />
+                ) : null}
+              </g>
             );
           })}
 
