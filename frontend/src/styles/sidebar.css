@@ -119,7 +119,7 @@
   text-overflow: ellipsis;
 }
 
-@media (min-width: 1101px) {
+@media (min-width: 900px) {
   .workspace-nav__detail {
     display: none;
   }

@@ -111,7 +111,7 @@
  position: static !important;
  display: grid;
  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr) auto;
- align-items: end;
+ align-items: start;
  gap: clamp(18px, 2.2vw, 30px);
  padding: 20px 24px 18px;
  border-bottom: 1px solid rgba(138, 184, 196, 0.07);
@@ -253,8 +253,14 @@
  display: grid;
  grid-template-columns: repeat(2, minmax(160px, 1fr));
  gap: 10px;
- align-self: stretch;
+ align-self: start;
+ align-content: start;
  min-width: min(100%, 380px);
+}
+
+.status-rack > .secondary-command-button {
+  min-height: 42px;
+  align-self: start;
 }
 
 .status-chip {
@@ -514,6 +520,15 @@
 .cultivation-overview-orb .health-orb {
   width: min(100%, 244px);
   max-width: 244px;
+}
+
+.cultivation-mission-grid--empty .cultivation-overview-orb-field {
+  opacity: 0.28;
+}
+
+.cultivation-mission-grid--empty .cultivation-overview-orb-meta strong {
+  font-size: 1rem;
+  letter-spacing: 0.01em;
 }
 
 .cultivation-overview-orb-meta {

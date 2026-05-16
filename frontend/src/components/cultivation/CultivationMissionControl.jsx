@@ -71,9 +71,10 @@ export default function CultivationMissionControl({
     );
   }
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
-  const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
   const orbState = deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry);
+  const isNoDataState = orbState === "unknown";
+  const continuationWindow = isNoDataState ? "Awaiting telemetry" : (cognition.continuation_windows?.window ?? "Monitoring");
   const severityState = deriveCultivationSeverity(cognition, orbState);
 
   const report = buildWeeklyPilotReport({
@@ -135,7 +136,7 @@ export default function CultivationMissionControl({
                 <div className="cultivation-overview-left-metrics">
                   <article className="cultivation-overview-pill">
                     <span>Cognition state</span>
-                    <strong>{cognition.cognition_state ?? "Monitoring"}</strong>
+                    <strong>{isNoDataState ? "Awaiting telemetry" : (cognition.cognition_state ?? "Monitoring")}</strong>
                   </article>
                   <article className="cultivation-overview-pill">
                     <span>Continuation window</span>
@@ -150,7 +151,7 @@ export default function CultivationMissionControl({
               <section className="cultivation-overview-right cultivation-intelligence-block" aria-label="Operator intelligence summary">
                 <div className="cultivation-intelligence-row">
                   <span>What's changing</span>
-                  <strong>{summarizeChange(cognition)}</strong>
+                  <strong>{isNoDataState ? "Awaiting telemetry." : summarizeChange(cognition)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
                   <span>Where it's spreading</span>
@@ -158,11 +159,11 @@ export default function CultivationMissionControl({
                 </div>
                 <div className="cultivation-intelligence-row">
                   <span>Why trust this</span>
-                  <strong>{summarizeTrust(cognition, evidenceSummary)}</strong>
+                  <strong>{isNoDataState ? "Upload telemetry to activate evidence-backed structural cognition." : summarizeTrust(cognition, evidenceSummary)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
                   <span>Active archetypes</span>
-                  <strong>{summarizeArchetypes(cognition.active_archetypes)}</strong>
+                  <strong>{isNoDataState ? "Awaiting telemetry." : summarizeArchetypes(cognition.active_archetypes)}</strong>
                 </div>
               </section>
             </div>
@@ -335,7 +336,7 @@ function deriveCultivationSeverity(cognition, orbState) {
 }
 
 function formatCultivationStateLabel(cognition, orbState) {
-  if (orbState === "unknown") return "No data connected";
+  if (orbState === "unknown") return "Awaiting telemetry";
   const stability = String(cognition?.structural_stability ?? "").trim();
   if (stability) return stability.toUpperCase();
   return formatOrbLabel(orbState).toUpperCase();
