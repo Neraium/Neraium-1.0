@@ -31,6 +31,18 @@
     min-width: 0;
   }
 
+  .platform-shell {
+    display: block;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .platform-main {
+    display: block;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .mobile-status-bar {
     position: sticky;
     top: 0;
@@ -104,6 +116,8 @@
 
   .top-status {
     display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch;
     gap: 12px;
     padding: 12px;
     border-radius: 0 0 20px 20px;
@@ -114,6 +128,7 @@
 
   .top-status__title {
     gap: 6px;
+    max-width: none;
   }
 
   .top-status__title .eyebrow,
