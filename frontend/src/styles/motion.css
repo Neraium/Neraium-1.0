@@ -30,7 +30,7 @@
 .section-card:hover,
 .status-chip:hover,
 .system-body-metric:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .system-body-orb-panel__halo--outer,
@@ -147,9 +147,9 @@
     radial-gradient(circle at 18% 12%, rgba(108, 186, 156, 0.055), transparent 28%),
     radial-gradient(circle at 82% 4%, rgba(138, 184, 196, 0.052), transparent 30%),
     linear-gradient(120deg, transparent 0 42%, rgba(255, 255, 255, 0.018) 50%, transparent 58% 100%);
-  opacity: 0.78;
+  opacity: 0.46;
   transform: translate3d(0, 0, 0);
-  animation: ambientOpsDrift 22s ease-in-out infinite;
+  animation: ambientOpsDrift 30s ease-in-out infinite;
 }
 
 .platform-workspace {
@@ -167,7 +167,7 @@
 }
 
 .health-orb__cognition-rings {
-  animation: orbCognitionRotate 18s linear infinite;
+  animation: orbCognitionRotate 26s linear infinite;
 }
 
 .health-orb__cognition-ring {
@@ -191,7 +191,7 @@
 .health-orb__telemetry-trace {
   stroke-dasharray: 44 180;
   stroke-dashoffset: 0;
-  animation: orbTelemetryShimmer 5.8s ease-in-out infinite;
+  animation: orbTelemetryShimmer 8.4s ease-in-out infinite;
 }
 
 .health-orb__telemetry-trace--slow {
@@ -218,7 +218,7 @@
 .health-orb--animated .health-orb__propagation {
   transform-box: fill-box;
   transform-origin: center;
-  animation: orbCognitionPulse 4.6s ease-in-out infinite;
+  animation: orbCognitionPulse 6.8s ease-in-out infinite;
 }
 
 @keyframes ambientOpsDrift {

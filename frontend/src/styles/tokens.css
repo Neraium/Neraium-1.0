@@ -28,4 +28,10 @@
   --panel-padding-compact: var(--space-14);
   --panel-padding-base: var(--space-18);
   --panel-padding-large: var(--space-24);
+  --surface-radius: 16px;
+  --surface-radius-lg: 20px;
+  --surface-padding: var(--space-18);
+  --surface-padding-tight: var(--space-14);
+  --surface-gap: var(--space-14);
+  --surface-gap-wide: var(--space-20);
 }

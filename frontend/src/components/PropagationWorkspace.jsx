@@ -82,9 +82,9 @@ export default function PropagationWorkspace({
       {expertMode ? (
         <Panel title="Technical propagation context" className="span-12">
           <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Topology phase</span><strong>{frame?.topology_state?.phase ?? "n/a"}</strong></li>
-            <li><span className="metadata-text">Fragmentation indicator</span><strong>{frame?.topology_state?.fragmentation_indicator ?? "n/a"}</strong></li>
-            <li><span className="metadata-text">Propagation acceleration</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "n/a"}</strong></li>
+            <li><span className="metadata-text">Topology phase</span><strong>{frame?.topology_state?.phase ?? "Awaiting telemetry"}</strong></li>
+            <li><span className="metadata-text">Fragmentation indicator</span><strong>{frame?.topology_state?.fragmentation_indicator ?? "Awaiting telemetry"}</strong></li>
+            <li><span className="metadata-text">Propagation acceleration</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "Awaiting telemetry"}</strong></li>
           </ul>
         </Panel>
       ) : null}

@@ -1,39 +1,39 @@
 :root {
   --type-label-xs: 0.64rem;
-  --type-label-sm: 0.7rem;
-  --type-body-sm: 0.86rem;
-  --type-body-md: 0.95rem;
+  --type-label-sm: 0.72rem;
+  --type-body-sm: 0.88rem;
+  --type-body-md: 0.96rem;
   --type-title-md: clamp(1.2rem, 1.5vw, 1.7rem);
-  --type-title-lg: clamp(1.5rem, 2vw, 2.2rem);
+  --type-title-lg: clamp(1.45rem, 1.9vw, 2rem);
   --type-metric-lg: clamp(1.15rem, 1.6vw, 1.4rem);
 }
 
 .workspace-header__kicker,
 .section-label {
   font-size: var(--type-label-sm);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .workspace-header__title,
 .panel-title {
   font-size: var(--type-title-lg);
-  line-height: 1.1;
+  line-height: 1.14;
   letter-spacing: 0.01em;
-  font-weight: 600;
+  font-weight: 580;
 }
 
 .workspace-header__description,
 .narrative-text {
   font-size: var(--type-body-md);
-  line-height: 1.55;
+  line-height: 1.58;
 }
 
 .metadata-text {
   color: var(--text-muted);
   font-size: var(--type-label-xs);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 

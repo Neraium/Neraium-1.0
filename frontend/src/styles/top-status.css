@@ -391,3 +391,44 @@
     flex-basis: 33.333%;
   }
 }
+
+/* Global operational polish: calmer hierarchy and restrained telemetry treatment. */
+.top-status--deployment {
+  gap: 14px;
+  padding: 14px 18px 12px;
+  background:
+    radial-gradient(circle at 92% -10%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.08), transparent 36%),
+    linear-gradient(180deg, rgba(8, 12, 15, 0.92), rgba(5, 8, 11, 0.9));
+}
+
+.top-status--deployment::before,
+.top-status--deployment::after {
+  animation: none;
+}
+
+.active-deployment-bar {
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--surface-radius-lg);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(238, 248, 246, 0.06);
+  backdrop-filter: blur(12px) saturate(120%);
+}
+
+.active-deployment-bar::before {
+  animation: none;
+  opacity: 0.18;
+}
+
+.active-deployment-bar__metric {
+  min-height: 44px;
+}
+
+.active-deployment-bar__metric span {
+  font-size: 0.58rem;
+  letter-spacing: 0.11em;
+}
+
+.active-deployment-bar__metric strong {
+  font-size: clamp(0.72rem, 0.86vw, 0.82rem);
+  animation: none;
+}

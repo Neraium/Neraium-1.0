@@ -108,7 +108,7 @@
   .top-status {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
     padding: 14px 14px 12px;
     border-bottom-color: rgba(177, 211, 206, 0.1);
   }
@@ -172,8 +172,8 @@
   .top-status__brief-item p,
   .top-status__brief-item strong,
   .top-status__compact-item strong {
-    font-size: 0.8rem;
-    line-height: 1.42;
+    font-size: 0.78rem;
+    line-height: 1.4;
   }
 
   .top-status .status-rack {
@@ -193,9 +193,9 @@
   }
 
   .top-status .status-chip {
-    flex: 0 0 min(74vw, 230px);
-    min-height: 70px;
-    padding: 10px 12px;
+    flex: 0 0 min(72vw, 220px);
+    min-height: 66px;
+    padding: 9px 11px;
     border-radius: 14px;
   }
 
@@ -272,7 +272,7 @@
   .workspace-grid--evidence,
   .workspace-grid--console {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
   }
 
   .span-12,
@@ -323,7 +323,7 @@
   .status-banner,
   .empty-state {
     min-height: 0;
-    padding: 12px;
+    padding: 11px;
     border-radius: 14px;
   }
 
@@ -415,7 +415,7 @@
   .secondary-command-button,
   .link-action,
   .workspace-drawer__close {
-    min-height: 44px;
+    min-height: 42px;
   }
 }
 
