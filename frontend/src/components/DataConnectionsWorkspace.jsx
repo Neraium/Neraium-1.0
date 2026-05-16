@@ -14,14 +14,11 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { CompactList, DataTable, EmptyState, MetricGrid, Panel, WorkflowStages } from "./workspacePrimitives";
 
-const LIVE_CONNECTION_REFRESH_MS = 5000;
-const DEFAULT_CONNECTION_ID = "rest-telemetry-intake";
-const DEFAULT_CONNECTION_URL = "";
 const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
   "source_id": "pilot-json-001",
-  "source_type": "external_rest_api",
-  "facility_id": "cultivation-facility-001",
-  "room_id": "flower-room-1",
+  "source_type": "uploaded_dataset",
+  "facility_id": "pilot-facility-001",
+  "room_id": "room-1",
   "scenario": "airflow_drift",
   "tick": 10,
   "timestamp": "2026-05-01T08:00:00Z",
@@ -97,51 +94,6 @@ function validateTelemetryFile(file, kind) {
   return "";
 }
 
-function connectionTone(status) {
-  const normalized = String(status ?? "").toLowerCase();
-  if (normalized === "online") {
-    return "nominal";
-  }
-  if (normalized === "polling") {
-    return "review";
-  }
-  if (normalized === "error") {
-    return "elevated";
-  }
-  return "info";
-}
-
-function formatConnectionStatus(status) {
-  const normalized = String(status ?? "").toLowerCase();
-  if (normalized === "online") {
-    return "Online";
-  }
-  if (normalized === "polling") {
-    return "Connected";
-  }
-  if (normalized === "error") {
-    return "Error";
-  }
-  if (normalized === "offline") {
-    return "Offline";
-  }
-  return "Not configured";
-}
-
-function formatBaselineStatus(status) {
-  const normalized = String(status ?? "").toLowerCase();
-  if (normalized === "building") {
-    return "Building";
-  }
-  if (normalized === "active") {
-    return "Active";
-  }
-  if (normalized === "failed") {
-    return "Failed";
-  }
-  return "None";
-}
-
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -152,7 +104,7 @@ export default function DataConnectionsWorkspace({
   onUploadComplete,
   formatClockTime,
 }) {
-  const TABS = ["overview", "upload", "connections", "diagnostics"];
+  const TABS = ["overview", "upload", "diagnostics"];
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
@@ -161,37 +113,24 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
-  const [connectionError, setConnectionError] = useState("");
-  const [connectionNotice, setConnectionNotice] = useState("");
-  const [connections, setConnections] = useState([]);
-  const [connectionBusy, setConnectionBusy] = useState("");
   const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
   const [copyState, setCopyState] = useState("idle");
-  const [connectionForm, setConnectionForm] = useState({
-    connection_id: DEFAULT_CONNECTION_ID,
-    name: "Live Telemetry Intake",
-    url: DEFAULT_CONNECTION_URL,
-    facility_id: "cultivation-facility-001",
-    room_id: "flower-room-1",
-    polling_interval_seconds: 5,
-  });
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const uploadInputRef = useRef(null);
 
-  const loadConnections = useCallback(async () => {
+  const loadLatestUpload = useCallback(async () => {
     try {
-      const response = await apiFetch("/api/data-connections", { accessCode });
+      const response = await apiFetch("/api/data/latest-upload", { accessCode });
       const payload = await readJsonPayload(response);
       if (!response.ok) {
-        throw new Error(payload?.detail ?? `Unexpected response: ${response.status}`);
+        return null;
       }
-      setConnections(payload?.connections ?? []);
-      setConnectionError("");
+      return payload;
     } catch (error) {
-      console.error("data_connections_load_failed", { error: normalizeErrorMessage(error?.message ?? error) });
-      setConnectionError(normalizeErrorMessage(error?.message ?? error));
+      console.error("latest_upload_refresh_failed", { error: normalizeErrorMessage(error?.message ?? error) });
+      return null;
     }
   }, [accessCode, apiFetch]);
 
@@ -212,27 +151,6 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     setUploadResult(latestUploadResult);
   }, [latestUploadResult]);
-
-  useEffect(() => {
-    const activeConnection = connections.find((item) => item.connection_id === DEFAULT_CONNECTION_ID) ?? connections[0];
-    if (!activeConnection) {
-      return;
-    }
-    setConnectionForm({
-      connection_id: activeConnection.connection_id,
-      name: activeConnection.name,
-      url: activeConnection.url,
-      facility_id: activeConnection.facility_id ?? "",
-      room_id: activeConnection.room_id ?? "",
-      polling_interval_seconds: activeConnection.polling_interval_seconds ?? 5,
-    });
-  }, [connections]);
-
-  useEffect(() => {
-    loadConnections();
-    const intervalId = window.setInterval(loadConnections, LIVE_CONNECTION_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
-  }, [loadConnections]);
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -257,18 +175,6 @@ export default function DataConnectionsWorkspace({
     pollFailureCountRef.current = 0;
 
     try {
-      /* Legacy shared-api-helper multipart shape retained for contract visibility while
-         XMLHttpRequest provides real upload progress events:
-      const response = await apiFetch("/api/data/upload", {
-        accessCode,
-        method: "POST",
-        body: formData,
-        timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
-      });
-      const payload = await readJsonPayload(response);
-      */
-      // Legacy missing-session guard string retained for contract visibility:
-      // throw buildUploadRequestError(response, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
       const { ok, status, payload } = await uploadTelemetryFileWithProgress({
         file: selectedFile,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
@@ -388,8 +294,7 @@ export default function DataConnectionsWorkspace({
       }
 
       if (nextStatus === "complete") {
-        const latestResponse = await apiFetch("/api/data/latest-upload", { accessCode });
-        const latestPayload = latestResponse.ok ? await readJsonPayload(latestResponse) : payload.result_summary;
+        const latestPayload = await loadLatestUpload();
         const latestResult = latestPayload?.latest_result;
         const completedPayload = {
           ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
@@ -401,7 +306,6 @@ export default function DataConnectionsWorkspace({
         };
         setUploadResult(completedPayload);
         await onUploadComplete(completedPayload);
-        await loadConnections();
         return;
       }
 
@@ -433,75 +337,7 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function handleSaveConnection() {
-    setConnectionBusy(`${connectionForm.connection_id}:save`);
-    setConnectionError("");
-    setConnectionNotice("");
-    try {
-      const response = await apiFetch("/api/data-connections", {
-        accessCode,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...connectionForm,
-          source_type: "external_rest_api",
-          polling_enabled: Boolean(activeConnection?.polling_enabled),
-          polling_interval_seconds: Number(connectionForm.polling_interval_seconds || 5),
-        }),
-      });
-      const payload = await readJsonPayload(response);
-      if (!response.ok) {
-        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
-      }
-      await loadConnections();
-      setConnectionNotice(payload?.message ?? "Connection saved.");
-    } catch (error) {
-      setConnectionError(normalizeErrorMessage(error?.message ?? error));
-    } finally {
-      setConnectionBusy("");
-    }
-  }
-
-  async function handleResetAllConnections() {
-    const confirmed = window.confirm(
-      "Reset all telemetry connections and clear active telemetry source state?",
-    );
-    if (!confirmed) {
-      return;
-    }
-    setConnectionBusy("reset-all");
-    setConnectionError("");
-    setConnectionNotice("");
-    try {
-      const response = await apiFetch("/api/data-connections/reset-all", {
-        accessCode,
-        method: "POST",
-      });
-      const payload = await readJsonPayload(response);
-      if (!response.ok) {
-        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
-      }
-      setConnections(payload?.connections ?? []);
-      setUploadResult(null);
-      await loadConnections();
-      setConnectionNotice(payload?.message ?? "All telemetry connections were reset.");
-    } catch (error) {
-      setConnectionError(normalizeErrorMessage(error?.message ?? error));
-    } finally {
-      setConnectionBusy("");
-    }
-  }
-
-  const activeConnection = connections.find((item) => item.connection_id === DEFAULT_CONNECTION_ID) ?? connections[0] ?? null;
-  const healthyCount = connections.filter((item) => ["online", "polling"].includes(String(item.status).toLowerCase())).length;
-  const totalSensors = connections.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
-  const totalReadings = connections.reduce((sum, item) => sum + (item.readings_received ?? 0), 0);
-  const hasSuccessfulLiveTelemetry = Boolean(
-    activeConnection?.last_success_at
-      && (activeConnection?.readings_accepted ?? 0) > 0
-      && !activeConnection?.error_message,
-  );
-  const displayUploadError = hasSuccessfulLiveTelemetry && !isUploadProcessing(uploadState) ? "" : uploadError;
+  const displayUploadError = uploadError;
   const intakeStages = uploadJob
     ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
     : uploadResult
@@ -510,17 +346,11 @@ export default function DataConnectionsWorkspace({
   const latestStatus = latestUploadSnapshot?.status ?? "empty";
   const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
-  const liveTelemetryMessage = activeConnection?.baseline_status === "active"
-    ? "Live telemetry baseline ready"
-    : activeConnection?.baseline_status === "building"
-      ? `Building live baseline (${activeConnection?.baseline_samples_collected ?? 0}/${activeConnection?.baseline_samples_required ?? 0})`
-      : "Live telemetry received";
   const latestMessage = normalizeErrorMessage(
     displayUploadError
       || uploadJob?.error
       || uploadJob?.message
       || uploadJob?.progress_label
-      || (hasSuccessfulLiveTelemetry ? liveTelemetryMessage : "")
       || latestUploadSnapshot?.message
       || uploadStateMessage(uploadState),
   );
@@ -528,7 +358,7 @@ export default function DataConnectionsWorkspace({
   const selectedFileIsLarge = isLargeOperationalUpload(selectedFile);
   const uploadGuidance = uploadReadinessMessage(selectedFile);
   const intakeStateEstimate = selectedFileIsLarge
-    ? "Estimated intake state: high-volume export will remain in background processing while the workspace polls for live status."
+    ? "Estimated intake state: high-volume export will remain in background processing while the workspace polls for status."
     : selectedFile
       ? "Estimated intake state: standard telemetry export will queue for background processing after transfer."
       : "Estimated intake state appears after file selection.";
@@ -558,19 +388,14 @@ export default function DataConnectionsWorkspace({
     { key: "process", label: "Construct Intelligence Model", value: isUploadProcessing(uploadState) ? "baseline + replay generation" : uploadJob?.status || "Ready" },
     { key: "status", label: "Activate Cognition", value: uploadError ? "Operator attention" : uploadResult ? "Active" : "Standby" },
   ];
-
-  const baselineStatusLabel = formatBaselineStatus(activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status);
-  const baselineSamplesCollected = activeConnection?.baseline_samples_collected ?? latestUploadSnapshot?.baseline_samples_collected ?? 0;
-  const baselineSamplesRequired = activeConnection?.baseline_samples_required ?? latestUploadSnapshot?.baseline_samples_required ?? 0;
-  const baselineSource = activeConnection?.baseline_source ?? latestUploadSnapshot?.baseline_source;
-  const currentBaselineStatus = activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status;
-  const baselineMessage = currentBaselineStatus === "building"
-    ? "Building live baseline"
-    : currentBaselineStatus === "active"
-      ? "Live baseline active"
-      : currentBaselineStatus === "failed"
-        ? "Live baseline failed"
-      : "Awaiting uploaded telemetry";
+  const baselineStatus = latestUploadSnapshot?.baseline_status;
+  const baselineMessage = baselineStatus === "building"
+    ? "Building uploaded baseline"
+    : baselineStatus === "active"
+      ? "Uploaded baseline active"
+      : baselineStatus === "failed"
+        ? "Uploaded baseline failed"
+        : "Awaiting uploaded telemetry";
 
   return (
     <div className="workspace-grid workspace-grid--connections">
@@ -585,7 +410,7 @@ export default function DataConnectionsWorkspace({
               className={activeTab === tab ? "command-button" : "secondary-command-button"}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === "overview" ? "Overview" : tab === "upload" ? "Upload" : tab === "connections" ? "Connections" : "Diagnostics"}
+              {tab === "overview" ? "Overview" : tab === "upload" ? "Upload" : "Diagnostics"}
             </button>
           ))}
         </div>
@@ -707,12 +532,11 @@ export default function DataConnectionsWorkspace({
             { label: "Cognition State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
             { label: "Control Plane", value: apiStatus.label },
             { label: "Model Updated", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "Awaiting first intelligence model" },
-            { label: "Signal Origin", value: latestUploadSnapshot?.result_source === "rest_poll" ? "Live telemetry stream" : latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting uploaded telemetry" },
+            { label: "Signal Origin", value: latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting uploaded telemetry" },
             { label: "Relational Baseline", value: baselineMessage },
-            { label: "Active Source", value: activeConnection?.name ?? "Awaiting source" },
             { label: "Primary Environment", value: roomContext.primary },
-            { label: "Operating Scenario", value: activeConnection?.current_scenario ?? "Awaiting uploaded telemetry" },
-            { label: "Temporal Index", value: activeConnection?.current_tick ?? "Tracking on activation" },
+            { label: "Operating Scenario", value: latestUploadSnapshot?.scenario ?? "Awaiting uploaded telemetry" },
+            { label: "Temporal Index", value: latestUploadSnapshot?.current_tick ?? "Tracking on activation" },
           ]}
         />
       </Panel>
@@ -720,7 +544,7 @@ export default function DataConnectionsWorkspace({
       <Panel title="Structural Delta" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <MetricGrid
           metrics={[
-            { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? activeConnection?.name ?? "Model pending" },
+            { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Model pending" },
             { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "First baseline forming" },
             { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "Awaiting second frame" },
             { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Evidence will populate after processing" },
@@ -732,149 +556,17 @@ export default function DataConnectionsWorkspace({
       </>
       )}
 
-      {activeTab === "connections" && (
-      <Panel title="Telemetry Stream" className="span-12">
-        {activeConnection ? (
-          <>
-            <form className="connector-rest-grid" onSubmit={(event) => event.preventDefault()}>
-              <label>
-                <span>Name</span>
-                <input
-                  type="text"
-                  value={connectionForm.name}
-                  onChange={(event) => setConnectionForm((current) => ({ ...current, name: event.target.value }))}
-                />
-              </label>
-              <label>
-                <span>URL</span>
-                <input
-                  type="url"
-                  value={connectionForm.url}
-                  onChange={(event) => setConnectionForm((current) => ({ ...current, url: event.target.value }))}
-                />
-              </label>
-              <label>
-                <span>Facility ID</span>
-                <input
-                  type="text"
-                  value={connectionForm.facility_id}
-                  onChange={(event) => setConnectionForm((current) => ({ ...current, facility_id: event.target.value }))}
-                />
-              </label>
-              <label>
-                <span>Room ID</span>
-                <input
-                  type="text"
-                  value={connectionForm.room_id}
-                  onChange={(event) => setConnectionForm((current) => ({ ...current, room_id: event.target.value }))}
-                />
-              </label>
-              <div className="connector-form__actions">
-                <button
-                  className="secondary-command-button"
-                  type="button"
-                  disabled={connectionBusy === `${connectionForm.connection_id}:save`}
-                  onClick={handleSaveConnection}
-                >
-                  {connectionBusy === `${connectionForm.connection_id}:save` ? "Saving" : "Save Connection"}
-                </button>
-                <button
-                  className="secondary-command-button"
-                  type="button"
-                  disabled={connectionBusy === "reset-all"}
-                  onClick={handleResetAllConnections}
-                >
-                  {connectionBusy === "reset-all" ? "Resetting" : "Reset All Connections"}
-                </button>
-              </div>
-            </form>
-            <MetricGrid
-              metrics={[
-                { label: "URL", value: activeConnection.url },
-                { label: "Status", value: formatConnectionStatus(activeConnection.status) },
-                { label: "Endpoint Mode", value: "Configured" },
-                { label: "Baseline Source", value: baselineSource === "live_rest" ? "Live REST" : baselineSource === "uploaded_file" ? "Uploaded File" : "None" },
-                { label: "Baseline Status", value: baselineStatusLabel },
-                { label: "Samples", value: baselineSamplesRequired > 0 ? `${baselineSamplesCollected}/${baselineSamplesRequired}` : baselineSamplesCollected },
-                { label: "Last Poll", value: activeConnection.last_poll_at ? formatClockTime(activeConnection.last_poll_at) : "Not yet" },
-                { label: "Last Success", value: activeConnection.last_success_at ? formatClockTime(activeConnection.last_success_at) : "Not yet" },
-                { label: "Readings", value: activeConnection.readings_received ?? 0 },
-                { label: "Sensors", value: activeConnection.sensors_detected ?? 0 },
-                { label: "Scenario", value: activeConnection.current_scenario ?? "Awaiting uploaded telemetry" },
-                { label: "Baseline Updated", value: activeConnection.last_baseline_update ? formatClockTime(activeConnection.last_baseline_update) : "Not yet" },
-              ]}
-            />
-            <CompactList
-              items={[
-                `Room: ${activeConnection.room_id ?? "Unknown room"}`,
-                `Facility: ${activeConnection.facility_id ?? "Unknown facility"}`,
-                `Telemetry timestamp: ${activeConnection.latest_telemetry_timestamp ?? "Awaiting uploaded telemetry"}`,
-                `Last ingestion source: ${activeConnection.last_ingestion_source ?? "Not yet ingested"}`,
-                `Baseline status: ${baselineStatusLabel}`,
-                baselineSamplesRequired > 0 ? `Baseline samples: ${baselineSamplesCollected}/${baselineSamplesRequired}` : `Baseline samples: ${baselineSamplesCollected}`,
-                activeConnection.last_baseline_update ? `Last baseline update: ${activeConnection.last_baseline_update}` : "Last baseline update: Not yet",
-                activeConnection.baseline_status === "failed" && activeConnection.baseline_error_message
-                  ? `Baseline error: ${activeConnection.baseline_error_message}`
-                  : null,
-                String(activeConnection.status ?? "").toLowerCase() === "error" && activeConnection.error_message
-                  ? `Error: ${activeConnection.error_message}`
-                  : `Connection is ${formatConnectionStatus(activeConnection.status).toLowerCase()}.`,
-              ].filter(Boolean)}
-              emptyText="No live connection metadata yet."
-            />
-          </>
-        ) : (
-          <EmptyState title="No data connection registered" body="Register a REST telemetry source to keep the intake workspace ready for live data." compact />
-        )}
-      </Panel>
-      )}
-
       {activeTab === "diagnostics" && (
       <Panel title="Advanced Diagnostics" className="span-12">
         <details className="technical-summary-panel">
-          <summary>Show connection fleet, active result, and upload history</summary>
-
-          <MetricGrid
-            metrics={[
-              { label: "Connections", value: connections.length || "Pending" },
-              { label: "Online", value: healthyCount },
-              { label: "Sensors", value: totalSensors || "Pending" },
-              { label: "Readings", value: totalReadings || "Pending" },
-            ]}
-          />
-
-          <div className="connector-status-list">
-            {connections.map((connection) => (
-              <div className="connector-status-card" key={connection.connection_id}>
-                <div className="connector-status-card__header">
-                  <div>
-                    <p className="section-token">{connection.source_type}</p>
-                    <h3>{connection.name}</h3>
-                  </div>
-                  <span className={`connector-status-pill connector-status-pill--${connectionTone(connection.status)}`}>
-                    {formatConnectionStatus(connection.status)}
-                  </span>
-                </div>
-                <MetricGrid
-                  metrics={[
-                    { label: "Last Poll", value: connection.last_poll_at ? formatClockTime(connection.last_poll_at) : "Not yet" },
-                    { label: "Last Success", value: connection.last_success_at ? formatClockTime(connection.last_success_at) : "Not yet" },
-                    { label: "Baseline", value: formatBaselineStatus(connection.baseline_status) },
-                    { label: "Sensors", value: connection.sensors_detected ?? 0 },
-                    { label: "Readings", value: connection.readings_received ?? 0 },
-                  ]}
-                  compact
-                />
-              </div>
-            ))}
-          </div>
+          <summary>Show active result and upload history</summary>
 
           <MetricGrid
             metrics={[
               { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
               { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
               { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-              { label: "Timestamp", value: activeConnection?.latest_telemetry_timestamp ? formatClockTime(activeConnection.latest_telemetry_timestamp) : uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
+              { label: "Timestamp", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
             ]}
             compact
           />
@@ -893,23 +585,11 @@ export default function DataConnectionsWorkspace({
                 ])}
               />
             ) : (
-              <EmptyState title="No ingestion history" body="Completed uploads and meaningful live telemetry changes will appear here." compact />
+              <EmptyState title="No ingestion history" body="Completed uploads and meaningful uploaded telemetry changes will appear here." compact />
             )}
           </Panel>
         </details>
       </Panel>
-      )}
-
-      {connectionNotice && activeTab !== "overview" && (
-        <Panel title="Connection Response" className="span-12">
-          <p role="status" aria-live="polite">{connectionNotice}</p>
-        </Panel>
-      )}
-
-      {connectionError && activeTab !== "overview" && (
-        <Panel title="Connection Response" className="span-12">
-          <p className="form-error">{connectionError}</p>
-        </Panel>
       )}
     </div>
   );
