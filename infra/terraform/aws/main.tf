@@ -162,6 +162,7 @@ resource "aws_lb" "api" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
+  idle_timeout       = 300
 }
 
 resource "aws_lb_target_group" "api" {
@@ -275,6 +276,7 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "BACKEND_HOST", value = "0.0.0.0" },
         { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
         { name = "NERAIUM_PROCESS_ROLE", value = "api" },
+        { name = "NERAIUM_MAX_UPLOAD_SIZE_BYTES", value = tostring(var.max_upload_size_bytes) },
       ]
       secrets = [
         { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }
@@ -309,6 +311,7 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "BACKEND_HOST", value = "0.0.0.0" },
         { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
         { name = "NERAIUM_PROCESS_ROLE", value = "worker" },
+        { name = "NERAIUM_MAX_UPLOAD_SIZE_BYTES", value = tostring(var.max_upload_size_bytes) },
       ]
       secrets = [
         { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }

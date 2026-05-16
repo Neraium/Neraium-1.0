@@ -121,6 +121,18 @@ def test_object_errors_render_through_normalized_messages() -> None:
     assert "{normalizeErrorMessage(uploadError)}" in source
 
 
+def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
+    source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
+
+    assert "const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;" in source
+    assert "const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;" in source
+    assert "Large operational telemetry detected" in source
+    assert "Preparing telemetry intake" in source
+    assert "High-volume export identified" in source
+    assert "No synthetic progress is shown" in source
+    assert "25 MB mobile intake limit" not in source
+
+
 def test_protected_route_errors_use_generic_session_copy() -> None:
     source = read_upload_surface()
     app_source = read_frontend(APP_JSX)

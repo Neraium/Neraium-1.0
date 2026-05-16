@@ -5,8 +5,8 @@ import time
 
 from app.core.config import Settings
 from app.main import create_app
-from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, STATE_PATH
-from app.services import upload_jobs
+from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
+from app.services import sii_runner, upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
@@ -52,7 +52,7 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
     assert payload["filename"] == "sensor-export.csv"
-    assert payload["message"] == "Telemetry batch received. Processing started."
+    assert payload["message"] == "Preparing telemetry intake. Upload received and queued for background processing."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
     assert payload["file_size_bytes"] > 0
 
@@ -319,7 +319,7 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     assert payload["core_engine"] == CORE_ENGINE
     assert payload["error"] is None
     assert payload["result_summary"]["filename"] == "ready-report.csv"
-    assert STATE_PATH.exists()
+    assert sii_runner.STATE_PATH.exists()
 
 
 def test_upload_status_can_return_queued_state() -> None:

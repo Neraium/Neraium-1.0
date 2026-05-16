@@ -71,8 +71,8 @@ MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000)
 MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000)
 
 PROGRESS_LABELS = {
-    "PENDING": "Telemetry batch received. Processing is queued.",
-    "PARSING": "Reading CSV headers, rows, and timestamp context.",
+    "PENDING": "Preparing telemetry intake. Background processing is queued.",
+    "PARSING": "High-volume export identified. Reading headers, rows, and timestamp context.",
     "BASELINE_MODELING": "Building baseline model from telemetry windows.",
     "RUNNING_SII": "Running SII engine against uploaded telemetry.",
     "GENERATING_EVIDENCE": "Generating evidence and writing facility state.",
@@ -120,7 +120,7 @@ async def create_upload_job(
     ensure_runtime_dirs()
     job_id = uuid.uuid4().hex
     filename = Path(file.filename or "telemetry.csv").name
-    upload_path = UPLOAD_DIR / f"{job_id}.csv"
+    upload_path = UPLOAD_DIR / f"{job_id}{Path(filename).suffix.lower() or '.csv'}"
     size_bytes = 0
     hasher = hashlib.sha256()
     try:

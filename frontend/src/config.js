@@ -5,7 +5,7 @@ const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? "45
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiTimeoutMs > 0
   ? configuredApiTimeoutMs
   : 45000;
-const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 120000);
+const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 300000);
 const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
 const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
@@ -97,10 +97,6 @@ function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
   return false;
 }
 
-function requestCredentialsFor(apiBaseUrl) {
-  return isCrossOriginApiTarget(apiBaseUrl) ? "same-origin" : "include";
-}
-
 export function buildAccessHeaders() {
   return {};
 }
@@ -130,7 +126,7 @@ export async function apiFetch(path, options = {}) {
       const response = await fetch(buildUrl(apiBaseUrl, path), {
         method: normalizedMethod,
         ...requestOptions,
-        credentials: requestCredentialsFor(apiBaseUrl),
+        credentials: "include",
         cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
         headers: {
           ...buildAccessHeaders(),
