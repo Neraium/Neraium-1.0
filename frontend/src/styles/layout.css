@@ -1094,3 +1094,108 @@
     width: 100%;
   }
 }
+
+/* Compact operational awareness feed replacing card-heavy queue. */
+.cultivation-awareness-feed {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  background: rgba(138, 184, 196, 0.1);
+}
+
+.cultivation-awareness-feed__item {
+  --feed-severity-rgb: 138, 184, 196;
+  position: relative;
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  min-height: 78px;
+  background:
+    linear-gradient(90deg, rgba(var(--feed-severity-rgb), 0.08), transparent 40%),
+    rgba(6, 10, 12, 0.86);
+}
+
+.cultivation-awareness-feed__item--severity-high { --feed-severity-rgb: 200, 160, 106; }
+.cultivation-awareness-feed__item--severity-medium { --feed-severity-rgb: 138, 184, 196; }
+.cultivation-awareness-feed__item--severity-low { --feed-severity-rgb: 108, 186, 156; }
+
+.cultivation-awareness-feed__item::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgb(var(--feed-severity-rgb));
+  box-shadow: 0 0 18px rgba(var(--feed-severity-rgb), 0.34);
+}
+
+.cultivation-awareness-feed__index {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-right: 1px solid rgba(138, 184, 196, 0.08);
+  color: rgba(224, 239, 236, 0.82);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+}
+
+.cultivation-awareness-feed__index i {
+  width: 18px;
+  height: 1px;
+  background: rgba(var(--feed-severity-rgb), 0.7);
+  animation: telemetryLineSync 3.4s ease-in-out infinite;
+}
+
+.cultivation-awareness-feed__body {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 10px 14px;
+  min-width: 0;
+}
+
+.cultivation-awareness-feed__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cultivation-awareness-feed__header span,
+.cultivation-awareness-feed__header em {
+  color: rgba(186, 207, 204, 0.74);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 820;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cultivation-awareness-feed__header em {
+  margin-left: auto;
+  color: rgba(var(--feed-severity-rgb), 0.9);
+  white-space: nowrap;
+}
+
+.cultivation-awareness-feed__body strong {
+  overflow: hidden;
+  color: rgba(246, 252, 252, 0.96);
+  font-size: 0.9rem;
+  line-height: 1.26;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cultivation-awareness-feed__body p {
+  margin: 0;
+  overflow: hidden;
+  color: rgba(199, 218, 215, 0.72);
+  font-size: 0.74rem;
+  line-height: 1.34;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cultivation-awareness-feed__item--severity-high .cultivation-awareness-feed__index i {
+  animation-duration: 2.1s;
+}

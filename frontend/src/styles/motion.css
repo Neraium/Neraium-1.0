@@ -122,3 +122,124 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Global ambient motion: low-cost layers using transform/opacity only. */
+.platform-main,
+.platform-sidebar,
+.mobile-status-bar {
+  position: relative;
+}
+
+.platform-main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(108, 186, 156, 0.055), transparent 28%),
+    radial-gradient(circle at 82% 4%, rgba(138, 184, 196, 0.052), transparent 30%),
+    linear-gradient(120deg, transparent 0 42%, rgba(255, 255, 255, 0.018) 50%, transparent 58% 100%);
+  opacity: 0.78;
+  transform: translate3d(0, 0, 0);
+  animation: ambientOpsDrift 22s ease-in-out infinite;
+}
+
+.platform-workspace {
+  position: relative;
+  z-index: 1;
+}
+
+.health-orb__cognition-rings,
+.health-orb__environment,
+.health-orb__field,
+.health-orb__scan {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.health-orb__cognition-rings {
+  animation: orbCognitionRotate 18s linear infinite;
+}
+
+.health-orb__cognition-ring {
+  fill: none;
+  stroke: var(--orb-hue);
+  stroke-width: 0.9;
+  stroke-dasharray: 4 10;
+  opacity: calc(0.18 + (var(--orb-pulse, 0.3) * 0.22));
+}
+
+.health-orb__cognition-ring--meridian {
+  animation: orbRingBreathe 5.8s ease-in-out infinite;
+}
+
+.health-orb__cognition-ring--tilt {
+  transform: rotate(-32deg);
+  transform-origin: 170px 132px;
+  opacity: 0.18;
+}
+
+.health-orb__telemetry-trace {
+  stroke-dasharray: 44 180;
+  stroke-dashoffset: 0;
+  animation: orbTelemetryShimmer 5.8s ease-in-out infinite;
+}
+
+.health-orb__telemetry-trace--slow {
+  opacity: 0.42;
+  animation-duration: 8.2s;
+}
+
+.health-orb__telemetry-trace--reverse {
+  opacity: 0.34;
+  animation-direction: reverse;
+  animation-duration: 7.4s;
+}
+
+.health-orb__scan-line--diagonal {
+  opacity: 0.22;
+  animation-delay: 1.3s;
+}
+
+.health-orb--animated .health-orb__field {
+  animation: orbParallaxDepth 12s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__aura,
+.health-orb--animated .health-orb__propagation {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: orbCognitionPulse 4.6s ease-in-out infinite;
+}
+
+@keyframes ambientOpsDrift {
+  0%, 100% { opacity: 0.56; transform: translate3d(0, 0, 0) scale(1); }
+  50% { opacity: 0.86; transform: translate3d(10px, -8px, 0) scale(1.01); }
+}
+
+@keyframes orbCognitionRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes orbRingBreathe {
+  0%, 100% { opacity: 0.12; transform: scale(0.985); }
+  50% { opacity: 0.34; transform: scale(1.015); }
+}
+
+@keyframes orbTelemetryShimmer {
+  0% { stroke-dashoffset: 96; opacity: 0.12; }
+  48% { opacity: 0.78; }
+  100% { stroke-dashoffset: -120; opacity: 0.16; }
+}
+
+@keyframes orbParallaxDepth {
+  0%, 100% { transform: translate3d(-1px, 0, 0) rotate(-0.25deg); }
+  50% { transform: translate3d(2px, -1px, 0) rotate(0.35deg); }
+}
+
+@keyframes orbCognitionPulse {
+  0%, 100% { opacity: calc(0.42 + (var(--orb-pulse, 0.3) * 0.18)); transform: scale(0.992); }
+  50% { opacity: calc(0.58 + (var(--orb-pulse, 0.3) * 0.24)); transform: scale(1.012); }
+}
