@@ -986,3 +986,111 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Cultivation reporting hierarchy: keep live operations primary and make reports secondary. */
+.cultivation-awareness-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cultivation-awareness-card {
+  display: grid;
+  gap: 7px;
+  min-height: 132px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--cultivation-severity, rgba(138, 184, 196, 0.8)) 24%, rgba(138, 184, 196, 0.12));
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--cultivation-severity, rgba(138, 184, 196, 0.8)) 10%, transparent), transparent 44%),
+    linear-gradient(180deg, rgba(12, 18, 21, 0.82), rgba(6, 10, 12, 0.72));
+}
+
+.cultivation-awareness-card span,
+.cultivation-report-summary-card .cultivation-report-operator__eyebrow {
+  color: rgba(190, 209, 205, 0.72);
+  font-size: 0.62rem;
+  font-weight: 820;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cultivation-awareness-card strong {
+  color: rgba(246, 252, 252, 0.95);
+  font-size: 0.86rem;
+  line-height: 1.28;
+}
+
+.cultivation-awareness-card p,
+.cultivation-report-summary-card p {
+  margin: 0;
+  color: rgba(205, 222, 219, 0.76);
+  font-size: 0.76rem;
+  line-height: 1.42;
+}
+
+.cultivation-report-collapsed-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(129, 196, 193, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(12, 18, 21, 0.68), rgba(6, 10, 12, 0.74));
+}
+
+.cultivation-report-summary-card {
+  display: grid;
+  gap: 7px;
+}
+
+.cultivation-report-summary-card h3 {
+  margin: 0;
+  color: rgba(244, 251, 249, 0.96);
+  font-size: clamp(1rem, 2.2vw, 1.28rem);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.cultivation-report-actions--center {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+}
+
+.cultivation-report-expanded-flow {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 980px) {
+  .cultivation-awareness-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .cultivation-awareness-grid,
+  .cultivation-report-collapsed-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .cultivation-awareness-card {
+    min-height: 0;
+    padding: 10px 11px;
+  }
+
+  .cultivation-report-actions--center {
+    justify-content: stretch;
+  }
+
+  .cultivation-report-actions--center .secondary-command-button {
+    width: 100%;
+  }
+}

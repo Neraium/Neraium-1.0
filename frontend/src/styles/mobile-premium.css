@@ -2249,3 +2249,55 @@
     gap: 2px 6px;
   }
 }
+
+/* Keep cultivation mobile home focused on live operations; reports are secondary export workflow. */
+@media (max-width: 760px) {
+  .cultivation-view-panel--overview .cultivation-overview-left {
+    display: grid;
+    padding: 9px !important;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-orb-wrap {
+    grid-template-columns: minmax(82px, 0.34fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-orb .health-orb {
+    width: min(25vw, 104px) !important;
+    min-width: 82px !important;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-left-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-pill {
+    padding: 7px 8px !important;
+    border-bottom: 0;
+    border-right: 1px solid rgba(177, 211, 206, 0.1);
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-pill:last-child {
+    border-right: 0;
+  }
+
+  .cultivation-awareness-panel {
+    order: 2;
+  }
+
+  .cultivation-awareness-grid {
+    gap: 8px !important;
+  }
+
+  .cultivation-awareness-card {
+    border-radius: 12px !important;
+  }
+
+  .cultivation-report-panel {
+    opacity: 0.94;
+  }
+
+  .cultivation-report-collapsed-shell {
+    padding: 11px !important;
+  }
+}
