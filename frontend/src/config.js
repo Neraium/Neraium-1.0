@@ -11,6 +11,24 @@ const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ?
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 
+function appSiblingApiBaseUrl() {
+  if (typeof window === "undefined" || !isProductionBuild) {
+    return "";
+  }
+
+  const { protocol, hostname } = window.location;
+  if (protocol !== "https:" || !hostname) {
+    return "";
+  }
+  if (hostname === "app.neraium.com") {
+    return PRODUCTION_API_FALLBACK;
+  }
+  if (hostname.endsWith(".neraium.com")) {
+    return `https://api.${hostname.split(".").slice(-2).join(".")}`;
+  }
+  return "";
+}
+
 function isUnsafeMixedContentTarget(apiBaseUrl) {
   if (typeof window === "undefined" || !apiBaseUrl) {
     return false;
@@ -29,12 +47,18 @@ function apiBaseCandidates() {
   const candidates = [
     API_BASE_URL,
     configuredFallbackApiBaseUrl,
+    appSiblingApiBaseUrl(),
     isProductionBuild ? PRODUCTION_API_FALLBACK : "",
   ];
 
-  return candidates.filter((value, index, list) => {
-    const normalized = value ?? "";
-    return list.indexOf(value) === index && !isUnsafeMixedContentTarget(normalized);
+  const seen = new Set();
+  return candidates.filter((value) => {
+    const normalized = (value ?? "").replace(/\/+$/, "");
+    if (seen.has(normalized) || isUnsafeMixedContentTarget(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
   });
 }
 
@@ -64,13 +88,17 @@ function shouldRetryAgainstFallback(error) {
 }
 
 function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
-  if (status >= 500) {
+  if (status >= 500 || status === 408 || status === 425 || status === 429) {
     return true;
   }
-  if (status === 404 && isProductionBuild && !apiBaseUrl && String(path || "").startsWith("/api/")) {
+  if ([404, 405].includes(status) && isProductionBuild && !apiBaseUrl && String(path || "").startsWith("/api/")) {
     return true;
   }
   return false;
+}
+
+function requestCredentialsFor(apiBaseUrl) {
+  return isCrossOriginApiTarget(apiBaseUrl) ? "same-origin" : "include";
 }
 
 export function buildAccessHeaders() {
@@ -102,7 +130,7 @@ export async function apiFetch(path, options = {}) {
       const response = await fetch(buildUrl(apiBaseUrl, path), {
         method: normalizedMethod,
         ...requestOptions,
-        credentials: "include",
+        credentials: requestCredentialsFor(apiBaseUrl),
         cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
         headers: {
           ...buildAccessHeaders(),
@@ -131,6 +159,7 @@ export async function apiFetch(path, options = {}) {
       networkError.name = "ApiNetworkError";
       networkError.path = path;
       networkError.cause = error;
+      networkError.apiBaseUrl = apiBaseUrl || "same-origin";
       lastError = networkError;
 
       if (!shouldRetryAgainstFallback(networkError) || apiBaseUrl === candidates[candidates.length - 1]) {
@@ -147,7 +176,7 @@ export async function apiFetch(path, options = {}) {
 export const API_CONFIG_WARNING = configuredApiBaseUrl
   ? ""
   : isProductionBuild
-    ? "VITE_API_BASE_URL is not configured for this production build. Using same-origin /api first, then production API fallback."
+    ? "VITE_API_BASE_URL is not configured for this production build. Using same-origin /api first, then the HTTPS Neraium API fallback."
     : "VITE_API_BASE_URL is not configured. Using local development API.";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
