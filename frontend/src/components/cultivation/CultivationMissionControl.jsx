@@ -53,7 +53,22 @@ export default function CultivationMissionControl({
     return <EmptyState title="Cultivation mission control unavailable" body={error} />;
   }
   if (!cognition || !replay) {
-    return <Panel title="Cultivation Mission Control" subtitle="Loading cultivation structural cognition context." />;
+    return (
+      <Panel
+        title="Cultivation Mission Control"
+        className="span-12 cultivation-loading-panel"
+        subtitle="Loading cultivation structural cognition context."
+      >
+        <div className="cultivation-loading-panel__skeleton" aria-hidden="true">
+          <div className="cultivation-loading-panel__hero" />
+          <div className="cultivation-loading-panel__grid">
+            <div className="cultivation-loading-panel__card" />
+            <div className="cultivation-loading-panel__card" />
+            <div className="cultivation-loading-panel__card" />
+          </div>
+        </div>
+      </Panel>
+    );
   }
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
   const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";

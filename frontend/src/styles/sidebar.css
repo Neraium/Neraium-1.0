@@ -76,11 +76,11 @@
   width: 100%;
   min-height: 66px;
   padding: 10px 12px 10px 16px;
-  border: 1px solid rgba(138, 184, 196, 0.024);
+  border: 1px solid rgba(138, 184, 196, 0.018);
   border-left: 1px solid transparent;
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(16, 21, 25, 0.56), rgba(9, 12, 15, 0.52));
+    linear-gradient(180deg, rgba(14, 19, 23, 0.42), rgba(8, 11, 14, 0.4));
   color: var(--text-secondary);
   text-align: left;
 }
@@ -233,12 +233,12 @@
 }
 
 .workspace-nav__item--tier-secondary {
-  opacity: 0.92;
+  opacity: 0.84;
 }
 
 .workspace-nav__item--tier-tertiary {
   min-height: 58px;
-  opacity: 0.78;
+  opacity: 0.68;
 }
 
 .workspace-nav__pulse {
