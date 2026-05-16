@@ -17,7 +17,7 @@ export default function SidebarNavigation({
           <div className="brand-mark">N</div>
           <div>
             <p className="brand-name">NERAIUM // OPS</p>
-            <p className="brand-subtitle">Structural Intelligence Control Plane</p>
+            <p className="brand-subtitle">Cultivation Infrastructure Control Plane</p>
           </div>
         </div>
         <span className="brand-edition">Enterprise Command</span>
@@ -40,12 +40,12 @@ export default function SidebarNavigation({
         </nav>
       </div>
       <div className="sidebar-section sidebar-section--terminal">
-        <p className="sidebar-kicker">Persistent state</p>
-        <SidebarTelemetry label="Data source" value={liveOps.dataSourceLabel} />
+        <p className="sidebar-kicker">Operational state</p>
+        <SidebarTelemetry label="Telemetry source" value={liveOps.dataSourceLabel} />
         <SidebarTelemetry label="Primary room" value={roomContext.primary} />
-        <SidebarTelemetry label="Time coverage" value={timeCoverage.summary} />
-        <SidebarTelemetry label="Facility state" value={liveOps.facilityStateLabel} />
-        <SidebarTelemetry label="Findings" value={`${liveOps.findings.length} active`} />
+        <SidebarTelemetry label="Continuation window" value={timeCoverage.summary} />
+        <SidebarTelemetry label="Propagation state" value={liveOps.facilityStateLabel} />
+        <SidebarTelemetry label="Active findings" value={`${liveOps.findings.length}`} />
         <SidebarTelemetry label="Last sync" value={liveOps.connectionSummary} />
       </div>
       <div className="sidebar-footer">

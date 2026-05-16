@@ -566,7 +566,7 @@ export default function DataConnectionsWorkspace({
       ? "Live baseline active"
       : currentBaselineStatus === "failed"
         ? "Live baseline failed"
-        : "No data connected yet";
+      : "Awaiting uploaded telemetry";
 
   return (
     <div className="workspace-grid workspace-grid--connections">
@@ -703,11 +703,11 @@ export default function DataConnectionsWorkspace({
             { label: "Cognition State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
             { label: "Control Plane", value: apiStatus.label },
             { label: "Model Updated", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "Awaiting first intelligence model" },
-            { label: "Signal Origin", value: latestUploadSnapshot?.result_source === "rest_poll" ? "Live telemetry stream" : latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting telemetry" },
+            { label: "Signal Origin", value: latestUploadSnapshot?.result_source === "rest_poll" ? "Live telemetry stream" : latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting uploaded telemetry" },
             { label: "Relational Baseline", value: baselineMessage },
             { label: "Active Source", value: activeConnection?.name ?? "Awaiting source" },
             { label: "Primary Environment", value: roomContext.primary },
-            { label: "Operating Scenario", value: activeConnection?.current_scenario ?? "Awaiting telemetry" },
+            { label: "Operating Scenario", value: activeConnection?.current_scenario ?? "Awaiting uploaded telemetry" },
             { label: "Temporal Index", value: activeConnection?.current_tick ?? "Tracking on activation" },
           ]}
         />
@@ -719,7 +719,7 @@ export default function DataConnectionsWorkspace({
             { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? activeConnection?.name ?? "Model pending" },
             { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "First baseline forming" },
             { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "Awaiting second frame" },
-            { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Awaiting telemetry" },
+            { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Evidence will populate after processing" },
           ]}
           compact
         />
@@ -796,7 +796,7 @@ export default function DataConnectionsWorkspace({
                 { label: "Last Success", value: activeConnection.last_success_at ? formatClockTime(activeConnection.last_success_at) : "Not yet" },
                 { label: "Readings", value: activeConnection.readings_received ?? 0 },
                 { label: "Sensors", value: activeConnection.sensors_detected ?? 0 },
-                { label: "Scenario", value: activeConnection.current_scenario ?? "Awaiting telemetry" },
+                { label: "Scenario", value: activeConnection.current_scenario ?? "Awaiting uploaded telemetry" },
                 { label: "Baseline Updated", value: activeConnection.last_baseline_update ? formatClockTime(activeConnection.last_baseline_update) : "Not yet" },
               ]}
             />
@@ -804,7 +804,7 @@ export default function DataConnectionsWorkspace({
               items={[
                 `Room: ${activeConnection.room_id ?? "Unknown room"}`,
                 `Facility: ${activeConnection.facility_id ?? "Unknown facility"}`,
-                `Telemetry timestamp: ${activeConnection.latest_telemetry_timestamp ?? "Awaiting telemetry"}`,
+                `Telemetry timestamp: ${activeConnection.latest_telemetry_timestamp ?? "Awaiting uploaded telemetry"}`,
                 `Last ingestion source: ${activeConnection.last_ingestion_source ?? "Not yet ingested"}`,
                 `Baseline status: ${baselineStatusLabel}`,
                 baselineSamplesRequired > 0 ? `Baseline samples: ${baselineSamplesCollected}/${baselineSamplesRequired}` : `Baseline samples: ${baselineSamplesCollected}`,
@@ -885,7 +885,7 @@ export default function DataConnectionsWorkspace({
                   row.score,
                   row.state,
                   row.room,
-                  row.scoreDelta ?? "n/a",
+                  row.scoreDelta ?? "Pending",
                 ])}
               />
             ) : (

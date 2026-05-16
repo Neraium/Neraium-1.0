@@ -35,17 +35,17 @@ export default function TopStatusBar({
         </div>
       </div>
       <div className={`top-status__brief top-status__brief--${liveOps.facilityTone}`}>
-        <article className="top-status__brief-item"><span>What&apos;s wrong</span><strong>{triageSummary.problem}</strong></article>
+        <article className="top-status__brief-item"><span>Current condition</span><strong>{triageSummary.problem}</strong></article>
         <article className="top-status__brief-item"><span>Where</span><strong>{triageSummary.where}</strong></article>
-        <article className="top-status__brief-item top-status__brief-item--wide"><span>Why we think that</span><p>{triageSummary.why}</p></article>
-        <article className="top-status__brief-item top-status__brief-item--wide"><span>Human read</span><p>{triageSummary.human}</p></article>
+        <article className="top-status__brief-item top-status__brief-item--wide"><span>Evidence confidence</span><p>{triageSummary.why}</p></article>
+        <article className="top-status__brief-item top-status__brief-item--wide"><span>Operator action focus</span><p>{triageSummary.human}</p></article>
       </div>
       <div className="status-rack">
         <StatusChip label="Severity" value={liveOps.facilityStateLabel} tone={liveOps.facilityTone} />
         <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
-        <StatusChip label="Next inspect" value={liveOps.primaryWindow?.label ?? "Facility overview"} tone={liveOps.primaryWindow?.tone ?? "info"} />
+        <StatusChip label="Continuation window" value={liveOps.primaryWindow?.label ?? "Facility overview"} tone={liveOps.primaryWindow?.tone ?? "info"} />
         <StatusChip
-          label="What changed"
+          label="Structural update"
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
         />

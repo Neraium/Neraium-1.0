@@ -76,7 +76,7 @@ export default function CultivationMissionControl({
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
   const orbState = deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry);
   const isNoDataState = orbState === "unknown";
-  const continuationWindow = isNoDataState ? "Awaiting telemetry" : (cognition.continuation_windows?.window ?? "Monitoring");
+  const continuationWindow = isNoDataState ? "Replay unavailable until timeline data is connected" : (cognition.continuation_windows?.window ?? "Monitoring");
   const severityState = deriveCultivationSeverity(cognition, orbState);
 
   const report = buildWeeklyPilotReport({
@@ -200,7 +200,7 @@ export default function CultivationMissionControl({
                 <div className="cultivation-overview-left-metrics">
                   <article className="cultivation-overview-pill">
                     <span>Cognition state</span>
-                    <strong>{isNoDataState ? "Awaiting telemetry" : (cognition.cognition_state ?? "Monitoring")}</strong>
+                    <strong>{isNoDataState ? "No active propagation detected" : (cognition.cognition_state ?? "Monitoring")}</strong>
                   </article>
                   <article className="cultivation-overview-pill">
                     <span>Continuation window</span>
@@ -215,7 +215,7 @@ export default function CultivationMissionControl({
               <section className="cultivation-overview-right cultivation-intelligence-block" aria-label="Operator intelligence summary">
                 <div className="cultivation-intelligence-row">
                   <span>What's changing</span>
-                  <strong>{isNoDataState ? "Awaiting telemetry." : summarizeChange(cognition)}</strong>
+                  <strong>{isNoDataState ? "Evidence will populate after processing." : summarizeChange(cognition)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
                   <span>Where it's spreading</span>
@@ -314,7 +314,7 @@ export default function CultivationMissionControl({
           <Panel title="Replay Snapshot" className="span-12 cultivation-replay-panel cultivation-view-panel cultivation-view-panel--replay" subtitle="Progression view for escalation and recovery.">
             <ul className="system-body-timeline-list cultivation-compact-list">
               {replayFrames.length === 0 && (
-                <li><span className="metadata-text">Replay</span><strong>No replay frames available.</strong></li>
+                <li><span className="metadata-text">Replay</span><strong>Replay unavailable until timeline data is connected.</strong></li>
               )}
               {replayFrames.map((frame, index) => (
                 <li key={`${frame.timestamp ?? "frame"}-${index}`}>
@@ -364,7 +364,7 @@ export default function CultivationMissionControl({
                 <li key={path}><span className="metadata-text">Pathway</span><strong>{humanizePathway(path)}</strong></li>
               ))}
               {(cognition.propagation_pathways ?? []).length === 0 && (
-                <li><span className="metadata-text">Pathway</span><strong>No active propagation pathway.</strong></li>
+                <li><span className="metadata-text">Pathway</span><strong>No active propagation detected.</strong></li>
               )}
             </ul>
           </Panel>
@@ -402,7 +402,7 @@ function deriveCultivationSeverity(cognition, orbState) {
 }
 
 function formatCultivationStateLabel(cognition, orbState) {
-  if (orbState === "unknown") return "Awaiting telemetry";
+  if (orbState === "unknown") return "Awaiting uploaded telemetry";
   const stability = String(cognition?.structural_stability ?? "").trim();
   if (stability) return stability.toUpperCase();
   return formatOrbLabel(orbState).toUpperCase();

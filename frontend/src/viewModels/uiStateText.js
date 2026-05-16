@@ -1,8 +1,8 @@
-export const NO_DATA_LABEL = "No data connected yet";
-export const AWAITING_TELEMETRY_LABEL = "Awaiting telemetry";
+export const NO_DATA_LABEL = "Awaiting uploaded telemetry";
+export const AWAITING_TELEMETRY_LABEL = "Awaiting uploaded telemetry";
 
 export function noDataGuidance() {
-  return "Connect live telemetry or upload a telemetry file to activate room context";
+  return "Connect a live telemetry source or upload a telemetry file to activate room context and evidence construction.";
 }
 
 export function emptyConnectionLabel() {

@@ -255,7 +255,7 @@
 .workspace-nav__item--tier-primary .workspace-nav__pulse {
   background: rgb(var(--state-accent-rgb, 138, 184, 196));
   box-shadow: 0 0 18px rgba(var(--state-accent-rgb, 138, 184, 196), 0.52);
-  animation: workspaceCognitionPulse 2.6s ease-in-out infinite;
+  animation: none;
 }
 
 .workspace-nav__activity {
@@ -276,7 +276,7 @@
   min-width: 22px;
   background: linear-gradient(90deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.42), transparent);
   transform-origin: left;
-  animation: telemetryLineSync 3.8s ease-in-out infinite;
+  animation: none;
 }
 
 .workspace-nav__item--active {
@@ -290,7 +290,7 @@
 .workspace-nav__item--active::after,
 .workspace-nav__item--tier-primary:hover::after {
   opacity: 1;
-  animation: workspaceTelemetryShimmer 4.8s ease-in-out infinite;
+  animation: none;
 }
 
 @keyframes workspaceTelemetryShimmer {
