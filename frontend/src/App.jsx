@@ -512,6 +512,11 @@ function TopStatusBar({
           tone={liveOps.primaryWindow?.tone ?? "info"}
         />
         <StatusChip
+          label="Projected lead time"
+          value={liveOps.primaryWindow?.window ?? "Monitoring"}
+          tone={liveOps.primaryWindow?.tone ?? liveOps.connectionTone}
+        />
+        <StatusChip
           label="What changed"
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
