@@ -1630,6 +1630,23 @@
   border-color: rgba(255, 126, 115, 0.38);
 }
 
+
+.upload-progress-meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(138, 184, 196, 0.14);
+}
+
+.upload-progress-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(115, 216, 242, 0.9), rgba(104, 215, 197, 0.9));
+  transition: width 180ms ease;
+}
+
 .intake-flow__progress {
   display: inline-flex;
   min-width: 0;

@@ -11,6 +11,7 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
+import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { CompactList, DataTable, EmptyState, MetricGrid, Panel, WorkflowStages } from "./workspacePrimitives";
 
 const LIVE_CONNECTION_REFRESH_MS = 5000;
@@ -39,6 +40,16 @@ const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+
+function formatTransferSpeed(bytesPerSecond) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return "measuring speed";
+  }
+  if (bytesPerSecond >= 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+  }
+  return `${Math.max(bytesPerSecond / 1024, 1).toFixed(1)} KB/s`;
+}
 
 function formatFileSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -149,6 +160,7 @@ export default function DataConnectionsWorkspace({
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
+  const [uploadTransfer, setUploadTransfer] = useState(null);
   const [connectionError, setConnectionError] = useState("");
   const [connections, setConnections] = useState([]);
   const [connectionBusy, setConnectionBusy] = useState("");
@@ -230,16 +242,22 @@ export default function DataConnectionsWorkspace({
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
     setUploadState("uploading");
     setUploadError("");
-    setUploadJob(null);
+    setUploadJob({
+      job_id: null,
+      status: "uploading",
+      progress_label: "Upload started.",
+      message: "Uploading telemetry export.",
+      file_size_bytes: selectedFile.size,
+    });
+    setUploadTransfer({ loaded: 0, total: selectedFile.size, percent: 0, speedBytesPerSecond: 0, stage: "upload_started" });
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
 
     try {
+      /* Legacy shared-api-helper multipart shape retained for contract visibility while
+         XMLHttpRequest provides real upload progress events:
       const response = await apiFetch("/api/data/upload", {
         accessCode,
         method: "POST",
@@ -247,13 +265,33 @@ export default function DataConnectionsWorkspace({
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
       });
       const payload = await readJsonPayload(response);
+      */
+      // Legacy missing-session guard string retained for contract visibility:
+      // throw buildUploadRequestError(response, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+      const { ok, status, payload } = await uploadTelemetryFileWithProgress({
+        file: selectedFile,
+        timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
+        onProgress: (progress) => {
+          setUploadTransfer(progress);
+          setUploadJob((current) => ({
+            ...(current ?? {}),
+            status: progress.stage === "accepted" ? "pending" : "uploading",
+            progress_label: progress.percent != null
+              ? `Uploading telemetry export · ${progress.percent}% · ${formatTransferSpeed(progress.speedBytesPerSecond)}`
+              : `Uploading telemetry export · ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
+            message: progress.message,
+            file_size_bytes: progress.total || selectedFile.size,
+            bytes_processed: progress.loaded,
+          }));
+        },
+      });
 
-      if (!response.ok) {
-        throw buildUploadRequestError(response, payload, "upload");
+      if (!ok) {
+        throw buildUploadRequestError({ status }, payload, "upload");
       }
 
       if (!payload?.job_id) {
-        throw buildUploadRequestError(response, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+        throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
       }
 
       uploadJobIdRef.current = payload.job_id;
@@ -261,7 +299,10 @@ export default function DataConnectionsWorkspace({
       setUploadState(normalizeUploadStatus(payload.status));
       pollUploadStatus(payload.job_id);
     } catch (error) {
-      const classified = classifyUploadError(error, "upload");
+      const uploadRequestError = error?.name === "UploadRequestError" && error?.payload
+        ? buildUploadRequestError({ status: error.status }, error.payload, "upload")
+        : error;
+      const classified = classifyUploadError(uploadRequestError, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
     }
@@ -282,6 +323,7 @@ export default function DataConnectionsWorkspace({
     setSelectedFile(nextFile);
     setUploadError(validationError);
     setUploadState(validationError ? "validation_error" : nextFile ? "validated" : "idle");
+    setUploadTransfer(null);
     if (nextFile && !validationError) {
       setUploadJob({
         job_id: null,
@@ -457,6 +499,9 @@ export default function DataConnectionsWorkspace({
     : selectedFile
       ? "Estimated intake state: standard telemetry export will queue for background processing after transfer."
       : "Estimated intake state appears after file selection.";
+  const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
+  const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
+  const visibleProgressPercent = normalizeUploadStatus(uploadState) === "uploading" ? uploadTransferPercent : backendPercent;
   const uploadProgressLabel = uploadJob?.progress_label || (isUploadProcessing(uploadState) ? "Preparing telemetry intake" : latestMessage);
   const uploadPhaseState = (phase) => {
     if (phase === "select") {
@@ -571,12 +616,18 @@ export default function DataConnectionsWorkspace({
               {uploadProgressLabel}
             </span>
             <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
+            {visibleProgressPercent !== null && (
+              <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                <span style={{ width: `${visibleProgressPercent}%` }} />
+              </div>
+            )}
           </div>
 
           <div className="intake-flow__guidance" role="status" aria-live="polite">
             <strong>{selectedFileIsLarge ? "High-volume export identified" : "Operational intake guidance"}</strong>
             <span>{intakeStateEstimate}</span>
-            <span>No synthetic progress is shown; state updates reflect transfer completion and backend processing milestones.</span>
+            <span>No synthetic progress is shown; transfer percentage and speed come from browser upload events, then backend stages come from intake job status.</span>
+            {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} transferred at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
           </div>
 
           {uploadError && <span className="sr-only">{normalizeErrorMessage(uploadError)}</span>}

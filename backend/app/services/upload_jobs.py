@@ -71,11 +71,14 @@ MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000)
 MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000)
 
 PROGRESS_LABELS = {
-    "PENDING": "Preparing telemetry intake. Background processing is queued.",
-    "PARSING": "High-volume export identified. Reading headers, rows, and timestamp context.",
-    "BASELINE_MODELING": "Building baseline model from telemetry windows.",
-    "RUNNING_SII": "Running SII engine against uploaded telemetry.",
-    "GENERATING_EVIDENCE": "Generating evidence and writing facility state.",
+    "PENDING": "File accepted. Background intake job is queued.",
+    "VALIDATING_SCHEMA": "Validating schema and timestamp context.",
+    "PARSING": "Parsing signal matrix with streaming windows.",
+    "BASELINE_MODELING": "Building relational baseline.",
+    "STRUCTURAL_SCORING": "Computing structural drift and first health state.",
+    "COGNITION_READY": "Operator cognition ready. Continuing downstream replay/evidence work.",
+    "GENERATING_REPLAY": "Generating replay frames and evidence artifacts.",
+    "GENERATING_EVIDENCE": "Writing evidence and facility state.",
     "COMPLETE": "Telemetry processing complete.",
     "FAILED": "Telemetry processing failed.",
 }
@@ -123,6 +126,8 @@ async def create_upload_job(
     upload_path = UPLOAD_DIR / f"{job_id}{Path(filename).suffix.lower() or '.csv'}"
     size_bytes = 0
     hasher = hashlib.sha256()
+    upload_started = time.perf_counter()
+    save_started = upload_started
     try:
         with upload_path.open("wb") as output:
             while True:
@@ -154,6 +159,12 @@ async def create_upload_job(
         "memory_estimate_bytes": 0,
         "processing_duration_seconds": None,
         "engine_runtime_seconds": None,
+        "bytes_processed": 0,
+        "warnings": [],
+        "errors": [],
+        "result_available": False,
+        "first_usable_available": False,
+        "timings": {"upload_receive_seconds": None, "file_save_seconds": None},
         "runner_used": False,
         "runner_module": RUNNER_MODULE,
         "core_engine": CORE_ENGINE,
@@ -164,6 +175,8 @@ async def create_upload_job(
         "input_hash": hasher.hexdigest(),
         "initiated_by": initiated_by,
     }
+    upload_duration = round(time.perf_counter() - upload_started, 4)
+    metadata["timings"] = {"upload_receive_seconds": upload_duration, "file_save_seconds": round(time.perf_counter() - save_started, 4)}
     write_job(metadata)
     enqueue_upload_job(job_id)
     logger.info(
@@ -264,15 +277,29 @@ def normalize_status(status: str) -> str:
     aliases = {
         "queued": "PENDING",
         "pending": "PENDING",
+        "validating_schema": "VALIDATING_SCHEMA",
         "parsing": "PARSING",
         "baseline_modeling": "BASELINE_MODELING",
         "running_sii": "RUNNING_SII",
+        "structural_scoring": "STRUCTURAL_SCORING",
+        "cognition_ready": "COGNITION_READY",
+        "generating_replay": "GENERATING_REPLAY",
         "writing_state": "GENERATING_EVIDENCE",
         "generating_evidence": "GENERATING_EVIDENCE",
         "complete": "COMPLETE",
         "failed": "FAILED",
     }
     return aliases.get(status.lower(), status.upper())
+
+
+def record_timing(processing_stats: dict[str, Any], stage: str, started: float) -> None:
+    timings = processing_stats.setdefault("timings", {})
+    timings[f"{stage}_seconds"] = round(time.perf_counter() - started, 4)
+
+
+def timed_status(status_callback: Any | None, status: str, processing_stats: dict[str, Any], **updates: Any) -> None:
+    if status_callback:
+        status_callback(status, timings=processing_stats.get("timings", {}), **updates)
 
 
 def process_upload_job(job_id: str) -> None:
@@ -304,6 +331,12 @@ def process_upload_job(job_id: str) -> None:
             chunk_count=result["processing_stats"]["chunk_count"],
             memory_estimate_bytes=result["processing_stats"]["memory_estimate_bytes"],
             engine_runtime_seconds=result["processing_stats"]["engine_runtime_seconds"],
+            bytes_processed=result.get("processing_stats", {}).get("bytes_processed", metadata.get("file_size_bytes", 0)),
+            warnings=result.get("warnings", [])[:10],
+            errors=result.get("sii_runner_result", {}).get("errors", [])[:5],
+            result_available=True,
+            first_usable_available=True,
+            timings=result.get("processing_stats", {}).get("timings", {}),
         )
         completed_at = now_iso()
         summary = summarize_result(result, completed_at)
@@ -323,10 +356,15 @@ def process_upload_job(job_id: str) -> None:
             processing_duration_seconds=duration,
             engine_runtime_seconds=result["processing_stats"]["engine_runtime_seconds"],
             error=None,
+            warnings=result.get("warnings", [])[:10],
+            errors=result.get("sii_runner_result", {}).get("errors", [])[:5],
+            result_available=True,
+            first_usable_available=True,
+            timings={**metadata.get("timings", {}), **result.get("processing_stats", {}).get("timings", {}), "total_job_seconds": duration},
             result_summary=summary,
         )
         logger.info(
-            "upload_job_complete job_id=%s rows=%s columns=%s chunks=%s duration=%s engine_runtime=%s memory_estimate=%s",
+            "upload_job_complete job_id=%s rows=%s columns=%s chunks=%s duration=%s engine_runtime=%s memory_estimate=%s timings=%s",
             job_id,
             result["row_count"],
             result["column_count"],
@@ -334,6 +372,7 @@ def process_upload_job(job_id: str) -> None:
             duration,
             result["processing_stats"]["engine_runtime_seconds"],
             result["processing_stats"]["memory_estimate_bytes"],
+            {**metadata.get("timings", {}), **result.get("processing_stats", {}).get("timings", {})},
         )
         complete_upload_queue_job(job_id, "completed")
     except Exception as exc:
@@ -345,6 +384,8 @@ def process_upload_job(job_id: str) -> None:
             completed_at=completed_at,
             processing_duration_seconds=round(time.perf_counter() - started, 4),
             error=f"{type(exc).__name__}: {exc}",
+            errors=[f"{type(exc).__name__}: {exc}"],
+            timings={**metadata.get("timings", {}), "total_job_seconds": round(time.perf_counter() - started, 4)},
         )
         upsert_evidence_run(
             {
@@ -489,6 +530,8 @@ def stream_csv_windows(
     file_path: Path,
     status_callback: Any | None = None,
 ) -> tuple[list[str], list[list[str]], int, dict[str, Any]]:
+    parse_started = time.perf_counter()
+    file_size_bytes = file_path.stat().st_size if file_path.exists() else 0
     first_rows: list[list[str]] = []
     tail_rows: deque[list[str]] = deque(maxlen=MAX_ANALYSIS_ROWS // 2)
     room_counts: Counter[str] = Counter()
@@ -496,6 +539,7 @@ def stream_csv_windows(
     malformed_rows = 0
     chunk_count = 0
     columns: list[str] | None = None
+    last_bytes_processed = 0
 
     try:
         csv_file = file_path.open("r", encoding="utf-8-sig", newline="")
@@ -510,6 +554,14 @@ def stream_csv_windows(
             raise ValueError("CSV file is empty.") from exc
         if not any(columns):
             raise ValueError("CSV file must include a header row.")
+        if status_callback:
+            status_callback(
+                "VALIDATING_SCHEMA",
+                rows_processed=0,
+                columns_detected=len(columns),
+                bytes_processed=0,
+                file_size_bytes=file_size_bytes,
+            )
         room_index = first_room_column_index(columns)
 
         for row in reader:
@@ -526,6 +578,10 @@ def stream_csv_windows(
                 tail_rows.append(row)
             if total_rows % CHUNK_SIZE_ROWS == 0:
                 chunk_count += 1
+                try:
+                    last_bytes_processed = csv_file.buffer.tell()
+                except (AttributeError, OSError):
+                    last_bytes_processed = min(file_size_bytes, max(last_bytes_processed, int(file_size_bytes * 0.5)))
                 if status_callback:
                     status_callback(
                         "PARSING",
@@ -533,6 +589,8 @@ def stream_csv_windows(
                         columns_detected=len(columns),
                         chunk_count=chunk_count,
                         memory_estimate_bytes=0,
+                        bytes_processed=last_bytes_processed,
+                        file_size_bytes=file_size_bytes,
                     )
 
     if total_rows == 0:
@@ -541,6 +599,7 @@ def stream_csv_windows(
     if total_rows % CHUNK_SIZE_ROWS:
         chunk_count += 1
 
+    last_bytes_processed = file_size_bytes
     data_rows = first_rows + list(tail_rows)
     if status_callback:
         status_callback(
@@ -549,6 +608,8 @@ def stream_csv_windows(
             columns_detected=len(columns),
             chunk_count=chunk_count,
             memory_estimate_bytes=estimate_rows_memory(data_rows),
+            bytes_processed=last_bytes_processed,
+            file_size_bytes=file_size_bytes,
         )
 
     logger.info(
@@ -569,6 +630,9 @@ def stream_csv_windows(
         "memory_estimate_bytes": estimate_rows_memory(data_rows),
         "used_streaming": True,
         "engine_runtime_seconds": 0,
+        "file_size_bytes": file_size_bytes,
+        "bytes_processed": last_bytes_processed,
+        "timings": {"parse_seconds": round(time.perf_counter() - parse_started, 4)},
         "room_summary": room_summary_from_counts(room_counts, total_rows),
     }
 
@@ -585,8 +649,8 @@ def build_upload_result(
     intelligence_mode: str = "live",
     intelligence_source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if status_callback:
-        status_callback("PARSING", rows_processed=total_rows, columns_detected=len(columns))
+    stage_started = time.perf_counter()
+    timed_status(status_callback, "VALIDATING_SCHEMA", processing_stats, rows_processed=total_rows, columns_detected=len(columns), bytes_processed=processing_stats.get("bytes_processed", 0))
     warnings = build_warnings(columns, data_rows)
     if processing_stats.get("used_streaming") and processing_stats.get("sampled_rows", 0) < total_rows:
         warnings.append(
@@ -618,8 +682,9 @@ def build_upload_result(
         timestamp_detected=detected_timestamp_column is not None,
         warnings=warnings,
     )
-    if status_callback:
-        status_callback("BASELINE_MODELING", rows_processed=total_rows, columns_detected=len(columns))
+    record_timing(processing_stats, "schema_validation", stage_started)
+    stage_started = time.perf_counter()
+    timed_status(status_callback, "BASELINE_MODELING", processing_stats, rows_processed=total_rows, columns_detected=len(columns), warnings=warnings[:10])
     baseline_analysis = build_baseline_analysis(columns, data_rows, numeric_profiles)
     schema_mapping = map_cultivation_columns(columns)
     room_summary = processing_stats.get("room_summary") or build_room_summary(columns, data_rows, total_rows)
@@ -632,8 +697,9 @@ def build_upload_result(
         baseline_analysis=baseline_analysis,
         cultivation_mapping=schema_mapping,
     )
-    if status_callback:
-        status_callback("RUNNING_SII", rows_processed=total_rows, columns_detected=len(columns))
+    record_timing(processing_stats, "baseline_build", stage_started)
+    stage_started = time.perf_counter()
+    timed_status(status_callback, "STRUCTURAL_SCORING", processing_stats, rows_processed=total_rows, columns_detected=len(columns))
     engine_started = time.perf_counter()
     engine_result = run_engine_analysis(
         columns=columns,
@@ -644,6 +710,8 @@ def build_upload_result(
         numeric_profiles=numeric_profiles,
     )
     processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
+    record_timing(processing_stats, "structural_scoring", stage_started)
+    stage_started = time.perf_counter()
     driver_attribution = build_driver_attribution(
         room_state={
             "room": primary_room,
@@ -684,6 +752,10 @@ def build_upload_result(
         rows_processed=total_rows,
         columns_analyzed=baseline_analysis["columns_analyzed"],
     )
+    record_timing(processing_stats, "cognition_build", stage_started)
+    timed_status(status_callback, "COGNITION_READY", processing_stats, rows_processed=total_rows, columns_detected=len(columns), warnings=warnings[:10], result_available=True, first_usable_available=True)
+    stage_started = time.perf_counter()
+    timed_status(status_callback, "GENERATING_REPLAY", processing_stats, rows_processed=total_rows, columns_detected=len(columns), result_available=True, first_usable_available=True)
     sii_rows = downsample_rows(data_rows, MAX_SII_ROWS)
     sii_runner_result = run_sii_runner(
         columns=columns,
@@ -695,6 +767,7 @@ def build_upload_result(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
+    record_timing(processing_stats, "replay_generation", stage_started)
     runner_latest_state = sii_runner_result.get("latest_state") if isinstance(sii_runner_result, dict) else None
     if isinstance(runner_latest_state, dict):
         runner_projection_hours = runner_latest_state.get("projected_time_to_failure_hours")

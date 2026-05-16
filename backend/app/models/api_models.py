@@ -14,7 +14,14 @@ class UploadAcceptedResponse(BaseModel):
     filename: str
     message: str
     status_url: str
+    result_url: str | None = None
     file_size_bytes: int
+    stage: str | None = None
+    percent: int | None = None
+    bytes_processed: int = 0
+    rows_processed: int = 0
+    result_available: bool = False
+
 
 
 class UploadStatusResponse(BaseModel):
@@ -23,10 +30,13 @@ class UploadStatusResponse(BaseModel):
     progress: int
     processing_state: str
     progress_label: str | None = None
+    stage: str | None = None
+    percent: int | None = None
     message: str
     error_type: str | None = None
     filename: str | None = None
     file_size_bytes: int = 0
+    bytes_processed: int = 0
     rows_processed: int = 0
     columns_detected: int = 0
     chunk_count: int = 0
@@ -39,6 +49,11 @@ class UploadStatusResponse(BaseModel):
     started_at: str | None = None
     completed_at: str | None = None
     error: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    result_available: bool = False
+    first_usable_available: bool = False
+    timings: dict[str, Any] = Field(default_factory=dict)
     result_summary: dict[str, Any] | None = None
 
 

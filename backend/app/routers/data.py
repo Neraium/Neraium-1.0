@@ -43,10 +43,13 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "progress": 0,
             "processing_state": "not_found",
             "progress_label": "Upload session expired or was not found.",
+            "stage": "not_found",
+            "percent": 0,
             "message": "Upload session expired or was not found.",
             "error_type": "upload_session_missing",
             "filename": None,
             "file_size_bytes": 0,
+            "bytes_processed": 0,
             "rows_processed": 0,
             "columns_detected": 0,
             "chunk_count": 0,
@@ -59,39 +62,56 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "started_at": None,
             "completed_at": None,
             "error": "upload_session_missing",
+            "warnings": [],
+            "errors": ["upload_session_missing"],
+            "result_available": False,
+            "first_usable_available": False,
+            "timings": {},
             "result_summary": None,
         }
 
     normalized_status = str(metadata.get("status", "PENDING")).upper()
     progress_map = {
         "PENDING": 8,
-        "PARSING": 22,
-        "BASELINE_MODELING": 42,
+        "VALIDATING_SCHEMA": 18,
+        "PARSING": 34,
+        "BASELINE_MODELING": 52,
         "RUNNING_SII": 68,
-        "GENERATING_EVIDENCE": 86,
+        "STRUCTURAL_SCORING": 68,
+        "COGNITION_READY": 78,
+        "GENERATING_REPLAY": 88,
+        "GENERATING_EVIDENCE": 94,
         "COMPLETE": 100,
         "FAILED": 100,
     }
     message_map = {
-        "PENDING": "Telemetry batch processing in progress.",
-        "PARSING": "Telemetry batch processing in progress.",
-        "BASELINE_MODELING": "Large telemetry uploads may require additional processing time.",
+        "PENDING": "File accepted. Background intake job is queued.",
+        "VALIDATING_SCHEMA": "Validating schema.",
+        "PARSING": "Parsing signal matrix.",
+        "BASELINE_MODELING": "Building relational baseline.",
         "RUNNING_SII": "Telemetry batch processing in progress.",
-        "GENERATING_EVIDENCE": "Telemetry batch processing in progress.",
+        "STRUCTURAL_SCORING": "Computing structural drift.",
+        "COGNITION_READY": "Cognition ready; downstream replay/evidence continues.",
+        "GENERATING_REPLAY": "Generating replay frames.",
+        "GENERATING_EVIDENCE": "Writing evidence and state.",
         "COMPLETE": "Telemetry processing complete.",
         "FAILED": "Telemetry processing failed.",
     }
     error_type = "sii_processing_failure" if normalized_status == "FAILED" else None
+    measured_percent = metadata.get("percent") or metadata.get("progress") or progress_map.get(normalized_status, 0)
     return {
         "job_id": metadata.get("job_id"),
         "status": normalized_status,
-        "progress": progress_map.get(normalized_status, 0),
+        "progress": measured_percent,
         "processing_state": normalized_status.lower(),
         "progress_label": metadata.get("progress_label"),
+        "stage": normalized_status.lower(),
+        "percent": measured_percent,
         "message": message_map.get(normalized_status, "Telemetry processing in progress."),
         "error_type": error_type,
         "filename": metadata.get("filename"),
         "file_size_bytes": metadata.get("file_size_bytes", 0),
+        "bytes_processed": metadata.get("bytes_processed", 0),
         "rows_processed": metadata.get("rows_processed", 0),
         "columns_detected": metadata.get("columns_detected", 0),
         "chunk_count": metadata.get("chunk_count", 0),
@@ -104,6 +124,11 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "started_at": metadata.get("started_at"),
         "completed_at": metadata.get("completed_at"),
         "error": metadata.get("error"),
+        "warnings": metadata.get("warnings", []),
+        "errors": metadata.get("errors", []),
+        "result_available": bool(metadata.get("result_available") or normalized_status == "COMPLETE"),
+        "first_usable_available": bool(metadata.get("first_usable_available") or normalized_status in {"COGNITION_READY", "GENERATING_REPLAY", "GENERATING_EVIDENCE", "COMPLETE"}),
+        "timings": metadata.get("timings", {}),
         "result_summary": metadata.get("result_summary"),
     }
 
@@ -215,7 +240,13 @@ async def upload_csv(
         "filename": metadata["filename"],
         "message": "Preparing telemetry intake. Upload received and queued for background processing.",
         "status_url": f"/api/data/upload-status/{metadata['job_id']}",
+        "result_url": f"/api/data/intake/{metadata['job_id']}/result",
         "file_size_bytes": metadata["file_size_bytes"],
+        "stage": "pending",
+        "percent": 8,
+        "bytes_processed": metadata["file_size_bytes"],
+        "rows_processed": 0,
+        "result_available": False,
     }
 
 
@@ -249,6 +280,43 @@ def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
         True,
     )
     return payload
+
+
+@router.get("/data/intake/{job_id}/status", response_model=UploadStatusResponse)
+def read_intake_status(request: Request, job_id: str) -> dict[str, Any]:
+    return read_upload_status(request, job_id)
+
+
+@router.get("/data/intake/{job_id}/result")
+def read_intake_result(job_id: str) -> dict[str, Any]:
+    metadata = read_job(job_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
+    if not metadata.get("result_available") and str(metadata.get("status", "")).upper() != "COMPLETE":
+        return {
+            "job_id": job_id,
+            "status": metadata.get("status", "PENDING"),
+            "result_available": False,
+            "first_usable_available": bool(metadata.get("first_usable_available")),
+            "message": "Intake result is not available yet; continue polling status.",
+            "status_url": f"/api/data/intake/{job_id}/status",
+        }
+    latest_result = read_latest_upload_result()
+    if latest_result and latest_result.get("job_id") == job_id:
+        return {
+            "job_id": job_id,
+            "status": metadata.get("status", "COMPLETE"),
+            "result_available": True,
+            "result": latest_result,
+            "summary": metadata.get("result_summary"),
+        }
+    return {
+        "job_id": job_id,
+        "status": metadata.get("status", "COMPLETE"),
+        "result_available": bool(metadata.get("result_summary")),
+        "summary": metadata.get("result_summary"),
+        "message": "Detailed result is still being persisted; summary is returned when available.",
+    }
 
 
 def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dict[str, Any]:
