@@ -3185,3 +3185,135 @@
     padding-inline: 10px;
   }
 }
+
+/* Final mobile/desktop visual audit corrections.
+   Keep this block last so it wins over earlier experimental passes. */
+@media (max-width: 900px) {
+  .platform-sidebar {
+    display: none !important;
+  }
+
+  .platform-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mobile-status-bar {
+    z-index: 70 !important;
+  }
+
+  .mobile-status-bar .brand-name--hero {
+    opacity: 0.92 !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  .mobile-status-bar__workspace {
+    max-width: 100% !important;
+    color: rgba(220, 234, 232, 0.92) !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.03em !important;
+    text-transform: none !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .cultivation-view-panel--overview .cultivation-overview-grid {
+    gap: 10px !important;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-left {
+    padding: 12px 0 8px !important;
+    border-top-color: rgba(138, 184, 196, 0.18) !important;
+    border-bottom-color: rgba(138, 184, 196, 0.18) !important;
+  }
+
+  .cultivation-overview-orb-wrap {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    margin: 0 !important;
+  }
+
+  .cultivation-overview-orb {
+    min-height: clamp(220px, 62vw, 320px) !important;
+    overflow: visible !important;
+  }
+
+  .cultivation-overview-orb .health-orb {
+    width: min(92vw, 320px) !important;
+    max-width: 320px !important;
+    min-width: 0 !important;
+  }
+
+  .cultivation-overview-orb-meta {
+    position: static !important;
+    max-width: 100% !important;
+    justify-items: start !important;
+    padding: 0 10px 2px !important;
+    border-top: 0 !important;
+    background: transparent !important;
+    text-align: left !important;
+    backdrop-filter: none !important;
+  }
+
+  .cultivation-overview-orb-meta span {
+    color: rgba(170, 207, 214, 0.95) !important;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  .cultivation-overview-orb-meta strong {
+    font-size: clamp(1.02rem, 4.6vw, 1.32rem) !important;
+    letter-spacing: 0.02em !important;
+    text-transform: none !important;
+  }
+
+  .cultivation-overview-left-metrics {
+    margin: 0 10px !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .cultivation-overview-pill {
+    border: 1px solid rgba(138, 184, 196, 0.14) !important;
+    border-radius: 12px !important;
+    background: rgba(6, 10, 12, 0.72) !important;
+  }
+
+  .cultivation-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .cultivation-tab {
+    min-width: 0 !important;
+    min-height: 34px !important;
+    padding: 0 4px !important;
+    font-size: 0.52rem !important;
+    letter-spacing: 0.02em !important;
+    text-transform: none !important;
+    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 901px) {
+  .cultivation-top-summary-card span,
+  .cultivation-overview-orb-meta span,
+  .cultivation-overview-pill span,
+  .cultivation-awareness-feed__header span,
+  .cultivation-awareness-feed__header em {
+    color: rgba(198, 220, 224, 0.9) !important;
+  }
+
+  .cultivation-top-summary-card strong,
+  .cultivation-overview-orb-meta strong,
+  .cultivation-awareness-feed__body strong,
+  .cultivation-awareness-feed__body p {
+    color: rgba(238, 247, 246, 0.96) !important;
+  }
+}
