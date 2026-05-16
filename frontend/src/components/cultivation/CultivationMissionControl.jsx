@@ -7,6 +7,7 @@ export default function CultivationMissionControl({
   apiFetch,
   accessCode,
   isDemoMode,
+  hasUploadedTelemetry = false,
   Panel,
   EmptyState,
 }) {
@@ -57,7 +58,7 @@ export default function CultivationMissionControl({
   const evidenceSummary = buildCultivationEvidenceSummary(cognition);
   const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
-  const orbState = deriveOrbState(cognition, isDemoMode);
+  const orbState = deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry);
   const severityState = deriveCultivationSeverity(cognition, orbState);
 
   const report = buildWeeklyPilotReport({
@@ -535,12 +536,12 @@ function summarizeFrame(frame) {
   return "Structural state captured for operator review.";
 }
 
-function deriveOrbState(cognition, isDemoMode) {
+function deriveOrbState(cognition, isDemoMode, hasUploadedTelemetry) {
   if (!cognition) return "unknown";
+  if (!hasUploadedTelemetry && !isDemoMode) return "unknown";
   const hasSignals = Boolean(
     (cognition.propagation_pathways?.length ?? 0) > 0
     || (cognition.active_archetypes?.length ?? 0) > 0
-    || cognition.operator_explanation
   );
   if (!hasSignals && !isDemoMode) return "unknown";
 

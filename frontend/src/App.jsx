@@ -210,6 +210,7 @@ function App() {
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           isDemoMode={isDemoMode}
+          hasUploadedTelemetry={uploadStateView.hasFullUploadResult(latestUploadResult)}
           Panel={Panel}
           MetricGrid={MetricGrid}
           EmptyState={EmptyState}
