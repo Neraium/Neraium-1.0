@@ -92,12 +92,14 @@ export default function CultivationMissionControl({
     continuationWindow,
   });
   const pilotFlowSteps = [
-    { id: "overview", label: "Facility status", detail: "Confirm structural state and continuation window." },
-    { id: "overview", label: "Active change", detail: "Read what is changing and where attention should go." },
-    { id: "propagation", label: "Propagation map", detail: "See where pressure is spreading or stabilizing." },
-    { id: "evidence", label: "Evidence summary", detail: "Review confidence-backed support in plain language." },
-    { id: "replay", label: "Replay snapshot", detail: "Check simplified progression and recovery posture." },
-    { id: "reports", label: "Weekly pilot report", detail: "Export concise operator-ready report." },
+    { id: "overview", label: "Facility Structural Status", detail: "Confirm facility state and continuation window." },
+    { id: "overview", label: "Room Drift", detail: "Review one room-level drift condition requiring operator attention." },
+    { id: "overview", label: "Environmental Coupling", detail: "Check coupling behavior across temperature, humidity, and airflow." },
+    { id: "overview", label: "Humidity Response + Thermal Balance", detail: "Validate humidity response and thermal balance posture." },
+    { id: "propagation", label: "Propagation State", detail: "See where pressure is spreading or stabilizing between rooms." },
+    { id: "evidence", label: "Evidence Confidence", detail: "Review operator-facing evidence support and confidence basis." },
+    { id: "replay", label: "Operator Review", detail: "Use simplified replay snapshot for escalation and recovery review." },
+    { id: "reports", label: "Weekly Pilot Report Preview", detail: "End the demo with a concise weekly pilot report preview." },
   ];
 
   return (
@@ -153,7 +155,7 @@ export default function CultivationMissionControl({
       <Panel
         title="Pilot Demo Path"
         className="span-12 cultivation-list-panel cultivation-view-panel"
-        subtitle="One guided operator flow from facility status through report export."
+        subtitle="One guided 2-minute operator flow from facility status to weekly report preview."
       >
         <div className="cultivation-awareness-feed" role="list">
           {pilotFlowSteps.map((step, index) => (
@@ -174,7 +176,7 @@ export default function CultivationMissionControl({
                     className="secondary-command-button"
                     onClick={() => setActiveTab(step.id)}
                   >
-                    {step.id === "reports" ? "Open Report" : "Open Step"}
+                    {step.id === "reports" ? "Open Preview" : "Open Step"}
                   </button>
                 </div>
               </div>
@@ -199,7 +201,7 @@ export default function CultivationMissionControl({
                 </div>
                 <div className="cultivation-overview-left-metrics">
                   <article className="cultivation-overview-pill">
-                    <span>Cognition state</span>
+                  <span>Room Drift</span>
                     <strong>{isNoDataState ? "No active propagation detected" : (cognition.cognition_state ?? "Monitoring")}</strong>
                   </article>
                   <article className="cultivation-overview-pill">
@@ -207,26 +209,26 @@ export default function CultivationMissionControl({
                     <strong>{continuationWindow}</strong>
                   </article>
                   <article className="cultivation-overview-pill">
-                    <span>Recovery / convergence</span>
-                    <strong>{cognition.recovery_convergence?.convergence_quality ?? "developing"}</strong>
+                  <span>Thermal Balance</span>
+                  <strong>{cognition.recovery_convergence?.convergence_quality ?? "developing"}</strong>
                   </article>
                 </div>
               </section>
               <section className="cultivation-overview-right cultivation-intelligence-block" aria-label="Operator intelligence summary">
                 <div className="cultivation-intelligence-row">
-                  <span>What's changing</span>
+                  <span>Humidity Response</span>
                   <strong>{isNoDataState ? "Evidence will populate after processing." : summarizeChange(cognition)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
-                  <span>Where it's spreading</span>
+                  <span>Propagation State</span>
                   <strong>{summarizeSpread(cognition)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
-                  <span>Why trust this</span>
+                  <span>Environmental Coupling</span>
                   <strong>{isNoDataState ? "Upload telemetry to activate evidence-backed structural cognition." : summarizeTrust(cognition, evidenceSummary)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
-                  <span>Confidence</span>
+                  <span>Evidence Confidence</span>
                   <strong>{isNoDataState ? "Building evidence confidence" : summarizeConfidence(cognition, evidenceSummary)}</strong>
                 </div>
               </section>
@@ -257,7 +259,7 @@ export default function CultivationMissionControl({
 
 
       {activeTab === "reports" && (
-        <Panel title="Export Center" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Weekly Pilot Report is archived reporting workflow, collapsed by default so live operations stay primary.">
+        <Panel title="Weekly Pilot Report Preview" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Preview is collapsed by default so active operations remain primary.">
           <div className="cultivation-report-collapsed-shell">
             <div className="cultivation-report-summary-card">
               <p className="cultivation-report-operator__eyebrow">Weekly Pilot Report</p>
