@@ -362,6 +362,34 @@ export default function DataConnectionsWorkspace({
       || latestUploadSnapshot?.message
       || uploadStateMessage(uploadState),
   );
+  const selectedFileSize = selectedFile
+    ? selectedFile.size >= 1024 * 1024
+      ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.max(selectedFile.size / 1024, 1).toFixed(1)} KB`
+    : "Awaiting file";
+  const uploadProgressLabel = uploadJob?.progress_label || (isUploadProcessing(uploadState) ? "Processing telemetry through SII" : latestMessage);
+  const uploadPhaseState = (phase) => {
+    if (phase === "select") {
+      return selectedFile || uploadResult ? "complete" : "active";
+    }
+    if (phase === "validate") {
+      if (uploadError) return "error";
+      return selectedFile || uploadResult ? "complete" : "pending";
+    }
+    if (phase === "process") {
+      if (uploadError && !isUploadProcessing(uploadState)) return "error";
+      if (isUploadProcessing(uploadState)) return "active";
+      return uploadResult ? "complete" : "pending";
+    }
+    if (uploadError && !isUploadProcessing(uploadState)) return "error";
+    return uploadResult ? "complete" : isUploadProcessing(uploadState) ? "active" : "pending";
+  };
+  const uploadFlowSteps = [
+    { key: "select", label: "Select File", value: selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename || "CSV / JSON" },
+    { key: "validate", label: "Validate", value: selectedFile ? selectedFileSize : "Schema + columns" },
+    { key: "process", label: "Process", value: isUploadProcessing(uploadState) ? "SII running" : uploadJob?.status || "Ready" },
+    { key: "status", label: "Status", value: uploadError ? "Review" : uploadResult ? "Complete" : "Standby" },
+  ];
 
   const baselineStatusLabel = formatBaselineStatus(activeConnection?.baseline_status ?? latestUploadSnapshot?.baseline_status);
   const baselineSamplesCollected = activeConnection?.baseline_samples_collected ?? latestUploadSnapshot?.baseline_samples_collected ?? 0;
@@ -396,46 +424,74 @@ export default function DataConnectionsWorkspace({
       </Panel>
 
       {activeTab === "upload" && (
-      <Panel title="Upload Intake" className="span-7 workspace-hero-panel">
-        <form className="intake-flow" onSubmit={handleUpload}>
+      <Panel title="Upload Intake" className="span-7 workspace-hero-panel upload-ops-panel">
+        <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
           <div className="intake-flow__header">
-            <h3>Upload Telemetry File</h3>
-            <p>Upload a production CSV or JSON telemetry export if you want a file-based baseline. You can also keep a live REST endpoint connected here for reference.</p>
+            <div>
+              <p className="section-token">Upload Telemetry File</p>
+              <h3>Select File → Validate → Process → Status</h3>
+            </div>
+            <p>Use a CSV or JSON telemetry export to establish a file-based baseline, with live REST telemetry remaining visible for continuity.</p>
           </div>
 
-          <div className="intake-flow__controls">
-            <input
-              ref={uploadInputRef}
-              accept=".csv,text/csv"
-              id="csv-upload"
-              type="file"
-              className="intake-flow__input"
-              onChange={(event) => {
-                setSelectedFile(event.target.files?.[0] ?? null);
-                setUploadError("");
-              }}
-            />
-            <button className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>
-              Upload CSV Telemetry
-            </button>
-            <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
-              Upload JSON Telemetry
-            </button>
-            <button className="secondary-command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
-              {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()} File`}
-            </button>
+          <ol className="upload-flow-rail" aria-label="Upload progress">
+            {uploadFlowSteps.map((step, index) => (
+              <li className={`upload-flow-rail__step upload-flow-rail__step--${uploadPhaseState(step.key)}`} key={step.key}>
+                <span className="upload-flow-rail__index">{index + 1}</span>
+                <span className="upload-flow-rail__copy">
+                  <strong>{step.label}</strong>
+                  <span>{step.value}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <input
+            ref={uploadInputRef}
+            accept=".csv,text/csv"
+            id="csv-upload"
+            type="file"
+            className="intake-flow__input"
+            onChange={(event) => {
+              setSelectedFile(event.target.files?.[0] ?? null);
+              setUploadError("");
+            }}
+          />
+
+          <div className="upload-file-card">
+            <div className="upload-file-card__main">
+              <span className="upload-file-card__label">Selected telemetry</span>
+              <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
+              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose a CSV or JSON export to activate validation and processing."}</p>
+            </div>
+            <div className="upload-file-card__actions">
+              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>
+                Select CSV
+              </button>
+              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
+                Select JSON
+              </button>
+              <button className="command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
+                {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()}`}
+              </button>
+            </div>
           </div>
 
-          <div className="intake-flow__status">
-            <span>{selectedFile ? `${selectedFile.name} (${pendingUploadKind.toUpperCase()})` : (latestUploadSnapshot?.last_filename ?? "No data connected yet")}</span>
+          <div className={`intake-flow__status intake-flow__status--${uploadError ? "error" : isUploadProcessing(uploadState) ? "active" : uploadResult ? "complete" : "idle"}`}>
             <span className="intake-flow__progress">
               {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
-              {latestMessage}
+              {uploadProgressLabel}
             </span>
+            <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
           </div>
 
           {uploadError && <span className="sr-only">{normalizeErrorMessage(uploadError)}</span>}
-          {displayUploadError && <p className="form-error">{normalizeErrorMessage(uploadError || displayUploadError)}</p>}
+          {displayUploadError && (
+            <div className="form-error form-error--professional" role="status" aria-live="polite">
+              <strong>Upload requires attention</strong>
+              <span>{normalizeErrorMessage(uploadError || displayUploadError)}</span>
+            </div>
+          )}
         </form>
         <div className="connector-json-hint">
           <div className="connector-json-hint__header">
