@@ -11,6 +11,20 @@ const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ?
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 
+function isUnsafeMixedContentTarget(apiBaseUrl) {
+  if (typeof window === "undefined" || !apiBaseUrl) {
+    return false;
+  }
+
+  try {
+    const current = new URL(window.location.href);
+    const target = new URL(apiBaseUrl, window.location.origin);
+    return current.protocol === "https:" && target.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function apiBaseCandidates() {
   const candidates = [
     API_BASE_URL,
@@ -18,7 +32,10 @@ function apiBaseCandidates() {
     isProductionBuild ? PRODUCTION_API_FALLBACK : "",
   ];
 
-  return candidates.filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
+  return candidates.filter((value, index, list) => {
+    const normalized = value ?? "";
+    return list.indexOf(value) === index && !isUnsafeMixedContentTarget(normalized);
+  });
 }
 
 function isCrossOriginApiTarget(apiBaseUrl = API_BASE_URL) {
@@ -39,7 +56,7 @@ function timeoutMessage(timeoutMs, path) {
 }
 
 function buildUrl(apiBaseUrl, path) {
-  return `${apiBaseUrl}${path}`;
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
 function shouldRetryAgainstFallback(error) {
