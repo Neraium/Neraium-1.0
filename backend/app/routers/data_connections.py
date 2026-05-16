@@ -33,14 +33,17 @@ def read_data_connections() -> dict[str, Any]:
 
 @router.post("/data-connections", response_model=DataConnectionActionResponse)
 def create_or_update_data_connection(payload: DataConnectionUpsertRequest) -> dict[str, Any]:
-    connection_id = payload.connection_id or "node-red-cultivation-telemetry"
-    connection = upsert_registered_data_connection(
-        {
-            "connection_id": connection_id,
-            **payload.model_dump(exclude={"connection_id"}),
-            "status": "polling" if payload.polling_enabled else "offline",
-        }
-    )
+    connection_id = payload.connection_id or "rest-telemetry-intake"
+    try:
+        connection = upsert_registered_data_connection(
+            {
+                "connection_id": connection_id,
+                **payload.model_dump(exclude={"connection_id"}),
+                "status": "polling" if payload.polling_enabled else "offline",
+            }
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     return {"connection": connection, "message": f"{connection['name']} saved."}
 
 

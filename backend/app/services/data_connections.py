@@ -14,6 +14,7 @@ from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import Settings, get_settings
 from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.runtime_db import (
+    delete_data_connection,
     list_data_connections,
     read_data_connection,
     read_latest_payload,
@@ -30,8 +31,9 @@ from app.services.upload_jobs import (
 
 
 logger = logging.getLogger(__name__)
-DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
-DEFAULT_CONNECTION_NAME = "Node-RED Cultivation Telemetry"
+DEFAULT_CONNECTION_ID = "rest-telemetry-intake"
+DEFAULT_CONNECTION_NAME = "REST Telemetry Intake"
+LEGACY_NODE_RED_CONNECTION_ID = "node-red-cultivation-telemetry"
 DEFAULT_POLLING_INTERVAL_SECONDS = 5
 DEFAULT_LIVE_BASELINE_SAMPLE_COUNT = 6
 MAX_BUFFER_RECORDS = 2048
@@ -84,6 +86,7 @@ def default_connection_payload(settings: Settings | None = None) -> dict[str, An
 
 
 def ensure_default_data_connection(settings: Settings | None = None) -> dict[str, Any]:
+    remove_legacy_telemetry_connection()
     existing = read_data_connection(DEFAULT_CONNECTION_ID)
     if existing:
         return existing
@@ -92,12 +95,23 @@ def ensure_default_data_connection(settings: Settings | None = None) -> dict[str
     return payload
 
 
+def remove_legacy_telemetry_connection() -> None:
+    delete_data_connection(LEGACY_NODE_RED_CONNECTION_ID)
+
+
 def list_registered_data_connections() -> list[dict[str, Any]]:
     ensure_default_data_connection()
-    return [upsert_registered_data_connection(item) for item in list_data_connections(limit=100)]
+    return [
+        upsert_registered_data_connection(item)
+        for item in list_data_connections(limit=100)
+        if item.get("connection_id") != LEGACY_NODE_RED_CONNECTION_ID
+    ]
 
 
 def upsert_registered_data_connection(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("connection_id") == LEGACY_NODE_RED_CONNECTION_ID:
+        remove_legacy_telemetry_connection()
+        raise ValueError(f"Data connection {LEGACY_NODE_RED_CONNECTION_ID} was removed.")
     current = read_data_connection(payload.get("connection_id", "")) or {}
     merged = {
         **default_connection_payload(),
@@ -183,6 +197,9 @@ def recent_records_key(connection_id: str) -> str:
 
 
 def require_connection(connection_id: str) -> dict[str, Any]:
+    if connection_id == LEGACY_NODE_RED_CONNECTION_ID:
+        remove_legacy_telemetry_connection()
+        raise ValueError(f"Data connection {connection_id} was removed.")
     ensure_default_data_connection()
     connection = read_data_connection(connection_id)
     if connection is None:

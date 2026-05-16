@@ -25,7 +25,7 @@ from app.services.upload_jobs import (
 
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
-DEFAULT_CONNECTION_ID = "node-red-cultivation-telemetry"
+DEFAULT_CONNECTION_ID = "rest-telemetry-intake"
 MULTIPART_ENVELOPE_ALLOWANCE_BYTES = 5 * 1024 * 1024
 
 

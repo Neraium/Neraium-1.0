@@ -8,7 +8,7 @@ from app.services import data_connections, evidence_store, runtime_db, upload_jo
 
 def telemetry_payload(timestamp: str, *, tick: int = 1) -> dict:
     return {
-        "source_id": "node-red-test",
+        "source_id": "rest-test",
         "source_type": "external_rest_api",
         "facility_id": "facility-1",
         "room_id": "flower-room-1",
@@ -58,7 +58,7 @@ def isolated_runtime(tmp_path, monkeypatch):
         {
             "connection_id": data_connections.DEFAULT_CONNECTION_ID,
             "name": data_connections.DEFAULT_CONNECTION_NAME,
-            "url": "https://node-red.test/telemetry/latest",
+            "url": "https://telemetry.example.test/latest",
             "source_type": "external_rest_api",
             "facility_id": "facility-1",
             "room_id": "flower-room-1",

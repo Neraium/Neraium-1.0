@@ -6,8 +6,7 @@ from pathlib import Path
 DEFAULT_APP_ENV = "development"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
 DEFAULT_BACKEND_PORT = 8010
-DEFAULT_LOCAL_TELEMETRY_URL = "http://127.0.0.1:1880/telemetry/latest"
-DEFAULT_PRODUCTION_TELEMETRY_URL = "http://18.216.253.180:1880/telemetry/latest"
+DEFAULT_TELEMETRY_URL = ""
 DEFAULT_PROCESS_ROLE = "all"
 DEFAULT_CORS_ORIGINS = [
     "http://127.0.0.1:3010",
@@ -35,7 +34,7 @@ class Settings:
     process_role: str = DEFAULT_PROCESS_ROLE
     start_background_workers: bool = False
     start_data_connection_poller: bool = False
-    default_telemetry_url: str = DEFAULT_LOCAL_TELEMETRY_URL
+    default_telemetry_url: str = DEFAULT_TELEMETRY_URL
     cors_origin_regex: str | None = None
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
@@ -52,7 +51,7 @@ def get_settings() -> Settings:
         cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
         process_role=process_role,
         start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"all", "worker"}),
-        start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), process_role in {"all", "worker"}),
+        start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), False),
         default_telemetry_url=parse_default_telemetry_url(os.getenv("NERAIUM_DEFAULT_TELEMETRY_URL"), app_env),
         cors_origin_regex=parse_cors_origin_regex(os.getenv("CORS_ORIGIN_REGEX")),
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
@@ -107,9 +106,7 @@ def parse_runtime_dir(raw_value: str | None) -> Path:
 def parse_default_telemetry_url(raw_value: str | None, app_env: str) -> str:
     if raw_value and raw_value.strip():
         return raw_value.strip()
-    if app_env.strip().lower() == "production":
-        return DEFAULT_PRODUCTION_TELEMETRY_URL
-    return DEFAULT_LOCAL_TELEMETRY_URL
+    return DEFAULT_TELEMETRY_URL
 
 
 def parse_positive_int(raw_value: str | None, default: int) -> int:
