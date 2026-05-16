@@ -18,6 +18,8 @@ export default function SystemBodyWorkspace({
   metrics,
   evidenceItems,
   timelineItems,
+  lastUpdate,
+  focusLabel,
   isLoading = false,
 }) {
   void primaryMessage;
@@ -48,6 +50,8 @@ export default function SystemBodyWorkspace({
           uiState={uiState}
           coherence={coherence}
           stateLabel={stateLabel}
+          lastUpdate={lastUpdate}
+          focusLabel={focusLabel}
         />
       </section>
       <SystemMetricGrid metrics={metrics} />

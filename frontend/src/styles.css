@@ -11124,3 +11124,112 @@ nav[aria-label="Workspaces"] a {
     border-right: 0;
   }
 }
+
+/* Canonical health orb: restrained live operational behavior. */
+.health-orb {
+  transition: filter 720ms cubic-bezier(0.22, 1, 0.36, 1), opacity 720ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.health-orb__propagation {
+  fill: none;
+  stroke: var(--orb-hue);
+  stroke-width: 1.2;
+  stroke-dasharray: 2 10;
+  opacity: calc(0.12 + (var(--orb-pulse, 0.3) * 0.18));
+  transform-origin: 170px 132px;
+}
+
+.health-orb__propagation--inner {
+  stroke-dasharray: 1 8;
+  opacity: calc(0.16 + (var(--orb-pulse, 0.3) * 0.22));
+}
+
+.health-orb__scan-line {
+  stroke: var(--orb-hue);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 18 22;
+  opacity: 0.24;
+  transform-origin: 170px 132px;
+}
+
+.health-orb--animated .health-orb__propagation--outer {
+  animation: orbPropagationOuter 8.8s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__propagation--inner {
+  animation: orbPropagationInner 6.8s ease-in-out infinite;
+}
+
+
+.health-orb--watch.health-orb--animated .health-orb__propagation--outer { animation-duration: 7.4s; }
+.health-orb--watch.health-orb--animated .health-orb__propagation--inner { animation-duration: 5.8s; }
+.health-orb--warning.health-orb--animated .health-orb__propagation--outer { animation-duration: 6.2s; }
+.health-orb--warning.health-orb--animated .health-orb__propagation--inner { animation-duration: 4.9s; }
+.health-orb--critical.health-orb--animated .health-orb__propagation--outer { animation-duration: 5.1s; }
+.health-orb--critical.health-orb--animated .health-orb__propagation--inner { animation-duration: 4.2s; }
+
+.health-orb--animated .health-orb__scan-line {
+  animation: orbTelemetrySweep 5.8s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__scan-line--delayed {
+  animation-delay: -2.6s;
+}
+
+.health-orb--watch.health-orb--animated .health-orb__svg,
+.health-orb--warning.health-orb--animated .health-orb__svg {
+  animation-name: orbDriftCinematic;
+}
+
+.health-orb--recovery.health-orb--animated .health-orb__svg {
+  animation-name: orbRecoveryConverge;
+  animation-duration: 8.6s;
+}
+
+.health-orb--neutral.health-orb--animated {
+  animation-name: orbDormantBreath;
+  animation-duration: 10s;
+}
+
+.health-orb--neutral .health-orb__link,
+.health-orb--neutral .health-orb__node,
+.health-orb--neutral .health-orb__core {
+  opacity: 0.46;
+}
+
+.health-orb--watch::before {
+  opacity: 0.34;
+}
+
+.health-orb--recovery::before {
+  opacity: 0.26;
+}
+
+@keyframes orbPropagationOuter {
+  0% { transform: scale(0.96) rotate(0deg); opacity: 0.08; stroke-dashoffset: 0; }
+  50% { transform: scale(1.025) rotate(5deg); opacity: calc(0.16 + (var(--orb-pulse, 0.3) * 0.2)); stroke-dashoffset: -18; }
+  100% { transform: scale(0.96) rotate(0deg); opacity: 0.08; stroke-dashoffset: -36; }
+}
+
+@keyframes orbPropagationInner {
+  0% { transform: scale(1.01) rotate(0deg); opacity: 0.12; stroke-dashoffset: 0; }
+  50% { transform: scale(0.985) rotate(-4deg); opacity: calc(0.18 + (var(--orb-pulse, 0.3) * 0.22)); stroke-dashoffset: 16; }
+  100% { transform: scale(1.01) rotate(0deg); opacity: 0.12; stroke-dashoffset: 32; }
+}
+
+@keyframes orbTelemetrySweep {
+  0%, 100% { transform: translateY(-10px); opacity: 0.08; stroke-dashoffset: 0; }
+  42% { transform: translateY(10px); opacity: calc(0.16 + (var(--orb-pulse, 0.3) * 0.24)); stroke-dashoffset: -36; }
+}
+
+@keyframes orbRecoveryConverge {
+  0% { transform: rotate(-0.35deg) scale(1.006); }
+  50% { transform: rotate(0.2deg) scale(0.996); }
+  100% { transform: rotate(-0.35deg) scale(1.006); }
+}
+
+@keyframes orbDormantBreath {
+  0%, 100% { transform: translateY(0) scale(0.992); opacity: 0.78; }
+  50% { transform: translateY(-1px) scale(0.996); opacity: 0.9; }
+}

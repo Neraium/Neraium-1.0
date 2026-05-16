@@ -103,7 +103,7 @@
 }
 
 .ui-state-indicator::before {
-  content: ;
+  content: "";
  position: absolute;
  inset: 14px auto 14px 0;
  width: 2px;
