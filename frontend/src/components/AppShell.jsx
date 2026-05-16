@@ -140,12 +140,7 @@ function MobileOperationalHeader({
   onSelectWorkspace,
 }) {
   const missionLabel = activeWorkspace === "cultivation-mission-control" ? "Active Deployment" : "Operational Command";
-  const telemetryState = liveOps.intelligenceMode === "empty"
-    ? "Telemetry sync pending"
-    : liveOps.connectionTone === "nominal"
-      ? "Telemetry synchronized"
-      : liveOps.connectionStatusLine;
-  const operationalTimestamp = liveOps.connectionSummary || liveOps.primaryWindow?.label || "Awaiting sync";
+  const hudMetrics = buildOperationalHudMetrics(liveOps);
 
   return (
     <header className={`mobile-status-bar mobile-status-bar--${liveOps.facilityTone}`}>
@@ -170,31 +165,17 @@ function MobileOperationalHeader({
         </button>
       </div>
 
-      <div className="mobile-command-strip mobile-command-strip--deployment" aria-label="Active deployment bar">
-        <div className="mobile-command-strip__cell mobile-command-strip__cell--primary">
-          <span>Deployment</span>
-          <strong>{liveOps.facilityStateLabel}</strong>
+      <div className={`mobile-command-strip mobile-command-strip--deployment mobile-command-strip--${liveOps.facilityTone}`} aria-label="Live structural cognition ribbon">
+        <div className="mobile-command-strip__cell mobile-command-strip__cell--identity">
+          <span>Cultivation Primary</span>
+          <strong>Live Structural Cognition Active</strong>
         </div>
-        <div className="mobile-command-strip__cell">
-          <span>Telemetry</span>
-          <strong>{telemetryState}</strong>
-        </div>
-        <div className="mobile-command-strip__cell">
-          <span>Cognition</span>
-          <strong>{liveOps.dataSourceLabel}</strong>
-        </div>
-        <div className="mobile-command-strip__cell">
-          <span>Replay</span>
-          <strong>{liveOps.relationshipRows?.length ? `${liveOps.relationshipRows.length} paths` : "Standby"}</strong>
-        </div>
-        <div className="mobile-command-strip__cell">
-          <span>Facility</span>
-          <strong>{roomContext.primary || "Facility"}</strong>
-        </div>
-        <div className="mobile-command-strip__cell">
-          <span>Update</span>
-          <strong>{operationalTimestamp}</strong>
-        </div>
+        {hudMetrics.map((metric, index) => (
+          <div className={`mobile-command-strip__cell ${index === 0 ? "mobile-command-strip__cell--primary" : ""}`} key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+          </div>
+        ))}
       </div>
 
       <nav className="mobile-workspace-pills" aria-label="Priority workspace shortcuts">
@@ -330,16 +311,7 @@ function TopStatusBar({
   const uiState = normalizeOperationalState(liveOps.facilityTone);
   const degradedMode = apiStatus?.state === "offline";
   const minimalCultivationHeader = activeWorkspace === "cultivation-mission-control";
-  const deploymentMetrics = [
-    { label: "Deployment", value: liveOps.facilityStateLabel, tone: liveOps.facilityTone },
-    { label: "Telemetry sync", value: liveOps.connectionTone === "nominal" ? "Synchronized" : liveOps.connectionStatusLine, tone: liveOps.connectionTone },
-    { label: "Cognition", value: intelligenceLabel, tone: liveOps.facilityTone },
-    { label: "Replay", value: liveOps.relationshipRows?.length ? `${liveOps.relationshipRows.length} structural paths` : "Standby", tone: liveOps.primaryWindow?.tone ?? "info" },
-    { label: "Active facility", value: roomContext.primary || "Facility envelope", tone: liveOps.facilityTone },
-    { label: "Ingestion", value: latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel, tone: latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone },
-    { label: "Last update", value: liveOps.connectionSummary || "Awaiting sync", tone: liveOps.connectionTone },
-    { label: "Connected systems", value: liveOps.overviewMetrics?.find((metric) => metric.label === "Systems in scope" || metric.label === "Systems in Scope")?.value ?? "Systems mapped", tone: liveOps.connectionTone },
-  ];
+  const deploymentMetrics = buildOperationalHudMetrics(liveOps);
   return (
     <header className={`top-status top-status--deployment ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
       <div className="top-status__title">
@@ -361,15 +333,18 @@ function TopStatusBar({
         </div>
       </div>
 
-      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Active deployment telemetry">
+      <div className={`active-deployment-bar active-deployment-bar--${liveOps.facilityTone}`} aria-label="Live structural cognition operational ribbon">
         <div className="active-deployment-bar__header">
           <span className="active-deployment-bar__beacon" aria-hidden="true" />
-          <strong>Active Deployment Bar</strong>
-          <em>{activeConfig.eyebrow}</em>
+          <div className="active-deployment-bar__identity">
+            <strong>Live Structural Cognition</strong>
+            <em>Cultivation Primary · Live Structural Cognition Active</em>
+          </div>
+          <span className="active-deployment-bar__mode">{activeConfig.eyebrow}</span>
         </div>
-        <div className="active-deployment-bar__grid">
+        <div className="active-deployment-bar__stream" role="list">
           {deploymentMetrics.map((metric) => (
-            <div className={`active-deployment-bar__metric active-deployment-bar__metric--${metric.tone}`} key={metric.label}>
+            <div className={`active-deployment-bar__metric active-deployment-bar__metric--${metric.tone}`} role="listitem" key={metric.label}>
               <span>{metric.label}</span>
               <strong>{metric.value}</strong>
             </div>
@@ -450,6 +425,30 @@ function TopStatusBar({
       </div>
     </header>
   );
+}
+
+function buildOperationalHudMetrics(liveOps) {
+  const relationshipCount = liveOps.relationshipRows?.length || 0;
+  const replayValue = relationshipCount > 0
+    ? `${relationshipCount} Active ${relationshipCount === 1 ? "Trajectory" : "Trajectories"}`
+    : "Replay Trajectory Standby";
+  const structuralState = ["nominal", "online", "stable"].includes(liveOps.facilityTone)
+    ? "Topology Synchronization Stable"
+    : "Structural Drift Emerging";
+  const propagationValue = ["elevated", "unstable", "offline"].includes(liveOps.facilityTone)
+    ? "Propagation Watch Active"
+    : "Localized";
+  const syncValue = liveOps.intelligenceMode === "empty"
+    ? "Topology Synchronization Pending"
+    : "Live Telemetry Active";
+
+  return [
+    { label: "State", value: structuralState, tone: liveOps.facilityTone },
+    { label: "Replay", value: replayValue, tone: liveOps.primaryWindow?.tone ?? "info" },
+    { label: "Propagation", value: propagationValue, tone: liveOps.facilityTone },
+    { label: "Sync", value: syncValue, tone: liveOps.connectionTone },
+    { label: "Updated", value: liveOps.connectionSummary || "Awaiting synchronization", tone: liveOps.connectionTone },
+  ];
 }
 
 function StatusChip({ label, value, tone }) {

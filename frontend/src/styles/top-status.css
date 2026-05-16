@@ -179,3 +179,215 @@
     display: none;
   }
 }
+
+/* Unified operational intelligence ribbon: replaces boxed telemetry grid with a cinematic HUD stream. */
+.top-status--deployment {
+  grid-template-columns: minmax(240px, 0.48fr) minmax(540px, 1.52fr);
+  gap: 16px;
+  padding: 16px 20px 14px;
+  background:
+    radial-gradient(circle at 92% -10%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.14), transparent 36%),
+    linear-gradient(90deg, rgba(138, 184, 196, 0.045), transparent 38%),
+    linear-gradient(180deg, rgba(7, 12, 15, 0.94), rgba(4, 8, 11, 0.88));
+}
+
+.top-status--deployment::before {
+  opacity: 0.16;
+  mask-image: linear-gradient(90deg, transparent 0%, black 24%, black 100%);
+}
+
+.top-status--deployment::after {
+  content: "OPS";
+  position: absolute;
+  right: clamp(18px, 4vw, 58px);
+  top: -0.42em;
+  z-index: 0;
+  color: rgba(222, 244, 241, 0.026);
+  font-size: clamp(4.5rem, 12vw, 10rem);
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  line-height: 1;
+  pointer-events: none;
+  transform: skewX(-8deg);
+}
+
+.active-deployment-bar {
+  position: relative;
+  isolation: isolate;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.14);
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    linear-gradient(120deg, rgba(var(--state-accent-rgb, 138, 184, 196), 0.095), transparent 34%),
+    linear-gradient(180deg, rgba(13, 22, 26, 0.72), rgba(5, 9, 12, 0.58));
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(238, 248, 246, 0.075),
+    inset 0 -1px 0 rgba(var(--state-accent-rgb, 138, 184, 196), 0.08);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.active-deployment-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(220, 246, 241, 0.1) 45%, transparent 72%),
+    radial-gradient(circle at 15% 0%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.12), transparent 42%);
+  opacity: 0.42;
+  transform: translateX(-44%);
+  animation: operationalHudSweep 7.8s ease-in-out infinite;
+}
+
+.active-deployment-bar__header {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.active-deployment-bar__identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.active-deployment-bar__identity strong {
+  color: rgba(244, 251, 249, 0.96);
+  font-size: clamp(0.7rem, 0.86vw, 0.82rem);
+  letter-spacing: 0.16em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px rgba(var(--state-accent-rgb, 138, 184, 196), 0.16);
+}
+
+.active-deployment-bar__identity em,
+.active-deployment-bar__mode {
+  overflow: visible;
+  color: rgba(174, 199, 201, 0.72);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
+  text-overflow: clip;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.active-deployment-bar__mode {
+  justify-self: end;
+  max-width: 18ch;
+  padding: 5px 8px;
+  border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(4, 8, 11, 0.34);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-deployment-bar__stream {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.active-deployment-bar__metric {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 2px 16px 2px 0;
+  background: transparent;
+}
+
+.active-deployment-bar__metric + .active-deployment-bar__metric {
+  padding-left: 16px;
+}
+
+.active-deployment-bar__metric + .active-deployment-bar__metric::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(var(--state-accent-rgb, 138, 184, 196), 0.24), transparent);
+}
+
+.active-deployment-bar__metric span {
+  color: rgba(var(--state-accent-rgb, 138, 184, 196), 0.78);
+  font-size: 0.56rem;
+  letter-spacing: 0.17em;
+}
+
+.active-deployment-bar__metric strong {
+  display: block;
+  overflow: visible;
+  color: rgba(244, 251, 249, 0.96);
+  font-family: inherit;
+  font-size: clamp(0.72rem, 0.9vw, 0.88rem);
+  font-weight: 650;
+  line-height: 1.22;
+  text-overflow: clip;
+  white-space: normal;
+  text-wrap: balance;
+  animation: operationalHudTextFlicker 8.5s steps(1, end) infinite;
+}
+
+.active-deployment-bar__beacon {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  animation: telemetryHeartbeat 2.4s ease-in-out infinite, operationalBeaconBreath 5s ease-in-out infinite;
+}
+
+.active-deployment-bar__beacon::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.22);
+  border-radius: inherit;
+  animation: operationalBeaconRing 2.8s ease-out infinite;
+}
+
+@keyframes operationalHudSweep {
+  0%, 22% { transform: translateX(-58%); opacity: 0; }
+  42% { opacity: 0.46; }
+  78%, 100% { transform: translateX(64%); opacity: 0; }
+}
+
+@keyframes operationalHudTextFlicker {
+  0%, 97%, 100% { opacity: 1; }
+  98% { opacity: 0.72; }
+  99% { opacity: 0.94; }
+}
+
+@keyframes operationalBeaconBreath {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(var(--state-accent-rgb, 138, 184, 196), 0.36)); }
+  50% { filter: drop-shadow(0 0 14px rgba(var(--state-accent-rgb, 138, 184, 196), 0.68)); }
+}
+
+@keyframes operationalBeaconRing {
+  0% { transform: scale(0.72); opacity: 0; }
+  34% { opacity: 0.72; }
+  100% { transform: scale(1.42); opacity: 0; }
+}
+
+@media (max-width: 1280px) {
+  .active-deployment-bar__stream {
+    flex-wrap: wrap;
+    gap: 12px 0;
+  }
+
+  .active-deployment-bar__metric {
+    flex-basis: 33.333%;
+  }
+}
