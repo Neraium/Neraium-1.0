@@ -2054,3 +2054,198 @@
   color: var(--text-secondary);
   font-size: 0.74rem;
 }
+
+@media (max-width: 900px) {
+  .mobile-status-bar {
+    position: relative;
+    z-index: 12;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 10px;
+  }
+
+  .mobile-status-bar__topline {
+    display: contents;
+  }
+
+  .mobile-health-module {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.18);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 23% 14%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.16), transparent 40%),
+      linear-gradient(180deg, rgba(13, 19, 23, 0.91), rgba(5, 8, 11, 0.86));
+    box-shadow:
+      inset 0 1px 0 rgba(238, 248, 246, 0.06),
+      0 18px 44px rgba(0, 0, 0, 0.32);
+  }
+
+  .mobile-health-module--stable {
+    --state-accent-rgb: var(--state-stable-rgb);
+  }
+
+  .mobile-health-module--watching {
+    --state-accent-rgb: var(--state-warning-rgb);
+  }
+
+  .mobile-health-module--drift {
+    --state-accent-rgb: var(--state-warning-rgb);
+  }
+
+  .mobile-health-module--propagation_active {
+    --state-accent-rgb: var(--state-critical-rgb);
+  }
+
+  .mobile-health-module--unknown,
+  .mobile-health-module--empty {
+    --state-accent-rgb: var(--state-neutral-rgb);
+  }
+
+  .mobile-health-module__strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 22px;
+    padding: 0 2px;
+    color: rgba(181, 204, 207, 0.74);
+    font-size: 0.56rem;
+    font-weight: 850;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .mobile-health-module__strip strong {
+    max-width: 62%;
+    overflow: hidden;
+    color: rgba(242, 249, 247, 0.92);
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-health-module__body {
+    display: grid;
+    grid-template-columns: minmax(112px, 36vw) minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mobile-health-module__orb {
+    display: grid;
+    place-items: center;
+    min-height: 126px;
+    border: 1px solid rgba(var(--state-accent-rgb, 138, 184, 196), 0.1);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 50% 40%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.14), transparent 58%),
+      linear-gradient(180deg, rgba(10, 16, 19, 0.8), rgba(3, 6, 8, 0.58));
+    overflow: hidden;
+  }
+
+  .mobile-health-module__orb .health-orb {
+    max-width: min(144px, 35vw) !important;
+  }
+
+  .mobile-health-module--empty .mobile-health-module__orb .health-orb {
+    opacity: 0.42;
+    filter: grayscale(0.55) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.32)) !important;
+  }
+
+  .mobile-health-module__readout {
+    min-width: 0;
+  }
+
+  .mobile-health-module__eyebrow {
+    margin: 0 0 2px;
+    color: rgba(var(--state-accent-rgb, 138, 184, 196), 0.96);
+    font-size: 0.57rem;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .mobile-health-module__condition {
+    display: block;
+    color: rgba(248, 252, 251, 0.98);
+    font-size: clamp(1rem, 5vw, 1.42rem);
+    line-height: 1.02;
+    letter-spacing: -0.045em;
+  }
+
+  .mobile-health-module__interpretation {
+    display: -webkit-box;
+    margin: 5px 0 7px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: rgba(205, 222, 219, 0.86);
+    font-size: 0.68rem;
+    line-height: 1.28;
+  }
+
+  .mobile-health-module__facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(177, 211, 206, 0.09);
+  }
+
+  .mobile-health-module__facts span {
+    color: rgba(162, 184, 188, 0.78);
+    font-size: 0.52rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .mobile-health-module__facts strong {
+    overflow: hidden;
+    color: rgba(242, 249, 247, 0.93);
+    font-size: 0.62rem;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-workspace-pills {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-left {
+    display: none;
+  }
+
+  .cultivation-view-panel--overview .cultivation-overview-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .mobile-health-module {
+    padding: 7px;
+    border-radius: 16px;
+  }
+
+  .mobile-health-module__body {
+    grid-template-columns: minmax(104px, 34vw) minmax(0, 1fr);
+  }
+
+  .mobile-health-module__orb {
+    min-height: 112px;
+  }
+
+  .mobile-health-module__orb .health-orb {
+    max-width: min(128px, 34vw) !important;
+  }
+
+  .mobile-health-module__facts {
+    gap: 2px 6px;
+  }
+}
