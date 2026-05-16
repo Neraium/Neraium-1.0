@@ -73,6 +73,11 @@ export default function useWorkspaceNavigation({
       workspaceDrawerRef.current.scrollTop = 0;
     }
 
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         setIsWorkspaceMenuOpen(false);
@@ -80,7 +85,11 @@ export default function useWorkspaceNavigation({
     }
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isWorkspaceMenuOpen]);
 
   const handleWorkspaceSelect = useCallback((workspaceId) => {
