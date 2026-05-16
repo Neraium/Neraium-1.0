@@ -77,4 +77,7 @@ export const DEFAULT_WORKSPACE_ID = "cultivation-mission-control";
 
 export const PRIMARY_WORKSPACE_ORDER = WORKSPACES.map((workspace) => workspace.id);
 
-export const EXPERT_WORKSPACE_IDS = new Set();
+export const EXPERT_WORKSPACE_IDS = new Set([
+  "historical-replay",
+  "evidence-console",
+]);

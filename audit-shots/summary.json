@@ -1,0 +1,308 @@
+[
+  {
+    "viewport": "desktop",
+    "label": "Cultivation Mission Control",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "viewport": "desktop",
+    "label": "Structural Replay",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "viewport": "desktop",
+    "label": "Evidence Lineage",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "viewport": "desktop",
+    "label": "Propagation Map",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "viewport": "desktop",
+    "label": "Data Connections",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "viewport": "desktop",
+    "label": "Operator Workflow",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Workflow' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Cultivation Evidence",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Cultivation Evidence' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Current Cognition State",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Current Cognition State' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Drift Timeline",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Drift Timeline' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Multi-Site Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Multi-Site Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Structural Ontology",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Structural Ontology' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Ecosystem Layer",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Ecosystem Layer' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Distributed Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Distributed Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Operator Training",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Training' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Behavior Science",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Behavior Science' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Operator Curriculum",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Curriculum' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "desktop",
+    "label": "Research Workspace",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Research Workspace' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Cultivation Mission Control",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Cultivation Mission Control' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" aria-current=\"page\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--active workspace-nav__item--state-critical\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    6 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Structural Replay",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Structural Replay' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    6 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Evidence Lineage",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Evidence Lineage' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Propagation Map",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Propagation Map' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-secondary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    6 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Data Connections",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Data Connections' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-secondary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Operator Workflow",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Workflow' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Cultivation Evidence",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Cultivation Evidence' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Current Cognition State",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Current Cognition State' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Drift Timeline",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Drift Timeline' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Multi-Site Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Multi-Site Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Structural Ontology",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Structural Ontology' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Ecosystem Layer",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Ecosystem Layer' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Distributed Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Distributed Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Operator Training",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Training' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Behavior Science",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Behavior Science' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Operator Curriculum",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Curriculum' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "tablet",
+    "label": "Research Workspace",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Research Workspace' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Cultivation Mission Control",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Cultivation Mission Control' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" aria-current=\"page\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--active workspace-nav__item--state-critical\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Structural Replay",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Structural Replay' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Evidence Lineage",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Evidence Lineage' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-primary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Propagation Map",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Propagation Map' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-secondary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Data Connections",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Data Connections' }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"workspace-nav__item workspace-nav__item--tier-secondary workspace-nav__item--state-neutral\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    5 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Operator Workflow",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Workflow' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Cultivation Evidence",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Cultivation Evidence' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Current Cognition State",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Current Cognition State' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Drift Timeline",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Drift Timeline' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Multi-Site Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Multi-Site Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Structural Ontology",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Structural Ontology' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Ecosystem Layer",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Ecosystem Layer' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Distributed Cognition",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Distributed Cognition' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Operator Training",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Training' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Behavior Science",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Behavior Science' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Operator Curriculum",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Operator Curriculum' }).first()\u001b[22m\n"
+  },
+  {
+    "viewport": "mobile",
+    "label": "Research Workspace",
+    "ok": false,
+    "note": "locator.click: Timeout 4000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: 'Research Workspace' }).first()\u001b[22m\n"
+  }
+]

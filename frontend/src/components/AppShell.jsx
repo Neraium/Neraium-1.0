@@ -7,6 +7,8 @@ export default function AppShell({
   workspaceRef,
   workspaceDrawerRef,
   visibleWorkspaces,
+  expertMode,
+  onToggleExpertMode,
   activeConfig,
   apiStatus,
   latestUploadResult,
@@ -36,6 +38,7 @@ export default function AppShell({
           roomContext={roomContext}
           timeCoverage={timeCoverage}
           liveOps={liveOps}
+          expertMode={expertMode}
           onSelectWorkspace={onSelectWorkspace}
         />
       )}
@@ -48,6 +51,7 @@ export default function AppShell({
           roomContext={roomContext}
           isWorkspaceMenuOpen={isWorkspaceMenuOpen}
           setIsWorkspaceMenuOpen={setIsWorkspaceMenuOpen}
+          expertMode={expertMode}
           onSelectWorkspace={onSelectWorkspace}
         />
       )}
@@ -63,6 +67,8 @@ export default function AppShell({
           onToggleDemoMode={onToggleDemoMode}
           demoScenario={demoScenario}
           onSetDemoScenario={onSetDemoScenario}
+          expertMode={expertMode}
+          onToggleExpertMode={onToggleExpertMode}
           formatReadiness={formatReadiness}
           formatIntelligenceSourceLabel={formatIntelligenceSourceLabel}
           deriveTriageSummary={deriveTriageSummary}
@@ -108,6 +114,7 @@ export default function AppShell({
               roomContext={roomContext}
               timeCoverage={timeCoverage}
               liveOps={liveOps}
+              expertMode={expertMode}
               onSelectWorkspace={onSelectWorkspace}
             />
           </aside>
@@ -125,6 +132,7 @@ function MobileOperationalHeader({
   visibleWorkspaces,
   liveOps,
   roomContext,
+  expertMode,
   isWorkspaceMenuOpen,
   setIsWorkspaceMenuOpen,
   onSelectWorkspace,
@@ -166,6 +174,10 @@ function MobileOperationalHeader({
             <strong>{metric.value}</strong>
           </div>
         ))}
+        <div className="mobile-command-strip__cell">
+          <span>Mode</span>
+          <strong>{expertMode ? "Expert" : "Pilot"}</strong>
+        </div>
       </div>
 
       <nav className="mobile-workspace-pills" aria-label="Priority workspace shortcuts">
@@ -195,6 +207,7 @@ function WorkspaceNavigationContent({
   roomContext,
   timeCoverage,
   liveOps,
+  expertMode,
   onSelectWorkspace,
 }) {
   const activeUiState = normalizeOperationalState(liveOps.facilityTone);
@@ -240,7 +253,7 @@ function WorkspaceNavigationContent({
                   <span>{statusText}</span>
                   <i aria-hidden="true" />
                 </span>
-                {!isDrawer ? <span className="workspace-nav__detail">{workspace.description}</span> : null}
+                {!isDrawer && expertMode ? <span className="workspace-nav__detail">{workspace.description}</span> : null}
               </button>
             );
           })}
@@ -283,6 +296,8 @@ function TopStatusBar({
   onToggleDemoMode,
   demoScenario,
   onSetDemoScenario,
+  expertMode,
+  onToggleExpertMode,
   formatReadiness,
   formatIntelligenceSourceLabel,
   deriveTriageSummary,
@@ -382,11 +397,16 @@ function TopStatusBar({
         <StatusChip label="Severity" value={liveOps.facilityStateLabel} tone={liveOps.facilityTone} />
         <StatusChip label="Primary room" value={roomContext.primary} tone={liveOps.facilityTone} />
         <StatusChip label="Next inspect" value={liveOps.primaryWindow?.label ?? "Facility overview"} tone={liveOps.primaryWindow?.tone ?? "info"} />
+        <StatusChip label="Lead time" value={liveOps.primaryWindow?.window ?? "Monitoring"} tone={liveOps.primaryWindow?.tone ?? liveOps.connectionTone} />
+        <StatusChip label="Evidence confidence" value={liveOps.interventionItems?.[0]?.confidence ? `${liveOps.interventionItems[0].confidence}%` : "Building"} tone={liveOps.facilityTone} />
         <StatusChip
           label="What changed"
           value={latestUploadResult?.data_quality ? formatReadiness(latestUploadResult.data_quality?.readiness) : liveOps.readinessLabel}
           tone={latestUploadResult?.data_quality?.readiness ?? liveOps.connectionTone}
         />
+        <button className="secondary-command-button" type="button" onClick={onToggleExpertMode}>
+          {expertMode ? "Expert On" : "Pilot Mode"}
+        </button>
         <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
           {isDemoMode ? "Sample On" : "Sample Off"}
         </button>
@@ -409,23 +429,19 @@ function TopStatusBar({
 }
 
 function buildOperationalHudMetrics(liveOps) {
-  const relationshipCount = liveOps.relationshipRows?.length || 0;
-  const replayValue = relationshipCount > 0
-    ? `${relationshipCount} Active ${relationshipCount === 1 ? "Trajectory" : "Trajectories"}`
-    : "Replay Trajectory Standby";
   const structuralState = ["nominal", "online", "stable"].includes(liveOps.facilityTone)
-    ? "Topology Synchronization Stable"
-    : "Structural Drift Emerging";
+    ? "Stable"
+    : "Monitoring";
   const propagationValue = ["elevated", "unstable", "offline"].includes(liveOps.facilityTone)
-    ? "Propagation Watch Active"
+    ? "Watch active"
     : "Localized";
   const syncValue = liveOps.intelligenceMode === "empty"
-    ? "Topology Synchronization Pending"
-    : "Live Telemetry Active";
+    ? "Awaiting telemetry"
+    : "Live telemetry";
 
   return [
     { label: "State", value: structuralState, tone: liveOps.facilityTone },
-    { label: "Replay", value: replayValue, tone: liveOps.primaryWindow?.tone ?? "info" },
+    { label: "Lead time", value: liveOps.primaryWindow?.window ?? "Monitoring", tone: liveOps.primaryWindow?.tone ?? "info" },
     { label: "Propagation", value: propagationValue, tone: liveOps.facilityTone },
     { label: "Sync", value: syncValue, tone: liveOps.connectionTone },
     { label: "Updated", value: liveOps.connectionSummary || "Awaiting synchronization", tone: liveOps.connectionTone },

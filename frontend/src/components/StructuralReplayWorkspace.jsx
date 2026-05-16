@@ -9,6 +9,7 @@ import ReplayCognitionField from "./ReplayCognitionField";
 export default function StructuralReplayWorkspace({
   apiFetch,
   accessCode,
+  expertMode = false,
   normalizeErrorMessage,
   formatClockTime,
   Panel,
@@ -112,49 +113,57 @@ export default function StructuralReplayWorkspace({
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
 
   const metrics = useMemo(() => ([
-    { label: "Replay Frames", value: meta.frame_count ?? operativeTimeline.length },
-    { label: "Frame", value: `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` },
+    { label: "Replay snapshots", value: meta.frame_count ?? operativeTimeline.length },
+    { label: "Current point", value: `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` },
     { label: "Playback", value: `${playbackSpeed.toFixed(1)}x` },
-    { label: "Compression", value: `${replayCompression}x` },
-    { label: "Range Preview", value: rangePreviewCount || "Adaptive window" },
-    { label: "Structural State", value: strengthenReplayState(shownFrame?.topology_state?.stability_state) },
-    { label: "Evidence Confidence", value: shownFrame?.cognition_state?.confidence_tier ?? "Evidence lock forming" },
-    { label: "Operational Phase", value: strengthenReplayState(shownFrame?.cognition_state?.operational_phase) },
+    { label: "Lead time", value: shownFrame?.continuation_window?.window ?? "Monitoring" },
+    { label: "Preview range", value: rangePreviewCount || "Adaptive window" },
+    { label: "System stability", value: strengthenReplayState(shownFrame?.topology_state?.stability_state) },
+    { label: "Evidence confidence", value: shownFrame?.cognition_state?.confidence_tier ?? "Building" },
+    { label: "Progression state", value: strengthenReplayState(shownFrame?.cognition_state?.operational_phase) },
   ]), [frameIndex, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, replayCompression, shownFrame?.cognition_state?.confidence_tier, shownFrame?.cognition_state?.operational_phase, shownFrame?.topology_state?.stability_state]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Structural Replay Workspace" className="span-12 workspace-hero-panel">
+      <Panel title="Replay Snapshot" className="span-12 workspace-hero-panel" subtitle="Operational progression view for escalation and recovery.">
         <MetricGrid metrics={metrics} />
-        <div className="structural-replay-controls">
-          <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)}>
-            {isPlaying ? "Pause Replay" : "Play Replay"}
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)}>
-            {comparisonMode ? "Primary View" : "Comparison Mode"}
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))}>
-            Previous Frame
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))}>
-            Next Frame
-          </button>
-          <label className="metadata-text" htmlFor="replay-speed">Speed</label>
-          <select id="replay-speed" value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))}>
-            {[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}
-          </select>
-          <label className="metadata-text" htmlFor="replay-compression">Compression</label>
-          <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>
-            {[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}
-          </select>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, operativeTimeline.length - 1)}
-            value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))}
-            onChange={(event) => setFrameIndex(Number(event.target.value))}
-          />
-        </div>
+        {expertMode ? (
+          <div className="structural-replay-controls">
+            <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)}>
+              {isPlaying ? "Pause Replay" : "Play Replay"}
+            </button>
+            <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)}>
+              {comparisonMode ? "Primary View" : "Comparison Mode"}
+            </button>
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))}>
+              Previous Frame
+            </button>
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))}>
+              Next Frame
+            </button>
+            <label className="metadata-text" htmlFor="replay-speed">Speed</label>
+            <select id="replay-speed" value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))}>
+              {[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}
+            </select>
+            <label className="metadata-text" htmlFor="replay-compression">Compression</label>
+            <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>
+              {[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}
+            </select>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, operativeTimeline.length - 1)}
+              value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))}
+              onChange={(event) => setFrameIndex(Number(event.target.value))}
+            />
+          </div>
+        ) : (
+          <div className="structural-replay-controls">
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))}>Previous</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))}>Next</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)}>{isPlaying ? "Pause" : "Play"}</button>
+          </div>
+        )}
         <p className="metadata-text">
           Active timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : "model-generated continuity frame"}
         </p>
@@ -167,43 +176,35 @@ export default function StructuralReplayWorkspace({
         />
       </Panel>
 
-      <Panel title="Cognition Phase Rail" className="span-12 replay-phase-panel">
-        <div className="canonical-flow">
-          {canonicalFlow.map((phase) => {
-            const active = shownFrame?.cognition_state?.canonical_phase === phase;
-            return (
-              <div key={phase} className={`canonical-flow__step ${active ? "is-active" : ""}`}>
-                <span>{phase.replaceAll("_", " ")}</span>
-              </div>
-            );
-          })}
-        </div>
-      </Panel>
+      {expertMode ? (
+        <Panel title="Cognition Phase Rail" className="span-12 replay-phase-panel">
+          <div className="canonical-flow">
+            {canonicalFlow.map((phase) => {
+              const active = shownFrame?.cognition_state?.canonical_phase === phase;
+              return (
+                <div key={phase} className={`canonical-flow__step ${active ? "is-active" : ""}`}>
+                  <span>{phase.replaceAll("_", " ")}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : null}
 
       <Panel title="Propagation Map" className="span-6">
         <PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} />
       </Panel>
 
-      <Panel title="Evidence Interaction Layer" className="span-6">
-        <EvidenceInteractionPanel frame={shownFrame} />
-      </Panel>
-
-      <Panel title="Structural Memory Replay" className="span-6">
-        <StructuralMemoryPanel frame={shownFrame} />
-      </Panel>
-
-      <Panel title="Evidence Lineage" className="span-6">
-        <EvidenceLineagePanel frame={shownFrame} />
-      </Panel>
-
-      <Panel title="Operational Time Intelligence" className="span-6">
-        <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Canonical Phase</span><strong>{shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? "baseline continuity"}</strong></li>
-          <li><span className="metadata-text">Propagation Acceleration</span><strong>{shownFrame?.propagation_state?.propagation_acceleration ?? "watching"}</strong></li>
-          <li><span className="metadata-text">Structural Compression</span><strong>{shownFrame?.subsystem_pressure?.compression_intensity ?? "adaptive"}</strong></li>
-          <li><span className="metadata-text">Continuation Window</span><strong>{shownFrame?.continuation_window?.window ?? "model-derived watch"}</strong></li>
-          <li><span className="metadata-text">Timing Window</span><strong>{shownFrame?.continuation_window?.timing_window ?? "active intelligence"}</strong></li>
-        </ul>
+      <Panel title={expertMode ? "Evidence Interaction Layer" : "Evidence Summary"} className="span-6">
+        {expertMode ? (
+          <EvidenceInteractionPanel frame={shownFrame} />
+        ) : (
+          <ul className="system-body-timeline-list">
+            <li><span className="metadata-text">Evidence confidence</span><strong>{shownFrame?.cognition_state?.confidence_tier ?? "Building"}</strong></li>
+            <li><span className="metadata-text">System stability</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
+            <li><span className="metadata-text">Cross-system support</span><strong>{(shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : "Limited"}</strong></li>
+          </ul>
+        )}
       </Panel>
 
       <Panel title="Recovery Convergence" className="span-6">
@@ -213,6 +214,27 @@ export default function StructuralReplayWorkspace({
           <li><span className="metadata-text">Facility Cognition State</span><strong>{strengthenReplayState(shownFrame?.cognition_state?.facility_state)}</strong></li>
         </ul>
       </Panel>
+      {expertMode ? (
+        <>
+          <Panel title="Structural Memory Replay" className="span-6">
+            <StructuralMemoryPanel frame={shownFrame} />
+          </Panel>
+
+          <Panel title="Evidence Lineage" className="span-6">
+            <EvidenceLineagePanel frame={shownFrame} />
+          </Panel>
+
+          <Panel title="Operational Time Intelligence" className="span-6">
+            <ul className="system-body-timeline-list">
+              <li><span className="metadata-text">Canonical Phase</span><strong>{shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? "baseline continuity"}</strong></li>
+              <li><span className="metadata-text">Propagation Acceleration</span><strong>{shownFrame?.propagation_state?.propagation_acceleration ?? "watching"}</strong></li>
+              <li><span className="metadata-text">Structural Compression</span><strong>{shownFrame?.subsystem_pressure?.compression_intensity ?? "adaptive"}</strong></li>
+              <li><span className="metadata-text">Continuation Window</span><strong>{shownFrame?.continuation_window?.window ?? "model-derived watch"}</strong></li>
+              <li><span className="metadata-text">Timing Window</span><strong>{shownFrame?.continuation_window?.timing_window ?? "active intelligence"}</strong></li>
+            </ul>
+          </Panel>
+        </>
+      ) : null}
 
       {error ? (
         <Panel title="Replay Notice" className="span-12">

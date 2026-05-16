@@ -7,6 +7,7 @@ export default function CultivationMissionControl({
   apiFetch,
   accessCode,
   isDemoMode,
+  expertMode = false,
   hasUploadedTelemetry = false,
   Panel,
   EmptyState,
@@ -100,10 +101,10 @@ export default function CultivationMissionControl({
         <div className="cultivation-tabs" role="tablist" aria-label="Cultivation mission control views">
           {[
             { id: "overview", label: "Overview" },
-            { id: "replay", label: "Replay" },
-            { id: "evidence", label: "Evidence" },
             { id: "propagation", label: "Propagation" },
-            { id: "reports", label: "Reports" },
+            { id: "replay", label: "Replay Snapshot" },
+            { id: "evidence", label: "Evidence Summary" },
+            ...(expertMode ? [{ id: "reports", label: "Reports" }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -162,8 +163,8 @@ export default function CultivationMissionControl({
                   <strong>{isNoDataState ? "Upload telemetry to activate evidence-backed structural cognition." : summarizeTrust(cognition, evidenceSummary)}</strong>
                 </div>
                 <div className="cultivation-intelligence-row">
-                  <span>Active archetypes</span>
-                  <strong>{isNoDataState ? "Awaiting telemetry." : summarizeArchetypes(cognition.active_archetypes)}</strong>
+                  <span>Confidence</span>
+                  <strong>{isNoDataState ? "Building evidence confidence" : summarizeConfidence(cognition, evidenceSummary)}</strong>
                 </div>
               </section>
             </div>
@@ -245,7 +246,7 @@ export default function CultivationMissionControl({
 
       {activeTab === "replay" && (
         <>
-          <Panel title="Structural Replay" className="span-12 cultivation-replay-panel cultivation-view-panel cultivation-view-panel--replay" subtitle="Replay timeline and environmental topology progression context.">
+          <Panel title="Replay Snapshot" className="span-12 cultivation-replay-panel cultivation-view-panel cultivation-view-panel--replay" subtitle="Progression view for escalation and recovery.">
             <ul className="system-body-timeline-list cultivation-compact-list">
               {replayFrames.length === 0 && (
                 <li><span className="metadata-text">Replay</span><strong>No replay frames available.</strong></li>
@@ -258,11 +259,11 @@ export default function CultivationMissionControl({
               ))}
             </ul>
           </Panel>
-          <Panel title="Continuation Window Context" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--context" subtitle="Continuation window framing during replay review.">
+          <Panel title="Continuation Window" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--context" subtitle="How much time remains before escalation risk increases.">
             <div className="cultivation-summary-callouts">
-              <p><strong>Continuation window:</strong> {continuationWindow}</p>
-              <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
-              <p><strong>Replay frames:</strong> {replay.meta?.frame_count ?? 0}</p>
+              <p><strong>Lead time:</strong> {continuationWindow}</p>
+              <p><strong>Recovery signal:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
+              <p><strong>Snapshots:</strong> {replay.meta?.frame_count ?? 0}</p>
             </div>
           </Panel>
         </>
@@ -270,17 +271,17 @@ export default function CultivationMissionControl({
 
       {activeTab === "evidence" && (
         <>
-          <Panel title="Evidence Lineage" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--evidence" subtitle="Evidence sources, confidence basis, and relationship corroboration.">
+          <Panel title="Evidence Summary" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--evidence" subtitle="Concise evidence supporting the current operator view.">
             <ul className="system-body-timeline-list cultivation-compact-list">
               {evidenceSummary.map((item) => (
                 <li key={item}><span className="metadata-text">Evidence source</span><strong>{item}</strong></li>
               ))}
             </ul>
           </Panel>
-          <Panel title="Confidence Basis" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--confidence" subtitle="Operational confidence grounded in corroboration and persistence.">
+          <Panel title={expertMode ? "Confidence Basis" : "Confidence"} className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--confidence" subtitle={expertMode ? "Operational confidence grounded in corroboration and persistence." : "Evidence-backed confidence for current operator guidance."}>
             <div className="cultivation-summary-callouts">
-              <p><strong>Confidence basis:</strong> Evidence density + subsystem corroboration + persistence consistency.</p>
-              <p><strong>Subsystem corroboration:</strong> {(cognition.propagation_pathways ?? []).length > 0 ? "present" : "limited"}</p>
+              <p><strong>Evidence confidence:</strong> {summarizeConfidence(cognition, evidenceSummary)}</p>
+              <p><strong>Cross-system support:</strong> {(cognition.propagation_pathways ?? []).length > 0 ? "present" : "limited"}</p>
               <p><strong>Relationship evidence:</strong> {summarizeTrust(cognition, evidenceSummary)}</p>
             </div>
           </Panel>
@@ -315,11 +316,11 @@ export default function CultivationMissionControl({
             </Panel>
             <Panel title="Recovery / Convergence" className="cultivation-list-panel cultivation-stack-panel" subtitle="Room synchronization and convergence state.">
               <div className="cultivation-summary-callouts">
-                <p><strong>Room synchronization:</strong> {(cognition.propagation_pathways ?? []).length > 0 ? "drifting" : "stable"}</p>
-                <p><strong>Environmental pressure:</strong> {summarizeSpread(cognition)}</p>
-                <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
-              </div>
-            </Panel>
+              <p><strong>Room synchronization:</strong> {(cognition.propagation_pathways ?? []).length > 0 ? "monitoring" : "stable"}</p>
+              <p><strong>Environmental pressure:</strong> {summarizeSpread(cognition)}</p>
+              <p><strong>Recovery / convergence:</strong> {cognition.recovery_convergence?.convergence_quality ?? "developing"}</p>
+            </div>
+          </Panel>
           </div>
         </>
       )}
@@ -538,6 +539,17 @@ function summarizeTrust(cognition, evidenceSummary) {
   return evidenceSummary[0]
     ?? cognition.operator_explanation
     ?? "Evidence lineage is building from current telemetry context.";
+}
+
+function summarizeConfidence(cognition, evidenceSummary) {
+  const confidenceSignals = evidenceSummary.length;
+  if ((cognition.propagation_pathways?.length ?? 0) === 0 && confidenceSignals <= 1) {
+    return "Moderate confidence";
+  }
+  if (confidenceSignals >= 3) {
+    return "High confidence";
+  }
+  return "Building confidence";
 }
 
 function summarizeFrame(frame) {

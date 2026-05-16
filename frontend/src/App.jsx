@@ -210,6 +210,7 @@ function App() {
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           isDemoMode={isDemoMode}
+          expertMode={expertMode}
           hasUploadedTelemetry={uploadStateView.hasFullUploadResult(latestUploadResult)}
           Panel={Panel}
           MetricGrid={MetricGrid}
@@ -235,6 +236,7 @@ function App() {
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           isDemoMode={isDemoMode}
+          expertMode={expertMode}
           normalizeErrorMessage={normalizeErrorMessage}
           Panel={Panel}
           EmptyState={EmptyState}
@@ -296,6 +298,7 @@ function App() {
         <StructuralReplayWorkspace
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
+          expertMode={expertMode}
           normalizeErrorMessage={normalizeErrorMessage}
           formatClockTime={formatClockTime}
           Panel={Panel}
