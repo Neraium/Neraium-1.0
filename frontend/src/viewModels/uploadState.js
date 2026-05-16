@@ -17,7 +17,11 @@ export function hasFullUploadResult(result) {
 }
 
 export function hasActiveTelemetrySnapshot(snapshot) {
-  const status = String(snapshot?.status ?? "").toLowerCase();
+  const status = String(snapshot?.status ?? snapshot?.processing_state ?? "").toLowerCase();
+  const explicitlyInactive = ["empty", "idle", "cleared", "reset", "none", "no_data"].includes(status);
+  if (explicitlyInactive || snapshot?.latest_result === null || snapshot?.latest_upload === null) {
+    return false;
+  }
   return Boolean(
     status === "active"
     || status === "baseline_active"
