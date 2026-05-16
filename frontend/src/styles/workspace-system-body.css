@@ -128,17 +128,17 @@
 .system-body-orb-panel__lattice span:nth-child(9) { left: 72%; top: 73%; }
 
 .system-body-orb-panel__halo--outer {
- inset: 12% 4% 20% 18%;
- background: radial-gradient(circle, rgba(138, 184, 196, 0.18), rgba(138, 184, 196, 0.03) 46%, transparent 70%);
+  inset: 12% 4% 20% 18%;
+ background: radial-gradient(circle, rgba(138, 184, 196, 0.14), rgba(138, 184, 196, 0.028) 46%, transparent 70%);
  filter: blur(12px);
- animation: orbAmbient 12s ease-in-out infinite;
+ animation: orbAmbient 18s cubic-bezier(0.42, 0.0, 0.2, 1) infinite;
 }
 
 .system-body-orb-panel__halo--inner {
  inset: 22% 10% 28% 26%;
- background: radial-gradient(circle, rgba(108, 186, 156, 0.16), transparent 62%);
+ background: radial-gradient(circle, rgba(108, 186, 156, 0.12), transparent 62%);
  filter: blur(10px);
- animation: orbAmbientSoft 14s ease-in-out infinite;
+ animation: orbAmbientSoft 21s cubic-bezier(0.42, 0.0, 0.2, 1) infinite;
 }
 
 .system-body-orb-panel__depth {
@@ -280,15 +280,15 @@
 }
 
 @keyframes orbAmbient {
-  0% { opacity: 0.5; transform: translateY(0) scale(1); }
-  50% { opacity: 0.82; transform: translateY(-8px) scale(1.03); }
-  100% { opacity: 0.5; transform: translateY(0) scale(1); }
+  0% { opacity: 0.4; transform: translateY(0) scale(1); }
+  50% { opacity: 0.58; transform: translateY(-4px) scale(1.015); }
+  100% { opacity: 0.4; transform: translateY(0) scale(1); }
 }
 
 @keyframes orbAmbientSoft {
-  0% { opacity: 0.42; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.05); }
-  100% { opacity: 0.42; transform: scale(1); }
+  0% { opacity: 0.36; transform: scale(1); }
+  50% { opacity: 0.52; transform: scale(1.02); }
+  100% { opacity: 0.36; transform: scale(1); }
 }
 
 @media (max-width: 1280px) {

@@ -160,9 +160,9 @@
   --orb-premium-shadow-core: color-mix(in srgb, var(--orb-hue) 34%, transparent);
   --orb-premium-rim: color-mix(in srgb, var(--orb-hue) 48%, rgba(255, 255, 255, 0.12));
   filter:
-    drop-shadow(0 18px 28px rgba(0, 0, 0, 0.32))
-    drop-shadow(0 0 18px var(--orb-premium-shadow-soft))
-    drop-shadow(0 0 42px var(--orb-premium-shadow-core));
+    drop-shadow(0 16px 26px rgba(0, 0, 0, 0.3))
+    drop-shadow(0 0 14px var(--orb-premium-shadow-soft))
+    drop-shadow(0 0 30px var(--orb-premium-shadow-core));
 }
 
 .health-orb__shell {
@@ -171,14 +171,14 @@
 }
 
 .health-orb__rim {
-  opacity: 0.56;
+  opacity: 0.5;
   stroke: color-mix(in srgb, var(--orb-hue) 62%, rgba(255, 255, 255, 0.24));
 }
 
 .health-orb__core {
   filter:
-    drop-shadow(0 0 14px color-mix(in srgb, var(--orb-hue) 42%, transparent))
-    drop-shadow(0 0 30px color-mix(in srgb, var(--orb-hue) 26%, transparent));
+    drop-shadow(0 0 12px color-mix(in srgb, var(--orb-hue) 34%, transparent))
+    drop-shadow(0 0 22px color-mix(in srgb, var(--orb-hue) 20%, transparent));
 }
 
 .health-orb__core-hotspot {
