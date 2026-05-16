@@ -902,3 +902,87 @@
   0%, 100% { transform: scale(1); opacity: 0.35; }
   50% { transform: scale(1.38); opacity: 0.8; }
 }
+
+.cultivation-report-actions {
+  margin-bottom: 12px;
+}
+
+.cultivation-report-operator {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(129, 196, 193, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(14, 21, 25, 0.82), rgba(7, 11, 14, 0.74));
+}
+
+.cultivation-report-operator__eyebrow {
+  margin: 0;
+  color: rgba(138, 184, 196, 0.86);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cultivation-report-operator h3 {
+  margin: 0;
+  color: rgba(244, 251, 249, 0.98);
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.cultivation-report-operator__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cultivation-report-operator__grid section {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(138, 184, 196, 0.1);
+  border-radius: 12px;
+  background: rgba(8, 13, 16, 0.58);
+}
+
+.cultivation-report-operator__grid span {
+  color: rgba(176, 203, 208, 0.78);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cultivation-report-operator__grid strong {
+  color: rgba(237, 248, 245, 0.95);
+  font-size: 0.95rem;
+  line-height: 1.42;
+  font-weight: 560;
+}
+
+.cultivation-report-operator__notes {
+  display: grid;
+  gap: 8px;
+}
+
+.cultivation-report-operator__notes p {
+  margin: 0;
+  color: rgba(205, 222, 219, 0.86);
+  line-height: 1.5;
+}
+
+.cultivation-report-raw {
+  margin-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .cultivation-report-operator,
+  .cultivation-report-operator__grid {
+    grid-template-columns: 1fr;
+  }
+}

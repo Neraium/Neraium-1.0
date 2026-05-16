@@ -1,4 +1,5 @@
 import DesktopWorkspaceLayout from "./shell/layout/DesktopWorkspaceLayout";
+import HealthOrb from "./HealthOrb";
 import { StatusDot } from "./workspacePrimitives";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
 
@@ -163,20 +164,7 @@ function MobileOperationalHeader({
         </button>
       </div>
 
-      <div className="mobile-condition-rack" aria-label="Current operational condition">
-        <div className="mobile-condition-rack__primary">
-          <span>Structural condition</span>
-          <strong>{liveOps.facilityStateLabel}</strong>
-        </div>
-        <div>
-          <span>Room</span>
-          <strong>{roomContext.primary}</strong>
-        </div>
-        <div>
-          <span>Next inspect</span>
-          <strong>{liveOps.primaryWindow?.label ?? "Facility"}</strong>
-        </div>
-      </div>
+      <MobileHealthStatusModule liveOps={liveOps} roomContext={roomContext} />
 
       <nav className="mobile-workspace-pills" aria-label="Priority workspace shortcuts">
         {compactWorkspaces.map((workspace) => (
@@ -193,6 +181,68 @@ function MobileOperationalHeader({
       </nav>
     </header>
   );
+}
+
+function MobileHealthStatusModule({ liveOps, roomContext }) {
+  const noTelemetry = liveOps.intelligenceMode === "empty" || String(liveOps.facilityStateLabel ?? "").toLowerCase().includes("no data");
+  const orbState = noTelemetry ? "unknown" : mobileOrbStateFromTone(liveOps.facilityTone);
+  const urgency = noTelemetry ? "Baseline required" : formatMobileUrgency(liveOps.facilityTone, liveOps.facilityStateLabel);
+  const operatorFocus = noTelemetry
+    ? "Connect data to establish baseline"
+    : liveOps.primaryWindow?.recommendation
+      ?? liveOps.primaryWindow?.summary
+      ?? liveOps.heroSubline
+      ?? "Inspect the active structural relationship.";
+  const activeRoom = noTelemetry ? "Awaiting telemetry" : (roomContext.primary || liveOps.primaryWindow?.label || "Facility");
+  const updatedLabel = noTelemetry ? "Awaiting first sync" : liveOps.connectionSummary;
+
+  return (
+    <section className={`mobile-health-module mobile-health-module--${orbState} ${noTelemetry ? "mobile-health-module--empty" : ""}`} aria-label="Primary structural health status">
+      <div className="mobile-health-module__strip">
+        <span>{liveOps.connectionLabel}</span>
+        <strong>{noTelemetry ? "Connect data to establish baseline" : liveOps.connectionTone === "nominal" ? "Telemetry connected" : liveOps.connectionStatusLine}</strong>
+      </div>
+      <div className="mobile-health-module__body">
+        <div className="mobile-health-module__orb" aria-hidden="true">
+          <HealthOrb systemState={orbState} intensity={noTelemetry ? 0.08 : mobileOrbIntensity(orbState)} animated={!noTelemetry} />
+        </div>
+        <div className="mobile-health-module__readout">
+          <p className="mobile-health-module__eyebrow">Structural Health</p>
+          <strong className="mobile-health-module__condition">{noTelemetry ? "No telemetry connected" : liveOps.facilityStateLabel}</strong>
+          <p className="mobile-health-module__interpretation">{operatorFocus}</p>
+          <div className="mobile-health-module__facts">
+            <span>Primary Room</span>
+            <strong>{activeRoom}</strong>
+            <span>Urgency</span>
+            <strong>{urgency}</strong>
+            <span>Updated</span>
+            <strong>{updatedLabel}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function mobileOrbStateFromTone(tone) {
+  if (["unstable", "critical"].includes(tone)) return "propagation_active";
+  if (["elevated", "high"].includes(tone)) return "drift";
+  if (["review", "watch", "checking", "info"].includes(tone)) return "watching";
+  return "stable";
+}
+
+function mobileOrbIntensity(state) {
+  if (state === "propagation_active") return 0.96;
+  if (state === "drift") return 0.72;
+  if (state === "watching") return 0.48;
+  return 0.28;
+}
+
+function formatMobileUrgency(tone, fallback) {
+  if (["unstable", "critical"].includes(tone)) return "High / Escalating";
+  if (["elevated", "high"].includes(tone)) return "Moderate / Escalating";
+  if (["review", "watch", "checking", "info"].includes(tone)) return "Moderate";
+  return fallback || "Normal";
 }
 
 function WorkspaceNavigationContent({

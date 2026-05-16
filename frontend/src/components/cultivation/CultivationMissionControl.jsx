@@ -58,7 +58,7 @@ export default function CultivationMissionControl({
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
   const orbState = deriveOrbState(cognition, isDemoMode);
 
-  const reportExport = buildWeeklyPilotReport({
+  const report = buildWeeklyPilotReport({
     cognition,
     replay,
     ontology,
@@ -142,11 +142,33 @@ export default function CultivationMissionControl({
               </section>
             </div>
           </Panel>
-          <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Exportable operator-ready summary from current structural cognition state.">
-            <button type="button" className="secondary-command-button" onClick={() => exportPilotReport(reportExport)}>
-              Export Weekly Pilot Report
-            </button>
-            <pre className="code-surface cultivation-report-surface">{reportExport}</pre>
+          <Panel title="Weekly Pilot Report" className="span-12 cultivation-code-panel cultivation-report-panel cultivation-view-panel cultivation-view-panel--report" subtitle="Operator-ready summary from current structural cognition state.">
+            <div className="cultivation-report-actions">
+              <button type="button" className="secondary-command-button" onClick={() => exportPilotReport(report.formatted)}>
+                Export Operator Report
+              </button>
+            </div>
+            <article className="cultivation-report-operator">
+              <p className="cultivation-report-operator__eyebrow">Formatted operator report</p>
+              <h3>{report.headline}</h3>
+              <div className="cultivation-report-operator__grid">
+                {report.sections.map((section) => (
+                  <section key={section.label}>
+                    <span>{section.label}</span>
+                    <strong>{section.value}</strong>
+                  </section>
+                ))}
+              </div>
+              <div className="cultivation-report-operator__notes">
+                {report.notes.map((note) => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
+            </article>
+            <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
+              <summary>Expert Mode: View Raw Payload</summary>
+              <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
+            </details>
           </Panel>
         </>
       )}
@@ -260,16 +282,20 @@ function buildCultivationEvidenceSummary(cognition) {
 }
 
 function buildWeeklyPilotReport({ cognition, replay, ontology, evidenceSummary }) {
+  const generatedAt = new Date().toISOString();
+  const pathways = (cognition.propagation_pathways ?? []).map((path) => humanizePathway(path));
+  const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
+  const recovery = cognition.recovery_convergence?.convergence_quality ?? "developing";
   const payload = {
-    generated_at: new Date().toISOString(),
+    generated_at: generatedAt,
     pilot_summary: {
       cognition_state: cognition.cognition_state,
       structural_stability: cognition.structural_stability,
-      continuation_window: cognition.continuation_windows?.window ?? "Monitoring",
-      recovery_convergence: cognition.recovery_convergence?.convergence_quality ?? "developing",
+      continuation_window: continuationWindow,
+      recovery_convergence: recovery,
       operator_explanation: cognition.operator_explanation,
     },
-    propagation_pathways: (cognition.propagation_pathways ?? []).map((path) => humanizePathway(path)),
+    propagation_pathways: pathways,
     active_archetypes: cognition.active_archetypes ?? [],
     evidence_summary: evidenceSummary,
     replay_evidence: {
@@ -278,15 +304,44 @@ function buildWeeklyPilotReport({ cognition, replay, ontology, evidenceSummary }
     },
     ontology_snapshot_available: Boolean(ontology && Object.keys(ontology).length > 0),
   };
-  return JSON.stringify(payload, null, 2);
+  const headline = `${cognition.structural_stability ?? "WATCH"}: ${cognition.cognition_state ?? "Monitoring"}`;
+  const sections = [
+    { label: "Condition", value: cognition.structural_stability ?? "WATCH" },
+    { label: "Operator Focus", value: cognition.operator_explanation ?? summarizeChange(cognition) },
+    { label: "Propagation", value: pathways[0] ?? "No active propagation pathway" },
+    { label: "Continuation Window", value: continuationWindow },
+    { label: "Recovery / Convergence", value: recovery },
+    { label: "Replay Evidence", value: `${replay.meta?.frame_count ?? 0} frames reviewed` },
+  ];
+  const notes = [
+    `Active archetypes: ${summarizeArchetypes(cognition.active_archetypes)}.`,
+    `Evidence basis: ${evidenceSummary[0] ?? "Evidence lineage is building from current telemetry context."}`,
+    `Generated: ${new Date(generatedAt).toLocaleString()}.`,
+  ];
+  const formatted = [
+    "NERAIUM WEEKLY PILOT REPORT",
+    headline,
+    "",
+    ...sections.map((section) => `${section.label}: ${section.value}`),
+    "",
+    ...notes,
+  ].join("\n");
+
+  return {
+    headline,
+    sections,
+    notes,
+    formatted,
+    raw: JSON.stringify(payload, null, 2),
+  };
 }
 
 function exportPilotReport(reportBody) {
-  const blob = new Blob([reportBody], { type: "application/json" });
+  const blob = new Blob([reportBody], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `neraium-weekly-pilot-report-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.download = `neraium-weekly-pilot-report-${new Date().toISOString().slice(0, 10)}.txt`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
