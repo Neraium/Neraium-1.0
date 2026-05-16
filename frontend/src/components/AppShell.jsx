@@ -122,7 +122,7 @@ export default function AppShell({
         <>
           <div
             className={`workspace-drawer-backdrop ${isWorkspaceMenuOpen ? "workspace-drawer-backdrop--open" : ""}`}
-            hidden={!isWorkspaceMenuOpen}
+            aria-hidden="true"
             style={{ pointerEvents: isWorkspaceMenuOpen ? "auto" : "none" }}
             onClick={() => setIsWorkspaceMenuOpen(false)}
           />
@@ -135,9 +135,12 @@ export default function AppShell({
             style={{ pointerEvents: isWorkspaceMenuOpen ? "auto" : "none" }}
           >
             <div className="workspace-drawer__header">
-              <div>
-                <p className="sidebar-kicker">Navigation</p>
-                <strong>{activeConfig.label}</strong>
+              <div className="workspace-drawer__brand">
+                <span className="brand-mark brand-mark--drawer" aria-hidden="true">N</span>
+                <div className="workspace-drawer__title-block">
+                  <p className="sidebar-kicker">Neraium navigation</p>
+                  <strong>{activeConfig.label}</strong>
+                </div>
               </div>
               <button
                 className="workspace-drawer__close"
