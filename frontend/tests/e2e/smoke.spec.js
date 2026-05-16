@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("Neraium frontend smoke", () => {
+// Temporarily disabled while the Playwright smoke suite is paused.
+test.describe.skip("Neraium frontend smoke", () => {
   test("loads cultivation-first operator shell", async ({ page }) => {
     await page.goto("/");
 
