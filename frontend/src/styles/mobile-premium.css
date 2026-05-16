@@ -1,0 +1,563 @@
+/*
+   Neraium mobile premium optimization layer.
+   Loaded last from styles/index.css so it can safely correct cramped mobile layouts
+   without changing backend behavior or component contracts.
+*/
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    background-size: 28px 28px, 28px 28px, auto, auto, auto;
+  }
+
+  .platform-shell,
+  .platform-main,
+  .platform-workspace,
+  .workspace-grid,
+  .ops-panel,
+  .top-status,
+  .mobile-status-bar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-status-bar {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+    border-bottom: 1px solid rgba(177, 211, 206, 0.14);
+    background:
+      radial-gradient(circle at 0% 0%, rgba(255, 126, 115, 0.12), transparent 34%),
+      linear-gradient(180deg, rgba(8, 11, 14, 0.985), rgba(5, 8, 11, 0.94));
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-status-bar__brand,
+  .mobile-status-bar__copy {
+    min-width: 0;
+  }
+
+  .mobile-status-bar__copy {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mobile-status-bar .brand-name--hero {
+    max-width: 100%;
+    color: #f7fbfa;
+    font-size: 1.05rem;
+    line-height: 1;
+    letter-spacing: -0.035em;
+    white-space: nowrap;
+  }
+
+  .mobile-status-bar__workspace {
+    margin: 0;
+    max-width: 48vw;
+    color: rgba(191, 208, 204, 0.82);
+    font-size: 0.72rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-demo-controls {
+    display: none;
+  }
+
+  .workspace-menu-button {
+    width: auto;
+    min-width: 92px;
+    min-height: 42px;
+    padding: 0 12px;
+    border-color: rgba(255, 126, 115, 0.24);
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.12), transparent 42%),
+      linear-gradient(180deg, rgba(70, 28, 27, 0.96), rgba(30, 13, 15, 0.94));
+    box-shadow: 0 0 0 1px rgba(255, 126, 115, 0.12), 0 14px 32px rgba(0, 0, 0, 0.32);
+  }
+
+  .workspace-menu-button__icon {
+    color: var(--accent-red);
+  }
+
+  .platform-workspace {
+    padding: 14px 12px calc(30px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .top-status {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 0 0 20px 20px;
+    background:
+      radial-gradient(circle at 95% 0%, rgba(255, 126, 115, 0.12), transparent 34%),
+      linear-gradient(180deg, rgba(12, 17, 21, 0.94), rgba(6, 10, 13, 0.88));
+  }
+
+  .top-status__title {
+    gap: 6px;
+  }
+
+  .top-status__title .eyebrow,
+  .top-status__title > p:last-child,
+  .top-status__meta-copy {
+    display: none;
+  }
+
+  .top-status h1 {
+    font-size: clamp(1.22rem, 6vw, 1.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.045em;
+  }
+
+  .top-status__meta {
+    gap: 8px;
+  }
+
+  .sii-source-chip {
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 0.62rem;
+  }
+
+  .top-status__brief {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .top-status__brief-item {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(177, 211, 206, 0.1);
+    border-radius: 14px;
+    background: rgba(12, 18, 22, 0.72);
+  }
+
+  .top-status__brief-item span,
+  .top-status__compact-item span {
+    font-size: 0.6rem;
+  }
+
+  .top-status__brief-item strong,
+  .top-status__brief-item p,
+  .top-status__compact-item strong {
+    font-size: 0.78rem;
+    line-height: 1.38;
+  }
+
+  .top-status__compact {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .top-status__compact-item {
+    padding: 10px;
+    border: 1px solid rgba(177, 211, 206, 0.1);
+    border-radius: 14px;
+    background: rgba(12, 18, 22, 0.72);
+  }
+
+  .status-rack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .status-rack .secondary-command-button,
+  .status-rack .secondary-command-button:not(:first-of-type) {
+    display: none;
+  }
+
+  .status-chip {
+    min-height: 0;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .status-chip__head {
+    gap: 6px;
+  }
+
+  .status-chip span {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+  }
+
+  .status-chip strong {
+    font-size: 0.72rem;
+    line-height: 1.28;
+  }
+
+  .workspace-grid,
+  .workspace-grid--operator-flow,
+  .workspace-grid--overview-simple,
+  .workspace-grid--systems,
+  .workspace-grid--intake,
+  .workspace-grid--evidence,
+  .workspace-grid--console {
+    display: grid;
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  .span-12,
+  .span-8,
+  .span-7,
+  .span-6,
+  .span-5,
+  .span-4,
+  .span-3,
+  .span-2,
+  .workspace-grid--operator-flow > .overview-panel--command,
+  .workspace-grid--operator-flow > .overview-panel--room-first,
+  .workspace-grid--operator-flow > .overview-panel--detail {
+    grid-column: 1 / -1 !important;
+  }
+
+  .workspace-grid--operator-flow > .overview-panel--detail,
+  .room-detail-panel {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .ops-panel,
+  .overview-panel,
+  .room-command-hero,
+  .room-command-grid__main,
+  .room-detail-panel {
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .ops-panel:hover,
+  .intervention-card:hover,
+  .telemetry-card:hover,
+  .metric-cell:hover,
+  .zone-summary-card:hover,
+  .room-card:hover {
+    transform: none;
+  }
+
+  .ops-panel__header {
+    gap: 5px;
+    padding-bottom: 10px;
+  }
+
+  .ops-panel__header h2,
+  .room-section-header h2 {
+    max-width: none;
+    font-size: 0.96rem;
+    line-height: 1.24;
+  }
+
+  .ops-panel__header p,
+  .room-section-header > p {
+    font-size: 0.75rem;
+    line-height: 1.45;
+  }
+
+  .overview-hero,
+  .workspace-grid--operator-flow .overview-hero,
+  .countdown-hero,
+  .workspace-grid--operator-flow .countdown-hero,
+  .room-command-hero,
+  .room-command-grid,
+  .facility-summary-strip,
+  .room-card-grid,
+  .room-detail-actions,
+  .overview-summary-grid,
+  .room-health-grid,
+  .intervention-grid,
+  .topology-map__nodes,
+  .fleet-summary__grid,
+  .metric-grid,
+  .metric-grid--compact,
+  .zone-summary-grid,
+  .telemetry-grid,
+  .telemetry-grid--compact,
+  .two-column-block,
+  .compact-list--inline,
+  .connector-rest-grid,
+  .intake-flow__controls,
+  .morning-check__row,
+  .morning-check__summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .overview-hero__headline,
+  .workspace-grid--operator-flow .overview-hero__headline,
+  .room-command-hero__main h2 {
+    max-width: 13ch;
+    font-size: clamp(2rem, 11vw, 3.25rem);
+    line-height: 0.94;
+    letter-spacing: -0.07em;
+  }
+
+  .overview-hero__lead p,
+  .room-command-hero__main p,
+  .room-command-hero__action p,
+  .operating-state-next p,
+  .room-card__driver p,
+  .intervention-card p,
+  .room-health-card p,
+  .timeline-item p,
+  .feed-item p {
+    font-size: 0.8rem;
+    line-height: 1.52;
+  }
+
+  .countdown-hero__score,
+  .countdown-hero__window,
+  .workspace-grid--operator-flow .countdown-hero__score,
+  .workspace-grid--operator-flow .countdown-hero__window {
+    min-height: 0;
+    padding: 14px;
+    border-radius: 16px;
+    align-content: start;
+  }
+
+  .countdown-hero__score strong,
+  .countdown-hero__window strong,
+  .workspace-grid--operator-flow .countdown-hero__score strong,
+  .workspace-grid--operator-flow .countdown-hero__window strong {
+    font-size: clamp(2.15rem, 13vw, 3.8rem);
+    line-height: 0.95;
+  }
+
+  .facility-summary-strip__item,
+  .overview-summary-cell,
+  .metric-cell,
+  .zone-summary-card,
+  .telemetry-card,
+  .compact-list-block,
+  .status-banner,
+  .empty-state,
+  .intervention-card,
+  .room-health-card,
+  .room-card,
+  .action-queue__item,
+  .topology-node,
+  .target-selector__item {
+    min-height: 0;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .room-card {
+    gap: 12px;
+  }
+
+  .room-card__top,
+  .room-card__metrics,
+  .room-card__footer,
+  .intervention-card__footer,
+  .action-queue__header,
+  .action-queue__meta,
+  .action-queue__actions,
+  .why-panel__summary,
+  .why-panel__recommendation,
+  .why-panel__actions,
+  .connector-status-card__header,
+  .connector-json-hint__header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .room-card__footer span:last-child,
+  .why-panel__recommendation strong {
+    max-width: none;
+    text-align: left;
+  }
+
+  .command-button,
+  .secondary-command-button,
+  .link-action,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .command-button,
+  .secondary-command-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .table-shell,
+  .evidence-console,
+  .connector-json-hint__code {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 520px;
+  }
+
+  .evidence-console {
+    max-height: 220px;
+  }
+
+  .evidence-console__line,
+  .technical-detail-panel__lines code {
+    font-size: 0.66rem;
+    line-height: 1.42;
+  }
+
+  .timeline-item,
+  .workflow-step,
+  .drift-row,
+  .evidence-action-row {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  .timeline-item .status-dot,
+  .workflow-step .status-dot {
+    display: none;
+  }
+
+  .timeline-item__time,
+  .timeline-item > div,
+  .workflow-step span:last-child {
+    grid-column: auto;
+  }
+
+  .confidence-dial {
+    width: 52px;
+  }
+
+  .confidence-dial--large {
+    width: 70px;
+  }
+
+  .workspace-drawer {
+    width: min(340px, 92vw);
+    border-radius: 0 22px 22px 0;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(255, 126, 115, 0.11), transparent 34%),
+      linear-gradient(180deg, rgba(11, 15, 18, 0.99), rgba(5, 8, 10, 0.99));
+  }
+
+  .workspace-nav {
+    gap: 8px;
+  }
+
+  .workspace-nav__item {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .workspace-nav__detail {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .mobile-status-bar,
+  .platform-workspace,
+  .top-status {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .mobile-status-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mobile-status-bar__workspace {
+    max-width: 56vw;
+  }
+
+  .workspace-menu-button {
+    min-width: 78px;
+    padding: 0 10px;
+  }
+
+  .workspace-menu-button span:last-child {
+    font-size: 0.72rem;
+  }
+
+  .status-rack {
+    grid-template-columns: 1fr;
+  }
+
+  .top-status__brief-item:nth-of-type(n + 3),
+  .top-status__compact-item:nth-of-type(n + 3) {
+    display: none;
+  }
+
+  .ops-panel,
+  .overview-panel,
+  .room-command-hero,
+  .room-command-grid__main,
+  .room-detail-panel {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .ops-panel__header h2,
+  .room-section-header h2 {
+    font-size: 0.9rem;
+  }
+
+  .overview-hero__headline,
+  .workspace-grid--operator-flow .overview-hero__headline,
+  .room-command-hero__main h2 {
+    font-size: clamp(1.85rem, 12vw, 2.9rem);
+  }
+
+  .countdown-hero__score strong,
+  .countdown-hero__window strong,
+  .workspace-grid--operator-flow .countdown-hero__score strong,
+  .workspace-grid--operator-flow .countdown-hero__window strong {
+    font-size: clamp(2rem, 14vw, 3.25rem);
+  }
+
+  .facility-summary-strip__item,
+  .overview-summary-cell,
+  .metric-cell,
+  .zone-summary-card,
+  .telemetry-card,
+  .compact-list-block,
+  .status-banner,
+  .empty-state,
+  .intervention-card,
+  .room-health-card,
+  .room-card,
+  .action-queue__item,
+  .topology-node,
+  .target-selector__item {
+    padding: 11px;
+  }
+
+  .data-table {
+    min-width: 430px;
+  }
+}
