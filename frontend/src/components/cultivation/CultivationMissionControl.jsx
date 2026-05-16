@@ -57,6 +57,7 @@ export default function CultivationMissionControl({
   const continuationWindow = cognition.continuation_windows?.window ?? "Monitoring";
   const replayFrames = replay.timeline?.slice(0, 6) ?? [];
   const orbState = deriveOrbState(cognition, isDemoMode);
+  const severityState = deriveCultivationSeverity(cognition, orbState);
 
   const report = buildWeeklyPilotReport({
     cognition,
@@ -66,7 +67,7 @@ export default function CultivationMissionControl({
   });
 
   return (
-    <div className="workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean">
+    <div className={`workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean cultivation-mission-grid--${severityState}`}>
       <Panel
         title="Cultivation Mission Control"
         className="span-12 workspace-hero-panel cultivation-hero-panel"
@@ -96,15 +97,15 @@ export default function CultivationMissionControl({
         <>
           <Panel title="Overview" className="span-12 cultivation-list-panel cultivation-view-panel cultivation-view-panel--overview" subtitle="Current facility-level structural cognition summary.">
             <div className="cultivation-overview-grid">
-              <section className="cultivation-overview-left">
+              <section className={`cultivation-overview-left cultivation-overview-left--${severityState}`}>
                 <div className="cultivation-overview-orb-wrap">
                   <div className="cultivation-overview-orb">
                     <div className="cultivation-overview-orb-field" aria-hidden="true" />
                     <HealthOrb systemState={orbState} intensity={orbStateIntensity(orbState)} />
                   </div>
                   <div className="cultivation-overview-orb-meta">
-                    <span>Structural condition</span>
-                    <strong>{formatOrbLabel(orbState)}</strong>
+                    <span>Structural health</span>
+                    <strong>{formatCultivationStateLabel(cognition, orbState)}</strong>
                   </div>
                 </div>
                 <div className="cultivation-overview-left-metrics">
@@ -122,23 +123,23 @@ export default function CultivationMissionControl({
                   </article>
                 </div>
               </section>
-              <section className="cultivation-overview-right">
-                <article className="cultivation-top-summary-card">
+              <section className="cultivation-overview-right cultivation-intelligence-block" aria-label="Operator intelligence summary">
+                <div className="cultivation-intelligence-row">
                   <span>What's changing</span>
                   <strong>{summarizeChange(cognition)}</strong>
-                </article>
-                <article className="cultivation-top-summary-card">
+                </div>
+                <div className="cultivation-intelligence-row">
                   <span>Where it's spreading</span>
                   <strong>{summarizeSpread(cognition)}</strong>
-                </article>
-                <article className="cultivation-top-summary-card">
+                </div>
+                <div className="cultivation-intelligence-row">
                   <span>Why trust this</span>
                   <strong>{summarizeTrust(cognition, evidenceSummary)}</strong>
-                </article>
-                <article className="cultivation-top-summary-card">
+                </div>
+                <div className="cultivation-intelligence-row">
                   <span>Active archetypes</span>
                   <strong>{summarizeArchetypes(cognition.active_archetypes)}</strong>
-                </article>
+                </div>
               </section>
             </div>
           </Panel>
@@ -166,7 +167,7 @@ export default function CultivationMissionControl({
               </div>
             </article>
             <details className="technical-summary-panel technical-summary-panel--raw cultivation-report-raw">
-              <summary>Expert Mode: View Raw Payload</summary>
+              <summary>View Raw Payload (Expert)</summary>
               <pre className="code-surface cultivation-report-surface">{report.raw}</pre>
             </details>
           </Panel>
@@ -255,6 +256,21 @@ export default function CultivationMissionControl({
       )}
     </div>
   );
+}
+
+function deriveCultivationSeverity(cognition, orbState) {
+  if (orbState === "unknown") return "empty";
+  const stability = String(cognition?.structural_stability ?? "").toUpperCase();
+  if (stability.includes("ALERT") || stability.includes("FRAGMENT") || stability.includes("DETERIOR")) return "alert";
+  if (stability.includes("WATCH") || orbState === "watching" || orbState === "drift") return "watch";
+  return "stable";
+}
+
+function formatCultivationStateLabel(cognition, orbState) {
+  if (orbState === "unknown") return "No data connected";
+  const stability = String(cognition?.structural_stability ?? "").trim();
+  if (stability) return stability.toUpperCase();
+  return formatOrbLabel(orbState).toUpperCase();
 }
 
 function humanizePathway(path) {
