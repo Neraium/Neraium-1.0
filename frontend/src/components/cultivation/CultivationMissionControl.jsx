@@ -91,17 +91,6 @@ export default function CultivationMissionControl({
     replayFrames,
     continuationWindow,
   });
-  const pilotFlowSteps = [
-    { id: "overview", label: "Facility Structural Status", detail: "Confirm facility state and continuation window." },
-    { id: "overview", label: "Room Drift", detail: "Review one room-level drift condition requiring operator attention." },
-    { id: "overview", label: "Environmental Coupling", detail: "Check coupling behavior across temperature, humidity, and airflow." },
-    { id: "overview", label: "Humidity Response + Thermal Balance", detail: "Validate humidity response and thermal balance posture." },
-    { id: "propagation", label: "Propagation State", detail: "See where pressure is spreading or stabilizing between rooms." },
-    { id: "evidence", label: "Evidence Confidence", detail: "Review operator-facing evidence support and confidence basis." },
-    { id: "replay", label: "Operator Review", detail: "Use simplified replay snapshot for escalation and recovery review." },
-    { id: "reports", label: "Weekly Pilot Report Preview", detail: "End the demo with a concise weekly pilot report preview." },
-  ];
-
   return (
     <div className={`workspace-grid workspace-grid--console cultivation-mission-grid cultivation-mission-grid--clean cultivation-mission-grid--${severityState}`}>
       <Panel
@@ -150,38 +139,6 @@ export default function CultivationMissionControl({
           >
             Load Sample Cultivation Data
           </button>
-        </div>
-      </Panel>
-      <Panel
-        title="Pilot Demo Path"
-        className="span-12 cultivation-list-panel cultivation-view-panel"
-        subtitle="One guided 2-minute operator flow from facility status to weekly report preview."
-      >
-        <div className="cultivation-awareness-feed" role="list">
-          {pilotFlowSteps.map((step, index) => (
-            <article className="cultivation-awareness-feed__item cultivation-awareness-feed__item--trust cultivation-awareness-feed__item--severity-low" key={`${step.label}-${index}`} role="listitem">
-              <div className="cultivation-awareness-feed__index">
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <i aria-hidden="true" />
-              </div>
-              <div className="cultivation-awareness-feed__body">
-                <div className="cultivation-awareness-feed__header">
-                  <span>{step.label}</span>
-                  <em>{activeTab === step.id ? "Current" : "Open"}</em>
-                </div>
-                <p>{step.detail}</p>
-                <div className="cultivation-report-actions">
-                  <button
-                    type="button"
-                    className="secondary-command-button"
-                    onClick={() => setActiveTab(step.id)}
-                  >
-                    {step.id === "reports" ? "Open Preview" : "Open Step"}
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
         </div>
       </Panel>
       {activeTab === "overview" && (

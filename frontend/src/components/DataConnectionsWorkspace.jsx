@@ -168,7 +168,7 @@ export default function DataConnectionsWorkspace({
   const [copyState, setCopyState] = useState("idle");
   const [connectionForm, setConnectionForm] = useState({
     connection_id: DEFAULT_CONNECTION_ID,
-    name: "REST Telemetry Intake",
+    name: "Live Telemetry Intake",
     url: DEFAULT_CONNECTION_URL,
     facility_id: "cultivation-facility-001",
     room_id: "flower-room-1",

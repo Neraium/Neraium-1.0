@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 def enrich_connections_with_uploaded_telemetry(connections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep the UI from treating uploaded telemetry as if no data exists.
 
-    File uploads are not the same thing as a live Node-RED stream, but once a
+    File uploads are not the same thing as a live telemetry stream, but once a
     completed upload exists the customer UI should say an imported telemetry
     source is active instead of showing contradictory "awaiting telemetry" copy.
     """

@@ -33,7 +33,7 @@ from app.services.upload_jobs import (
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONNECTION_ID = "rest-telemetry-intake"
-DEFAULT_CONNECTION_NAME = "REST Telemetry Intake"
+DEFAULT_CONNECTION_NAME = "Live Telemetry Intake"
 LEGACY_NODE_RED_CONNECTION_ID = "node-red-cultivation-telemetry"
 DEFAULT_POLLING_INTERVAL_SECONDS = 5
 DEFAULT_LIVE_BASELINE_SAMPLE_COUNT = 6
