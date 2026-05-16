@@ -23,9 +23,9 @@
 
   .mobile-status-bar__topline {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
     align-items: center !important;
-    gap: 10px !important;
+    gap: 12px !important;
     width: 100% !important;
     min-width: 0 !important;
   }
@@ -34,6 +34,11 @@
   .mobile-status-bar__copy {
     min-width: 0 !important;
     max-width: 100% !important;
+  }
+
+  .mobile-status-bar__brand {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
   }
 
   .mobile-status-bar .brand-name--hero {
@@ -64,6 +69,9 @@
   }
 
   .workspace-menu-button {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
     position: relative !important;
     z-index: 2 !important;
     display: inline-flex !important;
@@ -98,7 +106,6 @@
     letter-spacing: 0.04em !important;
   }
 
-  /* Delete the extra mobile layers. The drawer button and cultivation tabs are enough. */
   .mobile-command-strip,
   .mobile-workspace-pills {
     display: none !important;
