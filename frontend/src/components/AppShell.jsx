@@ -141,13 +141,14 @@ function MobileOperationalHeader({
   onSelectWorkspace,
 }) {
   const compactWorkspaces = visibleWorkspaces.slice(0, 5);
+  const missionLabel = activeWorkspace === "cultivation-mission-control" ? "Active Deployment" : "Operational Command";
   return (
     <header className={`mobile-status-bar mobile-status-bar--${liveOps.facilityTone}`}>
       <div className="mobile-status-bar__topline">
         <div className="mobile-status-bar__brand">
           <div className="mobile-status-bar__copy">
             <p className="brand-name brand-name--hero">Neraium // OPS</p>
-            <p className="mobile-status-bar__workspace">{activeConfig.label}</p>
+            <p className="mobile-status-bar__workspace">{missionLabel} · {activeConfig.label}</p>
           </div>
         </div>
         <button
@@ -225,9 +226,9 @@ function MobileHealthStatusModule({ liveOps, roomContext }) {
 }
 
 function mobileOrbStateFromTone(tone) {
-  if (["unstable", "critical"].includes(tone)) return "propagation_active";
-  if (["elevated", "high"].includes(tone)) return "drift";
-  if (["review", "watch", "checking", "info"].includes(tone)) return "watching";
+  if (["unstable", "critical", "alert"].includes(tone)) return "propagation_active";
+  if (["elevated", "high", "review", "watch", "checking"].includes(tone)) return "watching";
+  if (["offline", "muted", "unknown", "empty"].includes(tone)) return "unknown";
   return "stable";
 }
 
@@ -239,10 +240,10 @@ function mobileOrbIntensity(state) {
 }
 
 function formatMobileUrgency(tone, fallback) {
-  if (["unstable", "critical"].includes(tone)) return "High / Escalating";
-  if (["elevated", "high"].includes(tone)) return "Moderate / Escalating";
-  if (["review", "watch", "checking", "info"].includes(tone)) return "Moderate";
-  return fallback || "Normal";
+  if (["unstable", "critical", "alert"].includes(tone)) return "ALERT / Escalating";
+  if (["elevated", "high", "review", "watch", "checking"].includes(tone)) return "WATCH / Active";
+  if (["offline", "muted", "unknown", "empty"].includes(tone)) return "NO DATA";
+  return fallback || "STABLE";
 }
 
 function WorkspaceNavigationContent({
@@ -270,7 +271,7 @@ function WorkspaceNavigationContent({
               <p className="brand-subtitle">Structural Intelligence Control Plane</p>
             </div>
           </div>
-          <span className="brand-edition">Enterprise Command</span>
+          <span className="brand-edition">Operational Command</span>
         </div>
       ) : null}
 
