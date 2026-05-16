@@ -3343,6 +3343,30 @@
   .mobile-status-bar {
     gap: 7px !important;
     padding-bottom: 6px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+
+  .mobile-status-bar__workspace {
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .platform-main {
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .platform-workspace,
+  .workspace-surface,
+  .workspace-grid,
+  .workspace-grid--console,
+  .cultivation-mission-grid,
+  .ops-panel {
+    width: 100% !important;
+    max-width: none !important;
   }
 
   .cultivation-tabs {
@@ -3365,10 +3389,40 @@
 
   .mobile-status-bar__workspace {
     display: block !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   .platform-workspace {
     padding-top: 12px !important;
+  }
+
+  .workspace-menu-button,
+  .workspace-drawer__close,
+  .secondary-command-button,
+  .cultivation-tab {
+    min-height: 44px !important;
+  }
+
+  .workspace-menu-button {
+    min-width: 96px !important;
+  }
+
+  .cultivation-tab {
+    min-height: 44px !important;
+    font-size: 0.84rem !important;
+    padding: 0 14px !important;
+  }
+
+  .cultivation-overview-orb {
+    overflow: clip !important;
+  }
+
+  .cultivation-overview-orb-field {
+    inset: 12px !important;
+    max-width: calc(100% - 24px) !important;
   }
 
   .mobile-command-strip {
@@ -3377,5 +3431,20 @@
 
   .cultivation-view-panel--overview .cultivation-overview-left {
     padding-top: 10px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace-menu-button,
+  .workspace-drawer__close,
+  .secondary-command-button,
+  .cultivation-tab {
+    min-height: 44px !important;
+  }
+
+  .workspace-menu-button {
+    height: 44px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
   }
 }

@@ -99,6 +99,19 @@ export default function useWorkspaceNavigation({
     };
   }, [isWorkspaceMenuOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    function handleResize() {
+      if (window.innerWidth > 1100) {
+        setIsWorkspaceMenuOpen(false);
+      }
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleWorkspaceSelect = useCallback((workspaceId) => {
     setActiveWorkspace(workspaceId);
     if (onWorkspaceSelect) {
