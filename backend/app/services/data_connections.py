@@ -24,6 +24,7 @@ from app.services.runtime_db import (
 from app.services.upload_jobs import (
     build_upload_result,
     read_latest_upload_result,
+    reset_latest_upload_state,
     summarize_result,
     write_latest_upload_result,
     write_latest_upload_summary,
@@ -139,6 +140,41 @@ def set_connection_polling(connection_id: str, *, enabled: bool) -> dict[str, An
     connection["status"] = "polling" if enabled else "offline"
     connection["error_message"] = ""
     return upsert_registered_data_connection(connection)
+
+
+def reset_all_data_connections() -> list[dict[str, Any]]:
+    """Reset all registered data connections and clear active telemetry state."""
+    reset_connections: list[dict[str, Any]] = []
+    for connection in list_registered_data_connections():
+        connection_id = str(connection.get("connection_id") or "")
+        if not connection_id:
+            continue
+        clear_live_baseline(connection_id)
+        reset_payload = {
+            **connection,
+            "polling_enabled": False,
+            "status": "offline",
+            "error_message": "",
+            "last_poll_at": None,
+            "last_success_at": None,
+            "readings_received": 0,
+            "readings_accepted": 0,
+            "readings_rejected": 0,
+            "sensors_detected": 0,
+            "current_scenario": None,
+            "current_tick": None,
+            "latest_telemetry_timestamp": None,
+            "last_ingestion_source": None,
+            "baseline_source": None,
+            "baseline_status": "none",
+            "baseline_samples_collected": 0,
+            "last_baseline_update": None,
+            "baseline_error_message": "",
+        }
+        reset_connections.append(upsert_registered_data_connection(reset_payload))
+
+    reset_latest_upload_state()
+    return reset_connections
 
 
 def reset_connection_live_baseline(connection_id: str) -> dict[str, Any]:

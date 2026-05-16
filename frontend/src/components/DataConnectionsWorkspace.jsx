@@ -459,6 +459,35 @@ export default function DataConnectionsWorkspace({
     }
   }
 
+  async function handleResetAllConnections() {
+    const confirmed = window.confirm(
+      "Reset all telemetry connections and clear active telemetry source state?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    setConnectionBusy("reset-all");
+    setConnectionError("");
+    try {
+      const response = await apiFetch("/api/data-connections/reset-all", {
+        accessCode,
+        method: "POST",
+      });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? payload?.message ?? `Unexpected response: ${response.status}`);
+      }
+      setConnections(payload?.connections ?? []);
+      setUploadResult(null);
+      await loadConnections();
+      setConnectionError(payload?.message ?? "All telemetry connections were reset.");
+    } catch (error) {
+      setConnectionError(normalizeErrorMessage(error?.message ?? error));
+    } finally {
+      setConnectionBusy("");
+    }
+  }
+
   const activeConnection = connections.find((item) => item.connection_id === DEFAULT_CONNECTION_ID) ?? connections[0] ?? null;
   const healthyCount = connections.filter((item) => ["online", "polling"].includes(String(item.status).toLowerCase())).length;
   const totalSensors = connections.reduce((sum, item) => sum + (item.sensors_detected ?? 0), 0);
@@ -744,6 +773,14 @@ export default function DataConnectionsWorkspace({
                   onClick={handleSaveConnection}
                 >
                   {connectionBusy === `${connectionForm.connection_id}:save` ? "Saving" : "Save Connection"}
+                </button>
+                <button
+                  className="secondary-command-button"
+                  type="button"
+                  disabled={connectionBusy === "reset-all"}
+                  onClick={handleResetAllConnections}
+                >
+                  {connectionBusy === "reset-all" ? "Resetting" : "Reset All Connections"}
                 </button>
               </div>
             </form>

@@ -180,3 +180,8 @@ class DataConnectionActionResponse(BaseModel):
     normalized_preview: list[dict[str, Any]] = Field(default_factory=list)
     latest_result: dict[str, Any] | None = None
     meaningful_change: bool | None = None
+
+
+class DataConnectionsBulkActionResponse(BaseModel):
+    connections: list[DataConnectionResponse] = Field(default_factory=list)
+    message: str

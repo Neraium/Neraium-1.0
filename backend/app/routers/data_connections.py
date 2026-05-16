@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.security import require_api_access
 from app.models.api_models import (
     DataConnectionActionResponse,
+    DataConnectionsBulkActionResponse,
     DataConnectionsListResponse,
     DataConnectionResponse,
     DataConnectionUpsertRequest,
@@ -16,6 +17,7 @@ from app.services.data_connections import (
     list_registered_data_connections,
     poll_data_connection_once,
     read_connection_status,
+    reset_all_data_connections,
     reset_connection_live_baseline,
     set_connection_polling,
     test_data_connection,
@@ -165,6 +167,15 @@ def reset_data_connection_baseline(connection_id: str) -> dict[str, Any]:
     return {
         "connection": connection,
         "message": f"Live baseline reset for {connection['name']}. Polling will rebuild it from new telemetry.",
+    }
+
+
+@router.post("/data-connections/reset-all", response_model=DataConnectionsBulkActionResponse)
+def reset_all_connections() -> dict[str, Any]:
+    connections = reset_all_data_connections()
+    return {
+        "connections": connections,
+        "message": "All telemetry connections were reset and active telemetry state was cleared.",
     }
 
 

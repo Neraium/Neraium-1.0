@@ -229,3 +229,38 @@ def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_p
     assert post_reset_status.status_code == 200
     assert post_reset_status.json()["baseline_status"] == "building"
     assert post_reset_status.json()["baseline_samples_collected"] == 1
+
+
+def test_reset_all_connections_clears_active_source_state(monkeypatch, tmp_path) -> None:
+    client = build_client(tmp_path)
+    payload = payload_for(
+        tick=71,
+        timestamp="2026-05-10T20:11:04.590Z",
+        temperature=74.8,
+        humidity=57.3,
+        airflow=99.2,
+    )
+    monkeypatch.setattr("app.services.data_connections.fetch_connection_payload", lambda connection, transport=None: payload)
+
+    for _ in range(BASELINE_SAMPLE_COUNT + 1):
+        response = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
+        assert response.status_code == 200
+
+    before_latest = client.get("/api/data/latest-upload")
+    assert before_latest.status_code == 200
+    assert before_latest.json()["status"] != "empty"
+
+    reset = client.post("/api/data-connections/reset-all")
+    assert reset.status_code == 200
+    reset_payload = reset.json()
+    assert reset_payload["connections"]
+    assert all(connection["status"] == "offline" for connection in reset_payload["connections"])
+    assert all(connection["baseline_status"] == "none" for connection in reset_payload["connections"])
+    assert all(connection["last_ingestion_source"] is None for connection in reset_payload["connections"])
+
+    latest = client.get("/api/data/latest-upload")
+    assert latest.status_code == 200
+    latest_payload = latest.json()
+    assert latest_payload["status"] == "empty"
+    assert latest_payload["latest_result"] is None
+    assert latest_payload["result_source"] is None

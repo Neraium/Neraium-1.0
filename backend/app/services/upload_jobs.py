@@ -1033,6 +1033,19 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
     return latest_job.get("result_summary")
 
 
+def reset_latest_upload_state() -> None:
+    """Clear persisted latest upload summary/result/history for runtime reset flows."""
+    ensure_runtime_dirs()
+    upsert_latest_payload("latest_upload_summary", None)
+    upsert_latest_payload("latest_upload_result", None)
+    atomic_write_json_list(latest_upload_history_path(), [])
+    for path in (latest_upload_path(), latest_upload_result_path()):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("latest_upload_state_reset_file_cleanup_failed path=%s", path)
+
+
 def truncate_engine_result(engine_result: dict[str, Any]) -> dict[str, Any]:
     return {
         **engine_result,
