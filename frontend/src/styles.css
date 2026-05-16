@@ -11233,3 +11233,107 @@ nav[aria-label="Workspaces"] a {
   0%, 100% { transform: translateY(0) scale(0.992); opacity: 0.78; }
   50% { transform: translateY(-1px) scale(0.996); opacity: 0.9; }
 }
+
+/* Orb cognition upgrade: environmental field, telemetry shimmer, and directional propagation. */
+.health-orb {
+  transform-origin: 50% 58%;
+}
+
+.health-orb__environment {
+  opacity: calc(0.32 + (var(--orb-pulse, 0.3) * 0.18));
+  transform-origin: 170px 132px;
+}
+
+.health-orb__directional-aura {
+  fill: none;
+  stroke: url(#orbDirectionalAura);
+  stroke-width: 10;
+  stroke-linecap: round;
+  opacity: 0.28;
+  filter: blur(1.2px);
+  transform-origin: 170px 132px;
+}
+
+.health-orb__directional-aura--lower {
+  stroke-width: 8;
+  opacity: 0.2;
+}
+
+.health-orb__telemetry-trace {
+  fill: none;
+  stroke: url(#orbTelemetryTrace);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-dasharray: 32 76;
+  opacity: 0.42;
+  transform-origin: 170px 132px;
+}
+
+.health-orb__field {
+  transform-origin: 170px 132px;
+}
+
+.health-orb--animated .health-orb__environment {
+  animation: orbEnvironmentalField 13.5s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__directional-aura--upper {
+  animation: orbDirectionalPropagation 9.2s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__directional-aura--lower {
+  animation: orbDirectionalPropagationReverse 11.4s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__telemetry-trace {
+  animation: orbTelemetryContinuity 6.8s ease-in-out infinite;
+}
+
+.health-orb--animated .health-orb__field {
+  animation: orbLatticeTension 10.8s ease-in-out infinite;
+}
+
+.health-orb--watch.health-orb--animated .health-orb__telemetry-trace,
+.health-orb--warning.health-orb--animated .health-orb__telemetry-trace {
+  animation-duration: 5.4s;
+}
+
+.health-orb--critical.health-orb--animated .health-orb__environment,
+.health-orb--critical.health-orb--animated .health-orb__directional-aura,
+.health-orb--critical.health-orb--animated .health-orb__telemetry-trace {
+  opacity: 0.54;
+  animation-duration: 4.6s;
+}
+
+.health-orb--neutral .health-orb__environment,
+.health-orb--neutral .health-orb__directional-aura,
+.health-orb--neutral .health-orb__telemetry-trace {
+  opacity: 0.16;
+  animation-duration: 16s;
+}
+
+@keyframes orbEnvironmentalField {
+  0%, 100% { transform: rotate(-0.8deg) scale(0.99); opacity: calc(0.24 + (var(--orb-pulse, 0.3) * 0.12)); }
+  45% { transform: rotate(1.1deg) scale(1.015); opacity: calc(0.36 + (var(--orb-pulse, 0.3) * 0.2)); }
+}
+
+@keyframes orbDirectionalPropagation {
+  0%, 100% { stroke-dasharray: 42 120; stroke-dashoffset: 0; transform: rotate(-1deg) scale(0.985); opacity: 0.16; }
+  48% { stroke-dasharray: 68 92; stroke-dashoffset: -46; transform: rotate(1.2deg) scale(1.018); opacity: calc(0.24 + (var(--orb-pulse, 0.3) * 0.22)); }
+}
+
+@keyframes orbDirectionalPropagationReverse {
+  0%, 100% { stroke-dasharray: 36 132; stroke-dashoffset: 18; transform: rotate(1deg) scale(0.99); opacity: 0.12; }
+  52% { stroke-dasharray: 56 104; stroke-dashoffset: 62; transform: rotate(-1.4deg) scale(1.012); opacity: calc(0.2 + (var(--orb-pulse, 0.3) * 0.18)); }
+}
+
+@keyframes orbTelemetryContinuity {
+  0%, 100% { stroke-dashoffset: 92; opacity: 0.16; transform: translateX(-2px); }
+  38% { opacity: calc(0.3 + (var(--orb-pulse, 0.3) * 0.2)); }
+  62% { stroke-dashoffset: -70; opacity: 0.22; transform: translateX(2px); }
+}
+
+@keyframes orbLatticeTension {
+  0%, 100% { transform: rotate(-0.18deg) scale(0.998); }
+  50% { transform: rotate(0.22deg) scale(1.004); }
+}

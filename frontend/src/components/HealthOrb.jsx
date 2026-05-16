@@ -193,6 +193,16 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
             <stop offset="36%" stopColor="white" stopOpacity="0.08" />
             <stop offset="100%" stopColor="white" stopOpacity="0" />
           </linearGradient>
+          <linearGradient id="orbDirectionalAura" x1="8%" y1="18%" x2="92%" y2="82%">
+            <stop offset="0%" stopColor="var(--orb-hue)" stopOpacity="0" />
+            <stop offset="42%" stopColor="var(--orb-hue)" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="orbTelemetryTrace" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="var(--orb-hue)" stopOpacity="0" />
+            <stop offset="46%" stopColor="white" stopOpacity="0.46" />
+            <stop offset="100%" stopColor="var(--orb-hue)" stopOpacity="0" />
+          </linearGradient>
           <clipPath id="orbSphereMask">
             <circle cx="170" cy="132" r={isCritical ? 92 : isWarning ? 90 : 88} />
           </clipPath>
@@ -205,6 +215,11 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
           <ellipse cx="170" cy="258" rx="138" ry="28" className="health-orb__base-ring" />
         </g>
 
+        <g className="health-orb__environment" aria-hidden="true">
+          <path d="M60 116 C98 54 234 44 284 108" className="health-orb__directional-aura health-orb__directional-aura--upper" />
+          <path d="M48 158 C96 226 236 232 296 158" className="health-orb__directional-aura health-orb__directional-aura--lower" />
+          <path d="M82 132 C126 102 210 104 258 132" className="health-orb__telemetry-trace" />
+        </g>
         <circle cx="170" cy="132" r={isCritical ? 118 : isWarning ? 110 : isWatch ? 104 : 100} className="health-orb__propagation health-orb__propagation--outer" />
         <circle cx="170" cy="132" r={isCritical ? 100 : isWarning ? 96 : isWatch ? 92 : 88} className="health-orb__propagation health-orb__propagation--inner" />
         <circle cx="170" cy="132" r={isCritical ? 98 : isWarning ? 95 : isWatch ? 93 : 92} className="health-orb__aura" />
