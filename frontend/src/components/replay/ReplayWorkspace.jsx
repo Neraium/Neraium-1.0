@@ -61,14 +61,53 @@ export default function ReplayWorkspace({
           fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode }),
         ]);
         if (cancelled) return;
-        const nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
+        let nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
+        let nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
+        let nextMeta = primary.meta ?? {};
+
+        if (mode !== "demo" && nextTimeline.length === 0) {
+          const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
+          if (!cancelled && fallback.timeline.length > 0) {
+            nextTimeline = fallback.timeline;
+            nextComparison = [];
+            nextMeta = {
+              ...(nextMeta ?? {}),
+              ...(fallback.meta ?? {}),
+              replay_source: "upload_job",
+              replay_job_id: fallback.jobId,
+            };
+          }
+        }
+
         setTimeline(nextTimeline);
-        setComparisonTimeline(Array.isArray(comparison.timeline) ? comparison.timeline : []);
-        setMeta(primary.meta ?? {});
+        setComparisonTimeline(nextComparison);
+        setMeta(nextMeta);
         setFrameIndex(Math.max(0, nextTimeline.length - 1));
         setError("");
       } catch (loadError) {
         if (cancelled) return;
+        try {
+          const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
+          if (cancelled) return;
+          if (fallback.timeline.length > 0) {
+            setTimeline(fallback.timeline);
+            setComparisonTimeline([]);
+            setMeta({
+              frame_count: fallback.timeline.length,
+              intervals: 32,
+              replay_compression: replayCompression,
+              canonical_flow: [],
+              replay_source: "upload_job",
+              replay_job_id: fallback.jobId,
+              ...(fallback.meta ?? {}),
+            });
+            setFrameIndex(Math.max(0, fallback.timeline.length - 1));
+            setError("");
+            return;
+          }
+        } catch {
+          // Fall through to user-facing replay notice.
+        }
         setTimeline([]);
         setComparisonTimeline([]);
         setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
@@ -106,7 +145,11 @@ export default function ReplayWorkspace({
         const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode });
         setRangePreviewCount(preview.frame_count ?? 0);
       } catch {
-        setRangePreviewCount(0);
+        const localFrames = timeline.filter((frame) => {
+          const frameTimestamp = String(frame?.timestamp ?? "");
+          return frameTimestamp >= start && frameTimestamp <= end;
+        });
+        setRangePreviewCount(localFrames.length);
       }
     }
     loadRangePreview();
@@ -262,6 +305,28 @@ export default function ReplayWorkspace({
       {error ? <Panel title="Replay Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
     </div>
   );
+}
+
+async function fetchUploadScopedReplay({ apiFetch, accessCode }) {
+  const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
+  if (!latestResponse.ok) {
+    throw new Error(`Unexpected response: ${latestResponse.status}`);
+  }
+  const latestPayload = await latestResponse.json();
+  const latestResult = latestPayload?.latest_result ?? {};
+  const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
+  const jobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
+  if (!jobId) {
+    return { jobId: null, timeline: [], meta: {} };
+  }
+  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(jobId)}`, { accessCode });
+  if (!replayResponse.ok) {
+    throw new Error(`Unexpected response: ${replayResponse.status}`);
+  }
+  const replayPayload = await replayResponse.json();
+  const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
+  const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
+  return { jobId, timeline, meta };
 }
 
 const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];
