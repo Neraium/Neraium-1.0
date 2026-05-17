@@ -325,7 +325,6 @@ function buildLifecycleRail({ awaitingSii, uiState }) {
   if (awaitingSii || uiState === "neutral") {
     return LIFECYCLE_RAIL_NEUTRAL;
   }
-
   return LIFECYCLE_RAIL_ACTIVE;
 }
 

@@ -48,6 +48,14 @@
   min-height: auto;
 }
 
+.system-body-summary-desktop {
+  display: block;
+}
+
+.system-body-summary-mobile {
+  display: none;
+}
+
 .system-body-summary-card--primary {
   display: grid;
   align-content: start;

@@ -57,7 +57,7 @@ export default function SystemBodyWorkspace({
 
             <div className="system-body-status-row">
               <div className={`workspace-header__status workspace-header__status--${connectionTone}`}>
-                <span className="metadata-text">Focus area</span>
+                <span className="metadata-text">Area</span>
                 <strong>{focusLabel || EMPTY_VALUE}</strong>
               </div>
               <div className="workspace-header__status">
@@ -67,12 +67,24 @@ export default function SystemBodyWorkspace({
             </div>
           </header>
 
-          <SystemNarrativePanel
-            summaryKicker="Operator Summary"
-            summaryTitle={summaryTitle}
-            items={narrativeItems}
-            uiState={uiState}
-          />
+          <div className="system-body-summary-desktop">
+            <SystemNarrativePanel
+              summaryKicker="Operator Summary"
+              summaryTitle={summaryTitle}
+              items={narrativeItems}
+              uiState={uiState}
+            />
+          </div>
+
+          <details className="system-body-summary-mobile">
+            <summary>Operator Summary</summary>
+            <SystemNarrativePanel
+              summaryKicker="Operator Summary"
+              summaryTitle={summaryTitle}
+              items={narrativeItems}
+              uiState={uiState}
+            />
+          </details>
         </div>
 
         <SystemOrbPanel
