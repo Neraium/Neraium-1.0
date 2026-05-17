@@ -295,6 +295,16 @@ function App() {
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
 
+  const handleGateUploadComplete = useCallback(async () => {
+    setIsDemoMode(false);
+    setAllowPersistedLatest(true);
+    setDriftHistory([]);
+    const hasResult = await loadLatestUploadState({ includePersisted: true });
+    setSessionIntent(hasResult ? "current" : "neutral");
+    await loadFacilitySystems();
+    setEvidenceRefreshKey((current) => current + 1);
+  }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+
   const applyDemoStep = useCallback((index) => {
     const step = DEMO_STEPS[index] ?? DEMO_STEPS[0];
     demoNavigationRef.current = true;
@@ -402,7 +412,17 @@ function App() {
     }
 
     if (activeWorkspace === "system-body") { 
-      return <SystemTopologyWorkspace liveOps={displayedLiveOps} selectedTarget={selectedTopologyTarget} onSelectTarget={setSelectedTopologyTarget} />; 
+      return (
+        <SystemTopologyWorkspace
+          liveOps={displayedLiveOps}
+          selectedTarget={selectedTopologyTarget}
+          onSelectTarget={setSelectedTopologyTarget}
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          onWorkspaceNavigate={handleWorkspaceSelect}
+          onUploadComplete={handleGateUploadComplete}
+        />
+      ); 
     } 
  
     if (activeWorkspace === "drift-timeline") { 

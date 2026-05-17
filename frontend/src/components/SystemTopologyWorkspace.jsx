@@ -24,6 +24,10 @@ export default function SystemTopologyWorkspace({
   liveOps,
   selectedTarget,
   onSelectTarget,
+  apiFetch,
+  accessCode,
+  onWorkspaceNavigate,
+  onUploadComplete,
 }) {
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
   const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
@@ -100,6 +104,10 @@ export default function SystemTopologyWorkspace({
       statusLight={governed.statusLight}
       governedOnly
       governedDetail={governed.detail}
+      apiFetch={apiFetch}
+      accessCode={accessCode}
+      onWorkspaceNavigate={onWorkspaceNavigate}
+      onUploadComplete={onUploadComplete}
     />
   );
 }

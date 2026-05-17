@@ -466,6 +466,34 @@
   color: var(--text-primary);
 }
 
+.system-gate__settings-action {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(11, 15, 19, 0.72);
+  color: rgba(233, 240, 240, 0.9);
+  text-align: left;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  padding: 9px 10px;
+}
+
+.system-gate__settings-action:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.system-gate__upload-input {
+  display: none;
+}
+
+.system-gate__settings-message {
+  margin: 10px 0 0;
+  color: rgba(214, 225, 223, 0.76);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .system-gate__detail {
   position: absolute;
   left: 14px;
