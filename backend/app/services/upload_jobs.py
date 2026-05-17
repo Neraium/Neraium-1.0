@@ -541,8 +541,10 @@ def stream_csv_windows(
 ) -> tuple[list[str], list[list[str]], int, dict[str, Any]]:
     parse_started = time.perf_counter()
     file_size_bytes = file_path.stat().st_size if file_path.exists() else 0
-    first_rows: list[list[str]] = []
-    tail_rows: deque[list[str]] = deque(maxlen=MAX_ANALYSIS_ROWS // 2)
+    first_rows: list[tuple[int, list[str]]] = []
+    tail_rows: deque[tuple[int, list[str]]] = deque(maxlen=MAX_ANALYSIS_ROWS // 3)
+    middle_reservoir: list[tuple[int, list[str]]] = []
+    middle_capacity = max(1, MAX_ANALYSIS_ROWS - (MAX_ANALYSIS_ROWS // 3) - (MAX_ANALYSIS_ROWS // 3))
     room_counts: Counter[str] = Counter()
     total_rows = 0
     malformed_rows = 0
@@ -581,10 +583,16 @@ def stream_csv_windows(
                 room_counts[row[room_index].strip()] += 1
             if len(row) != len(columns):
                 malformed_rows += 1
-            if len(first_rows) < MAX_ANALYSIS_ROWS // 2:
-                first_rows.append(row)
+            if len(first_rows) < MAX_ANALYSIS_ROWS // 3:
+                first_rows.append((total_rows - 1, row))
             else:
-                tail_rows.append(row)
+                if len(middle_reservoir) < middle_capacity:
+                    middle_reservoir.append((total_rows - 1, row))
+                else:
+                    reservoir_index = int(np.random.randint(0, max(total_rows, 1)))
+                    if reservoir_index < middle_capacity:
+                        middle_reservoir[reservoir_index] = (total_rows - 1, row)
+                tail_rows.append((total_rows - 1, row))
             if total_rows % CHUNK_SIZE_ROWS == 0:
                 chunk_count += 1
                 try:
@@ -609,7 +617,12 @@ def stream_csv_windows(
         chunk_count += 1
 
     last_bytes_processed = file_size_bytes
-    data_rows = first_rows + list(tail_rows)
+    merged_rows = first_rows + middle_reservoir + list(tail_rows)
+    deduped_by_index: dict[int, list[str]] = {}
+    for row_index, row in merged_rows:
+        deduped_by_index[row_index] = row
+    sampled_row_indexes = sorted(deduped_by_index.keys())
+    data_rows = [deduped_by_index[index] for index in sampled_row_indexes]
     if status_callback:
         status_callback(
             "PARSING",
@@ -643,6 +656,7 @@ def stream_csv_windows(
         "bytes_processed": last_bytes_processed,
         "timings": {"parse_seconds": round(time.perf_counter() - parse_started, 4)},
         "room_summary": room_summary_from_counts(room_counts, total_rows),
+        "sampled_row_indexes": sampled_row_indexes,
     }
 
 
@@ -783,6 +797,7 @@ def build_upload_result(
         numeric_profiles=numeric_profiles,
         timestamp_column=detected_timestamp_column,
         primary_room=primary_room,
+        row_indexes=processing_stats.get("sampled_row_indexes"),
     )
     sii_intelligence["replay_timeline"] = replay_timeline
     processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
@@ -1386,14 +1401,14 @@ def downsample_rows(rows: list[list[str]], limit: int) -> list[list[str]]:
 
 def replay_target_frames(total_rows: int) -> int:
     if total_rows < 10_000:
-        return 20
+        return 60
     if total_rows < 100_000:
-        return 50
-    if total_rows <= 500_000:
         return 100
+    if total_rows <= 500_000:
+        return 160
     if total_rows <= 1_000_000:
-        return 150
-    return 200
+        return 220
+    return 280
 
 
 def replay_baseline_rows(total_rows: int) -> int:
@@ -1440,6 +1455,7 @@ def build_structural_replay_timeline(
     numeric_profiles: list[dict[str, Any]],
     timestamp_column: str | None,
     primary_room: str,
+    row_indexes: list[int] | None = None,
 ) -> dict[str, Any]:
     vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
     vectors = vector_rows["vectors"]
@@ -1454,8 +1470,7 @@ def build_structural_replay_timeline(
         return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
 
     frame_target = replay_target_frames(total_rows)
-    frame_count = max(2, min(200, frame_target, available))
-    step = max(1, int(math.floor(available / frame_count)))
+    frame_count = max(2, min(300, frame_target, available))
     window_size = max(5, min(64, baseline_count // 2))
 
     vector_matrix = np.asarray(vectors, dtype=float)
@@ -1471,11 +1486,48 @@ def build_structural_replay_timeline(
     prev_velocity = 0.0
     distances: list[float] = []
 
-    frame_positions = list(range(baseline_count, sample_count, step))
-    if frame_positions[-1] != sample_count - 1:
-        frame_positions.append(sample_count - 1)
-    if len(frame_positions) > 200:
-        frame_positions = frame_positions[:199] + [frame_positions[-1]]
+    dense_target = min(1200, available)
+    dense_step = max(1, int(math.floor(available / max(dense_target, 1))))
+    dense_positions = list(range(baseline_count, sample_count, dense_step))
+    if not dense_positions or dense_positions[-1] != sample_count - 1:
+        dense_positions.append(sample_count - 1)
+
+    coarse_distances: list[tuple[int, float]] = []
+    for sample_index in dense_positions:
+        window_start = max(baseline_count, sample_index - window_size + 1)
+        window_vectors = vector_matrix[window_start:sample_index + 1]
+        window_mean = np.nan_to_num(np.nanmean(window_vectors, axis=0), nan=0.0)
+        normalized_delta = np.abs(window_mean - baseline_mean) / safe_baseline
+        baseline_distance = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 2.0))
+        coarse_distances.append((sample_index, baseline_distance))
+
+    significance_candidates: list[tuple[float, int]] = []
+    previous_distance = coarse_distances[0][1] if coarse_distances else 0.0
+    previous_velocity = 0.0
+    previous_state = None
+    for sample_index, baseline_distance in coarse_distances:
+        velocity = baseline_distance - previous_distance
+        acceleration = velocity - previous_velocity
+        state = classify_structural_state(
+            baseline_distance=baseline_distance,
+            drift_velocity=velocity,
+            drift_acceleration=acceleration,
+            recent_distances=[previous_distance, baseline_distance],
+        )
+        score = abs(velocity) + (2.0 * abs(acceleration)) + (0.25 if state != previous_state else 0.0)
+        significance_candidates.append((score, sample_index))
+        previous_distance = baseline_distance
+        previous_velocity = velocity
+        previous_state = state
+
+    uniform_positions = np.linspace(baseline_count, sample_count - 1, num=frame_count, dtype=int).tolist()
+    frame_positions_set = set(uniform_positions)
+    for _, sample_index in sorted(significance_candidates, key=lambda item: item[0], reverse=True)[: frame_count * 2]:
+        frame_positions_set.add(int(sample_index))
+    frame_positions = sorted(frame_positions_set)
+    if len(frame_positions) > 300:
+        sampled = np.linspace(0, len(frame_positions) - 1, num=300, dtype=int).tolist()
+        frame_positions = [frame_positions[index] for index in sampled]
 
     for frame_index, sample_index in enumerate(frame_positions):
         window_start = max(baseline_count, sample_index - window_size + 1)
@@ -1516,13 +1568,17 @@ def build_structural_replay_timeline(
         )
         phase = replay_state_to_phase(structural_state)
 
-        sample_row_index = vector_rows["row_indexes"][sample_index]
-        sample_window_start = vector_rows["row_indexes"][window_start]
-        global_row_start = min(total_rows - 1, int(round((sample_window_start / max(len(rows) - 1, 1)) * (total_rows - 1))))
-        global_row_end = min(total_rows - 1, int(round((sample_row_index / max(len(rows) - 1, 1)) * (total_rows - 1))))
+        sample_row_position = vector_rows["row_indexes"][sample_index]
+        sample_window_position = vector_rows["row_indexes"][window_start]
+        if row_indexes and len(row_indexes) == len(rows):
+            global_row_start = min(total_rows - 1, max(0, int(row_indexes[sample_window_position])))
+            global_row_end = min(total_rows - 1, max(0, int(row_indexes[sample_row_position])))
+        else:
+            global_row_start = min(total_rows - 1, int(round((sample_window_position / max(len(rows) - 1, 1)) * (total_rows - 1))))
+            global_row_end = min(total_rows - 1, int(round((sample_row_position / max(len(rows) - 1, 1)) * (total_rows - 1))))
 
-        start_ts = parse_runner_timestamp(columns, rows[sample_window_start], timestamp_column, sample_window_start)
-        end_ts = parse_runner_timestamp(columns, rows[sample_row_index], timestamp_column, sample_row_index)
+        start_ts = parse_runner_timestamp(columns, rows[sample_window_position], timestamp_column, sample_window_position)
+        end_ts = parse_runner_timestamp(columns, rows[sample_row_position], timestamp_column, sample_row_position)
 
         confidence = float(np.clip(np.mean(~np.isnan(window_vectors)), 0.0, 1.0)) if window_vectors.size else 0.0
 
