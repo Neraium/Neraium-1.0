@@ -332,3 +332,49 @@
   }
 
 }
+/* Hard cap Structural State mobile typography */
+@media (max-width: 720px) {
+  .system-status-rail__item {
+    flex: 0 0 92px !important;
+    width: 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+    padding: 8px 9px !important;
+  }
+
+  .system-status-rail__item span {
+    font-size: 0.55rem !important;
+  }
+
+  .system-status-rail__item strong {
+    font-size: 1.15rem !important;
+    line-height: 1 !important;
+  }
+
+  .system-body-hero__header .workspace-header__title,
+  .workspace-header__title {
+    font-size: clamp(2rem, 8vw, 2.55rem) !important;
+    line-height: 0.98 !important;
+  }
+
+  .system-body-action-strip strong {
+    font-size: clamp(1.35rem, 6.2vw, 1.85rem) !important;
+    line-height: 1.08 !important;
+  }
+
+  .workspace-header__status strong {
+    font-size: clamp(1.25rem, 6vw, 1.75rem) !important;
+    line-height: 1.05 !important;
+  }
+
+  .system-body-summary-card h2 {
+    font-size: clamp(1.25rem, 6vw, 1.75rem) !important;
+    line-height: 1.12 !important;
+  }
+
+  .system-body-narrative-item p,
+  .system-body-evidence-card p {
+    font-size: 0.9rem !important;
+    line-height: 1.35 !important;
+  }
+}
