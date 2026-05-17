@@ -34,6 +34,15 @@ export default function ReplayWorkspace({
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
   const [replayMode, setReplayMode] = useState(false);
+  const togglePlayback = () => {
+    setIsPlaying((value) => {
+      const next = !value;
+      if (next) {
+        setReplayMode(true);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!shouldRequestReplay) {
@@ -173,7 +182,7 @@ export default function ReplayWorkspace({
         <MetricGrid metrics={metrics} />
         {expertMode ? (
           <div className="structural-replay-controls">
-            <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause Replay" : "Play Replay"}</button>
+            <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause Replay" : "Play Replay"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)} disabled={!hasReplaySnapshots}>{comparisonMode ? "Primary View" : "Comparison Mode"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous Frame</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next Frame</button>
@@ -189,7 +198,7 @@ export default function ReplayWorkspace({
           <div className="structural-replay-controls">
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
+            <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
             <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>

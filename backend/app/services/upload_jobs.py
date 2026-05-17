@@ -486,6 +486,7 @@ def process_csv_file(
         filename=filename,
         status_callback=status_callback,
         processing_stats=processing_stats,
+        source_file_path=file_path,
     )
 
 
@@ -671,6 +672,7 @@ def build_upload_result(
     intelligence_source: str = "uploaded",
     intelligence_mode: str = "live",
     intelligence_source_metadata: dict[str, Any] | None = None,
+    source_file_path: Path | None = None,
 ) -> dict[str, Any]:
     stage_started = time.perf_counter()
     timed_status(status_callback, "VALIDATING_SCHEMA", processing_stats, rows_processed=total_rows, columns_detected=len(columns), bytes_processed=processing_stats.get("bytes_processed", 0))
@@ -684,6 +686,15 @@ def build_upload_result(
     detected_timestamp_column = detect_timestamp_column(columns)
     if detected_timestamp_column is None:
         warnings.append("No obvious timestamp column detected.")
+    sampled_row_indexes = processing_stats.get("sampled_row_indexes")
+    data_rows, sampled_row_indexes = order_rows_chronologically(
+        columns=columns,
+        rows=data_rows,
+        timestamp_column=detected_timestamp_column,
+        row_indexes=sampled_row_indexes if isinstance(sampled_row_indexes, list) else None,
+    )
+    if sampled_row_indexes:
+        processing_stats["sampled_row_indexes"] = sampled_row_indexes
 
     numeric_profiles = profile_numeric_columns(columns, data_rows)
     warnings.extend(
@@ -780,6 +791,34 @@ def build_upload_result(
     stage_started = time.perf_counter()
     timed_status(status_callback, "GENERATING_REPLAY", processing_stats, rows_processed=total_rows, columns_detected=len(columns), result_available=True, first_usable_available=True)
     sii_rows = downsample_rows(data_rows, MAX_SII_ROWS)
+    replay_rows = data_rows
+    replay_row_indexes = processing_stats.get("sampled_row_indexes")
+    replay_rows_mode = "sampled_windows"
+    if source_file_path is not None and source_file_path.exists() and processing_stats.get("used_streaming"):
+        frame_target = replay_target_frames(total_rows)
+        replay_rows_target = max(600, min(2400, frame_target * 8))
+        full_timeline_rows, full_timeline_indexes = build_replay_rows_from_full_csv(
+            file_path=source_file_path,
+            columns=columns,
+            numeric_profiles=numeric_profiles,
+            total_rows=total_rows,
+            target_rows=replay_rows_target,
+            timestamp_column=detected_timestamp_column,
+        )
+        if full_timeline_rows:
+            replay_rows = full_timeline_rows
+            replay_row_indexes = full_timeline_indexes
+            replay_rows_mode = "full_timeline"
+            processing_stats["replay_rows_source"] = "full_timeline"
+            processing_stats["replay_rows_count"] = len(full_timeline_rows)
+        else:
+            processing_stats["replay_rows_source"] = "sampled_windows"
+            processing_stats["replay_rows_count"] = len(replay_rows)
+    else:
+        processing_stats["replay_rows_source"] = "in_memory_rows"
+        processing_stats["replay_rows_count"] = len(replay_rows)
+    if replay_rows_mode == "sampled_windows" and processing_stats.get("used_streaming"):
+        warnings.append("Replay timeline was generated from sampled windows because full-timeline replay extraction was unavailable.")
     sii_runner_result = run_sii_runner(
         columns=columns,
         rows=sii_rows,
@@ -792,12 +831,12 @@ def build_upload_result(
     )
     replay_timeline = build_structural_replay_timeline(
         columns=columns,
-        rows=data_rows,
+        rows=replay_rows,
         total_rows=total_rows,
         numeric_profiles=numeric_profiles,
         timestamp_column=detected_timestamp_column,
         primary_room=primary_room,
-        row_indexes=processing_stats.get("sampled_row_indexes"),
+        row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
     )
     sii_intelligence["replay_timeline"] = replay_timeline
     processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
@@ -1397,6 +1436,125 @@ def downsample_rows(rows: list[list[str]], limit: int) -> list[list[str]]:
         return rows
     step = len(rows) / limit
     return [rows[min(len(rows) - 1, int(index * step))] for index in range(limit)]
+
+
+def order_rows_chronologically(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    timestamp_column: str | None,
+    row_indexes: list[int] | None = None,
+) -> tuple[list[list[str]], list[int] | None]:
+    if not rows or not timestamp_column:
+        return rows, row_indexes
+    if timestamp_column not in columns:
+        return rows, row_indexes
+    indexed: list[tuple[float, int, list[str], int | None]] = []
+    for local_index, row in enumerate(rows):
+        source_index = row_indexes[local_index] if row_indexes and local_index < len(row_indexes) else local_index
+        timestamp_value = parse_runner_timestamp(columns, row, timestamp_column, source_index)
+        indexed.append((timestamp_value, local_index, row, source_index))
+    indexed.sort(key=lambda item: (item[0], item[1]))
+    ordered_rows = [item[2] for item in indexed]
+    if row_indexes is None:
+        return ordered_rows, None
+    ordered_indexes = [int(item[3] or 0) for item in indexed]
+    return ordered_rows, ordered_indexes
+
+
+def build_replay_rows_from_full_csv(
+    *,
+    file_path: Path,
+    columns: list[str],
+    numeric_profiles: list[dict[str, Any]],
+    total_rows: int,
+    target_rows: int,
+    timestamp_column: str | None,
+) -> tuple[list[list[str]], list[int]]:
+    if total_rows <= 0 or target_rows <= 0:
+        return [], []
+    profile_columns = {str(profile.get("column")) for profile in numeric_profiles if profile.get("column")}
+    numeric_indexes = [index for index, name in enumerate(columns) if name in profile_columns]
+    if not numeric_indexes:
+        return [], []
+
+    bin_count = max(32, min(total_rows, target_rows))
+    bin_size = max(1, int(math.ceil(total_rows / bin_count)))
+    replay_rows: list[list[str]] = []
+    replay_indexes: list[int] = []
+    active_bin = -1
+    first_row_in_bin: list[str] | None = None
+    last_row_in_bin: list[str] | None = None
+    last_index = 0
+    sums: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    row_counter = -1
+
+    def flush_bin() -> None:
+        nonlocal first_row_in_bin, last_row_in_bin, last_index, sums, counts
+        if first_row_in_bin is None or last_row_in_bin is None:
+            return
+        representative_row = list(last_row_in_bin)
+        for column_index in numeric_indexes:
+            value_count = counts.get(column_index, 0)
+            if value_count <= 0:
+                continue
+            representative_row[column_index] = f"{(sums.get(column_index, 0.0) / value_count):.6f}"
+        if timestamp_column and timestamp_column in columns:
+            ts_index = columns.index(timestamp_column)
+            if ts_index < len(representative_row) and ts_index < len(last_row_in_bin):
+                representative_row[ts_index] = last_row_in_bin[ts_index]
+        replay_rows.append(representative_row)
+        replay_indexes.append(last_index)
+        first_row_in_bin = None
+        last_row_in_bin = None
+        last_index = 0
+        sums = {}
+        counts = {}
+
+    try:
+        csv_file = file_path.open("r", encoding="utf-8-sig", newline="")
+    except UnicodeDecodeError:
+        return [], []
+
+    with csv_file:
+        reader = csv.reader(csv_file)
+        try:
+            next(reader)
+        except StopIteration:
+            return [], []
+        for row in reader:
+            if not any(cell.strip() for cell in row):
+                continue
+            row_counter += 1
+            bin_index = min(bin_count - 1, row_counter // bin_size)
+            if bin_index != active_bin:
+                flush_bin()
+                active_bin = bin_index
+                first_row_in_bin = row
+            last_row_in_bin = row
+            last_index = row_counter
+            for column_index in numeric_indexes:
+                if column_index >= len(row):
+                    continue
+                raw = row[column_index].strip()
+                if raw == "":
+                    continue
+                try:
+                    value = float(raw)
+                except ValueError:
+                    continue
+                sums[column_index] = sums.get(column_index, 0.0) + value
+                counts[column_index] = counts.get(column_index, 0) + 1
+        flush_bin()
+
+    ordered_rows, ordered_indexes = order_rows_chronologically(
+        columns=columns,
+        rows=replay_rows,
+        timestamp_column=timestamp_column,
+        row_indexes=replay_indexes,
+    )
+    return ordered_rows, ordered_indexes or replay_indexes
 
 
 def replay_target_frames(total_rows: int) -> int:
