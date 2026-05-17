@@ -1,4 +1,5 @@
 import SectionCard from "../../layout/SectionCard";
+import { OPERATIONAL_VOCABULARY } from "../../../viewModels/operationalVocabulary";
 
 export default function SystemEvidencePanel({ evidenceItems, timelineItems, uiState }) {
   const visibleEvidence = evidenceItems.filter((item) => hasOperatorValue(item.value)).slice(0, 3);
@@ -20,7 +21,15 @@ export default function SystemEvidencePanel({ evidenceItems, timelineItems, uiSt
         </SectionCard>
       ) : null}
 
-      {visibleTimeline.length > 0 ? (
+      {uiState === "neutral" ? (
+        <SectionCard className={`system-body-timeline-card ui-state-surface ui-state-surface--${uiState}`}>
+          <span className="section-label">Structural Progression</span>
+          <div className="empty-state compact">
+            <strong>{OPERATIONAL_VOCABULARY.neutral.noActiveProgression}</strong>
+            <p>Structural progression tracking begins after telemetry baseline formation.</p>
+          </div>
+        </SectionCard>
+      ) : visibleTimeline.length > 0 ? (
         <SectionCard className={`system-body-timeline-card ui-state-surface ui-state-surface--${uiState}`}>
           <span className="section-label">Structural Progression</span>
           <ul className="system-body-timeline-list">

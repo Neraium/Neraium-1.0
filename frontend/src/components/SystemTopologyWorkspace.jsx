@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
+import { LIFECYCLE_RAIL_NEUTRAL, OPERATIONAL_VOCABULARY } from "../viewModels/operationalVocabulary";
 
 const STATE = {
   nominal: {
@@ -83,7 +84,7 @@ export default function SystemTopologyWorkspace({
   const awaitingLabel =
     liveOps.intelligenceMode === "processing"
       ? "Telemetry processing in progress"
-      : "Awaiting baseline telemetry";
+      : OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry;
 
   const issueType = awaitingSii
     ? awaitingLabel
@@ -187,7 +188,7 @@ export default function SystemTopologyWorkspace({
 
   const humanRead =
     awaitingSii || uiState === "neutral"
-      ? "Collect more telemetry to establish baseline and persistence."
+      ? "Upload telemetry to begin baseline formation."
       : (
           liveOps.connectionActionHint
           || "Confirm persistence across recent telemetry windows."
@@ -312,16 +313,10 @@ export default function SystemTopologyWorkspace({
 
 function buildLifecycleRail({ liveOps, awaitingSii, uiState }) {
   if (awaitingSii || uiState === "neutral") {
-    return [
-      { label: "Intake", status: "Pending" },
-      { label: "Baseline", status: "Pending" },
-      { label: "Monitoring", status: "Idle" },
-      { label: "Drift", status: "None" },
-      { label: "Review", status: "None" },
-    ];
+    return LIFECYCLE_RAIL_NEUTRAL;
   }
-  const driftStatus = uiState === "critical" || uiState === "warning" ? "Review" : uiState === "watch" ? "Review" : "None";
-  const reviewStatus = uiState === "critical" || uiState === "warning" ? "Needed" : uiState === "watch" ? "Active" : "None";
+  const driftStatus = uiState === "critical" || uiState === "warning" || uiState === "watch" ? "Review" : "None";
+  const reviewStatus = uiState === "critical" || uiState === "warning" || uiState === "watch" ? "Needed" : "None";
   return [
     { label: "Intake", status: "Confirmed" },
     { label: "Baseline", status: "Confirmed" },

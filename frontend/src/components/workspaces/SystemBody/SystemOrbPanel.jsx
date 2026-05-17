@@ -1,4 +1,5 @@
 import HealthOrb from "../../HealthOrb";
+import { OPERATIONAL_VOCABULARY } from "../../../viewModels/operationalVocabulary";
 
 const STATE_COPY = {
   stable: {
@@ -42,18 +43,18 @@ const STATE_COPY = {
     environment: "Envelope cooling",
   },
   unknown: {
-    code: "DISCONNECTED",
-    attention: "Awaiting baseline",
+    code: "STANDBY",
+    attention: OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry,
     structural: "Structure unverified",
-    telemetry: "Evidence stream pending",
+    telemetry: OPERATIONAL_VOCABULARY.neutral.baselinePending,
     progression: "No escalation model",
     environment: "Dormant field",
   },
   neutral: {
-    code: "DISCONNECTED",
-    attention: "Awaiting baseline",
+    code: "STANDBY",
+    attention: OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry,
     structural: "Structure unverified",
-    telemetry: "Evidence stream pending",
+    telemetry: OPERATIONAL_VOCABULARY.neutral.baselinePending,
     progression: "No escalation model",
     environment: "Dormant field",
   },

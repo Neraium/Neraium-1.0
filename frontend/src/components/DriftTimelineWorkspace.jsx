@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { OPERATIONAL_VOCABULARY } from "../viewModels/operationalVocabulary";
 
 function formatSigned(value) {
   const rounded = Number(value ?? 0).toFixed(3);
@@ -30,43 +31,6 @@ function normalizeStateLabel(tone, distance, velocity, hasEnoughPoints) {
   if (distance >= 0.36 || velocity >= 0.035) return "Alert";
   if (distance >= 0.16 || velocity >= 0.015) return "Watch";
   return "Stable";
-}
-
-function buildSimulatedHistory(mode, phase = 0) {
-  const samples = 24;
-  const points = [];
-  let previous = null;
-  let previousVelocity = 0;
-
-  for (let idx = 0; idx < samples; idx += 1) {
-    const t = idx / (samples - 1);
-    const p = phase * 0.18;
-    let distance;
-
-    if (mode === "stable") {
-      distance = 0.075 + Math.sin(idx * 0.55 + p) * 0.012 + Math.cos(idx * 0.18 + p * 0.5) * 0.006;
-    } else if (mode === "drift") {
-      distance = 0.11 + t * 0.17 + Math.sin(idx * 0.5 + p) * 0.022;
-    } else {
-      distance = 0.18 + t * t * 0.62 + Math.sin(idx * 0.72 + p) * 0.03;
-    }
-
-    const roundedDistance = Number(distance.toFixed(3));
-    const velocity = previous == null ? 0 : Number((roundedDistance - previous).toFixed(3));
-    const acceleration = Number((velocity - previousVelocity).toFixed(3));
-
-    points.push({
-      stamp: `t-${samples - 1 - idx}`,
-      distance: roundedDistance,
-      velocity,
-      acceleration,
-    });
-
-    previous = roundedDistance;
-    previousVelocity = velocity;
-  }
-
-  return points;
 }
 
 function modeFromTone(tone) {
@@ -242,15 +206,9 @@ export default function DriftTimelineWorkspace({
   hasCurrentUploadResult = false,
   isDemoMode,
 }) {
-  const [simTick, setSimTick] = useState(0);
   const [replayHistory, setReplayHistory] = useState(null);
   const [replaySignal, setReplaySignal] = useState("");
   const [replayModeLabel, setReplayModeLabel] = useState("");
-
-  useEffect(() => {
-    const timer = setInterval(() => setSimTick((value) => value + 1), 1200);
-    return () => clearInterval(timer);
-  }, []);
 
   const uploadedHistory = useMemo(
     () => buildUploadedHistoryFromResult(latestUploadResult, latestUploadSnapshot),
@@ -342,13 +300,12 @@ export default function DriftTimelineWorkspace({
     .reduce((sum, value) => sum + Math.abs(value), 0);
   const currentDistance = Number((relationshipMagnitude + driftMagnitude).toFixed(3));
   const hasSignal = relationshipMagnitude > 0 || driftMagnitude > 0;
-  const simulatedMode = modeFromTone(liveOps.facilityTone);
-  const simulatedHistory = buildSimulatedHistory(simulatedMode, simTick);
+  const noActiveTelemetry = !hasUploadedTelemetry && !hasSignal && !replayHistory;
   const baseHistory = hasUploadedTelemetry
     ? uploadedHistory
     : hasSignal
       ? (driftHistory?.length ? driftHistory : [{ stamp: "now", distance: currentDistance, velocity: 0, acceleration: 0 }])
-      : simulatedHistory;
+      : [];
   const history = replayHistory ?? baseHistory ?? [];
   const hasEnoughPoints = history.length >= 2;
   const last = history[history.length - 1] ?? { distance: 0, velocity: 0, acceleration: 0 };
@@ -370,14 +327,14 @@ export default function DriftTimelineWorkspace({
     ? "Uploaded CSV structural drift"
     : replayHistory
       ? `Replay ${replayModeLabel || replayTargetMode}`
-      : (hasSignal ? "Live structural drift" : `Simulated ${simulatedMode}`);
+      : (hasSignal ? "Live structural drift" : OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry);
 
   return (
     <section className="drift-timeline">
       <div className="drift-timeline__header">
         <p className="system-body__kicker">Temporal View</p>
-        <h2>{hasUploadedTelemetry ? "Uploaded CSV Drift Timeline" : "Drift Timeline"}</h2>
-        <p>{hasUploadedTelemetry ? "Structural movement calculated from the uploaded telemetry file." : "Distance from stable baseline, tracked as trajectory not isolated metrics."}</p>
+        <h2>{hasUploadedTelemetry ? "Uploaded CSV Drift Timeline" : OPERATIONAL_VOCABULARY.neutral.noActiveTrajectory}</h2>
+        <p>{hasUploadedTelemetry ? "Structural movement calculated from the uploaded telemetry file." : "Upload telemetry or connect a historian source to begin structural analysis."}</p>
       </div>
 
       {hasUploadedTelemetry && (
@@ -410,34 +367,38 @@ export default function DriftTimelineWorkspace({
           </svg>
         ) : (
           <div className="empty-state compact">
-            <strong>Not enough uploaded samples to calculate drift timeline.</strong>
-            <p>Upload a CSV with multiple numeric telemetry rows so Neraium can calculate movement against baseline.</p>
+            <strong>{noActiveTelemetry ? OPERATIONAL_VOCABULARY.neutral.noActiveTrajectory : "Not enough uploaded samples to calculate drift timeline."}</strong>
+            <p>{noActiveTelemetry ? "Upload telemetry or connect a historian source to begin structural analysis." : "Upload a CSV with multiple numeric telemetry rows so Neraium can calculate movement against baseline."}</p>
           </div>
         )}
-        <div className="timeline-stats">
-          <div>
-            <span>Baseline distance</span>
-            <strong>{toFinite(last.distance).toFixed(3)} baseline units</strong>
-          </div>
-          <div>
-            <span>Current state</span>
-            <strong>{currentStateLabel}</strong>
-          </div>
-          <div>
-            <span>Rate of change</span>
-            <strong>{formatSigned(last.velocity)} baseline units/sample</strong>
-          </div>
-          <div>
-            <span>Change in rate</span>
-            <strong>{formatSigned(last.acceleration)} baseline units/sample^2</strong>
-          </div>
-        </div>
-        <div className="timeline-stats">
-          <div>
-            <span>Timeline signal</span>
-            <strong>{timelineSignalLabel}</strong>
-          </div>
-        </div>
+        {!noActiveTelemetry ? (
+          <>
+            <div className="timeline-stats">
+              <div>
+                <span>Baseline distance</span>
+                <strong>{toFinite(last.distance).toFixed(3)} baseline units</strong>
+              </div>
+              <div>
+                <span>Current state</span>
+                <strong>{currentStateLabel}</strong>
+              </div>
+              <div>
+                <span>Rate of change</span>
+                <strong>{formatSigned(last.velocity)} baseline units/sample</strong>
+              </div>
+              <div>
+                <span>Change in rate</span>
+                <strong>{formatSigned(last.acceleration)} baseline units/sample^2</strong>
+              </div>
+            </div>
+            <div className="timeline-stats">
+              <div>
+                <span>Timeline signal</span>
+                <strong>{timelineSignalLabel}</strong>
+              </div>
+            </div>
+          </>
+        ) : null}
       </article>
 
       <article className="timeline-card">
@@ -446,18 +407,20 @@ export default function DriftTimelineWorkspace({
           <strong>Last updated</strong>
           <span>{lastUpdatedLabel}</span>
         </div>
-        <div className="timeline-stats">
-          {recentSamples.map((sample, index) => (
-            <div key={`${sample.stamp}-${index}`}>
-              <span>{sample.stamp || "now"}</span>
-              <strong>{toFinite(sample.distance).toFixed(3)} baseline units</strong>
-            </div>
-          ))}
-        </div>
-        {!hasUploadedTelemetry && !hasSignal && !replayHistory && (
-          <p className="timeline-item__time">
-            Simulated trajectory is shown while telemetry is unavailable. Upload telemetry or run demo mode for live behavior.
-          </p>
+        {!noActiveTelemetry ? (
+          <div className="timeline-stats">
+            {recentSamples.map((sample, index) => (
+              <div key={`${sample.stamp}-${index}`}>
+                <span>{sample.stamp || "now"}</span>
+                <strong>{toFinite(sample.distance).toFixed(3)} baseline units</strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state compact">
+            <strong>{OPERATIONAL_VOCABULARY.neutral.noActiveAnalysis}</strong>
+            <p>{OPERATIONAL_VOCABULARY.neutral.awaitingHistorianStream}</p>
+          </div>
         )}
         {hasUploadedTelemetry && !hasEnoughPoints && (
           <p className="timeline-item__time">

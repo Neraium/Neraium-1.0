@@ -1,23 +1,24 @@
 .system-body-diagnostics {
-  border: 1px solid rgba(143, 168, 164, 0.12);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(18, 24, 29, 0.72), rgba(10, 14, 17, 0.78));
-  padding: 14px;
+  border: 1px solid rgba(143, 168, 164, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(16, 22, 27, 0.82), rgba(9, 13, 16, 0.86));
+  padding: 12px;
 }
 
 .system-body-diagnostics > summary {
   cursor: pointer;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .system-body-diagnostics__grid {
-  margin-top: 12px;
+  margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .system-body-diagnostics__metric {
   min-height: auto;
+  padding: 10px 11px;
 }

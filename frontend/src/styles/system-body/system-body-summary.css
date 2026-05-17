@@ -1,14 +1,25 @@
 .system-status-rail {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
   margin-bottom: 6px;
 }
 
+.system-status-rail::-webkit-scrollbar {
+  display: none;
+}
+
 .system-status-rail__item {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 96px;
+  scroll-snap-align: start;
   gap: 3px;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 1px solid rgba(143, 168, 164, 0.13);
   border-radius: 10px;
   background: rgba(7, 11, 14, 0.56);
@@ -16,15 +27,19 @@
 
 .system-status-rail__item span {
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .system-status-rail__item strong {
   color: var(--text-primary);
-  font-size: 0.78rem;
-  line-height: 1.2;
+  font-size: 0.68rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .system-body-summary-card {

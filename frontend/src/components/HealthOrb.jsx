@@ -157,6 +157,7 @@ function edgeVisibility(linkIndex, systemState) {
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
   const mode = normalizeOrbState(systemState);
+  const isNeutral = mode === "unknown";
   const isCritical = mode === "propagation_active";
   const isWarning = mode === "drift";
   const isWatch = mode === "watching" || mode === "recovery";
@@ -224,9 +225,13 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
         <g className="health-orb__environment" aria-hidden="true">
           <path d="M60 116 C98 54 234 44 284 108" className="health-orb__directional-aura health-orb__directional-aura--upper" />
           <path d="M48 158 C96 226 236 232 296 158" className="health-orb__directional-aura health-orb__directional-aura--lower" />
-          <path d="M82 132 C126 102 210 104 258 132" className="health-orb__telemetry-trace" />
-          <path d="M76 88 C132 68 212 68 266 91" className="health-orb__telemetry-trace health-orb__telemetry-trace--slow" />
-          <path d="M70 188 C124 214 220 214 274 188" className="health-orb__telemetry-trace health-orb__telemetry-trace--reverse" />
+          {!isNeutral ? (
+            <>
+              <path d="M82 132 C126 102 210 104 258 132" className="health-orb__telemetry-trace" />
+              <path d="M76 88 C132 68 212 68 266 91" className="health-orb__telemetry-trace health-orb__telemetry-trace--slow" />
+              <path d="M70 188 C124 214 220 214 274 188" className="health-orb__telemetry-trace health-orb__telemetry-trace--reverse" />
+            </>
+          ) : null}
         </g>
         <circle cx="170" cy="132" r={isCritical ? 118 : isWarning ? 110 : isWatch ? 104 : 100} className="health-orb__propagation health-orb__propagation--outer" />
         <circle cx="170" cy="132" r={isCritical ? 100 : isWarning ? 96 : isWatch ? 92 : 88} className="health-orb__propagation health-orb__propagation--inner" />
