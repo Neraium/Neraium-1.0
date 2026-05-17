@@ -33,10 +33,74 @@ export default function SystemBodyWorkspace({
 }) {
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const hasAdmittedFinding = statusLight !== "gray";
 
   const operatorFocus =
     narrativeItems?.find((item) => item.label?.toLowerCase().includes("operator"))?.value
     || EMPTY_VALUE;
+
+  if (governedOnly) {
+    return (
+      <PageContainer className="system-body system-body--gate">
+        <section className={`system-gate ui-state-surface ui-state-surface--${uiState}`} aria-label="The Gate">
+          <button type="button" className="system-gate__settings" aria-label="Open Gate settings" onClick={() => setSettingsOpen((v) => !v)}>
+            SET
+          </button>
+          <div className="system-gate__center" role="button" tabIndex={0} onClick={() => hasAdmittedFinding && setDetailOpen(true)} onKeyDown={(event) => {
+            if ((event.key === "Enter" || event.key === " ") && hasAdmittedFinding) {
+              event.preventDefault();
+              setDetailOpen(true);
+            }
+          }}>
+            <h2 className="system-gate__title">The Gate</h2>
+            <SystemOrbPanel
+              systemState={systemState}
+              uiState={uiState}
+              coherence={coherence}
+              stateLabel={stateLabel}
+              lastUpdate={lastUpdate}
+              focusLabel={focusLabel}
+              orbData={null}
+              compactPreview
+            />
+            <p className="system-gate__state">{stateLabel || EMPTY_VALUE}</p>
+            <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
+            <p className="system-gate__inspect">Tap to Inspect</p>
+          </div>
+          {settingsOpen ? (
+            <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
+              <ul>
+                <li>Upload historical data</li>
+                <li>Connect live data source</li>
+                <li>Configure deployment settings</li>
+                <li>Governance/admin access</li>
+              </ul>
+            </aside>
+          ) : null}
+          {detailOpen && hasAdmittedFinding && governedDetail ? (
+            <aside className="system-gate__detail" aria-label="Governed admitted detail view">
+              <header>
+                <strong>Admitted Finding</strong>
+                <button type="button" className="btn btn--secondary" onClick={() => setDetailOpen(false)}>Close</button>
+              </header>
+              <ul>
+                <li><span>Why</span><strong>{governedDetail.evidenceSummary || EMPTY_VALUE}</strong></li>
+                <li><span>Where</span><strong>{governedDetail.affectedSubsystem || EMPTY_VALUE}</strong></li>
+                <li><span>Persistence Count</span><strong>{governedDetail.persistenceConfirmation || EMPTY_VALUE}</strong></li>
+                <li><span>Trajectory</span><strong>{governedDetail.telemetryWindowReferences || EMPTY_VALUE}</strong></li>
+                <li><span>Recovery Window Status</span><strong>{governedDetail.persistenceConfirmation || EMPTY_VALUE}</strong></li>
+                <li><span>Subsystem Affected</span><strong>{governedDetail.affectedSubsystem || EMPTY_VALUE}</strong></li>
+                <li><span>Structural Relationship Evidence</span><strong>{governedDetail.structuralRelationshipEvidence || EMPTY_VALUE}</strong></li>
+                <li><span>Operator Focus</span><strong>{governedDetail.operatorFocus || EMPTY_VALUE}</strong></li>
+                <li><span>EVP Reference</span><strong>{governedDetail.evpPreview || EMPTY_VALUE}</strong></li>
+              </ul>
+            </aside>
+          ) : null}
+        </section>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer className={`system-body system-body--orb-first system-body--mobile-polished ${isEmptyStructuralState ? "system-body--empty-structural" : ""}`}>

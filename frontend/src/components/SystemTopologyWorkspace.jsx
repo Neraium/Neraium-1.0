@@ -48,7 +48,7 @@ export default function SystemTopologyWorkspace({
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = deriveOrbOperationalState({ awaitingSii, layer, liveOps, primaryItem });
+  const systemState = orbStateFromStatusLight(governed.statusLight);
   const primaryMessage = governed.hasPass
     ? concise(governed.passedFindingSummary, 120)
     : "No admitted finding is available for operator display.";
@@ -65,7 +65,7 @@ export default function SystemTopologyWorkspace({
 
   const narrativeItems = compactOperationalItems([
     { label: "Current Governed System State", value: governed.currentGovernedSystemState, state: uiState },
-    { label: "Affected Subsystem", value: concise(governed.affectedSubsystem, 80), state: uiState },
+    ...(governed.hasPass ? [{ label: "Affected Subsystem", value: concise(governed.affectedSubsystem, 80), state: uiState }] : []),
     { label: "Timestamp", value: governed.timestamp, state: "stable" },
   ]);
 
@@ -228,6 +228,13 @@ function statusLightFromAdmitted(admittedState, hasPass, uiState) {
 
 function showEvpForAdmitted(admittedState) {
   return admittedState === "WATCH" || admittedState === "ALERT";
+}
+
+function orbStateFromStatusLight(statusLight) {
+  if (statusLight === "green") return "stable";
+  if (statusLight === "yellow") return "watching";
+  if (statusLight === "red") return "propagation_active";
+  return "unknown";
 }
 
 function previewHash(value) {
