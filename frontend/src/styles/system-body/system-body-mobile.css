@@ -114,40 +114,40 @@
 
   .system-body.system-body--orb-first {
     max-width: 100%;
-    gap: 16px;
+    gap: 20px;
     padding-top: max(0px, env(safe-area-inset-top, 0px));
-    padding-right: max(0px, env(safe-area-inset-right, 0px));
+    padding-right: max(4px, env(safe-area-inset-right, 0px));
     padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-left: max(4px, env(safe-area-inset-left, 0px));
   }
 
   .system-body-hero {
-    gap: 8px;
-    padding: 10px;
+    gap: 12px;
+    padding: 16px;
     min-height: auto;
     border-radius: 14px;
     box-shadow: none;
   }
 
   .system-body-hero__header {
-    gap: 8px;
+    gap: 12px;
   }
 
   .system-body-hero__header .workspace-header__title {
     max-width: none;
-    font-size: clamp(1.875rem, 8vw, 2.25rem);
-    line-height: 1;
+    font-size: 2.5rem;
+    line-height: 1.02;
     letter-spacing: -0.04em;
   }
 
   .system-body-hero__header .workspace-header__subtitle {
     max-width: none;
-    font-size: 0.9rem;
-    line-height: 1.35;
+    font-size: 0.94rem;
+    line-height: 1.45;
   }
 
   .system-status-rail {
-    gap: 5px;
+    gap: 7px;
     padding-right: calc(12px + env(safe-area-inset-right, 0px));
     padding-left: 0;
     padding-bottom: 2px;
@@ -157,9 +157,9 @@
   .system-status-rail__item {
     min-width: max-content;
     max-width: none;
-    min-height: 33px;
-    max-height: 33px;
-    padding: 5px 9px;
+    min-height: 38px;
+    max-height: 38px;
+    padding: 7px 10px;
     border-radius: 999px;
     gap: 2px;
     justify-content: center;
@@ -182,7 +182,7 @@
   }
 
   .system-body-action-strip {
-    padding: 12px;
+    padding: 14px;
     border-radius: 10px;
     border-color: rgba(var(--state-accent-rgb), 0.12);
     background: rgba(9, 14, 18, 0.72);
@@ -200,7 +200,7 @@
   .system-body-status-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 10px;
   }
 
   .system-body-status-row .workspace-header__status {
@@ -235,7 +235,7 @@
   .system-body-summary-mobile > summary {
     cursor: pointer;
     list-style: none;
-    padding: 10px 12px;
+    padding: 12px 14px;
     color: var(--text-primary);
     font-size: 0.74rem;
     letter-spacing: 0.08em;
@@ -247,11 +247,11 @@
   }
 
   .system-body-summary-mobile .system-body-summary-card--primary {
-    margin: 0 10px 10px;
+    margin: 0 12px 12px;
   }
 
   .system-body-summary-card--primary {
-    padding: 12px;
+    padding: 14px;
     border-radius: 14px;
   }
 
@@ -261,11 +261,11 @@
   }
 
   .system-body-narrative-grid {
-    gap: 8px;
+    gap: 10px;
   }
 
   .system-body-narrative-item {
-    padding: 10px 11px;
+    padding: 12px;
     border-radius: 12px;
   }
 
@@ -275,19 +275,19 @@
   }
 
   .system-body-orb-panel {
-    min-height: 132px;
+    min-height: 320px;
     border-top: 1px solid rgba(var(--state-accent-rgb), 0.06);
     border-left: 0;
   }
 
   .system-body-orb-panel__stage {
-    width: min(100%, 148px);
-    min-width: 148px;
-    min-height: 112px;
+    width: min(100%, 248px);
+    min-width: 220px;
+    min-height: 220px;
   }
 
   .system-body-orb-panel__stage .health-orb {
-    max-width: 148px;
+    max-width: 248px;
   }
 
   .system-body-orb-panel__meta {
@@ -313,22 +313,30 @@
   }
 
   .system-body-orb-panel__telemetry {
-    display: none;
+    display: grid;
+    width: min(260px, 60%);
+    left: 10px;
+    bottom: 10px;
   }
 
   .system-body-orb-panel__sync {
-    display: none;
+    display: grid;
+    right: 10px;
+    top: 56px;
+    bottom: auto;
+    max-width: 52%;
   }
 
   .system-body-metric,
   .system-body-evidence-card,
   .system-body-timeline-card {
     min-height: auto;
-    padding: 12px;
+    padding: 14px;
     border-radius: 14px;
   }
 
   .system-body-timeline-list li {
     min-height: auto;
+    padding: 12px;
   }
 }

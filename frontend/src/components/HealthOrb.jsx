@@ -157,6 +157,7 @@ function edgeVisibility(linkIndex, systemState) {
 
 export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
   const mode = normalizeOrbState(systemState);
+  const isAlertState = mode === "drift" || mode === "propagation_active";
   const isNeutral = mode === "unknown";
   const isCritical = mode === "propagation_active";
   const isWarning = mode === "drift";
@@ -176,6 +177,8 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
         "--orb-pulse": tone.pulse,
         "--orb-signal-duration": `${(3.8 - tone.pulse * 1.6).toFixed(2)}s`,
         "--orb-node-duration": `${(5.4 - tone.pulse * 2).toFixed(2)}s`,
+        "--orb-link-alert": isAlertState ? "rgba(255,170,120,0.7)" : "rgba(255,255,255,0.25)",
+        animation: isAlertState ? "orbAlertMotion 4s ease-in-out infinite" : undefined,
       }}
     >
       <svg className="health-orb__svg" viewBox="0 0 340 300" role="img" aria-label="System health orb">
@@ -268,6 +271,10 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
                   x2={n2.x}
                   y2={n2.y}
                   className={`health-orb__link health-orb__link--${visibility}`}
+                  style={{
+                    stroke: "var(--orb-link-alert)",
+                    animation: isAlertState ? "orbEdgeInstability 2s ease-in-out infinite" : undefined,
+                  }}
                 />
                 {(mode !== "unknown" && index % (isCritical ? 2 : isWarning ? 3 : 5) === 0) ? (
                   <line
@@ -290,7 +297,10 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
               cy={node.y}
               r={node.g === "core" ? 4.6 : node.g === "top" || node.g === "bottom" ? 3.6 : 3.2}
               className={`health-orb__node health-orb__node--${node.g} ${node.g === "core" ? "health-orb__node--core" : ""}`}
-              style={{ "--orb-delay": `${index * 80}ms` }}
+              style={{
+                "--orb-delay": `${index * 80}ms`,
+                animation: isAlertState ? `orbNodeDrift ${3 + ((index % 5) * 0.35)}s ease-in-out infinite` : undefined,
+              }}
             />
           ))}
         </g>

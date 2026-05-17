@@ -7,6 +7,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.core.security import require_api_access
 from app.models.api_models import ObservabilitySummaryResponse
+from app.services.aletheia_governance import list_evp_records
 from app.services.evidence_store import list_evidence_runs
 from app.services.runtime_db import audit_events_count, queue_metrics
 
@@ -59,3 +60,16 @@ def get_observability_metrics() -> PlainTextResponse:
         f"neraium_audit_events_total {audit_events_count()}",
     ]
     return PlainTextResponse("\n".join(lines) + "\n")
+
+
+@router.get("/observability/evp-governance")
+def get_evp_governance_records(limit: int = 200) -> dict:
+    records = list_evp_records(limit=limit, operator_visible=None)
+    pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "PASS"]
+    no_pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "NO_PASS"]
+    return {
+        "total": len(records),
+        "pass_count": len(pass_records),
+        "no_pass_count": len(no_pass_records),
+        "records": records,
+    }

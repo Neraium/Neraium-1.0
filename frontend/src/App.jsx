@@ -17,6 +17,7 @@ import OperatorTrainingWorkspace from "./components/OperatorTrainingWorkspace";
 import InfrastructureBehaviorScienceWorkspace from "./components/InfrastructureBehaviorScienceWorkspace";
 import OperatorCognitionTrainingWorkspace from "./components/OperatorCognitionTrainingWorkspace";
 import StructuralCognitionResearchWorkspace from "./components/StructuralCognitionResearchWorkspace";
+import GovernanceAdminWorkspace from "./components/GovernanceAdminWorkspace";
 import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
 import CultivationMissionControl from "./components/cultivation/CultivationMissionControl";
 import CultivationEvidenceWorkspace from "./components/cultivation/CultivationEvidenceWorkspace";
@@ -569,6 +570,17 @@ function App() {
     if (activeWorkspace === "structural-cognition-research") {
       return (
         <StructuralCognitionResearchWorkspace
+          apiFetch={apiFetch}
+          accessCode={apiAccessCode}
+          Panel={Panel}
+          EmptyState={EmptyState}
+        />
+      );
+    }
+
+    if (activeWorkspace === "governance-admin") {
+      return (
+        <GovernanceAdminWorkspace
           apiFetch={apiFetch}
           accessCode={apiAccessCode}
           Panel={Panel}

@@ -9,33 +9,37 @@ export const OPERATIONAL_VOCABULARY = {
     awaitingHistorianStream: "Awaiting historian stream",
   },
   monitoring: {
-    monitoringActive: "Monitoring active",
-    structuralTrackingActive: "Structural tracking active",
+    monitoringActive: "Monitoring",
+    structuralTrackingActive: "Persistence Under Evaluation",
   },
   escalation: {
-    driftEmerging: "Drift emerging",
-    structuralInstabilityDetected: "Structural instability detected",
-    relationshipDivergenceObserved: "Relationship divergence observed",
-    crossSubsystemPropagationObserved: "Cross-subsystem propagation observed",
+    driftEmerging: "Emerging Drift",
+    structuralInstabilityDetected: "Structural Instability",
+    relationshipDivergenceObserved: "Divergence Observed",
+    crossSubsystemPropagationObserved: "Drift Propagation",
   },
   recovery: {
-    structuralConvergenceObserved: "Structural convergence observed",
-    recoveryStabilizationDetected: "Recovery stabilization detected",
+    structuralConvergenceObserved: "Stability Recovery",
+    recoveryStabilizationDetected: "Containment Stable",
   },
 };
 
-export const LIFECYCLE_RAIL_NEUTRAL = [
-  { label: "Intake", status: "-" },
-  { label: "Baseline", status: "-" },
-  { label: "Monitoring", status: "-" },
-  { label: "Drift", status: "-" },
-  { label: "Review", status: "-" },
+export const ESCALATION_LAYERS = [
+  "Stable",
+  "Monitoring",
+  "Emerging Drift",
+  "Persistent Drift",
+  "Structural Instability",
+  "Escalation Candidate",
+  "Critical Escalation",
 ];
 
-export const LIFECYCLE_RAIL_ACTIVE = [
-  { label: "Intake", status: "Ready" },
-  { label: "Baseline", status: "Ready" },
-  { label: "Monitoring", status: "Active" },
-  { label: "Drift", status: "Review" },
-  { label: "Review", status: "Needed" },
-];
+export const LIFECYCLE_RAIL_NEUTRAL = ESCALATION_LAYERS.map((label) => ({
+  label,
+  status: "Pending",
+}));
+
+export const LIFECYCLE_RAIL_ACTIVE_BASE = ESCALATION_LAYERS.map((label, index) => ({
+  label,
+  level: index + 1,
+}));

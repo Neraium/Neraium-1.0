@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.aletheia_governance import govern_candidate
 from app.services.structural_cognition import build_structural_cognition
 
 
@@ -136,7 +137,7 @@ def build_sample_intelligence() -> dict[str, Any]:
         urgency="review",
     )
     operator_explanation = structural_cognition["operator_explanation_v2"]
-    return {
+    candidate = {
         "source": "sii_engine",
         "mode": "sample",
         "facility_state": "Drift observed",
@@ -165,6 +166,8 @@ def build_sample_intelligence() -> dict[str, Any]:
             *rooms[0]["structural_explanation"][:2],
         ],
     }
+    candidate["aletheia_gate"] = govern_candidate(candidate)
+    return candidate
 
 
 def build_upload_intelligence(
@@ -239,7 +242,7 @@ def build_upload_intelligence(
         confidence=confidence_number(driver_attribution),
     )
     primary_room_record = room_records[0]
-    return {
+    candidate = {
         "source": source,
         "mode": mode,
         "facility_state": primary_room_record["room_state"],
@@ -270,6 +273,8 @@ def build_upload_intelligence(
         "source_metadata": source_metadata or {},
         **structural_cognition,
     }
+    candidate["aletheia_gate"] = govern_candidate(candidate)
+    return candidate
 
 
 def build_upload_room_records(

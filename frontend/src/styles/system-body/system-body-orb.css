@@ -4,13 +4,14 @@
   display: grid;
   align-content: center;
   justify-items: center;
-  min-height: clamp(220px, 24vw, 340px);
+  min-height: 320px;
   min-width: 0;
   overflow: hidden;
-  border-left: 1px solid rgba(var(--state-accent-rgb), 0.09);
+  border-left: 1px solid rgba(251, 146, 60, 0.12);
+  border-radius: 28px;
   background:
-    radial-gradient(circle at 50% 44%, rgba(var(--state-accent-rgb), 0.05), transparent 52%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02), transparent 20%);
+    radial-gradient(circle at center, rgba(255, 160, 80, 0.12), transparent 65%),
+    linear-gradient(180deg, #000 0%, #071019 55%, #000 100%);
 }
 
 .system-body-orb-panel__stage {
@@ -99,6 +100,31 @@
   opacity: 0.26;
 }
 
+.system-body-orb-panel__ambient-motion {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: radial-gradient(circle at center, #ffb36b 0%, transparent 60%);
+  background-size: 200% 200%;
+  animation: orbAmbientMotion 18s ease-in-out infinite alternate;
+}
+
+.system-body-orb-panel__alert-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 8px 14px;
+  color: rgba(254, 226, 226, 0.96);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .system-body-orb-panel__lattice span {
   position: absolute;
   width: 14px;
@@ -124,6 +150,7 @@
   bottom: clamp(54px, 7vw, 78px);
   z-index: 5;
   display: grid;
+  gap: 0;
   width: min(250px, 46%);
   border-top: 1px solid rgba(var(--state-accent-rgb), 0.18);
   background: linear-gradient(90deg, rgba(4, 8, 10, 0.7), rgba(4, 8, 10, 0.18));
@@ -139,8 +166,9 @@
 
 .system-body-orb-panel__telemetry strong {
   color: var(--text-primary);
-  font-size: 0.8rem;
-  line-height: 1.2;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  font-weight: 600;
 }
 
 .system-body-orb-panel__sync {
@@ -175,4 +203,36 @@
   font-size: 0.76rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .system-body-orb-panel {
+    min-height: 380px;
+  }
+}
+
+@keyframes orbAmbientMotion {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+
+@keyframes orbAlertMotion {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.02) rotate(0.5deg); }
+  50% { transform: scale(0.98) rotate(-0.5deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes orbNodeDrift {
+  0% { transform: translate(0, 0); opacity: 0.7; }
+  25% { transform: translate(2px, -3px); opacity: 1; }
+  50% { transform: translate(-2px, 2px); opacity: 0.8; }
+  100% { transform: translate(0, 0); opacity: 1; }
+}
+
+@keyframes orbEdgeInstability {
+  0% { opacity: 0.25; }
+  33% { opacity: 0.9; }
+  66% { opacity: 0.4; }
+  100% { opacity: 0.8; }
 }

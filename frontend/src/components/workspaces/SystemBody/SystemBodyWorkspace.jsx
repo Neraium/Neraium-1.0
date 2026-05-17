@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import SystemOrbPanel from "./SystemOrbPanel";
 import SystemNarrativePanel from "./SystemNarrativePanel";
 import SystemEvidencePanel from "./SystemEvidencePanel";
@@ -24,10 +24,15 @@ export default function SystemBodyWorkspace({
   lastUpdate,
   focusLabel,
   lifecycleRail = [],
+  orbData = null,
+  statusLight = "gray",
+  governedOnly = false,
+  governedDetail = null,
   isLoading = false,
   isEmptyStructuralState = false,
 }) {
   void isLoading;
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const operatorFocus =
     narrativeItems?.find((item) => item.label?.toLowerCase().includes("operator"))?.value
@@ -40,45 +45,59 @@ export default function SystemBodyWorkspace({
       <div className="system-body-standard-shell">
       <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
-          {lifecycleRail.length > 0 ? (
-            <div className="system-status-rail" aria-label="Operational lifecycle status rail">
-              {lifecycleRail.map((item) => (
-                <article className="system-status-rail__item" key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.status}</strong>
-                </article>
-              ))}
-            </div>
-          ) : null}
           <header className="system-body-hero__header">
-            <p className="workspace-header__kicker">Primary System State</p>
+            <p className="workspace-header__kicker">Governed Operator State</p>
             <h2 className="workspace-header__title">{stateLabel || EMPTY_VALUE}</h2>
             <p className="workspace-header__subtitle">{primaryMessage || subtitle || EMPTY_VALUE}</p>
+            <div className="system-body-status-light" aria-label="Governed status light">
+              <span className={`system-body-status-light__dot system-body-status-light__dot--${statusLight}`} />
+              <strong>{statusLightLabel(statusLight)}</strong>
+            </div>
 
             <div className="system-body-action-strip">
               <span>Operator Focus</span>
               <strong>{operatorFocus}</strong>
             </div>
-
-            <div className="system-body-status-row">
-              <div className={`workspace-header__status workspace-header__status--${connectionTone}`}>
-                <span className="metadata-text">Area</span>
-                <strong>{focusLabel || EMPTY_VALUE}</strong>
-              </div>
-              <div className="workspace-header__status">
-                <span className="metadata-text">Updated</span>
-                <strong>{lastUpdate || connectionStatus || EMPTY_VALUE}</strong>
-              </div>
-            </div>
           </header>
 
           <div className="system-body-summary-desktop">
-            <SystemNarrativePanel
-              summaryKicker="Operator Summary"
-              summaryTitle={summaryTitle}
-              items={narrativeItems}
-              uiState={uiState}
-            />
+            {governedOnly ? (
+              <section className={`system-body-governed-summary ui-state-surface ui-state-surface--${uiState}`}>
+                <div className="system-body-governed-summary__header">
+                  <span className="section-label">Governed Operator View</span>
+                  <button type="button" className="btn btn--secondary" onClick={() => setDetailOpen((v) => !v)}>
+                    {detailOpen ? "Hide Governed Detail" : "Open Governed Detail"}
+                  </button>
+                </div>
+                <ul className="system-body-governed-summary__list">
+                  {narrativeItems.map((item) => (
+                    <li key={item.label}><span>{item.label}</span><strong>{item.value}</strong></li>
+                  ))}
+                </ul>
+                {detailOpen && governedDetail ? (
+                  <div className="system-body-governed-detail">
+                    <ul>
+                      <li><span>Admitted State</span><strong>{governedDetail.admittedState || EMPTY_VALUE}</strong></li>
+                      <li><span>Evidence Summary</span><strong>{governedDetail.evidenceSummary || EMPTY_VALUE}</strong></li>
+                      <li><span>Persistence Confirmation</span><strong>{governedDetail.persistenceConfirmation || EMPTY_VALUE}</strong></li>
+                      <li><span>Doctrine Version</span><strong>{governedDetail.doctrineVersion || EMPTY_VALUE}</strong></li>
+                      <li><span>Affected Subsystem</span><strong>{governedDetail.affectedSubsystem || EMPTY_VALUE}</strong></li>
+                      <li><span>Structural Relationship Evidence</span><strong>{governedDetail.structuralRelationshipEvidence || EMPTY_VALUE}</strong></li>
+                      <li><span>Operator Focus</span><strong>{governedDetail.operatorFocus || EMPTY_VALUE}</strong></li>
+                      <li><span>Telemetry Window References</span><strong>{governedDetail.telemetryWindowReferences || EMPTY_VALUE}</strong></li>
+                      <li><span>EVP ID/Hash</span><strong>{governedDetail.evpPreview || EMPTY_VALUE}</strong></li>
+                    </ul>
+                  </div>
+                ) : null}
+              </section>
+            ) : (
+              <SystemNarrativePanel
+                summaryKicker="Operator Summary"
+                summaryTitle={summaryTitle}
+                items={narrativeItems}
+                uiState={uiState}
+              />
+            )}
           </div>
         </div>
 
@@ -89,27 +108,39 @@ export default function SystemBodyWorkspace({
           stateLabel={stateLabel}
           lastUpdate={lastUpdate}
           focusLabel={focusLabel}
+          orbData={orbData}
         />
       </section>
 
-      <SystemEvidencePanel
-        evidenceItems={evidenceItems}
-        timelineItems={timelineItems}
-        uiState={uiState}
-      />
-
-      <details className="system-body-summary-mobile">
-        <summary>Operator Summary</summary>
-        <SystemNarrativePanel
-          summaryKicker="Operator Summary"
-          summaryTitle={summaryTitle}
-          items={narrativeItems}
+      {governedOnly ? null : (
+        <SystemEvidencePanel
+          evidenceItems={evidenceItems}
+          timelineItems={timelineItems}
           uiState={uiState}
         />
-      </details>
+      )}
 
-      <SystemDiagnosticsPanel metrics={metrics} uiState={uiState} />
+      {governedOnly ? null : (
+        <details className="system-body-summary-mobile">
+          <summary>Operator Summary</summary>
+          <SystemNarrativePanel
+            summaryKicker="Operator Summary"
+            summaryTitle={summaryTitle}
+            items={narrativeItems}
+            uiState={uiState}
+          />
+        </details>
+      )}
+
+      {governedOnly ? null : <SystemDiagnosticsPanel metrics={metrics} uiState={uiState} />}
       </div>
     </PageContainer>
   );
+}
+
+function statusLightLabel(light) {
+  if (light === "green") return "Governed Stable";
+  if (light === "yellow") return "Governed Watch";
+  if (light === "red") return "Governed Alert";
+  return "No Governed Finding";
 }

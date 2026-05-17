@@ -98,6 +98,11 @@ function buildSiiOperationalContext(state, deps) {
 
   return {
     useDemoTelemetry: false,
+    sourceIntelligence: safeIntelligence,
+    distributed_cognition_governance:
+      safeIntelligence?.distributed_cognition_governance
+      ?? fullResult?.distributed_cognition_governance
+      ?? null,
     intelligenceMode: safeIntelligence.mode ?? intelligenceStatus?.mode ?? (fullResult ? "live" : "empty"),
     facilityTone,
     facilityStateLabel: safeIntelligence.facility_state ?? deps.formatOperationalLabel(facilityTone),
@@ -193,6 +198,8 @@ function buildEmptyOperationalContext(state, deps) {
 
   return {
     useDemoTelemetry: false,
+    sourceIntelligence: null,
+    distributed_cognition_governance: null,
     intelligenceMode: "empty",
     facilityTone: "info",
     facilityStateLabel: NO_DATA_LABEL,

@@ -23,6 +23,12 @@ export const WORKSPACES = [
     eyebrow: "Technical",
     description: "Advanced replay internals, evidence lineage, topology, and diagnostic overlays.",
   },
+  {
+    id: "governance-admin",
+    label: "Governance Admin",
+    eyebrow: "Admin",
+    description: "Internal Aletheia Gate custody records (PASS and NO_PASS EVP receipts).",
+  },
 ];
 
 export const FALLBACK_SYSTEMS = [
@@ -71,4 +77,4 @@ export const DEFAULT_WORKSPACE_ID = "system-body";
 
 export const PRIMARY_WORKSPACE_ORDER = WORKSPACES.map((workspace) => workspace.id);
 
-export const EXPERT_WORKSPACE_IDS = new Set([]);
+export const EXPERT_WORKSPACE_IDS = new Set(["governance-admin"]);

@@ -2,62 +2,13 @@ import HealthOrb from "../../HealthOrb";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
 const STATE_COPY = {
-  stable: {
-    code: "STABLE",
-    attention: "Low attention",
-    structural: "Relationships within baseline",
-    telemetry: "Baseline telemetry aligned",
-    progression: "No elevated drift persistence",
-    environment: "Envelope steady",
-  },
-  watching: {
-    code: "WATCH",
-    attention: "Planned attention",
-    structural: "Early relational drift",
-    telemetry: "Telemetry consistency changing",
-    progression: "Persistence under review",
-    environment: "Directional variance",
-  },
-  drift: {
-    code: "ALERT",
-    attention: "Operator attention",
-    structural: "Relational instability detected",
-    telemetry: "Baseline divergence sustained",
-    progression: "Deviation persistence increasing",
-    environment: "Instability vector",
-  },
-  propagation_active: {
-    code: "ALERT",
-    attention: "Immediate review",
-    structural: "Cross-subsystem spread observed",
-    telemetry: "Multi-signal deviation corroborated",
-    progression: "Progression rate elevated",
-    environment: "Multi-zone coupling",
-  },
-  recovery: {
-    code: "RECOVERING",
-    attention: "Verify cooling",
-    structural: "Relational recovery observed",
-    telemetry: "Baseline re-alignment increasing",
-    progression: "Deviation persistence decreasing",
-    environment: "Envelope cooling",
-  },
-  unknown: {
-    code: EMPTY_VALUE,
-    attention: EMPTY_VALUE,
-    structural: EMPTY_VALUE,
-    telemetry: EMPTY_VALUE,
-    progression: EMPTY_VALUE,
-    environment: EMPTY_VALUE,
-  },
-  neutral: {
-    code: EMPTY_VALUE,
-    attention: EMPTY_VALUE,
-    structural: EMPTY_VALUE,
-    telemetry: EMPTY_VALUE,
-    progression: EMPTY_VALUE,
-    environment: EMPTY_VALUE,
-  },
+  stable: { code: "L1-L2", attention: "Stable / Monitoring" },
+  watching: { code: "L3", attention: "Emerging Drift" },
+  drift: { code: "L4-L5", attention: "Persistent Drift / Structural Instability" },
+  propagation_active: { code: "L6-L7", attention: "Escalation Candidate / Critical Escalation" },
+  recovery: { code: "RECOVERY", attention: "Stability Recovery" },
+  unknown: { code: EMPTY_VALUE, attention: EMPTY_VALUE },
+  neutral: { code: EMPTY_VALUE, attention: EMPTY_VALUE },
 };
 
 function normalizePanelState(systemState) {
@@ -77,6 +28,7 @@ export default function SystemOrbPanel({
   stateLabel,
   lastUpdate,
   focusLabel,
+  orbData,
   compactPreview = false,
 }) {
   const resolvedSystemState = normalizePanelState(systemState);
@@ -86,13 +38,13 @@ export default function SystemOrbPanel({
   const copy = STATE_COPY[resolvedSystemState] ?? STATE_COPY.unknown;
   const instability = Math.max(0, Math.min(1, 1 - resolvedCoherence));
   const instabilityDisplay = resolvedSystemState === "unknown" ? EMPTY_VALUE : `${Math.round(instability * 100)}%`;
-  const normalizedFocus = focusLabel || EMPTY_VALUE;
-  void normalizedFocus;
+  const showAlert = resolvedSystemState === "drift" || resolvedSystemState === "propagation_active";
+  void focusLabel;
 
   return (
     <aside
       className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
-      aria-label="Primary infrastructure condition orb"
+      aria-label="Structural topology intelligence field"
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (
@@ -102,12 +54,16 @@ export default function SystemOrbPanel({
       <div className="system-body-orb-panel__halo system-body-orb-panel__halo--outer" />
       <div className="system-body-orb-panel__halo system-body-orb-panel__halo--inner" />
       <div className="system-body-orb-panel__depth" />
+      <div className="system-body-orb-panel__ambient-motion" aria-hidden="true" />
+      {showAlert ? (
+        <div className="system-body-orb-panel__alert-badge" aria-label="Escalation alert state">ALERT</div>
+      ) : null}
       <div className="system-body-orb-panel__stage">
         <HealthOrb systemState={resolvedSystemState} intensity={instability} />
       </div>
       {!compactPreview ? (
         <div className="system-body-orb-panel__meta">
-          <span className="section-label">Structural State</span>
+          <span className="section-label">Topology Health</span>
           <strong>{copy.code}</strong>
           <em>{resolvedLabel}</em>
         </div>
@@ -116,7 +72,15 @@ export default function SystemOrbPanel({
         <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
           <span />
           <strong>{lastUpdate || EMPTY_VALUE}</strong>
-          <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Structural pressure ${instabilityDisplay}`}</em>
+          <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Instability density ${instabilityDisplay}`}</em>
+        </div>
+      ) : null}
+      {!compactPreview && orbData ? (
+        <div className="system-body-orb-panel__telemetry">
+          <div><span className="section-label">Containment Boundary</span><strong>{orbData.containment ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Propagation Direction</span><strong>{orbData.propagationDirection ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Relationship Fragmentation</span><strong>{orbData.fragmentation ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Evidence Confidence</span><strong>{orbData.evidenceConfidence ?? EMPTY_VALUE}</strong></div>
         </div>
       ) : null}
     </aside>

@@ -2,309 +2,87 @@ import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
 import {
+  ESCALATION_LAYERS,
+  LIFECYCLE_RAIL_ACTIVE_BASE,
   LIFECYCLE_RAIL_NEUTRAL,
-  LIFECYCLE_RAIL_ACTIVE,
 } from "../viewModels/operationalVocabulary";
 import { EMPTY_VALUE } from "../viewModels/emptyValue";
 
-const STATE = {
-  nominal: {
-    label: "Stable",
-    description: "Infrastructure relationships are stable across the monitored system.",
-  },
-  review: {
-    label: "Early Structural Drift",
-    description: "System behavior is beginning to move away from baseline.",
-  },
-  elevated: {
-    label: "Escalating Drift",
-    description: "Persistent deviation is visible and requires focused operator review.",
-  },
-  unstable: {
-    label: "Structural Instability",
-    description: "System behavior is moving away from baseline and requires focused review.",
-  },
-  info: {
-    label: "Baseline Pending",
-    description: "Telemetry baseline required before structural assessment is available.",
-  },
-};
-
 const FALLBACK_STATE = {
-  label: "No active analysis",
-  description: "Upload telemetry or connect a historian source to begin baseline formation.",
-  mode: "no-data",
+  label: "Monitoring",
+  description: "Telemetry baseline is still forming. Evidence remains insufficient for structural classification.",
 };
 
+const STRUCTURAL_PHASES = [
+  { label: "Phase 1 - Initial Deviation", description: "Relationship variance detected outside baseline behavior." },
+  { label: "Phase 2 - Persistence Confirmation", description: "Repeated multi-window corroboration observed." },
+  { label: "Phase 3 - Drift Expansion", description: "Relationship instability propagating across adjacent telemetry groups." },
+  { label: "Phase 4 - Structural Instability", description: "Persistent relational divergence exceeding baseline containment." },
+  { label: "Phase 5 - Escalation Candidate", description: "Subsystem-level propagation and recovery degradation observed." },
+];
 export default function SystemTopologyWorkspace({
   liveOps,
   selectedTarget,
   onSelectTarget,
 }) {
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
+  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
+  const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
+  const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
+  const governed = deriveGovernedOutput(liveOps, {
+    awaitingSii,
+    uiState,
+    layer,
+  });
 
-  const awaitingSii =
-    liveOps.intelligenceMode === "empty"
-    || liveOps.intelligenceMode === "processing";
-
-  const uiState =
-    awaitingSii || rawUiState === "neutral"
-      ? "neutral"
-      : rawUiState;
-
-  const state =
-    awaitingSii || uiState === "neutral"
-      ? FALLBACK_STATE
-      : (STATE[liveOps.facilityTone] ?? STATE.info);
-
+  const stateLabel = governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label;
+  const stateDescription = buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
+  const findings = liveOps.findings?.slice(0, 2) ?? [];
 
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce(
       (sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)),
       0,
     );
-
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = deriveOrbOperationalState({
-    awaitingSii,
-    uiState,
-    liveOps,
-    primaryItem,
-  });
+  const systemState = deriveOrbOperationalState({ awaitingSii, layer, liveOps, primaryItem });
+  const primaryMessage = governed.hasPass
+    ? concise(governed.passedFindingSummary, 120)
+    : "No admitted finding is available for operator display.";
 
-  const findings = liveOps.findings?.slice(0, 2) ?? [];
-
-  const primaryMessage = concise(
-    findings[0]?.detail ?? state.description,
-    96,
-  );
-
-  const secondaryMessage =
-    findings[1]?.detail ?? liveOps.heroSubline;
-
-  const neutralCopy = {
-    issue: EMPTY_VALUE,
-    location: EMPTY_VALUE,
-    runway: EMPTY_VALUE,
-    confidence: EMPTY_VALUE,
-    primaryEvidence: EMPTY_VALUE,
-    relationshipEvidence: EMPTY_VALUE,
-    signal: EMPTY_VALUE,
-    propagation: EMPTY_VALUE,
-    memory: EMPTY_VALUE,
-    continuation: EMPTY_VALUE,
-    summary: EMPTY_VALUE,
-  };
-
-  const issueType = awaitingSii
-    ? neutralCopy.issue
-    : (
-        primaryItem?.title
-        ?? findings[0]?.title
-        ?? liveOps.facilityStateLabel
-        ?? state.label
-      );
-
-  const suspectedLocation = awaitingSii
-    ? neutralCopy.location
-    : (
-        primaryItem?.label
-        ?? liveOps.primaryWindow?.label
-        ?? "Facility scope"
-      );
-
-  const runway = awaitingSii
-    ? neutralCopy.runway
-    : liveOps.facilityTone === "nominal"
-      ? "No elevated progression observed"
-      : (
-          primaryItem?.window
-          ?? liveOps.primaryWindow?.window
-          ?? "Progression rate under review"
-        );
-
-  const confidence = awaitingSii
-    ? neutralCopy.confidence
-    : (
-        primaryItem?.supportingEvidence?.length
-        || liveOps.relationshipRows?.length
-      )
-      ? "Multi-signal corroboration observed"
-      : "Corroboration still developing";
-
-  const primaryEvidence = awaitingSii
-    ? neutralCopy.primaryEvidence
-    : (
-        primaryItem?.supportingEvidence?.[0]
-        ?? findings[0]?.detail
-        ?? "Relationships are moving away from baseline."
-      );
-
-  const relationshipEvidence = awaitingSii
-    ? neutralCopy.relationshipEvidence
-    : (
-        primaryItem?.relationshipEvidence?.[0]
-        ?? liveOps.relationshipRows?.[0]?.detail
-        ?? "Subsystem relationships are shifting relative to baseline."
-      );
-
-  const activeArchetype = awaitingSii
-    ? neutralCopy.signal
-    : (
-        primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ")
-        ?? EMPTY_VALUE
-      );
-
-  const propagationPath = awaitingSii
-    ? neutralCopy.propagation
-    : (
-        primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ")
-        ?? EMPTY_VALUE
-      );
-
-  const memoryMatch = awaitingSii
-    ? neutralCopy.memory
-    : (
-        primaryItem?.structuralMemoryMatches?.[0]?.label
-        ?? EMPTY_VALUE
-      );
-
-  const continuationWindow = awaitingSii
-    ? neutralCopy.continuation
-    : (
-        primaryItem?.continuationWindow
-        ?? EMPTY_VALUE
-      );
-
-  const facilitySummary = awaitingSii
-    ? neutralCopy.summary
-    : (
-        primaryItem?.facilityCognitionState
-        ?? liveOps.heroSubline
-        ?? EMPTY_VALUE
-      );
-
+  const focusArea = governed.affectedSubsystem;
+  const summaryTitle = governed.hasPass
+    ? "Governed PASS Finding"
+    : "Governed Output Pending";
   const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
 
-  const whyWeThinkThat =
-    awaitingSii || uiState === "neutral"
-      ? EMPTY_VALUE
-      : (
-          dedupeText(facilitySummary, state.description)
-          || secondaryMessage
-          || relationshipEvidence
-        );
+  const metrics = [];
 
-  const humanRead =
-    awaitingSii || uiState === "neutral"
-      ? EMPTY_VALUE
-      : (
-          liveOps.connectionActionHint
-          || "Confirm persistence across recent telemetry windows."
-        );
+  const evidenceItems = [];
 
-  const where = suspectedLocation;
+  const narrativeItems = compactOperationalItems([
+    { label: "Current Governed System State", value: governed.currentGovernedSystemState, state: uiState },
+    { label: "Affected Subsystem", value: concise(governed.affectedSubsystem, 80), state: uiState },
+    { label: "Timestamp", value: governed.timestamp, state: "stable" },
+  ]);
 
-  const summaryTitle = dedupeText(state.description, primaryMessage) || EMPTY_VALUE;
+  const timelineItems = [];
+  const lifecycleRail = [];
+  const orbData = buildOrbData(liveOps, primaryItem, coherence, layer);
 
   void selectedTarget;
   void onSelectTarget;
-
-  const metrics = compactOperationalItems([
-    {
-      label: "Progression window",
-      value: runway,
-      priority: true,
-      state: uiState,
-    },
-    {
-      label: "Current structural state",
-      value: issueType,
-      state: uiState,
-    },
-    {
-      label: "Operational focus",
-      value: liveOps.primaryWindow?.label ?? where,
-      state: uiState === "stable" ? "stable" : "watch",
-    },
-    {
-      label: "Corroboration",
-      value: confidence,
-      state: uiState === "neutral" ? "neutral" : "stable",
-    },
-  ]);
-
-  const evidenceItems = compactOperationalItems([
-    {
-      label: "Observed structural deviation",
-      value: concise(primaryEvidence, 88),
-      state: uiState,
-    },
-    {
-      label: "Relationship change",
-      value: concise(relationshipEvidence, 88),
-      state: uiState === "stable" ? "stable" : uiState,
-    },
-    {
-      label: "Contributing signal",
-      value: concise(activeArchetype, 72),
-      state: uiState === "neutral" ? "neutral" : "watch",
-    },
-  ]);
-
-  const narrativeItems = compactOperationalItems([
-    {
-      label: "Primary change",
-      value: concise(whyWeThinkThat, 70),
-      state: uiState === "stable" ? "stable" : uiState,
-    },
-    {
-      label: "Infrastructure area",
-      value: concise(where, 54),
-      state: uiState === "critical" ? "warning" : uiState,
-    },
-    {
-      label: "Operator focus",
-      value: concise(humanRead, 72),
-      state: uiState === "critical" ? "warning" : "stable",
-    },
-  ]);
-
-  const timelineItems = compactOperationalItems([
-    {
-      label: "Initial deviation",
-      value: concise(lastUpdate, 48),
-      state: "neutral",
-    },
-    {
-      label: "Persistence checkpoint",
-      value: concise(confidence, 54),
-      state: uiState === "neutral" ? "neutral" : "stable",
-    },
-    {
-      label: "Drift trend",
-      value: concise(continuationWindow, 54),
-      state: uiState,
-    },
-    {
-      label: "Subsystem spread",
-      value: concise(propagationPath || memoryMatch, 58),
-      state: uiState === "neutral" ? "neutral" : uiState,
-    },
-  ]);
-
-  const lifecycleRail = buildLifecycleRail({ liveOps, awaitingSii, uiState });
 
   return (
     <SystemBodyWorkspace
       systemState={systemState}
       uiState={uiState}
       coherence={coherence}
-      stateLabel={state.label}
-      subtitle={state.description}
+      stateLabel={stateLabel}
+      subtitle={stateDescription}
       connectionStatus={liveOps.connectionStatusLine}
       connectionTone={liveOps.connectionTone}
       primaryMessage={primaryMessage}
@@ -314,116 +92,226 @@ export default function SystemTopologyWorkspace({
       evidenceItems={evidenceItems}
       timelineItems={timelineItems}
       lastUpdate={lastUpdate}
-      focusLabel={where}
+      focusLabel={focusArea}
       lifecycleRail={lifecycleRail}
+      orbData={orbData}
       isLoading={awaitingSii}
       isEmptyStructuralState={awaitingSii || uiState === "neutral"}
+      statusLight={governed.statusLight}
+      governedOnly
+      governedDetail={governed.detail}
     />
   );
 }
 
-function buildLifecycleRail({ awaitingSii, uiState }) {
-  if (awaitingSii || uiState === "neutral") {
-    return LIFECYCLE_RAIL_NEUTRAL;
+function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
+  const intelligence = liveOps?.sourceIntelligence ?? null;
+  const governance =
+    intelligence?.aletheia_gate
+    ?? intelligence?.distributed_cognition_governance
+    ?? liveOps?.distributed_cognition_governance
+    ?? null;
+
+  const outcome = gateOutcome(governance);
+  const hasPass = outcome === "PASS";
+  const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
+  const statusLight = statusLightFromAdmitted(admittedState, hasPass, uiState);
+
+  if (!hasPass) {
+    return {
+      hasPass: false,
+      statusLight,
+      currentGovernedSystemState: "No governed finding",
+      passedFindingSummary: "No admitted PASS finding available from Aletheia's Gate.",
+      affectedSubsystem: "Not available",
+      evidenceBackedOperatorFocus: "Not available",
+      persistenceWindowConfirmation: "Not available",
+      evpPreview: "Not available",
+      timestamp: liveOps.connectionSummary ?? "Not available",
+      detail: {
+        admittedState: "NONE",
+        evidenceSummary: "Not available",
+        persistenceConfirmation: "Not available",
+        doctrineVersion: "Not available",
+        affectedSubsystem: "Not available",
+        structuralRelationshipEvidence: "Not available",
+        operatorFocus: "Not available",
+        telemetryWindowReferences: "Not available",
+        evpPreview: "Not available",
+      },
+    };
   }
-  return LIFECYCLE_RAIL_ACTIVE;
+
+  const evpRaw =
+    governance?.evp_id
+    ?? governance?.evp_hash
+    ?? governance?.record_id
+    ?? governance?.decision_id
+    ?? null;
+
+  return {
+    hasPass: true,
+    statusLight,
+    currentGovernedSystemState: governedStateFromAdmitted(admittedState, uiState),
+    passedFindingSummary:
+      liveOps?.findings?.[0]?.detail
+      ?? "Governed PASS finding is active.",
+    affectedSubsystem:
+      liveOps?.interventionItems?.[0]?.label
+      ?? liveOps?.primaryWindow?.label
+      ?? "Facility scope",
+    evidenceBackedOperatorFocus:
+      liveOps?.interventionItems?.[0]?.recommendation
+      ?? "Confirm governed persistence with current operating controls.",
+    persistenceWindowConfirmation:
+      liveOps?.interventionItems?.[0]?.window
+      ?? liveOps?.primaryWindow?.window
+      ?? `Layer ${layer} persistence confirmed`,
+    evpPreview: showEvpForAdmitted(admittedState) && evpRaw ? previewHash(evpRaw) : "Not displayed for STABLE PASS",
+    timestamp: liveOps.connectionSummary ?? "Unavailable",
+    detail: {
+      admittedState: governedStateFromAdmitted(admittedState, uiState),
+      evidenceSummary: liveOps?.findings?.[0]?.detail ?? "Admitted PASS evidence available.",
+      persistenceConfirmation: liveOps?.interventionItems?.[0]?.window ?? `Layer ${layer} persistence confirmed`,
+      doctrineVersion: governance?.doctrine_version ?? "Unknown doctrine",
+      affectedSubsystem:
+        liveOps?.interventionItems?.[0]?.label
+        ?? liveOps?.primaryWindow?.label
+        ?? "Facility scope",
+      structuralRelationshipEvidence:
+        liveOps?.interventionItems?.[0]?.relationshipEvidence?.[0]
+        ?? liveOps?.relationshipRows?.[0]?.detail
+        ?? "Not available",
+      operatorFocus:
+        liveOps?.interventionItems?.[0]?.recommendation
+        ?? "Confirm admitted persistence against telemetry controls.",
+      telemetryWindowReferences:
+        liveOps?.interventionItems?.[0]?.window
+        ?? liveOps?.primaryWindow?.window
+        ?? "Not available",
+      evpPreview: showEvpForAdmitted(admittedState) && evpRaw ? previewHash(evpRaw) : "Not displayed for STABLE PASS",
+    },
+  };
+}
+
+function gateOutcome(governance) {
+  // Aletheia's Gate operator admissibility is strictly binary.
+  const normalized = String(
+    governance?.gate_outcome
+    ?? governance?.validation_status
+    ?? governance?.status
+    ?? governance?.decision?.status
+    ?? "",
+  ).toUpperCase();
+  if (["PASS", "VALIDATED", "APPROVED"].includes(normalized)) return "PASS";
+  // REVIEW and all non-PASS outcomes are non-admitted in operator view.
+  return "NO_PASS";
+}
+
+function governedStateFromAdmitted(admittedState, uiState) {
+  if (admittedState === "STABLE") return "Admitted stable condition";
+  if (admittedState === "WATCH") return "Admitted watch condition";
+  if (admittedState === "ALERT") return "Admitted alert condition";
+  if (uiState === "stable") return "Governed stable condition";
+  if (uiState === "watch") return "Governed watch condition";
+  if (uiState === "warning" || uiState === "critical") return "Governed alert condition";
+  return "No governed finding";
+}
+
+function statusLightFromAdmitted(admittedState, hasPass, uiState) {
+  if (!hasPass) return "gray";
+  if (admittedState === "STABLE") return "green";
+  if (admittedState === "WATCH") return "yellow";
+  if (admittedState === "ALERT") return "red";
+  return uiState === "stable" ? "green" : uiState === "watch" ? "yellow" : "red";
+}
+
+function showEvpForAdmitted(admittedState) {
+  return admittedState === "WATCH" || admittedState === "ALERT";
+}
+
+function previewHash(value) {
+  const v = String(value ?? "").trim();
+  if (!v) return "Unavailable";
+  if (v.length <= 12) return v;
+  return `${v.slice(0, 6)}...${v.slice(-4)}`;
+}
+
+function buildStateDescription(layer) {
+  if (layer <= 2) return "Structural relationships remain inside baseline containment with active observation.";
+  if (layer === 3) return "Divergence Observed with emerging persistence across recent windows.";
+  if (layer === 4) return "Persistent Drift is corroborated across multiple evidence windows.";
+  if (layer === 5) return "Structural Instability is exceeding baseline containment assumptions.";
+  if (layer === 6) return "Propagation and recovery degradation indicate Escalation Candidate status.";
+  return "Critical Escalation conditions indicate fragmented structural relationships and high propagation pressure.";
+}
+
+function deriveEscalationLayer({ awaitingSii, uiState, liveOps }) {
+  if (awaitingSii || uiState === "neutral") return 2;
+  const propagationSignal = String(liveOps.relationshipRows?.[0]?.detail ?? "").toLowerCase();
+  const hasPropagation = propagationSignal.includes("propagation") || propagationSignal.includes("spread") || propagationSignal.includes("fragment");
+  if (uiState === "stable") return 1;
+  if (uiState === "watch") return 3;
+  if (uiState === "warning") return hasPropagation ? 5 : 4;
+  if (uiState === "critical") return hasPropagation ? 7 : 6;
+  return 2;
+}
+
+function buildLifecycleRail({ awaitingSii, layer }) {
+  if (awaitingSii) return LIFECYCLE_RAIL_NEUTRAL;
+  return LIFECYCLE_RAIL_ACTIVE_BASE.map((item) => ({
+    label: item.label,
+    status: item.level < layer ? "Confirmed" : item.level === layer ? "Active" : "Standby",
+  }));
+}
+
+function buildStructuralProgressionItems(layer) {
+  const count = Math.min(Math.max(layer, 4), 5);
+  return STRUCTURAL_PHASES.slice(0, count).map((phase, index) => ({
+    label: phase.label,
+    value: phase.description,
+    state: index + 1 <= layer ? "warning" : "neutral",
+  }));
+}
+
+function buildOrbData(liveOps, primaryItem, coherence, layer) {
+  const instabilityDensity = Math.round((1 - Math.max(0, Math.min(1, coherence))) * 100);
+  const evidenceConfidence = Number(primaryItem?.confidence ?? liveOps.primaryWindow?.confidence ?? 0);
+  const propagation = String(primaryItem?.propagationPathways?.[0] ?? liveOps.relationshipRows?.[0]?.detail ?? "");
+  const fragmentation = layer >= 5 ? "Relational Fragmentation" : "Contained Relationships";
+  const containment = layer >= 5 ? "Containment Boundary Stressed" : "Containment Stable";
+
+  return {
+    topologyHealth: ESCALATION_LAYERS[layer - 1],
+    propagationDirection: propagation || "Propagation direction under evaluation",
+    instabilityDensity: `${instabilityDensity}%`,
+    fragmentation,
+    containment,
+    evidenceConfidence: evidenceConfidence > 0 ? `${evidenceConfidence}%` : "Evidence Insufficient",
+  };
 }
 
 function compactOperationalItems(items) {
   return items.filter((item) => {
     const value = String(item?.value ?? "").trim().toLowerCase();
-
-    return (
-      value
-      && value !== "none"
-      && value !== "n/a"
-      && value !== "na"
-      && value !== "awaiting facility cognition"
-    );
+    return value && value !== "none" && value !== "n/a" && value !== "na" && value !== "awaiting facility cognition";
   });
 }
 
 function concise(value, max = 80) {
-  const text = String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (text.length <= max) {
-    return text;
-  }
-
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
   return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
 }
 
-function dedupeText(value, duplicateCandidate) {
-  const text = String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const duplicate = String(duplicateCandidate ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) {
-    return "";
-  }
-
-  if (!duplicate) {
-    return text;
-  }
-
-  return text.toLowerCase() === duplicate.toLowerCase()
-    ? ""
-    : text;
-}
-
-function deriveOrbOperationalState({
-  awaitingSii,
-  uiState,
-  liveOps,
-  primaryItem,
-}) {
-  if (awaitingSii || uiState === "neutral") {
-    return "unknown";
-  }
-
-  const convergenceSignal = String(
-    primaryItem?.recoveryConvergence
-    ?? liveOps.primaryWindow?.recoveryConvergence
-    ?? liveOps.heroSubline
-    ?? "",
-  ).toLowerCase();
-
-  if (
-    convergenceSignal.includes("recover")
-    || convergenceSignal.includes("convergen")
-    || convergenceSignal.includes("stabiliz")
-  ) {
+function deriveOrbOperationalState({ awaitingSii, layer, liveOps, primaryItem }) {
+  if (awaitingSii) return "unknown";
+  const convergenceSignal = String(primaryItem?.recoveryConvergence ?? liveOps.primaryWindow?.recoveryConvergence ?? liveOps.heroSubline ?? "").toLowerCase();
+  if (convergenceSignal.includes("recover") || convergenceSignal.includes("convergen") || convergenceSignal.includes("stabiliz")) {
     return "recovery";
   }
-
-  const propagationSignal = String(
-    primaryItem?.propagationPathways?.[0]
-    ?? liveOps.relationshipRows?.[0]?.detail
-    ?? "",
-  ).toLowerCase();
-
-  const hasPropagation =
-    propagationSignal.includes("propagation")
-    || propagationSignal.includes("spread")
-    || propagationSignal.includes("pathway");
-
-  if ((uiState === "critical" || uiState === "warning") && hasPropagation) {
-    return "propagation_active";
-  }
-
-  if (uiState === "critical" || uiState === "warning") {
-    return "drift";
-  }
-
-  if (uiState === "watch") {
-    return "watching";
-  }
-
+  if (layer >= 7) return "propagation_active";
+  if (layer >= 5) return "drift";
+  if (layer >= 3) return "watching";
   return "stable";
 }
