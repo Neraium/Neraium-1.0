@@ -19,9 +19,10 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: min(100%, clamp(200px, 20vw, 290px));
-  min-width: min(100%, 220px);
-  min-height: clamp(170px, 20vw, 250px);
+  width: clamp(240px, 62%, 560px);
+  max-width: 100%;
+  min-width: min(100%, 260px);
+  min-height: clamp(240px, 36vw, 560px);
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.16));
 }
 

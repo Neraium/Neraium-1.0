@@ -257,7 +257,7 @@
   border: 1px solid rgba(177, 190, 198, 0.08);
   border-radius: clamp(20px, 4vw, 32px);
   background:
-    radial-gradient(circle at 50% 42%, rgba(154, 163, 173, 0.055), transparent 30%),
+    radial-gradient(circle at 50% 44%, rgba(154, 163, 173, 0.048), transparent 34%),
     linear-gradient(180deg, rgba(9, 13, 16, 0.995), rgba(4, 7, 9, 0.98));
   overflow: hidden;
   isolation: isolate;
@@ -266,8 +266,8 @@
 .system-gate::before {
   content: "";
   position: absolute;
-  inset: 16%;
-  border: 1px solid rgba(175, 188, 198, 0.045);
+  inset: 14%;
+  border: 1px solid rgba(175, 188, 198, 0.032);
   border-radius: 999px;
   opacity: 0.8;
   pointer-events: none;
@@ -319,8 +319,9 @@
 }
 
 .system-gate__center .system-body-orb-panel {
-  min-height: clamp(310px, 52vh, 520px);
-  width: min(92vw, 560px);
+  min-height: clamp(420px, 64vh, 720px);
+  width: clamp(360px, 38vw, 760px);
+  max-width: calc(100vw - 44px);
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -536,23 +537,23 @@
 }
 
 .system-gate--gray .system-body-orb-panel__stage .health-orb {
-  opacity: 0.68;
+  opacity: 0.82;
   filter:
-    grayscale(0.24)
-    drop-shadow(0 18px 28px rgba(0, 0, 0, 0.32))
-    drop-shadow(0 0 20px rgba(128, 139, 151, 0.12));
+    grayscale(0.14)
+    drop-shadow(0 24px 44px rgba(0, 0, 0, 0.36))
+    drop-shadow(0 0 24px rgba(128, 139, 151, 0.09));
 }
 
 .system-gate--yellow .system-body-orb-panel__stage .health-orb {
   filter:
-    drop-shadow(0 20px 34px rgba(0, 0, 0, 0.36))
-    drop-shadow(0 0 24px rgba(200, 160, 106, 0.18));
+    drop-shadow(0 24px 42px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 0 22px rgba(200, 160, 106, 0.14));
 }
 
 .system-gate--red .system-body-orb-panel__stage .health-orb {
   filter:
-    drop-shadow(0 24px 38px rgba(0, 0, 0, 0.42))
-    drop-shadow(0 0 34px rgba(212, 107, 95, 0.32));
+    drop-shadow(0 28px 44px rgba(0, 0, 0, 0.44))
+    drop-shadow(0 0 36px rgba(212, 107, 95, 0.28));
 }
 
 @media (max-width: 760px) {
@@ -570,11 +571,26 @@
   }
 
   .system-gate__center .system-body-orb-panel {
-    min-height: clamp(280px, 50vh, 410px);
-    width: min(104vw, 500px);
+    min-height: clamp(360px, 58svh, 560px);
+    width: clamp(250px, 60vw, 430px);
+    max-width: calc(100vw - 28px);
   }
 
   .system-gate__detail {
     max-height: 60vh;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1199px) {
+  .system-gate__center .system-body-orb-panel {
+    width: clamp(360px, 42vw, 680px);
+    min-height: clamp(400px, 60vh, 660px);
+  }
+}
+
+@media (min-width: 1600px) {
+  .system-gate__center .system-body-orb-panel {
+    width: clamp(560px, 34vw, 820px);
+    min-height: clamp(520px, 66vh, 760px);
   }
 }
