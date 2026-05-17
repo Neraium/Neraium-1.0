@@ -1,0 +1,118 @@
+.system-status-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.system-status-rail__item {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid rgba(143, 168, 164, 0.13);
+  border-radius: 10px;
+  background: rgba(7, 11, 14, 0.56);
+}
+
+.system-status-rail__item span {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-status-rail__item strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.system-body-summary-card {
+  min-height: auto;
+}
+
+.system-body-summary-card--primary {
+  display: grid;
+  align-content: start;
+  gap: var(--space-16);
+  min-height: auto;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid rgba(143, 168, 164, 0.12);
+  border-radius: 20px;
+  background: rgba(6, 10, 13, 0.38);
+  box-shadow: none;
+}
+
+.system-body-summary-card h2 {
+  margin: 0;
+  max-width: 24ch;
+  font-size: clamp(1.3rem, 2vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.system-body-narrative-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.system-body-narrative-item {
+  display: grid;
+  gap: var(--space-8);
+  align-content: start;
+  min-height: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(143, 168, 164, 0.08);
+  border-radius: 16px;
+  background: rgba(8, 13, 16, 0.56);
+}
+
+.system-body-narrative-item p {
+  margin: 0;
+  max-width: 60ch;
+  color: rgba(226, 238, 235, 0.84);
+  line-height: 1.46;
+}
+
+.system-body-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+
+.system-body-metric {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: var(--space-10);
+  min-height: 104px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid rgba(143, 168, 164, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(18, 25, 30, 0.72), rgba(10, 14, 17, 0.78));
+}
+
+.system-body-metric::after {
+  content: "";
+  position: absolute;
+  inset: 18px auto 18px 0;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(var(--state-accent-rgb), 0.9);
+}
+
+.system-body-metric--priority {
+  min-height: 112px;
+}
+
+.system-body-metric strong {
+  color: var(--text-primary);
+  font-size: clamp(0.94rem, 1.2vw, 1.08rem);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.system-body-metric--priority strong {
+  font-size: clamp(1rem, 1.4vw, 1.18rem);
+}

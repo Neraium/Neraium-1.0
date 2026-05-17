@@ -1,0 +1,181 @@
+@media (max-width: 1280px) {
+  .system-body-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.82fr);
+  }
+
+  .system-body-evidence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .system-body-timeline-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .system-body.system-body--orb-first {
+    max-width: 100%;
+    gap: var(--workspace-rhythm-base);
+  }
+
+  .system-body-hero,
+  .system-body-hero--loading {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .system-body-hero__copy {
+    order: 0;
+  }
+
+  .system-body-orb-panel {
+    order: 1;
+    min-height: 220px;
+    border-left: 0;
+    border-top: 1px solid rgba(var(--state-accent-rgb), 0.09);
+  }
+
+  .system-body-orb-panel__stage {
+    width: min(100%, 260px);
+    min-height: 200px;
+  }
+
+  .system-body-metric-grid,
+  .system-body-evidence-grid,
+  .system-body-timeline-list,
+  .system-body-diagnostics__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .system-body.system-body--orb-first {
+    max-width: 100%;
+    gap: 16px;
+    padding-top: 0;
+    padding-bottom: 28px;
+  }
+
+  .system-body-hero {
+    gap: 12px;
+    padding: 10px;
+    min-height: auto;
+    border-radius: 16px;
+  }
+
+  .system-body-hero__header {
+    gap: 10px;
+  }
+
+  .system-body-hero__header .workspace-header__title {
+    max-width: 11ch;
+    font-size: clamp(1.28rem, 7.2vw, 1.9rem);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+  }
+
+  .system-body-hero__header .workspace-header__subtitle {
+    max-width: 34ch;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .system-status-rail {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .system-body-action-strip {
+    padding: 10px 11px;
+    border-radius: 12px;
+  }
+
+  .system-body-action-strip strong {
+    font-size: 0.84rem;
+    line-height: 1.3;
+  }
+
+  .system-body-status-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .system-body-summary-card--primary {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .system-body-summary-card h2 {
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  .system-body-narrative-grid {
+    gap: 8px;
+  }
+
+  .system-body-narrative-item {
+    padding: 10px 11px;
+    border-radius: 12px;
+  }
+
+  .system-body-narrative-item p {
+    max-width: none;
+    line-height: 1.42;
+  }
+
+  .system-body-orb-panel {
+    min-height: 150px;
+  }
+
+  .system-body-orb-panel__stage {
+    width: min(100%, 170px);
+    min-width: 170px;
+    min-height: 130px;
+  }
+
+  .system-body-orb-panel__stage .health-orb {
+    max-width: 170px;
+  }
+
+  .system-body-orb-panel__meta {
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    transform: none;
+    max-width: 56%;
+    padding: 6px 8px;
+    border-radius: 10px;
+    text-align: right;
+    justify-items: end;
+  }
+
+  .system-body-orb-panel__meta strong {
+    font-size: 0.88rem;
+  }
+
+  .system-body-orb-panel__telemetry {
+    display: none;
+  }
+
+  .system-body-orb-panel__sync {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: none;
+    padding: 6px 8px;
+  }
+
+  .system-body-metric,
+  .system-body-evidence-card,
+  .system-body-timeline-card {
+    min-height: auto;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .system-body-timeline-list li {
+    min-height: auto;
+  }
+}

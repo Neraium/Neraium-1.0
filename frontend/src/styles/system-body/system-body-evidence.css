@@ -1,0 +1,34 @@
+.system-body-evidence-block {
+  display: grid;
+  gap: var(--space-20);
+}
+
+.system-body-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+
+.system-body-evidence-card,
+.system-body-timeline-card {
+  border: 1px solid rgba(143, 168, 164, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(18, 24, 29, 0.72), rgba(10, 14, 17, 0.78));
+}
+
+.system-body-evidence-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-10);
+  min-height: 150px;
+  padding: 18px;
+}
+
+.system-body-evidence-card p {
+  margin: 0;
+  line-height: 1.52;
+}
+
+.system-body-timeline-card {
+  padding: 18px;
+}

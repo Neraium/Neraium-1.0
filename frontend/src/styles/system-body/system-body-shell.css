@@ -1,0 +1,21 @@
+.system-body.system-body--orb-first {
+  display: grid;
+  gap: clamp(22px, 3vw, 38px);
+  width: 100%;
+  max-width: min(1440px, 96vw);
+  margin: 0 auto;
+  padding: var(--space-12) 0 calc(var(--space-36) + var(--space-10));
+}
+
+.system-body--loading {
+  display: grid;
+  gap: clamp(28px, 3.5vw, 44px);
+}
+
+.system-body-hero--loading {
+  min-height: clamp(560px, 68vh, 760px);
+}
+
+.system-body-orb-panel--loading {
+  place-items: center;
+}

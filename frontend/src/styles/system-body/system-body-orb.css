@@ -1,0 +1,178 @@
+.system-body-orb-panel {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: clamp(220px, 24vw, 340px);
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid rgba(var(--state-accent-rgb), 0.09);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(var(--state-accent-rgb), 0.05), transparent 52%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02), transparent 20%);
+}
+
+.system-body-orb-panel__stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: min(100%, clamp(200px, 20vw, 290px));
+  min-width: min(100%, 220px);
+  min-height: clamp(170px, 20vw, 250px);
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.16));
+}
+
+.system-body-orb-panel__stage .health-orb {
+  width: 100%;
+  min-width: min(100%, 260px);
+  max-width: 600px;
+}
+
+.system-body-orb-panel__halo,
+.system-body-orb-panel__depth {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.system-body-orb-panel__halo--outer {
+  inset: 12% 8% 18%;
+  background: radial-gradient(circle, rgba(var(--state-accent-rgb), 0.04), rgba(var(--state-accent-rgb), 0.01) 48%, transparent 72%);
+  filter: blur(12px);
+  animation: none;
+}
+
+.system-body-orb-panel__halo--inner {
+  inset: 22% 18% 28%;
+  background: radial-gradient(circle, rgba(var(--state-accent-rgb), 0.03), transparent 64%);
+  filter: blur(10px);
+  animation: none;
+}
+
+.system-body-orb-panel__depth {
+  inset: auto 14% 7%;
+  height: 28%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.46), transparent 72%);
+  filter: blur(16px);
+}
+
+.system-body-orb-panel__meta {
+  position: absolute;
+  top: clamp(12px, 2vw, 22px);
+  right: clamp(12px, 2vw, 24px);
+  z-index: 3;
+  display: grid;
+  gap: var(--space-6);
+  justify-items: end;
+  max-width: 58%;
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid rgba(var(--state-accent-rgb), 0.12);
+  border-radius: 14px;
+  background: rgba(5, 9, 12, 0.56);
+  text-align: right;
+  backdrop-filter: blur(8px);
+}
+
+.system-body-orb-panel__meta strong {
+  color: var(--text-primary);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: clamp(1.1rem, 1.8vw, 1.8rem);
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+}
+
+.system-body-orb-panel__meta em,
+.system-body-orb-panel__sync em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.system-body-orb-panel__lattice {
+  position: absolute;
+  inset: 7% 4% 10%;
+  pointer-events: none;
+  opacity: 0.26;
+}
+
+.system-body-orb-panel__lattice span {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(var(--state-accent-rgb), 0.1);
+  transform: rotate(45deg);
+  box-shadow: none;
+}
+
+.system-body-orb-panel__lattice span:nth-child(1) { left: 10%; top: 11%; }
+.system-body-orb-panel__lattice span:nth-child(2) { left: 41%; top: 11%; }
+.system-body-orb-panel__lattice span:nth-child(3) { left: 72%; top: 11%; }
+.system-body-orb-panel__lattice span:nth-child(4) { left: 10%; top: 42%; }
+.system-body-orb-panel__lattice span:nth-child(5) { left: 41%; top: 42%; }
+.system-body-orb-panel__lattice span:nth-child(6) { left: 72%; top: 42%; }
+.system-body-orb-panel__lattice span:nth-child(7) { left: 10%; top: 73%; }
+.system-body-orb-panel__lattice span:nth-child(8) { left: 41%; top: 73%; }
+.system-body-orb-panel__lattice span:nth-child(9) { left: 72%; top: 73%; }
+
+.system-body-orb-panel__telemetry {
+  position: absolute;
+  left: clamp(10px, 1.4vw, 18px);
+  bottom: clamp(54px, 7vw, 78px);
+  z-index: 5;
+  display: grid;
+  width: min(250px, 46%);
+  border-top: 1px solid rgba(var(--state-accent-rgb), 0.18);
+  background: linear-gradient(90deg, rgba(4, 8, 10, 0.7), rgba(4, 8, 10, 0.18));
+  backdrop-filter: blur(10px);
+}
+
+.system-body-orb-panel__telemetry div {
+  display: grid;
+  gap: 2px;
+  padding: 9px 0 9px 12px;
+  border-bottom: 1px solid rgba(143, 168, 164, 0.1);
+}
+
+.system-body-orb-panel__telemetry strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.system-body-orb-panel__sync {
+  position: absolute;
+  right: clamp(10px, 2vw, 24px);
+  bottom: clamp(10px, 2vw, 22px);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 9px;
+  align-items: center;
+  max-width: min(360px, 54%);
+  padding: 10px 12px;
+  border-top: 1px solid rgba(var(--state-accent-rgb), 0.16);
+  background: rgba(3, 7, 9, 0.48);
+}
+
+.system-body-orb-panel__sync span {
+  grid-row: span 2;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(var(--state-accent-rgb));
+  box-shadow: 0 0 14px rgba(var(--state-accent-rgb), 0.42);
+  animation: telemetryHeartbeat 2.8s ease-in-out infinite;
+}
+
+.system-body-orb-panel__sync strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
