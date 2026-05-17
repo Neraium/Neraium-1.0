@@ -29,7 +29,7 @@ export default function SystemBodyWorkspace({
     || "Review affected subsystem relationships and confirm persistence across recent windows.";
 
   return (
-    <PageContainer className="system-body system-body--operator-first">
+    <PageContainer className="system-body system-body--orb-first system-body--mobile-polished">
       <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
           <header className="system-body-hero__header">
