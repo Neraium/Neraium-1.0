@@ -114,7 +114,7 @@ function buildFieldModel(timeline, frameIndex) {
   };
 }
 
-function display(value, fallback = "Not assessed") {
+function display(value, fallback = "—") {
   const raw = String(value ?? "").replaceAll("_", " ").trim();
   return raw || fallback;
 }
@@ -122,10 +122,10 @@ function display(value, fallback = "Not assessed") {
 export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, comparisonMode, formatClockTime, inactive = false }) {
   const model = useMemo(() => buildFieldModel(timeline, frameIndex), [timeline, frameIndex]);
   const frame = model.activeFrame;
-  const status = inactive ? "Topology awaiting telemetry" : display(frame?.topology_state?.stability_state, "Not assessed");
-  const phase = inactive ? "Telemetry required" : display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "Not assessed");
-  const confidence = inactive ? "Not assessed" : display(frame?.cognition_state?.confidence_tier, "Not assessed");
-  const pathLabel = inactive ? "No active replay context" : (model.dominantPaths?.[0]?.replaceAll?.("_", " → ") ?? "Not assessed");
+  const status = inactive ? "Topology awaiting telemetry" : display(frame?.topology_state?.stability_state, "—");
+  const phase = inactive ? "—" : display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "—");
+  const confidence = inactive ? "—" : display(frame?.cognition_state?.confidence_tier, "—");
+  const pathLabel = inactive ? "—" : (model.dominantPaths?.[0]?.replaceAll?.("_", " → ") ?? "—");
 
   return (
     <section
@@ -145,7 +145,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
           <span>{phase} · {pathLabel}</span>
         </div>
         <div className="replay-cognition-field__state">
-          <strong>{inactive ? "Unavailable" : `${Math.round(model.divergence * 100)}%`}</strong>
+          <strong>{inactive ? "—" : `${Math.round(model.divergence * 100)}%`}</strong>
           <span>{inactive ? "analysis state" : "baseline divergence"}</span>
         </div>
       </div>
@@ -211,11 +211,11 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
       </svg>
 
       <div className="replay-cognition-field__footer">
-        <div><span>Topology</span><strong>{inactive ? "Awaiting telemetry" : display(frame?.topology_state?.fragmentation_indicator, "Not assessed")}</strong></div>
-        <div><span>Propagation</span><strong>{inactive ? "Not assessed" : display(frame?.propagation_state?.propagation_acceleration, "Not assessed")}</strong></div>
-        <div><span>Recovery</span><strong>{inactive ? "Not assessed" : display(frame?.propagation_state?.recovery_convergence, "Not assessed")}</strong></div>
+        <div><span>Topology</span><strong>{inactive ? "—" : display(frame?.topology_state?.fragmentation_indicator, "—")}</strong></div>
+        <div><span>Propagation</span><strong>{inactive ? "—" : display(frame?.propagation_state?.propagation_acceleration, "—")}</strong></div>
+        <div><span>Recovery</span><strong>{inactive ? "—" : display(frame?.propagation_state?.recovery_convergence, "—")}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>
-        <div><span>Timestamp</span><strong>{frame?.timestamp ? formatClockTime(frame.timestamp) : "Unavailable"}</strong></div>
+        <div><span>Timestamp</span><strong>{frame?.timestamp ? formatClockTime(frame.timestamp) : "—"}</strong></div>
       </div>
     </section>
   );

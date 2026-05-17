@@ -88,6 +88,7 @@ export default function ReplayWorkspace({
   }, [accessCode, apiFetch, frameIndex, mode, timeline]);
 
   const hasReplaySnapshots = timeline.length > 0;
+  const dash = "—";
   const hasDiagnosticsEvidence = Boolean(hasRealSiiOutput || hasCurrentUploadResult || hasActiveSession || hasResumedSession || hasReplaySnapshots);
   const hasTopologyEvidence = Boolean(hasReplaySnapshots && timeline[0]?.topology_state);
   const operativeTimeline = timeline;
@@ -98,23 +99,23 @@ export default function ReplayWorkspace({
   const metrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
       return [
-        { label: "Replay snapshots", value: "Unavailable" },
-        { label: "Current point", value: "Unavailable" },
-        { label: "Lead time", value: "Unavailable" },
-        { label: "Evidence confidence", value: "Awaiting telemetry" },
-        { label: "System stability", value: "Baseline pending" },
-        { label: "Progression state", value: "No active progression" },
+        { label: "Replay snapshots", value: dash },
+        { label: "Current point", value: dash },
+        { label: "Lead time", value: dash },
+        { label: "Evidence confidence", value: dash },
+        { label: "System stability", value: dash },
+        { label: "Progression state", value: dash },
       ];
     }
     return [
-      { label: "Replay snapshots", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : "Unavailable" },
-      { label: "Current point", value: hasReplaySnapshots ? `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : "Unavailable" },
-      { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : "Unavailable" },
-      { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? "Not assessed") : "Unavailable" },
-      { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || "Not assessed") : "Unavailable" },
-      { label: "System stability", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : "Baseline pending" },
-      { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : "Awaiting telemetry" },
-      { label: "Progression state", value: hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.operational_phase) : "No active progression" },
+      { label: "Replay snapshots", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
+      { label: "Current point", value: hasReplaySnapshots ? `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+      { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : dash },
+      { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash },
+      { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
+      { label: "System stability", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
+      { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
+      { label: "Progression state", value: hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.operational_phase) : dash },
     ];
   }, [frameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.cognition_state?.confidence_tier, shownFrame?.cognition_state?.operational_phase, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window]);
 
@@ -144,7 +145,7 @@ export default function ReplayWorkspace({
         {!hasDiagnosticsEvidence ? (
           <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a historian stream is connected.</p>
         ) : null}
-        <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : "Unavailable"}</p>
+        <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
@@ -160,15 +161,15 @@ export default function ReplayWorkspace({
           <ul className="system-body-timeline-list">
             <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
             <li><span className="metadata-text">System stability</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
-            <li><span className="metadata-text">Cross-system support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : "Not assessed") : "Not assessed"}</strong></li>
+            <li><span className="metadata-text">Cross-system support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
           </ul>
         )}
       </Panel>
       <Panel title="Recovery Convergence" className="span-6">
         <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Convergence Signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? "Not assessed") : "Not assessed"}</strong></li>
-          <li><span className="metadata-text">Fragmentation Indicator</span><strong>{hasReplaySnapshots ? (shownFrame?.topology_state?.fragmentation_indicator ?? "Not assessed") : "Not assessed"}</strong></li>
-          <li><span className="metadata-text">Analysis state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : "Baseline pending"}</strong></li>
+          <li><span className="metadata-text">Convergence Signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Fragmentation Indicator</span><strong>{hasReplaySnapshots ? (shownFrame?.topology_state?.fragmentation_indicator ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Analysis state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
         </ul>
       </Panel>
       {expertMode ? (
@@ -177,11 +178,11 @@ export default function ReplayWorkspace({
           <Panel title="Evidence Lineage" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
           <Panel title="Operational Time Intelligence" className="span-6">
             <ul className="system-body-timeline-list">
-              <li><span className="metadata-text">State-space phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? "Not assessed") : "Not assessed"}</strong></li>
-              <li><span className="metadata-text">Propagation acceleration</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.propagation_acceleration ?? "Not assessed") : "Not assessed"}</strong></li>
-              <li><span className="metadata-text">Structural compression</span><strong>{hasReplaySnapshots ? (shownFrame?.subsystem_pressure?.compression_intensity ?? "Not assessed") : "Not assessed"}</strong></li>
-              <li><span className="metadata-text">Continuation window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? "Not assessed") : "Not assessed"}</strong></li>
-              <li><span className="metadata-text">Timing window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.timing_window ?? "Not assessed") : "Not assessed"}</strong></li>
+              <li><span className="metadata-text">State-space phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
+              <li><span className="metadata-text">Propagation acceleration</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash}</strong></li>
+              <li><span className="metadata-text">Structural compression</span><strong>{hasReplaySnapshots ? (shownFrame?.subsystem_pressure?.compression_intensity ?? dash) : dash}</strong></li>
+              <li><span className="metadata-text">Continuation window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash}</strong></li>
+              <li><span className="metadata-text">Timing window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.timing_window ?? dash) : dash}</strong></li>
             </ul>
           </Panel>
         </>
@@ -195,7 +196,7 @@ const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pr
 
 function strengthenReplayState(value) {
   const normalized = String(value ?? "").toLowerCase();
-  if (!normalized.trim()) return "Not assessed";
+  if (!normalized.trim()) return "—";
   if (normalized.includes("needs review") || normalized.includes("review")) return "Propagation Watch Active";
   if (normalized.includes("drift")) return "Structural Drift Emerging";
   if (normalized.includes("instab") || normalized.includes("separat")) return "Relational Instability Observed";
