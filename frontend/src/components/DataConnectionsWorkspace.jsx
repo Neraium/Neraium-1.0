@@ -271,6 +271,8 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = normalizeUploadStatus(uploadState) === "uploading" ? uploadTransferPercent : backendPercent;
   const baselineStatus = latestUploadSnapshot?.baseline_status;
   const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending";
+  const diagnosticsResult = uploadStateView.hasFullUploadResult(uploadResult) ? uploadResult : latestUploadResult;
+  const hasDiagnosticsSession = hasActiveSession && hasRealSiiOutput && (hasCurrentUploadResult || hasResumedSession);
 
   return (
     <div className="workspace-grid workspace-grid--connections">
@@ -369,7 +371,14 @@ export default function DataConnectionsWorkspace({
 
       {activeTab === "diagnostics" && (
         <DiagnosticsPanel
-          latestUploadResult={latestUploadResult}
+          latestUploadResult={diagnosticsResult}
+          latestUploadSnapshot={latestUploadSnapshot}
+          hasActiveSession={hasDiagnosticsSession}
+          hasCurrentUploadResult={hasCurrentUploadResult}
+          hasResumedSession={hasResumedSession}
+          hasRealSiiOutput={hasRealSiiOutput}
+          apiFetch={apiFetch}
+          accessCode={accessCode}
           uploadStateView={uploadStateView}
           uploadHistoryRows={uploadHistoryRows}
         />
