@@ -113,83 +113,104 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     ?? null;
 
   const outcome = gateOutcome(governance);
-  const hasPass = outcome === "PASS";
   const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
-  const statusLight = statusLightFromAdmitted(admittedState, hasPass, uiState);
+  const hasPass = outcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
+  const statusLight = statusLightFromAdmitted(admittedState, hasPass);
 
   if (!hasPass) {
     return {
       hasPass: false,
       statusLight,
-      currentGovernedSystemState: "No governed finding",
-      passedFindingSummary: "No admitted PASS finding available from Aletheia's Gate.",
-      affectedSubsystem: "Not available",
-      evidenceBackedOperatorFocus: "Not available",
-      persistenceWindowConfirmation: "Not available",
-      evpPreview: "Not available",
+      currentGovernedSystemState: "No admitted governed condition",
+      passedFindingSummary: "",
+      affectedSubsystem: "",
+      evidenceBackedOperatorFocus: "",
+      persistenceWindowConfirmation: "",
+      evpPreview: "",
       timestamp: liveOps.connectionSummary ?? "Not available",
-      detail: {
-        admittedState: "NONE",
-        evidenceSummary: "Not available",
-        persistenceConfirmation: "Not available",
-        doctrineVersion: "Not available",
-        affectedSubsystem: "Not available",
-        structuralRelationshipEvidence: "Not available",
-        operatorFocus: "Not available",
-        telemetryWindowReferences: "Not available",
-        evpPreview: "Not available",
-      },
+      detail: null,
     };
   }
 
   const evpRaw =
-    governance?.evp_id
+    governance?.evp_reference?.evp_id
+    ?? governance?.evp_reference?.evp_hash
+    ?? governance?.evp_id
     ?? governance?.evp_hash
     ?? governance?.record_id
     ?? governance?.decision_id
     ?? null;
+  const intervention = liveOps?.interventionItems?.[0] ?? {};
+  const primaryWindow = liveOps?.primaryWindow ?? {};
+  const finding = liveOps?.findings?.[0] ?? {};
+  const relationshipEvidence = governance?.affected_relationship_path
+    ?? intervention?.relationshipEvidence?.[0]
+    ?? liveOps?.relationshipRows?.[0]?.detail
+    ?? "";
+  const affectedSubsystem = governance?.affected_subsystem
+    ?? intervention?.label
+    ?? primaryWindow?.label
+    ?? "Facility relationship scope";
+  const evidenceSummary = governance?.why_summary
+    ?? finding?.detail
+    ?? "Doctrine-admitted structural relationship evidence satisfied persistence and corroboration requirements.";
+  const persistenceCount = valueOrEmpty(governance?.persistence_count);
+  const trajectoryDirection = normalizeTrajectory(governance?.trajectory_direction);
+  const recoveryWindowStatus = governance?.recovery_window_status ?? "RECOVERY_WINDOW_UNCLEAR";
+  const evpPreview = evpRaw ? previewHash(evpRaw) : "EVP pending server custody";
 
   return {
     hasPass: true,
     statusLight,
-    currentGovernedSystemState: governedStateFromAdmitted(admittedState, uiState),
-    passedFindingSummary:
-      liveOps?.findings?.[0]?.detail
-      ?? "Governed PASS finding is active.",
-    affectedSubsystem:
-      liveOps?.interventionItems?.[0]?.label
-      ?? liveOps?.primaryWindow?.label
-      ?? "Facility scope",
+    currentGovernedSystemState: governedStateFromAdmitted(admittedState),
+    passedFindingSummary: evidenceSummary,
+    affectedSubsystem,
     evidenceBackedOperatorFocus:
-      liveOps?.interventionItems?.[0]?.recommendation
-      ?? "Confirm governed persistence with current operating controls.",
+      governance?.operator_focus
+      ?? intervention?.recommendation
+      ?? "Inspect admitted structural relationship path and recovery window status.",
     persistenceWindowConfirmation:
-      liveOps?.interventionItems?.[0]?.window
-      ?? liveOps?.primaryWindow?.window
+      governance?.elapsed_operational_duration
+      ?? intervention?.window
+      ?? primaryWindow?.window
       ?? `Layer ${layer} persistence confirmed`,
-    evpPreview: showEvpForAdmitted(admittedState) && evpRaw ? previewHash(evpRaw) : "Not displayed for STABLE PASS",
+    evpPreview,
     timestamp: liveOps.connectionSummary ?? "Unavailable",
     detail: {
-      admittedState: governedStateFromAdmitted(admittedState, uiState),
-      evidenceSummary: liveOps?.findings?.[0]?.detail ?? "Admitted PASS evidence available.",
-      persistenceConfirmation: liveOps?.interventionItems?.[0]?.window ?? `Layer ${layer} persistence confirmed`,
+      admittedState: governedStateFromAdmitted(admittedState),
+      why: evidenceSummary,
+      primaryEvidenceFamily: governance?.primary_evidence_family ?? "Structural relationship evidence",
+      corroboratingEvidenceFamilies: formatList(governance?.corroborating_evidence_families),
+      doctrineRulesSatisfied: formatList(governance?.doctrine_rules_satisfied),
       doctrineVersion: governance?.doctrine_version ?? "Unknown doctrine",
-      affectedSubsystem:
-        liveOps?.interventionItems?.[0]?.label
-        ?? liveOps?.primaryWindow?.label
-        ?? "Facility scope",
-      structuralRelationshipEvidence:
-        liveOps?.interventionItems?.[0]?.relationshipEvidence?.[0]
-        ?? liveOps?.relationshipRows?.[0]?.detail
-        ?? "Not available",
+      affectedSubsystem,
+      affectedRelationshipPath: relationshipEvidence || "Primary subsystem relationship path",
+      operationalMapping: governance?.operational_mapping ?? "Operational loop under admitted finding",
+      persistenceCount: persistenceCount || "Confirmed",
+      firstAdmittedWindow: governance?.first_admitted_window ?? primaryWindow?.window ?? "First Gate-admitted window",
+      elapsedOperationalDuration:
+        governance?.elapsed_operational_duration
+        ?? intervention?.window
+        ?? primaryWindow?.window
+        ?? "Confirmed operational window",
+      trajectory: trajectoryDirection,
+      driftVelocity: governance?.drift_velocity ?? `${trajectoryDirection} structural drift`,
+      transitionPressure: governance?.transition_pressure ?? (admittedState === "ALERT" ? "High" : "Elevated"),
+      relationalStabilityTrend: governance?.relational_stability_trend ?? (admittedState === "ALERT" ? "Degrading" : "Under admitted watch"),
+      structuralDriftTrend: governance?.structural_drift_trend ?? trajectoryDirection,
+      recoveryWindowStatus,
+      interventionSensitivity: governance?.intervention_sensitivity ?? recoveryLanguage(recoveryWindowStatus),
+      structuralRelationshipEvidence: relationshipEvidence || "Primary subsystem relationship path",
       operatorFocus:
-        liveOps?.interventionItems?.[0]?.recommendation
-        ?? "Confirm admitted persistence against telemetry controls.",
+        governance?.operator_focus
+        ?? intervention?.recommendation
+        ?? "Inspect admitted structural relationship path and recovery window status.",
       telemetryWindowReferences:
-        liveOps?.interventionItems?.[0]?.window
-        ?? liveOps?.primaryWindow?.window
-        ?? "Not available",
-      evpPreview: showEvpForAdmitted(admittedState) && evpRaw ? previewHash(evpRaw) : "Not displayed for STABLE PASS",
+        governance?.first_admitted_window
+        ?? intervention?.window
+        ?? primaryWindow?.window
+        ?? "Gate-admitted telemetry window",
+      evpPreview,
     },
   };
 }
@@ -208,22 +229,17 @@ function gateOutcome(governance) {
   return "NO_PASS";
 }
 
-function governedStateFromAdmitted(admittedState, uiState) {
-  if (admittedState === "STABLE") return "Admitted stable condition";
+function governedStateFromAdmitted(admittedState) {
   if (admittedState === "WATCH") return "Admitted watch condition";
   if (admittedState === "ALERT") return "Admitted alert condition";
-  if (uiState === "stable") return "Governed stable condition";
-  if (uiState === "watch") return "Governed watch condition";
-  if (uiState === "warning" || uiState === "critical") return "Governed alert condition";
-  return "No governed finding";
+  return "No admitted governed condition";
 }
 
-function statusLightFromAdmitted(admittedState, hasPass, uiState) {
+function statusLightFromAdmitted(admittedState, hasPass) {
   if (!hasPass) return "gray";
-  if (admittedState === "STABLE") return "green";
   if (admittedState === "WATCH") return "yellow";
   if (admittedState === "ALERT") return "red";
-  return uiState === "stable" ? "green" : uiState === "watch" ? "yellow" : "red";
+  return "gray";
 }
 
 function showEvpForAdmitted(admittedState) {
@@ -231,10 +247,32 @@ function showEvpForAdmitted(admittedState) {
 }
 
 function orbStateFromStatusLight(statusLight) {
-  if (statusLight === "green") return "stable";
   if (statusLight === "yellow") return "watching";
   if (statusLight === "red") return "propagation_active";
   return "unknown";
+}
+
+function valueOrEmpty(value) {
+  if (value === null || value === undefined || value === "") return "";
+  return String(value);
+}
+
+function normalizeTrajectory(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Stable";
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function formatList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join("; ");
+  return String(value ?? "").trim() || "Doctrine requirements satisfied";
+}
+
+function recoveryLanguage(status) {
+  if (status === "RECOVERY_WINDOW_CRITICAL") return "Urgent intervention sensitivity";
+  if (status === "RECOVERY_WINDOW_NARROWING") return "Elevated intervention sensitivity";
+  if (status === "RECOVERY_WINDOW_OPEN") return "Recovery remains responsive to intervention";
+  return "Recovery sensitivity unclear";
 }
 
 function previewHash(value) {

@@ -10,14 +10,18 @@ export default function DesktopWorkspaceLayout({
   children,
   drawer,
 }) {
+  const isGateWorkspace = activeWorkspace === "system-body";
+
   return (
-    <main className="platform-shell">
-      <aside className="platform-sidebar" aria-label="Workspace navigation">
-        {navigation}
-      </aside>
+    <main className={`platform-shell ${isGateWorkspace ? "platform-shell--gate" : ""}`}>
+      {!isGateWorkspace ? (
+        <aside className="platform-sidebar" aria-label="Workspace navigation">
+          {navigation}
+        </aside>
+      ) : null}
       <div className="platform-main">
-        <MobileWorkspaceLayout header={mobileHeader} drawer={drawer}>
-          {topStatus}
+        <MobileWorkspaceLayout header={isGateWorkspace ? null : mobileHeader} drawer={isGateWorkspace ? null : drawer}>
+          {!isGateWorkspace ? topStatus : null}
           <WorkspaceContentRegion activeWorkspace={activeWorkspace} workspaceRef={workspaceRef}>
             {children}
           </WorkspaceContentRegion>

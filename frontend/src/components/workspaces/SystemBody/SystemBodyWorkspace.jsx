@@ -35,6 +35,7 @@ export default function SystemBodyWorkspace({
   const [detailOpen, setDetailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const hasAdmittedFinding = statusLight !== "gray";
+  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
 
   const operatorFocus =
     narrativeItems?.find((item) => item.label?.toLowerCase().includes("operator"))?.value
@@ -43,7 +44,11 @@ export default function SystemBodyWorkspace({
   if (governedOnly) {
     return (
       <PageContainer className="system-body system-body--gate">
-        <section className={`system-gate ui-state-surface ui-state-surface--${uiState}`} aria-label="The Gate">
+        <section className={`system-gate system-gate--${statusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="The Gate">
+          <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
+            <span className="system-gate__heartbeat-dot" />
+            <strong>{heartbeat.label}</strong>
+          </div>
           <button type="button" className="system-gate__settings" aria-label="Open Gate settings" onClick={() => setSettingsOpen((v) => !v)}>
             SET
           </button>
@@ -53,7 +58,6 @@ export default function SystemBodyWorkspace({
               setDetailOpen(true);
             }
           }}>
-            <h2 className="system-gate__title">The Gate</h2>
             <SystemOrbPanel
               systemState={systemState}
               uiState={uiState}
@@ -66,14 +70,14 @@ export default function SystemBodyWorkspace({
             />
             <p className="system-gate__state">{stateLabel || EMPTY_VALUE}</p>
             <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
-            <p className="system-gate__inspect">Tap to Inspect</p>
+            {hasAdmittedFinding ? <p className="system-gate__inspect">Tap to Inspect</p> : null}
           </div>
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
-                <li>Upload historical data</li>
-                <li>Connect live data source</li>
-                <li>Configure deployment settings</li>
+                <li>Upload historical CSV</li>
+                <li>Connect live telemetry source</li>
+                <li>Replay controls</li>
                 <li>Governance/admin access</li>
               </ul>
             </aside>
@@ -85,11 +89,22 @@ export default function SystemBodyWorkspace({
                 <button type="button" className="btn btn--secondary" onClick={() => setDetailOpen(false)}>Close</button>
               </header>
               <ul>
-                <li><span>Why</span><strong>{governedDetail.evidenceSummary || EMPTY_VALUE}</strong></li>
-                <li><span>Where</span><strong>{governedDetail.affectedSubsystem || EMPTY_VALUE}</strong></li>
-                <li><span>Persistence Count</span><strong>{governedDetail.persistenceConfirmation || EMPTY_VALUE}</strong></li>
-                <li><span>Trajectory</span><strong>{governedDetail.telemetryWindowReferences || EMPTY_VALUE}</strong></li>
-                <li><span>Recovery Window Status</span><strong>{governedDetail.persistenceConfirmation || EMPTY_VALUE}</strong></li>
+                <li><span>Why</span><strong>{governedDetail.why || EMPTY_VALUE}</strong></li>
+                <li><span>Primary Evidence Family</span><strong>{governedDetail.primaryEvidenceFamily || EMPTY_VALUE}</strong></li>
+                <li><span>Corroborating Evidence Families</span><strong>{governedDetail.corroboratingEvidenceFamilies || EMPTY_VALUE}</strong></li>
+                <li><span>Doctrine Rules Satisfied</span><strong>{governedDetail.doctrineRulesSatisfied || EMPTY_VALUE}</strong></li>
+                <li><span>Where</span><strong>{governedDetail.affectedRelationshipPath || EMPTY_VALUE}</strong></li>
+                <li><span>Operational Mapping</span><strong>{governedDetail.operationalMapping || EMPTY_VALUE}</strong></li>
+                <li><span>How Long</span><strong>{governedDetail.elapsedOperationalDuration || EMPTY_VALUE}</strong></li>
+                <li><span>Persistence Count</span><strong>{governedDetail.persistenceCount || EMPTY_VALUE}</strong></li>
+                <li><span>First Admitted Window</span><strong>{governedDetail.firstAdmittedWindow || EMPTY_VALUE}</strong></li>
+                <li><span>Trajectory</span><strong>{governedDetail.trajectory || EMPTY_VALUE}</strong></li>
+                <li><span>Drift Velocity</span><strong>{governedDetail.driftVelocity || EMPTY_VALUE}</strong></li>
+                <li><span>Transition Pressure</span><strong>{governedDetail.transitionPressure || EMPTY_VALUE}</strong></li>
+                <li><span>Relational Stability Trend</span><strong>{governedDetail.relationalStabilityTrend || EMPTY_VALUE}</strong></li>
+                <li><span>Structural Drift Trend</span><strong>{governedDetail.structuralDriftTrend || EMPTY_VALUE}</strong></li>
+                <li><span>Recovery Window Status</span><strong>{governedDetail.recoveryWindowStatus || EMPTY_VALUE}</strong></li>
+                <li><span>Intervention Sensitivity</span><strong>{governedDetail.interventionSensitivity || EMPTY_VALUE}</strong></li>
                 <li><span>Subsystem Affected</span><strong>{governedDetail.affectedSubsystem || EMPTY_VALUE}</strong></li>
                 <li><span>Structural Relationship Evidence</span><strong>{governedDetail.structuralRelationshipEvidence || EMPTY_VALUE}</strong></li>
                 <li><span>Operator Focus</span><strong>{governedDetail.operatorFocus || EMPTY_VALUE}</strong></li>
@@ -203,8 +218,24 @@ export default function SystemBodyWorkspace({
 }
 
 function statusLightLabel(light) {
-  if (light === "green") return "Governed Stable";
   if (light === "yellow") return "Governed Watch";
   if (light === "red") return "Governed Alert";
-  return "No Governed Finding";
+  return "No Admitted Condition";
+}
+
+function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
+  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
+  if (text.includes("offline") || text.includes("disconnected")) {
+    return { label: "Offline", tone: "offline" };
+  }
+  if (text.includes("replay")) {
+    return { label: "Replay running", tone: "syncing" };
+  }
+  if (text.includes("sync")) {
+    return { label: "Data stream active", tone: "syncing" };
+  }
+  if (text.includes("degraded") || text.includes("limited") || text.includes("elevated")) {
+    return { label: "Connection degraded", tone: "degraded" };
+  }
+  return { label: "Neraium online", tone: "online" };
 }

@@ -44,7 +44,7 @@ export default function SystemOrbPanel({
   return (
     <aside
       className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
-      aria-label="Structural topology intelligence field"
+      aria-label={compactPreview ? "The Gate admitted condition indicator" : "Structural topology intelligence field"}
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (
@@ -59,7 +59,11 @@ export default function SystemOrbPanel({
         <div className="system-body-orb-panel__alert-badge" aria-label="Escalation alert state">ALERT</div>
       ) : null}
       <div className="system-body-orb-panel__stage">
-        <HealthOrb systemState={resolvedSystemState} intensity={instability} />
+        <HealthOrb
+          systemState={resolvedSystemState}
+          intensity={instability}
+          animated={resolvedSystemState === "watching" || resolvedSystemState === "drift" || resolvedSystemState === "propagation_active"}
+        />
       </div>
       {!compactPreview ? (
         <div className="system-body-orb-panel__meta">
