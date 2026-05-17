@@ -153,7 +153,7 @@ export default function SystemBodyWorkspace({
           {detailOpen && hasAdmittedFinding && governedDetail ? (
             <aside className="system-gate__detail" aria-label="Governed admitted detail view">
               <header>
-                <strong>Admitted Finding</strong>
+                <strong>Gate State Detail</strong>
                 <button type="button" className="btn btn--secondary" onClick={() => setDetailOpen(false)}>Close</button>
               </header>
               <ul>
@@ -336,9 +336,9 @@ function wait(ms) {
 }
 
 function statusLightLabel(light) {
-  if (light === "yellow") return "Governed Watch";
-  if (light === "red") return "Governed Alert";
-  return "No Admitted Condition";
+  if (light === "yellow") return "Watch";
+  if (light === "red") return "Alert";
+  return "Stable";
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {

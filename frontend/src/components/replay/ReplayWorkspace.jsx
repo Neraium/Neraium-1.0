@@ -339,7 +339,7 @@ function strengthenReplayState(value) {
   if (normalized.includes("instab") || normalized.includes("separat")) return "Relational Instability Observed";
   if (normalized.includes("deterior") || normalized.includes("fragment")) return "Topology Divergence Active";
   if (normalized.includes("recover") || normalized.includes("convergen")) return "Recovery Convergence Tracking";
-  if (normalized.includes("stable") || normalized.includes("nominal")) return "Baseline stability pending";
+  if (normalized.includes("stable") || normalized.includes("nominal")) return "Stable";
   return sentenceCase(String(value).replaceAll("_", " "));
 }
 

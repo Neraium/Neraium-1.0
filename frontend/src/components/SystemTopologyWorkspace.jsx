@@ -55,7 +55,7 @@ export default function SystemTopologyWorkspace({
   const systemState = orbStateFromStatusLight(governed.statusLight);
   const primaryMessage = governed.hasPass
     ? concise(governed.passedFindingSummary, 120)
-    : "No admitted finding is available for operator display.";
+    : "Stable";
 
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = governed.hasPass
@@ -129,7 +129,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     return {
       hasPass: false,
       statusLight,
-      currentGovernedSystemState: "No admitted governed condition",
+      currentGovernedSystemState: "Stable",
       passedFindingSummary: "",
       affectedSubsystem: "",
       evidenceBackedOperatorFocus: "",
@@ -238,9 +238,9 @@ function gateOutcome(governance) {
 }
 
 function governedStateFromAdmitted(admittedState) {
-  if (admittedState === "WATCH") return "Admitted watch condition";
-  if (admittedState === "ALERT") return "Admitted alert condition";
-  return "No admitted governed condition";
+  if (admittedState === "WATCH") return "Watch";
+  if (admittedState === "ALERT") return "Alert";
+  return "Stable";
 }
 
 function statusLightFromAdmitted(admittedState, hasPass) {
