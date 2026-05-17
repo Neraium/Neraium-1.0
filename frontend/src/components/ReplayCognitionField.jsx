@@ -165,7 +165,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
     >
       <div className="replay-cognition-field__header">
         <div>
-          <p className="section-token">Active Structural Intelligence Mode</p>
+          <p className="section-token">Intake Status</p>
           <h3>{status}</h3>
           <span>{phase} · {pathLabel}</span>
         </div>

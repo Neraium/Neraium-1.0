@@ -115,7 +115,7 @@ function mergeUploadBackedCognitionState(state, latestUploadSnapshot) {
     ...state,
     cognition_state: state?.cognition_state && state.cognition_state !== "Monitoring"
       ? state.cognition_state
-      : "Latest result active",
+      : "Active Session",
     structural_stability: state?.structural_stability && state.structural_stability !== "UNKNOWN"
       ? state.structural_stability
       : "WATCH",
@@ -163,3 +163,4 @@ function hasActiveUpload(snapshot) {
     || (snapshot?.columns_detected ?? 0) > 0
   );
 }
+

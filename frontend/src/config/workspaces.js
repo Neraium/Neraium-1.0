@@ -13,9 +13,9 @@ export const WORKSPACES = [
   },
   {
     id: "data-connections",
-    label: "Data Connections",
+    label: "Historian Setup",
     eyebrow: "Intake",
-    description: "Upload telemetry and manage the live evidence stream.",
+    description: "Configure read-only historian intake and upload pilot telemetry.",
   },
   {
     id: "historical-replay",

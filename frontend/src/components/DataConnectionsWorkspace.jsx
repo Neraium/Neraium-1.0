@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildIntakeStages,
   buildUploadRequestError,
@@ -37,24 +37,22 @@ const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const TAG_MAP_ROWS = [
+  ["hvac_runtime", "HVAC Runtime", "Cultivation Rooms", "HVAC Unit 1", "minutes", "1 min", "Good"],
+  ["temp_air", "Air Temperature", "Cultivation Rooms", "Room Sensor", "°F", "1 min", "Good"],
+  ["rh_percent", "Relative Humidity", "Cultivation Rooms", "Room Sensor", "%RH", "1 min", "Good"],
+  ["dehu_runtime", "Dehumidifier Runtime", "Cultivation Rooms", "Dehu Unit 1", "minutes", "1 min", "Good"],
+];
 
 function formatTransferSpeed(bytesPerSecond) {
-  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
-    return "measuring speed";
-  }
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
-  }
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "measuring speed";
+  if (bytesPerSecond >= 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
   return `${Math.max(bytesPerSecond / 1024, 1).toFixed(1)} KB/s`;
 }
 
 function formatFileSize(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "Awaiting file";
-  }
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
+  if (!Number.isFinite(bytes) || bytes <= 0) return "Awaiting file";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(bytes / 1024, 1).toFixed(1)} KB`;
 }
 
@@ -63,34 +61,24 @@ function isLargeOperationalUpload(file) {
 }
 
 function uploadReadinessMessage(file) {
-  if (!file) {
-    return "Choose an operational telemetry export to begin intelligence construction.";
-  }
+  if (!file) return "Choose telemetry export data to begin pilot intake analysis.";
   if (isLargeOperationalUpload(file)) {
-    return "Large operational telemetry detected. The export will be transferred securely, queued for background intake, and processed through schema detection, baseline modeling, SII analysis, and evidence writing.";
+    return "Large telemetry export detected. Transfer is secure and processing continues in the background while status is tracked in Intake Status.";
   }
-  return "Telemetry export ready for secure intake and background processing.";
+  return "Telemetry export is ready for secure intake and analysis.";
 }
 
 function validateTelemetryFile(file, kind) {
-  if (!file) {
-    return "Choose a CSV or JSON telemetry file to upload.";
-  }
+  if (!file) return "Choose a CSV or JSON telemetry file to upload.";
   if (file.size > MAX_UPLOAD_BYTES) {
-    return `High-volume export identified above the configured ${formatFileSize(MAX_UPLOAD_BYTES)} operational intake target. Use a partitioned export or route through the enterprise batch intake path.`;
+    return `High-volume export above ${formatFileSize(MAX_UPLOAD_BYTES)}. Use partitioned export or enterprise batch intake.`;
   }
-
   const filename = String(file.name ?? "").toLowerCase();
   const mime = String(file.type ?? "").toLowerCase();
   const looksJson = filename.endsWith(".json") || mime.includes("json");
   const looksCsv = filename.endsWith(".csv") || mime.includes("csv") || mime === "text/plain" || mime === "";
-
-  if (kind === "json" && !looksJson) {
-    return "Selected file does not look like JSON telemetry. Choose a .json export or switch to CSV.";
-  }
-  if (kind === "csv" && !looksCsv) {
-    return "Selected file does not look like CSV telemetry. Choose a .csv export or switch to JSON.";
-  }
+  if (kind === "json" && !looksJson) return "Selected file does not look like JSON telemetry.";
+  if (kind === "csv" && !looksCsv) return "Selected file does not look like CSV telemetry.";
   return "";
 }
 
@@ -105,7 +93,17 @@ export default function DataConnectionsWorkspace({
   onResetDemo,
   formatClockTime,
 }) {
-  const TABS = ["overview", "upload", "diagnostics"];
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 760;
+  const tabs = useMemo(
+    () => [
+      { id: "overview", label: "Overview" },
+      { id: "historian-setup", label: isMobile ? "Setup" : "Historian Setup" },
+      { id: "upload", label: "Upload Data" },
+      { id: "diagnostics", label: "Diagnostics" },
+    ],
+    [isMobile],
+  );
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
@@ -125,29 +123,15 @@ export default function DataConnectionsWorkspace({
     try {
       const response = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
       const payload = await readJsonPayload(response);
-      if (!response.ok) {
-        return null;
-      }
-      return payload;
-    } catch (error) {
-      console.error("latest_upload_refresh_failed", { error: normalizeErrorMessage(error?.message ?? error) });
+      return response.ok ? payload : null;
+    } catch {
       return null;
     }
   }, [accessCode, apiFetch]);
 
   useEffect(() => () => {
-    if (pollTimerRef.current) {
-      window.clearTimeout(pollTimerRef.current);
-    }
+    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
   }, []);
-
-  useEffect(() => {
-    if (copyState !== "copied") {
-      return undefined;
-    }
-    const timerId = window.setTimeout(() => setCopyState("idle"), 1600);
-    return () => window.clearTimeout(timerId);
-  }, [copyState]);
 
   useEffect(() => {
     setUploadResult(latestUploadResult);
@@ -164,13 +148,7 @@ export default function DataConnectionsWorkspace({
 
     setUploadState("uploading");
     setUploadError("");
-    setUploadJob({
-      job_id: null,
-      status: "uploading",
-      progress_label: "Upload started.",
-      message: "Uploading telemetry export.",
-      file_size_bytes: selectedFile.size,
-    });
+    setUploadJob({ job_id: null, status: "uploading", progress_label: "Upload started.", message: "Uploading telemetry export.", file_size_bytes: selectedFile.size });
     setUploadTransfer({ loaded: 0, total: selectedFile.size, percent: 0, speedBytesPerSecond: 0, stage: "upload_started" });
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
@@ -194,13 +172,8 @@ export default function DataConnectionsWorkspace({
         },
       });
 
-      if (!ok) {
-        throw buildUploadRequestError({ status }, payload, "upload");
-      }
-
-      if (!payload?.job_id) {
-        throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
-      }
+      if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
+      if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
 
       uploadJobIdRef.current = payload.job_id;
       setUploadJob(payload);
@@ -236,9 +209,7 @@ export default function DataConnectionsWorkspace({
       setUploadJob({
         job_id: null,
         status: "validated",
-        progress_label: isLargeOperationalUpload(nextFile)
-          ? "Large operational telemetry detected. Preparing telemetry intake."
-          : "Telemetry export validated. Ready for intake.",
+        progress_label: isLargeOperationalUpload(nextFile) ? "Large telemetry export detected." : "Telemetry export validated.",
         message: uploadReadinessMessage(nextFile),
         file_size_bytes: nextFile.size,
       });
@@ -247,52 +218,19 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  function handleRetryUpload() {
-    if (uploadJobIdRef.current && isUploadProcessing(uploadState)) {
-      pollUploadStatus(uploadJobIdRef.current);
-      return;
-    }
-    if (uploadInputRef.current && selectedFile) {
-      setUploadError("");
-      setUploadState("validated");
-    } else {
-      openFilePicker(pendingUploadKind);
-    }
-  }
-
-  async function handleCopyJsonSchema() {
-    try {
-      await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
-      setCopyState("copied");
-    } catch {
-      setCopyState("error");
-    }
-  }
-
   async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
-    if (!pollingJobId) {
-      setUploadError("Upload state unavailable.");
-      setUploadState("error");
-      return;
-    }
-
+    if (!pollingJobId) return;
     try {
       const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
       const payload = await readJsonPayload(response);
-
-      if (!response.ok) {
-        throw buildUploadRequestError(response, payload, "poll");
-      }
+      if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
 
       pollFailureCountRef.current = 0;
       uploadJobIdRef.current = payload.job_id ?? pollingJobId;
       setUploadJob(payload);
       const nextStatus = normalizeUploadStatus(payload.status);
       setUploadState(nextStatus);
-      if (isUploadProcessing(nextStatus)) {
-        setUploadError("");
-      }
 
       if (nextStatus === "complete") {
         const latestPayload = await loadLatestUpload();
@@ -311,92 +249,23 @@ export default function DataConnectionsWorkspace({
       }
 
       if (nextStatus === "failed") {
-        setUploadError(operatorUploadMessage({
-          status: response.status,
-          errorType: payload.error_type ?? "sii_processing_failure",
-          detail: payload.error,
-          phase: "poll",
-        }));
+        setUploadError(operatorUploadMessage({ status: response.status, errorType: payload.error_type ?? "sii_processing_failure", detail: payload.error, phase: "poll" }));
         return;
       }
-
       pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), 2000);
     } catch (error) {
       const classified = classifyUploadError(error, "poll");
       if (classified.retryable && pollFailureCountRef.current < 30) {
         pollFailureCountRef.current += 1;
-        setUploadState((current) => isUploadProcessing(current) ? current : "running_sii");
+        setUploadState((current) => (isUploadProcessing(current) ? current : "running_sii"));
         setUploadError(classified.message);
-        pollTimerRef.current = window.setTimeout(
-          () => pollUploadStatus(pollingJobId),
-          Math.min(2000 + pollFailureCountRef.current * 1500, 12000),
-        );
+        pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), Math.min(2000 + pollFailureCountRef.current * 1500, 12000));
         return;
       }
       setUploadError(classified.finalMessage ?? classified.message);
       setUploadState(classified.retryable ? "error" : classified.state);
     }
   }
-
-  const displayUploadError = uploadError;
-  const intakeStages = uploadJob
-    ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
-    : uploadResult
-      ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
-      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError: displayUploadError, roomContext });
-  const latestStatus = latestUploadSnapshot?.status ?? "empty";
-  const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
-  const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
-  const latestMessage = normalizeErrorMessage(
-    displayUploadError
-      || uploadJob?.error
-      || uploadJob?.message
-      || uploadJob?.progress_label
-      || latestUploadSnapshot?.message
-      || uploadStateMessage(uploadState),
-  );
-  const selectedFileSize = formatFileSize(selectedFile?.size ?? 0);
-  const selectedFileIsLarge = isLargeOperationalUpload(selectedFile);
-  const uploadGuidance = uploadReadinessMessage(selectedFile);
-  const intakeStateEstimate = selectedFileIsLarge
-    ? "Estimated intake state: high-volume export will remain in background processing while the workspace polls for status."
-    : selectedFile
-      ? "Estimated intake state: standard telemetry export will queue for background processing after transfer."
-      : "Estimated intake state appears after file selection.";
-  const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
-  const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
-  const visibleProgressPercent = normalizeUploadStatus(uploadState) === "uploading" ? uploadTransferPercent : backendPercent;
-  const uploadProgressLabel = uploadJob?.progress_label || (isUploadProcessing(uploadState) ? "Preparing telemetry intake" : latestMessage);
-  const uploadPhaseState = (phase) => {
-    if (phase === "select") {
-      return selectedFile || uploadResult ? "complete" : "active";
-    }
-    if (phase === "validate") {
-      if (uploadError) return "error";
-      return selectedFile || uploadResult ? "complete" : "pending";
-    }
-    if (phase === "process") {
-      if (uploadError && !isUploadProcessing(uploadState)) return "error";
-      if (isUploadProcessing(uploadState)) return "active";
-      return uploadResult ? "complete" : "pending";
-    }
-    if (uploadError && !isUploadProcessing(uploadState)) return "error";
-    return uploadResult ? "complete" : isUploadProcessing(uploadState) ? "active" : "pending";
-  };
-  const uploadFlowSteps = [
-    { key: "select", label: "Acquire Telemetry", value: selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename || "Operational source" },
-    { key: "validate", label: "Resolve Signal Schema", value: selectedFile ? selectedFileSize : "sensor matrix" },
-    { key: "process", label: "Construct Intelligence Model", value: isUploadProcessing(uploadState) ? "baseline + replay generation" : uploadJob?.status || "Ready" },
-    { key: "status", label: "Activate Cognition", value: uploadError ? "Operator attention" : uploadResult ? "Active" : "Standby" },
-  ];
-  const baselineStatus = latestUploadSnapshot?.baseline_status;
-  const baselineMessage = baselineStatus === "building"
-    ? "Building uploaded baseline"
-    : baselineStatus === "active"
-      ? "Uploaded baseline active"
-      : baselineStatus === "failed"
-        ? "Uploaded baseline failed"
-      : "Awaiting uploaded telemetry";
 
   async function handleResetDemoClick() {
     setSelectedFile(null);
@@ -411,215 +280,244 @@ export default function DataConnectionsWorkspace({
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-    if (uploadInputRef.current) {
-      uploadInputRef.current.value = "";
-    }
-    if (onResetDemo) {
-      await onResetDemo();
-    }
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+    if (onResetDemo) await onResetDemo();
   }
+
+  const displayUploadError = uploadError;
+  const intakeStages = uploadJob
+    ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
+    : uploadResult
+      ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
+      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError: displayUploadError, roomContext });
+  const latestStatus = latestUploadSnapshot?.status ?? "empty";
+  const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
+  const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
+  const latestMessage = normalizeErrorMessage(
+    displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || latestUploadSnapshot?.message || uploadStateMessage(uploadState),
+  );
+  const selectedFileSize = formatFileSize(selectedFile?.size ?? 0);
+  const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
+  const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
+  const visibleProgressPercent = normalizeUploadStatus(uploadState) === "uploading" ? uploadTransferPercent : backendPercent;
+  const baselineStatus = latestUploadSnapshot?.baseline_status;
+  const baselineMessage = baselineStatus === "building"
+    ? "Baseline Pending"
+    : baselineStatus === "active"
+      ? "Baseline Active"
+      : "Baseline Pending";
 
   return (
     <div className="workspace-grid workspace-grid--connections">
-      <Panel title="Data Connections" className="span-12 workspace-hero-panel">
-        <div className="intake-flow__controls" role="tablist" aria-label="Data connections sections">
-          {TABS.map((tab) => (
+      <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
+        <div className="intake-flow__controls" role="tablist" aria-label="Historian intake sections">
+          {tabs.map((tab) => (
             <button
-              key={tab}
+              key={tab.id}
               type="button"
               role="tab"
-              aria-selected={activeTab === tab}
-              className={activeTab === tab ? "command-button" : "secondary-command-button"}
-              onClick={() => setActiveTab(tab)}
+              aria-selected={activeTab === tab.id}
+              className={activeTab === tab.id ? "command-button" : "secondary-command-button"}
+              onClick={() => setActiveTab(tab.id)}
             >
-              {tab === "overview" ? "Overview" : tab === "upload" ? "Upload" : "Diagnostics"}
+              {tab.label}
             </button>
           ))}
-          <button
-            type="button"
-            className="secondary-command-button"
-            onClick={handleResetDemoClick}
-            disabled={isUploadProcessing(uploadState)}
-          >
-            Reset Demo
+          <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
+            Reset Demo State
           </button>
         </div>
       </Panel>
 
-      {activeTab === "upload" && (
-      <Panel title="Upload Intake" className="span-7 workspace-hero-panel upload-ops-panel">
-        <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
-          <div className="intake-flow__header">
-            <div>
-              <p className="section-token">Telemetry Intelligence Constructor</p>
-              <h3>Acquire → Resolve → Model → Activate</h3>
-            </div>
-            <p>Neraium constructs a structural intelligence model from telemetry: schema resolution, relational baseline computation, replay generation, and active cognition handoff.</p>
-          </div>
-
-          <ol className="upload-flow-rail" aria-label="Upload progress">
-            {uploadFlowSteps.map((step, index) => (
-              <li className={`upload-flow-rail__step upload-flow-rail__step--${uploadPhaseState(step.key)}`} key={step.key}>
-                <span className="upload-flow-rail__index">{index + 1}</span>
-                <span className="upload-flow-rail__copy">
-                  <strong>{step.label}</strong>
-                  <span>{step.value}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-
-          <input
-            ref={uploadInputRef}
-            accept=".csv,text/csv"
-            id="csv-upload"
-            type="file"
-            className="intake-flow__input"
-            onChange={handleFileSelection}
-          />
-
-          <div className="upload-file-card">
-            <div className="upload-file-card__main">
-              <span className="upload-file-card__label">Telemetry source</span>
-              <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose an operational telemetry export to begin intelligence construction."}</p>
-              <p>{uploadGuidance}</p>
-            </div>
-            <div className="upload-file-card__actions">
-              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>
-                Select CSV
-              </button>
-              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
-                Select JSON
-              </button>
-              <button className="command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
-                {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()}`}
-              </button>
-            </div>
-          </div>
-
-          <div className={`intake-flow__status intake-flow__status--${uploadError ? "error" : isUploadProcessing(uploadState) ? "active" : uploadResult ? "complete" : "idle"}`}>
-            <span className="intake-flow__progress">
-              {isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}
-              {uploadProgressLabel}
-            </span>
-            <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
-            {visibleProgressPercent !== null && (
-              <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
-                <span style={{ width: `${visibleProgressPercent}%` }} />
-              </div>
-            )}
-          </div>
-
-          <div className="intake-flow__guidance" role="status" aria-live="polite">
-            <strong>{selectedFileIsLarge ? "High-volume telemetry field identified" : "Intelligence construction guidance"}</strong>
-            <span>{intakeStateEstimate}</span>
-            <span>Progress tracks transfer, schema resolution, baseline modeling, structural scoring, replay frame generation, and active cognition handoff.</span>
-            {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} transferred at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
-          </div>
-
-          {uploadError && <span className="sr-only">{normalizeErrorMessage(uploadError)}</span>}
-          {displayUploadError && (
-            <div className="form-error form-error--professional" role="status" aria-live="polite">
-              <strong>Upload requires attention</strong>
-              <span>{normalizeErrorMessage(uploadError || displayUploadError)}</span>
-              <button className="secondary-command-button" type="button" onClick={handleRetryUpload}>
-                Retry intake
-              </button>
-            </div>
-          )}
-        </form>
-        <div className="connector-json-hint">
-          <div className="connector-json-hint__header">
-            <p className="section-token">JSON upload schema</p>
-            <div className="connector-json-hint__actions">
-              <button className="secondary-command-button" type="button" onClick={handleCopyJsonSchema}>
-                {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
-              </button>
-              <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
-                {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
-              </button>
-            </div>
-          </div>
-          {isJsonSchemaOpen && (
-            <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>
-          )}
-        </div>
-      </Panel>
-      )}
-
-      {activeTab === "upload" && (
-      <Panel title="Model Construction State" className="span-5 upload-cognition-state">
-        <WorkflowStages items={intakeStages} />
-      </Panel>
-      )}
-
       {activeTab === "overview" && (
-      <>
-      <Panel title="Active Structural Intelligence" className="span-7 uploaded-intelligence-panel">
-        <MetricGrid
-          metrics={[
-            { label: "Cognition State", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
-            { label: "Control Plane", value: apiStatus.label },
-            { label: "Model Updated", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "Awaiting first intelligence model" },
-            { label: "Signal Origin", value: latestUploadSnapshot?.result_source ? "Operational telemetry import" : "Awaiting uploaded telemetry" },
-            { label: "Relational Baseline", value: baselineMessage },
-            { label: "Primary Environment", value: roomContext.primary },
-            { label: "Operating Scenario", value: latestUploadSnapshot?.scenario ?? "Awaiting uploaded telemetry" },
-            { label: "Temporal Index", value: latestUploadSnapshot?.current_tick ?? "Tracking on activation" },
-          ]}
-        />
-      </Panel>
+        <>
+          <Panel title="Intake Status" className="span-7 uploaded-intelligence-panel">
+            <MetricGrid
+              metrics={[
+                { label: "Active Session", value: uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) },
+                { label: "Control Plane", value: apiStatus.label },
+                { label: "Analysis Active", value: latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No Active Session" },
+                { label: "Signal Origin", value: latestUploadSnapshot?.result_source ? "Telemetry import" : "Awaiting uploaded telemetry" },
+                { label: "Baseline", value: baselineMessage },
+                { label: "Primary Environment", value: roomContext.primary },
+                { label: "Operational Mode", value: latestUploadSnapshot?.scenario ?? "Awaiting uploaded telemetry" },
+                { label: "Session Tick", value: latestUploadSnapshot?.current_tick ?? "Pending activation" },
+              ]}
+            />
+          </Panel>
+          <Panel title="Recent Structural Analysis" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+            <MetricGrid
+              metrics={[
+                { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
+                { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "Awaiting uploaded telemetry" },
+                { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "No Active Session" },
+                { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "No Active Session" },
+              ]}
+              compact
+            />
+            <CompactList items={uploadDiffSummary.lines} emptyText="Awaiting meaningful structural change." />
+          </Panel>
+        </>
+      )}
 
-      <Panel title="Structural Delta" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
-        <MetricGrid
-          metrics={[
-            { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Model pending" },
-            { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "First baseline forming" },
-            { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "Awaiting second frame" },
-            { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "Evidence will populate after processing" },
-          ]}
-          compact
-        />
-        <CompactList items={uploadDiffSummary.lines} emptyText="Waiting for a meaningful state change." />
-      </Panel>
-      </>
+      {activeTab === "historian-setup" && (
+        <>
+          <Panel title="Historian Intake Architecture" className="span-12 workspace-hero-panel">
+            <DataTable
+              columns={["Pipeline Stage"]}
+              rows={[
+                ["Historian / BMS / SCADA"],
+                ["read-only ingestion"],
+                ["Neraium Intake Connector"],
+                ["Tag Mapper + Normalizer"],
+                ["Baseline Builder"],
+                ["Live Structural Analysis"],
+                ["Operator UI / Reports"],
+              ]}
+            />
+          </Panel>
+          <Panel title="Connection Mode" className="span-6">
+            <MetricGrid
+              metrics={[
+                { label: "CSV Export Pilot", value: "Pilot Ready · Read-only ingest only" },
+                { label: "Read-only Historian API", value: "Available · No control path" },
+                { label: "Scheduled Pull", value: "Available · Pull-only ingestion window" },
+                { label: "Live Stream / MQTT", value: "Future · Read-only subscription model" },
+              ]}
+            />
+          </Panel>
+          <Panel title="Historian Source" className="span-6">
+            <MetricGrid
+              metrics={[
+                { label: "Source Type", value: "AVEVA / OSIsoft PI, Ignition, Niagara/BACnet, SQL historian, InfluxDB/TimescaleDB, CSV/S3/Blob" },
+                { label: "Host / Endpoint", value: "Configured per pilot environment" },
+                { label: "Authentication", value: "Token / basic / service account (read-only scope)" },
+                { label: "Polling Interval", value: "1 to 15 minutes" },
+                { label: "Timezone", value: "Facility local timezone" },
+                { label: "Retention Window", value: "30 to 90 day baseline capture" },
+              ]}
+            />
+          </Panel>
+          <Panel title="Tag Mapping" className="span-12">
+            <DataTable
+              columns={["Raw Tag", "Normalized Name", "Subsystem", "Equipment", "Unit", "Sample Rate", "Quality"]}
+              rows={TAG_MAP_ROWS}
+            />
+          </Panel>
+          <Panel title="Baseline Window" className="span-8">
+            <MetricGrid
+              metrics={[
+                { label: "Historical Baseline", value: "30 to 90 days recommended" },
+                { label: "Recent Comparison", value: "15 minutes to 24 hours" },
+                { label: "Context: Alarms", value: "Optional input channel" },
+                { label: "Context: Maintenance Logs", value: "Optional input channel" },
+                { label: "Context: Setpoint Changes", value: "Optional input channel" },
+                { label: "Context: Weather + Load", value: "Optional input channel" },
+              ]}
+            />
+          </Panel>
+          <Panel title="Read-only Safety Statement" className="span-4">
+            <p>
+              Neraium connects read-only. It does not write to the historian, change setpoints, issue commands, or control equipment.
+            </p>
+          </Panel>
+        </>
+      )}
+
+      {activeTab === "upload" && (
+        <>
+          <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
+            <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
+              <div className="intake-flow__header">
+                <div>
+                  <p className="section-token">Historian Pilot Intake</p>
+                  <h3>Acquire → Normalize → Baseline → Analyze</h3>
+                </div>
+                <p>Upload a historian export for read-only pilot intake and structural analysis.</p>
+              </div>
+
+              <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" className="intake-flow__input" onChange={handleFileSelection} />
+
+              <div className="upload-file-card">
+                <div className="upload-file-card__main">
+                  <span className="upload-file-card__label">Telemetry source</span>
+                  <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
+                  <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file · ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
+                  <p>{uploadReadinessMessage(selectedFile)}</p>
+                </div>
+                <div className="upload-file-card__actions">
+                  <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
+                  <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>Select JSON</button>
+                  <button className="command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
+                    {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()}`}
+                  </button>
+                </div>
+              </div>
+
+              <div className={`intake-flow__status intake-flow__status--${uploadError ? "error" : isUploadProcessing(uploadState) ? "active" : uploadResult ? "complete" : "idle"}`}>
+                <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{uploadJob?.progress_label || latestMessage}</span>
+                <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
+                {visibleProgressPercent !== null && (
+                  <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                    <span style={{ width: `${visibleProgressPercent}%` }} />
+                  </div>
+                )}
+                {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
+              </div>
+            </form>
+            <div className="connector-json-hint">
+              <div className="connector-json-hint__header">
+                <p className="section-token">JSON upload schema</p>
+                <div className="connector-json-hint__actions">
+                  <button className="secondary-command-button" type="button" onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
+                      setCopyState("copied");
+                    } catch {
+                      setCopyState("error");
+                    }
+                  }}>
+                    {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
+                  </button>
+                  <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
+                    {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
+                  </button>
+                </div>
+              </div>
+              {isJsonSchemaOpen && <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>}
+            </div>
+          </Panel>
+          <Panel title="Model Construction State" className="span-5 upload-cognition-state">
+            <WorkflowStages items={intakeStages} />
+          </Panel>
+        </>
       )}
 
       {activeTab === "diagnostics" && (
-      <Panel title="Advanced Diagnostics" className="span-12">
-        <details className="technical-summary-panel">
-          <summary>Show active result and upload history</summary>
-
-          <MetricGrid
-            metrics={[
-              { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No active result" },
-              { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No active result" },
-              { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No active result" },
-              { label: "Timestamp", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
-            ]}
-            compact
-          />
-
-          <Panel title="Upload History" className="span-12">
-            {uploadHistoryRows.length > 0 ? (
-              <DataTable
-                columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
-                rows={uploadHistoryRows.map((row) => [
-                  row.filename,
-                  row.status,
-                  row.score,
-                  row.state,
-                  row.room,
-                  row.scoreDelta ?? "Pending",
-                ])}
-              />
-            ) : (
-              <EmptyState title="No ingestion history" body="Completed uploads and meaningful uploaded telemetry changes will appear here." compact />
-            )}
-          </Panel>
-        </details>
-      </Panel>
+        <Panel title="Diagnostics" className="span-12">
+          <details className="technical-summary-panel">
+            <summary>Show active result and upload history</summary>
+            <MetricGrid
+              metrics={[
+                { label: "Score", value: latestUploadResult?.sii_intelligence?.neraium_score ?? "No Active Session" },
+                { label: "State", value: latestUploadResult?.sii_intelligence?.facility_state ?? "No Active Session" },
+                { label: "Drift", value: latestUploadResult?.sii_intelligence?.urgency ?? "No Active Session" },
+                { label: "Timestamp", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
+              ]}
+              compact
+            />
+            <Panel title="Upload History" className="span-12">
+              {uploadHistoryRows.length > 0 ? (
+                <DataTable
+                  columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
+                  rows={uploadHistoryRows.map((row) => [row.filename, row.status, row.score, row.state, row.room, row.scoreDelta ?? "Pending"])}
+                />
+              ) : (
+                <EmptyState title="No ingestion history" body="Completed uploads and structural analysis sessions will appear here." compact />
+              )}
+            </Panel>
+          </details>
+        </Panel>
       )}
     </div>
   );

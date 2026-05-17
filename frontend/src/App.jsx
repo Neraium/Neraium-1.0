@@ -957,7 +957,7 @@ function deriveFacilityStability(result) {
   if (overallResult === "needs_review") {
     return "Review recommended for irrigation variance";
   }
-  return "No active result";
+  return "No Active Session";
 }
 
 async function buildProtectedRequestMessage(response) {
@@ -1562,3 +1562,4 @@ function buildDemoLiveOps(tick = 0, scenario = "drift") {
 }
 
 export default App;
+

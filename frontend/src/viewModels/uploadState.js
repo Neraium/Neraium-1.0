@@ -188,14 +188,14 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
       tone: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll" ? "nominal" : "info",
     },
     {
-      title: uploadError ? "Upload failed" : (latestStatus === "active" || latestStatus === "baseline_active" ? "Latest result active" : "No active result"),
+      title: uploadError ? "Upload failed" : (latestStatus === "active" || latestStatus === "baseline_active" ? "Active Session" : "No Active Session"),
       detail: uploadError
         ? normalizeErrorMessage(uploadError)
         : latestStatus === "active"
           ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
           : latestStatus === "baseline_active"
             ? "Live baseline is active. The next telemetry comparison will activate Facility Command."
-            : "No active result. Awaiting uploaded telemetry.",
+            : "No Active Session. Awaiting uploaded telemetry.",
       state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
       tone: uploadError ? "elevated" : (latestStatus === "active" || latestStatus === "baseline_active" ? "nominal" : "info"),
     },
@@ -217,7 +217,7 @@ export function connectionStateLabel(latestStatus, uploadState, uploadError) {
     return "Live baseline active";
   }
   if (normalizedLatestStatus === "active") {
-    return "Latest result active";
+    return "Active Session";
   }
   return NO_DATA_LABEL;
 }
@@ -242,7 +242,7 @@ export function buildUploadDiffSummary(history = []) {
   const previous = history[1] ?? null;
   if (!current) {
     return {
-      title: "No active result",
+      title: "No Active Session",
       lines: [noDataGuidance()],
     };
   }

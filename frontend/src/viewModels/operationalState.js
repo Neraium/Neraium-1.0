@@ -242,10 +242,10 @@ function buildEmptyOperationalContext(state, deps) {
   const items = [{
     id: "connect-data",
     label: "Connect telemetry",
-    detail: "Start live polling or upload a telemetry file in Data Connections to activate dashboard values.",
+    detail: "Start live polling or upload a telemetry file in Historian Setup to activate dashboard values.",
     tone: "info",
     window: AWAITING_TELEMETRY_LABEL,
-    impact: "No active result",
+    impact: "No Active Session",
     actions: ["Connect"],
     technicalDetails: [
       `latest_upload_status=${latestUploadSnapshot?.status ?? "empty"}`,
@@ -315,7 +315,7 @@ function buildTelemetryCards(result, deps) {
   if (!result) {
     return TELEMETRY_CHANNELS.map((channel) => ({
       label: deps.formatCategory(channel),
-      primary: "No active result",
+      primary: "No Active Session",
       secondary: "Upload telemetry to populate this system signal.",
       series: [],
       tone: "info",
@@ -473,8 +473,8 @@ function buildAlertItems(result, apiStatus) {
 
   if (!result) {
     alerts.push({
-      title: "No active result",
-      detail: "Upload telemetry in Data Connections to activate Facility Command.",
+      title: "No Active Session",
+      detail: "Upload telemetry in Historian Setup to activate Facility Command.",
       tone: "info",
     });
     return alerts;
@@ -511,7 +511,7 @@ function buildAlertItems(result, apiStatus) {
 
 function buildOverviewMetrics(result, apiStatus, systems, systemsState, deps) {
   return [
-    { label: "Facility stability", value: result?.engine_result ? deps.deriveFacilityStability(result) : "No active result" },
+    { label: "Facility stability", value: result?.engine_result ? deps.deriveFacilityStability(result) : "No Active Session" },
     { label: "Active alerts", value: buildAlertItems(result, apiStatus).length },
     { label: "Data source", value: result ? latestManualSourceLabel(result) : "No data connected" },
     { label: "Uploaded rooms", value: result?.room_summary?.room_count ?? result?.sii_intelligence?.rooms?.length ?? 0 },
@@ -1005,7 +1005,7 @@ function buildSiiConsoleEvents(intelligence, apiStatus) {
 
 function buildEmptyTelemetryCards() {
   return [
-    { label: "Neraium Score", primary: "No active result", secondary: "Complete an upload to calculate a score.", series: [], tone: "info" },
+    { label: "Neraium Score", primary: "No Active Session", secondary: "Complete an upload to calculate a score.", series: [], tone: "info" },
     { label: "Operating State", primary: NO_DATA_LABEL, secondary: "This updates from the latest completed upload.", series: [], tone: "info" },
     { label: "Primary Room", primary: "Awaiting upload", secondary: "Room context appears after ingestion completes.", series: [], tone: "info" },
     { label: "Drift", primary: "Awaiting upload", secondary: "Drift and alerts appear after a completed upload.", series: [], tone: "info" },
@@ -1121,3 +1121,4 @@ function buildSeries(profile, drift) {
 function average(values) {
   return values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
 }
+
