@@ -1,2 +1,0 @@
-export const OPERATIONAL_CADENCE_MS = 30000;
-export const LIVE_REFRESH_INTERVAL_MS = 5000;

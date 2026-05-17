@@ -24,7 +24,7 @@ export const DEMO_STEPS = [
   {
     title: "Drift Emergence",
     message: "Relationship movement begins before alarms or threshold failures.",
-    workspace: "drift-timeline",
+    workspace: "system-body",
   },
   {
     title: "Operator Review",
@@ -39,7 +39,7 @@ export const DEMO_STEPS = [
   {
     title: "Replay Timeline",
     message: "Uploaded telemetry can replay the movement from stable behavior into drift or recovery.",
-    workspace: "drift-timeline",
+    workspace: "historical-replay",
   },
 ];
 

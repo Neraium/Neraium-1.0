@@ -62,7 +62,7 @@ export default function SystemOrbPanel({
         <HealthOrb
           systemState={resolvedSystemState}
           intensity={instability}
-          animated={resolvedSystemState === "watching" || resolvedSystemState === "drift" || resolvedSystemState === "propagation_active"}
+          animated={compactPreview ? resolvedSystemState === "propagation_active" : (resolvedSystemState === "watching" || resolvedSystemState === "drift" || resolvedSystemState === "propagation_active")}
         />
       </div>
       {!compactPreview ? (

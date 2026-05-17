@@ -6,12 +6,6 @@ export const WORKSPACES = [
     description: "Primary infrastructure condition, escalation direction, and operational focus.",
   },
   {
-    id: "drift-timeline",
-    label: "Escalation Timeline",
-    eyebrow: "Progression",
-    description: "When instability began, how it persisted, and where consequence is increasing.",
-  },
-  {
     id: "data-connections",
     label: "Historian Setup",
     eyebrow: "Intake",

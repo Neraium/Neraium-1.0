@@ -12,8 +12,3 @@
 @import "./motion.css" layer(motion);
 @import "./states.css" layer(states);
 @import "./workspace-system-body.css" layer(components);
-@import "./sidebar.css" layer(components);
-@import "./top-status.css" layer(layout);
-@import "./shell.css" layer(layout);
-@import "./mobile-premium.css" layer(overrides);
-@import "./mobile-top-fix.css" layer(overrides);
