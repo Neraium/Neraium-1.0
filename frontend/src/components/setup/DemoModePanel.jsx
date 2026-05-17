@@ -1,36 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { Panel } from "../workspacePrimitives";
 
-const STEP_DURATION_MS = 5000;
+export const STEP_DURATION_MS = 5000;
 
-const DEMO_STEPS = [
+export const DEMO_STEPS = [
   {
     title: "Historian Intake",
     message: "Read-only telemetry intake from historian, BMS, SCADA, or CSV export.",
+    workspace: "data-connections",
+    tab: "overview",
   },
   {
     title: "Baseline Formation",
     message: "Neraium establishes normal operating relationships across telemetry signals.",
+    workspace: "data-connections",
+    tab: "historian-setup",
   },
   {
     title: "Structural Monitoring",
     message: "Live or uploaded telemetry is compared against baseline system behavior.",
+    workspace: "system-body",
   },
   {
     title: "Drift Emergence",
     message: "Relationship movement begins before alarms or threshold failures.",
+    workspace: "drift-timeline",
   },
   {
     title: "Operator Review",
     message: "Operators receive a clear focus area and evidence-backed interpretation.",
+    workspace: "system-body",
   },
   {
     title: "Diagnostics",
     message: "Engineering teams can inspect replay, topology, and structural evidence.",
+    workspace: "historical-replay",
   },
   {
     title: "Replay Timeline",
     message: "Uploaded telemetry can replay the movement from stable behavior into drift or recovery.",
+    workspace: "drift-timeline",
   },
 ];
 
@@ -38,39 +47,26 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export default function DemoModePanel() {
-  const [stepIndex, setStepIndex] = useState(0);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+export default function DemoModePanel({
+  demoState,
+  onActivateDemo,
+  onTogglePlayback,
+  onPrevious,
+  onNext,
+  onRestart,
+}) {
+  const [hasActivatedOnce, setHasActivatedOnce] = useState(false);
+  const stepIndex = demoState?.stepIndex ?? 0;
+  const elapsedMs = demoState?.elapsedMs ?? 0;
+  const isPlaying = Boolean(demoState?.active && demoState?.isPlaying);
   const activeStep = DEMO_STEPS[stepIndex];
   const progress = useMemo(() => clamp((elapsedMs / STEP_DURATION_MS) * 100, 0, 100), [elapsedMs]);
 
   useEffect(() => {
-    setStepIndex(0);
-    setElapsedMs(0);
-    setIsPlaying(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isPlaying) return undefined;
-    const timer = window.setInterval(() => {
-      setElapsedMs((current) => {
-        const next = current + 100;
-        if (next >= STEP_DURATION_MS) {
-          setStepIndex((index) => (index + 1) % DEMO_STEPS.length);
-          return 0;
-        }
-        return next;
-      });
-    }, 100);
-    return () => window.clearInterval(timer);
-  }, [isPlaying]);
-
-  function pauseOnManualNavigation(nextStep) {
-    setStepIndex(nextStep);
-    setElapsedMs(0);
-    setIsPlaying(false);
-  }
+    if (hasActivatedOnce) return;
+    onActivateDemo?.();
+    setHasActivatedOnce(true);
+  }, [hasActivatedOnce, onActivateDemo]);
 
   return (
     <Panel title="Demo Mode" className="span-12 workspace-hero-panel">
@@ -99,31 +95,27 @@ export default function DemoModePanel() {
           <span style={{ width: `${progress}%` }} />
         </div>
         <div className="intake-flow__controls">
-          <button type="button" className="secondary-command-button" onClick={() => setIsPlaying((current) => !current)}>
+          <button type="button" className="secondary-command-button" onClick={onTogglePlayback}>
             {isPlaying ? "Pause" : "Play"}
           </button>
           <button
             type="button"
             className="secondary-command-button"
-            onClick={() => pauseOnManualNavigation((stepIndex - 1 + DEMO_STEPS.length) % DEMO_STEPS.length)}
+            onClick={onPrevious}
           >
             Previous
           </button>
           <button
             type="button"
             className="secondary-command-button"
-            onClick={() => pauseOnManualNavigation((stepIndex + 1) % DEMO_STEPS.length)}
+            onClick={onNext}
           >
             Next
           </button>
           <button
             type="button"
             className="command-button"
-            onClick={() => {
-              setStepIndex(0);
-              setElapsedMs(0);
-              setIsPlaying(true);
-            }}
+            onClick={onRestart}
           >
             Restart
           </button>

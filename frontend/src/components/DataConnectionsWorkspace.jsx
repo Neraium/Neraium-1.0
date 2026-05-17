@@ -75,6 +75,13 @@ export default function DataConnectionsWorkspace({
   onResetDemo,
   onResumePreviousSession,
   formatClockTime,
+  demoState,
+  demoTabId,
+  onActivateDemo,
+  onToggleDemoPlayback,
+  onPreviousDemoStep,
+  onNextDemoStep,
+  onRestartDemo,
 }) {
   const tabs = useMemo(() => [
     { id: "overview", label: "Overview" },
@@ -116,6 +123,11 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     setUploadResult(latestUploadResult);
   }, [latestUploadResult]);
+
+  useEffect(() => {
+    if (!demoTabId) return;
+    setActiveTab(demoTabId);
+  }, [demoTabId]);
 
   async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
@@ -386,7 +398,16 @@ export default function DataConnectionsWorkspace({
         />
       )}
 
-      {activeTab === "demo" && <DemoModePanel />}
+      {activeTab === "demo" && (
+        <DemoModePanel
+          demoState={demoState}
+          onActivateDemo={onActivateDemo}
+          onTogglePlayback={onToggleDemoPlayback}
+          onPrevious={onPreviousDemoStep}
+          onNext={onNextDemoStep}
+          onRestart={onRestartDemo}
+        />
+      )}
     </div>
   );
 }

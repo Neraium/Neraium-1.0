@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
  API_BASE_URL,
  apiFetch,
@@ -21,6 +21,7 @@ import OperatorWorkflowWorkspace from "./components/OperatorWorkflowWorkspace";
 import CultivationMissionControl from "./components/cultivation/CultivationMissionControl";
 import CultivationEvidenceWorkspace from "./components/cultivation/CultivationEvidenceWorkspace";
 import PropagationWorkspace from "./components/PropagationWorkspace";
+import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel";
 import AppShell from "./components/AppShell";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import {
@@ -53,6 +54,10 @@ function App() {
   const [driftHistory, setDriftHistory] = useState([]);
   const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
   const [sessionIntent, setSessionIntent] = useState("neutral");
+  const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
+  const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
+  const demoNavigationRef = useRef(false);
+  const guidedDemoActiveRef = useRef(false);
   const {
     telemetryTick,
     apiStatus,
@@ -75,10 +80,19 @@ function App() {
     formatEndpoint,
     buildProtectedRequestMessage,
   });
+  useEffect(() => {
+    guidedDemoActiveRef.current = Boolean(guidedDemo.active);
+  }, [guidedDemo.active]);
+
   const onWorkspaceSelect = useCallback((workspaceId) => {
     if (workspaceId !== "drift-timeline" && autoReplay.active) {
       setAutoReplay((current) => ({ ...current, active: false }));
     }
+    if (guidedDemoActiveRef.current && !demoNavigationRef.current) {
+      setGuidedDemo((current) => ({ ...current, active: false, isPlaying: false }));
+      setDemoDataConnectionsTab(null);
+    }
+    demoNavigationRef.current = false;
   }, [autoReplay.active]);
   const {
     activeWorkspace,
@@ -257,6 +271,54 @@ function App() {
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
 
+  const applyDemoStep = useCallback((index) => {
+    const step = DEMO_STEPS[index] ?? DEMO_STEPS[0];
+    demoNavigationRef.current = true;
+    if (step.workspace === "data-connections" && step.tab) {
+      setDemoDataConnectionsTab(step.tab);
+    } else {
+      setDemoDataConnectionsTab(null);
+    }
+    setActiveWorkspace(step.workspace);
+  }, [setActiveWorkspace]);
+
+  const startGuidedDemo = useCallback(() => {
+    setGuidedDemo({ active: true, isPlaying: true, stepIndex: 0, elapsedMs: 0 });
+    applyDemoStep(0);
+  }, [applyDemoStep]);
+
+  const toggleGuidedDemoPlayback = useCallback(() => {
+    setGuidedDemo((current) => ({ ...current, isPlaying: !current.isPlaying, active: true }));
+  }, []);
+
+  const gotoGuidedDemoStep = useCallback((nextIndex) => {
+    const normalized = ((nextIndex % DEMO_STEPS.length) + DEMO_STEPS.length) % DEMO_STEPS.length;
+    setGuidedDemo((current) => ({ ...current, active: true, isPlaying: false, stepIndex: normalized, elapsedMs: 0 }));
+    applyDemoStep(normalized);
+  }, [applyDemoStep]);
+
+  const restartGuidedDemo = useCallback(() => {
+    setGuidedDemo({ active: true, isPlaying: true, stepIndex: 0, elapsedMs: 0 });
+    applyDemoStep(0);
+  }, [applyDemoStep]);
+
+  useEffect(() => {
+    if (!guidedDemo.active || !guidedDemo.isPlaying) return;
+    const timer = window.setInterval(() => {
+      setGuidedDemo((current) => {
+        if (!current.active || !current.isPlaying) return current;
+        const nextElapsed = current.elapsedMs + 100;
+        if (nextElapsed < STEP_DURATION_MS) {
+          return { ...current, elapsedMs: nextElapsed };
+        }
+        const nextStep = (current.stepIndex + 1) % DEMO_STEPS.length;
+        applyDemoStep(nextStep);
+        return { ...current, stepIndex: nextStep, elapsedMs: 0 };
+      });
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [applyDemoStep, guidedDemo.active, guidedDemo.isPlaying]);
+
   function renderActiveWorkspace() { 
     if (activeWorkspace === "cultivation-mission-control") {
       return (
@@ -365,6 +427,13 @@ function App() {
           onResetDemo={handleResetDemo}
           onResumePreviousSession={handleResumePreviousSession}
           formatClockTime={formatClockTime}
+          demoState={guidedDemo}
+          demoTabId={demoDataConnectionsTab}
+          onActivateDemo={startGuidedDemo}
+          onToggleDemoPlayback={toggleGuidedDemoPlayback}
+          onPreviousDemoStep={() => gotoGuidedDemoStep(guidedDemo.stepIndex - 1)}
+          onNextDemoStep={() => gotoGuidedDemoStep(guidedDemo.stepIndex + 1)}
+          onRestartDemo={restartGuidedDemo}
         />
       );
     }
