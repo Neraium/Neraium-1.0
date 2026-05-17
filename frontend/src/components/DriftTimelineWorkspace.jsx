@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_VALUE } from "../viewModels/emptyValue";
+import {
+  classifyBaselineSeparation,
+  classifyDriftAcceleration,
+  classifyDriftVelocity,
+  formatStructuralRead,
+  formatTrajectorySignal,
+} from "../viewModels/structuralTimelineViewModel";
 
 function formatSigned(value) {
   const rounded = Number(value ?? 0).toFixed(3);
@@ -333,8 +340,8 @@ export default function DriftTimelineWorkspace({
     <section className="drift-timeline">
       <div className="drift-timeline__header">
         <p className="system-body__kicker">Temporal View</p>
-        <h2>{hasUploadedTelemetry ? "Uploaded CSV Drift Timeline" : EMPTY_VALUE}</h2>
-        <p>{hasUploadedTelemetry ? "Structural movement calculated from the uploaded telemetry file." : "No telemetry session is currently active."}</p>
+        <h2>{hasUploadedTelemetry ? "Structural Movement Timeline" : EMPTY_VALUE}</h2>
+        <p>{hasUploadedTelemetry ? "Movement from stable baseline, tracked across uploaded telemetry." : "No telemetry session is currently active."}</p>
       </div>
 
       {hasUploadedTelemetry && (
@@ -375,28 +382,41 @@ export default function DriftTimelineWorkspace({
           <>
             <div className="timeline-stats">
               <div>
-                <span>Baseline distance</span>
-                <strong>{toFinite(last.distance).toFixed(3)} baseline units</strong>
+                <span>Baseline Separation</span>
+                <strong>{hasUploadedTelemetry ? classifyBaselineSeparation(toFinite(last.distance)) : EMPTY_VALUE}</strong>
+                {hasUploadedTelemetry ? <em className="timeline-stats__raw">{toFinite(last.distance).toFixed(3)} baseline units</em> : null}
               </div>
               <div>
-                <span>Current state</span>
-                <strong>{currentStateLabel}</strong>
+                <span>Structural Read</span>
+                <strong>{hasUploadedTelemetry ? formatStructuralRead(currentStateLabel) : EMPTY_VALUE}</strong>
               </div>
               <div>
-                <span>Rate of change</span>
-                <strong>{formatSigned(last.velocity)} baseline units/sample</strong>
+                <span>Drift Velocity</span>
+                <strong>{hasUploadedTelemetry ? classifyDriftVelocity(toFinite(last.velocity)) : EMPTY_VALUE}</strong>
               </div>
               <div>
-                <span>Change in rate</span>
-                <strong>{formatSigned(last.acceleration)} baseline units/sample^2</strong>
+                <span>Drift Acceleration</span>
+                <strong>{hasUploadedTelemetry ? classifyDriftAcceleration(toFinite(last.acceleration)) : EMPTY_VALUE}</strong>
               </div>
             </div>
             <div className="timeline-stats">
               <div>
-                <span>Timeline signal</span>
-                <strong>{timelineSignalLabel}</strong>
+                <span>Trajectory Signal</span>
+                <strong>{hasUploadedTelemetry ? formatTrajectorySignal(timelineSignalLabel, hasUploadedTelemetry) : EMPTY_VALUE}</strong>
               </div>
             </div>
+            {hasUploadedTelemetry ? (
+              <details className="technical-detail-panel">
+                <summary>Advanced Diagnostics</summary>
+                <div className="technical-detail-panel__lines">
+                  <code>Raw baseline distance: {toFinite(last.distance).toFixed(3)} baseline units</code>
+                  <code>Raw drift velocity: {formatSigned(last.velocity)} baseline units/sample</code>
+                  <code>Raw drift acceleration: {formatSigned(last.acceleration)} baseline units/sample^2</code>
+                  <code>Sample interval: per uploaded telemetry sample</code>
+                  <code>Analysis window: {history.length} samples</code>
+                </div>
+              </details>
+            ) : null}
           </>
         ) : null}
       </article>
