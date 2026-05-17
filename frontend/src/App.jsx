@@ -145,10 +145,7 @@ function App() {
     windowLabelFromTone,
     buildWindowContext, 
   }), [apiStatus, intelligenceStatus, latestUploadResult, latestUploadSnapshot, roomContext, systems, systemsState, telemetryTick]); 
-  const liveOps = useMemo(
-    () => (isDemoMode ? buildDemoLiveOps(telemetryTick, demoScenario) : runtimeLiveOps),
-    [demoScenario, isDemoMode, runtimeLiveOps, telemetryTick],
-  );
+  const liveOps = runtimeLiveOps;
   const relationshipMagnitude = useMemo(
     () => (liveOps.relationshipRows ?? [])
       .map((row) => Number(row.pair_weight ?? row.change))
@@ -239,6 +236,13 @@ function App() {
     setActiveWorkspace("data-connections");
   }, [apiAccessCode, apiFetch, loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest, setDemoScenario, setIsDemoMode]);
 
+  const handleResumePreviousSession = useCallback(async () => {
+    setAllowPersistedLatest(true);
+    await loadLatestUploadState({ includePersisted: true });
+    await loadFacilitySystems();
+    setActiveWorkspace("system-body");
+  }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
+
   function renderActiveWorkspace() { 
     if (activeWorkspace === "cultivation-mission-control") {
       return (
@@ -248,8 +252,6 @@ function App() {
           isDemoMode={isDemoMode}
           expertMode={expertMode}
           onRunPilotDemo={() => {
-            setIsDemoMode(true);
-            setDemoScenario("drift");
             setActiveWorkspace("cultivation-mission-control");
           }}
           hasUploadedTelemetry={uploadStateView.hasFullUploadResult(latestUploadResult)}
@@ -340,6 +342,7 @@ function App() {
             }));
           }}
           onResetDemo={handleResetDemo}
+          onResumePreviousSession={handleResumePreviousSession}
           formatClockTime={formatClockTime}
         />
       );
@@ -477,15 +480,7 @@ function App() {
         isWorkspaceMenuOpen={isWorkspaceMenuOpen}
         setIsWorkspaceMenuOpen={setIsWorkspaceMenuOpen}
         isDemoMode={isDemoMode}
-        onToggleDemoMode={() => {
-          setIsDemoMode((current) => {
-            const next = !current;
-            if (next) {
-              setDemoScenario("stable");
-            }
-            return next;
-          });
-        }}
+        onToggleDemoMode={() => {}}
         demoScenario={demoScenario}
         onSetDemoScenario={setDemoScenario}
         renderActiveWorkspace={renderActiveWorkspace}
@@ -888,25 +883,25 @@ function normalizeFacilityIntelligence(intelligence) {
   const safe = {
     source: "processing",
     mode: "processing",
-    facility_state: "Processing",
-    room_state: "Processing",
-    urgency: "review",
-    intervention_window: "Processing",
+    facility_state: "Baseline Pending",
+    room_state: "Baseline Pending",
+    urgency: "nominal",
+    intervention_window: "Baseline Pending",
     neraium_score: null,
-    primary_room: "Processing uploaded telemetry",
+    primary_room: "Awaiting uploaded telemetry",
     priority_room: null,
-    primary_driver: "SII engine is analyzing uploaded telemetry",
-    supporting_evidence: ["Telemetry batch processing is underway."],
+    primary_driver: "Awaiting uploaded telemetry",
+    supporting_evidence: ["No active telemetry session is available yet."],
     relationship_evidence: [],
     structural_explanation: ["Awaiting completed runner output."],
     confidence_basis: "Awaiting completed runner output",
-    recommended_operator_review: "Processing uploaded telemetry",
-    next_operator_move: "Processing uploaded telemetry",
-    what_to_check: ["Wait for SII processing to complete"],
-    why_flagged: "Telemetry batch processing",
-    baseline_comparison: "Awaiting completed runner output",
-    observed_persistence: "Awaiting completed runner output",
-    projected_time_to_failure: "Awaiting completed runner output",
+    recommended_operator_review: "Awaiting uploaded telemetry",
+    next_operator_move: "Awaiting uploaded telemetry",
+    what_to_check: ["Connect telemetry or upload a dataset"],
+    why_flagged: "No active telemetry session",
+    baseline_comparison: "Baseline Pending",
+    observed_persistence: "Baseline Pending",
+    projected_time_to_failure: "Baseline Pending",
     projected_time_to_failure_hours: null,
     last_updated: new Date().toISOString(),
     rooms: [],

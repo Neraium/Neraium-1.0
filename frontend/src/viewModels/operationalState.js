@@ -54,70 +54,8 @@ export function buildOperationalContext(state, deps) {
     }, deps);
   }
 
-  if (fullResult) {
-    const telemetryCards = buildTelemetryCards(fullResult, deps);
-    const facilityTone = deps.mapOperationalTone(fullResult.engine_result?.overall_result ?? fullResult.data_quality?.readiness ?? "nominal");
-    const interventionItems = buildUploadedInterventionItems(fullResult, roomContext, telemetryCards, facilityTone, deps);
-    const actionQueue = buildActionQueue(interventionItems);
-    const primaryWindow = interventionItems[0] ?? null;
-    return {
-      useDemoTelemetry: false,
-      intelligenceMode: "live",
-      facilityTone,
-      facilityStateLabel: deps.formatEngineResult(fullResult.engine_result?.overall_result ?? "normal"),
-      heroTag: facilityTone === "nominal" ? "Control window established" : "Decision window tightening",
-      heroHeadline: deps.heroHeadlineFromTone(facilityTone),
-      heroSubline: deps.heroSublineFromTone(facilityTone, roomContext.primary),
-      readinessLabel: deps.formatReadiness(fullResult.data_quality?.readiness),
-      connectionTone,
-      connectionLabel: "Latest upload active",
-      connectionDetail: apiStatus.detail,
-      connectionSummary,
-      connectionStatusLine,
-      connectionActionHint,
-      dataSourceLabel: latestManualSourceLabel(fullResult),
-      neraiumScore: calculateNeraiumScore(facilityTone, interventionItems, true),
-      scoreNarrative: summarizeScoreNarrative(facilityTone, interventionItems),
-      scoreContext: buildScoreContext(calculateNeraiumScore(facilityTone, interventionItems, true), facilityTone, interventionItems),
-      windowContext: deps.buildWindowContext(primaryWindow, roomContext),
-      primaryWindow,
-      interventionItems,
-      actionQueue,
-      topologyNodes: buildTopologyNodes(interventionItems),
-      alerts: buildAlertItems(fullResult, apiStatus),
-      findings: buildFindingsFeed(fullResult, deps),
-      timeline: buildOperationalTimeline(fullResult, apiStatus, roomContext, deps),
-      telemetryCards,
-      summaryTelemetry: telemetryCards,
-      overviewMetrics: buildOverviewMetrics(fullResult, apiStatus, systems, systemsState, deps),
-      roomCards: buildZoneSummary(roomContext),
-      roomTransitions: buildRoomTransitions(fullResult, roomContext),
-      driftRows: (fullResult.baseline_analysis?.column_drift ?? []).map((row) => ({
-        ...row,
-        drift_flag: deps.mapOperationalTone(row.drift_flag),
-      })),
-      relationshipRows: buildRelationshipRows(fullResult, deps),
-      irrigationNotes: [
-        `Irrigation context: ${roomContext.irrigation}.`,
-        "Baseline established from current upload.",
-        "Review recommended for irrigation variance only where the room trend persists across the active window.",
-      ],
-      systemRows: systems.map((system) => [
-        system.name,
-        system.scope,
-        deps.systemRoomContext(system.name, roomContext),
-        systemsState === "ready" ? "Backend feed active" : "Backend connection unavailable",
-      ]),
-      intakeStages: deps.buildConnectionStateStages
-        ? deps.buildIntakeStages(fullResult, "complete", roomContext)
-        : deps.buildIntakeStages(fullResult, "complete", roomContext),
-      evidenceLines: buildEvidenceConsole(fullResult, deps),
-      consoleEvents: buildConsoleEvents(fullResult, apiStatus, roomContext, deps),
-      observations: deps.buildRoomObservations(fullResult, roomContext),
-      reportNotes: deps.reportTemplates,
-      connectionEvents: buildConnectionEvents(apiStatus, deps),
-    };
-  }
+  // Do not synthesize WATCH/ALERT state from partial frontend-only results.
+  // UI severity should come from backend SII intelligence once available.
 
   return buildEmptyOperationalContext({
     latestUploadSnapshot,

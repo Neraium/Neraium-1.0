@@ -20,6 +20,7 @@ export default function SystemBodyWorkspace({
   timelineItems,
   lastUpdate,
   focusLabel,
+  lifecycleRail = [],
   isLoading = false,
 }) {
   void isLoading;
@@ -32,6 +33,16 @@ export default function SystemBodyWorkspace({
     <PageContainer className="system-body system-body--orb-first system-body--mobile-polished">
       <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
+          {lifecycleRail.length > 0 ? (
+            <div className="system-status-rail" aria-label="Operational lifecycle status rail">
+              {lifecycleRail.map((item) => (
+                <article className="system-status-rail__item" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.status}</strong>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <header className="system-body-hero__header">
             <p className="workspace-header__kicker">Primary System State</p>
             <h2 className="workspace-header__title">{stateLabel}</h2>

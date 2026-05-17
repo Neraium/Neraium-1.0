@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from app.core.security import require_api_access
 from api.cognition_contracts import build_canonical_cognition_state_response
 from app.services.engine_identity import build_engine_identity
@@ -12,9 +12,9 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 
 
 @router.get("/facility/systems")
-def read_facility_systems() -> dict[str, Any]:
+def read_facility_systems(include_persisted: bool = Query(False)) -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = resolve_uploaded_intelligence(latest_result)
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     return {
         "systems": [
             {
@@ -57,20 +57,20 @@ def read_facility_systems() -> dict[str, Any]:
 
 
 @router.get("/intelligence/status")
-def read_intelligence_status() -> dict[str, Any]:
+def read_intelligence_status(include_persisted: bool = Query(False)) -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = resolve_uploaded_intelligence(latest_result)
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     return build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status()
 
 
 @router.get("/facility/cognition-state")
-def read_cognition_state() -> dict[str, Any]:
+def read_cognition_state(include_persisted: bool = Query(False)) -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = resolve_uploaded_intelligence(latest_result)
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     if not intelligence:
         return {
-            "cognition_state": "Monitoring",
-            "structural_stability": "WATCH",
+            "cognition_state": "Baseline Pending",
+            "structural_stability": "BASELINE_PENDING",
             "active_archetypes": [],
             "propagation_pathways": [],
             "evidence_lineage": {},
@@ -78,7 +78,7 @@ def read_cognition_state() -> dict[str, Any]:
             "continuation_windows": {"window": "Monitoring", "structural_pathways": [], "uncertainty_range": []},
             "replay_summary": {"frame_count": 0, "canonical_flow": [], "active_frame": {}},
             "recovery_convergence": {},
-            "operator_explanation": "No uploaded structural cognition state is available yet.",
+            "operator_explanation": "No active telemetry session is available yet.",
             "source_mode": "live",
         }
     response = build_canonical_cognition_state_response(intelligence)
@@ -86,7 +86,9 @@ def read_cognition_state() -> dict[str, Any]:
     return response
 
 
-def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None) -> dict[str, Any] | None:
+def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, include_persisted: bool = False) -> dict[str, Any] | None:
+    if not include_persisted:
+        return None
     intelligence = read_latest_sii_state()
     if is_valid_persisted_intelligence(intelligence):
         return intelligence

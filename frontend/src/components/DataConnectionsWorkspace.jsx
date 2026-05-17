@@ -91,6 +91,7 @@ export default function DataConnectionsWorkspace({
   roomContext,
   onUploadComplete,
   onResetDemo,
+  onResumePreviousSession,
   formatClockTime,
 }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 760;
@@ -325,6 +326,9 @@ export default function DataConnectionsWorkspace({
           ))}
           <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
             Reset Demo State
+          </button>
+          <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
+            Resume Previous Session
           </button>
         </div>
       </Panel>

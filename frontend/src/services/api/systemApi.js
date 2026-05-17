@@ -1,5 +1,5 @@
 export async function fetchFacilitySystems({ apiFetch, accessCode }) {
-  const response = await apiFetch("/api/facility/systems", { accessCode });
+  const response = await apiFetch("/api/facility/systems?include_persisted=0", { accessCode });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       throw response;

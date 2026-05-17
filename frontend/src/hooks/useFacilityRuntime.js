@@ -36,13 +36,7 @@ export default function useFacilityRuntime({
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
   const [allowPersistedLatest, setAllowPersistedLatest] = useState(false);
   const [demoScenario, setDemoScenario] = useState("drift");
-  const [isDemoMode, setIsDemoMode] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    const params = new URLSearchParams(window.location.search);
-    return params.get("demo") === "1";
-  });
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const healthCheckAttemptsRef = useRef(0);
   const facilitySystemsFetchDisabledRef = useRef(false);
 

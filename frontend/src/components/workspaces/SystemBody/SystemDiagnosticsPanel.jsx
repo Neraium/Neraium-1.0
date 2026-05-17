@@ -9,8 +9,8 @@ export default function SystemDiagnosticsPanel({ metrics, uiState }) {
   return (
     <details className={`system-body-diagnostics ui-state-surface ui-state-surface--${uiState}`}>
       <summary>
-        <span className="section-label">Technical Diagnostics</span>
-        <strong>Engineer-facing metrics</strong>
+        <span className="section-label">Advanced Diagnostics</span>
+        <strong>Expand engineer-facing metrics</strong>
       </summary>
       <div className="system-body-diagnostics__grid">
         {visibleMetrics.map((metric) => (

@@ -396,9 +396,7 @@
 .top-status--deployment {
   gap: 14px;
   padding: 14px 18px 12px;
-  background:
-    radial-gradient(circle at 92% -10%, rgba(var(--state-accent-rgb, 138, 184, 196), 0.08), transparent 36%),
-    linear-gradient(180deg, rgba(8, 12, 15, 0.92), rgba(5, 8, 11, 0.9));
+  background: linear-gradient(180deg, rgba(8, 12, 15, 0.92), rgba(5, 8, 11, 0.9));
 }
 
 .top-status--deployment::before,
@@ -450,6 +448,12 @@
   border-radius: 16px;
 }
 
+.top-status__brief-item strong,
+.top-status__brief-item p {
+  font-size: 0.84rem;
+  line-height: 1.34;
+}
+
 .top-status__brief-item:nth-child(n + 3) {
   display: none;
 }
@@ -459,7 +463,12 @@
 }
 
 .status-chip {
-  min-height: 74px;
+  min-height: 62px;
+}
+
+.status-chip strong {
+  font-size: 0.82rem;
+  line-height: 1.2;
 }
 
 @media (max-width: 720px) {

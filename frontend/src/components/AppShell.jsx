@@ -347,24 +347,24 @@ function TopStatusBar({
       </div>
 
       {!minimalCultivationHeader ? (
-        <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
-          <article className="top-status__brief-item">
-            <span>What's changing</span>
-            <strong>{triageSummary.problem}</strong>
-          </article>
-          <article className="top-status__brief-item">
-            <span>Where it is spreading</span>
-            <strong>{triageSummary.where}</strong>
-          </article>
-          <article className="top-status__brief-item top-status__brief-item--wide">
-            <span>Why trust this</span>
-            <p>{triageSummary.why}</p>
-          </article>
-          <article className="top-status__brief-item top-status__brief-item--wide">
-            <span>What to inspect</span>
-            <p>{triageSummary.human}</p>
-          </article>
-        </div>
+      <div className={`top-status__brief top-status__brief--${liveOps.facilityTone} ui-state-surface ui-state-surface--${uiState}`}>
+        <article className="top-status__brief-item">
+          <span>State</span>
+          <strong>{triageSummary.problem}</strong>
+        </article>
+        <article className="top-status__brief-item">
+          <span>Affected area</span>
+          <strong>{triageSummary.where}</strong>
+        </article>
+        <article className="top-status__brief-item top-status__brief-item--wide">
+          <span>Evidence</span>
+          <p>{triageSummary.why}</p>
+        </article>
+        <article className="top-status__brief-item top-status__brief-item--wide">
+          <span>Operator focus</span>
+          <p>{triageSummary.human}</p>
+        </article>
+      </div>
       ) : (
         <div className="top-status__compact">
           <article className="top-status__compact-item">
@@ -397,22 +397,11 @@ function TopStatusBar({
         <button className="secondary-command-button" type="button" onClick={onToggleExpertMode}>
           {expertMode ? "Diagnostics On" : "Operator View"}
         </button>
-        <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
-          {isDemoMode ? "Demo On" : "Demo Off"}
-        </button>
-        {isDemoMode && (
-          <>
-            <button className={`secondary-command-button ${demoScenario === "stable" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("stable")}>
-              Stable
-            </button>
-            <button className={`secondary-command-button ${demoScenario === "drift" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("drift")}>
-              Drift
-            </button>
-            <button className={`secondary-command-button ${demoScenario === "separation" ? "is-active" : ""}`} type="button" onClick={() => onSetDemoScenario("separation")}>
-              Separation
-            </button>
-          </>
-        )}
+        {isDemoMode ? (
+          <button className="secondary-command-button" type="button" onClick={onToggleDemoMode}>
+            Exit Demo
+          </button>
+        ) : null}
       </div>
     </header>
   );
@@ -421,21 +410,21 @@ function TopStatusBar({
 function buildOperationalHudMetrics(liveOps) {
   const structuralState = getOperatorStateLabel(liveOps.facilityTone);
   const propagationValue = ["elevated", "unstable", "offline"].includes(liveOps.facilityTone)
-    ? "Watch active"
-    : "Localized";
+    ? "Progression observed"
+    : "No active spread";
   return [
     { label: "State", value: structuralState, tone: liveOps.facilityTone },
-    { label: "Lead time", value: liveOps.primaryWindow?.window ?? "Monitoring", tone: liveOps.primaryWindow?.tone ?? "info" },
-    { label: "Escalation", value: propagationValue, tone: liveOps.facilityTone },
+    { label: "Progression window", value: liveOps.primaryWindow?.window ?? "Monitoring", tone: liveOps.primaryWindow?.tone ?? "info" },
+    { label: "Relationship drift", value: propagationValue, tone: liveOps.facilityTone },
   ];
 }
 
 function getOperatorStateLabel(tone) {
-  if (["nominal", "stable", "online"].includes(tone)) return "Stable";
-  if (tone === "review" || tone === "watch") return "Emerging Structural Drift";
-  if (tone === "elevated" || tone === "warning") return "Escalating Instability";
-  if (tone === "unstable" || tone === "critical" || tone === "offline") return "Critical Divergence";
-  return "Structural Deviation";
+  if (["nominal", "stable", "online"].includes(tone)) return "Baseline pending or stable";
+  if (tone === "review" || tone === "watch") return "Deviation detected";
+  if (tone === "elevated" || tone === "warning") return "Progression observed";
+  if (tone === "unstable" || tone === "critical" || tone === "offline") return "Operator review required";
+  return "Monitoring active";
 }
 
 function StatusChip({ label, value, tone }) {

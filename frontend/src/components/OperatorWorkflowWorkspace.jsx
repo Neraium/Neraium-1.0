@@ -110,7 +110,7 @@ export default function OperatorWorkflowWorkspace({
         Panel={Panel}
         MetricGrid={MetricGrid}
         EmptyState={EmptyState}
-        mode={isDemoMode ? "demo" : "live"}
+        mode="live"
       />
     </div>
   );

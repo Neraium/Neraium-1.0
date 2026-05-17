@@ -24,7 +24,7 @@ export async function fetchCanonicalCognitionState({ apiFetch, accessCode }) {
   const latestUploadSnapshot = await readLatestUploadSnapshot({ apiFetch, accessCode });
 
   const response = await apiFetch(
-    "/api/facility/cognition-state",
+    "/api/facility/cognition-state?include_persisted=1",
     { accessCode },
   );
   if (response.ok) {
@@ -35,7 +35,7 @@ export async function fetchCanonicalCognitionState({ apiFetch, accessCode }) {
   // Backward compatibility for deployments that have /facility/systems
   // but have not yet rolled out /facility/cognition-state.
   if (response.status === 404 || response.status >= 500) {
-    const fallback = await apiFetch("/api/facility/systems", { accessCode });
+    const fallback = await apiFetch("/api/facility/systems?include_persisted=1", { accessCode });
     if (!fallback.ok) {
       // If both endpoints are unavailable on this deployment revision,
       // return a safe upload-backed state when an upload is active instead of
@@ -83,7 +83,7 @@ export async function fetchCanonicalCognitionState({ apiFetch, accessCode }) {
 
 async function readLatestUploadSnapshot({ apiFetch, accessCode }) {
   try {
-    const response = await apiFetch("/api/data/latest-upload", { accessCode });
+    const response = await apiFetch("/api/data/latest-upload?include_persisted=0", { accessCode });
     if (!response.ok) {
       return null;
     }
@@ -94,73 +94,6 @@ async function readLatestUploadSnapshot({ apiFetch, accessCode }) {
 }
 
 function mergeUploadBackedCognitionState(state, latestUploadSnapshot) {
-  if (!hasActiveUpload(latestUploadSnapshot)) {
-    return state;
-  }
-
-  const activeArchetypes = Array.isArray(state?.active_archetypes) ? state.active_archetypes.filter(Boolean) : [];
-  const propagationPathways = Array.isArray(state?.propagation_pathways) ? state.propagation_pathways.filter(Boolean) : [];
-  const hasSignals = activeArchetypes.length > 0 || propagationPathways.length > 0;
-
-  if (hasSignals) {
-    return state;
-  }
-
-  const filename = latestUploadSnapshot?.last_filename ?? "uploaded telemetry";
-  const rows = latestUploadSnapshot?.rows_processed ?? 0;
-  const columns = latestUploadSnapshot?.columns_detected ?? 0;
-  const modelLabel = filename ? `${filename} active` : "Latest upload active";
-
-  return {
-    ...state,
-    cognition_state: state?.cognition_state && state.cognition_state !== "Monitoring"
-      ? state.cognition_state
-      : "Active Session",
-    structural_stability: state?.structural_stability && state.structural_stability !== "UNKNOWN"
-      ? state.structural_stability
-      : "WATCH",
-    active_archetypes: ["TELEMETRY_ACTIVE"],
-    propagation_pathways: propagationPathways,
-    evidence_lineage: {
-      ...(state?.evidence_lineage ?? {}),
-      evidence_sources: {
-        ...(state?.evidence_lineage?.evidence_sources ?? {}),
-        topology_evidence: [
-          `Uploaded telemetry is active: ${modelLabel}.`,
-          rows > 0 || columns > 0
-            ? `${rows} rows and ${columns} columns are available for structural review.`
-            : "Telemetry import is available for structural review.",
-        ],
-      },
-    },
-    continuation_windows: {
-      ...(state?.continuation_windows ?? {}),
-      window: state?.continuation_windows?.window && state.continuation_windows.window !== "Monitoring"
-        ? state.continuation_windows.window
-        : "Monitoring active upload",
-    },
-    recovery_convergence: {
-      ...(state?.recovery_convergence ?? {}),
-      convergence_quality: state?.recovery_convergence?.convergence_quality ?? "monitoring",
-    },
-    operator_explanation:
-      state?.operator_explanation && !String(state.operator_explanation).toLowerCase().includes("no structural cognition payload")
-        ? state.operator_explanation
-        : "Uploaded telemetry is active. Neraium is holding the facility in operator review while structural evidence and replay context are assembled.",
-    source_mode: "uploaded",
-  };
-}
-
-function hasActiveUpload(snapshot) {
-  const status = String(snapshot?.status ?? "").toLowerCase();
-  return Boolean(
-    status === "active"
-    || status === "baseline_active"
-    || snapshot?.latest_result
-    || snapshot?.state_available
-    || snapshot?.last_filename
-    || (snapshot?.rows_processed ?? 0) > 0
-    || (snapshot?.columns_detected ?? 0) > 0
-  );
+  return state;
 }
 

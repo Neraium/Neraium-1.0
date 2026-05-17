@@ -285,6 +285,8 @@ export default function SystemTopologyWorkspace({
     },
   ]);
 
+  const lifecycleRail = buildLifecycleRail({ liveOps, awaitingSii, uiState });
+
   return (
     <SystemBodyWorkspace
       systemState={systemState}
@@ -302,9 +304,31 @@ export default function SystemTopologyWorkspace({
       timelineItems={timelineItems}
       lastUpdate={lastUpdate}
       focusLabel={where}
+      lifecycleRail={lifecycleRail}
       isLoading={awaitingSii}
     />
   );
+}
+
+function buildLifecycleRail({ liveOps, awaitingSii, uiState }) {
+  if (awaitingSii || uiState === "neutral") {
+    return [
+      { label: "Intake", status: "Pending" },
+      { label: "Baseline", status: "Pending" },
+      { label: "Monitoring", status: "Pending" },
+      { label: "Drift", status: "Pending" },
+      { label: "Review", status: "Pending" },
+    ];
+  }
+  const driftStatus = uiState === "critical" || uiState === "warning" ? "Attention" : uiState === "watch" ? "Active" : "Pending";
+  const reviewStatus = uiState === "critical" || uiState === "warning" ? "Attention" : uiState === "watch" ? "Active" : "Pending";
+  return [
+    { label: "Intake", status: "Confirmed" },
+    { label: "Baseline", status: "Confirmed" },
+    { label: "Monitoring", status: "Active" },
+    { label: "Drift", status: driftStatus },
+    { label: "Review", status: reviewStatus },
+  ];
 }
 
 function compactOperationalItems(items) {
