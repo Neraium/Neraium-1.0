@@ -237,3 +237,122 @@
   66% { opacity: 0.4; }
   100% { opacity: 0.8; }
 }
+
+.health-orb--gate-bud {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+}
+
+.health-orb__svg--gate-bud {
+  width: 100%;
+  height: auto;
+  max-width: 640px;
+}
+
+.gate-bud__leaf {
+  stroke-linejoin: round;
+  transition: transform 280ms ease, opacity 280ms ease;
+}
+
+.gate-bud__leaf--left {
+  transform-origin: 142px 142px;
+}
+
+.gate-bud__leaf--right {
+  transform-origin: 178px 142px;
+}
+
+.gate-bud__vein {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+
+.gate-bud__pathway {
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0.46;
+}
+
+.gate-bud__node {
+  opacity: 0.7;
+}
+
+.health-orb--gate-bud-animated .gate-bud__pathway,
+.health-orb--gate-bud-animated .gate-bud__node {
+  animation: gateBudStablePulse 6.2s ease-in-out infinite;
+  animation-delay: var(--gate-delay, 0ms);
+}
+
+.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__pathway {
+  animation-name: gateBudWatchPulse;
+  animation-duration: 4.2s;
+}
+
+.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__leaf--left {
+  transform: translateX(-1.2px) rotate(-0.55deg);
+}
+
+.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__leaf--right {
+  transform: translateX(1.2px) rotate(0.55deg);
+}
+
+.health-orb--bud-alert.health-orb--gate-bud-animated {
+  animation: gateBudAlertBody 1.4s ease-in-out infinite;
+}
+
+.health-orb--bud-alert.health-orb--gate-bud-animated .gate-bud__pathway {
+  animation-name: gateBudAlertPath;
+  animation-duration: 0.9s;
+  opacity: 0.82;
+}
+
+.health-orb--bud-alert.health-orb--gate-bud-animated .gate-bud__node {
+  animation-name: gateBudAlertNode;
+  animation-duration: 0.7s;
+  opacity: 0.96;
+}
+
+.gate-bud__pathway--watch {
+  stroke-dasharray: 3 4;
+}
+
+.gate-bud__pathway--critical {
+  stroke-dasharray: 2 3;
+}
+
+.gate-bud__node--critical {
+  filter: drop-shadow(0 0 8px rgba(221, 102, 88, 0.62));
+}
+
+@keyframes gateBudStablePulse {
+  0%, 100% { opacity: 0.34; }
+  50% { opacity: 0.66; }
+}
+
+@keyframes gateBudWatchPulse {
+  0%, 100% { opacity: 0.38; }
+  40% { opacity: 0.76; }
+  70% { opacity: 0.48; }
+}
+
+@keyframes gateBudAlertBody {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.016); }
+  60% { transform: scale(0.988); }
+}
+
+@keyframes gateBudAlertPath {
+  0%, 100% { opacity: 0.34; }
+  35% { opacity: 1; }
+  70% { opacity: 0.44; }
+}
+
+@keyframes gateBudAlertNode {
+  0%, 100% { opacity: 0.62; }
+  35% { opacity: 1; }
+  70% { opacity: 0.72; }
+}

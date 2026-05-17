@@ -38,7 +38,6 @@ export default function SystemOrbPanel({
   const copy = STATE_COPY[resolvedSystemState] ?? STATE_COPY.unknown;
   const instability = Math.max(0, Math.min(1, 1 - resolvedCoherence));
   const instabilityDisplay = resolvedSystemState === "unknown" ? EMPTY_VALUE : `${Math.round(instability * 100)}%`;
-  const showAlert = resolvedSystemState === "drift" || resolvedSystemState === "propagation_active";
   void focusLabel;
 
   return (
@@ -55,14 +54,11 @@ export default function SystemOrbPanel({
       <div className="system-body-orb-panel__halo system-body-orb-panel__halo--inner" />
       <div className="system-body-orb-panel__depth" />
       <div className="system-body-orb-panel__ambient-motion" aria-hidden="true" />
-      {showAlert ? (
-        <div className="system-body-orb-panel__alert-badge" aria-label="Escalation alert state">ALERT</div>
-      ) : null}
       <div className="system-body-orb-panel__stage">
         <HealthOrb
           systemState={resolvedSystemState}
           intensity={instability}
-          animated={compactPreview ? resolvedSystemState === "propagation_active" : (resolvedSystemState === "watching" || resolvedSystemState === "drift" || resolvedSystemState === "propagation_active")}
+          animated
         />
       </div>
       {!compactPreview ? (
