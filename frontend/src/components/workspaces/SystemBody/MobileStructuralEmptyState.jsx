@@ -5,11 +5,11 @@ export default function MobileStructuralEmptyState({ lifecycleRail = [] }) {
   const chips = lifecycleRail.length > 0
     ? lifecycleRail
     : [
-        { label: "Intake", status: "—" },
-        { label: "Baseline", status: "—" },
-        { label: "Monitoring", status: "—" },
-        { label: "Drift", status: "—" },
-        { label: "Review", status: "—" },
+        { label: "Intake", status: "-" },
+        { label: "Baseline", status: "-" },
+        { label: "Monitoring", status: "-" },
+        { label: "Drift", status: "-" },
+        { label: "Review", status: "-" },
       ];
 
   function goToUploadWorkspace() {

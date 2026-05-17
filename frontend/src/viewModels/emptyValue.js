@@ -1,4 +1,4 @@
-export const EMPTY_VALUE = "—";
+export const EMPTY_VALUE = "-";
 
 const EMPTY_STRINGS = new Set([
   "",

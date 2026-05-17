@@ -103,7 +103,7 @@ export default function AppShell({
                 aria-label="Close workspace menu"
                 onClick={() => setIsWorkspaceMenuOpen(false)}
               >
-                <span aria-hidden="true">×</span>
+                <span aria-hidden="true">x</span>
                 <span>Close</span>
               </button>
             </div>
@@ -147,7 +147,7 @@ function MobileOperationalHeader({
         <div className="mobile-status-bar__brand">
           <div className="mobile-status-bar__copy">
             <p className="brand-name brand-name--hero">Neraium</p>
-            <p className="mobile-status-bar__workspace">{missionLabel} · {activeConfig.label}</p>
+            <p className="mobile-status-bar__workspace">{missionLabel} / {activeConfig.label}</p>
           </div>
         </div>
         <button
@@ -309,7 +309,7 @@ function TopStatusBar({
   return (
     <header className={`top-status top-status--deployment ${minimalCultivationHeader ? "top-status--minimal top-status--cultivation" : ""}`}>
       <div className="top-status__title">
-        <p className="eyebrow">Neraium Command · {activeConfig.eyebrow}</p>
+        <p className="eyebrow">Neraium Command / {activeConfig.eyebrow}</p>
         <h1 id="page-title" className={minimalCultivationHeader ? "sr-only" : ""}>
           {activeConfig.label}
         </h1>

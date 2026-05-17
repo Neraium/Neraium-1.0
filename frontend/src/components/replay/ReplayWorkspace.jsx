@@ -104,7 +104,7 @@ export default function ReplayWorkspace({
   }, [accessCode, apiFetch, frameIndex, mode, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
-  const dash = "—";
+  const dash = "-";
   const hasDiagnosticsEvidence = Boolean(hasRealSiiOutput || hasCurrentUploadResult || hasActiveSession || hasResumedSession || hasReplaySnapshots);
   const hasTopologyEvidence = Boolean(hasReplaySnapshots && timeline[0]?.topology_state);
   const operativeTimeline = timeline;
@@ -183,6 +183,7 @@ export default function ReplayWorkspace({
             <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
           </div>
         ) : (
           <div className="structural-replay-controls">
@@ -196,9 +197,12 @@ export default function ReplayWorkspace({
           </div>
         )}
         {hasReplaySnapshots ? (
-          <p className="metadata-text">
-            Replay Mode: {replayMode ? "Active" : "Preview"} | Frame {Math.min(frameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)} | {currentPercent}% | Time {formatClockTime(currentTimeLabel)}
-          </p>
+          <div className={`historian-replay-status ${replayMode ? "historian-replay-status--active" : ""}`}>
+            <span className="historian-replay-status__badge">{replayMode ? "Replay Mode Active" : "Replay Preview"}</span>
+            <span>Frame {Math.min(frameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
+            <span>{currentPercent}% through dataset</span>
+            <span>{formatClockTime(currentTimeLabel)}</span>
+          </div>
         ) : null}
         {!hasDiagnosticsEvidence ? (
           <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a historian stream is connected.</p>
@@ -255,7 +259,7 @@ const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pr
 
 function strengthenReplayState(value) {
   const normalized = String(value ?? "").toLowerCase();
-  if (!normalized.trim()) return "—";
+  if (!normalized.trim()) return "-";
   if (normalized.includes("needs review") || normalized.includes("review")) return "Propagation Watch Active";
   if (normalized.includes("drift")) return "Structural Drift Emerging";
   if (normalized.includes("instab") || normalized.includes("separat")) return "Relational Instability Observed";

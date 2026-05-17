@@ -25,11 +25,11 @@ export const OPERATIONAL_VOCABULARY = {
 };
 
 export const LIFECYCLE_RAIL_NEUTRAL = [
-  { label: "Intake", status: "—" },
-  { label: "Baseline", status: "—" },
-  { label: "Monitoring", status: "—" },
-  { label: "Drift", status: "—" },
-  { label: "Review", status: "—" },
+  { label: "Intake", status: "-" },
+  { label: "Baseline", status: "-" },
+  { label: "Monitoring", status: "-" },
+  { label: "Drift", status: "-" },
+  { label: "Review", status: "-" },
 ];
 
 export const LIFECYCLE_RAIL_ACTIVE = [

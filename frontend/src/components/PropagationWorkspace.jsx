@@ -67,24 +67,24 @@ export default function PropagationWorkspace({
           {(frame?.propagation_state?.dominant_paths ?? []).length === 0 && (
             <li>
               <span className="metadata-text">Spread pathway</span>
-              <strong>—</strong>
+              <strong>-</strong>
             </li>
           )}
         </ul>
       </Panel>
       <Panel title="Operator Awareness" className="span-6">
         <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">System stability</span><strong>{frame?.topology_state?.stability_state ?? "—"}</strong></li>
-          <li><span className="metadata-text">Recovery signal</span><strong>{frame?.propagation_state?.recovery_convergence ?? "—"}</strong></li>
-          <li><span className="metadata-text">Attention priority</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "—"}</strong></li>
+          <li><span className="metadata-text">System stability</span><strong>{frame?.topology_state?.stability_state ?? "-"}</strong></li>
+          <li><span className="metadata-text">Recovery signal</span><strong>{frame?.propagation_state?.recovery_convergence ?? "-"}</strong></li>
+          <li><span className="metadata-text">Attention priority</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "-"}</strong></li>
         </ul>
       </Panel>
       {expertMode ? (
         <Panel title="Technical propagation context" className="span-12">
           <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Topology phase</span><strong>{frame?.topology_state?.phase ?? "—"}</strong></li>
-            <li><span className="metadata-text">Fragmentation indicator</span><strong>{frame?.topology_state?.fragmentation_indicator ?? "—"}</strong></li>
-            <li><span className="metadata-text">Propagation acceleration</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "—"}</strong></li>
+            <li><span className="metadata-text">Topology phase</span><strong>{frame?.topology_state?.phase ?? "-"}</strong></li>
+            <li><span className="metadata-text">Fragmentation indicator</span><strong>{frame?.topology_state?.fragmentation_indicator ?? "-"}</strong></li>
+            <li><span className="metadata-text">Propagation acceleration</span><strong>{frame?.propagation_state?.propagation_acceleration ?? "-"}</strong></li>
           </ul>
         </Panel>
       ) : null}

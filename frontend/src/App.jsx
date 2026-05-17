@@ -178,6 +178,23 @@ function App() {
     () => (historianReplayState.enabled ? buildReplayLiveOps(liveOps, historianReplayState.frame) : liveOps),
     [historianReplayState.enabled, historianReplayState.frame, liveOps],
   );
+  const handleReplayFrameChange = useCallback((frame, meta) => {
+    setHistorianReplayState((current) => {
+      const sameMeta =
+        current.meta?.frameIndex === meta?.frameIndex
+        && current.meta?.totalFrames === meta?.totalFrames
+        && current.meta?.isPlaying === meta?.isPlaying;
+      if (current.frame === frame && sameMeta) {
+        return current;
+      }
+      return { ...current, frame, meta };
+    });
+  }, []);
+  const handleReplayModeChange = useCallback((enabled) => {
+    setHistorianReplayState((current) => (
+      current.enabled === enabled ? current : { ...current, enabled }
+    ));
+  }, []);
   const relationshipMagnitude = useMemo(
     () => (liveOps.relationshipRows ?? [])
       .map((row) => Number(row.pair_weight ?? row.change))
@@ -459,8 +476,8 @@ function App() {
           hasCurrentUploadResult={hasCurrentUploadResult}
           hasResumedSession={hasResumedSession}
           hasRealSiiOutput={hasRealSiiOutput}
-          onReplayFrameChange={(frame, meta) => setHistorianReplayState((current) => ({ ...current, frame, meta }))}
-          onReplayModeChange={(enabled) => setHistorianReplayState((current) => ({ ...current, enabled }))}
+          onReplayFrameChange={handleReplayFrameChange}
+          onReplayModeChange={handleReplayModeChange}
         />
       );
     }
@@ -612,7 +629,7 @@ function TopStatusBar({
   return (
     <header className="top-status"> 
       <div className="top-status__title"> 
-        <p className="eyebrow">Neraium Command • {activeConfig.eyebrow}</p> 
+        <p className="eyebrow">Neraium Command / {activeConfig.eyebrow}</p> 
         <h1 id="page-title">{activeConfig.label}</h1> 
         <p>{activeConfig.description}</p> 
         <div className="top-status__meta">

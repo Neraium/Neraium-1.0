@@ -7,7 +7,7 @@ import {
   formatStructuralRead,
 } from "../../viewModels/structuralTimelineViewModel";
 
-const DASH = "—";
+const DASH = "-";
 
 function readPrimaryContributors(result) {
   const frameContributors = result?.sii_intelligence?.replay_timeline?.timeline?.at?.(-1)?.primary_contributors;

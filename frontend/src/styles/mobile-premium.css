@@ -1392,6 +1392,29 @@
     align-items: center;
     font-size: 0.76rem;
   }
+
+  .structural-replay-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .structural-replay-controls .btn,
+  .structural-replay-controls select {
+    min-height: 34px;
+    padding: 7px 8px;
+    border-radius: 9px;
+    font-size: 0.66rem;
+  }
+
+  .historian-replay-status {
+    gap: 6px;
+    font-size: 0.66rem;
+  }
+
+  .historian-replay-status span {
+    min-height: 24px;
+    padding: 3px 7px;
+  }
 }
 
 @media (max-width: 520px) {
