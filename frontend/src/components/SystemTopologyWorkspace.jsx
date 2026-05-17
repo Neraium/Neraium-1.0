@@ -1,7 +1,10 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
-import { LIFECYCLE_RAIL_NEUTRAL } from "../viewModels/operationalVocabulary";
+import {
+  LIFECYCLE_RAIL_NEUTRAL,
+  LIFECYCLE_RAIL_ACTIVE,
+} from "../viewModels/operationalVocabulary";
 import { EMPTY_VALUE } from "../viewModels/emptyValue";
 
 const STATE = {
@@ -152,28 +155,28 @@ export default function SystemTopologyWorkspace({
     ? neutralCopy.signal
     : (
         primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ")
-        ?? "Subsystem attribution pending"
+        ?? EMPTY_VALUE
       );
 
   const propagationPath = awaitingSii
     ? neutralCopy.propagation
     : (
         primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ")
-        ?? "No cross-subsystem spread confirmed."
+        ?? EMPTY_VALUE
       );
 
   const memoryMatch = awaitingSii
     ? neutralCopy.memory
     : (
         primaryItem?.structuralMemoryMatches?.[0]?.label
-        ?? "Historical reference match not yet established."
+        ?? EMPTY_VALUE
       );
 
   const continuationWindow = awaitingSii
     ? neutralCopy.continuation
     : (
         primaryItem?.continuationWindow
-        ?? "Progression under monitoring"
+        ?? EMPTY_VALUE
       );
 
   const facilitySummary = awaitingSii
@@ -181,6 +184,7 @@ export default function SystemTopologyWorkspace({
     : (
         primaryItem?.facilityCognitionState
         ?? liveOps.heroSubline
+        ?? EMPTY_VALUE
       );
 
   const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
@@ -317,19 +321,12 @@ export default function SystemTopologyWorkspace({
   );
 }
 
-function buildLifecycleRail({ liveOps, awaitingSii, uiState }) {
+function buildLifecycleRail({ awaitingSii, uiState }) {
   if (awaitingSii || uiState === "neutral") {
     return LIFECYCLE_RAIL_NEUTRAL;
   }
-  const driftStatus = uiState === "critical" || uiState === "warning" || uiState === "watch" ? "Review" : "None";
-  const reviewStatus = uiState === "critical" || uiState === "warning" || uiState === "watch" ? "Needed" : "None";
-  return [
-    { label: "Intake", status: "Confirmed" },
-    { label: "Baseline", status: "Confirmed" },
-    { label: "Monitoring", status: "Active" },
-    { label: "Drift", status: driftStatus },
-    { label: "Review", status: reviewStatus },
-  ];
+
+  return LIFECYCLE_RAIL_ACTIVE;
 }
 
 function compactOperationalItems(items) {
@@ -341,6 +338,7 @@ function compactOperationalItems(items) {
       && value !== "none"
       && value !== "n/a"
       && value !== "na"
+      && value !== "awaiting facility cognition"
     );
   });
 }
