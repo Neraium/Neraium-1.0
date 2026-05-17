@@ -1637,6 +1637,18 @@ def build_structural_replay_timeline(
                     f"{structural_state}. Baseline separation {baseline_distance:.3f}; "
                     f"velocity {drift_velocity:.3f}; acceleration {drift_acceleration:.3f}."
                 ),
+                "total_frames": len(frame_positions),
+                "timestamp_start": datetime.fromtimestamp(start_ts, tz=UTC).isoformat(),
+                "timestamp_end": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                "row_start": global_row_start + 1,
+                "row_end": global_row_end + 1,
+                "structural_state": structural_state,
+                "baseline_separation": round(baseline_distance, 6),
+                "relationship_changes": dominant_paths,
+                "topology_state_label": phase,
+                "affected_area": primary_room,
+                "operator_focus": "Confirm persistence across recent telemetry windows.",
+                "operator_summary": f"{structural_state} across rows {global_row_start + 1}-{global_row_end + 1}.",
             }
         )
 

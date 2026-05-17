@@ -19,6 +19,8 @@ export default function ReplayWorkspace({
   hasCurrentUploadResult = false,
   hasResumedSession = false,
   hasRealSiiOutput = false,
+  onReplayFrameChange,
+  onReplayModeChange,
 }) {
   const [timeline, setTimeline] = useState([]);
   const [comparisonTimeline, setComparisonTimeline] = useState([]);
@@ -31,6 +33,7 @@ export default function ReplayWorkspace({
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
+  const [replayMode, setReplayMode] = useState(false);
 
   useEffect(() => {
     if (!shouldRequestReplay) {
@@ -108,6 +111,30 @@ export default function ReplayWorkspace({
   const activeFrame = operativeTimeline[Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
   const comparisonFrame = comparisonTimeline[frameIndex] ?? null;
   const shownFrame = comparisonMode ? (comparisonFrame ?? activeFrame) : activeFrame;
+  const currentPercent = hasReplaySnapshots ? Math.round(((Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1)) + 1) / Math.max(operativeTimeline.length, 1)) * 100) : 0;
+  const currentTimeLabel = shownFrame?.timestamp_end ?? shownFrame?.timestamp ?? dash;
+
+  useEffect(() => {
+    if (typeof onReplayFrameChange === "function") {
+      onReplayFrameChange(replayMode ? shownFrame : null, {
+        frameIndex: Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1)),
+        totalFrames: operativeTimeline.length,
+        isPlaying,
+      });
+    }
+  }, [frameIndex, isPlaying, onReplayFrameChange, operativeTimeline.length, replayMode, shownFrame]);
+
+  useEffect(() => {
+    if (!hasReplaySnapshots && replayMode) {
+      setReplayMode(false);
+    }
+  }, [hasReplaySnapshots, replayMode]);
+
+  useEffect(() => {
+    if (typeof onReplayModeChange === "function") {
+      onReplayModeChange(replayMode && hasReplaySnapshots);
+    }
+  }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
   const metrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
@@ -155,18 +182,28 @@ export default function ReplayWorkspace({
             <label className="metadata-text" htmlFor="replay-compression">Compression</label>
             <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
           </div>
         ) : (
           <div className="structural-replay-controls">
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
             <button type="button" className="btn btn--secondary" onClick={() => setIsPlaying((value) => !value)} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
+            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
         )}
+        {hasReplaySnapshots ? (
+          <p className="metadata-text">
+            Replay Mode: {replayMode ? "Active" : "Preview"} | Frame {Math.min(frameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)} | {currentPercent}% | Time {formatClockTime(currentTimeLabel)}
+          </p>
+        ) : null}
         {!hasDiagnosticsEvidence ? (
           <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a historian stream is connected.</p>
         ) : null}
-        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay frames available.</p> : null}
+        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload historian telemetry to generate a full SII replay.</p> : null}
         <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>

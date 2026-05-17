@@ -44,6 +44,7 @@ import { INTAKE_STAGES, REPORT_TEMPLATES } from "./config/workspaces";
 import useWorkspaceNavigation from "./hooks/useWorkspaceNavigation";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import { resetDemoSession } from "./services/api/uploadApi";
+import { buildReplayLiveOps } from "./viewModels/historianReplayState";
 
 function App() { 
   const hasAccess = true;
@@ -55,6 +56,7 @@ function App() {
   const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
   const [sessionIntent, setSessionIntent] = useState("neutral");
   const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
+  const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
   const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
   const demoNavigationRef = useRef(false);
   const guidedDemoActiveRef = useRef(false);
@@ -172,6 +174,10 @@ function App() {
     buildWindowContext, 
   }), [apiStatus, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, intelligenceStatus, roomContext, systems, systemsState, telemetryTick]); 
   const liveOps = runtimeLiveOps;
+  const displayedLiveOps = useMemo(
+    () => (historianReplayState.enabled ? buildReplayLiveOps(liveOps, historianReplayState.frame) : liveOps),
+    [historianReplayState.enabled, historianReplayState.frame, liveOps],
+  );
   const relationshipMagnitude = useMemo(
     () => (liveOps.relationshipRows ?? [])
       .map((row) => Number(row.pair_weight ?? row.change))
@@ -378,13 +384,13 @@ function App() {
     }
 
     if (activeWorkspace === "system-body") { 
-      return <SystemTopologyWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} onSelectTarget={setSelectedTopologyTarget} />; 
+      return <SystemTopologyWorkspace liveOps={displayedLiveOps} selectedTarget={selectedTopologyTarget} onSelectTarget={setSelectedTopologyTarget} />; 
     } 
  
     if (activeWorkspace === "drift-timeline") { 
       return (
         <DriftTimelineWorkspace
-          liveOps={liveOps}
+          liveOps={displayedLiveOps}
           driftHistory={driftHistory}
           autoReplay={autoReplay}
           latestUploadResult={effectiveLatestUploadResult}
@@ -453,6 +459,8 @@ function App() {
           hasCurrentUploadResult={hasCurrentUploadResult}
           hasResumedSession={hasResumedSession}
           hasRealSiiOutput={hasRealSiiOutput}
+          onReplayFrameChange={(frame, meta) => setHistorianReplayState((current) => ({ ...current, frame, meta }))}
+          onReplayModeChange={(enabled) => setHistorianReplayState((current) => ({ ...current, enabled }))}
         />
       );
     }
@@ -460,7 +468,7 @@ function App() {
     if (activeWorkspace === "fleet-view") {
       return (
         <FleetWorkspace
-          liveOps={liveOps}
+          liveOps={displayedLiveOps}
           latestUploadSnapshot={effectiveLatestUploadSnapshot}
           driftHistory={driftHistory}
           isDemoMode={isDemoMode}
@@ -552,7 +560,7 @@ function App() {
       );
     }
  
-    return <EvidenceConsoleWorkspace liveOps={liveOps} selectedTarget={selectedTopologyTarget} />; 
+    return <EvidenceConsoleWorkspace liveOps={displayedLiveOps} selectedTarget={selectedTopologyTarget} />; 
   } 
 
   return (
@@ -569,7 +577,7 @@ function App() {
         latestUploadResult={effectiveLatestUploadResult}
         roomContext={roomContext}
         timeCoverage={timeCoverage}
-        liveOps={liveOps}
+        liveOps={displayedLiveOps}
         onSelectWorkspace={handleWorkspaceSelect}
         isWorkspaceMenuOpen={isWorkspaceMenuOpen}
         setIsWorkspaceMenuOpen={setIsWorkspaceMenuOpen}
