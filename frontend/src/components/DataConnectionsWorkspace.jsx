@@ -16,7 +16,6 @@ import { Panel } from "./workspacePrimitives";
 import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
-import SessionResetPanel from "./setup/SessionResetPanel";
 import DiagnosticsPanel from "./setup/DiagnosticsPanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
 
@@ -66,19 +65,22 @@ export default function DataConnectionsWorkspace({
   apiStatus,
   latestUploadSnapshot,
   latestUploadResult,
+  hasActiveSession,
+  hasResumedSession,
+  hasCurrentUploadResult,
+  hasRealSiiOutput,
   roomContext,
   onUploadComplete,
   onResetDemo,
   onResumePreviousSession,
   formatClockTime,
 }) {
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 760;
   const tabs = useMemo(() => [
     { id: "overview", label: "Overview" },
-    { id: "historian-setup", label: isMobile ? "Setup" : "Historian Setup" },
-    { id: "upload", label: "Upload Data" },
+    { id: "historian-setup", label: "Setup" },
+    { id: "upload", label: "Upload" },
     { id: "diagnostics", label: "Diagnostics" },
-  ], [isMobile]);
+  ], []);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -259,7 +261,7 @@ export default function DataConnectionsWorkspace({
     : uploadResult
       ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
       : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError: displayUploadError, roomContext });
-  const latestStatus = latestUploadSnapshot?.status ?? "empty";
+  const latestStatus = hasActiveSession ? (latestUploadSnapshot?.status ?? "empty") : "empty";
   const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
   const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || latestUploadSnapshot?.message || uploadStateMessage(uploadState));
@@ -279,26 +281,63 @@ export default function DataConnectionsWorkspace({
               {tab.label}
             </button>
           ))}
-          <SessionResetPanel onResetDemoClick={handleResetDemoClick} onResumePreviousSession={onResumePreviousSession} disabled={isUploadProcessing(uploadState)} />
         </div>
       </Panel>
 
       {activeTab === "overview" && (
-        <IntakeStatusPanel
-          uploadStateView={uploadStateView}
-          latestStatus={latestStatus}
-          uploadState={uploadState}
-          displayUploadError={displayUploadError}
-          apiStatus={apiStatus}
-          latestUploadSnapshot={latestUploadSnapshot}
-          formatClockTime={formatClockTime}
-          baselineMessage={baselineMessage}
-          roomContext={roomContext}
-          uploadDiffSummary={uploadDiffSummary}
-        />
+        <>
+          <Panel title="Session Controls" className="span-12">
+            <p className="narrative-text">
+              Startup remains neutral until a new upload completes or a previous session is explicitly resumed.
+            </p>
+            <div className="intake-flow__controls">
+              <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
+                Reset Demo State
+              </button>
+              <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
+                Resume Previous Session
+              </button>
+              <button type="button" className="command-button" onClick={() => setActiveTab("upload")}>
+                Upload Data
+              </button>
+            </div>
+          </Panel>
+          <IntakeStatusPanel
+            uploadStateView={uploadStateView}
+            latestStatus={latestStatus}
+            uploadState={uploadState}
+            displayUploadError={displayUploadError}
+            apiStatus={apiStatus}
+            latestUploadSnapshot={latestUploadSnapshot}
+            formatClockTime={formatClockTime}
+            baselineMessage={baselineMessage}
+            roomContext={roomContext}
+            uploadDiffSummary={uploadDiffSummary}
+            hasActiveSession={hasActiveSession}
+            hasResumedSession={hasResumedSession}
+            hasCurrentUploadResult={hasCurrentUploadResult}
+            hasRealSiiOutput={hasRealSiiOutput}
+            onResumePreviousSession={onResumePreviousSession}
+            onOpenUpload={() => setActiveTab("upload")}
+          />
+        </>
       )}
 
-      {activeTab === "historian-setup" && <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />}
+      {activeTab === "historian-setup" && (
+        <>
+          <Panel title="Session Controls" className="span-12">
+            <div className="intake-flow__controls">
+              <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
+                Reset Demo State
+              </button>
+              <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
+                Resume Previous Session
+              </button>
+            </div>
+          </Panel>
+          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
+        </>
+      )}
 
       {activeTab === "upload" && (
         <IntakeFlowPanel

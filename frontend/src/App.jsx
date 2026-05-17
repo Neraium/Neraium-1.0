@@ -52,6 +52,7 @@ function App() {
   const [selectedTopologyTarget, setSelectedTopologyTarget] = useState(null);
   const [driftHistory, setDriftHistory] = useState([]);
   const [autoReplay, setAutoReplay] = useState({ key: 0, targetTone: "nominal", active: false });
+  const [sessionIntent, setSessionIntent] = useState("neutral");
   const {
     telemetryTick,
     apiStatus,
@@ -92,11 +93,22 @@ function App() {
     workspaceDrawerRef,
     handleWorkspaceSelect,
   } = useWorkspaceNavigation({ onWorkspaceSelect });
-  const roomContext = useMemo(() => uploadStateView.deriveRoomContext(latestUploadResult), [latestUploadResult]);
-  const timeCoverage = useMemo(() => uploadStateView.deriveTimeCoverage(latestUploadResult), [latestUploadResult]);
+  const hasRealSiiOutput = useMemo(
+    () => uploadStateView.hasFullUploadResult(latestUploadResult),
+    [latestUploadResult],
+  );
+  const hasCurrentUploadResult = sessionIntent === "current" && hasRealSiiOutput;
+  const hasResumedSession = sessionIntent === "resumed" && hasRealSiiOutput;
+  const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
+  const effectiveLatestUploadResult = hasActiveSession ? latestUploadResult : null;
+  const effectiveLatestUploadSnapshot = hasActiveSession
+    ? latestUploadSnapshot
+    : uploadStateView.buildEmptyLatestUploadSnapshot();
+  const roomContext = useMemo(() => uploadStateView.deriveRoomContext(effectiveLatestUploadResult), [effectiveLatestUploadResult]);
+  const timeCoverage = useMemo(() => uploadStateView.deriveTimeCoverage(effectiveLatestUploadResult), [effectiveLatestUploadResult]);
   const runtimeLiveOps = useMemo(() => buildFacilityOperationalState({ 
-    result: latestUploadResult,
-    latestUploadSnapshot,
+    result: effectiveLatestUploadResult,
+    latestUploadSnapshot: effectiveLatestUploadSnapshot,
     apiStatus,
     roomContext,
     systems,
@@ -144,7 +156,7 @@ function App() {
     translateEvidenceLine,
     windowLabelFromTone,
     buildWindowContext, 
-  }), [apiStatus, intelligenceStatus, latestUploadResult, latestUploadSnapshot, roomContext, systems, systemsState, telemetryTick]); 
+  }), [apiStatus, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, intelligenceStatus, roomContext, systems, systemsState, telemetryTick]); 
   const liveOps = runtimeLiveOps;
   const relationshipMagnitude = useMemo(
     () => (liveOps.relationshipRows ?? [])
@@ -230,6 +242,7 @@ function App() {
     setDriftHistory([]);
     setPreferredEvidenceRunId(null);
     setSelectedTopologyTarget(null);
+    setSessionIntent("neutral");
     setAllowPersistedLatest(false);
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
@@ -238,7 +251,8 @@ function App() {
 
   const handleResumePreviousSession = useCallback(async () => {
     setAllowPersistedLatest(true);
-    await loadLatestUploadState({ includePersisted: true });
+    const hasResult = await loadLatestUploadState({ includePersisted: true });
+    setSessionIntent(hasResult ? "resumed" : "neutral");
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
@@ -254,7 +268,7 @@ function App() {
           onRunPilotDemo={() => {
             setActiveWorkspace("cultivation-mission-control");
           }}
-          hasUploadedTelemetry={uploadStateView.hasFullUploadResult(latestUploadResult)}
+          hasUploadedTelemetry={hasActiveSession}
           Panel={Panel}
           MetricGrid={MetricGrid}
           EmptyState={EmptyState}
@@ -311,8 +325,10 @@ function App() {
           liveOps={liveOps}
           driftHistory={driftHistory}
           autoReplay={autoReplay}
-          latestUploadResult={latestUploadResult}
-          latestUploadSnapshot={latestUploadSnapshot}
+          latestUploadResult={effectiveLatestUploadResult}
+          latestUploadSnapshot={effectiveLatestUploadSnapshot}
+          hasActiveSession={hasActiveSession}
+          hasCurrentUploadResult={hasCurrentUploadResult}
           isDemoMode={isDemoMode}
         />
       ); 
@@ -324,14 +340,19 @@ function App() {
           accessCode={apiAccessCode}
           apiFetch={apiFetch}
           apiStatus={apiStatus}
-          latestUploadSnapshot={latestUploadSnapshot}
-          latestUploadResult={latestUploadResult}
+          latestUploadSnapshot={effectiveLatestUploadSnapshot}
+          latestUploadResult={effectiveLatestUploadResult}
+          hasActiveSession={hasActiveSession}
+          hasResumedSession={hasResumedSession}
+          hasCurrentUploadResult={hasCurrentUploadResult}
+          hasRealSiiOutput={hasRealSiiOutput}
           roomContext={roomContext}
           onUploadComplete={async () => {
             setIsDemoMode(false);
             setAllowPersistedLatest(true);
             setDriftHistory([]);
-            await loadLatestUploadState({ includePersisted: true });
+            const hasResult = await loadLatestUploadState({ includePersisted: true });
+            setSessionIntent(hasResult ? "current" : "neutral");
             await loadFacilitySystems();
             setEvidenceRefreshKey((current) => current + 1);
             setActiveWorkspace("drift-timeline");
@@ -367,7 +388,7 @@ function App() {
       return (
         <FleetWorkspace
           liveOps={liveOps}
-          latestUploadSnapshot={latestUploadSnapshot}
+          latestUploadSnapshot={effectiveLatestUploadSnapshot}
           driftHistory={driftHistory}
           isDemoMode={isDemoMode}
           demoScenario={demoScenario}
@@ -384,7 +405,7 @@ function App() {
     if (activeWorkspace === "structural-ontology") {
       return (
         <StructuralOntologyWorkspace
-          intelligence={latestUploadResult?.sii_intelligence ?? null}
+          intelligence={effectiveLatestUploadResult?.sii_intelligence ?? null}
           Panel={Panel}
           EmptyState={EmptyState}
         />
@@ -472,7 +493,7 @@ function App() {
         onToggleExpertMode={() => setExpertMode((current) => !current)}
         activeConfig={activeConfig}
         apiStatus={apiStatus}
-        latestUploadResult={latestUploadResult}
+        latestUploadResult={effectiveLatestUploadResult}
         roomContext={roomContext}
         timeCoverage={timeCoverage}
         liveOps={liveOps}

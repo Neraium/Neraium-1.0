@@ -81,8 +81,27 @@
   }
 
   .system-status-rail {
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .system-status-rail__item {
+    min-width: 84px;
+    padding: 5px 7px;
+    border-radius: 9px;
+    gap: 2px;
+  }
+
+  .system-status-rail__item span {
+    font-size: 0.54rem;
+  }
+
+  .system-status-rail__item strong {
+    font-size: 0.66rem;
+    line-height: 1.12;
   }
 
   .system-body-action-strip {

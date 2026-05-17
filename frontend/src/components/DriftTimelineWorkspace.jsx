@@ -233,7 +233,15 @@ function buildUploadMetadata(result, snapshot, history) {
   };
 }
 
-export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoReplay, latestUploadResult, latestUploadSnapshot, isDemoMode }) {
+export default function DriftTimelineWorkspace({
+  liveOps,
+  driftHistory,
+  autoReplay,
+  latestUploadResult,
+  latestUploadSnapshot,
+  hasCurrentUploadResult = false,
+  isDemoMode,
+}) {
   const [simTick, setSimTick] = useState(0);
   const [replayHistory, setReplayHistory] = useState(null);
   const [replaySignal, setReplaySignal] = useState("");
@@ -248,7 +256,7 @@ export default function DriftTimelineWorkspace({ liveOps, driftHistory, autoRepl
     () => buildUploadedHistoryFromResult(latestUploadResult, latestUploadSnapshot),
     [latestUploadResult, latestUploadSnapshot],
   );
-  const hasUploadedTelemetry = !isDemoMode && Boolean(latestUploadResult || latestUploadSnapshot);
+  const hasUploadedTelemetry = !isDemoMode && Boolean(hasCurrentUploadResult && latestUploadResult);
   const uploadMetadata = useMemo(
     () => buildUploadMetadata(latestUploadResult, latestUploadSnapshot, uploadedHistory),
     [latestUploadResult, latestUploadSnapshot, uploadedHistory],

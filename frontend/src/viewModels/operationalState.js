@@ -716,7 +716,7 @@ function buildSiiInterventionItems(intelligence, deps) {
   const accelerationWindowDays = intelligence.counterfactuals?.uncertainty_ranges?.instability_acceleration_window_days;
   const continuationWindow = intelligence.counterfactuals?.progression_scenarios?.[0]?.window
     ?? (Array.isArray(accelerationWindowDays) ? `${accelerationWindowDays.join("-")} operational days` : "Monitoring");
-  const facilityCognitionState = intelligence.facility_cognition?.facility_cognition_state ?? "Facility cognition building";
+  const facilityCognitionState = intelligence.facility_cognition?.facility_cognition_state ?? "Subsystem attribution pending";
   return rooms.map((room, index) => {
     const tone = deps.mapSiiUrgency(room.urgency ?? intelligence.urgency);
     const rawSupportingEvidence = room.supporting_evidence ?? intelligence.supporting_evidence ?? [];

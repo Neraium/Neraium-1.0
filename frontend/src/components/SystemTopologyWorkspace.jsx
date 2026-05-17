@@ -141,7 +141,7 @@ export default function SystemTopologyWorkspace({
     ? awaitingLabel
     : (
         primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ")
-        ?? "Subsystem attribution in progress"
+        ?? "Subsystem attribution pending"
       );
 
   const propagationPath = awaitingSii
@@ -190,7 +190,7 @@ export default function SystemTopologyWorkspace({
       ? "Collect more telemetry to establish baseline and persistence."
       : (
           liveOps.connectionActionHint
-          || `Review ${propagationPath}; confirm persistence across recent windows.`
+          || "Confirm persistence across recent telemetry windows."
         );
 
   const where = suspectedLocation;
@@ -315,13 +315,13 @@ function buildLifecycleRail({ liveOps, awaitingSii, uiState }) {
     return [
       { label: "Intake", status: "Pending" },
       { label: "Baseline", status: "Pending" },
-      { label: "Monitoring", status: "Pending" },
-      { label: "Drift", status: "Pending" },
-      { label: "Review", status: "Pending" },
+      { label: "Monitoring", status: "Idle" },
+      { label: "Drift", status: "None" },
+      { label: "Review", status: "None" },
     ];
   }
-  const driftStatus = uiState === "critical" || uiState === "warning" ? "Attention" : uiState === "watch" ? "Active" : "Pending";
-  const reviewStatus = uiState === "critical" || uiState === "warning" ? "Attention" : uiState === "watch" ? "Active" : "Pending";
+  const driftStatus = uiState === "critical" || uiState === "warning" ? "Review" : uiState === "watch" ? "Review" : "None";
+  const reviewStatus = uiState === "critical" || uiState === "warning" ? "Needed" : uiState === "watch" ? "Active" : "None";
   return [
     { label: "Intake", status: "Confirmed" },
     { label: "Baseline", status: "Confirmed" },
