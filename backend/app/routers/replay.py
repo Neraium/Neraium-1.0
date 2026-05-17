@@ -24,13 +24,21 @@ def replay_timeline(
     if mode == "demo":
         return build_canonical_demo_replay_payload(intervals=intervals)
     intelligence = current_intelligence()
+    persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
+    persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
+    if isinstance(persisted_timeline, list) and persisted_timeline:
+        payload = {
+            "meta": persisted.get("meta", {}),
+            "timeline": persisted_timeline,
+            "source": intelligence.get("source", "uploaded"),
+            "facility_state": intelligence.get("facility_state"),
+        }
+        return payload
     payload = _engine.build_timeline(
         intelligence=intelligence,
         intervals=intervals,
         replay_compression=replay_compression,
     )
-    if not payload.get("timeline"):
-        return build_canonical_demo_replay_payload(intervals=intervals)
     payload["source"] = intelligence.get("source", "sample")
     payload["facility_state"] = intelligence.get("facility_state")
     return payload
@@ -47,6 +55,11 @@ def replay_frame(
         frame = next((item for item in timeline if str(item.get("timestamp")) == timestamp), timeline[-1] if timeline else {})
         return {"source": "demo", "frame": frame}
     intelligence = current_intelligence()
+    persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
+    persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
+    if isinstance(persisted_timeline, list) and persisted_timeline:
+        frame = next((item for item in persisted_timeline if str(item.get("timestamp")) == timestamp), persisted_timeline[-1])
+        return {"source": intelligence.get("source", "uploaded"), "frame": frame}
     frame = _engine.frame_at_timestamp(
         intelligence=intelligence,
         timestamp=timestamp,
@@ -70,6 +83,17 @@ def replay_range(
         frames = [f for f in timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
         return {"source": "demo", "frames": frames, "frame_count": len(frames)}
     intelligence = current_intelligence()
+    persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
+    persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
+    if isinstance(persisted_timeline, list) and persisted_timeline:
+        frames = [f for f in persisted_timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
+        return {
+            "source": intelligence.get("source", "uploaded"),
+            "start_timestamp": start_timestamp,
+            "end_timestamp": end_timestamp,
+            "frame_count": len(frames),
+            "frames": frames,
+        }
     window = _engine.frame_range(
         intelligence=intelligence,
         start_timestamp=start_timestamp,
@@ -84,5 +108,5 @@ def replay_range(
 
 def current_intelligence() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = resolve_uploaded_intelligence(latest_result)
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
     return intelligence or build_sample_intelligence()

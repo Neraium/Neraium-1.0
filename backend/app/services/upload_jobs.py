@@ -7,12 +7,14 @@ import os
 import time
 import uuid
 import hashlib
+import math
 from collections import Counter, deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
+import numpy as np
 
 from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import get_settings
@@ -42,7 +44,14 @@ from app.services.runtime_db import (
     upsert_upload_job,
 )
 from app.services.sii_intelligence import build_upload_intelligence
-from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE, run_sii_runner, write_latest_sii_state
+from app.services.sii_runner import (
+    CORE_ENGINE,
+    RUNNER_MODULE,
+    build_sensor_vectors,
+    parse_timestamp as parse_runner_timestamp,
+    run_sii_runner,
+    write_latest_sii_state,
+)
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -767,6 +776,16 @@ def build_upload_result(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
+    replay_timeline = build_structural_replay_timeline(
+        columns=columns,
+        rows=data_rows,
+        total_rows=total_rows,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=detected_timestamp_column,
+        primary_room=primary_room,
+    )
+    sii_intelligence["replay_timeline"] = replay_timeline
+    processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
     record_timing(processing_stats, "replay_generation", stage_started)
     runner_latest_state = sii_runner_result.get("latest_state") if isinstance(sii_runner_result, dict) else None
     if isinstance(runner_latest_state, dict):
@@ -1363,6 +1382,229 @@ def downsample_rows(rows: list[list[str]], limit: int) -> list[list[str]]:
         return rows
     step = len(rows) / limit
     return [rows[min(len(rows) - 1, int(index * step))] for index in range(limit)]
+
+
+def replay_target_frames(total_rows: int) -> int:
+    if total_rows < 10_000:
+        return 20
+    if total_rows < 100_000:
+        return 50
+    if total_rows <= 500_000:
+        return 100
+    if total_rows <= 1_000_000:
+        return 150
+    return 200
+
+
+def replay_baseline_rows(total_rows: int) -> int:
+    return max(10, int(total_rows * 0.15))
+
+
+def classify_structural_state(
+    *,
+    baseline_distance: float,
+    drift_velocity: float,
+    drift_acceleration: float,
+    recent_distances: list[float],
+) -> str:
+    if len(recent_distances) >= 4 and recent_distances[-1] < recent_distances[-2] < recent_distances[-3]:
+        if baseline_distance < 0.28:
+            return "Recovery / Stabilizing"
+    if baseline_distance >= 0.34 or drift_velocity >= 0.05:
+        return "Alert"
+    if baseline_distance >= 0.22 or drift_velocity >= 0.03:
+        return "Drift emerging"
+    if baseline_distance >= 0.12 or drift_velocity > 0.0 or drift_acceleration > 0.0:
+        return "Watch"
+    return "Healthy / Stable"
+
+
+def replay_state_to_phase(state: str) -> str:
+    normalized = state.lower()
+    if "alert" in normalized:
+        return "structural_fragmentation"
+    if "drift" in normalized:
+        return "propagation_activation"
+    if "watch" in normalized:
+        return "relationship_weakening"
+    if "recovery" in normalized or "stabiliz" in normalized:
+        return "recovery_or_escalation"
+    return "stable_topology"
+
+
+def build_structural_replay_timeline(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    total_rows: int,
+    numeric_profiles: list[dict[str, Any]],
+    timestamp_column: str | None,
+    primary_room: str,
+) -> dict[str, Any]:
+    vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
+    vectors = vector_rows["vectors"]
+    sample_count = len(vectors)
+    if sample_count < 4:
+        return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
+
+    baseline_rows_total = replay_baseline_rows(total_rows)
+    baseline_count = max(3, min(sample_count - 2, int(round(sample_count * (baseline_rows_total / max(total_rows, 1))))))
+    available = sample_count - baseline_count
+    if available <= 1:
+        return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
+
+    frame_target = replay_target_frames(total_rows)
+    frame_count = max(2, min(200, frame_target, available))
+    step = max(1, int(math.floor(available / frame_count)))
+    window_size = max(5, min(64, baseline_count // 2))
+
+    vector_matrix = np.asarray(vectors, dtype=float)
+    baseline_vectors = vector_matrix[:baseline_count]
+    baseline_mean = np.nan_to_num(np.nanmean(baseline_vectors, axis=0), nan=0.0)
+    safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
+    baseline_filled = np.where(np.isnan(baseline_vectors), np.nanmean(baseline_vectors, axis=0), baseline_vectors)
+    baseline_corr = np.corrcoef(np.transpose(np.nan_to_num(baseline_filled, nan=0.0))) if baseline_filled.shape[1] >= 2 else None
+
+    numeric_columns = vector_rows["columns_used"]
+    timeline: list[dict[str, Any]] = []
+    prev_distance = 0.0
+    prev_velocity = 0.0
+    distances: list[float] = []
+
+    frame_positions = list(range(baseline_count, sample_count, step))
+    if frame_positions[-1] != sample_count - 1:
+        frame_positions.append(sample_count - 1)
+    if len(frame_positions) > 200:
+        frame_positions = frame_positions[:199] + [frame_positions[-1]]
+
+    for frame_index, sample_index in enumerate(frame_positions):
+        window_start = max(baseline_count, sample_index - window_size + 1)
+        window_vectors = vector_matrix[window_start:sample_index + 1]
+        window_mean = np.nan_to_num(np.nanmean(window_vectors, axis=0), nan=0.0)
+
+        normalized_delta = np.abs(window_mean - baseline_mean) / safe_baseline
+        baseline_distance = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 2.0))
+        drift_velocity = baseline_distance - prev_distance if frame_index > 0 else 0.0
+        drift_acceleration = drift_velocity - prev_velocity if frame_index > 0 else 0.0
+
+        col_shift = [
+            {"column": column, "shift": float(normalized_delta[idx])}
+            for idx, column in enumerate(numeric_columns)
+            if idx < len(normalized_delta)
+        ]
+        col_shift.sort(key=lambda item: item["shift"], reverse=True)
+        contributors = [item["column"] for item in col_shift[:3] if item["shift"] > 0]
+
+        relationship_drift = None
+        dominant_paths: list[str] = []
+        if baseline_corr is not None and window_vectors.shape[1] >= 2:
+            filled_window = np.where(np.isnan(window_vectors), np.nanmean(window_vectors, axis=0), window_vectors)
+            window_corr = np.corrcoef(np.transpose(np.nan_to_num(filled_window, nan=0.0)))
+            corr_delta = np.abs(window_corr - baseline_corr)
+            relationship_drift = float(np.clip(np.nan_to_num(np.nanmean(corr_delta), nan=0.0), 0.0, 2.0))
+            if np.isfinite(corr_delta).any():
+                top_pair = np.unravel_index(np.nanargmax(corr_delta), corr_delta.shape)
+                if top_pair[0] != top_pair[1] and top_pair[0] < len(numeric_columns) and top_pair[1] < len(numeric_columns):
+                    dominant_paths.append(f"{numeric_columns[top_pair[0]]}_{numeric_columns[top_pair[1]]}")
+
+        distances.append(baseline_distance)
+        structural_state = classify_structural_state(
+            baseline_distance=baseline_distance,
+            drift_velocity=drift_velocity,
+            drift_acceleration=drift_acceleration,
+            recent_distances=distances,
+        )
+        phase = replay_state_to_phase(structural_state)
+
+        sample_row_index = vector_rows["row_indexes"][sample_index]
+        sample_window_start = vector_rows["row_indexes"][window_start]
+        global_row_start = min(total_rows - 1, int(round((sample_window_start / max(len(rows) - 1, 1)) * (total_rows - 1))))
+        global_row_end = min(total_rows - 1, int(round((sample_row_index / max(len(rows) - 1, 1)) * (total_rows - 1))))
+
+        start_ts = parse_runner_timestamp(columns, rows[sample_window_start], timestamp_column, sample_window_start)
+        end_ts = parse_runner_timestamp(columns, rows[sample_row_index], timestamp_column, sample_row_index)
+
+        confidence = float(np.clip(np.mean(~np.isnan(window_vectors)), 0.0, 1.0)) if window_vectors.size else 0.0
+
+        timeline.append(
+            {
+                "timestamp": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                "frame_index": frame_index,
+                "row_range": {"start": global_row_start + 1, "end": global_row_end + 1},
+                "timestamp_range": {
+                    "start": datetime.fromtimestamp(start_ts, tz=UTC).isoformat(),
+                    "end": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                },
+                "topology_state": {
+                    "phase": phase,
+                    "drift_index": round(baseline_distance, 6),
+                    "fragmentation_indicator": round(relationship_drift or baseline_distance, 6),
+                    "stability_state": structural_state,
+                },
+                "subsystem_pressure": {
+                    "pressure_score": round(baseline_distance, 6),
+                    "volatility_index": round(abs(drift_velocity), 6),
+                    "compression_intensity": "HIGH_COMPRESSION" if baseline_distance >= 0.34 else ("MODERATE_COMPRESSION" if baseline_distance >= 0.22 else "LOW_COMPRESSION"),
+                },
+                "active_archetypes": [{"name": signal} for signal in contributors],
+                "propagation_state": {
+                    "dominant_paths": dominant_paths,
+                    "activation_intensity": round(min(1.0, baseline_distance * 1.8), 6),
+                    "propagation_acceleration": round(drift_acceleration, 6),
+                    "recovery_convergence": "STABILIZING" if structural_state.startswith("Recovery") else "DIVERGING",
+                },
+                "evidence_state": {
+                    "corroboration_strength": "HIGH" if confidence >= 0.8 else ("MODERATE" if confidence >= 0.6 else "LOW"),
+                    "lineage_events": [],
+                },
+                "cognition_state": {
+                    "facility_state": structural_state,
+                    "confidence_tier": "STRUCTURAL_EVIDENCE_CONFIRMED" if confidence >= 0.8 else ("RELATIONSHIP_EVIDENCE_PRESENT" if confidence >= 0.6 else "BASELINE_EVIDENCE"),
+                    "state_evolution": f"frame_{frame_index + 1}_of_{len(frame_positions)}",
+                    "canonical_phase": phase,
+                    "operational_phase": phase,
+                },
+                "memory_similarity": [],
+                "continuation_window": {
+                    "active_scenario": "Uploaded telemetry replay",
+                    "window": structural_state,
+                    "timing_window": f"rows {global_row_start + 1}-{global_row_end + 1}",
+                },
+                "baseline_distance": round(baseline_distance, 6),
+                "drift_velocity": round(drift_velocity, 6),
+                "drift_acceleration": round(drift_acceleration, 6),
+                "relationship_drift": round(relationship_drift, 6) if relationship_drift is not None else None,
+                "primary_contributors": contributors,
+                "affected_subsystem": primary_room,
+                "evidence_confidence": round(confidence, 4),
+                "operator_interpretation": (
+                    f"{structural_state}. Baseline separation {baseline_distance:.3f}; "
+                    f"velocity {drift_velocity:.3f}; acceleration {drift_acceleration:.3f}."
+                ),
+            }
+        )
+
+        prev_distance = baseline_distance
+        prev_velocity = drift_velocity
+
+    return {
+        "meta": {
+            "frame_count": len(timeline),
+            "frame_target": frame_target,
+            "baseline_rows": baseline_rows_total,
+            "sampled_rows": sample_count,
+            "total_rows": total_rows,
+            "playback_speeds": [0.5, 1.0, 1.5, 2.0, 4.0],
+            "canonical_flow": [
+                "stable_topology",
+                "relationship_weakening",
+                "propagation_activation",
+                "structural_fragmentation",
+                "recovery_or_escalation",
+            ],
+        },
+        "timeline": timeline,
+    }
 
 
 def estimate_rows_memory(rows: list[list[str]]) -> int:

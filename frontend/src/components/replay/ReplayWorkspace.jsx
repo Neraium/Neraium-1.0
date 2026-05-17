@@ -112,25 +112,33 @@ export default function ReplayWorkspace({
   const metrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
       return [
-        { label: "Replay snapshots", value: dash },
-        { label: "Current point", value: dash },
-        { label: "Lead time", value: dash },
+        { label: "Structural Movement Timeline", value: dash },
+        { label: "Current Window", value: dash },
+        { label: "Baseline Separation", value: dash },
+        { label: "Drift Velocity", value: dash },
+        { label: "Drift Acceleration", value: dash },
+        { label: "Structural Read", value: dash },
+        { label: "Primary Contributors", value: dash },
         { label: "Evidence confidence", value: dash },
-        { label: "System stability", value: dash },
-        { label: "Progression state", value: dash },
       ];
     }
+    const contributors = Array.isArray(shownFrame?.primary_contributors) && shownFrame.primary_contributors.length
+      ? shownFrame.primary_contributors.slice(0, 2).join(" | ")
+      : dash;
     return [
-      { label: "Replay snapshots", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-      { label: "Current point", value: hasReplaySnapshots ? `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+      { label: "Structural Movement Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
+      { label: "Current Window", value: hasReplaySnapshots ? `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+      { label: "Baseline Separation", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
+      { label: "Drift Velocity", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
+      { label: "Drift Acceleration", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
+      { label: "Structural Read", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
+      { label: "Primary Contributors", value: contributors },
       { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : dash },
       { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash },
       { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
-      { label: "System stability", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
       { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
-      { label: "Progression state", value: hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.operational_phase) : dash },
     ];
-  }, [frameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.cognition_state?.confidence_tier, shownFrame?.cognition_state?.operational_phase, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window]);
+  }, [frameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -158,6 +166,7 @@ export default function ReplayWorkspace({
         {!hasDiagnosticsEvidence ? (
           <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a historian stream is connected.</p>
         ) : null}
+        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay frames available.</p> : null}
         <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>

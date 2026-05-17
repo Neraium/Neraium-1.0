@@ -322,6 +322,26 @@ def read_intake_result(job_id: str) -> dict[str, Any]:
     }
 
 
+@router.get("/data/replay/{job_id}")
+def read_upload_replay(job_id: str) -> dict[str, Any]:
+    metadata = read_job(job_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
+    latest_result = read_latest_upload_result()
+    if not latest_result or latest_result.get("job_id") != job_id:
+        return {"job_id": job_id, "frame_count": 0, "timeline": [], "meta": {}, "message": "No replay frames available."}
+    replay = ((latest_result.get("sii_intelligence") or {}).get("replay_timeline") or {})
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if not isinstance(timeline, list):
+        timeline = []
+    return {
+        "job_id": job_id,
+        "frame_count": len(timeline),
+        "timeline": timeline,
+        "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
+    }
+
+
 def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dict[str, Any]:
     return {
         "job_id": job_id,
