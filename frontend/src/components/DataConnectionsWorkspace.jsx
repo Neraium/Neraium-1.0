@@ -17,6 +17,7 @@ import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import DiagnosticsPanel from "./setup/DiagnosticsPanel";
+import DemoModePanel from "./setup/DemoModePanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -80,6 +81,7 @@ export default function DataConnectionsWorkspace({
     { id: "historian-setup", label: "Setup" },
     { id: "upload", label: "Upload" },
     { id: "diagnostics", label: "Diagnostics" },
+    { id: "demo", label: "Demo" },
   ], []);
 
   const [selectedFile, setSelectedFile] = useState(null);
@@ -383,6 +385,8 @@ export default function DataConnectionsWorkspace({
           uploadHistoryRows={uploadHistoryRows}
         />
       )}
+
+      {activeTab === "demo" && <DemoModePanel />}
     </div>
   );
 }
