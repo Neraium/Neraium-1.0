@@ -75,16 +75,6 @@ export default function SystemBodyWorkspace({
               uiState={uiState}
             />
           </div>
-
-          <details className="system-body-summary-mobile">
-            <summary>Operator Summary</summary>
-            <SystemNarrativePanel
-              summaryKicker="Operator Summary"
-              summaryTitle={summaryTitle}
-              items={narrativeItems}
-              uiState={uiState}
-            />
-          </details>
         </div>
 
         <SystemOrbPanel
@@ -102,6 +92,16 @@ export default function SystemBodyWorkspace({
         timelineItems={timelineItems}
         uiState={uiState}
       />
+
+      <details className="system-body-summary-mobile">
+        <summary>Operator Summary</summary>
+        <SystemNarrativePanel
+          summaryKicker="Operator Summary"
+          summaryTitle={summaryTitle}
+          items={narrativeItems}
+          uiState={uiState}
+        />
+      </details>
 
       <SystemDiagnosticsPanel metrics={metrics} uiState={uiState} />
     </PageContainer>

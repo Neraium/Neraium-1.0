@@ -31,8 +31,8 @@ const STATE = {
 };
 
 const FALLBACK_STATE = {
-  label: EMPTY_VALUE,
-  description: "No telemetry session is currently active.",
+  label: "No active analysis",
+  description: "Upload telemetry or connect a historian source to begin baseline formation.",
   mode: "no-data",
 };
 
