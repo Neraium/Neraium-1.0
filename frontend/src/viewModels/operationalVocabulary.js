@@ -31,3 +31,11 @@ export const LIFECYCLE_RAIL_NEUTRAL = [
   { label: "Drift", status: "—" },
   { label: "Review", status: "—" },
 ];
+
+export const LIFECYCLE_RAIL_ACTIVE = [
+  { label: "Intake", status: "Ready" },
+  { label: "Baseline", status: "Ready" },
+  { label: "Monitoring", status: "Active" },
+  { label: "Drift", status: "Review" },
+  { label: "Review", status: "Needed" },
+];
