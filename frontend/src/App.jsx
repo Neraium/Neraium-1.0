@@ -380,6 +380,10 @@ function App() {
           Panel={Panel}
           MetricGrid={MetricGrid}
           EmptyState={EmptyState}
+          hasActiveSession={hasActiveSession}
+          hasCurrentUploadResult={hasCurrentUploadResult}
+          hasResumedSession={hasResumedSession}
+          hasRealSiiOutput={hasRealSiiOutput}
         />
       );
     }
