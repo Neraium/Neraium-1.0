@@ -177,6 +177,37 @@ def reset_all_data_connections() -> list[dict[str, Any]]:
     return reset_connections
 
 
+def clear_all_connection_runtime_state() -> list[dict[str, Any]]:
+    """Clear live runtime/baseline markers while preserving connection configuration."""
+    cleared_connections: list[dict[str, Any]] = []
+    for connection in list_registered_data_connections():
+        connection_id = str(connection.get("connection_id") or "")
+        if not connection_id:
+            continue
+        clear_live_baseline(connection_id)
+        cleared_payload = {
+            **connection,
+            "error_message": "",
+            "last_poll_at": None,
+            "last_success_at": None,
+            "readings_received": 0,
+            "readings_accepted": 0,
+            "readings_rejected": 0,
+            "sensors_detected": 0,
+            "current_scenario": None,
+            "current_tick": None,
+            "latest_telemetry_timestamp": None,
+            "last_ingestion_source": None,
+            "baseline_source": None,
+            "baseline_status": "none",
+            "baseline_samples_collected": 0,
+            "last_baseline_update": None,
+            "baseline_error_message": "",
+        }
+        cleared_connections.append(upsert_registered_data_connection(cleared_payload))
+    return cleared_connections
+
+
 def reset_connection_live_baseline(connection_id: str) -> dict[str, Any]:
     connection = require_connection(connection_id)
     logger.info(

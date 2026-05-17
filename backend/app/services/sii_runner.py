@@ -465,6 +465,14 @@ def write_latest_sii_state(state: dict[str, Any]) -> None:
         raise last_error
 
 
+def reset_latest_sii_state() -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        STATE_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def is_valid_latest_sii_state(state: Any) -> bool:
     if not isinstance(state, dict):
         return False

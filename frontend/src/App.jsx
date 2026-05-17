@@ -42,6 +42,7 @@ import * as uploadStateView from "./viewModels/uploadState";
 import { INTAKE_STAGES, REPORT_TEMPLATES } from "./config/workspaces";
 import useWorkspaceNavigation from "./hooks/useWorkspaceNavigation";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
+import { resetDemoSession } from "./services/api/uploadApi";
 
 function App() { 
   const hasAccess = true;
@@ -65,6 +66,7 @@ function App() {
     setIsDemoMode,
     loadFacilitySystems,
     loadLatestUploadState,
+    setAllowPersistedLatest,
   } = useFacilityRuntime({
     hasAccess,
     accessCode: apiAccessCode,
@@ -203,6 +205,40 @@ function App() {
     });
   }, [baselineDistance, liveOps.connectionSummary, telemetryTick]);
 
+  const handleResetDemo = useCallback(async () => {
+    try {
+      await resetDemoSession({ apiFetch, accessCode: apiAccessCode });
+    } catch {
+      // Continue with client reset even if backend reset is unavailable.
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const keysToRemove = [];
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+          const key = window.localStorage.key(index);
+          if (key && key.toLowerCase().includes("neraium")) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+        window.sessionStorage.clear();
+      } catch {
+        // Ignore storage cleanup failures to avoid blocking reset UX.
+      }
+    }
+
+    setIsDemoMode(false);
+    setDemoScenario("drift");
+    setDriftHistory([]);
+    setPreferredEvidenceRunId(null);
+    setSelectedTopologyTarget(null);
+    setAllowPersistedLatest(false);
+    await loadLatestUploadState({ includePersisted: false });
+    await loadFacilitySystems();
+    setActiveWorkspace("data-connections");
+  }, [apiAccessCode, apiFetch, loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest, setDemoScenario, setIsDemoMode]);
+
   function renderActiveWorkspace() { 
     if (activeWorkspace === "cultivation-mission-control") {
       return (
@@ -291,8 +327,9 @@ function App() {
           roomContext={roomContext}
           onUploadComplete={async () => {
             setIsDemoMode(false);
+            setAllowPersistedLatest(true);
             setDriftHistory([]);
-            await loadLatestUploadState();
+            await loadLatestUploadState({ includePersisted: true });
             await loadFacilitySystems();
             setEvidenceRefreshKey((current) => current + 1);
             setActiveWorkspace("drift-timeline");
@@ -302,6 +339,7 @@ function App() {
               active: true,
             }));
           }}
+          onResetDemo={handleResetDemo}
           formatClockTime={formatClockTime}
         />
       );

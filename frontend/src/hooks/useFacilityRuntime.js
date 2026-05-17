@@ -34,6 +34,7 @@ export default function useFacilityRuntime({
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
+  const [allowPersistedLatest, setAllowPersistedLatest] = useState(false);
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(() => {
     if (typeof window === "undefined") {
@@ -124,12 +125,13 @@ export default function useFacilityRuntime({
     }
   }, [accessCode, apiStatus.state, buildProtectedRequestMessage, hasAccess]);
 
-  const loadLatestUploadState = useCallback(async () => {
+  const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
     if (!hasAccess) {
       return false;
     }
+    const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
-      const payload = await fetchLatestUploadState({ apiFetch, accessCode });
+      const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted });
       setLatestUploadSnapshot(payload.snapshot);
       setLatestUploadResult(payload.latestResult);
       return Boolean(payload.latestResult);
@@ -138,7 +140,7 @@ export default function useFacilityRuntime({
       setLatestUploadResult(null);
       return false;
     }
-  }, [accessCode, hasAccess]);
+  }, [accessCode, allowPersistedLatest, hasAccess]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
@@ -192,6 +194,8 @@ export default function useFacilityRuntime({
     setIsDemoMode,
     loadFacilitySystems,
     loadLatestUploadState,
+    allowPersistedLatest,
+    setAllowPersistedLatest,
     retryBackendConnection,
   };
 }

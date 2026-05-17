@@ -102,6 +102,7 @@ export default function DataConnectionsWorkspace({
   latestUploadResult,
   roomContext,
   onUploadComplete,
+  onResetDemo,
   formatClockTime,
 }) {
   const TABS = ["overview", "upload", "diagnostics"];
@@ -122,7 +123,7 @@ export default function DataConnectionsWorkspace({
 
   const loadLatestUpload = useCallback(async () => {
     try {
-      const response = await apiFetch("/api/data/latest-upload", { accessCode });
+      const response = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
       const payload = await readJsonPayload(response);
       if (!response.ok) {
         return null;
@@ -395,7 +396,28 @@ export default function DataConnectionsWorkspace({
       ? "Uploaded baseline active"
       : baselineStatus === "failed"
         ? "Uploaded baseline failed"
-        : "Awaiting uploaded telemetry";
+      : "Awaiting uploaded telemetry";
+
+  async function handleResetDemoClick() {
+    setSelectedFile(null);
+    setUploadState("idle");
+    setUploadError("");
+    setUploadResult(null);
+    setUploadJob(null);
+    setUploadTransfer(null);
+    uploadJobIdRef.current = null;
+    pollFailureCountRef.current = 0;
+    if (pollTimerRef.current) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = "";
+    }
+    if (onResetDemo) {
+      await onResetDemo();
+    }
+  }
 
   return (
     <div className="workspace-grid workspace-grid--connections">
@@ -413,6 +435,14 @@ export default function DataConnectionsWorkspace({
               {tab === "overview" ? "Overview" : tab === "upload" ? "Upload" : "Diagnostics"}
             </button>
           ))}
+          <button
+            type="button"
+            className="secondary-command-button"
+            onClick={handleResetDemoClick}
+            disabled={isUploadProcessing(uploadState)}
+          >
+            Reset Demo
+          </button>
         </div>
       </Panel>
 

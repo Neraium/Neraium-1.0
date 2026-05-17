@@ -1,48 +1,31 @@
 import { buildAccessHeaders, buildApiUrl } from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
 
-export async function fetchLatestUploadState({ apiFetch, accessCode }) {
-  const response = await apiFetch("/api/data/latest-upload", { accessCode });
+export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
+  const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });
   if (!response.ok) {
     throw new Error(`Unexpected response: ${response.status}`);
   }
 
   const payload = await response.json();
   const latestResult = payload?.latest_result;
-  const snapshotIsActive = uploadStateView.hasActiveTelemetrySnapshot(payload);
-  const hydratedSnapshotResult = snapshotIsActive
-    ? {
-        filename: payload?.last_filename ?? "Active telemetry import",
-        row_count: payload?.rows_processed ?? 0,
-        column_count: payload?.columns_detected ?? 0,
-        rows_processed: payload?.rows_processed ?? 0,
-        columns_detected: payload?.columns_detected ?? 0,
-        room_summary: {
-          rooms: [
-            {
-              room: "Cultivation Rooms",
-            },
-          ],
-        },
-        processing_trace: {
-          completed_at: payload?.last_processed_at ?? null,
-          source: payload?.source ?? payload?.result_source ?? "uploaded",
-        },
-        sii_intelligence: {
-          source: payload?.source ?? payload?.result_source ?? "uploaded",
-          last_updated: payload?.last_processed_at ?? null,
-        },
-      }
-    : null;
-
-  const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult)
-    ? latestResult
-    : hydratedSnapshotResult;
+  const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
 
   return {
     snapshot: payload ?? uploadStateView.buildEmptyLatestUploadSnapshot(),
     latestResult: normalizedLatestResult,
   };
+}
+
+export async function resetDemoSession({ apiFetch, accessCode }) {
+  const response = await apiFetch("/api/data/reset", {
+    method: "POST",
+    accessCode,
+  });
+  if (!response.ok) {
+    throw new Error(`Unexpected response: ${response.status}`);
+  }
+  return response.json();
 }
 
 function readJsonResponse(xhr) {
