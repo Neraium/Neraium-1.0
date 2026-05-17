@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -11,10 +12,7 @@ COPY backend/requirements.txt .
 RUN python -m pip install --upgrade pip && \
     python -m pip install -r requirements.txt
 
-COPY backend/app ./app
-COPY backend/api ./api
-COPY backend/audit ./audit
-COPY backend/engines ./engines
+COPY backend/ ./
 
 EXPOSE 80
 

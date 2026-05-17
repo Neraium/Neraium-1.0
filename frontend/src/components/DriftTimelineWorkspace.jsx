@@ -6,6 +6,8 @@ import {
   classifyDriftVelocity,
   formatStructuralRead,
   formatTrajectorySignal,
+  mapStructuralInterpretation,
+  mapStructuralSeverity,
 } from "../viewModels/structuralTimelineViewModel";
 
 function formatSigned(value) {
@@ -20,6 +22,21 @@ function toFinite(value, fallback = 0) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function isUsableTimestamp(value) {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time);
+}
+
+function formatReplayTime(stamp, index) {
+  if (isUsableTimestamp(stamp)) {
+    return new Date(stamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  const elapsed = index * 12;
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 function pickFirst(...values) {
@@ -322,7 +339,7 @@ export default function DriftTimelineWorkspace({
     const y = 120 - (Math.abs(toFinite(item.distance)) / scale) * 100;
     return `${x},${y}`;
   }).join(" ");
-  const recentSamples = history.slice(-6).reverse();
+  const recentSamples = history.slice(-6);
   const lastUpdatedLabel = hasUploadedTelemetry ? "Uploaded telemetry analysis" : (liveOps.connectionSummary || "Awaiting sync");
   const pulseTone = hasUploadedTelemetry
     ? normalizeStateLabel(liveOps.facilityTone, toFinite(last.distance), toFinite(last.velocity), hasEnoughPoints).toLowerCase()
@@ -384,7 +401,6 @@ export default function DriftTimelineWorkspace({
               <div>
                 <span>Baseline Separation</span>
                 <strong>{hasUploadedTelemetry ? classifyBaselineSeparation(toFinite(last.distance)) : EMPTY_VALUE}</strong>
-                {hasUploadedTelemetry ? <em className="timeline-stats__raw">{toFinite(last.distance).toFixed(3)} baseline units</em> : null}
               </div>
               <div>
                 <span>Structural Read</span>
@@ -409,9 +425,9 @@ export default function DriftTimelineWorkspace({
               <details className="technical-detail-panel">
                 <summary>Advanced Diagnostics</summary>
                 <div className="technical-detail-panel__lines">
-                  <code>Raw baseline distance: {toFinite(last.distance).toFixed(3)} baseline units</code>
-                  <code>Raw drift velocity: {formatSigned(last.velocity)} baseline units/sample</code>
-                  <code>Raw drift acceleration: {formatSigned(last.acceleration)} baseline units/sample^2</code>
+                  <code>Raw baseline distance score: {toFinite(last.distance).toFixed(3)}</code>
+                  <code>Raw drift velocity score: {formatSigned(last.velocity)}</code>
+                  <code>Raw drift acceleration score: {formatSigned(last.acceleration)}</code>
                   <code>Sample interval: per uploaded telemetry sample</code>
                   <code>Analysis window: {history.length} samples</code>
                 </div>
@@ -428,13 +444,18 @@ export default function DriftTimelineWorkspace({
           <span>{noActiveTelemetry ? EMPTY_VALUE : lastUpdatedLabel}</span>
         </div>
         {!noActiveTelemetry ? (
-          <div className="timeline-stats">
-            {recentSamples.map((sample, index) => (
-              <div key={`${sample.stamp}-${index}`}>
-                <span>{sample.stamp || "now"}</span>
-                <strong>{toFinite(sample.distance).toFixed(3)} baseline units</strong>
-              </div>
-            ))}
+          <div className="timeline-stats timeline-stats--progression">
+            {recentSamples.map((sample, index) => {
+              const progression = mapStructuralSeverity(sample.distance, sample.velocity);
+              const interpretation = mapStructuralInterpretation(sample.distance, sample.velocity, sample.acceleration);
+              return (
+                <div key={`${sample.stamp}-${index}`}>
+                  <span>{formatReplayTime(sample.stamp, index)}</span>
+                  <strong>{progression}</strong>
+                  <em className="timeline-stats__raw">{interpretation}</em>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="empty-state compact">
