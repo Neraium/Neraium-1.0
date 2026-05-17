@@ -122,7 +122,7 @@ function display(value, fallback = "—") {
 export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, comparisonMode, formatClockTime, inactive = false }) {
   const model = useMemo(() => buildFieldModel(timeline, frameIndex), [timeline, frameIndex]);
   const frame = model.activeFrame;
-  const status = inactive ? "Topology awaiting telemetry" : display(frame?.topology_state?.stability_state, "—");
+  const status = inactive ? "—" : display(frame?.topology_state?.stability_state, "—");
   const phase = inactive ? "—" : display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "—");
   const confidence = inactive ? "—" : display(frame?.cognition_state?.confidence_tier, "—");
   const pathLabel = inactive ? "—" : (model.dominantPaths?.[0]?.replaceAll?.("_", " → ") ?? "—");
@@ -146,7 +146,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         </div>
         <div className="replay-cognition-field__state">
           <strong>{inactive ? "—" : `${Math.round(model.divergence * 100)}%`}</strong>
-          <span>{inactive ? "analysis state" : "baseline divergence"}</span>
+          <span>{inactive ? "—" : "baseline divergence"}</span>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { formatOperatorActionLabel } from "../viewModels/operationalHelpers";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
+import { EMPTY_VALUE, formatEmptyValue } from "../viewModels/emptyValue";
 
 export function Panel({ title, subtitle, className = "", children }) {
   const heading = subtitle || title;
@@ -37,7 +38,7 @@ export function MetricGrid({ metrics, compact = false }) {
       {metrics.map((metric) => (
         <div className="metric-cell" key={metric.label}>
           <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
+          <strong>{formatEmptyValue(metric.value)}</strong>
         </div>
       ))}
     </div>
@@ -222,7 +223,7 @@ export function RelationshipMonitor({
               <span>{formatRelationshipPair(columns, index)}</span>
               <StatusDot tone={row.tone ?? "info"} />
             </div>
-            <strong>{relationshipDetail(row)}</strong>
+            <strong>{formatEmptyValue(relationshipDetail(row))}</strong>
             <p>{relationshipConsistencyLabel(row)}</p>
             {Array.isArray(row.technicalDetails) && row.technicalDetails.length > 0 && (
               <details className="technical-detail-panel technical-detail-panel--compact">
@@ -292,7 +293,7 @@ export function InterventionGrid({
               <span>Time</span>
               <strong>{item.window}</strong>
             </div>
-            <p>{compact ? item.primaryAction ?? item.recommendation : guidance.primaryDriver}</p>
+          <p>{formatEmptyValue(compact ? item.primaryAction ?? item.recommendation : guidance.primaryDriver)}</p>
             {!compact && (
               <div className="intervention-card__footer">
                 <span className={`overview-pill overview-pill--${item.tone}`}>{item.primaryAction ?? item.recommendation}</span>
@@ -554,9 +555,9 @@ export function TargetSelector({ items, selectedId, onSelect, buildGuidanceForIt
             <span>{item.label}</span>
             <StatusDot tone={item.tone} />
           </div>
-          <strong>{item.window}</strong>
-          <p>{item.primaryAction ?? item.recommendation}</p>
-          <p className="target-selector__driver">{buildGuidanceForItem(item).primaryDriver}</p>
+          <strong>{formatEmptyValue(item.window)}</strong>
+          <p>{formatEmptyValue(item.primaryAction ?? item.recommendation)}</p>
+          <p className="target-selector__driver">{formatEmptyValue(buildGuidanceForItem(item).primaryDriver)}</p>
         </button>
       ))}
     </div>
@@ -585,7 +586,7 @@ export function EvidenceConsole({ lines, animated = false }) {
     <div className={`evidence-console ${animated ? "evidence-console--animated" : ""}`}>
       {lines.map((line, index) => (
         <div className="evidence-console__line" key={`${line}-${index}`}>
-          <span>{line}</span>
+          <span>{formatEmptyValue(line)}</span>
         </div>
       ))}
     </div>
@@ -614,7 +615,7 @@ export function EngineIdentityPanel({
           <strong>{identity?.engine_name ?? "Neraium SII"}</strong>
           <small>{runnerAvailable ? "Production SII runner available" : "Production SII runner pending"}</small>
         </span>
-        <span>{source}</span>
+        <span>{formatEmptyValue(source)}</span>
       </summary>
       <MetricGrid
         metrics={[
@@ -662,7 +663,7 @@ export function DataTable({ columns, rows }) {
                   key={`${rowIndex}-${cellIndex}`}
                   data-label={columns[cellIndex]}
                 >
-                  {cell}
+                  {formatEmptyValue(cell)}
                 </td>
               ))}
             </tr>
@@ -676,8 +677,8 @@ export function DataTable({ columns, rows }) {
 export function EmptyState({ title, body, compact = false }) {
   return (
     <div className={`empty-state ${compact ? "empty-state--compact" : ""}`}>
-      <strong>{title}</strong>
-      <p>{body}</p>
+      <strong>{formatEmptyValue(title) || EMPTY_VALUE}</strong>
+      <p>{formatEmptyValue(body) || EMPTY_VALUE}</p>
     </div>
   );
 }

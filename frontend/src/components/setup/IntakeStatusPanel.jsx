@@ -26,12 +26,12 @@ export default function IntakeStatusPanel({
           metrics={[
             { label: "Active Session", value: showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) : "No Active Session" },
             { label: "Control Plane", value: apiStatus.label },
-            { label: "Analysis Active", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : "No Active Session" },
-            { label: "Signal Origin", value: showAnalysis && latestUploadSnapshot?.result_source ? "Telemetry import" : "Awaiting uploaded telemetry" },
+            { label: "Analysis Active", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
+            { label: "Signal Origin", value: showAnalysis && latestUploadSnapshot?.result_source ? "Telemetry import" : null },
             { label: "Baseline", value: baselineMessage },
             { label: "Primary Environment", value: roomContext.primary },
-            { label: "Operational Mode", value: showAnalysis ? (latestUploadSnapshot?.scenario ?? "Monitoring") : "Awaiting uploaded telemetry" },
-            { label: "Session Tick", value: showAnalysis ? (latestUploadSnapshot?.current_tick ?? "Pending activation") : "Pending activation" },
+            { label: "Operational Mode", value: showAnalysis ? latestUploadSnapshot?.scenario : null },
+            { label: "Session Tick", value: showAnalysis ? latestUploadSnapshot?.current_tick : null },
           ]}
         />
       </Panel>
@@ -40,9 +40,9 @@ export default function IntakeStatusPanel({
           <MetricGrid
             metrics={[
               { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
-              { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename ?? "Awaiting uploaded telemetry" },
-              { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta ?? "No Active Session" },
-              { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state ?? "No Active Session" },
+              { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename },
+              { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
+              { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
             ]}
             compact
           />
