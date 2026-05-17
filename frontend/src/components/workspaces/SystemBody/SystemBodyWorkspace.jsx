@@ -1,3 +1,4 @@
+import React from "react";
 import SystemOrbPanel from "./SystemOrbPanel";
 import SystemNarrativePanel from "./SystemNarrativePanel";
 import SystemEvidencePanel from "./SystemEvidencePanel";
