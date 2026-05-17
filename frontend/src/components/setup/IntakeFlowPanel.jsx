@@ -33,7 +33,7 @@ export default function IntakeFlowPanel({
           <div className="intake-flow__header">
             <div>
               <p className="section-token">Historian Pilot Intake</p>
-              <h3>Acquire â†’ Normalize â†’ Baseline â†’ Analyze</h3>
+              <h3>Acquire - Normalize - Baseline - Analyze</h3>
             </div>
             <p>Upload a historian export for read-only pilot intake and structural analysis.</p>
           </div>
@@ -42,7 +42,7 @@ export default function IntakeFlowPanel({
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
               <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file Â· ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
+              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
               <p>{uploadReadinessMessage(selectedFile)}</p>
             </div>
             <div className="upload-file-card__actions">

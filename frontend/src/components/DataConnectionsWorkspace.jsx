@@ -185,8 +185,8 @@ export default function DataConnectionsWorkspace({
             ...(current ?? {}),
             status: progress.stage === "accepted" ? "pending" : "uploading",
             progress_label: progress.percent != null
-              ? `Uploading telemetry export Â· ${progress.percent}% Â· ${formatTransferSpeed(progress.speedBytesPerSecond)}`
-              : `Uploading telemetry export Â· ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
+              ? `Uploading telemetry export - ${progress.percent}% - ${formatTransferSpeed(progress.speedBytesPerSecond)}`
+              : `Uploading telemetry export - ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
             message: progress.message,
             file_size_bytes: progress.total || selectedFile.size,
             bytes_processed: progress.loaded,
