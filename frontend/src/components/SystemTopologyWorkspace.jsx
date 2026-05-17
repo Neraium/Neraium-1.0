@@ -317,6 +317,7 @@ export default function SystemTopologyWorkspace({
       focusLabel={where}
       lifecycleRail={lifecycleRail}
       isLoading={awaitingSii}
+      isEmptyStructuralState={awaitingSii || uiState === "neutral"}
     />
   );
 }

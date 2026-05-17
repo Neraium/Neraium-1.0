@@ -1,3 +1,7 @@
+ .system-body-mobile-empty {
+  display: none;
+}
+
 @media (max-width: 1280px) {
   .system-body-hero {
     grid-template-columns: minmax(0, 1fr) minmax(320px, 0.82fr);
@@ -49,6 +53,65 @@
 }
 
 @media (max-width: 720px) {
+  .system-body--empty-structural .system-body-mobile-empty {
+    display: grid;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid rgba(143, 168, 164, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(16, 23, 28, 0.96), rgba(8, 12, 15, 0.94));
+  }
+
+  .system-body--empty-structural .system-body-standard-shell {
+    display: none;
+  }
+
+  .system-body-mobile-empty__header {
+    display: grid;
+    gap: 8px;
+  }
+
+  .system-body-mobile-empty__header .workspace-header__title {
+    margin: 0;
+    font-size: clamp(1.8rem, 7.2vw, 2.1rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+  }
+
+  .system-body-mobile-empty__header .workspace-header__subtitle {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+
+  .system-body-mobile-empty__cta {
+    width: fit-content;
+    padding: 10px 14px;
+  }
+
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel {
+    min-height: 168px;
+    max-height: 180px;
+    border: 0;
+    background: transparent;
+  }
+
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__lattice,
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__halo,
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__depth {
+    display: none;
+  }
+
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__stage {
+    width: min(100%, 156px);
+    min-width: 156px;
+    min-height: 120px;
+  }
+
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__stage .health-orb {
+    max-width: 156px;
+  }
+
   .system-body.system-body--orb-first {
     max-width: 100%;
     gap: 16px;
@@ -94,8 +157,8 @@
   .system-status-rail__item {
     min-width: max-content;
     max-width: none;
-    min-height: 32px;
-    max-height: 32px;
+    min-height: 33px;
+    max-height: 33px;
     padding: 5px 9px;
     border-radius: 999px;
     gap: 2px;
@@ -113,7 +176,9 @@
 
   .system-status-rail__item strong {
     font-size: 0.72rem;
-    line-height: 1;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: visible;
   }
 
   .system-body-action-strip {
@@ -140,15 +205,15 @@
 
   .system-body-status-row .workspace-header__status {
     min-width: 0;
-    padding: 8px 10px;
-    border-radius: 10px;
-    gap: 3px;
-    border-color: rgba(143, 168, 164, 0.1);
-    background: rgba(9, 13, 17, 0.58);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    gap: 2px;
   }
 
   .system-body-status-row .workspace-header__status strong {
-    font-size: 0.84rem;
+    font-size: 0.9rem;
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
@@ -212,6 +277,7 @@
   .system-body-orb-panel {
     min-height: 132px;
     border-top: 1px solid rgba(var(--state-accent-rgb), 0.06);
+    border-left: 0;
   }
 
   .system-body-orb-panel__stage {

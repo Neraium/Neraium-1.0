@@ -70,7 +70,15 @@ function normalizePanelState(systemState) {
   return "unknown";
 }
 
-export default function SystemOrbPanel({ systemState, uiState, coherence, stateLabel, lastUpdate, focusLabel }) {
+export default function SystemOrbPanel({
+  systemState,
+  uiState,
+  coherence,
+  stateLabel,
+  lastUpdate,
+  focusLabel,
+  compactPreview = false,
+}) {
   const resolvedSystemState = normalizePanelState(systemState);
   const resolvedUiState = uiState || "neutral";
   const resolvedCoherence = Number.isFinite(coherence) ? coherence : 1;
@@ -83,7 +91,7 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
 
   return (
     <aside
-      className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState}`}
+      className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
       aria-label="Primary infrastructure condition orb"
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
@@ -97,16 +105,20 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
       <div className="system-body-orb-panel__stage">
         <HealthOrb systemState={resolvedSystemState} intensity={instability} />
       </div>
-      <div className="system-body-orb-panel__meta">
-        <span className="section-label">Structural State</span>
-        <strong>{copy.code}</strong>
-        <em>{resolvedLabel}</em>
-      </div>
-      <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
-        <span />
-        <strong>{lastUpdate || EMPTY_VALUE}</strong>
-        <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Structural pressure ${instabilityDisplay}`}</em>
-      </div>
+      {!compactPreview ? (
+        <div className="system-body-orb-panel__meta">
+          <span className="section-label">Structural State</span>
+          <strong>{copy.code}</strong>
+          <em>{resolvedLabel}</em>
+        </div>
+      ) : null}
+      {!compactPreview ? (
+        <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
+          <span />
+          <strong>{lastUpdate || EMPTY_VALUE}</strong>
+          <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Structural pressure ${instabilityDisplay}`}</em>
+        </div>
+      ) : null}
     </aside>
   );
 }

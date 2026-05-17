@@ -3,6 +3,7 @@ import SystemOrbPanel from "./SystemOrbPanel";
 import SystemNarrativePanel from "./SystemNarrativePanel";
 import SystemEvidencePanel from "./SystemEvidencePanel";
 import SystemDiagnosticsPanel from "./SystemDiagnosticsPanel";
+import MobileStructuralEmptyState from "./MobileStructuralEmptyState";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
@@ -24,6 +25,7 @@ export default function SystemBodyWorkspace({
   focusLabel,
   lifecycleRail = [],
   isLoading = false,
+  isEmptyStructuralState = false,
 }) {
   void isLoading;
 
@@ -32,7 +34,10 @@ export default function SystemBodyWorkspace({
     || EMPTY_VALUE;
 
   return (
-    <PageContainer className="system-body system-body--orb-first system-body--mobile-polished">
+    <PageContainer className={`system-body system-body--orb-first system-body--mobile-polished ${isEmptyStructuralState ? "system-body--empty-structural" : ""}`}>
+      {isEmptyStructuralState ? <MobileStructuralEmptyState lifecycleRail={lifecycleRail} /> : null}
+
+      <div className="system-body-standard-shell">
       <section className={`system-body-hero hero-panel system-body-hero--${systemState} ui-state-surface ui-state-surface--${uiState}`}>
         <div className="system-body-hero__copy">
           {lifecycleRail.length > 0 ? (
@@ -104,6 +109,7 @@ export default function SystemBodyWorkspace({
       </details>
 
       <SystemDiagnosticsPanel metrics={metrics} uiState={uiState} />
+      </div>
     </PageContainer>
   );
 }
