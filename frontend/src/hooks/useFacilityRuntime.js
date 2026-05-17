@@ -94,10 +94,15 @@ export default function useFacilityRuntime({
         setBackendError(authMessage);
         return false;
       }
+      if (error instanceof Response && error.status === 404) {
+        facilitySystemsFetchDisabledRef.current = true;
+      }
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
       const lowerMessage = String(normalizedMessage || "").toLowerCase();
       if (
-        lowerMessage.includes("failed to fetch")
+        lowerMessage.includes("404")
+        || lowerMessage.includes("unexpected response")
+        || lowerMessage.includes("failed to fetch")
         || lowerMessage.includes("networkerror")
         || lowerMessage.includes("cors")
       ) {

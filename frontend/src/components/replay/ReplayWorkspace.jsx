@@ -30,8 +30,17 @@ export default function ReplayWorkspace({
   const [error, setError] = useState("");
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
+  const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
 
   useEffect(() => {
+    if (!shouldRequestReplay) {
+      setTimeline([]);
+      setComparisonTimeline([]);
+      setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
+      setFrameIndex(0);
+      setError("");
+      return () => {};
+    }
     let cancelled = false;
     async function loadReplay() {
       try {
@@ -57,7 +66,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression]);
+  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -69,6 +78,10 @@ export default function ReplayWorkspace({
   }, [isPlaying, playbackSpeed, timeline.length]);
 
   useEffect(() => {
+    if (!shouldRequestReplay) {
+      setRangePreviewCount(0);
+      return () => {};
+    }
     async function loadRangePreview() {
       if (timeline.length < 2) {
         setRangePreviewCount(0);
@@ -85,7 +98,7 @@ export default function ReplayWorkspace({
       }
     }
     loadRangePreview();
-  }, [accessCode, apiFetch, frameIndex, mode, timeline]);
+  }, [accessCode, apiFetch, frameIndex, mode, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "—";

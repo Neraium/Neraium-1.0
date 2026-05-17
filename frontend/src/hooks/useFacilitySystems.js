@@ -44,7 +44,13 @@ export default function useFacilitySystems({
     } catch (error) {
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
       const lowerMessage = String(normalizedMessage || '').toLowerCase();
-      if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('networkerror') || lowerMessage.includes('cors')) {
+      if (
+        lowerMessage.includes('404')
+        || lowerMessage.includes('unexpected response')
+        || lowerMessage.includes('failed to fetch')
+        || lowerMessage.includes('networkerror')
+        || lowerMessage.includes('cors')
+      ) {
         facilitySystemsFetchDisabledRef.current = true;
       }
       setSystems(fallbackSystems);
