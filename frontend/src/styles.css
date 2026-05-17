@@ -11763,3 +11763,107 @@ nav[aria-label="Workspaces"] a {
     backdrop-filter: blur(16px);
   }
 }
+.system-body-hero .workspace-header__kicker,
+.system-body__kicker,
+.metadata-text {
+  opacity: 0.76;
+}
+
+.system-body-evidence-card,
+.system-body-timeline-card,
+.system-body-diagnostics {
+  border-color: rgba(143, 168, 164, 0.12);
+}
+
+.system-body-orb-panel__sync,
+.topology-card__status span,
+.drift-timeline .topology-card__status span:last-child {
+  opacity: 0.86;
+}
+
+.command-button,
+.secondary-command-button,
+.workspace-menu-button,
+.btn,
+.btn--secondary {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 0.76rem;
+}
+
+.secondary-command-button,
+.workspace-menu-button,
+.btn--secondary {
+  border-color: rgba(143, 168, 164, 0.2);
+  background: rgba(11, 16, 19, 0.78);
+}
+
+.command-button:hover:enabled,
+.secondary-command-button:hover:enabled,
+.workspace-menu-button:hover,
+.btn--secondary:hover {
+  transform: translateY(-0.5px);
+}
+
+.command-button:active:enabled,
+.secondary-command-button:active:enabled,
+.workspace-menu-button:active,
+.btn--secondary:active {
+  transform: translateY(0);
+}
+
+.topology-map {
+  background: linear-gradient(180deg, #0d1412, #0a100e);
+}
+
+.topology-edge {
+  stroke-width: 2.1;
+  stroke-dasharray: 5 5;
+  animation: pulseFlow 2.8s ease-in-out infinite, edgeGlow 3.6s ease-in-out infinite;
+  opacity: 0.86;
+}
+
+.topology-edge--active {
+  filter: drop-shadow(0 0 4px rgba(229, 75, 75, 0.4));
+}
+
+.topology-node {
+  animation: nodePulse 3.9s ease-in-out infinite;
+}
+
+.replay-cognition-field__drift-field {
+  opacity: calc(0.24 + var(--replay-divergence) * 0.2);
+  animation: replayBreathingField 11s ease-in-out infinite;
+}
+
+.replay-cognition-field__field-line {
+  animation: replayFieldFlow 22s ease-in-out infinite;
+  opacity: 0.26;
+}
+
+.replay-cognition-field__node-halo {
+  animation: replayNodeHalo 5.2s ease-in-out infinite;
+  opacity: 0.58;
+}
+
+.replay-cognition-field__structural-pulse {
+  animation: replayStructuralPulse 5.6s ease-in-out infinite;
+  opacity: 0.42;
+}
+
+.empty-state.compact {
+  position: relative;
+  overflow: hidden;
+}
+
+.empty-state.compact::after {
+  content: "";
+  position: absolute;
+  inset: auto -40px -34px -40px;
+  height: 82px;
+  background:
+    radial-gradient(circle at 32% 40%, rgba(122, 152, 148, 0.14), transparent 44%),
+    radial-gradient(circle at 72% 35%, rgba(102, 124, 142, 0.12), transparent 42%);
+  pointer-events: none;
+}

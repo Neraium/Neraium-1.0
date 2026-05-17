@@ -4,8 +4,11 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: 10px;
   scrollbar-width: none;
-  margin-bottom: 6px;
+  margin: 0;
+  padding: 0 10px 4px 0;
 }
 
 .system-status-rail::-webkit-scrollbar {
@@ -16,7 +19,8 @@
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  min-width: 96px;
+  min-width: 104px;
+  max-width: 124px;
   scroll-snap-align: start;
   gap: 3px;
   padding: 6px 8px;
@@ -38,8 +42,6 @@
   font-size: 0.68rem;
   line-height: 1.15;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .system-body-summary-card {

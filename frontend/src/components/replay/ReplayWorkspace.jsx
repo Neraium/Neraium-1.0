@@ -52,7 +52,7 @@ export default function ReplayWorkspace({
           setFrameIndex(Math.max(0, demoPayload.timeline.length - 1));
           setError("");
         } else {
-          setError(normalizeErrorMessage(loadError?.message ?? loadError));
+          setError(buildReplayNotice(loadError, normalizeErrorMessage));
         }
       }
     }
@@ -99,7 +99,7 @@ export default function ReplayWorkspace({
     { label: "Lead time", value: shownFrame?.continuation_window?.window ?? "Monitoring" },
     { label: "Preview range", value: rangePreviewCount || "Adaptive window" },
     { label: "System stability", value: strengthenReplayState(shownFrame?.topology_state?.stability_state) },
-    { label: "Evidence confidence", value: shownFrame?.cognition_state?.confidence_tier ?? "Building" },
+    { label: "Evidence confidence", value: formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) },
     { label: "Progression state", value: strengthenReplayState(shownFrame?.cognition_state?.operational_phase) },
   ]), [frameIndex, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.cognition_state?.confidence_tier, shownFrame?.cognition_state?.operational_phase, shownFrame?.topology_state?.stability_state]);
 
@@ -140,7 +140,7 @@ export default function ReplayWorkspace({
       <Panel title={expertMode ? "Evidence Diagnostics" : "Why Neraium Flagged This"} className="span-6">
         {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
           <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Evidence confidence</span><strong>{shownFrame?.cognition_state?.confidence_tier ?? "Building"}</strong></li>
+            <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
             <li><span className="metadata-text">System stability</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
             <li><span className="metadata-text">Cross-system support</span><strong>{(shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : "Limited"}</strong></li>
           </ul>
@@ -168,7 +168,7 @@ export default function ReplayWorkspace({
           </Panel>
         </>
       ) : null}
-      {error ? <Panel title="Replay Notice" className="span-12"><p className="narrative-text">{error} Adaptive replay continuity is displayed so the operator never loses topology context.</p></Panel> : null}
+      {error ? <Panel title="Replay Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
     </div>
   );
 }
@@ -183,8 +183,8 @@ function strengthenReplayState(value) {
   if (normalized.includes("instab") || normalized.includes("separat")) return "Relational Instability Observed";
   if (normalized.includes("deterior") || normalized.includes("fragment")) return "Topology Divergence Active";
   if (normalized.includes("recover") || normalized.includes("convergen")) return "Recovery Convergence Tracking";
-  if (normalized.includes("stable") || normalized.includes("nominal")) return "Baseline Stability Holding";
-  return String(value).replaceAll("_", " ");
+  if (normalized.includes("stable") || normalized.includes("nominal")) return "Baseline stability holding";
+  return sentenceCase(String(value).replaceAll("_", " "));
 }
 
 function buildIntelligentReplayFallback() {
@@ -196,12 +196,39 @@ function buildIntelligentReplayFallback() {
       timestamp: new Date(now - (6 - index) * 1000 * 60 * 20).toISOString(),
       topology_state: { stability_state: elevated ? "TOPOLOGY_DIVERGENCE_ACTIVE" : watch ? "STRUCTURAL_DRIFT_EMERGING" : "BASELINE_STABILITY_HOLDING", fragmentation_indicator: elevated ? "high" : watch ? "moderate" : "low", phase },
       propagation_state: { propagation_acceleration: elevated ? "high" : watch ? "moderate" : "low", dominant_paths: ["baseline_to_environment_to_recovery"], recovery_convergence: elevated ? "delayed" : watch ? "monitoring" : "stable" },
-      cognition_state: { canonical_phase: phase, confidence_tier: watch ? "EVIDENCE_LOCK_FORMING" : "BASELINE_EVIDENCE", operational_phase: elevated ? "propagation_watch_active" : watch ? "structural_drift_emerging" : "baseline_stability_holding", facility_state: elevated ? "Propagation Watch Active" : watch ? "Structural Drift Emerging" : "Baseline Stability Holding" },
+      cognition_state: { canonical_phase: phase, confidence_tier: watch ? "RELATIONSHIP_EVIDENCE_PRESENT" : "BASELINE_REFERENCE_CONFIRMED", operational_phase: elevated ? "propagation_watch_active" : watch ? "structural_drift_emerging" : "baseline_stability_holding", facility_state: elevated ? "Propagation Watch Active" : watch ? "Structural Drift Emerging" : "Baseline stability holding" },
       continuation_window: { window: elevated ? "3 to 6 operational days" : "7 to 14 operational days", timing_window: watch ? "compression emerging" : "low urgency" },
       subsystem_pressure: { compression_intensity: elevated ? "high" : watch ? "moderate" : "low" },
       evidence_state: { lineage_events: [{ target: "adaptive_replay_continuity", evidence_sources: { topology_evidence: ["Fallback continuity field generated from replay phase model"] } }] },
     };
   });
+}
+
+function sentenceCase(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+}
+
+function formatConfidenceLabel(value) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized.includes("structural_evidence_confirmed")) return "Structural evidence confirmed";
+  if (normalized.includes("relationship_evidence_present")) return "Relationship evidence present";
+  if (normalized.includes("baseline_reference_confirmed") || normalized.includes("baseline_evidence")) return "Baseline reference confirmed";
+  if (!normalized.trim()) return "Baseline reference pending";
+  return sentenceCase(String(value).replaceAll("_", " "));
+}
+
+function buildReplayNotice(error, normalizeErrorMessage) {
+  const message = String(normalizeErrorMessage(error?.message ?? error) ?? "");
+  const lower = message.toLowerCase();
+  if (lower.includes("404") || lower.includes("unexpected response")) {
+    return "Replay snapshots unavailable. Topology context remains accessible.";
+  }
+  if (lower.includes("network") || lower.includes("failed to fetch")) {
+    return "Replay snapshots are temporarily unavailable. Topology context remains accessible.";
+  }
+  return "No replay frames available for this session.";
 }
 
 function buildCultivationReplayDemo() {

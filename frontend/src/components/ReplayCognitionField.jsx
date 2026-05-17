@@ -70,7 +70,7 @@ function buildFallbackTimeline(seedFrame) {
       },
       cognition_state: {
         canonical_phase: phase,
-        confidence_tier: intensity > 0.5 ? "EVIDENCE LOCK" : "BASELINE FORMING",
+        confidence_tier: intensity > 0.5 ? "Relationship evidence present" : "Baseline reference confirmed",
         operational_phase: intensity > 0.5 ? "propagation_watch" : "baseline_construction",
         facility_state: intensity > 0.62 ? "Propagation Watch Active" : "Structural Drift Emerging",
       },
@@ -149,7 +149,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
   const frame = model.activeFrame;
   const status = display(frame?.topology_state?.stability_state, "Structural Drift Emerging");
   const phase = display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "baseline construction");
-  const confidence = display(frame?.cognition_state?.confidence_tier, "Evidence lock forming");
+  const confidence = display(frame?.cognition_state?.confidence_tier, "Relationship evidence present");
   const pathLabel = model.dominantPaths?.[0]?.replaceAll?.("_", " → ") ?? "baseline → environment → recovery";
 
   return (
@@ -165,7 +165,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
     >
       <div className="replay-cognition-field__header">
         <div>
-          <p className="section-token">Intake Status</p>
+          <p className="section-token">Replay status</p>
           <h3>{status}</h3>
           <span>{phase} · {pathLabel}</span>
         </div>

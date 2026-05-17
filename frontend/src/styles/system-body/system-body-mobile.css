@@ -52,8 +52,10 @@
   .system-body.system-body--orb-first {
     max-width: 100%;
     gap: 16px;
-    padding-top: 0;
-    padding-bottom: 28px;
+    padding-top: max(0px, env(safe-area-inset-top, 0px));
+    padding-right: max(0px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
   }
 
   .system-body-hero {
@@ -82,7 +84,10 @@
 
   .system-status-rail {
     gap: 6px;
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+    padding-left: 2px;
     padding-bottom: 2px;
+    margin-bottom: 2px;
   }
 
   .system-status-rail__item {

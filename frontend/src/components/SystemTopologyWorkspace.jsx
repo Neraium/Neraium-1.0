@@ -81,13 +81,22 @@ export default function SystemTopologyWorkspace({
   const secondaryMessage =
     findings[1]?.detail ?? liveOps.heroSubline;
 
-  const awaitingLabel =
-    liveOps.intelligenceMode === "processing"
-      ? "Telemetry processing in progress"
-      : OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry;
+  const neutralCopy = {
+    issue: liveOps.intelligenceMode === "processing" ? "Telemetry processing in progress" : OPERATIONAL_VOCABULARY.neutral.baselinePending,
+    location: OPERATIONAL_VOCABULARY.neutral.standby,
+    runway: "Unavailable until baseline forms",
+    confidence: "Evidence confidence unavailable until baseline forms",
+    primaryEvidence: "Unavailable until baseline forms",
+    relationshipEvidence: "Unavailable until baseline forms",
+    signal: "Signal attribution unavailable",
+    propagation: "Propagation mapping unavailable",
+    memory: "Historical reference unavailable",
+    continuation: "Begins after baseline formation",
+    summary: "Awaiting structured telemetry intake",
+  };
 
   const issueType = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.issue
     : (
         primaryItem?.title
         ?? findings[0]?.title
@@ -96,7 +105,7 @@ export default function SystemTopologyWorkspace({
       );
 
   const suspectedLocation = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.location
     : (
         primaryItem?.label
         ?? liveOps.primaryWindow?.label
@@ -104,7 +113,7 @@ export default function SystemTopologyWorkspace({
       );
 
   const runway = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.runway
     : liveOps.facilityTone === "nominal"
       ? "No elevated progression observed"
       : (
@@ -114,7 +123,7 @@ export default function SystemTopologyWorkspace({
         );
 
   const confidence = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.confidence
     : (
         primaryItem?.supportingEvidence?.length
         || liveOps.relationshipRows?.length
@@ -123,7 +132,7 @@ export default function SystemTopologyWorkspace({
       : "Corroboration still developing";
 
   const primaryEvidence = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.primaryEvidence
     : (
         primaryItem?.supportingEvidence?.[0]
         ?? findings[0]?.detail
@@ -131,7 +140,7 @@ export default function SystemTopologyWorkspace({
       );
 
   const relationshipEvidence = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.relationshipEvidence
     : (
         primaryItem?.relationshipEvidence?.[0]
         ?? liveOps.relationshipRows?.[0]?.detail
@@ -139,35 +148,35 @@ export default function SystemTopologyWorkspace({
       );
 
   const activeArchetype = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.signal
     : (
         primaryItem?.activeArchetypes?.[0]?.name?.replaceAll?.("_", " ")
         ?? "Subsystem attribution pending"
       );
 
   const propagationPath = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.propagation
     : (
         primaryItem?.propagationPathways?.[0]?.replaceAll?.("_", " ")
         ?? "No cross-subsystem spread confirmed."
       );
 
   const memoryMatch = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.memory
     : (
         primaryItem?.structuralMemoryMatches?.[0]?.label
         ?? "Historical reference match not yet established."
       );
 
   const continuationWindow = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.continuation
     : (
         primaryItem?.continuationWindow
         ?? "Progression under monitoring"
       );
 
   const facilitySummary = awaitingSii
-    ? awaitingLabel
+    ? neutralCopy.summary
     : (
         primaryItem?.facilityCognitionState
         ?? liveOps.heroSubline
