@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { OPERATIONAL_VOCABULARY } from "../viewModels/operationalVocabulary";
+import { EMPTY_VALUE } from "../viewModels/emptyValue";
 
 function formatSigned(value) {
   const rounded = Number(value ?? 0).toFixed(3);
@@ -327,14 +327,14 @@ export default function DriftTimelineWorkspace({
     ? "Uploaded CSV structural drift"
     : replayHistory
       ? `Replay ${replayModeLabel || replayTargetMode}`
-      : (hasSignal ? "Live structural drift" : OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry);
+      : (hasSignal ? "Live structural drift" : EMPTY_VALUE);
 
   return (
     <section className="drift-timeline">
       <div className="drift-timeline__header">
         <p className="system-body__kicker">Temporal View</p>
-        <h2>{hasUploadedTelemetry ? "Uploaded CSV Drift Timeline" : OPERATIONAL_VOCABULARY.neutral.noActiveTrajectory}</h2>
-        <p>{hasUploadedTelemetry ? "Structural movement calculated from the uploaded telemetry file." : "Upload telemetry or connect a historian source to begin structural analysis."}</p>
+        <h2>{hasUploadedTelemetry ? "Uploaded CSV Drift Timeline" : EMPTY_VALUE}</h2>
+        <p>{hasUploadedTelemetry ? "Structural movement calculated from the uploaded telemetry file." : "No telemetry session is currently active."}</p>
       </div>
 
       {hasUploadedTelemetry && (
@@ -367,8 +367,8 @@ export default function DriftTimelineWorkspace({
           </svg>
         ) : (
           <div className="empty-state compact">
-            <strong>{noActiveTelemetry ? OPERATIONAL_VOCABULARY.neutral.noActiveTrajectory : "Not enough uploaded samples to calculate drift timeline."}</strong>
-            <p>{noActiveTelemetry ? "Upload telemetry or connect a historian source to begin structural analysis." : "Upload a CSV with multiple numeric telemetry rows so Neraium can calculate movement against baseline."}</p>
+            <strong>{noActiveTelemetry ? EMPTY_VALUE : "Not enough uploaded samples to calculate drift timeline."}</strong>
+            <p>{noActiveTelemetry ? EMPTY_VALUE : "Upload a CSV with multiple numeric telemetry rows so Neraium can calculate movement against baseline."}</p>
           </div>
         )}
         {!noActiveTelemetry ? (
@@ -405,7 +405,7 @@ export default function DriftTimelineWorkspace({
         <div className="topology-card__status">
           <span className={`status-dot status-dot--${pulseTone}`} aria-hidden="true" />
           <strong>Last updated</strong>
-          <span>{lastUpdatedLabel}</span>
+          <span>{noActiveTelemetry ? EMPTY_VALUE : lastUpdatedLabel}</span>
         </div>
         {!noActiveTelemetry ? (
           <div className="timeline-stats">
@@ -418,8 +418,8 @@ export default function DriftTimelineWorkspace({
           </div>
         ) : (
           <div className="empty-state compact">
-            <strong>{OPERATIONAL_VOCABULARY.neutral.noActiveAnalysis}</strong>
-            <p>{OPERATIONAL_VOCABULARY.neutral.awaitingHistorianStream}</p>
+            <strong>{EMPTY_VALUE}</strong>
+            <p>{EMPTY_VALUE}</p>
           </div>
         )}
         {hasUploadedTelemetry && !hasEnoughPoints && (

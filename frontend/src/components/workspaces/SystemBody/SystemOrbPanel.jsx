@@ -1,5 +1,5 @@
 import HealthOrb from "../../HealthOrb";
-import { OPERATIONAL_VOCABULARY } from "../../../viewModels/operationalVocabulary";
+import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
 const STATE_COPY = {
   stable: {
@@ -43,20 +43,20 @@ const STATE_COPY = {
     environment: "Envelope cooling",
   },
   unknown: {
-    code: "STANDBY",
-    attention: OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry,
-    structural: "Structure unverified",
-    telemetry: OPERATIONAL_VOCABULARY.neutral.baselinePending,
-    progression: "No escalation model",
-    environment: "Dormant field",
+    code: EMPTY_VALUE,
+    attention: EMPTY_VALUE,
+    structural: EMPTY_VALUE,
+    telemetry: EMPTY_VALUE,
+    progression: EMPTY_VALUE,
+    environment: EMPTY_VALUE,
   },
   neutral: {
-    code: "STANDBY",
-    attention: OPERATIONAL_VOCABULARY.neutral.awaitingTelemetry,
-    structural: "Structure unverified",
-    telemetry: OPERATIONAL_VOCABULARY.neutral.baselinePending,
-    progression: "No escalation model",
-    environment: "Dormant field",
+    code: EMPTY_VALUE,
+    attention: EMPTY_VALUE,
+    structural: EMPTY_VALUE,
+    telemetry: EMPTY_VALUE,
+    progression: EMPTY_VALUE,
+    environment: EMPTY_VALUE,
   },
 };
 
@@ -74,11 +74,12 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
   const resolvedSystemState = normalizePanelState(systemState);
   const resolvedUiState = uiState || "neutral";
   const resolvedCoherence = Number.isFinite(coherence) ? coherence : 1;
-  const resolvedLabel = stateLabel || "Baseline Pending";
+  const resolvedLabel = stateLabel || EMPTY_VALUE;
   const copy = STATE_COPY[resolvedSystemState] ?? STATE_COPY.unknown;
   const instability = Math.max(0, Math.min(1, 1 - resolvedCoherence));
-  const instabilityDisplay = `${Math.round(instability * 100)}%`;
-  const normalizedFocus = focusLabel || "Facility envelope";
+  const instabilityDisplay = resolvedSystemState === "unknown" ? EMPTY_VALUE : `${Math.round(instability * 100)}%`;
+  const normalizedFocus = focusLabel || EMPTY_VALUE;
+  void normalizedFocus;
 
   return (
     <aside
@@ -103,8 +104,8 @@ export default function SystemOrbPanel({ systemState, uiState, coherence, stateL
       </div>
       <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
         <span />
-        <strong>{lastUpdate || "Awaiting confirmed update"}</strong>
-        <em>Structural pressure {instabilityDisplay}</em>
+        <strong>{lastUpdate || EMPTY_VALUE}</strong>
+        <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Structural pressure ${instabilityDisplay}`}</em>
       </div>
     </aside>
   );

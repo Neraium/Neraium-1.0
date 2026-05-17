@@ -3,6 +3,7 @@ import SystemNarrativePanel from "./SystemNarrativePanel";
 import SystemEvidencePanel from "./SystemEvidencePanel";
 import SystemDiagnosticsPanel from "./SystemDiagnosticsPanel";
 import PageContainer from "../../layout/PageContainer";
+import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
 export default function SystemBodyWorkspace({
   systemState,
@@ -27,7 +28,7 @@ export default function SystemBodyWorkspace({
 
   const operatorFocus =
     narrativeItems?.find((item) => item.label?.toLowerCase().includes("operator"))?.value
-    || "Review affected subsystem relationships and confirm persistence across recent windows.";
+    || EMPTY_VALUE;
 
   return (
     <PageContainer className="system-body system-body--orb-first system-body--mobile-polished">
@@ -45,8 +46,8 @@ export default function SystemBodyWorkspace({
           ) : null}
           <header className="system-body-hero__header">
             <p className="workspace-header__kicker">Primary System State</p>
-            <h2 className="workspace-header__title">{stateLabel}</h2>
-            <p className="workspace-header__subtitle">{primaryMessage || subtitle}</p>
+            <h2 className="workspace-header__title">{stateLabel || EMPTY_VALUE}</h2>
+            <p className="workspace-header__subtitle">{primaryMessage || subtitle || EMPTY_VALUE}</p>
 
             <div className="system-body-action-strip">
               <span>Operator Focus</span>
@@ -56,11 +57,11 @@ export default function SystemBodyWorkspace({
             <div className="system-body-status-row">
               <div className={`workspace-header__status workspace-header__status--${connectionTone}`}>
                 <span className="metadata-text">Focus area</span>
-                <strong>{focusLabel || "Facility scope"}</strong>
+                <strong>{focusLabel || EMPTY_VALUE}</strong>
               </div>
               <div className="workspace-header__status">
                 <span className="metadata-text">Updated</span>
-                <strong>{lastUpdate || connectionStatus}</strong>
+                <strong>{lastUpdate || connectionStatus || EMPTY_VALUE}</strong>
               </div>
             </div>
           </header>

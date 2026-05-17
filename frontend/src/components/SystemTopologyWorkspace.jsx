@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
-import { LIFECYCLE_RAIL_NEUTRAL, OPERATIONAL_VOCABULARY } from "../viewModels/operationalVocabulary";
+import { LIFECYCLE_RAIL_NEUTRAL } from "../viewModels/operationalVocabulary";
+import { EMPTY_VALUE } from "../viewModels/emptyValue";
 
 const STATE = {
   nominal: {
@@ -27,8 +28,8 @@ const STATE = {
 };
 
 const FALLBACK_STATE = {
-  label: "Baseline Pending",
-  description: "Telemetry baseline pending. Structural assessment is not yet available.",
+  label: EMPTY_VALUE,
+  description: "No telemetry session is currently active.",
   mode: "no-data",
 };
 
@@ -82,17 +83,17 @@ export default function SystemTopologyWorkspace({
     findings[1]?.detail ?? liveOps.heroSubline;
 
   const neutralCopy = {
-    issue: liveOps.intelligenceMode === "processing" ? "Telemetry processing in progress" : OPERATIONAL_VOCABULARY.neutral.baselinePending,
-    location: OPERATIONAL_VOCABULARY.neutral.standby,
-    runway: "Unavailable until baseline forms",
-    confidence: "Evidence confidence unavailable until baseline forms",
-    primaryEvidence: "Unavailable until baseline forms",
-    relationshipEvidence: "Unavailable until baseline forms",
-    signal: "Signal attribution unavailable",
-    propagation: "Propagation mapping unavailable",
-    memory: "Historical reference unavailable",
-    continuation: "Begins after baseline formation",
-    summary: "Awaiting structured telemetry intake",
+    issue: EMPTY_VALUE,
+    location: EMPTY_VALUE,
+    runway: EMPTY_VALUE,
+    confidence: EMPTY_VALUE,
+    primaryEvidence: EMPTY_VALUE,
+    relationshipEvidence: EMPTY_VALUE,
+    signal: EMPTY_VALUE,
+    propagation: EMPTY_VALUE,
+    memory: EMPTY_VALUE,
+    continuation: EMPTY_VALUE,
+    summary: EMPTY_VALUE,
   };
 
   const issueType = awaitingSii
@@ -182,13 +183,11 @@ export default function SystemTopologyWorkspace({
         ?? liveOps.heroSubline
       );
 
-  const lastUpdate =
-    liveOps.connectionSummary
-    ?? "Awaiting confirmed update";
+  const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
 
   const whyWeThinkThat =
     awaitingSii || uiState === "neutral"
-      ? "Telemetry baseline not available; assessment is deferred."
+      ? EMPTY_VALUE
       : (
           dedupeText(facilitySummary, state.description)
           || secondaryMessage
@@ -197,7 +196,7 @@ export default function SystemTopologyWorkspace({
 
   const humanRead =
     awaitingSii || uiState === "neutral"
-      ? "Upload telemetry to begin baseline formation."
+      ? EMPTY_VALUE
       : (
           liveOps.connectionActionHint
           || "Confirm persistence across recent telemetry windows."
@@ -205,9 +204,7 @@ export default function SystemTopologyWorkspace({
 
   const where = suspectedLocation;
 
-  const summaryTitle =
-    dedupeText(state.description, primaryMessage)
-    || "Operator review summary";
+  const summaryTitle = dedupeText(state.description, primaryMessage) || EMPTY_VALUE;
 
   void selectedTarget;
   void onSelectTarget;

@@ -25,9 +25,9 @@ export const OPERATIONAL_VOCABULARY = {
 };
 
 export const LIFECYCLE_RAIL_NEUTRAL = [
-  { label: "Intake", status: "Pending" },
-  { label: "Baseline", status: "Pending" },
-  { label: "Monitoring", status: "Idle" },
-  { label: "Drift", status: "None" },
-  { label: "Review", status: "None" },
+  { label: "Intake", status: "—" },
+  { label: "Baseline", status: "—" },
+  { label: "Monitoring", status: "—" },
+  { label: "Drift", status: "—" },
+  { label: "Review", status: "—" },
 ];
