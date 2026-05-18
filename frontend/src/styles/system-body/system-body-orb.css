@@ -31,6 +31,23 @@
   max-width: 600px;
 }
 
+.system-body-orb-panel--compact-preview {
+  min-height: auto;
+  border-radius: 0;
+}
+
+.system-body-orb-panel--compact-preview .system-body-orb-panel__stage {
+  width: min(100%, 520px);
+  min-width: 0;
+  min-height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.system-body-orb-panel--compact-preview .system-body-orb-panel__stage .health-orb {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .system-body-orb-panel__halo,
 .system-body-orb-panel__depth {
   position: absolute;

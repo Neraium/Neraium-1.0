@@ -53,6 +53,21 @@
 }
 
 @media (max-width: 720px) {
+  .workspace-view--system-body {
+    min-height: 100dvh;
+    padding:
+      max(6px, env(safe-area-inset-top, 0px))
+      max(6px, env(safe-area-inset-right, 0px))
+      max(10px, env(safe-area-inset-bottom, 0px))
+      max(6px, env(safe-area-inset-left, 0px));
+    overflow: visible;
+  }
+
+  .platform-shell--gate .platform-main {
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .system-body--empty-structural .system-body-mobile-empty {
     display: grid;
     gap: 12px;
