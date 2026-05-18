@@ -626,13 +626,24 @@
       linear-gradient(180deg, rgba(7, 11, 14, 0.995), rgba(3, 6, 8, 0.985));
   }
 
+  .system-gate::before {
+    inset: 14%;
+    border-color: rgba(175, 188, 198, 0.026);
+    opacity: 0.22;
+  }
+
+  .system-gate::after {
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.012), transparent 56%);
+    opacity: 0.18;
+  }
+
   .system-gate__center {
     position: relative;
     inset: auto;
-    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 74px);
-    padding: 24px 8px 8px;
-    gap: 6px;
-    align-content: start;
+    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 68px);
+    padding: 18px 8px 4px;
+    gap: 4px;
+    align-content: center;
     justify-items: center;
   }
 
@@ -653,33 +664,25 @@
 
   .system-gate__center .system-body-orb-panel__stage {
     width: min(95vw, 560px);
-    height: clamp(44dvh, 52dvh, 58dvh);
-    min-height: min(46dvh, 500px);
+    height: clamp(48dvh, 56dvh, 62dvh);
+    min-height: min(50dvh, 540px);
     aspect-ratio: 1 / 1;
-    max-height: min(58dvh, 560px);
+    max-height: min(62dvh, 620px);
     padding: 0;
   }
 
   .system-gate__center .system-body-orb-panel__stage .health-orb {
-    width: min(100%, 112%);
+    width: min(100%, 126%);
     max-width: none;
   }
 
   .system-gate__center .system-body-orb-panel__stage .health-orb__svg--gate-iris {
-    width: 112%;
+    width: 126%;
     max-width: none;
   }
 
   .system-gate__center::before {
-    content: "";
-    position: absolute;
-    left: 12px;
-    top: clamp(26px, 7dvh, 54px);
-    height: clamp(54dvh, 60dvh, 64dvh);
-    width: 1px;
-    background: linear-gradient(180deg, rgba(154, 194, 204, 0.55), rgba(154, 194, 204, 0.12) 74%, transparent);
-    opacity: 0.86;
-    pointer-events: none;
+    content: none;
   }
 
   .system-gate__center .system-body-orb-panel::before,
@@ -692,7 +695,7 @@
   }
 
   .system-gate__state {
-    margin: 2px 0 0;
+    margin: 0;
     max-width: min(92vw, 540px);
     font-size: clamp(1.54rem, 6.9vw, 2.08rem);
     line-height: 1;
@@ -700,7 +703,7 @@
   }
 
   .system-gate__timestamp {
-    margin: 0 0 2px;
+    margin: 0;
     font-size: 0.58rem;
     letter-spacing: 0.11em;
     line-height: 1.18;
