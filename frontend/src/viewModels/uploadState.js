@@ -284,6 +284,28 @@ function uniqueValues(values) {
     .slice(0, 24))];
 }
 
+export function hasVerifiedSiiCompletion({ latestResult, latestSnapshot } = {}) {
+  const result = latestResult ?? null;
+  const snapshot = latestSnapshot ?? null;
+  const hasResultEvidence = Boolean(
+    result
+    && result.sii_intelligence
+    && (
+      result.engine_result
+      || result.operator_report
+      || result.data_quality
+      || result.room_summary
+    )
+  );
+  const status = String(snapshot?.status ?? snapshot?.processing_state ?? "").toLowerCase();
+  const hasSnapshotEvidence = Boolean(
+    ["active", "baseline_active"].includes(status)
+    && snapshot?.state_available === true
+    && (snapshot?.last_processed_at || snapshot?.last_upload_at)
+  );
+  return hasResultEvidence && hasSnapshotEvidence;
+}
+
 function normalizePreviewValue(value) {
   if (value === null || value === undefined) return "";
   const text = String(value).trim();

@@ -1,8 +1,7 @@
 export function deriveIntelligenceMode({ hasRealSiiOutput, latestUploadSnapshot }) {
   if (hasRealSiiOutput) return "live";
   const status = String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase();
-  if (["active", "baseline_active"].includes(status)) return "live";
-  if (["queued", "pending", "uploading", "parsing", "baseline_modeling", "running_sii", "writing_state", "building_baseline"].includes(status)) {
+  if (["active", "baseline_active", "queued", "pending", "uploading", "parsing", "baseline_modeling", "running_sii", "writing_state", "building_baseline"].includes(status)) {
     return "processing";
   }
   return "empty";

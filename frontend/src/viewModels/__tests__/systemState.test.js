@@ -9,11 +9,11 @@ describe("systemState", () => {
     })).toBe("processing");
   });
 
-  it("derives live mode from active status without full result", () => {
+  it("keeps active status in processing mode without full SII proof", () => {
     expect(deriveIntelligenceMode({
       hasRealSiiOutput: false,
       latestUploadSnapshot: { status: "active" },
-    })).toBe("live");
+    })).toBe("processing");
   });
 
   it("classifies stale freshness when heartbeat is old", () => {
