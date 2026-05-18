@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 
-export default function GovernanceAdminWorkspace({ apiFetch, accessCode, Panel, EmptyState }) {
+export default function GovernanceAdminWorkspace({
+  apiFetch,
+  accessCode,
+  Panel,
+  EmptyState,
+  onBackToGate = null,
+}) {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -27,17 +33,52 @@ export default function GovernanceAdminWorkspace({ apiFetch, accessCode, Panel, 
     };
   }, [accessCode, apiFetch]);
 
+  const backControl = (
+    <button
+      type="button"
+      className="system-gate__settings-action"
+      onClick={() => {
+        if (typeof onBackToGate === "function") {
+          onBackToGate();
+        }
+      }}
+      style={{
+        position: "sticky",
+        top: "max(10px, env(safe-area-inset-top, 0px))",
+        left: 0,
+        zIndex: 40,
+        width: "fit-content",
+        marginBottom: "10px",
+        paddingInline: "12px",
+      }}
+      aria-label="Back to Gate"
+    >
+      ← Gate
+    </button>
+  );
+
   if (loading) {
-    return <Panel title="Governance Admin" subtitle="Loading Aletheia Gate custody records..." />;
+    return (
+      <section className="workspace-surface">
+        {backControl}
+        <Panel title="Governance Admin" subtitle="Loading Aletheia Gate custody records..." />
+      </section>
+    );
   }
 
   if (error) {
-    return <EmptyState title="Governance Admin Unavailable" body={error} />;
+    return (
+      <section className="workspace-surface">
+        {backControl}
+        <EmptyState title="Governance Admin Unavailable" body={error} />
+      </section>
+    );
   }
 
   const rows = (payload?.records ?? []).slice(0, 100);
   return (
     <section className="workspace-surface">
+      {backControl}
       <Panel
         title="Governance Admin"
         subtitle="Internal custody view for Aletheia Gate PASS/NO_PASS EVP receipts. Operator UI remains PASS-only."

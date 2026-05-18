@@ -194,6 +194,7 @@ function App() {
         accessCode={accessCode}
         Panel={Panel}
         EmptyState={EmptyState}
+        onBackToGate={() => setActiveWorkspace("system-body")}
       />
     );
   }
