@@ -101,6 +101,10 @@ function App() {
       heartbeatAt: heartbeatSource,
       online: apiStatus.state === "online",
     });
+    const siiVerification = {
+      verified: effectiveLatestUploadSnapshot?.sii_completed === true,
+      artifacts: effectiveLatestUploadSnapshot?.sii_completion_artifacts || {},
+    };
 
     return {
       facilityTone,
@@ -110,6 +114,7 @@ function App() {
       connectionStatusLine,
       lastDataHeartbeat: heartbeatSource,
       dataFreshness,
+      siiVerification,
       primaryWindow: {
         label: governance?.affected_subsystem ?? roomContext.primary,
         window: governance?.elapsed_operational_duration ?? "Governed window active",

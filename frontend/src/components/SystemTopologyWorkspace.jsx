@@ -94,6 +94,7 @@ export default function SystemTopologyWorkspace({
       connectionStatus={liveOps.connectionStatusLine}
       connectionTone={liveOps.connectionTone}
       dataFreshness={liveOps.dataFreshness}
+      siiVerification={liveOps.siiVerification}
       primaryMessage={primaryMessage}
       summaryTitle={summaryTitle}
       narrativeItems={narrativeItems}

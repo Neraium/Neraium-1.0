@@ -191,6 +191,20 @@ export default function DataConnectionsWorkspace({
     await processUploadBatch(selectedFiles);
   }
 
+  async function handleReprocessCurrentBatch() {
+    const failedFiles = batchResults.filter((item) => item.status === "failed").map((item) => item.file).filter(Boolean);
+    if (failedFiles.length > 0) {
+      await processUploadBatch(failedFiles);
+      return;
+    }
+    if (selectedFiles.length > 0) {
+      await processUploadBatch(selectedFiles);
+      return;
+    }
+    setUploadError("No local files available to reprocess. Re-select the source telemetry file(s) and retry.");
+    setUploadState("validation_error");
+  }
+
   async function processUploadBatch(filesToProcess) {
     const validationError = filesToProcess.length === 0
       ? "Choose one or more CSV/JSON telemetry files to upload."
@@ -432,6 +446,7 @@ export default function DataConnectionsWorkspace({
             intakeStages={intakeStages}
             batchResults={batchResults}
             onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
+            onReprocessCurrentBatch={handleReprocessCurrentBatch}
           />
           <IntakeStatusPanel
             uploadStateView={uploadStateView}

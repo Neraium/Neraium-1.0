@@ -12,6 +12,7 @@ export default function SystemBodyWorkspace({
   connectionStatus,
   connectionTone,
   dataFreshness = null,
+  siiVerification = null,
   primaryMessage,
   summaryTitle,
   narrativeItems,
@@ -61,6 +62,11 @@ export default function SystemBodyWorkspace({
             <strong>{heartbeat.label}</strong>
             {dataFreshness ? (
               <span className={`system-gate__freshness system-gate__freshness--${dataFreshness.tone}`}>{dataFreshness.label}</span>
+            ) : null}
+            {siiVerification ? (
+              <span className={`system-gate__freshness ${siiVerification.verified ? "system-gate__freshness--live" : "system-gate__freshness--aging"}`}>
+                {siiVerification.verified ? "SII Verified" : "SII Pending"}
+              </span>
             ) : null}
           </div>
           <button type="button" className="system-gate__settings" aria-label="Open Gate settings" onClick={() => setSettingsOpen((v) => !v)}>

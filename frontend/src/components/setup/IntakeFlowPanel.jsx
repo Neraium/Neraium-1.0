@@ -27,6 +27,7 @@ export default function IntakeFlowPanel({
   intakeStages,
   batchResults = [],
   onRetryFailedUploads,
+  onReprocessCurrentBatch,
 }) {
   const jsonIngestion = uploadJob?.result_summary?.json_ingestion;
   const hasJsonDiagnostics = Boolean(
@@ -45,6 +46,7 @@ export default function IntakeFlowPanel({
     : [];
   const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
   const successCount = batchResults.filter((entry) => entry.status === "success").length;
+  const siiContractFailed = uploadJob?.error_type === "sii_completion_missing" || String(latestMessage || "").toLowerCase().includes("sii completion");
 
   return (
     <>
@@ -103,6 +105,11 @@ export default function IntakeFlowPanel({
                 {failedCount > 0 && (
                   <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads} disabled={isUploadProcessing(uploadState)}>
                     Retry Failed Files
+                  </button>
+                )}
+                {siiContractFailed && (
+                  <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch} disabled={isUploadProcessing(uploadState)}>
+                    Reprocess Job
                   </button>
                 )}
               </div>
