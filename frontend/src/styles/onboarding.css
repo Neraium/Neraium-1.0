@@ -1,0 +1,231 @@
+.onboarding-shell {
+  display: grid;
+  gap: 14px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.onboarding-header {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(13, 19, 24, 0.92), rgba(8, 12, 15, 0.9));
+}
+
+.onboarding-header h1 {
+  margin: 0;
+  color: rgba(242, 248, 248, 0.98);
+  font-size: 1.5rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.onboarding-header p {
+  margin: 4px 0 0;
+  color: rgba(198, 220, 224, 0.86);
+  line-height: 1.42;
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding-stepper {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-stepper li {
+  display: grid;
+  gap: 4px;
+  min-height: 56px;
+  padding: 8px;
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 13, 16, 0.75);
+}
+
+.onboarding-stepper li span {
+  color: rgba(178, 203, 207, 0.8);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+}
+
+.onboarding-stepper li strong {
+  color: rgba(218, 232, 232, 0.9);
+  font-size: 0.74rem;
+  line-height: 1.22;
+}
+
+.onboarding-stepper li.is-active {
+  border-color: rgba(140, 198, 178, 0.52);
+  background: rgba(10, 20, 19, 0.88);
+}
+
+.onboarding-stepper li.is-complete {
+  border-color: rgba(108, 186, 156, 0.35);
+}
+
+.onboarding-card {
+  border: 1px solid rgba(138, 184, 196, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(12, 18, 22, 0.9), rgba(7, 11, 14, 0.88));
+}
+
+.onboarding-section {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-section h2 {
+  margin: 0;
+  color: rgba(243, 249, 249, 0.98);
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.onboarding-choice-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboarding-choice {
+  min-height: 46px;
+  border: 1px solid rgba(138, 184, 196, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 13, 16, 0.82);
+  color: rgba(226, 239, 239, 0.92);
+  font-size: 0.84rem;
+  letter-spacing: 0;
+  text-align: left;
+  padding: 10px;
+}
+
+.onboarding-choice.is-selected {
+  border-color: rgba(126, 208, 176, 0.54);
+  background: rgba(12, 25, 22, 0.9);
+}
+
+.onboarding-form-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboarding-form-grid input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(138, 184, 196, 0.18);
+  border-radius: 8px;
+  background: rgba(7, 11, 14, 0.9);
+  color: rgba(236, 244, 244, 0.94);
+  padding: 8px 10px;
+  font-size: 0.86rem;
+}
+
+.onboarding-inline {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+.onboarding-inline span {
+  color: rgba(196, 218, 223, 0.82);
+  font-size: 0.8rem;
+}
+
+.onboarding-map-row {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-map-row span {
+  color: rgba(182, 206, 210, 0.86);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.onboarding-checklist,
+.onboarding-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-checklist li,
+.onboarding-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  border: 1px solid rgba(138, 184, 196, 0.13);
+  border-radius: 8px;
+  background: rgba(7, 11, 14, 0.8);
+  padding: 8px 10px;
+}
+
+.onboarding-checklist li {
+  color: rgba(224, 236, 236, 0.9);
+  font-size: 0.82rem;
+}
+
+.onboarding-checklist li.ok {
+  border-color: rgba(126, 208, 176, 0.36);
+}
+
+.onboarding-checklist li.warn {
+  border-color: rgba(200, 160, 106, 0.4);
+}
+
+.onboarding-summary li span {
+  color: rgba(181, 205, 210, 0.85);
+  font-size: 0.72rem;
+}
+
+.onboarding-summary li strong {
+  color: rgba(238, 246, 246, 0.95);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.onboarding-start {
+  width: 100%;
+}
+
+.onboarding-started {
+  margin: 0;
+  color: rgba(164, 221, 196, 0.9);
+  font-size: 0.8rem;
+}
+
+.onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .onboarding-stepper {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .onboarding-choice-grid,
+  .onboarding-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -12,3 +12,4 @@
 @import "./motion.css" layer(motion);
 @import "./states.css" layer(states);
 @import "./workspace-system-body.css" layer(components);
+@import "./onboarding.css" layer(components);

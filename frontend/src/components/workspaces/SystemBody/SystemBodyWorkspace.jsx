@@ -145,6 +145,7 @@ export default function SystemBodyWorkspace({
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("onboarding")} disabled={settingsBusy}>Set up system</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={triggerUploadPicker} disabled={settingsBusy || !canUpload}>Upload historical CSV</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Connect live telemetry source</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("historical-replay")} disabled={settingsBusy}>Replay controls</button></li>
