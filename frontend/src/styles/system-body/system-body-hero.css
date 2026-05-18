@@ -614,69 +614,93 @@
   }
 
   .system-gate {
-    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px);
-    border-radius: 20px;
+    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 12px);
+    border-radius: 18px;
     padding:
-      calc(10px + env(safe-area-inset-top, 0px))
-      calc(10px + env(safe-area-inset-right, 0px))
-      calc(10px + env(safe-area-inset-bottom, 0px))
-      calc(10px + env(safe-area-inset-left, 0px));
+      calc(8px + env(safe-area-inset-top, 0px))
+      calc(8px + env(safe-area-inset-right, 0px))
+      calc(8px + env(safe-area-inset-bottom, 0px))
+      calc(8px + env(safe-area-inset-left, 0px));
+    background:
+      radial-gradient(circle at 50% 38%, rgba(154, 163, 173, 0.078), transparent 36%),
+      linear-gradient(180deg, rgba(7, 11, 14, 0.995), rgba(3, 6, 8, 0.985));
   }
 
   .system-gate__center {
     position: relative;
     inset: auto;
-    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 90px);
-    padding: 38px 10px 14px;
-    gap: 10px;
-    align-content: center;
+    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 74px);
+    padding: 24px 8px 8px;
+    gap: 6px;
+    align-content: start;
     justify-items: center;
   }
 
   .system-gate__center .system-body-orb-panel {
-    min-height: auto;
-    width: min(92vw, 520px);
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    width: min(95vw, 560px);
     max-width: 100%;
+    padding: 0;
+    border: 1px solid rgba(148, 168, 176, 0.24);
+    border-radius: 20px;
+    background:
+      radial-gradient(circle at 50% 46%, rgba(var(--state-accent-rgb), 0.2), rgba(5, 8, 10, 0.24) 60%, rgba(2, 4, 5, 0.7) 100%),
+      linear-gradient(180deg, rgba(12, 18, 23, 0.86), rgba(4, 8, 10, 0.92));
+    box-shadow:
+      inset 0 1px 0 rgba(216, 232, 236, 0.09),
+      inset 0 0 0 1px rgba(102, 126, 138, 0.08),
+      0 22px 54px rgba(0, 0, 0, 0.44);
+    overflow: hidden;
   }
 
   .system-gate__center .system-body-orb-panel__stage {
-    width: min(92vw, 520px);
-    min-height: auto;
+    width: min(95vw, 560px);
+    height: clamp(54dvh, 60dvh, 64dvh);
+    min-height: min(55dvh, 560px);
     aspect-ratio: 1 / 1;
+    max-height: min(64dvh, 620px);
+    padding: 0;
+  }
+
+  .system-gate__center .system-body-orb-panel__stage .health-orb {
+    width: min(100%, 96%);
+    max-width: none;
   }
 
   .system-gate__center::before {
     content: "";
     position: absolute;
-    left: 18px;
-    top: 24px;
-    bottom: 20px;
+    left: 12px;
+    top: clamp(26px, 7dvh, 54px);
+    height: clamp(54dvh, 60dvh, 64dvh);
     width: 1px;
-    background: linear-gradient(180deg, rgba(138, 184, 196, 0.36), rgba(138, 184, 196, 0.06));
-    opacity: 0.72;
+    background: linear-gradient(180deg, rgba(154, 194, 204, 0.55), rgba(154, 194, 204, 0.12) 74%, transparent);
+    opacity: 0.86;
     pointer-events: none;
   }
 
   .system-gate__state {
-    margin: 0;
+    margin: 2px 0 0;
     max-width: min(92vw, 540px);
-    font-size: clamp(1.42rem, 6.4vw, 1.92rem);
-    line-height: 1.02;
-    letter-spacing: -0.012em;
+    font-size: clamp(1.54rem, 6.9vw, 2.08rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
   }
 
   .system-gate__timestamp {
-    margin: 0;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    line-height: 1.24;
+    margin: 0 0 2px;
+    font-size: 0.58rem;
+    letter-spacing: 0.11em;
+    line-height: 1.18;
   }
 
   .system-gate__inspect {
-    margin: 2px 0 0;
-    padding: 6px 10px;
-    font-size: 0.62rem;
-    letter-spacing: 0.11em;
+    margin: 0;
+    padding: 5px 10px;
+    font-size: 0.56rem;
+    letter-spacing: 0.13em;
   }
 
   .system-gate__heartbeat,
@@ -686,7 +710,7 @@
 
   .system-gate__heartbeat {
     left: calc(8px + env(safe-area-inset-left, 0px));
-    padding: 5px 8px;
+    padding: 4px 8px;
   }
 
   .system-gate__heartbeat strong {
@@ -696,12 +720,12 @@
 
   .system-gate__settings {
     right: calc(8px + env(safe-area-inset-right, 0px));
-    padding: 6px 9px;
+    padding: 5px 8px;
     font-size: 0.58rem;
     letter-spacing: 0.12em;
-    border-color: rgba(138, 184, 196, 0.2);
-    background: rgba(8, 12, 15, 0.78);
-    color: rgba(220, 232, 231, 0.78);
+    border-color: rgba(149, 184, 196, 0.3);
+    background: rgba(8, 12, 15, 0.84);
+    color: rgba(226, 237, 236, 0.82);
   }
 
   .system-gate__settings-panel {
