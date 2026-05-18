@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const STORAGE_KEY = "neraium.onboarding.v1";
 
@@ -120,6 +120,7 @@ function loadSavedState() {
 
 export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring }) {
   const [flow, setFlow] = useState(loadSavedState);
+  const csvInputRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(flow));
@@ -183,6 +184,34 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
         vpd: current.signalMapping.vpd || "vpd",
       },
     }));
+  }
+
+  async function handleCsvFileSelection(event) {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+    let detectedColumns = [];
+    try {
+      const text = await file.text();
+      const headerLine = String(text || "").split(/\r?\n/, 1)[0] ?? "";
+      detectedColumns = headerLine
+        .split(",")
+        .map((column) => column.replace(/^"|"$/g, "").trim())
+        .filter(Boolean);
+    } catch {
+      detectedColumns = [];
+    }
+    setFlow((current) => ({
+      ...current,
+      csvFileName: file.name,
+      detectedColumns,
+      signalMapping: {
+        ...current.signalMapping,
+        temperature: current.signalMapping.temperature || (detectedColumns.includes("temperature") ? "temperature" : ""),
+        humidity: current.signalMapping.humidity || (detectedColumns.includes("humidity") ? "humidity" : ""),
+        vpd: current.signalMapping.vpd || (detectedColumns.includes("vpd") ? "vpd" : ""),
+      },
+    }));
+    setFlow((current) => ({ ...current, step: 3 }));
   }
 
   function runConnectionTest() {
@@ -290,10 +319,21 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
             )}
             {flow.dataSource === "CSV Upload" && (
               <div className="onboarding-inline">
-                <button type="button" className="command-button" onClick={() => {
-                  handleMockCsvSelect();
-                  updateFlow({ step: 3 });
-                }}>Upload and Detect Columns</button>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  style={{ display: "none" }}
+                  onChange={handleCsvFileSelection}
+                />
+                <button
+                  type="button"
+                  className="command-button"
+                  onClick={() => csvInputRef.current?.click()}
+                >
+                  Upload and Detect Columns
+                </button>
+                <button type="button" className="secondary-command-button" onClick={handleMockCsvSelect}>Use Demo CSV</button>
                 <span>{flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}</span>
               </div>
             )}
