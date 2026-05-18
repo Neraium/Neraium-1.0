@@ -665,7 +665,12 @@
   }
 
   .system-gate__center .system-body-orb-panel__stage .health-orb {
-    width: min(100%, 96%);
+    width: min(100%, 112%);
+    max-width: none;
+  }
+
+  .system-gate__center .system-body-orb-panel__stage .health-orb__svg--gate-iris {
+    width: 112%;
     max-width: none;
   }
 
