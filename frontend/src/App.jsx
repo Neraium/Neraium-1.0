@@ -234,7 +234,7 @@ function App() {
             backdropFilter: "blur(10px)",
           }}
         >
-          ? Gate
+          Back to Gate
         </button>
         {content}
       </div>
