@@ -231,6 +231,7 @@
 .system-body--gate {
   max-width: min(1280px, 100vw);
   margin: 0 auto;
+  min-height: calc(100dvh - 20px);
 }
 
 .platform-shell--gate {
@@ -253,7 +254,8 @@
 
 .system-gate {
   position: relative;
-  min-height: min(860px, calc(100svh - 32px));
+  min-height: calc(100dvh - 32px);
+  height: 100%;
   border: 1px solid rgba(177, 190, 198, 0.08);
   border-radius: clamp(20px, 4vw, 32px);
   background:
@@ -582,10 +584,11 @@
 @media (min-width: 1024px) {
   .system-body--gate {
     max-width: min(1360px, 100vw);
+    min-height: calc(100dvh - 16px);
   }
 
   .system-gate {
-    min-height: min(900px, calc(100svh - 24px));
+    min-height: calc(100dvh - 24px);
   }
 
   .system-gate__center {
