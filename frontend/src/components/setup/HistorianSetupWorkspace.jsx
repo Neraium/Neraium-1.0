@@ -65,8 +65,14 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
     setActiveStepIndex(next);
   }
 
+  const activeStepTestId = activeStep?.id === "connection-method"
+    ? "onboarding-data-source-step"
+    : activeStep?.id === "signal-mapping"
+      ? "signal-mapping-step"
+      : undefined;
+
   return (
-    <>
+    <div data-testid="onboarding-root">
       <Panel title="Setup Progress" className="span-12 workspace-hero-panel">
         <DataTable
           columns={["Step", "Status"]}
@@ -76,7 +82,7 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
           ])}
         />
       </Panel>
-      <div ref={activeStepRef}>
+      <div ref={activeStepRef} data-testid={activeStepTestId}>
         {activeStep.render({
           goToNextStep: () => goToStep(activeStepIndex + 1),
           goToPreviousStep: () => goToStep(activeStepIndex - 1),
@@ -97,14 +103,15 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
             className="command-button"
             onClick={() => goToStep(activeStepIndex + 1)}
             disabled={isLastStep}
+            data-testid="onboarding-next-button"
           >
             Next
           </button>
         </div>
-        <p className="narrative-text">
+        <p className="narrative-text" data-testid="onboarding-step-title">
           Step {activeStepIndex + 1} of {steps.length}: {activeStep.label}
         </p>
       </Panel>
-    </>
+    </div>
   );
 }
