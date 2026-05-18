@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "./config";
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
 import StructuralReplayWorkspace from "./components/StructuralReplayWorkspace";
 import GovernanceAdminWorkspace from "./components/GovernanceAdminWorkspace";
+import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel";
 import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState";
@@ -13,6 +14,8 @@ function App() {
   const [activeWorkspace, setActiveWorkspace] = useState("system-body");
   const [sessionIntent, setSessionIntent] = useState("neutral");
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
+  const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
+  const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
 
   const {
     apiStatus,
@@ -21,9 +24,6 @@ function App() {
     intelligenceStatus,
     latestUploadResult,
     latestUploadSnapshot,
-    demoScenario,
-    setDemoScenario,
-    isDemoMode,
     setIsDemoMode,
     loadFacilitySystems,
     loadLatestUploadState,
@@ -134,9 +134,54 @@ function App() {
     setSessionIntent("neutral");
     setIsDemoMode(false);
     setAllowPersistedLatest(false);
+    setGuidedDemo({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
+    setDemoDataConnectionsTab(null);
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+
+  const applyDemoStep = useCallback((index) => {
+    const step = DEMO_STEPS[index] ?? DEMO_STEPS[0];
+    setActiveWorkspace(step.workspace);
+    setDemoDataConnectionsTab(step.workspace === "data-connections" && step.tab ? step.tab : null);
+  }, []);
+
+  const startGuidedDemo = useCallback(() => {
+    setGuidedDemo({ active: true, isPlaying: true, stepIndex: 0, elapsedMs: 0 });
+    applyDemoStep(0);
+  }, [applyDemoStep]);
+
+  const toggleGuidedDemoPlayback = useCallback(() => {
+    setGuidedDemo((current) => ({ ...current, active: true, isPlaying: !current.isPlaying }));
+  }, []);
+
+  const gotoGuidedDemoStep = useCallback((nextIndex) => {
+    const normalized = ((nextIndex % DEMO_STEPS.length) + DEMO_STEPS.length) % DEMO_STEPS.length;
+    setGuidedDemo((current) => ({ ...current, active: true, isPlaying: false, stepIndex: normalized, elapsedMs: 0 }));
+    applyDemoStep(normalized);
+  }, [applyDemoStep]);
+
+  const restartGuidedDemo = useCallback(() => {
+    setGuidedDemo({ active: true, isPlaying: true, stepIndex: 0, elapsedMs: 0 });
+    applyDemoStep(0);
+  }, [applyDemoStep]);
+
+  useEffect(() => {
+    if (!guidedDemo.active || !guidedDemo.isPlaying) return;
+    const timer = window.setInterval(() => {
+      setGuidedDemo((current) => {
+        if (!current.active || !current.isPlaying) return current;
+        const nextElapsed = current.elapsedMs + 100;
+        if (nextElapsed < STEP_DURATION_MS) {
+          return { ...current, elapsedMs: nextElapsed };
+        }
+        const nextStep = (current.stepIndex + 1) % DEMO_STEPS.length;
+        applyDemoStep(nextStep);
+        return { ...current, stepIndex: nextStep, elapsedMs: 0 };
+      });
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [applyDemoStep, guidedDemo.active, guidedDemo.isPlaying]);
 
   function renderWithBackControl(content) {
     return (
@@ -156,7 +201,7 @@ function App() {
             backdropFilter: "blur(10px)",
           }}
         >
-          ← Gate
+          ? Gate
         </button>
         {content}
       </div>
@@ -180,13 +225,13 @@ function App() {
         onResetDemo={handleResetDemo}
         onResumePreviousSession={handleResumePreviousSession}
         formatClockTime={formatClockTime}
-        demoState={{ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 }}
-        demoTabId={null}
-        onActivateDemo={() => {}}
-        onToggleDemoPlayback={() => {}}
-        onPreviousDemoStep={() => {}}
-        onNextDemoStep={() => {}}
-        onRestartDemo={() => {}}
+        demoState={guidedDemo}
+        demoTabId={demoDataConnectionsTab}
+        onActivateDemo={startGuidedDemo}
+        onToggleDemoPlayback={toggleGuidedDemoPlayback}
+        onPreviousDemoStep={() => gotoGuidedDemoStep(guidedDemo.stepIndex - 1)}
+        onNextDemoStep={() => gotoGuidedDemoStep(guidedDemo.stepIndex + 1)}
+        onRestartDemo={restartGuidedDemo}
       />
     );
   }
