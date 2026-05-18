@@ -229,7 +229,7 @@
 }
 
 .system-body--gate {
-  max-width: min(940px, 100vw);
+  max-width: min(1280px, 100vw);
   margin: 0 auto;
 }
 
@@ -253,7 +253,7 @@
 
 .system-gate {
   position: relative;
-  min-height: min(780px, calc(100svh - 44px));
+  min-height: min(860px, calc(100svh - 32px));
   border: 1px solid rgba(177, 190, 198, 0.08);
   border-radius: clamp(20px, 4vw, 32px);
   background:
@@ -301,7 +301,7 @@
 
 .system-gate__center {
   position: absolute;
-  inset: 44px 0 34px;
+  inset: 52px 0 40px;
   display: grid;
   align-content: center;
   justify-items: center;
@@ -339,9 +339,9 @@
 }
 
 .system-gate__state {
-  margin: 2px 0 0;
+  margin: 6px 0 0;
   max-width: min(82vw, 520px);
-  font-size: clamp(1.18rem, 4.4vw, 1.7rem);
+  font-size: clamp(1.24rem, 2.2vw, 1.9rem);
   line-height: 1.08;
   letter-spacing: -0.025em;
   text-align: center;
@@ -349,7 +349,7 @@
 }
 
 .system-gate__timestamp {
-  margin: 0;
+  margin: 2px 0 0;
   font-size: 0.68rem;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -444,7 +444,7 @@
   top: 54px;
   right: 14px;
   z-index: 3;
-  width: min(320px, calc(100% - 20px));
+  width: min(360px, calc(100% - 20px));
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   background: rgba(8, 11, 13, 0.96);
@@ -497,11 +497,12 @@
 
 .system-gate__detail {
   position: absolute;
-  left: 14px;
+  left: auto;
   right: 14px;
   bottom: 14px;
   z-index: 3;
-  max-height: min(56vh, 520px);
+  width: min(560px, calc(100% - 28px));
+  max-height: min(62vh, 560px);
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -509,6 +510,57 @@
   padding: 13px 14px;
   box-shadow: 0 26px 90px rgba(0, 0, 0, 0.48);
   backdrop-filter: blur(18px);
+}
+
+@media (min-width: 1024px) {
+  .system-body--gate {
+    max-width: min(1360px, 100vw);
+  }
+
+  .system-gate {
+    min-height: min(900px, calc(100svh - 24px));
+  }
+
+  .system-gate__center {
+    inset: 56px 0 44px;
+    gap: 10px;
+  }
+
+  .system-gate__center .system-body-orb-panel {
+    width: clamp(460px, 36vw, 820px);
+    min-height: clamp(520px, 68vh, 820px);
+  }
+
+  .system-gate__state {
+    font-size: clamp(1.38rem, 1.8vw, 2.05rem);
+    max-width: min(62vw, 780px);
+  }
+
+  .system-gate__timestamp {
+    font-size: 0.72rem;
+  }
+
+  .system-gate__settings {
+    top: 18px;
+    right: 18px;
+  }
+
+  .system-gate__heartbeat {
+    top: 18px;
+    left: 18px;
+  }
+
+  .system-gate__settings-panel {
+    top: 58px;
+    right: 18px;
+  }
+
+  .system-gate__detail {
+    right: 18px;
+    bottom: 18px;
+    width: min(620px, calc(100% - 36px));
+    max-height: min(64vh, 620px);
+  }
 }
 
 .system-gate__detail header {
