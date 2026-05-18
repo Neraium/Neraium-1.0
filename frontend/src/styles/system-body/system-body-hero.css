@@ -499,6 +499,38 @@
   line-height: 1.35;
 }
 
+.system-gate__upload-progress-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.system-gate__upload-progress {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(138, 184, 196, 0.16);
+  border: 1px solid rgba(138, 184, 196, 0.22);
+}
+
+.system-gate__upload-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(126, 186, 204, 0.78), rgba(151, 215, 196, 0.88));
+  box-shadow: 0 0 12px rgba(120, 196, 186, 0.34);
+}
+
+.system-gate__upload-progress-label {
+  color: rgba(225, 236, 235, 0.86);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
 .system-gate__detail {
   position: absolute;
   left: auto;

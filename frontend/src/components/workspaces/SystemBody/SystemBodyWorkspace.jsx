@@ -36,6 +36,7 @@ export default function SystemBodyWorkspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsProgressPercent, setSettingsProgressPercent] = useState(null);
   const uploadInputRef = useRef(null);
   const hasAdmittedFinding = statusLight !== "gray";
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
@@ -66,6 +67,7 @@ export default function SystemBodyWorkspace({
         return;
       }
       setSettingsBusy(true);
+      setSettingsProgressPercent(0);
       setSettingsMessage("Uploading historical CSV to governed intake.");
       try {
         const formData = new FormData();
@@ -83,13 +85,20 @@ export default function SystemBodyWorkspace({
           apiFetch,
           accessCode,
           jobId: uploadPayload.job_id,
-          onProgress: (message) => setSettingsMessage(message),
+          onProgress: ({ message, percent }) => {
+            setSettingsMessage(message);
+            if (Number.isFinite(percent)) {
+              setSettingsProgressPercent(percent);
+            }
+          },
         });
+        setSettingsProgressPercent(100);
         setSettingsMessage(`Historical replay ready from admitted upload ${completed.job_id}.`);
         if (typeof onUploadComplete === "function") {
           await onUploadComplete(completed);
         }
       } catch (error) {
+        setSettingsProgressPercent(null);
         setSettingsMessage(error?.message || "Governed upload failed.");
       } finally {
         setSettingsBusy(false);
@@ -142,6 +151,21 @@ export default function SystemBodyWorkspace({
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("governance-admin")} disabled={settingsBusy}>Governance/admin access</button></li>
               </ul>
               <input ref={uploadInputRef} type="file" accept=".csv,text/csv" onChange={handleUploadSelection} className="system-gate__upload-input" />
+              {settingsBusy && Number.isFinite(settingsProgressPercent) ? (
+                <div className="system-gate__upload-progress-wrap">
+                  <div
+                    className="system-gate__upload-progress"
+                    role="progressbar"
+                    aria-label="Upload progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(settingsProgressPercent)}
+                  >
+                    <span style={{ width: `${settingsProgressPercent}%` }} />
+                  </div>
+                  <strong className="system-gate__upload-progress-label">{Math.round(settingsProgressPercent)}%</strong>
+                </div>
+              ) : null}
               {settingsMessage ? <p className="system-gate__settings-message">{settingsMessage}</p> : null}
             </aside>
           ) : null}
@@ -223,7 +247,10 @@ async function pollUploadJob({ apiFetch, accessCode, jobId, onProgress }) {
       }
       const percent = Number.isFinite(Number(payload?.percent)) ? Math.max(0, Math.min(100, Number(payload.percent))) : null;
       const label = payload?.progress_label || payload?.message || "Processing governed telemetry intake.";
-      onProgress?.(percent == null ? label : `${label} (${percent}%)`);
+      onProgress?.({
+        message: percent == null ? label : `${label} (${percent}%)`,
+        percent,
+      });
       await wait(nextUploadPollDelay({ payload, failureCount }));
     } catch (error) {
       failureCount += 1;
