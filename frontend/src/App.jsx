@@ -10,10 +10,18 @@ import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives"
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState";
 
+const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
+
+function readStoredSessionIntent() {
+  if (typeof window === "undefined") return "neutral";
+  const value = window.localStorage.getItem(SESSION_INTENT_STORAGE_KEY);
+  return value === "current" || value === "resumed" ? value : "neutral";
+}
+
 function App() {
   const accessCode = "";
   const [activeWorkspace, setActiveWorkspace] = useState("system-body");
-  const [sessionIntent, setSessionIntent] = useState("neutral");
+  const [sessionIntent, setSessionIntent] = useState(() => readStoredSessionIntent());
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
   const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
   const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
@@ -42,8 +50,9 @@ function App() {
     () => uploadStateView.hasFullUploadResult(latestUploadResult),
     [latestUploadResult],
   );
-  const hasCurrentUploadResult = sessionIntent === "current" && hasRealSiiOutput;
-  const hasResumedSession = sessionIntent === "resumed" && hasRealSiiOutput;
+  const effectiveSessionIntent = hasRealSiiOutput && sessionIntent === "neutral" ? "resumed" : sessionIntent;
+  const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasRealSiiOutput;
+  const hasResumedSession = effectiveSessionIntent === "resumed" && hasRealSiiOutput;
   const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
   const effectiveLatestUploadResult = hasActiveSession ? latestUploadResult : null;
   const effectiveLatestUploadSnapshot = hasActiveSession
@@ -166,6 +175,11 @@ function App() {
     setGuidedDemo({ active: true, isPlaying: true, stepIndex: 0, elapsedMs: 0 });
     applyDemoStep(0);
   }, [applyDemoStep]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
+  }, [effectiveSessionIntent]);
 
   useEffect(() => {
     if (!guidedDemo.active || !guidedDemo.isPlaying) return;

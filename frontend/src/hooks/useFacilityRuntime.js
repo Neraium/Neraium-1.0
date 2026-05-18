@@ -34,7 +34,7 @@ export default function useFacilityRuntime({
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
-  const [allowPersistedLatest, setAllowPersistedLatest] = useState(false);
+  const [allowPersistedLatest, setAllowPersistedLatest] = useState(true);
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
   const healthCheckAttemptsRef = useRef(0);
