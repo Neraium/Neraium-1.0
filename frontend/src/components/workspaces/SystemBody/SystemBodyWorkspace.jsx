@@ -34,6 +34,7 @@ export default function SystemBodyWorkspace({
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const hasAdmittedFinding = statusLight !== "gray";
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
@@ -47,6 +48,8 @@ export default function SystemBodyWorkspace({
       if (typeof onWorkspaceNavigate === "function") {
         onWorkspaceNavigate(workspaceId);
       }
+      setSettingsOpen(false);
+      setAdvancedOpen(false);
     }
 
   return (
@@ -83,15 +86,19 @@ export default function SystemBodyWorkspace({
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("onboarding")} disabled={settingsBusy}>Set up system</button></li>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Connect live telemetry source</button></li>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("governance-admin")} disabled={settingsBusy}>Governance/admin access</button></li>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Data connections</button></li>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => setAdvancedOpen((value) => !value)} disabled={settingsBusy}>{advancedOpen ? "Hide advanced" : "Advanced"}</button></li>
               </ul>
-              <div className="system-gate__settings-advanced">
-                <p className="system-gate__settings-advanced-label">Advanced</p>
-                <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("historical-replay")} disabled={settingsBusy}>
-                  Replay controls
-                </button>
-              </div>
+              {advancedOpen ? (
+                <div className="system-gate__settings-advanced">
+                  <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("historical-replay")} disabled={settingsBusy}>
+                    Replay controls
+                  </button>
+                  <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("governance-admin")} disabled={settingsBusy}>
+                    Governance/admin access
+                  </button>
+                </div>
+              ) : null}
             </aside>
           ) : null}
           {detailOpen && hasAdmittedFinding && governedDetail ? (
