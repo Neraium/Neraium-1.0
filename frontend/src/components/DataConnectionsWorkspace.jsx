@@ -160,14 +160,16 @@ export default function DataConnectionsWorkspace({
         setUploadError(operatorUploadMessage({ status: response.status, errorType: payload.error_type ?? "sii_processing_failure", detail: payload.error, phase: "poll" }));
         return;
       }
-      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), 2000);
+      const delayMs = nextUploadPollDelay({ payload, failureCount: pollFailureCountRef.current });
+      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), delayMs);
     } catch (error) {
       const classified = classifyUploadError(error, "poll");
       if (classified.retryable && pollFailureCountRef.current < 30) {
         pollFailureCountRef.current += 1;
         setUploadState((current) => (isUploadProcessing(current) ? current : "running_sii"));
         setUploadError(classified.message);
-        pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), Math.min(2000 + pollFailureCountRef.current * 1500, 12000));
+        const delayMs = nextUploadPollDelay({ payload: null, failureCount: pollFailureCountRef.current, failedAttempt: true });
+        pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), delayMs);
         return;
       }
       setUploadError(classified.finalMessage ?? classified.message);
@@ -410,4 +412,29 @@ export default function DataConnectionsWorkspace({
       )}
     </div>
   );
+}
+
+function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false }) {
+  const hintedRetry = Number(payload?.retry_after_ms);
+  if (Number.isFinite(hintedRetry) && hintedRetry >= 1000) {
+    return Math.min(Math.max(hintedRetry, 1000), 30000);
+  }
+
+  const percent = Number(payload?.percent);
+  const progress = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
+  let baseDelay = 2000;
+
+  if (failedAttempt) {
+    baseDelay = Math.min(2000 + failureCount * 1500, 15000);
+  } else if (progress != null) {
+    if (progress < 20) baseDelay = 1400;
+    else if (progress < 70) baseDelay = 2200;
+    else if (progress < 95) baseDelay = 3200;
+    else baseDelay = 4200;
+  } else {
+    baseDelay = 2600;
+  }
+
+  const hiddenMultiplier = typeof document !== "undefined" && document.visibilityState === "hidden" ? 1.75 : 1;
+  return Math.round(baseDelay * hiddenMultiplier);
 }

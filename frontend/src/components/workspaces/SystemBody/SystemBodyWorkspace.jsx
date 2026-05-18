@@ -205,29 +205,64 @@ function normalizeUploadStatus(status) {
 
 async function pollUploadJob({ apiFetch, accessCode, jobId, onProgress }) {
   const maxChecks = 180;
+  let failureCount = 0;
   for (let check = 0; check < maxChecks; check += 1) {
-    const response = await apiFetch(`/api/data/upload-status/${encodeURIComponent(jobId)}`, { accessCode });
-    const payload = await safeJson(response);
-    if (!response.ok) {
-      throw new Error(readUploadError(payload, response.status));
+    try {
+      const response = await apiFetch(`/api/data/upload-status/${encodeURIComponent(jobId)}`, { accessCode });
+      const payload = await safeJson(response);
+      if (!response.ok) {
+        throw new Error(readUploadError(payload, response.status));
+      }
+      failureCount = 0;
+      const status = normalizeUploadStatus(payload?.status);
+      if (status === "complete") {
+        return payload;
+      }
+      if (status === "failed") {
+        throw new Error(readUploadError(payload, 500));
+      }
+      const percent = Number.isFinite(Number(payload?.percent)) ? Math.max(0, Math.min(100, Number(payload.percent))) : null;
+      const label = payload?.progress_label || payload?.message || "Processing governed telemetry intake.";
+      onProgress?.(percent == null ? label : `${label} (${percent}%)`);
+      await wait(nextUploadPollDelay({ payload, failureCount }));
+    } catch (error) {
+      failureCount += 1;
+      if (failureCount >= 20) {
+        throw error;
+      }
+      await wait(nextUploadPollDelay({ payload: null, failureCount, failedAttempt: true }));
     }
-    const status = normalizeUploadStatus(payload?.status);
-    if (status === "complete") {
-      return payload;
-    }
-    if (status === "failed") {
-      throw new Error(readUploadError(payload, 500));
-    }
-    const percent = Number.isFinite(Number(payload?.percent)) ? Math.max(0, Math.min(100, Number(payload.percent))) : null;
-    const label = payload?.progress_label || payload?.message || "Processing governed telemetry intake.";
-    onProgress?.(percent == null ? label : `${label} (${percent}%)`);
-    await wait(2000);
   }
   throw new Error("Upload polling timed out before governed processing completed.");
 }
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false }) {
+  const hintedRetry = Number(payload?.retry_after_ms);
+  if (Number.isFinite(hintedRetry) && hintedRetry >= 1000) {
+    return Math.min(Math.max(hintedRetry, 1000), 30000);
+  }
+
+  const percent = Number(payload?.percent);
+  const progress = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
+  let baseDelay = 2000;
+
+  if (failedAttempt) {
+    baseDelay = Math.min(2000 + failureCount * 1500, 15000);
+  } else if (progress != null) {
+    if (progress < 20) baseDelay = 1400;
+    else if (progress < 70) baseDelay = 2200;
+    else if (progress < 95) baseDelay = 3200;
+    else baseDelay = 4200;
+  } else {
+    baseDelay = 2600;
+  }
+
+  const hiddenMultiplier = typeof document !== "undefined" && document.visibilityState === "hidden" ? 1.75 : 1;
+  return Math.round(baseDelay * hiddenMultiplier);
 }
 
 function statusLightLabel(light) {
