@@ -11,7 +11,7 @@ from app.core.config import Settings, get_settings
 from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay, state_compat
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
-from app.services.runtime_db import init_runtime_db
+from app.services.runtime_db import clear_stale_processing_queue_jobs, init_runtime_db
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,9 @@ async def app_lifespan(app: FastAPI):
 
     try:
         init_runtime_db()
+        recovered_jobs = clear_stale_processing_queue_jobs()
+        if recovered_jobs:
+            logger.warning("recovered_stale_processing_jobs count=%s", recovered_jobs)
         STARTUP_STATUS["runtime_db_ready"] = True
     except Exception as error:
         STARTUP_STATUS["failed_modules"].append(f"runtime_db: {error}")

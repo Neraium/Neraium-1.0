@@ -38,6 +38,7 @@ from app.services.runtime_db import (
     complete_upload_queue_job,
     enqueue_upload_job,
     list_upload_jobs,
+    mark_queue_job_failed,
     read_latest_payload,
     read_upload_job,
     upsert_latest_payload,
@@ -436,10 +437,22 @@ def process_upload_job(job_id: str) -> None:
 
 
 def process_next_queued_upload_job() -> None:
-    job_id = claim_next_upload_job()
-    if not job_id:
+    for _ in range(100):
+        job_id = claim_next_upload_job()
+        if not job_id:
+            return
+        metadata = read_job(job_id)
+        if metadata is None:
+            logger.warning("upload_queue_job_missing_metadata job_id=%s", job_id)
+            mark_queue_job_failed(job_id, "missing_upload_job_metadata")
+            continue
+        file_path = metadata.get("file_path")
+        if file_path and not Path(file_path).exists():
+            logger.warning("upload_queue_job_missing_file job_id=%s file_path=%s", job_id, file_path)
+            mark_queue_job_failed(job_id, "missing_upload_file")
+            continue
+        process_upload_job(job_id)
         return
-    process_upload_job(job_id)
 
 
 def process_csv_content(

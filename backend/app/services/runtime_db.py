@@ -171,7 +171,7 @@ def claim_next_upload_job() -> str | None:
         row = connection.execute(
             """
             SELECT job_id FROM upload_queue
-            WHERE status IN ('pending', 'failed')
+            WHERE status = 'pending'
             ORDER BY created_at ASC
             LIMIT 1
             """
@@ -191,6 +191,38 @@ def claim_next_upload_job() -> str | None:
             (now_iso(), now_iso(), job_id),
         )
         return job_id
+
+
+def mark_queue_job_failed(job_id: str, reason: str) -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE upload_queue
+            SET status = 'failed', last_error = ?, updated_at = ?, locked_at = NULL
+            WHERE job_id = ?
+            """,
+            (reason, now_iso(), job_id),
+        )
+
+
+def clear_stale_processing_queue_jobs() -> int:
+    init_runtime_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT job_id FROM upload_queue WHERE status = 'processing'"
+        ).fetchall()
+        stale_job_ids = [row["job_id"] for row in rows]
+        if stale_job_ids:
+            connection.executemany(
+                """
+                UPDATE upload_queue
+                SET status='failed', last_error=?, updated_at=?, locked_at=NULL
+                WHERE job_id = ?
+                """,
+                [("stale_processing_job_recovered", now_iso(), job_id) for job_id in stale_job_ids],
+            )
+    return len(stale_job_ids)
 
 
 def complete_upload_queue_job(job_id: str, status: str, last_error: str | None = None) -> None:
