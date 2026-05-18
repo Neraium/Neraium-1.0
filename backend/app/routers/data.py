@@ -113,9 +113,8 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     summary = metadata.get("result_summary") if isinstance(metadata.get("result_summary"), dict) else {}
     artifacts = metadata.get("sii_completion_artifacts") or summary.get("sii_completion_artifacts") or {}
     sii_completed = bool(metadata.get("sii_completed") or summary.get("sii_completed"))
-    has_explicit_sii_completed = ("sii_completed" in metadata) or ("sii_completed" in summary)
     is_summary_fallback = bool(metadata.get("summary_fallback"))
-    if normalized_status == "COMPLETE" and has_explicit_sii_completed and not sii_completed and not is_summary_fallback:
+    if normalized_status == "COMPLETE" and not sii_completed and not is_summary_fallback:
         normalized_status = "FAILED"
         measured_percent = 100
         error_type = "sii_completion_missing"

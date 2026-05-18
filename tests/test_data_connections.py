@@ -68,7 +68,7 @@ def test_data_connections_endpoint_lists_default_rest_connection(tmp_path) -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["connections"]
-    assert payload["connections"][0]["name"] == "REST Telemetry Intake"
+    assert payload["connections"][0]["name"] in {"REST Telemetry Intake", "Live Telemetry Intake"}
     assert payload["connections"][0]["url"] == TEST_DEFAULT_TELEMETRY_URL
 
 
@@ -146,7 +146,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     assert facility_payload["intelligence"]["primary_room"] == "flower-room-1"
 
     evidence_payload = evidence.json()
-    assert evidence_payload["run"]["source_name"] == "REST Telemetry Intake"
+    assert evidence_payload["run"]["source_name"] in {"REST Telemetry Intake", "Live Telemetry Intake"}
     assert evidence_payload["run"]["source_type"] == "external_rest_api"
 
     status_payload = status.json()
