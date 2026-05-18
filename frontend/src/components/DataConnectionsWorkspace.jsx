@@ -201,8 +201,49 @@ export default function DataConnectionsWorkspace({
       await processUploadBatch(selectedFiles);
       return;
     }
-    setUploadError("No local files available to reprocess. Re-select the source telemetry file(s) and retry.");
-    setUploadState("validation_error");
+    const latestJobId = uploadJob?.job_id ?? latestUploadSnapshot?.history?.[0]?.job_id;
+    if (!latestJobId) {
+      setUploadError("No upload session is available to reprocess yet.");
+      setUploadState("validation_error");
+      return;
+    }
+
+    setUploadError("");
+    setUploadState("running_sii");
+    setUploadJob({
+      job_id: latestJobId,
+      status: "running_sii",
+      progress_label: "Reprocessing persisted telemetry session.",
+      message: "Rebuilding the latest session from persisted artifacts.",
+    });
+
+    try {
+      const response = await apiFetch(`/api/data/upload-reprocess/${latestJobId}`, {
+        method: "POST",
+        accessCode,
+      });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) throw buildUploadRequestError(response, payload, "upload");
+
+      uploadJobIdRef.current = payload?.job_id ?? latestJobId;
+      setUploadJob(payload);
+      setUploadState(normalizeUploadStatus(payload?.status ?? "pending"));
+      await pollUploadStatus(uploadJobIdRef.current);
+
+      const latestPayload = await loadLatestUpload();
+      const latestResult = latestPayload?.latest_result;
+      const completedPayload = {
+        ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
+        ...(latestPayload ?? {}),
+      };
+      setUploadResult(completedPayload);
+      await onUploadComplete(completedPayload);
+      setUploadState("complete");
+    } catch (error) {
+      const classified = classifyUploadError(error, "upload");
+      setUploadError(classified.message);
+      setUploadState(classified.state);
+    }
   }
 
   async function processUploadBatch(filesToProcess) {

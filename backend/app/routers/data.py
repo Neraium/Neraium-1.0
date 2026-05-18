@@ -18,11 +18,17 @@ from app.services.upload_jobs import (
     create_upload_job,
     delete_upload_file,
     latest_completed_job_summary,
+    now_iso,
     process_next_queued_upload_job,
     read_upload_history,
+    read_latest_upload_summary,
     read_latest_upload_result,
     read_job,
     reset_latest_upload_state,
+    sii_completion_artifacts,
+    summarize_result,
+    update_job,
+    write_latest_upload_summary,
 )
 from app.services.data_connections import clear_all_connection_runtime_state
 
@@ -299,6 +305,69 @@ def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
         True,
     )
     return payload
+
+
+@router.post("/data/upload-reprocess/{job_id}", response_model=UploadAcceptedResponse)
+def reprocess_upload_job(job_id: str) -> dict[str, Any]:
+    metadata = read_job(job_id)
+    latest_result = read_latest_upload_result()
+    latest_summary = read_latest_upload_summary() or {}
+    if metadata is None and (not latest_result or latest_result.get("job_id") != job_id):
+        raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
+
+    if latest_result and latest_result.get("job_id") == job_id:
+        artifacts = sii_completion_artifacts(latest_result)
+        completed_at = latest_summary.get("last_processed_at") or now_iso()
+        summary = latest_summary if latest_summary.get("job_id") == job_id else summarize_result(latest_result, completed_at)
+        summary["sii_completed"] = bool(all(artifacts.values()))
+        summary["sii_completion_artifacts"] = artifacts
+        if not summary["sii_completed"]:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_type": "sii_completion_missing",
+                    "message": "SII completion artifacts are still missing. Re-upload source telemetry to rebuild.",
+                },
+            )
+        update_job(
+            job_id,
+            status="COMPLETE",
+            result_available=True,
+            first_usable_available=True,
+            sii_completed=True,
+            sii_completion_artifacts=artifacts,
+            result_summary=summary,
+            completed_at=completed_at,
+            error=None,
+        )
+        write_latest_upload_summary(job_id, summary, append_history=False)
+        payload = upload_status_payload(read_job(job_id), job_id)
+        return {
+            "job_id": job_id,
+            "status": payload["status"],
+            "progress": payload["progress"],
+            "processing_state": payload["processing_state"],
+            "error_type": None,
+            "filename": payload.get("filename") or latest_result.get("filename") or "telemetry.csv",
+            "message": "Upload session reprocessed from persisted artifacts.",
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "result_url": f"/api/data/intake/{job_id}/result",
+            "file_size_bytes": int(payload.get("file_size_bytes") or 0),
+            "stage": payload.get("stage"),
+            "percent": payload.get("percent"),
+            "bytes_processed": int(payload.get("bytes_processed") or 0),
+            "rows_processed": int(payload.get("rows_processed") or 0),
+            "result_available": True,
+            "sii_completed": True,
+        }
+
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "error_type": "reprocess_source_unavailable",
+            "message": "Original upload source is unavailable for reprocess. Re-upload source telemetry.",
+        },
+    )
 
 
 @router.get("/data/intake/{job_id}/status", response_model=UploadStatusResponse)
