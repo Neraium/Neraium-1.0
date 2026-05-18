@@ -4,7 +4,6 @@ import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
 import StructuralReplayWorkspace from "./components/StructuralReplayWorkspace";
 import GovernanceAdminWorkspace from "./components/GovernanceAdminWorkspace";
-import OnboardingWorkspace from "./components/OnboardingWorkspace";
 import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel";
 import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
@@ -310,15 +309,6 @@ function App() {
         Panel={Panel}
         EmptyState={EmptyState}
         onBackToGate={() => setActiveWorkspace("system-body")}
-      />
-    );
-  }
-
-  if (activeWorkspace === "onboarding") {
-    return renderWithBackControl(
-      <OnboardingWorkspace
-        onBackToGate={() => setActiveWorkspace("system-body")}
-        onStartMonitoring={() => setActiveWorkspace("system-body")}
       />
     );
   }

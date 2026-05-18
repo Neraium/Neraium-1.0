@@ -23,12 +23,6 @@ export const WORKSPACES = [
     eyebrow: "Admin",
     description: "Internal Aletheia Gate custody records (PASS and NO_PASS EVP receipts).",
   },
-  {
-    id: "onboarding",
-    label: "Set Up System",
-    eyebrow: "Setup",
-    description: "Guided onboarding from source selection to live monitoring.",
-  },
 ];
 
 export const FALLBACK_SYSTEMS = [

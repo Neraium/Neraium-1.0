@@ -95,8 +95,7 @@ export default function SystemBodyWorkspace({
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("onboarding")} disabled={settingsBusy}>Set up system</button></li>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Data connections</button></li>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Setup & data connections</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => setAdvancedOpen((value) => !value)} disabled={settingsBusy}>{advancedOpen ? "Hide advanced" : "Advanced"}</button></li>
               </ul>
               {advancedOpen ? (
