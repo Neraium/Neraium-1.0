@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DataTable, Panel } from "../workspacePrimitives";
 import ConnectionModeCards from "./ConnectionModeCards";
 import HistorianSourcePanel from "./HistorianSourcePanel";
@@ -8,6 +8,7 @@ import ReadOnlySafetyPanel from "./ReadOnlySafetyPanel";
 
 export default function HistorianSetupWorkspace({ tagMapRows }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const activeStepRef = useRef(null);
 
   const steps = useMemo(
     () => [
@@ -29,7 +30,7 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
       {
         id: "signal-mapping",
         label: "4. Signal Mapping",
-        render: () => <TagMappingPanel rows={tagMapRows} />,
+        render: ({ goToNextStep }) => <TagMappingPanel rows={tagMapRows} onContinue={goToNextStep} />,
       },
       {
         id: "baseline-window",
@@ -65,6 +66,10 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
   const activeStep = steps[activeStepIndex] ?? steps[0];
   const isFirstStep = activeStepIndex === 0;
   const isLastStep = activeStepIndex === steps.length - 1;
+
+  useEffect(() => {
+    activeStepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeStepIndex]);
 
   function goToStep(index) {
     const next = Math.max(0, Math.min(index, steps.length - 1));
@@ -103,7 +108,12 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
           ))}
         </div>
       </Panel>
-      {activeStep.render()}
+      <div ref={activeStepRef}>
+        {activeStep.render({
+          goToNextStep: () => goToStep(activeStepIndex + 1),
+          goToPreviousStep: () => goToStep(activeStepIndex - 1),
+        })}
+      </div>
       <Panel title="Step Navigation" className="span-12">
         <div className="intake-flow__controls">
           <button
