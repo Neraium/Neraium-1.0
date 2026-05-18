@@ -138,8 +138,33 @@ function App() {
     await loadFacilitySystems();
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
-  if (activeWorkspace === "data-connections") {
+  function renderWithBackControl(content) {
     return (
+      <div style={{ position: "relative", minHeight: "100svh" }}>
+        <button
+          type="button"
+          className="system-gate__settings-action"
+          onClick={() => setActiveWorkspace("system-body")}
+          aria-label="Back to Gate"
+          style={{
+            position: "fixed",
+            top: "max(12px, env(safe-area-inset-top, 0px))",
+            left: "max(12px, env(safe-area-inset-left, 0px))",
+            zIndex: 1000,
+            width: "fit-content",
+            paddingInline: "12px",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          ← Gate
+        </button>
+        {content}
+      </div>
+    );
+  }
+
+  if (activeWorkspace === "data-connections") {
+    return renderWithBackControl(
       <DataConnectionsWorkspace
         accessCode={accessCode}
         apiFetch={apiFetch}
@@ -167,7 +192,7 @@ function App() {
   }
 
   if (activeWorkspace === "historical-replay") {
-    return (
+    return renderWithBackControl(
       <StructuralReplayWorkspace
         apiFetch={apiFetch}
         accessCode={accessCode}
@@ -188,7 +213,7 @@ function App() {
   }
 
   if (activeWorkspace === "governance-admin") {
-    return (
+    return renderWithBackControl(
       <GovernanceAdminWorkspace
         apiFetch={apiFetch}
         accessCode={accessCode}
