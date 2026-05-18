@@ -653,7 +653,7 @@
     background: transparent;
     box-shadow: none;
     backdrop-filter: none;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .system-gate__center .system-body-orb-panel__stage {
@@ -666,12 +666,12 @@
   }
 
   .system-gate__center .system-body-orb-panel__stage .health-orb {
-    width: min(100%, 126%);
+    width: min(100%, 118%);
     max-width: none;
   }
 
   .system-gate__center .system-body-orb-panel__stage .health-orb__svg--gate-iris {
-    width: 126%;
+    width: 118%;
     max-width: none;
   }
 
