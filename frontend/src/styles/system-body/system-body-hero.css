@@ -626,15 +626,9 @@
       linear-gradient(180deg, rgba(7, 11, 14, 0.995), rgba(3, 6, 8, 0.985));
   }
 
-  .system-gate::before {
-    inset: 14%;
-    border-color: rgba(175, 188, 198, 0.026);
-    opacity: 0.22;
-  }
-
+  .system-gate::before,
   .system-gate::after {
-    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.012), transparent 56%);
-    opacity: 0.18;
+    content: none;
   }
 
   .system-gate__center {
