@@ -76,21 +76,26 @@ function App() {
     const gateOutcome = String(governance?.gate_outcome ?? "").toUpperCase();
     const hasPass = gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
 
-    const facilityTone = hasPass
-      ? admittedState === "ALERT"
-        ? "critical"
-        : "watch"
-      : "stable";
-
-    const intelligenceMode = deriveIntelligenceMode({
-      hasRealSiiOutput,
-      latestUploadSnapshot: effectiveLatestUploadSnapshot,
-    });
     const heartbeatSource =
       effectiveLatestUploadSnapshot?.last_processed_at
       ?? effectiveLatestUploadSnapshot?.last_upload_at
       ?? intelligenceStatus?.last_processed_at
       ?? null;
+    const hasTelemetryHeartbeat = Boolean(heartbeatSource);
+    const facilityTone = hasTelemetryHeartbeat
+      ? (hasPass
+        ? admittedState === "ALERT"
+          ? "critical"
+          : "watch"
+        : "stable")
+      : "empty";
+
+    const intelligenceMode = hasTelemetryHeartbeat
+      ? deriveIntelligenceMode({
+        hasRealSiiOutput,
+        latestUploadSnapshot: effectiveLatestUploadSnapshot,
+      })
+      : "empty";
     const connectionSummary = heartbeatSource
       ? `Updated ${formatClockTime(heartbeatSource)} CT`
       : "Awaiting telemetry heartbeat";
