@@ -331,6 +331,9 @@ def process_upload_job(job_id: str) -> None:
             filename=metadata["filename"],
             status_callback=lambda status, **updates: update_job(job_id, status=status, **updates),
         )
+        sii_artifacts = sii_completion_artifacts(result)
+        if not all(sii_artifacts.values()):
+            raise RuntimeError(f"SII completion artifacts missing: {sii_artifacts}")
         update_job(
             job_id,
             status="GENERATING_EVIDENCE",
@@ -345,6 +348,8 @@ def process_upload_job(job_id: str) -> None:
             errors=result.get("sii_runner_result", {}).get("errors", [])[:5],
             result_available=True,
             first_usable_available=True,
+            sii_completed=True,
+            sii_completion_artifacts=sii_artifacts,
             timings=result.get("processing_stats", {}).get("timings", {}),
         )
         completed_at = now_iso()
@@ -369,6 +374,8 @@ def process_upload_job(job_id: str) -> None:
             errors=result.get("sii_runner_result", {}).get("errors", [])[:5],
             result_available=True,
             first_usable_available=True,
+            sii_completed=True,
+            sii_completion_artifacts=sii_artifacts,
             timings={**metadata.get("timings", {}), **result.get("processing_stats", {}).get("timings", {}), "total_job_seconds": duration},
             result_summary=summary,
         )
@@ -918,6 +925,7 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
     score_delta = None
     if isinstance(current_score, (int, float)) and isinstance(previous_score, (int, float)):
         score_delta = round(float(current_score) - float(previous_score), 2)
+    artifacts = sii_completion_artifacts(result)
     return {
         "filename": result["filename"],
         "rows_processed": result["row_count"],
@@ -936,6 +944,8 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
         "primary_room": intelligence.get("primary_room"),
         "drift_status": intelligence.get("urgency"),
         "upload_result_source": "file_upload",
+        "sii_completed": all(artifacts.values()),
+        "sii_completion_artifacts": artifacts,
         "diff": {
             "previous_filename": previous.get("filename"),
             "previous_processed_at": previous.get("last_processed_at"),
@@ -953,6 +963,19 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             "rejection_reasons": ingestion_metadata.get("rejection_reasons", {}),
             "parsing_notes": ingestion_metadata.get("parsing_notes", []),
         },
+    }
+
+
+def sii_completion_artifacts(result: dict[str, Any]) -> dict[str, bool]:
+    runner = result.get("sii_runner_result") if isinstance(result, dict) else None
+    intelligence = result.get("sii_intelligence") if isinstance(result, dict) else None
+    processing_trace = result.get("processing_trace") if isinstance(result, dict) else None
+    engine_result = result.get("engine_result") if isinstance(result, dict) else None
+    return {
+        "runner_used": bool(runner and runner.get("runner_used")),
+        "intelligence_present": isinstance(intelligence, dict) and bool(intelligence),
+        "processing_trace_present": isinstance(processing_trace, dict) and bool(processing_trace),
+        "engine_result_present": isinstance(engine_result, dict) and bool(engine_result),
     }
 
 

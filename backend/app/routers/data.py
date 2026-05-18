@@ -69,6 +69,8 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "errors": ["upload_session_missing"],
             "result_available": False,
             "first_usable_available": False,
+            "sii_completed": False,
+            "sii_completion_artifacts": {},
             "timings": {},
             "result_summary": None,
         }
@@ -102,6 +104,13 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     }
     error_type = "sii_processing_failure" if normalized_status == "FAILED" else None
     measured_percent = metadata.get("percent") or metadata.get("progress") or progress_map.get(normalized_status, 0)
+    summary = metadata.get("result_summary") if isinstance(metadata.get("result_summary"), dict) else {}
+    artifacts = metadata.get("sii_completion_artifacts") or summary.get("sii_completion_artifacts") or {}
+    sii_completed = bool(metadata.get("sii_completed") or summary.get("sii_completed"))
+    if normalized_status == "COMPLETE" and not sii_completed:
+        normalized_status = "FAILED"
+        measured_percent = 100
+        error_type = "sii_completion_missing"
     return {
         "job_id": metadata.get("job_id"),
         "status": normalized_status,
@@ -110,7 +119,11 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "progress_label": metadata.get("progress_label"),
         "stage": normalized_status.lower(),
         "percent": measured_percent,
-        "message": message_map.get(normalized_status, "Telemetry processing in progress."),
+        "message": (
+            "Telemetry processing failed validation: SII completion artifacts are missing."
+            if normalized_status == "FAILED" and error_type == "sii_completion_missing"
+            else message_map.get(normalized_status, "Telemetry processing in progress.")
+        ),
         "error_type": error_type,
         "filename": metadata.get("filename"),
         "file_size_bytes": metadata.get("file_size_bytes", 0),
@@ -131,6 +144,8 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "errors": metadata.get("errors", []),
         "result_available": bool(metadata.get("result_available") or normalized_status == "COMPLETE"),
         "first_usable_available": bool(metadata.get("first_usable_available") or normalized_status in {"COGNITION_READY", "GENERATING_REPLAY", "GENERATING_EVIDENCE", "COMPLETE"}),
+        "sii_completed": sii_completed and normalized_status == "COMPLETE",
+        "sii_completion_artifacts": artifacts if isinstance(artifacts, dict) else {},
         "timings": metadata.get("timings", {}),
         "result_summary": metadata.get("result_summary"),
     }
@@ -250,6 +265,7 @@ async def upload_csv(
         "bytes_processed": metadata["file_size_bytes"],
         "rows_processed": 0,
         "result_available": False,
+        "sii_completed": False,
     }
 
 
@@ -361,6 +377,8 @@ def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dic
         "completed_at": summary.get("last_processed_at"),
         "error": None,
         "result_summary": summary,
+        "sii_completed": bool(summary.get("sii_completed")),
+        "sii_completion_artifacts": summary.get("sii_completion_artifacts", {}),
     }
 
 
@@ -436,7 +454,7 @@ def read_latest_upload(include_persisted: bool = Query(False)) -> dict[str, Any]
     if not columns_detected and detailed_result:
         columns_detected = detailed_result.get("column_count", 0)
     payload = {
-        "status": "active" if detailed_result is not None else ("baseline_active" if (live_connection or {}).get("baseline_status") == "active" else "building_baseline"),
+        "status": "active" if (detailed_result is not None and bool((summary or {}).get("sii_completed"))) else ("baseline_active" if (live_connection or {}).get("baseline_status") == "active" else "building_baseline"),
         "source": summary.get("source") or (detailed_result or {}).get("sii_intelligence", {}).get("source") or "uploaded",
         "message": (
             "Latest result active."
@@ -453,6 +471,8 @@ def read_latest_upload(include_persisted: bool = Query(False)) -> dict[str, Any]
         "connection_status": "connected",
         "result_source": summary.get("upload_result_source") or "file_upload",
         "history": read_upload_history(limit=6),
+        "sii_completed": bool((summary or {}).get("sii_completed")),
+        "sii_completion_artifacts": (summary or {}).get("sii_completion_artifacts", {}),
         "runner_used": summary.get("runner_used", False),
         "chunk_count": summary.get("chunk_count", 0),
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),

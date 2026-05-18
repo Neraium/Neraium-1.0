@@ -21,6 +21,7 @@ class UploadAcceptedResponse(BaseModel):
     bytes_processed: int = 0
     rows_processed: int = 0
     result_available: bool = False
+    sii_completed: bool = False
 
 
 
@@ -53,6 +54,8 @@ class UploadStatusResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     result_available: bool = False
     first_usable_available: bool = False
+    sii_completed: bool = False
+    sii_completion_artifacts: dict[str, bool] = Field(default_factory=dict)
     timings: dict[str, Any] = Field(default_factory=dict)
     result_summary: dict[str, Any] | None = None
 
@@ -72,6 +75,8 @@ class LatestUploadResponse(BaseModel):
     result_source: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
     latest_result: dict[str, Any] | None = None
+    sii_completed: bool = False
+    sii_completion_artifacts: dict[str, bool] = Field(default_factory=dict)
     runner_used: bool | None = None
     chunk_count: int | None = None
     memory_estimate_bytes: int | None = None

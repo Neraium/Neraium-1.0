@@ -287,6 +287,7 @@ function uniqueValues(values) {
 export function hasVerifiedSiiCompletion({ latestResult, latestSnapshot } = {}) {
   const result = latestResult ?? null;
   const snapshot = latestSnapshot ?? null;
+  if (snapshot?.sii_completed === true) return true;
   const hasResultEvidence = Boolean(
     result
     && result.sii_intelligence
