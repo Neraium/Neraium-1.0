@@ -10,6 +10,7 @@ from app.models.api_models import LatestUploadResponse, UploadAcceptedResponse, 
 from app.services.data_connections import read_connection_status
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import queue_metrics
+from app.services.adaptive_learning import build_adaptive_snapshot
 from app.services.sii_runner import read_latest_sii_state
 from app.services.sii_runner import reset_latest_sii_state
 from app.services.upload_jobs import (
@@ -498,6 +499,7 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
             "baseline_samples_collected": live_connection.get("baseline_samples_collected", 0) if live_connection else 0,
             "baseline_samples_required": live_connection.get("baseline_samples_required", 0) if live_connection else 0,
             "last_baseline_update": live_connection.get("last_baseline_update") if live_connection else None,
+            "adaptive_learning": {},
         }
         logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
         return payload
@@ -554,6 +556,7 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
         "baseline_samples_collected": live_baseline_samples_collected if live_connection is not None else summary.get("baseline_samples_collected", 0),
         "baseline_samples_required": live_baseline_samples_required if live_connection is not None else summary.get("baseline_samples_required", 0),
         "last_baseline_update": live_baseline_last_updated or summary.get("last_baseline_update"),
+        "adaptive_learning": build_adaptive_snapshot(detailed_result or {}, summary or {}) if detailed_result else {},
     }
     logger.info(
         "latest_result_served status=%s source=%s filename=%s rows=%s columns=%s state_available=%s",

@@ -71,6 +71,8 @@ def build_evidence_export(record: dict[str, Any]) -> str:
     errors = record.get("errors") or []
     drivers = record.get("primary_drivers") or []
     evidence_summary = record.get("evidence_summary") or []
+    archetypes = record.get("structural_archetypes") or []
+    feedback_history = record.get("operator_feedback_history") or []
     lines = [
         f"# Neraium Evidence Report",
         "",
@@ -91,14 +93,23 @@ def build_evidence_export(record: dict[str, Any]) -> str:
         f"- Scenario: {record.get('scenario')}",
         f"- Tick: {record.get('tick')}",
         f"- Initiated By: {record.get('initiated_by')}",
+        f"- Adaptive Site Key: {record.get('adaptive_site_key')}",
+        f"- Latest Feedback Category: {record.get('latest_feedback_category')}",
         f"- Input Hash: {record.get('input_hash')}",
         f"- Result Hash: {record.get('result_hash')}",
         "",
         "## Primary Drivers",
     ]
     lines.extend([f"- {item}" for item in drivers] or ["- None recorded"])
+    lines.extend(["", "## Interpretive Archetypes"])
+    lines.extend([f"- {item}" for item in archetypes] or ["- None recorded"])
     lines.extend(["", "## Evidence Summary"])
     lines.extend([f"- {item}" for item in evidence_summary] or ["- None recorded"])
+    lines.extend(["", "## Operator Feedback History"])
+    lines.extend(
+        [f"- {format_feedback_history_item(item)}" for item in feedback_history]
+        or ["- No operator feedback recorded"]
+    )
     lines.extend(["", "## Warnings"])
     lines.extend([f"- {item}" for item in warnings] or ["- None"])
     lines.extend(["", "## Errors"])
@@ -118,3 +129,12 @@ def atomic_write_json_list(path: Path, payload: list[dict[str, Any]]) -> None:
     temp_path = path.with_suffix(".json.tmp")
     temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     temp_path.replace(path)
+
+
+def format_feedback_history_item(item: dict[str, Any]) -> str:
+    recorded_at = item.get("recorded_at")
+    category = item.get("category")
+    actor = item.get("actor")
+    note = item.get("note")
+    note_suffix = f" - {note}" if note else ""
+    return f"{recorded_at}: {category} ({actor}){note_suffix}"

@@ -112,10 +112,11 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
-  const [batchResults, setBatchResults] = useState([]);
-  const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
-  const [copyState, setCopyState] = useState("idle");
-  const uploadJobIdRef = useRef(null);
+  const [batchResults, setBatchResults] = useState([]); 
+  const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false); 
+  const [copyState, setCopyState] = useState("idle"); 
+  const [feedbackState, setFeedbackState] = useState({ status: "idle", category: null, message: "" });
+  const uploadJobIdRef = useRef(null); 
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const uploadInputRef = useRef(null);
@@ -368,7 +369,7 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function handleResetDemoClick() {
+  async function handleResetDemoClick() { 
     setSelectedFiles([]);
     setUploadState("idle");
     setUploadError("");
@@ -383,10 +384,40 @@ export default function DataConnectionsWorkspace({
       pollTimerRef.current = null;
     }
     if (uploadInputRef.current) uploadInputRef.current.value = "";
-    if (onResetDemo) await onResetDemo();
-  }
+    if (onResetDemo) await onResetDemo(); 
+  } 
 
-  const displayUploadError = uploadError;
+  async function handleOperatorFeedback(category) {
+    const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id;
+    if (!latestRunId) {
+      setFeedbackState({ status: "error", category, message: "No recent event is available for operator feedback yet." });
+      return;
+    }
+    setFeedbackState({ status: "submitting", category, message: "Recording operator feedback." });
+    try {
+      const response = await apiFetch(`/api/evidence/runs/${latestRunId}/feedback`, {
+        method: "POST",
+        accessCode,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category }),
+      });
+      const payload = await readJsonPayload(response);
+      if (!response.ok) throw buildUploadRequestError(response, payload, "upload");
+      const refreshed = await loadLatestUpload();
+      if (refreshed?.latest_result) {
+        setUploadResult(refreshed.latest_result);
+      }
+      setFeedbackState({ status: "complete", category, message: "Operator feedback recorded in evidence memory." });
+      if (typeof onUploadComplete === "function" && refreshed) {
+        await onUploadComplete({ ...(refreshed.latest_result ?? {}), ...refreshed });
+      }
+    } catch (error) {
+      const classified = classifyUploadError(error, "upload");
+      setFeedbackState({ status: "error", category, message: classified.message });
+    }
+  }
+ 
+  const displayUploadError = uploadError; 
   const intakeStages = uploadJob
     ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
     : uploadResult
@@ -405,9 +436,11 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = isUploadProcessing(uploadState)
     ? Math.max(1, Math.min(99, preferredPercent))
     : (normalizeUploadStatus(uploadState) === "complete" ? 100 : null);
-  const baselineStatus = latestUploadSnapshot?.baseline_status;
-  const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending";
-  return (
+  const baselineStatus = latestUploadSnapshot?.baseline_status; 
+  const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending"; 
+  const adaptiveLearning = latestUploadSnapshot?.adaptive_learning ?? uploadResult?.adaptive_learning ?? latestUploadResult?.adaptive_learning ?? {};
+  const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
+  return ( 
     <div className="workspace-grid workspace-grid--connections">
       <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
         <div className="intake-flow__controls" role="tablist" aria-label="Historian intake sections">
@@ -451,13 +484,17 @@ export default function DataConnectionsWorkspace({
             uploadDiffSummary={uploadDiffSummary}
             hasActiveSession={hasActiveSession}
             hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult}
-            hasRealSiiOutput={hasRealSiiOutput}
-            onResumePreviousSession={onResumePreviousSession}
-            onOpenUpload={() => setActiveTab("upload")}
-          />
-        </>
-      )}
+            hasCurrentUploadResult={hasCurrentUploadResult} 
+            hasRealSiiOutput={hasRealSiiOutput} 
+            onResumePreviousSession={onResumePreviousSession} 
+            onOpenUpload={() => setActiveTab("upload")} 
+            adaptiveLearning={adaptiveLearning}
+            latestRunId={latestRunId}
+            feedbackState={feedbackState}
+            onOperatorFeedback={handleOperatorFeedback}
+          /> 
+        </> 
+      )} 
 
       {activeTab === "upload" && (
         <>
@@ -502,13 +539,17 @@ export default function DataConnectionsWorkspace({
             uploadDiffSummary={uploadDiffSummary}
             hasActiveSession={hasActiveSession}
             hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult}
-            hasRealSiiOutput={hasRealSiiOutput}
-            onResumePreviousSession={onResumePreviousSession}
-            onOpenUpload={() => setActiveTab("upload")}
-          />
-        </>
-      )}
+            hasCurrentUploadResult={hasCurrentUploadResult} 
+            hasRealSiiOutput={hasRealSiiOutput} 
+            onResumePreviousSession={onResumePreviousSession} 
+            onOpenUpload={() => setActiveTab("upload")} 
+            adaptiveLearning={adaptiveLearning}
+            latestRunId={latestRunId}
+            feedbackState={feedbackState}
+            onOperatorFeedback={handleOperatorFeedback}
+          /> 
+        </> 
+      )} 
     </div>
   );
 }

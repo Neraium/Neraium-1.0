@@ -54,6 +54,7 @@ export function buildEmptyLatestUploadSnapshot() {
     baseline_samples_collected: 0,
     baseline_samples_required: 0,
     last_baseline_update: null,
+    adaptive_learning: {},
   };
 }
 

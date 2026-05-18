@@ -20,6 +20,7 @@ from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import get_settings
 from app.engine import run_engine_analysis
 from app.services.baseline_analysis import build_baseline_analysis
+from app.services.adaptive_learning import append_event_memory, build_adaptive_snapshot, derive_interpretive_archetypes, derive_site_key, update_site_memory_from_result
 from app.services.csv_parser import parse_csv_content, preview_rows
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import (
@@ -50,6 +51,7 @@ from app.services.sii_runner import (
     RUNNER_MODULE,
     build_sensor_vectors,
     parse_timestamp as parse_runner_timestamp,
+    read_latest_sii_state,
     run_sii_runner,
     write_latest_sii_state,
 )
@@ -361,8 +363,13 @@ def process_upload_job(job_id: str) -> None:
             timings=result.get("processing_stats", {}).get("timings", {}),
         )
         completed_at = now_iso()
+        update_site_memory_from_result(result, completed_at)
+        result["adaptive_learning"] = build_adaptive_snapshot(result, {"last_processed_at": completed_at})
         summary = summarize_result(result, completed_at)
-        duration = round(time.perf_counter() - started, 4)
+        latest_state = read_latest_sii_state() or {}
+        if latest_state:
+            write_latest_sii_state({**latest_state, "adaptive_learning": result["adaptive_learning"]})
+        duration = round(time.perf_counter() - started, 4) 
         write_latest_upload_summary(job_id, summary)
         write_latest_upload_result(job_id, result)
         upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
@@ -892,14 +899,14 @@ def build_upload_result(
                         room["projected_time_to_failure_hours"] = runner_projection_hours
                 elif "projected_time_to_failure" not in room:
                     room["projected_time_to_failure"] = "Monitoring"
-    write_latest_sii_state(
-        {
-            **sii_intelligence,
-            "runner_module": sii_runner_result.get("runner_module"),
-            "core_engine": sii_runner_result.get("core_engine"),
-            "runner_used": sii_runner_result.get("runner_used"),
-            "last_processed_at": now_iso(),
-        }
+    write_latest_sii_state( 
+        { 
+            **sii_intelligence, 
+            "runner_module": sii_runner_result.get("runner_module"), 
+            "core_engine": sii_runner_result.get("core_engine"), 
+            "runner_used": sii_runner_result.get("runner_used"), 
+            "last_processed_at": now_iso(), 
+        } 
     )
     logger.info(
         "upload_result_calculated filename=%s rows=%s columns=%s readiness=%s overall_result=%s primary_room=%s",
@@ -936,7 +943,7 @@ def build_upload_result(
         "ingestion_metadata": intelligence_source_metadata or {},
         "previous_upload_summary": previous_upload_summary,
         "validation_provenance": VALIDATION_PROVENANCE,
-    }
+    } 
 
 
 def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any]:
@@ -988,6 +995,7 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             "rejection_reasons": ingestion_metadata.get("rejection_reasons", {}),
             "parsing_notes": ingestion_metadata.get("parsing_notes", []),
         },
+        "adaptive_learning": result.get("adaptive_learning", {}),
     }
 
 
@@ -1116,6 +1124,7 @@ def build_evidence_record(
     room = intelligence.get("primary_room") or primary_room_from_summary(result.get("room_summary", {}))
     record = {
         "run_id": metadata.get("job_id"),
+        "adaptive_site_key": derive_site_key(result),
         "source_type": "file_upload",
         "source_name": metadata.get("filename"),
         "filename": metadata.get("filename"),
@@ -1132,6 +1141,7 @@ def build_evidence_record(
         "neraium_score": intelligence.get("neraium_score"),
         "drift_status": intelligence.get("urgency"),
         "primary_drivers": [driver] if driver else [],
+        "structural_archetypes": [item["name"] for item in derive_interpretive_archetypes(result)],
         "evidence_summary": evidence_summary[:6],
         "warnings": result.get("warnings", [])[:10],
         "errors": result.get("sii_runner_result", {}).get("errors", [])[:5],
@@ -1139,6 +1149,13 @@ def build_evidence_record(
         "result_hash": digest_payload(summary),
         "initiated_by": metadata.get("initiated_by", "anonymous"),
     }
+    append_event_memory(
+        site_key=record["adaptive_site_key"],
+        run_id=str(record["run_id"]),
+        completed_at=completed_at,
+        summary=summary,
+        result=result,
+    )
     return record
 
 
@@ -1246,6 +1263,7 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "source_type": result.get("source_type"),
         "connection_id": result.get("connection_id"),
         "validation_provenance": result.get("validation_provenance", {}),
+        "adaptive_learning": result.get("adaptive_learning", {}),
     }
 
 

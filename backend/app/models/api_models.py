@@ -86,6 +86,7 @@ class LatestUploadResponse(BaseModel):
     baseline_samples_collected: int = 0
     baseline_samples_required: int = 0
     last_baseline_update: str | None = None
+    adaptive_learning: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvidenceRunResponse(BaseModel):
@@ -115,6 +116,15 @@ class EvidenceRunResponse(BaseModel):
     initiated_by: str | None = None
     scenario: str | None = None
     tick: int | None = None
+    adaptive_site_key: str | None = None
+    structural_archetypes: list[str] = Field(default_factory=list)
+    latest_feedback_category: str | None = None
+    operator_feedback_history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class OperatorFeedbackRequest(BaseModel):
+    category: str
+    note: str | None = None
 
 
 class EvidenceRunsListResponse(BaseModel):

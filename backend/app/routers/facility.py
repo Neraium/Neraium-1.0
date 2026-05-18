@@ -15,6 +15,9 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 def read_facility_systems(include_persisted: bool = Query(True)) -> dict[str, Any]:
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
+    adaptive_learning = {}
+    if include_persisted and isinstance(latest_result, dict) and isinstance(latest_result.get("adaptive_learning"), dict):
+        adaptive_learning = latest_result.get("adaptive_learning", {})
     return {
         "systems": [
             {
@@ -52,6 +55,7 @@ def read_facility_systems(include_persisted: bool = Query(True)) -> dict[str, An
             "unknown_system_drift",
         ],
         "intelligence": intelligence,
+        "adaptive_learning": adaptive_learning,
         "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
 
