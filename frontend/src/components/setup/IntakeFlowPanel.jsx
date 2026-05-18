@@ -5,7 +5,7 @@ export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
   handleFileSelection,
-  selectedFile,
+  selectedFiles,
   latestUploadSnapshot,
   pendingUploadKind,
   selectedFileSize,
@@ -53,18 +53,18 @@ export default function IntakeFlowPanel({
             </div>
             <p>Upload a historian export for read-only pilot intake and structural analysis.</p>
           </div>
-          <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" className="intake-flow__input" onChange={handleFileSelection} />
+          <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
-              <strong>{selectedFile ? selectedFile.name : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFile ? `${pendingUploadKind.toUpperCase()} file - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
-              <p>{uploadReadinessMessage(selectedFile)}</p>
+              <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} batch - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
+              <p>{uploadReadinessMessage(selectedFiles?.[0] ?? null)}</p>
             </div>
             <div className="upload-file-card__actions">
               <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
               <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>Select JSON</button>
-              <button className="command-button" type="submit" disabled={!selectedFile || isUploadProcessing(uploadState)}>
+              <button className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
                 {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()}`}
               </button>
             </div>

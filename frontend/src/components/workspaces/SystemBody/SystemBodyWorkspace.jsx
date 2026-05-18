@@ -228,9 +228,45 @@ function normalizeUploadStatus(status) {
   return "running";
 }
 
+function deriveProgressPercent(payload) {
+  const directCandidates = [payload?.percent, payload?.progress, payload?.progress_percent, payload?.percentage];
+  const direct = directCandidates
+    .map((value) => Number(value))
+    .find((value) => Number.isFinite(value));
+  if (Number.isFinite(direct)) {
+    return Math.max(0, Math.min(100, direct));
+  }
+
+  const status = String(payload?.status ?? "").toLowerCase();
+  const stagedPercent = {
+    uploading: 12,
+    accepted: 18,
+    pending: 28,
+    queued: 28,
+    validating_schema: 36,
+    parsing: 48,
+    baseline_modeling: 62,
+    structural_scoring: 74,
+    running_sii: 82,
+    cognition_ready: 90,
+    generating_replay: 94,
+    writing_state: 97,
+    completed: 100,
+    complete: 100,
+    ready: 100,
+    done: 100,
+    success: 100,
+    failed: 100,
+    error: 100,
+    cancelled: 100,
+  };
+  return stagedPercent[status] ?? null;
+}
+
 async function pollUploadJob({ apiFetch, accessCode, jobId, onProgress }) {
   const maxChecks = 180;
   let failureCount = 0;
+  let highestPercent = 0;
   for (let check = 0; check < maxChecks; check += 1) {
     try {
       const response = await apiFetch(`/api/data/upload-status/${encodeURIComponent(jobId)}`, { accessCode });
@@ -246,11 +282,15 @@ async function pollUploadJob({ apiFetch, accessCode, jobId, onProgress }) {
       if (status === "failed") {
         throw new Error(readUploadError(payload, 500));
       }
-      const percent = Number.isFinite(Number(payload?.percent)) ? Math.max(0, Math.min(100, Number(payload.percent))) : null;
+      const derivedPercent = deriveProgressPercent(payload);
+      const percent = Number.isFinite(derivedPercent)
+        ? Math.max(highestPercent, Math.max(0, Math.min(99, derivedPercent)))
+        : highestPercent;
+      highestPercent = percent;
       const label = payload?.progress_label || payload?.message || "Processing governed telemetry intake.";
       onProgress?.({
-        message: percent == null ? label : `${label} (${percent}%)`,
-        percent,
+        message: `${label} (${Math.round(percent)}%)`,
+        percent: Math.round(percent),
       });
       await wait(nextUploadPollDelay({ payload, failureCount }));
     } catch (error) {

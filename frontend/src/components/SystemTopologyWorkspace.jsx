@@ -39,7 +39,9 @@ export default function SystemTopologyWorkspace({
     layer,
   });
 
-  const stateLabel = governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label;
+  const stateLabel = awaitingSii
+    ? "No Data"
+    : (governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const findings = liveOps.findings?.slice(0, 2) ?? [];
@@ -53,9 +55,11 @@ export default function SystemTopologyWorkspace({
   }, [liveOps.relationshipRows]);
 
   const systemState = orbStateFromStatusLight(governed.statusLight);
-  const primaryMessage = governed.hasPass
-    ? concise(governed.passedFindingSummary, 120)
-    : "Stable";
+  const primaryMessage = awaitingSii
+    ? "Upload or connect telemetry to begin monitoring."
+    : governed.hasPass
+      ? concise(governed.passedFindingSummary, 120)
+      : "Stable";
 
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = governed.hasPass
@@ -129,7 +133,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     return {
       hasPass: false,
       statusLight,
-      currentGovernedSystemState: "Stable",
+      currentGovernedSystemState: awaitingSii ? "No Data" : "Stable",
       passedFindingSummary: "",
       affectedSubsystem: "",
       evidenceBackedOperatorFocus: "",

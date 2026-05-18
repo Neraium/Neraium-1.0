@@ -6,7 +6,6 @@ import {
   isUploadProcessing,
   normalizeErrorMessage,
   normalizeUploadStatus,
-  operatorUploadMessage,
   readJsonPayload,
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
@@ -16,8 +15,6 @@ import { Panel } from "./workspacePrimitives";
 import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
-import DiagnosticsPanel from "./setup/DiagnosticsPanel";
-import DemoModePanel from "./setup/DemoModePanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -60,6 +57,31 @@ function validateTelemetryFile(file, kind) {
   return "";
 }
 
+function fallbackPercentFromStatus(status) {
+  const normalized = normalizeUploadStatus(status);
+  const stagedPercent = {
+    idle: 0,
+    validated: 3,
+    uploading: 12,
+    upload_started: 12,
+    accepted: 18,
+    queued: 22,
+    pending: 28,
+    validating_schema: 36,
+    parsing: 48,
+    baseline_modeling: 62,
+    structural_scoring: 74,
+    running_sii: 82,
+    cognition_ready: 90,
+    generating_replay: 94,
+    writing_state: 97,
+    complete: 100,
+    failed: 100,
+    error: 100,
+  };
+  return stagedPercent[normalized] ?? null;
+}
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -75,24 +97,15 @@ export default function DataConnectionsWorkspace({
   onResetDemo,
   onResumePreviousSession,
   formatClockTime,
-  demoState,
   demoTabId,
-  onActivateDemo,
-  onToggleDemoPlayback,
-  onPreviousDemoStep,
-  onNextDemoStep,
-  onRestartDemo,
 }) {
   const tabs = useMemo(() => [
-    { id: "overview", label: "Overview" },
-    { id: "historian-setup", label: "Setup" },
-    { id: "upload", label: "Upload" },
-    { id: "diagnostics", label: "Diagnostics" },
-    { id: "demo", label: "Demo" },
+    { id: "connect-live", label: "Live Link" },
+    { id: "upload", label: "Upload Data" },
   ], []);
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [activeTab, setActiveTab] = useState("connect-live");
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -126,60 +139,57 @@ export default function DataConnectionsWorkspace({
 
   useEffect(() => {
     if (!demoTabId) return;
-    setActiveTab(demoTabId);
+    if (demoTabId === "upload") {
+      setActiveTab("upload");
+      return;
+    }
+    setActiveTab("connect-live");
   }, [demoTabId]);
 
   async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
-    if (!pollingJobId) return;
-    try {
-      const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
-      const payload = await readJsonPayload(response);
-      if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
-      pollFailureCountRef.current = 0;
-      uploadJobIdRef.current = payload.job_id ?? pollingJobId;
-      setUploadJob(payload);
-      const nextStatus = normalizeUploadStatus(payload.status);
-      setUploadState(nextStatus);
-      if (nextStatus === "complete") {
-        const latestPayload = await loadLatestUpload();
-        const latestResult = latestPayload?.latest_result;
-        const completedPayload = {
-          ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
-          ...(latestPayload ?? {}),
-          filename: latestPayload?.last_filename ?? payload.filename,
-          row_count: latestPayload?.rows_processed ?? payload.rows_processed,
-          column_count: latestPayload?.columns_detected ?? payload.columns_detected,
-          job_status: payload,
-        };
-        setUploadResult(completedPayload);
-        await onUploadComplete(completedPayload);
-        return;
+    if (!pollingJobId) throw new Error("Upload polling could not start.");
+    for (let attempts = 0; attempts < 240; attempts += 1) {
+      try {
+        const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
+        const payload = await readJsonPayload(response);
+        if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
+        pollFailureCountRef.current = 0;
+        uploadJobIdRef.current = payload.job_id ?? pollingJobId;
+        setUploadJob(payload);
+        const nextStatus = normalizeUploadStatus(payload.status);
+        setUploadState(nextStatus);
+        if (nextStatus === "complete") return payload;
+        if (nextStatus === "failed") throw buildUploadRequestError(response, payload, "poll");
+        const delayMs = nextUploadPollDelay({ payload, failureCount: pollFailureCountRef.current });
+        await new Promise((resolve) => {
+          pollTimerRef.current = window.setTimeout(resolve, delayMs);
+        });
+      } catch (error) {
+        const classified = classifyUploadError(error, "poll");
+        if (classified.retryable && pollFailureCountRef.current < 30) {
+          pollFailureCountRef.current += 1;
+          setUploadState((current) => (isUploadProcessing(current) ? current : "running_sii"));
+          setUploadError(classified.message);
+          const delayMs = nextUploadPollDelay({ payload: null, failureCount: pollFailureCountRef.current, failedAttempt: true });
+          await new Promise((resolve) => {
+            pollTimerRef.current = window.setTimeout(resolve, delayMs);
+          });
+          continue;
+        }
+        setUploadError(classified.finalMessage ?? classified.message);
+        setUploadState(classified.retryable ? "error" : classified.state);
+        throw error;
       }
-      if (nextStatus === "failed") {
-        setUploadError(operatorUploadMessage({ status: response.status, errorType: payload.error_type ?? "sii_processing_failure", detail: payload.error, phase: "poll" }));
-        return;
-      }
-      const delayMs = nextUploadPollDelay({ payload, failureCount: pollFailureCountRef.current });
-      pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), delayMs);
-    } catch (error) {
-      const classified = classifyUploadError(error, "poll");
-      if (classified.retryable && pollFailureCountRef.current < 30) {
-        pollFailureCountRef.current += 1;
-        setUploadState((current) => (isUploadProcessing(current) ? current : "running_sii"));
-        setUploadError(classified.message);
-        const delayMs = nextUploadPollDelay({ payload: null, failureCount: pollFailureCountRef.current, failedAttempt: true });
-        pollTimerRef.current = window.setTimeout(() => pollUploadStatus(pollingJobId), delayMs);
-        return;
-      }
-      setUploadError(classified.finalMessage ?? classified.message);
-      setUploadState(classified.retryable ? "error" : classified.state);
     }
+    throw new Error("Upload polling timed out.");
   }
 
   async function handleUpload(event) {
     event.preventDefault();
-    const validationError = validateTelemetryFile(selectedFile, pendingUploadKind);
+    const validationError = selectedFiles.length === 0
+      ? "Choose one or more CSV/JSON telemetry files to upload."
+      : validateTelemetryFile(selectedFiles[0], pendingUploadKind);
     if (validationError) {
       setUploadError(validationError);
       setUploadState("validation_error");
@@ -187,34 +197,50 @@ export default function DataConnectionsWorkspace({
     }
     setUploadState("uploading");
     setUploadError("");
-    setUploadJob({ job_id: null, status: "uploading", progress_label: "Upload started.", message: "Uploading telemetry export.", file_size_bytes: selectedFile.size });
-    setUploadTransfer({ loaded: 0, total: selectedFile.size, percent: 0, speedBytesPerSecond: 0, stage: "upload_started" });
+    const totalBytes = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+    setUploadJob({ job_id: null, status: "uploading", progress_label: "Upload started.", message: "Uploading telemetry export.", file_size_bytes: totalBytes });
+    setUploadTransfer({ loaded: 0, total: totalBytes, percent: 0, speedBytesPerSecond: 0, stage: "upload_started" });
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
     try {
-      const { ok, status, payload } = await uploadTelemetryFileWithProgress({
-        file: selectedFile,
-        timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
-        onProgress: (progress) => {
-          setUploadTransfer(progress);
-          setUploadJob((current) => ({
-            ...(current ?? {}),
-            status: progress.stage === "accepted" ? "pending" : "uploading",
-            progress_label: progress.percent != null
-              ? `Uploading telemetry export - ${progress.percent}% - ${formatTransferSpeed(progress.speedBytesPerSecond)}`
-              : `Uploading telemetry export - ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
-            message: progress.message,
-            file_size_bytes: progress.total || selectedFile.size,
-            bytes_processed: progress.loaded,
-          }));
-        },
-      });
-      if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
-      if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
-      uploadJobIdRef.current = payload.job_id;
-      setUploadJob(payload);
-      setUploadState(normalizeUploadStatus(payload.status));
-      pollUploadStatus(payload.job_id);
+      let aggregateLoaded = 0;
+      for (const [index, file] of selectedFiles.entries()) {
+        const startingLoaded = aggregateLoaded;
+        const { ok, status, payload } = await uploadTelemetryFileWithProgress({
+          file,
+          timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
+          onProgress: (progress) => {
+            const loaded = startingLoaded + (progress.loaded ?? 0);
+            const total = totalBytes;
+            const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+            setUploadTransfer({ ...progress, loaded, total, percent });
+            setUploadJob((current) => ({
+              ...(current ?? {}),
+              status: progress.stage === "accepted" ? "pending" : "uploading",
+              progress_label: `Uploading file ${index + 1}/${selectedFiles.length} - ${percent}% - ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
+              message: progress.message,
+              file_size_bytes: total,
+              bytes_processed: loaded,
+            }));
+          },
+        });
+        if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
+        if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+        uploadJobIdRef.current = payload.job_id;
+        setUploadJob(payload);
+        setUploadState(normalizeUploadStatus(payload.status));
+        await pollUploadStatus(payload.job_id);
+        aggregateLoaded += file.size || 0;
+      }
+      const latestPayload = await loadLatestUpload();
+      const latestResult = latestPayload?.latest_result;
+      const completedPayload = {
+        ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
+        ...(latestPayload ?? {}),
+      };
+      setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
+      setUploadResult(completedPayload);
+      await onUploadComplete(completedPayload);
     } catch (error) {
       const uploadRequestError = error?.name === "UploadRequestError" && error?.payload
         ? buildUploadRequestError({ status: error.status }, error.payload, "upload")
@@ -229,25 +255,28 @@ export default function DataConnectionsWorkspace({
     setPendingUploadKind(kind);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
+      uploadInputRef.current.multiple = true;
       uploadInputRef.current.accept = kind === "json" ? ".json,application/json" : ".csv,text/csv";
       uploadInputRef.current.click();
     }
   }
 
   function handleFileSelection(event) {
-    const nextFile = event.target.files?.[0] ?? null;
-    const validationError = validateTelemetryFile(nextFile, pendingUploadKind);
-    setSelectedFile(nextFile);
+    const nextFiles = Array.from(event.target.files ?? []);
+    const firstInvalid = nextFiles.find((file) => Boolean(validateTelemetryFile(file, pendingUploadKind)));
+    const validationError = firstInvalid ? validateTelemetryFile(firstInvalid, pendingUploadKind) : "";
+    setSelectedFiles(validationError ? [] : nextFiles);
     setUploadError(validationError);
-    setUploadState(validationError ? "validation_error" : nextFile ? "validated" : "idle");
+    setUploadState(validationError ? "validation_error" : nextFiles.length > 0 ? "validated" : "idle");
     setUploadTransfer(null);
-    if (nextFile && !validationError) {
+    if (nextFiles.length > 0 && !validationError) {
+      const totalBytes = nextFiles.reduce((sum, file) => sum + (file.size || 0), 0);
       setUploadJob({
         job_id: null,
         status: "validated",
-        progress_label: isLargeOperationalUpload(nextFile) ? "Large telemetry export detected." : "Telemetry export validated.",
-        message: uploadReadinessMessage(nextFile),
-        file_size_bytes: nextFile.size,
+        progress_label: nextFiles.length > 1 ? `${nextFiles.length} telemetry files validated.` : (isLargeOperationalUpload(nextFiles[0]) ? "Large telemetry export detected." : "Telemetry export validated."),
+        message: uploadReadinessMessage(nextFiles[0]),
+        file_size_bytes: totalBytes,
       });
     } else {
       setUploadJob(null);
@@ -255,7 +284,7 @@ export default function DataConnectionsWorkspace({
   }
 
   async function handleResetDemoClick() {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setUploadState("idle");
     setUploadError("");
     setUploadResult(null);
@@ -278,18 +307,20 @@ export default function DataConnectionsWorkspace({
       ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
       : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError: displayUploadError, roomContext });
   const latestStatus = hasActiveSession ? (latestUploadSnapshot?.status ?? "empty") : "empty";
-  const uploadHistoryRows = uploadStateView.buildUploadHistoryRows(latestUploadSnapshot?.history ?? []);
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(latestUploadSnapshot?.history ?? []);
   const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || latestUploadSnapshot?.message || uploadStateMessage(uploadState));
-  const selectedFileSize = formatFileSize(selectedFile?.size ?? 0);
+  const selectedFileSize = formatFileSize(selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0));
   const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
   const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
-  const visibleProgressPercent = normalizeUploadStatus(uploadState) === "uploading" ? uploadTransferPercent : backendPercent;
+  const statusFallbackPercent = fallbackPercentFromStatus(uploadJob?.status ?? uploadState);
+  const preferredPercent = [uploadTransferPercent, backendPercent, statusFallbackPercent]
+    .filter((value) => Number.isFinite(value))
+    .reduce((maxValue, value) => Math.max(maxValue, value), 0);
+  const visibleProgressPercent = isUploadProcessing(uploadState)
+    ? Math.max(1, Math.min(99, preferredPercent))
+    : (normalizeUploadStatus(uploadState) === "complete" ? 100 : null);
   const baselineStatus = latestUploadSnapshot?.baseline_status;
   const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending";
-  const diagnosticsResult = uploadStateView.hasFullUploadResult(uploadResult) ? uploadResult : latestUploadResult;
-  const hasDiagnosticsSession = hasActiveSession && hasRealSiiOutput && (hasCurrentUploadResult || hasResumedSession);
-
   return (
     <div className="workspace-grid workspace-grid--connections">
       <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
@@ -302,11 +333,11 @@ export default function DataConnectionsWorkspace({
         </div>
       </Panel>
 
-      {activeTab === "overview" && (
+      {activeTab === "connect-live" && (
         <>
           <Panel title="Session Controls" className="span-12">
             <p className="narrative-text">
-              Startup remains neutral until a new upload completes or a previous session is explicitly resumed.
+              Link a live source or resume the latest validated session.
             </p>
             <div className="intake-flow__controls">
               <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
@@ -316,10 +347,11 @@ export default function DataConnectionsWorkspace({
                 Resume Previous Session
               </button>
               <button type="button" className="command-button" onClick={() => setActiveTab("upload")}>
-                Upload Data
+                Open Upload
               </button>
             </div>
           </Panel>
+          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
           <IntakeStatusPanel
             uploadStateView={uploadStateView}
             latestStatus={latestStatus}
@@ -341,74 +373,52 @@ export default function DataConnectionsWorkspace({
         </>
       )}
 
-      {activeTab === "historian-setup" && (
-        <>
-          <Panel title="Session Controls" className="span-12">
-            <div className="intake-flow__controls">
-              <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
-                Reset Demo State
-              </button>
-              <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
-                Resume Previous Session
-              </button>
-            </div>
-          </Panel>
-          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
-        </>
-      )}
-
       {activeTab === "upload" && (
-        <IntakeFlowPanel
-          handleUpload={handleUpload}
-          uploadInputRef={uploadInputRef}
-          handleFileSelection={handleFileSelection}
-          selectedFile={selectedFile}
-          latestUploadSnapshot={latestUploadSnapshot}
-          pendingUploadKind={pendingUploadKind}
-          selectedFileSize={selectedFileSize}
-          uploadReadinessMessage={uploadReadinessMessage}
-          isUploadProcessing={isUploadProcessing}
-          uploadState={uploadState}
-          openFilePicker={openFilePicker}
-          uploadJob={uploadJob}
-          latestMessage={latestMessage}
-          visibleProgressPercent={visibleProgressPercent}
-          uploadTransfer={uploadTransfer}
-          formatFileSize={formatFileSize}
-          formatTransferSpeed={formatTransferSpeed}
-          uploadStateMessage={uploadStateMessage}
-          setCopyState={setCopyState}
-          copyState={copyState}
-          isJsonSchemaOpen={isJsonSchemaOpen}
-          setIsJsonSchemaOpen={setIsJsonSchemaOpen}
-          intakeStages={intakeStages}
-        />
-      )}
-
-      {activeTab === "diagnostics" && (
-        <DiagnosticsPanel
-          latestUploadResult={diagnosticsResult}
-          latestUploadSnapshot={latestUploadSnapshot}
-          hasActiveSession={hasDiagnosticsSession}
-          hasCurrentUploadResult={hasCurrentUploadResult}
-          hasResumedSession={hasResumedSession}
-          hasRealSiiOutput={hasRealSiiOutput}
-          apiFetch={apiFetch}
-          accessCode={accessCode}
-          uploadStateView={uploadStateView}
-          uploadHistoryRows={uploadHistoryRows}
-        />
-      )}
-
-      {activeTab === "demo" && (
-        <DemoModePanel
-          demoState={demoState}
-          onActivateDemo={onActivateDemo}
-          onTogglePlayback={onToggleDemoPlayback}
-          onPrevious={onPreviousDemoStep}
-          onNext={onNextDemoStep}
-          onRestart={onRestartDemo}
-        />
+        <>
+          <IntakeFlowPanel
+            handleUpload={handleUpload}
+            uploadInputRef={uploadInputRef}
+            handleFileSelection={handleFileSelection}
+            selectedFiles={selectedFiles}
+            latestUploadSnapshot={latestUploadSnapshot}
+            pendingUploadKind={pendingUploadKind}
+            selectedFileSize={selectedFileSize}
+            uploadReadinessMessage={uploadReadinessMessage}
+            isUploadProcessing={isUploadProcessing}
+            uploadState={uploadState}
+            openFilePicker={openFilePicker}
+            uploadJob={uploadJob}
+            latestMessage={latestMessage}
+            visibleProgressPercent={visibleProgressPercent}
+            uploadTransfer={uploadTransfer}
+            formatFileSize={formatFileSize}
+            formatTransferSpeed={formatTransferSpeed}
+            uploadStateMessage={uploadStateMessage}
+            setCopyState={setCopyState}
+            copyState={copyState}
+            isJsonSchemaOpen={isJsonSchemaOpen}
+            setIsJsonSchemaOpen={setIsJsonSchemaOpen}
+            intakeStages={intakeStages}
+          />
+          <IntakeStatusPanel
+            uploadStateView={uploadStateView}
+            latestStatus={latestStatus}
+            uploadState={uploadState}
+            displayUploadError={displayUploadError}
+            apiStatus={apiStatus}
+            latestUploadSnapshot={latestUploadSnapshot}
+            formatClockTime={formatClockTime}
+            baselineMessage={baselineMessage}
+            roomContext={roomContext}
+            uploadDiffSummary={uploadDiffSummary}
+            hasActiveSession={hasActiveSession}
+            hasResumedSession={hasResumedSession}
+            hasCurrentUploadResult={hasCurrentUploadResult}
+            hasRealSiiOutput={hasRealSiiOutput}
+            onResumePreviousSession={onResumePreviousSession}
+            onOpenUpload={() => setActiveTab("upload")}
+          />
+        </>
       )}
     </div>
   );
