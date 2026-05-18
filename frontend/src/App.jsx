@@ -53,11 +53,10 @@ function App() {
   const effectiveSessionIntent = hasRealSiiOutput && sessionIntent === "neutral" ? "resumed" : sessionIntent;
   const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasRealSiiOutput;
   const hasResumedSession = effectiveSessionIntent === "resumed" && hasRealSiiOutput;
-  const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
+  const hasSnapshotSession = uploadStateView.hasActiveTelemetrySnapshot(latestUploadSnapshot);
+  const hasActiveSession = hasCurrentUploadResult || hasResumedSession || hasSnapshotSession;
   const effectiveLatestUploadResult = hasActiveSession ? latestUploadResult : null;
-  const effectiveLatestUploadSnapshot = hasActiveSession
-    ? latestUploadSnapshot
-    : uploadStateView.buildEmptyLatestUploadSnapshot();
+  const effectiveLatestUploadSnapshot = latestUploadSnapshot;
   const roomContext = useMemo(
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
@@ -80,16 +79,29 @@ function App() {
         : "watch"
       : "stable";
 
-    const connectionSummary = latestUploadSnapshot?.last_upload_at
-      ? `Updated ${formatClockTime(latestUploadSnapshot.last_upload_at)} CT`
-      : formatClockTime(new Date());
+    const intelligenceMode = deriveIntelligenceMode({
+      hasRealSiiOutput,
+      latestUploadSnapshot: effectiveLatestUploadSnapshot,
+    });
+    const heartbeatSource =
+      effectiveLatestUploadSnapshot?.last_processed_at
+      ?? effectiveLatestUploadSnapshot?.last_upload_at
+      ?? intelligenceStatus?.last_processed_at
+      ?? null;
+    const connectionSummary = heartbeatSource
+      ? `Updated ${formatClockTime(heartbeatSource)} CT`
+      : "Awaiting telemetry heartbeat";
+    const connectionStatusLine = apiStatus.state === "online"
+      ? (heartbeatSource ? "Data stream active" : "Awaiting telemetry data")
+      : "Connection degraded";
 
     return {
       facilityTone,
-      intelligenceMode: effectiveLatestUploadResult ? "live" : "empty",
+      intelligenceMode,
       connectionTone: apiStatus.state === "online" ? "online" : "degraded",
       connectionSummary,
-      connectionStatusLine: apiStatus.state === "online" ? "Data stream active" : "Connection degraded",
+      connectionStatusLine,
+      lastDataHeartbeat: heartbeatSource,
       primaryWindow: {
         label: governance?.affected_subsystem ?? roomContext.primary,
         window: governance?.elapsed_operational_duration ?? "Governed window active",
@@ -114,7 +126,7 @@ function App() {
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, effectiveLatestUploadResult, intelligenceStatus, latestUploadSnapshot?.last_upload_at, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
     setHistorianReplayState((current) => ({ ...current, frame, meta }));
@@ -306,6 +318,16 @@ function App() {
       onUploadComplete={handleGateUploadComplete}
     />
   );
+}
+
+function deriveIntelligenceMode({ hasRealSiiOutput, latestUploadSnapshot }) {
+  if (hasRealSiiOutput) return "live";
+  const status = String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase();
+  if (["active", "baseline_active"].includes(status)) return "live";
+  if (["queued", "pending", "uploading", "parsing", "baseline_modeling", "running_sii", "writing_state", "building_baseline"].includes(status)) {
+    return "processing";
+  }
+  return "empty";
 }
 
 function formatClockTime(value) {
