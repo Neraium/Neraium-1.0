@@ -238,120 +238,149 @@
   100% { opacity: 0.8; }
 }
 
-.health-orb--gate-bud {
+.health-orb--gate-iris {
   width: 100%;
   aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
 }
 
-.health-orb__svg--gate-bud {
+.health-orb__svg--gate-iris {
   width: 100%;
   height: auto;
   max-width: 640px;
 }
 
-.gate-bud__leaf {
-  stroke-linejoin: round;
-  transition: transform 280ms ease, opacity 280ms ease;
-}
-
-.gate-bud__leaf--left {
-  transform-origin: 142px 142px;
-}
-
-.gate-bud__leaf--right {
-  transform-origin: 178px 142px;
-}
-
-.gate-bud__vein {
+.gate-iris__outer-ring,
+.gate-iris__inner-ring {
   fill: none;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  opacity: 0.6;
+  stroke-width: 1.4;
+  opacity: 0.78;
 }
 
-.gate-bud__pathway {
+.gate-iris__inner-ring {
   stroke-width: 1.2;
+  opacity: 0.58;
+}
+
+.gate-iris__blade {
+  stroke-width: 1.05;
+  stroke-linejoin: round;
+  opacity: 0.86;
+  transform-origin: 160px 140px;
+}
+
+.gate-iris__aperture {
+  fill: rgba(4, 7, 10, 0.92);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1;
+}
+
+.gate-iris__pathway {
+  stroke-width: 1.15;
   stroke-linecap: round;
-  opacity: 0.46;
+  opacity: 0.44;
 }
 
-.gate-bud__node {
-  opacity: 0.7;
+.gate-iris__node {
+  opacity: 0.74;
 }
 
-.health-orb--gate-bud-animated .gate-bud__pathway,
-.health-orb--gate-bud-animated .gate-bud__node {
-  animation: gateBudStablePulse 6.2s ease-in-out infinite;
-  animation-delay: var(--gate-delay, 0ms);
+.health-orb--gate-iris-animated .gate-iris__pathway,
+.health-orb--gate-iris-animated .gate-iris__node {
+  animation: gateIrisStablePulse 7s ease-in-out infinite;
+  animation-delay: var(--iris-delay, 0ms);
 }
 
-.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__pathway {
-  animation-name: gateBudWatchPulse;
-  animation-duration: 4.2s;
+.health-orb--gate-iris-animated .gate-iris__blade {
+  animation: gateIrisBladeStable 14s ease-in-out infinite;
+  animation-delay: var(--iris-delay, 0ms);
 }
 
-.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__leaf--left {
-  transform: translateX(-1.2px) rotate(-0.55deg);
+.health-orb--iris-watch.health-orb--gate-iris-animated .gate-iris__pathway {
+  animation-name: gateIrisWatchPulse;
+  animation-duration: 4.4s;
 }
 
-.health-orb--bud-watch.health-orb--gate-bud-animated .gate-bud__leaf--right {
-  transform: translateX(1.2px) rotate(0.55deg);
+.health-orb--iris-watch.health-orb--gate-iris-animated .gate-iris__blade {
+  animation-name: gateIrisBladeWatch;
+  animation-duration: 6.8s;
 }
 
-.health-orb--bud-alert.health-orb--gate-bud-animated {
-  animation: gateBudAlertBody 1.4s ease-in-out infinite;
+.health-orb--iris-alert.health-orb--gate-iris-animated {
+  animation: gateIrisAlertBody 1.1s ease-in-out infinite;
 }
 
-.health-orb--bud-alert.health-orb--gate-bud-animated .gate-bud__pathway {
-  animation-name: gateBudAlertPath;
-  animation-duration: 0.9s;
-  opacity: 0.82;
+.health-orb--iris-alert.health-orb--gate-iris-animated .gate-iris__pathway {
+  animation-name: gateIrisAlertPath;
+  animation-duration: 0.72s;
+  opacity: 0.86;
 }
 
-.health-orb--bud-alert.health-orb--gate-bud-animated .gate-bud__node {
-  animation-name: gateBudAlertNode;
-  animation-duration: 0.7s;
+.health-orb--iris-alert.health-orb--gate-iris-animated .gate-iris__node {
+  animation-name: gateIrisAlertNode;
+  animation-duration: 0.66s;
   opacity: 0.96;
 }
 
-.gate-bud__pathway--watch {
+.health-orb--iris-alert.health-orb--gate-iris-animated .gate-iris__blade {
+  animation-name: gateIrisBladeAlert;
+  animation-duration: 0.96s;
+}
+
+.gate-iris__pathway--watch {
   stroke-dasharray: 3 4;
 }
 
-.gate-bud__pathway--critical {
+.gate-iris__pathway--alert {
   stroke-dasharray: 2 3;
 }
 
-.gate-bud__node--critical {
-  filter: drop-shadow(0 0 8px rgba(221, 102, 88, 0.62));
+.gate-iris__node--alert {
+  filter: drop-shadow(0 0 8px rgba(223, 98, 84, 0.66));
 }
 
-@keyframes gateBudStablePulse {
+@keyframes gateIrisStablePulse {
   0%, 100% { opacity: 0.34; }
-  50% { opacity: 0.66; }
+  50% { opacity: 0.6; }
 }
 
-@keyframes gateBudWatchPulse {
+@keyframes gateIrisWatchPulse {
   0%, 100% { opacity: 0.38; }
-  40% { opacity: 0.76; }
+  40% { opacity: 0.74; }
   70% { opacity: 0.48; }
 }
 
-@keyframes gateBudAlertBody {
-  0%, 100% { transform: scale(1); }
-  30% { transform: scale(1.016); }
-  60% { transform: scale(0.988); }
+@keyframes gateIrisBladeStable {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(0.5deg); }
 }
 
-@keyframes gateBudAlertPath {
+@keyframes gateIrisBladeWatch {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  35% { transform: rotate(1.4deg) scale(1.006); }
+  70% { transform: rotate(-0.9deg) scale(0.996); }
+}
+
+@keyframes gateIrisAlertBody {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.018); }
+  60% { transform: scale(0.984); }
+}
+
+@keyframes gateIrisBladeAlert {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  30% { transform: rotate(2.8deg) scale(1.012); }
+  65% { transform: rotate(-2.1deg) scale(0.988); }
+}
+
+@keyframes gateIrisAlertPath {
   0%, 100% { opacity: 0.34; }
   35% { opacity: 1; }
   70% { opacity: 0.44; }
 }
 
-@keyframes gateBudAlertNode {
+@keyframes gateIrisAlertNode {
   0%, 100% { opacity: 0.62; }
   35% { opacity: 1; }
   70% { opacity: 0.72; }
