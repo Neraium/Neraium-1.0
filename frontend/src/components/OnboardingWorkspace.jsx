@@ -202,6 +202,20 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
     if (typeof onStartMonitoring === "function") onStartMonitoring();
   }
 
+  useEffect(() => {
+    if (flow.step === 2 && canContinue && flow.dataSource === "API") {
+      const timer = window.setTimeout(() => {
+        setFlow((current) => (
+          current.step === 2
+            ? { ...current, step: Math.min(current.step + 1, STEPS.length - 1) }
+            : current
+        ));
+      }, 180);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [canContinue, flow.step, flow.dataSource]);
+
   return (
     <section className="onboarding-shell" aria-label="Neraium setup wizard">
       <header className="onboarding-header">
@@ -235,7 +249,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
                   key={option}
                   type="button"
                   className={`onboarding-choice ${flow.systemType === option ? "is-selected" : ""}`}
-                  onClick={() => updateFlow({ systemType: option })}
+                  onClick={() => updateFlow({ systemType: option, step: 1 })}
                 >
                   {option}
                 </button>
@@ -253,7 +267,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
                   key={option}
                   type="button"
                   className={`onboarding-choice ${flow.dataSource === option ? "is-selected" : ""}`}
-                  onClick={() => updateFlow({ dataSource: option })}
+                  onClick={() => updateFlow({ dataSource: option, step: 2 })}
                 >
                   {option}
                 </button>
@@ -276,7 +290,10 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
             )}
             {flow.dataSource === "CSV Upload" && (
               <div className="onboarding-inline">
-                <button type="button" className="command-button" onClick={handleMockCsvSelect}>Upload and Detect Columns</button>
+                <button type="button" className="command-button" onClick={() => {
+                  handleMockCsvSelect();
+                  updateFlow({ step: 3 });
+                }}>Upload and Detect Columns</button>
                 <span>{flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}</span>
               </div>
             )}
@@ -319,7 +336,10 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
           <div className="onboarding-section">
             <h2>Connection Test</h2>
             <div className="onboarding-inline">
-              <button type="button" className="command-button" onClick={runConnectionTest}>Run Connection Test</button>
+              <button type="button" className="command-button" onClick={() => {
+                runConnectionTest();
+                updateFlow({ step: 5 });
+              }}>Run Connection Test</button>
             </div>
             {flow.connectionTest && (
               <ul className="onboarding-checklist">
@@ -346,7 +366,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
                   key={mode.id}
                   type="button"
                   className={`onboarding-choice ${flow.baselineMode === mode.id ? "is-selected" : ""}`}
-                  onClick={() => updateFlow({ baselineMode: mode.id })}
+                  onClick={() => updateFlow({ baselineMode: mode.id, step: 6 })}
                 >
                   {mode.label}
                 </button>
@@ -374,11 +394,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
 
       <footer className="onboarding-footer">
         <button type="button" className="secondary-command-button" onClick={prevStep} disabled={flow.step === 0}>Back</button>
-        {flow.step < STEPS.length - 1 ? (
-          <button type="button" className="command-button" onClick={nextStep} disabled={!canContinue}>Continue</button>
-        ) : null}
       </footer>
     </section>
   );
 }
-
