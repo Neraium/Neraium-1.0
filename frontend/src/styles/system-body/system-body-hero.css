@@ -428,6 +428,37 @@
   text-transform: uppercase;
 }
 
+.system-gate__freshness {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 239, 239, 0.82);
+}
+
+.system-gate__freshness--live {
+  border-color: rgba(123, 179, 154, 0.5);
+  color: rgba(178, 231, 208, 0.92);
+}
+
+.system-gate__freshness--aging {
+  border-color: rgba(200, 160, 106, 0.42);
+  color: rgba(241, 212, 169, 0.9);
+}
+
+.system-gate__freshness--stale,
+.system-gate__freshness--offline {
+  border-color: rgba(212, 107, 95, 0.42);
+  color: rgba(255, 197, 186, 0.92);
+}
+
+.system-gate__freshness--empty {
+  border-color: rgba(156, 172, 184, 0.4);
+  color: rgba(198, 211, 220, 0.88);
+}
+
 .system-gate__heartbeat--online .system-gate__heartbeat-dot {
   background: #8aa0a3;
 }

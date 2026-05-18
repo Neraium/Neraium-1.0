@@ -9,6 +9,7 @@ import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel";
 import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState";
+import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 
@@ -94,6 +95,10 @@ function App() {
     const connectionStatusLine = apiStatus.state === "online"
       ? (heartbeatSource ? "Data stream active" : "Awaiting telemetry data")
       : "Connection degraded";
+    const dataFreshness = classifyDataFreshness({
+      heartbeatAt: heartbeatSource,
+      online: apiStatus.state === "online",
+    });
 
     return {
       facilityTone,
@@ -102,6 +107,7 @@ function App() {
       connectionSummary,
       connectionStatusLine,
       lastDataHeartbeat: heartbeatSource,
+      dataFreshness,
       primaryWindow: {
         label: governance?.affected_subsystem ?? roomContext.primary,
         window: governance?.elapsed_operational_duration ?? "Governed window active",
@@ -318,16 +324,6 @@ function App() {
       onUploadComplete={handleGateUploadComplete}
     />
   );
-}
-
-function deriveIntelligenceMode({ hasRealSiiOutput, latestUploadSnapshot }) {
-  if (hasRealSiiOutput) return "live";
-  const status = String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase();
-  if (["active", "baseline_active"].includes(status)) return "live";
-  if (["queued", "pending", "uploading", "parsing", "baseline_modeling", "running_sii", "writing_state", "building_baseline"].includes(status)) {
-    return "processing";
-  }
-  return "empty";
 }
 
 function formatClockTime(value) {

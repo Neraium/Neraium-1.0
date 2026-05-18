@@ -25,6 +25,8 @@ export default function IntakeFlowPanel({
   isJsonSchemaOpen,
   setIsJsonSchemaOpen,
   intakeStages,
+  batchResults = [],
+  onRetryFailedUploads,
 }) {
   const jsonIngestion = uploadJob?.result_summary?.json_ingestion;
   const hasJsonDiagnostics = Boolean(
@@ -41,6 +43,8 @@ export default function IntakeFlowPanel({
       .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
       .slice(0, 4)
     : [];
+  const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
+  const successCount = batchResults.filter((entry) => entry.status === "success").length;
 
   return (
     <>
@@ -89,6 +93,19 @@ export default function IntakeFlowPanel({
             )}
             {Array.isArray(jsonIngestion?.parsing_notes) && jsonIngestion.parsing_notes.length > 0 && (
               <span>{jsonIngestion.parsing_notes.slice(0, 2).join(" ")}</span>
+            )}
+            {batchResults.length > 0 && (
+              <div className="intake-flow__batch-results">
+                <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
+                {batchResults.map((entry) => (
+                  <span key={entry.id}>{`${entry.fileName}: ${entry.status}${entry.message ? ` - ${entry.message}` : ""}`}</span>
+                ))}
+                {failedCount > 0 && (
+                  <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads} disabled={isUploadProcessing(uploadState)}>
+                    Retry Failed Files
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </form>

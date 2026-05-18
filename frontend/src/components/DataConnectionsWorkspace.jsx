@@ -112,6 +112,7 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
+  const [batchResults, setBatchResults] = useState([]);
   const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
   const [copyState, setCopyState] = useState("idle");
   const uploadJobIdRef = useRef(null);
@@ -187,9 +188,13 @@ export default function DataConnectionsWorkspace({
 
   async function handleUpload(event) {
     event.preventDefault();
-    const validationError = selectedFiles.length === 0
+    await processUploadBatch(selectedFiles);
+  }
+
+  async function processUploadBatch(filesToProcess) {
+    const validationError = filesToProcess.length === 0
       ? "Choose one or more CSV/JSON telemetry files to upload."
-      : validateTelemetryFile(selectedFiles[0], pendingUploadKind);
+      : validateTelemetryFile(filesToProcess[0], pendingUploadKind);
     if (validationError) {
       setUploadError(validationError);
       setUploadState("validation_error");
@@ -197,15 +202,25 @@ export default function DataConnectionsWorkspace({
     }
     setUploadState("uploading");
     setUploadError("");
-    const totalBytes = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+    const totalBytes = filesToProcess.reduce((sum, file) => sum + (file.size || 0), 0);
     setUploadJob({ job_id: null, status: "uploading", progress_label: "Upload started.", message: "Uploading telemetry export.", file_size_bytes: totalBytes });
     setUploadTransfer({ loaded: 0, total: totalBytes, percent: 0, speedBytesPerSecond: 0, stage: "upload_started" });
+    setBatchResults(filesToProcess.map((file) => ({
+      id: `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`,
+      file,
+      fileName: file.name,
+      status: "pending",
+      message: "Waiting",
+      jobId: null,
+    })));
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
     try {
       let aggregateLoaded = 0;
-      for (const [index, file] of selectedFiles.entries()) {
+      for (const [index, file] of filesToProcess.entries()) {
         const startingLoaded = aggregateLoaded;
+        const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
+        setBatchResults((current) => current.map((entry) => (entry.id === fileId ? { ...entry, status: "uploading", message: "Uploading" } : entry)));
         const { ok, status, payload } = await uploadTelemetryFileWithProgress({
           file,
           timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
@@ -217,20 +232,33 @@ export default function DataConnectionsWorkspace({
             setUploadJob((current) => ({
               ...(current ?? {}),
               status: progress.stage === "accepted" ? "pending" : "uploading",
-              progress_label: `Uploading file ${index + 1}/${selectedFiles.length} - ${percent}% - ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
+              progress_label: `Uploading file ${index + 1}/${filesToProcess.length} - ${percent}% - ${formatTransferSpeed(progress.speedBytesPerSecond)}`,
               message: progress.message,
               file_size_bytes: total,
               bytes_processed: loaded,
             }));
           },
         });
-        if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
-        if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
-        uploadJobIdRef.current = payload.job_id;
-        setUploadJob(payload);
-        setUploadState(normalizeUploadStatus(payload.status));
-        await pollUploadStatus(payload.job_id);
-        aggregateLoaded += file.size || 0;
+        try {
+          if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
+          if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+          uploadJobIdRef.current = payload.job_id;
+          setUploadJob(payload);
+          setUploadState(normalizeUploadStatus(payload.status));
+          await pollUploadStatus(payload.job_id);
+          aggregateLoaded += file.size || 0;
+          setBatchResults((current) => current.map((entry) => (entry.id === fileId
+            ? { ...entry, status: "success", message: "Processed", jobId: payload.job_id }
+            : entry)));
+        } catch (fileError) {
+          const uploadRequestError = fileError?.name === "UploadRequestError" && fileError?.payload
+            ? buildUploadRequestError({ status: fileError.status }, fileError.payload, "upload")
+            : fileError;
+          const classified = classifyUploadError(uploadRequestError, "upload");
+          setBatchResults((current) => current.map((entry) => (entry.id === fileId
+            ? { ...entry, status: "failed", message: classified.message, jobId: payload?.job_id ?? null }
+            : entry)));
+        }
       }
       const latestPayload = await loadLatestUpload();
       const latestResult = latestPayload?.latest_result;
@@ -241,6 +269,7 @@ export default function DataConnectionsWorkspace({
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
       setUploadResult(completedPayload);
       await onUploadComplete(completedPayload);
+      setUploadState("complete");
     } catch (error) {
       const uploadRequestError = error?.name === "UploadRequestError" && error?.payload
         ? buildUploadRequestError({ status: error.status }, error.payload, "upload")
@@ -269,6 +298,7 @@ export default function DataConnectionsWorkspace({
     setUploadError(validationError);
     setUploadState(validationError ? "validation_error" : nextFiles.length > 0 ? "validated" : "idle");
     setUploadTransfer(null);
+    setBatchResults([]);
     if (nextFiles.length > 0 && !validationError) {
       const totalBytes = nextFiles.reduce((sum, file) => sum + (file.size || 0), 0);
       setUploadJob({
@@ -290,6 +320,7 @@ export default function DataConnectionsWorkspace({
     setUploadResult(null);
     setUploadJob(null);
     setUploadTransfer(null);
+    setBatchResults([]);
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
     if (pollTimerRef.current) {
@@ -399,6 +430,8 @@ export default function DataConnectionsWorkspace({
             isJsonSchemaOpen={isJsonSchemaOpen}
             setIsJsonSchemaOpen={setIsJsonSchemaOpen}
             intakeStages={intakeStages}
+            batchResults={batchResults}
+            onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
           />
           <IntakeStatusPanel
             uploadStateView={uploadStateView}

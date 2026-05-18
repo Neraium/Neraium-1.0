@@ -93,20 +93,14 @@ export function deriveRoomContext(result) {
   }
 
   const summaryRooms = extractRoomSummaryNames(result);
-  const roomColumn = result.columns.find((column) => {
-    const normalized = column.toLowerCase();
-    return normalized.includes("room") || normalized.includes("zone");
-  });
-  const cycleColumn = result.columns.find((column) => {
-    const normalized = column.toLowerCase();
-    return normalized.includes("cycle") || normalized.includes("stage") || normalized.includes("phase");
-  });
+  const roomColumn = matchColumnAlias(result.columns, ["room", "zone", "location", "area"]);
+  const cycleColumn = matchColumnAlias(result.columns, ["cycle", "stage", "phase", "growthstage", "mode"]);
 
   const roomValues = roomColumn
-    ? result.preview_rows.map((row) => row[roomColumn]).filter(Boolean)
+    ? result.preview_rows.map((row) => normalizePreviewValue(row?.[roomColumn])).filter(Boolean)
     : [];
   const cycleValues = cycleColumn
-    ? result.preview_rows.map((row) => row[cycleColumn]).filter(Boolean)
+    ? result.preview_rows.map((row) => normalizePreviewValue(row?.[cycleColumn])).filter(Boolean)
     : [];
   const irrigationMapped = result.cultivation_mapping?.categories?.irrigation?.length ?? 0;
   const uploadedRooms = summaryRooms.length > 0 ? summaryRooms : uniqueValues(roomValues);
@@ -123,6 +117,20 @@ export function deriveRoomContext(result) {
 
 export function deriveTimeCoverage(result) {
   if (!result?.timestamp_profile) {
+    const timestampColumn = Array.isArray(result?.columns)
+      ? matchColumnAlias(result.columns, ["timestamp", "time", "datetime", "date", "ts"])
+      : null;
+    if (timestampColumn && Array.isArray(result?.preview_rows)) {
+      const samples = result.preview_rows
+        .map((row) => safeTimestamp(row?.[timestampColumn]))
+        .filter(Boolean);
+      if (samples.length > 0) {
+        return {
+          hasCoverage: true,
+          summary: `${samples[0]} to ${samples[samples.length - 1]}`,
+        };
+      }
+    }
     return {
       hasCoverage: false,
       summary: "Awaiting room timestamps",
@@ -269,7 +277,38 @@ function extractRoomSummaryNames(result) {
 }
 
 function uniqueValues(values) {
-  return [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
+  return [...new Set(values
+    .map((value) => normalizePreviewValue(value))
+    .filter(Boolean)
+    .map((value) => String(value))
+    .slice(0, 24))];
+}
+
+function normalizePreviewValue(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === "nan" || text.toLowerCase() === "null" || text.toLowerCase() === "undefined") return "";
+  return text;
+}
+
+function normalizeColumnName(value) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function matchColumnAlias(columns, aliases) {
+  if (!Array.isArray(columns)) return null;
+  const normalizedAliases = aliases.map((alias) => normalizeColumnName(alias));
+  return columns.find((column) => {
+    const normalizedColumn = normalizeColumnName(column);
+    return normalizedAliases.some((alias) => normalizedColumn.includes(alias));
+  }) ?? null;
+}
+
+function safeTimestamp(value) {
+  if (value === null || value === undefined) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 function normalizeUploadStatus(status) {

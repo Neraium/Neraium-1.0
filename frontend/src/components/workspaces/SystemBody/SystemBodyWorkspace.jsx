@@ -11,6 +11,7 @@ export default function SystemBodyWorkspace({
   subtitle,
   connectionStatus,
   connectionTone,
+  dataFreshness = null,
   primaryMessage,
   summaryTitle,
   narrativeItems,
@@ -58,6 +59,9 @@ export default function SystemBodyWorkspace({
           <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
             <span className="system-gate__heartbeat-dot" />
             <strong>{heartbeat.label}</strong>
+            {dataFreshness ? (
+              <span className={`system-gate__freshness system-gate__freshness--${dataFreshness.tone}`}>{dataFreshness.label}</span>
+            ) : null}
           </div>
           <button type="button" className="system-gate__settings" aria-label="Open Gate settings" onClick={() => setSettingsOpen((v) => !v)}>
             SET

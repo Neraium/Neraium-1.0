@@ -93,6 +93,7 @@ export default function SystemTopologyWorkspace({
       subtitle={stateDescription}
       connectionStatus={liveOps.connectionStatusLine}
       connectionTone={liveOps.connectionTone}
+      dataFreshness={liveOps.dataFreshness}
       primaryMessage={primaryMessage}
       summaryTitle={summaryTitle}
       narrativeItems={narrativeItems}
