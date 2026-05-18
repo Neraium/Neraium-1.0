@@ -11,7 +11,9 @@ from app.core.config import Settings, get_settings
 from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay, state_compat
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
-from app.services.runtime_db import clear_stale_processing_queue_jobs, init_runtime_db
+from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
+from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
+from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
 
 logger = logging.getLogger(__name__)
@@ -93,6 +95,11 @@ async def app_lifespan(app: FastAPI):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    # Keep service runtime paths aligned with app settings, especially in tests
+    # where each app instance may use a dedicated tmp runtime directory.
+    configure_runtime_db_dir(settings.runtime_dir)
+    configure_upload_jobs_dir(settings.runtime_dir)
+    configure_sii_runner_dir(settings.runtime_dir)
     app = FastAPI(
         title="Neraium API",
         version="0.1.0",

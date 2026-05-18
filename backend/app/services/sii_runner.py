@@ -39,6 +39,10 @@ STATE_REQUIRED_FIELDS = {
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
 
+def configure_runtime_dir(runtime_dir: Path) -> None:
+    global STATE_PATH
+    STATE_PATH = runtime_dir / "latest_sii_state.json"
+
 
 class BackendSiiRunner:
     """Backend-native telemetry runner used by production uploads and readiness checks."""

@@ -13,6 +13,11 @@ from app.core.config import get_settings
 RUNTIME_DIR = get_settings().runtime_dir
 DB_PATH = RUNTIME_DIR / "runtime.db"
 
+def configure_runtime_dir(runtime_dir: Path) -> None:
+    global RUNTIME_DIR, DB_PATH
+    RUNTIME_DIR = runtime_dir
+    DB_PATH = RUNTIME_DIR / "runtime.db"
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()

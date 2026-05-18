@@ -63,6 +63,13 @@ logger = logging.getLogger(__name__)
 WRITE_RETRY_ATTEMPTS = 6
 WRITE_RETRY_DELAY_SECONDS = 0.02
 
+def configure_runtime_dir(runtime_dir: Path) -> None:
+    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
+    RUNTIME_DIR = runtime_dir
+    UPLOAD_DIR = RUNTIME_DIR / "uploads"
+    JOB_DIR = RUNTIME_DIR / "upload_jobs"
+    LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
+
 
 def parse_positive_int_env(name: str, default: int) -> int:
     raw_value = os.getenv(name)
@@ -563,9 +570,11 @@ def stream_csv_windows(
     parse_started = time.perf_counter()
     file_size_bytes = file_path.stat().st_size if file_path.exists() else 0
     first_rows: list[tuple[int, list[str]]] = []
-    tail_rows: deque[tuple[int, list[str]]] = deque(maxlen=MAX_ANALYSIS_ROWS // 3)
-    middle_reservoir: list[tuple[int, list[str]]] = []
-    middle_capacity = max(1, MAX_ANALYSIS_ROWS - (MAX_ANALYSIS_ROWS // 3) - (MAX_ANALYSIS_ROWS // 3))
+    tail_rows: deque[tuple[int, list[str]]] = deque()
+    middle_reservoir: list[tuple[int, list[str]]] = [] 
+    edge_window = MAX_ANALYSIS_ROWS // 3
+    middle_capacity = max(1, MAX_ANALYSIS_ROWS - edge_window - edge_window) 
+    middle_candidates_seen = 0
     room_counts: Counter[str] = Counter()
     total_rows = 0
     malformed_rows = 0
@@ -604,16 +613,19 @@ def stream_csv_windows(
                 room_counts[row[room_index].strip()] += 1
             if len(row) != len(columns):
                 malformed_rows += 1
-            if len(first_rows) < MAX_ANALYSIS_ROWS // 3:
-                first_rows.append((total_rows - 1, row))
-            else:
-                if len(middle_reservoir) < middle_capacity:
-                    middle_reservoir.append((total_rows - 1, row))
-                else:
-                    reservoir_index = int(np.random.randint(0, max(total_rows, 1)))
-                    if reservoir_index < middle_capacity:
-                        middle_reservoir[reservoir_index] = (total_rows - 1, row)
+            if len(first_rows) < edge_window: 
+                first_rows.append((total_rows - 1, row)) 
+            else: 
                 tail_rows.append((total_rows - 1, row))
+                if len(tail_rows) > edge_window:
+                    middle_candidates_seen += 1
+                    candidate = tail_rows.popleft()
+                    if len(middle_reservoir) < middle_capacity:
+                        middle_reservoir.append(candidate)
+                    else:
+                        reservoir_index = int(np.random.randint(0, middle_candidates_seen))
+                        if reservoir_index < middle_capacity:
+                            middle_reservoir[reservoir_index] = candidate
             if total_rows % CHUNK_SIZE_ROWS == 0:
                 chunk_count += 1
                 try:

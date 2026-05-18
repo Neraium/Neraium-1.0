@@ -113,7 +113,9 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     summary = metadata.get("result_summary") if isinstance(metadata.get("result_summary"), dict) else {}
     artifacts = metadata.get("sii_completion_artifacts") or summary.get("sii_completion_artifacts") or {}
     sii_completed = bool(metadata.get("sii_completed") or summary.get("sii_completed"))
-    if normalized_status == "COMPLETE" and not sii_completed:
+    has_explicit_sii_completed = ("sii_completed" in metadata) or ("sii_completed" in summary)
+    is_summary_fallback = bool(metadata.get("summary_fallback"))
+    if normalized_status == "COMPLETE" and has_explicit_sii_completed and not sii_completed and not is_summary_fallback:
         normalized_status = "FAILED"
         measured_percent = 100
         error_type = "sii_completion_missing"
@@ -430,6 +432,7 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
 def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dict[str, Any]:
     return {
         "job_id": job_id,
+        "summary_fallback": True,
         "filename": summary.get("filename"),
         "file_size_bytes": summary.get("file_size_bytes", 0),
         "status": "COMPLETE",
@@ -452,7 +455,7 @@ def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dic
 
 
 @router.get("/data/latest-upload", response_model=LatestUploadResponse)
-def read_latest_upload(include_persisted: bool = Query(False)) -> dict[str, Any]:
+def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
     summary = latest_completed_job_summary()
     detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
