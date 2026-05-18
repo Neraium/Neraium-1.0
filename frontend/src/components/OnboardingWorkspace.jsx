@@ -183,6 +183,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
         humidity: current.signalMapping.humidity || "humidity",
         vpd: current.signalMapping.vpd || "vpd",
       },
+      step: 3,
     }));
   }
 
