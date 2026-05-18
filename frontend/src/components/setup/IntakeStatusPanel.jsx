@@ -26,7 +26,6 @@ export default function IntakeStatusPanel({
   const calibration = adaptiveLearning?.calibration ?? {};
   const adaptiveBaseline = adaptiveLearning?.adaptive_baseline ?? {};
   const eventMemory = adaptiveLearning?.event_memory ?? {};
-  const patternRecognition = adaptiveLearning?.pattern_recognition ?? {};
   const feedbackHistory = eventMemory?.recent_feedback_history ?? [];
   const feedbackOptions = adaptiveLearning?.operator_feedback_options ?? [];
   return (
@@ -71,21 +70,6 @@ export default function IntakeStatusPanel({
           </div>
         </Panel>
       )}
-      <Panel title="Adaptive Learning" className="span-6 uploaded-intelligence-panel">
-        <MetricGrid
-          metrics={[
-            { label: "Operational Fingerprint", value: adaptiveLearning?.site_key ?? "Site memory pending" },
-            { label: "Sensitivity Adjustment", value: calibration?.sensitivity_adjustment ?? 0 },
-            { label: "Nuisance Suppression", value: calibration?.nuisance_alert_suppression ?? 0 },
-            { label: "Feedback Events", value: feedbackHistory.length },
-          ]}
-          compact
-        />
-        <CompactList
-          items={(patternRecognition?.interpretive_archetypes ?? []).map((item) => `${item.name}: ${item.signal}`)}
-          emptyText="Interpretive archetypes will appear after governed evidence memory accumulates."
-        />
-      </Panel>
       <Panel title="Operator Feedback History" className="span-6 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <CompactList
           items={feedbackHistory.map((item) => `${item.feedback_category ?? item.category ?? "feedback"}${item.feedback_recorded_at ? ` at ${item.feedback_recorded_at}` : ""}`)}
