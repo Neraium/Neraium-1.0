@@ -901,6 +901,7 @@ def build_upload_result(
         "processing_trace": processing_trace,
         "processing_stats": processing_stats,
         "room_summary": room_summary,
+        "ingestion_metadata": intelligence_source_metadata or {},
         "previous_upload_summary": previous_upload_summary,
         "validation_provenance": VALIDATION_PROVENANCE,
     }
@@ -910,6 +911,7 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
     runner = result["sii_runner_result"]
     stats = result.get("processing_stats", {})
     intelligence = result.get("sii_intelligence", {})
+    ingestion_metadata = result.get("ingestion_metadata", {}) if isinstance(result.get("ingestion_metadata"), dict) else {}
     previous = result.get("previous_upload_summary") or {}
     current_score = intelligence.get("neraium_score")
     previous_score = previous.get("neraium_score")
@@ -942,6 +944,15 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
         "warnings": result["warnings"][:10],
         "runner_errors": runner.get("errors", [])[:5],
         "room_summary": result.get("room_summary", {}),
+        "json_ingestion": {
+            "source_type": ingestion_metadata.get("source_type"),
+            "readings_received": ingestion_metadata.get("readings_received"),
+            "readings_accepted": ingestion_metadata.get("readings_accepted"),
+            "readings_rejected": ingestion_metadata.get("readings_rejected"),
+            "sensors_detected": ingestion_metadata.get("sensors_detected"),
+            "rejection_reasons": ingestion_metadata.get("rejection_reasons", {}),
+            "parsing_notes": ingestion_metadata.get("parsing_notes", []),
+        },
     }
 
 
@@ -1199,10 +1210,71 @@ def parse_timestamp(value: str | None) -> datetime | None:
         return None
 
 
-def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:
-    snapshots = payload if isinstance(payload, list) else [payload]
-    if not snapshots or not all(isinstance(item, dict) for item in snapshots):
+def first_present(mapping: dict[str, Any], keys: list[str]) -> Any:
+    for key in keys:
+        if key in mapping and mapping.get(key) is not None:
+            return mapping.get(key)
+    return None
+
+
+def nested_present(mapping: dict[str, Any], dotted_keys: list[str]) -> Any:
+    for dotted in dotted_keys:
+        current: Any = mapping
+        found = True
+        for part in dotted.split("."):
+            if not isinstance(current, dict) or part not in current:
+                found = False
+                break
+            current = current.get(part)
+        if found and current is not None:
+            return current
+    return None
+
+
+def coerce_float(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        raise ValueError("empty_numeric_value")
+    if "," in text:
+        text = text.replace(",", "")
+    pieces = text.split()
+    try:
+        return float(pieces[0])
+    except (ValueError, IndexError) as exc:
+        raise ValueError("invalid_numeric_value") from exc
+
+
+def looks_like_sensor_reading(item: dict[str, Any]) -> bool:
+    value = first_present(item, ["value", "val", "reading", "measurement"])
+    sensor = first_present(item, ["sensor_id", "sensorId", "sensor_name", "sensorName", "tag", "name", "point_name"])
+    return value is not None and sensor is not None
+
+
+def extract_json_snapshots(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        if all(isinstance(item, dict) for item in payload):
+            return payload
+        raise ValueError("JSON telemetry file array entries must be objects.")
+    if not isinstance(payload, dict):
         raise ValueError("JSON telemetry file must contain an object or array of telemetry objects.")
+
+    for key in ["snapshots", "frames", "batches", "events", "payloads"]:
+        nested = payload.get(key)
+        if isinstance(nested, list) and nested and all(isinstance(item, dict) for item in nested):
+            return nested
+
+    direct_records = payload.get("records")
+    if isinstance(direct_records, list) and direct_records and all(isinstance(item, dict) for item in direct_records):
+        if all(looks_like_sensor_reading(item) for item in direct_records):
+            return [{"readings": direct_records, **{k: v for k, v in payload.items() if k != "records"}}]
+
+    return [payload]
+
+
+def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:
+    snapshots = extract_json_snapshots(payload)
 
     normalized: list[NormalizedTelemetryRecord] = []
     total_received = 0
@@ -1213,12 +1285,18 @@ def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[N
     facility_id: str | None = None
     room_id: str | None = None
     source_id: str | None = None
+    rejection_reasons: Counter[str] = Counter()
+    parsing_notes: list[str] = []
 
     for snapshot in snapshots:
         records, metadata = normalize_uploaded_json_snapshot(snapshot, filename)
         normalized.extend(records)
         total_received += metadata["readings_received"]
         total_rejected += metadata["readings_rejected"]
+        for reason, count in metadata.get("rejection_reasons", {}).items():
+            rejection_reasons[reason] += int(count)
+        if metadata.get("parsing_notes"):
+            parsing_notes.extend(str(note) for note in metadata["parsing_notes"])
         if metadata.get("scenario"):
             scenarios.append(str(metadata["scenario"]))
         if metadata.get("tick") is not None:
@@ -1244,51 +1322,72 @@ def normalize_uploaded_json_payload(payload: Any, filename: str) -> tuple[list[N
         "sensors_detected": len({record.sensor_id for record in normalized}),
         "scenario": scenarios[-1] if scenarios else None,
         "tick": ticks[-1] if ticks else None,
+        "rejection_reasons": dict(rejection_reasons),
+        "parsing_notes": sorted(set(parsing_notes))[:12],
     }
 
 
 def normalize_uploaded_json_snapshot(snapshot: dict[str, Any], filename: str) -> tuple[list[NormalizedTelemetryRecord], dict[str, Any]]:
-    readings = snapshot.get("readings")
+    readings = first_present(snapshot, ["readings", "records", "signals", "telemetry", "measurements", "data"])
+    if isinstance(readings, dict):
+        nested_values = [value for value in readings.values() if isinstance(value, list)]
+        if nested_values:
+            readings = nested_values[0]
     if not isinstance(readings, list) or not readings:
-        raise ValueError("JSON telemetry object must include a non-empty readings array.")
+        raise ValueError("JSON telemetry object must include a non-empty readings/records/signals array.")
 
-    source_id = str(snapshot.get("source_id") or filename)
-    facility_id = str(snapshot.get("facility_id") or "uploaded-facility")
-    room_id = str(snapshot.get("room_id") or "uploaded-room")
+    source_id = str(first_present(snapshot, ["source_id", "sourceId", "source", "dataset_id"]) or filename)
+    facility_id = str(first_present(snapshot, ["facility_id", "facilityId", "facility", "site_id", "siteId"]) or "uploaded-facility")
+    room_id = str(first_present(snapshot, ["room_id", "roomId", "room", "zone", "bay"]) or "uploaded-room")
     scenario = snapshot.get("scenario")
     tick = snapshot.get("tick")
-    payload_timestamp = snapshot.get("timestamp")
+    payload_timestamp = first_present(snapshot, ["timestamp", "time", "ts", "datetime", "recorded_at"])
     normalized: list[NormalizedTelemetryRecord] = []
-    rejected = 0
+    rejected_reasons: Counter[str] = Counter()
+    parsing_notes: list[str] = []
 
     for item in readings:
         if not isinstance(item, dict):
-            rejected += 1
+            rejected_reasons["non_object_record"] += 1
             continue
-        sensor_id = item.get("sensor_id")
-        sensor_name = item.get("sensor_name")
-        raw_value = item.get("value")
-        timestamp = item.get("timestamp") or payload_timestamp
-        if not sensor_id or not sensor_name or raw_value is None or not timestamp:
-            rejected += 1
+        sensor_id = first_present(item, ["sensor_id", "sensorId", "id", "tag_id", "tagId", "point_id"])
+        sensor_name = first_present(item, ["sensor_name", "sensorName", "name", "tag", "point_name", "pointName"]) or sensor_id
+        raw_value = first_present(item, ["value", "val", "reading", "measurement"])
+        if raw_value is None:
+            raw_value = nested_present(item, ["payload.value", "data.value", "reading.value"])
+        timestamp = first_present(item, ["timestamp", "time", "ts", "datetime", "recorded_at", "at"]) or payload_timestamp
+        if not sensor_id:
+            rejected_reasons["missing_sensor_id"] += 1
+            continue
+        if raw_value is None:
+            rejected_reasons["missing_value"] += 1
+            continue
+        if not timestamp:
+            rejected_reasons["missing_timestamp"] += 1
             continue
         try:
-            numeric_value = float(raw_value)
-        except (TypeError, ValueError):
-            rejected += 1
+            numeric_value = coerce_float(raw_value)
+        except ValueError:
+            rejected_reasons["invalid_numeric_value"] += 1
             continue
+        inferred_room = first_present(item, ["room_id", "roomId", "room", "zone", "bay"])
+        inferred_facility = first_present(item, ["facility_id", "facilityId", "facility", "site_id", "siteId"])
+        inferred_source = first_present(item, ["source_id", "sourceId", "source"])
+        effective_room = str(inferred_room or room_id)
+        effective_facility = str(inferred_facility or facility_id)
+        effective_source = str(inferred_source or source_id)
         normalized.append(
             NormalizedTelemetryRecord(
-                source_id=source_id,
-                facility_id=facility_id,
-                room_id=room_id,
-                system_id=facility_id,
+                source_id=effective_source,
+                facility_id=effective_facility,
+                room_id=effective_room,
+                system_id=effective_facility,
                 sensor_id=str(sensor_id),
                 sensor_name=str(sensor_name),
                 value=numeric_value,
-                unit=str(item.get("unit") or "").strip().lower(),
+                unit=str(first_present(item, ["unit", "uom"]) or "").strip().lower(),
                 timestamp=str(timestamp),
-                quality_status=str(item.get("quality") or "good").strip().lower() or "good",
+                quality_status=str(first_present(item, ["quality", "status"]) or "good").strip().lower() or "good",
                 metadata={
                     "scenario": scenario,
                     "tick": tick,
@@ -1298,6 +1397,12 @@ def normalize_uploaded_json_snapshot(snapshot: dict[str, Any], filename: str) ->
             )
         )
 
+    if first_present(snapshot, ["records", "signals", "telemetry", "measurements"]):
+        parsing_notes.append("Accepted alternate top-level readings key.")
+    if any(key in snapshot for key in ["site_id", "siteId", "zone", "bay"]):
+        parsing_notes.append("Mapped alternate facility/room keys.")
+
+    rejected = sum(rejected_reasons.values())
     return normalized, {
         "source_id": source_id,
         "facility_id": facility_id,
@@ -1310,6 +1415,8 @@ def normalize_uploaded_json_snapshot(snapshot: dict[str, Any], filename: str) ->
         "readings_accepted": len(normalized),
         "readings_rejected": rejected,
         "sensors_detected": len({record.sensor_id for record in normalized}),
+        "rejection_reasons": dict(rejected_reasons),
+        "parsing_notes": parsing_notes,
     }
 
 

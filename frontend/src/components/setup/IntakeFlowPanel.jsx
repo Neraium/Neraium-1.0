@@ -26,6 +26,22 @@ export default function IntakeFlowPanel({
   setIsJsonSchemaOpen,
   intakeStages,
 }) {
+  const jsonIngestion = uploadJob?.result_summary?.json_ingestion;
+  const hasJsonDiagnostics = Boolean(
+    jsonIngestion
+    && (
+      Number.isFinite(jsonIngestion.readings_received)
+      || Number.isFinite(jsonIngestion.readings_accepted)
+      || Number.isFinite(jsonIngestion.readings_rejected)
+    )
+  );
+  const rejectionSummary = jsonIngestion?.rejection_reasons
+    ? Object.entries(jsonIngestion.rejection_reasons)
+      .filter(([, count]) => Number(count) > 0)
+      .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
+      .slice(0, 4)
+    : [];
+
   return (
     <>
       <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -62,6 +78,18 @@ export default function IntakeFlowPanel({
               </div>
             )}
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
+            {hasJsonDiagnostics && (
+              <span>
+                {`JSON accepted ${jsonIngestion.readings_accepted ?? 0}/${jsonIngestion.readings_received ?? 0} readings`}
+                {Number(jsonIngestion.readings_rejected ?? 0) > 0 ? ` (${jsonIngestion.readings_rejected} rejected).` : "."}
+              </span>
+            )}
+            {rejectionSummary.length > 0 && (
+              <span>{`Rejected details: ${rejectionSummary.join(" | ")}`}</span>
+            )}
+            {Array.isArray(jsonIngestion?.parsing_notes) && jsonIngestion.parsing_notes.length > 0 && (
+              <span>{jsonIngestion.parsing_notes.slice(0, 2).join(" ")}</span>
+            )}
           </div>
         </form>
         <div className="connector-json-hint">
