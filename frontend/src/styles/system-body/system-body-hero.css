@@ -643,24 +643,20 @@
     width: min(95vw, 560px);
     max-width: 100%;
     padding: 0;
-    border: 1px solid rgba(148, 168, 176, 0.24);
-    border-radius: 20px;
-    background:
-      radial-gradient(circle at 50% 46%, rgba(var(--state-accent-rgb), 0.2), rgba(5, 8, 10, 0.24) 60%, rgba(2, 4, 5, 0.7) 100%),
-      linear-gradient(180deg, rgba(12, 18, 23, 0.86), rgba(4, 8, 10, 0.92));
-    box-shadow:
-      inset 0 1px 0 rgba(216, 232, 236, 0.09),
-      inset 0 0 0 1px rgba(102, 126, 138, 0.08),
-      0 22px 54px rgba(0, 0, 0, 0.44);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
     overflow: hidden;
   }
 
   .system-gate__center .system-body-orb-panel__stage {
     width: min(95vw, 560px);
-    height: clamp(54dvh, 60dvh, 64dvh);
-    min-height: min(55dvh, 560px);
+    height: clamp(44dvh, 52dvh, 58dvh);
+    min-height: min(46dvh, 500px);
     aspect-ratio: 1 / 1;
-    max-height: min(64dvh, 620px);
+    max-height: min(58dvh, 560px);
     padding: 0;
   }
 
@@ -684,6 +680,15 @@
     background: linear-gradient(180deg, rgba(154, 194, 204, 0.55), rgba(154, 194, 204, 0.12) 74%, transparent);
     opacity: 0.86;
     pointer-events: none;
+  }
+
+  .system-gate__center .system-body-orb-panel::before,
+  .system-gate__center .system-body-orb-panel::after,
+  .system-gate__center .system-body-orb-panel__stage::before,
+  .system-gate__center .system-body-orb-panel__stage::after {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
   }
 
   .system-gate__state {
