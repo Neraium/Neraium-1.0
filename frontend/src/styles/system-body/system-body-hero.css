@@ -338,6 +338,10 @@
   display: none;
 }
 
+.system-gate__center .system-body-orb-panel.ui-state-indicator::before {
+  content: none;
+}
+
 .system-gate__state {
   margin: 6px 0 0;
   max-width: min(82vw, 520px);
