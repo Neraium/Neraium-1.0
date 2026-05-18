@@ -38,11 +38,12 @@ export default function SystemOrbPanel({
   const copy = STATE_COPY[resolvedSystemState] ?? STATE_COPY.unknown;
   const instability = Math.max(0, Math.min(1, 1 - resolvedCoherence));
   const instabilityDisplay = resolvedSystemState === "unknown" ? EMPTY_VALUE : `${Math.round(instability * 100)}%`;
+  const indicatorClass = compactPreview ? "" : `ui-state-indicator ui-state-indicator--${resolvedUiState}`;
   void focusLabel;
 
   return (
     <aside
-      className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ui-state-indicator ui-state-indicator--${resolvedUiState} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
+      className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ${indicatorClass} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
       aria-label={compactPreview ? "The Gate admitted condition indicator" : "Structural topology intelligence field"}
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
