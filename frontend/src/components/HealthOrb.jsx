@@ -26,10 +26,10 @@ function tone(state) {
   }
   return {
     className: "health-orb--iris-stable",
-    ring: "rgba(145, 154, 165, 0.88)",
-    plate: "rgba(78, 87, 98, 0.2)",
-    line: "rgba(153, 162, 172, 0.58)",
-    node: "rgba(222, 230, 236, 0.9)",
+    ring: "rgba(168, 182, 196, 0.94)",
+    plate: "rgba(92, 106, 118, 0.26)",
+    line: "rgba(176, 190, 203, 0.72)",
+    node: "rgba(238, 246, 252, 0.96)",
   };
 }
 
