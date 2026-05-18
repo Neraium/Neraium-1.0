@@ -14,50 +14,39 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
     () => [
       {
         id: "historian-source",
-        label: "1. Historian / BMS / SCADA",
+        label: "Historian / BMS / SCADA",
         render: () => <HistorianSourcePanel />,
       },
       {
         id: "read-only-ingestion",
-        label: "2. Read-only Ingestion",
+        label: "Read-only Ingestion",
         render: () => <ReadOnlySafetyPanel />,
       },
       {
-        id: "intake-connector",
-        label: "3. Neraium Intake Connector",
+        id: "connection-method",
+        label: "Connection Method",
         render: () => <ConnectionModeCards />,
       },
       {
         id: "signal-mapping",
-        label: "4. Signal Mapping",
-        render: ({ goToNextStep }) => <TagMappingPanel rows={tagMapRows} onContinue={goToNextStep} />,
+        label: "Signal Mapping",
+        render: () => <TagMappingPanel rows={tagMapRows} />,
+      },
+      {
+        id: "connection-test",
+        label: "Connection Test",
+        render: () => (
+          <Panel title="Connection Test" className="span-12">
+            <p className="narrative-text">
+              Run a read-only connectivity check before baseline construction. This validates source reachability and telemetry heartbeat.
+            </p>
+          </Panel>
+        ),
       },
       {
         id: "baseline-window",
-        label: "5. Baseline Builder",
+        label: "Baseline Builder",
         render: () => <BaselineWindowPanel />,
-      },
-      {
-        id: "live-structural-analysis",
-        label: "6. Live Structural Analysis",
-        render: () => (
-          <Panel title="Live Structural Analysis" className="span-12">
-            <p className="narrative-text">
-              Real-time telemetry is compared against baseline relationships to detect structural drift and generate governed findings.
-            </p>
-          </Panel>
-        ),
-      },
-      {
-        id: "operator-ui-reports",
-        label: "7. Operator UI / Reports",
-        render: () => (
-          <Panel title="Operator UI / Reports" className="span-12">
-            <p className="narrative-text">
-              Findings are surfaced to operators with supporting evidence, timeline context, and recommended next actions.
-            </p>
-          </Panel>
-        ),
       },
     ],
     [tagMapRows],
@@ -78,35 +67,14 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
 
   return (
     <>
-      <Panel title="Historian Intake Architecture" className="span-12 workspace-hero-panel">
+      <Panel title="Setup Progress" className="span-12 workspace-hero-panel">
         <DataTable
-          columns={["Pipeline Stage"]}
-          rows={[
-            ["Historian / BMS / SCADA"],
-            ["read-only ingestion"],
-            ["Neraium Intake Connector"],
-            ["Tag Mapper + Normalizer"],
-            ["Baseline Builder"],
-            ["Live Structural Analysis"],
-            ["Operator UI / Reports"],
-          ]}
+          columns={["Step", "Status"]}
+          rows={steps.map((step, index) => [
+            `${index + 1}. ${step.label}`,
+            index < activeStepIndex ? "Complete" : index === activeStepIndex ? "Active" : "Pending",
+          ])}
         />
-      </Panel>
-      <Panel title="Setup Progress" className="span-12">
-        <div className="intake-flow__controls" role="tablist" aria-label="Historian setup steps">
-          {steps.map((step, index) => (
-            <button
-              key={step.id}
-              type="button"
-              role="tab"
-              aria-selected={activeStepIndex === index}
-              className={activeStepIndex === index ? "command-button" : "secondary-command-button"}
-              onClick={() => goToStep(index)}
-            >
-              {step.label}
-            </button>
-          ))}
-        </div>
       </Panel>
       <div ref={activeStepRef}>
         {activeStep.render({
