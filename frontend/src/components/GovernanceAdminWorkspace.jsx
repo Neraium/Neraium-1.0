@@ -57,7 +57,7 @@ export default function GovernanceAdminWorkspace({
       }}
       aria-label="Back to Gate"
     >
-      {"<- Gate"}
+      Back to Gate
     </button>
   );
 
