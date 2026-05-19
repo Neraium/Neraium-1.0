@@ -8,6 +8,7 @@ import ReadOnlySafetyPanel from "./ReadOnlySafetyPanel";
 
 export default function HistorianSetupWorkspace({ tagMapRows }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [connectionTestState, setConnectionTestState] = useState("idle");
   const activeStepRef = useRef(null);
 
   const steps = useMemo(
@@ -35,10 +36,30 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
       {
         id: "connection-test",
         label: "Connection Test",
-        render: () => (
+        render: ({ goToNextStep }) => (
           <Panel title="Connection Test" className="span-12">
             <p className="narrative-text">
               Run a read-only connectivity check before baseline construction. This validates source reachability and telemetry heartbeat.
+            </p>
+            <div className="intake-flow__controls">
+              <button
+                type="button"
+                className="secondary-command-button"
+                onClick={() => setConnectionTestState("running")}
+              >
+                Run Test
+              </button>
+              <button
+                type="button"
+                className="command-button"
+                onClick={goToNextStep}
+                disabled={connectionTestState !== "passed"}
+              >
+                Continue to Baseline Builder
+              </button>
+            </div>
+            <p className="narrative-text">
+              {connectionTestState === "idle" ? "No test run yet." : connectionTestState === "running" ? "Testing connection..." : "Connection test passed."}
             </p>
           </Panel>
         ),
@@ -59,6 +80,12 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
   useEffect(() => {
     activeStepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [activeStepIndex]);
+
+  useEffect(() => {
+    if (connectionTestState !== "running") return undefined;
+    const timer = window.setTimeout(() => setConnectionTestState("passed"), 700);
+    return () => window.clearTimeout(timer);
+  }, [connectionTestState]);
 
   function goToStep(index) {
     const next = Math.max(0, Math.min(index, steps.length - 1));

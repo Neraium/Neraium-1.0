@@ -4,7 +4,7 @@ async function openDataConnections(page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Open Gate settings" }).click();
   await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
-  await expect(page.getByRole("tab", { name: "Live Link" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Setup|Live Link/i })).toBeVisible();
 }
 
 test.describe("Setup + Upload regression", () => {
