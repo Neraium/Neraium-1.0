@@ -5,6 +5,7 @@ import StructuralMemoryPanel from "../StructuralMemoryPanel";
 import EvidenceLineagePanel from "../EvidenceLineagePanel";
 import EvidenceInteractionPanel from "../EvidenceInteractionPanel";
 import ReplayCognitionField from "../ReplayCognitionField";
+import { resolveSessionJobId } from "../../viewModels/currentSession";
 
 export default function ReplayWorkspace({
   apiFetch,
@@ -34,12 +35,7 @@ export default function ReplayWorkspace({
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
-  const sessionJobId = useMemo(() => {
-    const snapshot = currentSession?.latestUploadSnapshot ?? null;
-    const result = currentSession?.latestUploadResult ?? null;
-    const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
-    return result?.job_id ?? history[0]?.job_id ?? null;
-  }, [currentSession]);
+  const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
   const [replayMode, setReplayMode] = useState(false);
   const togglePlayback = () => {
     setIsPlaying((value) => {

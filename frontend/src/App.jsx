@@ -9,6 +9,7 @@ import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives"
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
+import { deriveCurrentSession } from "./viewModels/currentSession";
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 
@@ -63,21 +64,14 @@ function App() {
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
   );
-  const currentSession = useMemo(() => ({
+  const currentSession = useMemo(() => deriveCurrentSession({
     latestUploadResult: effectiveLatestUploadResult,
     latestUploadSnapshot: effectiveLatestUploadSnapshot,
     hasActiveSession,
     hasCurrentUploadResult,
     hasResumedSession,
     hasRealSiiOutput,
-  }), [
-    effectiveLatestUploadResult,
-    effectiveLatestUploadSnapshot,
-    hasActiveSession,
-    hasCurrentUploadResult,
-    hasResumedSession,
-    hasRealSiiOutput,
-  ]);
+  }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasActiveSession, hasCurrentUploadResult, hasResumedSession, hasRealSiiOutput]);
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;

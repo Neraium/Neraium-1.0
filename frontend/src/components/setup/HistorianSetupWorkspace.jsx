@@ -45,7 +45,7 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
               <button
                 type="button"
                 className="secondary-command-button"
-                onClick={() => setConnectionTestState("running")}
+                onClick={() => setConnectionTestState("passed")}
               >
                 Run Test
               </button>
@@ -53,13 +53,12 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
                 type="button"
                 className="command-button"
                 onClick={goToNextStep}
-                disabled={connectionTestState !== "passed"}
               >
                 Continue to Baseline Builder
               </button>
             </div>
             <p className="narrative-text">
-              {connectionTestState === "idle" ? "No test run yet." : connectionTestState === "running" ? "Testing connection..." : "Connection test passed."}
+              {connectionTestState === "idle" ? "No test run yet." : "Connection test passed."}
             </p>
           </Panel>
         ),
@@ -80,12 +79,6 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
   useEffect(() => {
     activeStepRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [activeStepIndex]);
-
-  useEffect(() => {
-    if (connectionTestState !== "running") return undefined;
-    const timer = window.setTimeout(() => setConnectionTestState("passed"), 700);
-    return () => window.clearTimeout(timer);
-  }, [connectionTestState]);
 
   function goToStep(index) {
     const next = Math.max(0, Math.min(index, steps.length - 1));

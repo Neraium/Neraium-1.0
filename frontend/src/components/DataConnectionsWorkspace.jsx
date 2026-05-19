@@ -11,11 +11,12 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import { Panel } from "./workspacePrimitives";
 import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
+import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
+import SessionControlsPanel from "./dataConnections/SessionControlsPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -454,43 +455,22 @@ export default function DataConnectionsWorkspace({
   const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
   return ( 
     <div className="workspace-grid workspace-grid--connections">
-      <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
-        <div className="intake-flow__controls" role="tablist" aria-label="Historian intake sections">
-          {tabs.map((tab) => (
-            <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? "command-button" : "secondary-command-button"} onClick={() => setActiveTab(tab.id)}>
-              {tab.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="secondary-command-button"
-            onClick={handleResetDemoClick}
-            disabled={isUploadProcessing(uploadState)}
-            aria-label="Reset everything"
-          >
-            Reset Everything
-          </button>
-        </div>
-      </Panel>
+      <ConnectionsHeaderPanel
+        tabs={tabs}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onResetEverything={handleResetDemoClick}
+        disableReset={isUploadProcessing(uploadState)}
+      />
 
       {activeTab === "connect-live" && (
         <>
-          <Panel title="Session Controls" className="span-12">
-            <p className="narrative-text">
-              Link a live source or resume the latest validated session.
-            </p>
-            <div className="intake-flow__controls">
-              <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
-                Reset Everything
-              </button>
-              <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
-                Resume Previous Session
-              </button>
-              <button type="button" className="command-button" onClick={() => setActiveTab("upload")}>
-                Open Upload
-              </button>
-            </div>
-          </Panel>
+          <SessionControlsPanel
+            onResetEverything={handleResetDemoClick}
+            onResumePreviousSession={onResumePreviousSession}
+            onOpenUpload={() => setActiveTab("upload")}
+            disableActions={isUploadProcessing(uploadState)}
+          />
           <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
         </> 
       )} 

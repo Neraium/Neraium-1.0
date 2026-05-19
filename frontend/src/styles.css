@@ -2439,6 +2439,22 @@ h4 {
   line-height: 1.45;
 }
 
+.upload-partial-alert {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(210, 165, 92, 0.34);
+  border-radius: 10px;
+  background: rgba(57, 43, 24, 0.44);
+}
+
+.upload-partial-alert strong {
+  color: rgba(240, 209, 156, 0.96);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .upload-spinner {
   width: 12px;
   height: 12px;

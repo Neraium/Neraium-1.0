@@ -99,6 +99,12 @@ export default function IntakeFlowPanel({
             {batchResults.length > 0 && (
               <div className="intake-flow__batch-results">
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
+                {failedCount > 0 && (
+                  <div className="upload-partial-alert" role="status" aria-live="polite">
+                    <strong>Partial Success</strong>
+                    <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
+                  </div>
+                )}
                 {batchResults.map((entry) => (
                   <span key={entry.id}>{`${entry.fileName}: ${entry.status}${entry.message ? ` - ${entry.message}` : ""}`}</span>
                 ))}

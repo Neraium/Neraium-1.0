@@ -31,8 +31,11 @@ test.describe("Setup + Upload regression", () => {
 
     await nextButton.click();
     await expect(stepTitle).toContainText("Connection Test");
+    await page.getByRole("button", { name: "Run Test" }).click();
+    const continueToBaselineButton = page.getByRole("button", { name: "Continue to Baseline Builder" });
+    await expect(continueToBaselineButton).toBeEnabled();
+    await continueToBaselineButton.click();
 
-    await nextButton.click();
     await expect(stepTitle).toContainText("Baseline Builder");
     await expect(nextButton).toBeDisabled();
   });

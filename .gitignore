@@ -38,6 +38,8 @@ frontend-dev.err.log
 
 # Frontend generated test artifacts
 output/playwright/
+frontend/playwright-report/
+frontend/test-results/
 
 # Backup snapshots
 *.backup-before-ecs.js
