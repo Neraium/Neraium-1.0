@@ -273,6 +273,8 @@ export default function DataConnectionsWorkspace({
     pollFailureCountRef.current = 0;
     try {
       let aggregateLoaded = 0;
+      let successCount = 0;
+      let failedCount = 0;
       for (const [index, file] of filesToProcess.entries()) {
         const startingLoaded = aggregateLoaded;
         const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
@@ -303,6 +305,7 @@ export default function DataConnectionsWorkspace({
           setUploadState(normalizeUploadStatus(payload.status));
           await pollUploadStatus(payload.job_id);
           aggregateLoaded += file.size || 0;
+          successCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
             ? { ...entry, status: "success", message: "Processed", jobId: payload.job_id }
             : entry)));
@@ -311,6 +314,7 @@ export default function DataConnectionsWorkspace({
             ? buildUploadRequestError({ status: fileError.status }, fileError.payload, "upload")
             : fileError;
           const classified = classifyUploadError(uploadRequestError, "upload");
+          failedCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
             ? { ...entry, status: "failed", message: classified.message, jobId: payload?.job_id ?? null }
             : entry)));
@@ -324,6 +328,14 @@ export default function DataConnectionsWorkspace({
       };
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
       setUploadResult(completedPayload);
+      if (failedCount > 0) {
+        if (successCount > 0) {
+          await onUploadComplete(completedPayload);
+        }
+        setUploadState("error");
+        setUploadError(`Processed ${successCount} file(s), ${failedCount} failed. Retry failed files.`);
+        return;
+      }
       await onUploadComplete(completedPayload);
       setUploadState("complete");
     } catch (error) {

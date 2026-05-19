@@ -17,7 +17,11 @@ export default function GovernanceAdminWorkspace({
       try {
         setLoading(true);
         setError("");
-        const data = await apiFetch(`/api/observability/evp-governance?limit=200`, { accessCode });
+        const response = await apiFetch("/api/observability/evp-governance?limit=200", { accessCode });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(String(data?.detail ?? `Unexpected response: ${response.status}`));
+        }
         if (!mounted) return;
         setPayload(data);
       } catch (err) {
@@ -53,7 +57,7 @@ export default function GovernanceAdminWorkspace({
       }}
       aria-label="Back to Gate"
     >
-      ← Gate
+      {"<- Gate"}
     </button>
   );
 
@@ -94,8 +98,8 @@ export default function GovernanceAdminWorkspace({
         {rows.map((record) => (
           <Panel
             key={record.evp_id}
-            title={`${record.gate_outcome} · ${record.admitted_state}`}
-            subtitle={`${record.evp_id} · ${record.timestamp_utc}`}
+            title={`${record.gate_outcome} - ${record.admitted_state}`}
+            subtitle={`${record.evp_id} - ${record.timestamp_utc}`}
           >
             <ul className="compact-list">
               <li><span className="metadata-text">Doctrine</span><strong>{record.doctrine_version}</strong></li>
