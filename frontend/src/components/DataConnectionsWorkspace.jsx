@@ -239,7 +239,9 @@ export default function DataConnectionsWorkspace({
         ...(latestPayload ?? {}),
       };
       setUploadResult(completedPayload);
-      await onUploadComplete(completedPayload);
+      if (typeof onUploadComplete === "function") {
+        await onUploadComplete(completedPayload);
+      }
       setUploadState("complete");
     } catch (error) {
       const classified = classifyUploadError(error, "upload");
@@ -328,16 +330,25 @@ export default function DataConnectionsWorkspace({
         ...(latestPayload ?? {}),
       };
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
-      setUploadResult(completedPayload);
       if (failedCount > 0) {
+        if (successCount === 0) {
+          setUploadResult(null);
+        } else {
+          setUploadResult(completedPayload);
+        }
         if (successCount > 0) {
-          await onUploadComplete(completedPayload);
+          if (typeof onUploadComplete === "function") {
+            await onUploadComplete(completedPayload);
+          }
         }
         setUploadState("error");
         setUploadError(`Processed ${successCount} file(s), ${failedCount} failed. Retry failed files.`);
         return;
       }
-      await onUploadComplete(completedPayload);
+      setUploadResult(completedPayload);
+      if (typeof onUploadComplete === "function") {
+        await onUploadComplete(completedPayload);
+      }
       setUploadState("complete");
     } catch (error) {
       const uploadRequestError = error?.name === "UploadRequestError" && error?.payload
@@ -390,6 +401,9 @@ export default function DataConnectionsWorkspace({
     setUploadJob(null);
     setUploadTransfer(null);
     setBatchResults([]);
+    setFeedbackState({ status: "idle", category: null, message: "" });
+    setCopyState("idle");
+    setIsJsonSchemaOpen(false);
     uploadJobIdRef.current = null;
     pollFailureCountRef.current = 0;
     if (pollTimerRef.current) {
