@@ -63,6 +63,21 @@ function App() {
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
   );
+  const currentSession = useMemo(() => ({
+    latestUploadResult: effectiveLatestUploadResult,
+    latestUploadSnapshot: effectiveLatestUploadSnapshot,
+    hasActiveSession,
+    hasCurrentUploadResult,
+    hasResumedSession,
+    hasRealSiiOutput,
+  }), [
+    effectiveLatestUploadResult,
+    effectiveLatestUploadSnapshot,
+    hasActiveSession,
+    hasCurrentUploadResult,
+    hasResumedSession,
+    hasRealSiiOutput,
+  ]);
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;
@@ -295,6 +310,7 @@ function App() {
         hasCurrentUploadResult={hasCurrentUploadResult}
         hasResumedSession={hasResumedSession}
         hasRealSiiOutput={hasRealSiiOutput}
+        currentSession={currentSession}
         onReplayFrameChange={handleReplayFrameChange}
         onReplayModeChange={handleReplayModeChange}
       />

@@ -19,6 +19,7 @@ export default function ReplayWorkspace({
   hasCurrentUploadResult = false,
   hasResumedSession = false,
   hasRealSiiOutput = false,
+  currentSession = null,
   onReplayFrameChange,
   onReplayModeChange,
 }) {
@@ -33,6 +34,12 @@ export default function ReplayWorkspace({
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
+  const sessionJobId = useMemo(() => {
+    const snapshot = currentSession?.latestUploadSnapshot ?? null;
+    const result = currentSession?.latestUploadResult ?? null;
+    const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
+    return result?.job_id ?? history[0]?.job_id ?? null;
+  }, [currentSession]);
   const [replayMode, setReplayMode] = useState(false);
   const togglePlayback = () => {
     setIsPlaying((value) => {
@@ -56,14 +63,29 @@ export default function ReplayWorkspace({
     let cancelled = false;
     async function loadReplay() {
       try {
-        const [primary, comparison] = await Promise.all([
-          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode }),
-          fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode }),
-        ]);
+        let nextTimeline = [];
+        let nextComparison = [];
+        let nextMeta = {};
+
+        if (sessionJobId) {
+          const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
+          nextTimeline = scoped.timeline;
+          nextComparison = [];
+          nextMeta = {
+            ...(scoped.meta ?? {}),
+            replay_source: "upload_job",
+            replay_job_id: scoped.jobId,
+          };
+        } else {
+          const [primary, comparison] = await Promise.all([
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode }),
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode }),
+          ]);
+          nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
+          nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
+          nextMeta = primary.meta ?? {};
+        }
         if (cancelled) return;
-        let nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
-        let nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
-        let nextMeta = primary.meta ?? {};
 
         if (mode !== "demo" && nextTimeline.length === 0) {
           const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
@@ -117,7 +139,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression, shouldRequestReplay]);
+  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -307,26 +329,29 @@ export default function ReplayWorkspace({
   );
 }
 
-async function fetchUploadScopedReplay({ apiFetch, accessCode }) {
-  const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
-  if (!latestResponse.ok) {
-    throw new Error(`Unexpected response: ${latestResponse.status}`);
+async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
+  let targetJobId = jobId;
+  if (!targetJobId) {
+    const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
+    if (!latestResponse.ok) {
+      throw new Error(`Unexpected response: ${latestResponse.status}`);
+    }
+    const latestPayload = await latestResponse.json();
+    const latestResult = latestPayload?.latest_result ?? {};
+    const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
+    targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
   }
-  const latestPayload = await latestResponse.json();
-  const latestResult = latestPayload?.latest_result ?? {};
-  const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
-  const jobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
-  if (!jobId) {
+  if (!targetJobId) {
     return { jobId: null, timeline: [], meta: {} };
   }
-  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(jobId)}`, { accessCode });
+  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (!replayResponse.ok) {
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
   const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  return { jobId, timeline, meta };
+  return { jobId: targetJobId, timeline, meta };
 }
 
 const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];
