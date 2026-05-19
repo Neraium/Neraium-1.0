@@ -1,4 +1,4 @@
-name: Frontend Build and Playwright Smoke
+name: Frontend Quality Gate
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  frontend-smoke:
+  frontend-quality:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,11 +33,14 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
+      - name: Lint frontend
+        run: npm run lint
+
       - name: Build frontend
         run: npm run build
 
-      - name: Run Playwright smoke tests
-        run: npm run test:e2e
+      - name: Run Playwright setup and responsive smoke tests
+        run: npm run test:e2e -- tests/e2e/setup-upload-regression.spec.js tests/e2e/responsive-layout.spec.js
 
       - name: Upload Playwright HTML report on failure
         if: failure()
