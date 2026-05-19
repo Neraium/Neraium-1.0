@@ -100,7 +100,7 @@ export default function DataConnectionsWorkspace({
   demoTabId,
 }) {
   const tabs = useMemo(() => [
-    { id: "connect-live", label: "Live Link" },
+    { id: "connect-live", label: "Setup" },
     { id: "upload", label: "Upload Data" },
   ], []);
 
@@ -449,6 +449,15 @@ export default function DataConnectionsWorkspace({
               {tab.label}
             </button>
           ))}
+          <button
+            type="button"
+            className="secondary-command-button"
+            onClick={handleResetDemoClick}
+            disabled={isUploadProcessing(uploadState)}
+            aria-label="Reset everything"
+          >
+            Reset Everything
+          </button>
         </div>
       </Panel>
 
@@ -460,7 +469,7 @@ export default function DataConnectionsWorkspace({
             </p>
             <div className="intake-flow__controls">
               <button type="button" className="secondary-command-button" onClick={handleResetDemoClick} disabled={isUploadProcessing(uploadState)}>
-                Reset Demo State
+                Reset Everything
               </button>
               <button type="button" className="secondary-command-button" onClick={onResumePreviousSession} disabled={isUploadProcessing(uploadState)}>
                 Resume Previous Session
@@ -471,28 +480,6 @@ export default function DataConnectionsWorkspace({
             </div>
           </Panel>
           <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
-          <IntakeStatusPanel
-            uploadStateView={uploadStateView}
-            latestStatus={latestStatus}
-            uploadState={uploadState}
-            displayUploadError={displayUploadError}
-            apiStatus={apiStatus}
-            latestUploadSnapshot={latestUploadSnapshot}
-            formatClockTime={formatClockTime}
-            baselineMessage={baselineMessage}
-            roomContext={roomContext}
-            uploadDiffSummary={uploadDiffSummary}
-            hasActiveSession={hasActiveSession}
-            hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult} 
-            hasRealSiiOutput={hasRealSiiOutput} 
-            onResumePreviousSession={onResumePreviousSession} 
-            onOpenUpload={() => setActiveTab("upload")} 
-            adaptiveLearning={adaptiveLearning}
-            latestRunId={latestRunId}
-            feedbackState={feedbackState}
-            onOperatorFeedback={handleOperatorFeedback}
-          /> 
         </> 
       )} 
 
