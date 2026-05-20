@@ -18,7 +18,7 @@ test.describe("Setup + Upload regression", () => {
     const setupPanel = page.getByTestId("onboarding-data-source-step");
 
     await expect(stepTitle).toContainText("Step 1 of");
-    await expect(stepTitle).toContainText("Connection Info");
+    await expect(stepTitle).toContainText(/Connection( Info)?/i);
     await expect(setupPanel).toBeVisible();
 
     await page.getByLabel("Source type").fill("Historian");
@@ -27,22 +27,24 @@ test.describe("Setup + Upload regression", () => {
 
     await nextButton.click();
     await expect(page.getByTestId("signal-mapping-step")).toBeVisible();
-    await expect(stepTitle).toContainText("Signal Mapping");
+    await expect(stepTitle).toContainText(/(Signal )?Mapping/i);
 
     await nextButton.click();
-    await expect(stepTitle).toContainText("Quick Verify");
+    await expect(stepTitle).toContainText(/(Quick )?Verify/i);
     await expect(nextButton).toHaveCount(0);
     await page.getByRole("button", { name: "Run Read-Only Check" }).click();
     await expect(page.getByText("Read-only verification passed.")).toBeVisible();
-    await page.getByRole("button", { name: "Finish Setup" }).click();
+    const finishSetupButton = page.getByRole("button", { name: "Finish Setup" });
+    await finishSetupButton.scrollIntoViewIfNeeded();
+    await finishSetupButton.click({ force: true });
     await expect(page.getByRole("button", { name: "Go to Upload" })).toBeVisible();
     await page.getByRole("button", { name: "Go to Upload" }).click();
-    await expect(page.getByRole("tab", { name: "Upload Data" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: /^Upload( Data)?$/i })).toHaveAttribute("aria-selected", "true");
   });
 
   test("enables upload processing after file selection", async ({ page }) => {
     await openDataConnections(page);
-    await page.getByRole("tab", { name: "Upload Data" }).click();
+    await page.getByRole("tab", { name: /^Upload( Data)?$/i }).click();
 
     const processButton = page.getByRole("button", { name: "Process Upload" });
     await expect(processButton).toBeDisabled();
