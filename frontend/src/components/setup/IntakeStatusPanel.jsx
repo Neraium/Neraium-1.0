@@ -28,28 +28,38 @@ export default function IntakeStatusPanel({
   const eventMemory = adaptiveLearning?.event_memory ?? {};
   const feedbackHistory = eventMemory?.recent_feedback_history ?? [];
   const feedbackOptions = adaptiveLearning?.operator_feedback_options ?? [];
+  const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) : "No Active Session";
+  const learningStatus = adaptiveLearning?.learning_status ?? "warming_up";
+  const baselineAge = adaptiveBaseline?.baseline_age?.label ?? "Unavailable";
+  const calibrationConfidence = calibration?.calibration_confidence ?? null;
+  const similarEvents = eventMemory?.historical_similar_events ?? 0;
   return (
     <>
       <Panel title="Intake Status" className="span-7 uploaded-intelligence-panel">
         <MetricGrid
           metrics={[
-            { label: "Active Session", value: showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) : "No Active Session" },
+            { label: "Session", value: sessionState },
             { label: "Control Plane", value: apiStatus.label },
-            { label: "Analysis Active", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
-            { label: "Signal Origin", value: showAnalysis && latestUploadSnapshot?.result_source ? "Telemetry import" : null },
+            { label: "Last Analysis", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
             { label: "Baseline", value: baselineMessage },
-            { label: "Primary Environment", value: roomContext.primary },
             { label: "Operational Mode", value: showAnalysis ? latestUploadSnapshot?.scenario : null },
-            { label: "Session Tick", value: showAnalysis ? latestUploadSnapshot?.current_tick : null },
-            { label: "Learning Status", value: adaptiveLearning?.learning_status ?? "warming_up" },
-            { label: "Baseline Age", value: adaptiveBaseline?.baseline_age?.label ?? "Unavailable" },
-            { label: "Calibration Confidence", value: calibration?.calibration_confidence ?? null },
-            { label: "Historical Similar Events", value: eventMemory?.historical_similar_events ?? 0 },
+            { label: "Environment", value: roomContext.primary },
           ]}
         />
       </Panel>
+      <Panel title="Adaptive Context" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <MetricGrid
+          metrics={[
+            { label: "Learning Status", value: learningStatus },
+            { label: "Baseline Age", value: baselineAge },
+            { label: "Calibration Confidence", value: calibrationConfidence },
+            { label: "Historical Similar Events", value: similarEvents },
+          ]}
+          compact
+        />
+      </Panel>
       {showAnalysis ? (
-        <Panel title="Recent Structural Analysis" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <Panel title="Recent Structural Analysis" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <MetricGrid
             metrics={[
               { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
