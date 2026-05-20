@@ -14,6 +14,7 @@ import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
+import PilotReadinessPanel from "./setup/PilotReadinessPanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 
@@ -541,6 +542,12 @@ export default function DataConnectionsWorkspace({
             feedbackState={feedbackState}
             onOperatorFeedback={handleOperatorFeedback}
           /> 
+          <PilotReadinessPanel
+            apiStatus={apiStatus}
+            latestUploadSnapshot={latestUploadSnapshot}
+            hasRealSiiOutput={hasRealSiiOutput}
+            formatClockTime={formatClockTime}
+          />
         </> 
       )} 
     </div>

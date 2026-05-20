@@ -1,0 +1,5 @@
+timestamp,room,temperature,humidity,flow_rate
+2026-05-01T00:15:00Z,Pool Return,79.9,58,118
+2026-05-01T00:00:00Z,Pool Return,79.2,57,121
+2026-05-01T00:10:00Z,Pool Return,79.6,58,119
+2026-05-01T00:05:00Z,Pool Return,79.4,57,120

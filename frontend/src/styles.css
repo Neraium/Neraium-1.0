@@ -11896,6 +11896,32 @@ nav[aria-label="Workspaces"] a {
   color: rgba(224, 247, 238, 0.96);
 }
 
+.pilot-readiness-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.pilot-readiness-list li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(133, 154, 179, 0.24);
+  background: rgba(8, 14, 22, 0.54);
+}
+
+.pilot-readiness-list li.is-ok {
+  border-color: rgba(99, 193, 162, 0.38);
+}
+
+.pilot-readiness-list li.is-warn {
+  border-color: rgba(213, 145, 97, 0.45);
+}
+
 @media (max-width: 900px) {
   .intake-stage-rail {
     gap: 6px;

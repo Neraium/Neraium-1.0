@@ -1,0 +1,5 @@
+timestamp,room,temperature,humidity,orp,ph
+2026-05-01T00:00:00Z,Spa Loop,99.0,44,680,7.4
+2026-05-01T00:05:00Z,Spa Loop,99.0,44,680,7.4
+2026-05-01T00:10:00Z,Spa Loop,99.0,44,680,7.4
+2026-05-01T00:15:00Z,Spa Loop,99.0,44,680,7.4
