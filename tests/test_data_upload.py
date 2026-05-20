@@ -111,7 +111,7 @@ def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
     assert payload["job_id"]
 
 
-def test_upload_stays_pending_in_api_role_without_worker_service(tmp_path) -> None:
+def test_upload_processes_in_api_role_without_worker_service(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -128,11 +128,9 @@ def test_upload_stays_pending_in_api_role_without_worker_service(tmp_path) -> No
     )
 
     assert response.status_code == 202
-    status = client.get(response.json()["status_url"])
-    assert status.status_code == 200
-    payload = status.json()
-    assert payload["status"] == "PENDING"
-    assert payload["runner_used"] is False
+    payload = wait_for_terminal_upload_status(client, response.json()["status_url"])
+    assert payload["status"] == "COMPLETE"
+    assert payload["runner_used"] is True
 
 
 def test_create_upload_job_enforces_streaming_size_limit() -> None:

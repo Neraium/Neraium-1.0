@@ -242,8 +242,9 @@ async def upload_csv(
         delete_upload_file(metadata)
         raise HTTPException(status_code=400, detail=f"{extension.upper().lstrip('.')} file is empty.")
 
-    if settings.process_role in {"all", "worker"}:
-        background_tasks.add_task(process_next_queued_upload_job)
+    # Always attempt processing after enqueue so uploads work regardless of
+    # process role configuration (api/worker/all).
+    background_tasks.add_task(process_next_queued_upload_job)
     logger.info(
         "upload_job_accepted job_id=%s returned_job_id=%s filename=%s size_bytes=%s auth_subject=%s auth_source=%s metadata_exists=%s",
         metadata["job_id"],
