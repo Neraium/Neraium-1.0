@@ -54,24 +54,24 @@ export default function IntakeFlowPanel({
         <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <div>
-              <p className="section-token">Historian Pilot Intake</p>
-              <h3>Acquire - Normalize - Baseline - Analyze</h3>
+              <p className="section-token">Telemetry Intake</p>
+              <h3>Upload and Process</h3>
             </div>
-            <p>Upload a historian export for read-only pilot intake and structural analysis.</p>
+            <p>Upload CSV or JSON telemetry and start read-only analysis.</p>
           </div>
           <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
               <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} batch - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
               <p>{uploadReadinessMessage(selectedFiles?.[0] ?? null)}</p>
             </div>
             <div className="upload-file-card__actions">
-              <button data-testid="onboarding-demo-csv-option" className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
-              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>Select JSON</button>
+              <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
+              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>Use JSON</button>
               <button className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
-                {isUploadProcessing(uploadState) ? "Processing" : `Process ${pendingUploadKind.toUpperCase()}`}
+                {isUploadProcessing(uploadState) ? "Processing" : "Process Upload"}
               </button>
             </div>
           </div>
@@ -105,9 +105,10 @@ export default function IntakeFlowPanel({
                     <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
                   </div>
                 )}
-                {batchResults.map((entry) => (
+                {batchResults.slice(0, 5).map((entry) => (
                   <span key={entry.id}>{`${entry.fileName}: ${entry.status}${entry.message ? ` - ${entry.message}` : ""}`}</span>
                 ))}
+                {batchResults.length > 5 ? <span>{`+${batchResults.length - 5} more files`}</span> : null}
                 {failedCount > 0 && (
                   <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads} disabled={isUploadProcessing(uploadState)}>
                     Retry Failed Files
@@ -146,6 +147,7 @@ export default function IntakeFlowPanel({
       </Panel>
       <Panel title="Model Construction State" className="span-5 upload-cognition-state">
         <WorkflowStages items={intakeStages} />
+        <p className="narrative-text">Processing remains read-only and does not actuate infrastructure.</p>
       </Panel>
     </>
   );
