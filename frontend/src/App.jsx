@@ -238,6 +238,11 @@ function App() {
     applyDemoStep(0);
   }, [applyDemoStep]);
 
+  const handleSignOut = useCallback(async () => {
+    await logoutUser();
+    setCurrentUser(null);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
@@ -312,26 +317,6 @@ function App() {
           }}
         >
           Back to Gate
-        </button>
-        <button
-          type="button"
-          className="system-gate__settings-action"
-          onClick={async () => {
-            await logoutUser();
-            setCurrentUser(null);
-          }}
-          aria-label="Sign out"
-          style={{
-            position: "fixed",
-            top: "max(12px, env(safe-area-inset-top, 0px))",
-            right: "max(12px, env(safe-area-inset-right, 0px))",
-            zIndex: 1000,
-            width: "fit-content",
-            paddingInline: "12px",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          Sign out
         </button>
         {content}
       </div>
@@ -434,26 +419,6 @@ function App() {
 
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-    <button
-      type="button"
-      className="system-gate__settings-action"
-      onClick={async () => {
-        await logoutUser();
-        setCurrentUser(null);
-      }}
-      aria-label="Sign out"
-      style={{
-        position: "fixed",
-        top: "max(12px, env(safe-area-inset-top, 0px))",
-        right: "max(12px, env(safe-area-inset-right, 0px))",
-        zIndex: 1000,
-        width: "fit-content",
-        paddingInline: "12px",
-        backdropFilter: "blur(10px)",
-      }}
-    >
-      Sign out
-    </button>
     {authError ? <p className="narrative-text" style={{ position: "fixed", top: "70px", right: "20px", zIndex: 1000 }}>{authError}</p> : null}
     <SystemTopologyWorkspace
       liveOps={historianReplayState.enabled && historianReplayState.frame
@@ -464,6 +429,7 @@ function App() {
       apiFetch={apiFetch}
       accessCode={accessCode}
       onWorkspaceNavigate={setActiveWorkspace}
+      onSignOut={handleSignOut}
       onUploadComplete={handleGateUploadComplete}
       domainMode={domainMode}
       onDomainModeChange={setDomainMode}

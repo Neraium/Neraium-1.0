@@ -19,6 +19,7 @@ export default function SystemTopologyWorkspace({
   apiFetch,
   accessCode,
   onWorkspaceNavigate, 
+  onSignOut = null,
   onUploadComplete, 
   domainMode = "aquatic",
   onDomainModeChange = null,
@@ -105,6 +106,7 @@ export default function SystemTopologyWorkspace({
       apiFetch={apiFetch}
       accessCode={accessCode}
       onWorkspaceNavigate={onWorkspaceNavigate}
+      onSignOut={onSignOut}
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
       onDomainModeChange={onDomainModeChange}

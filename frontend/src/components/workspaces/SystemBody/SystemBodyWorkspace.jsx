@@ -29,6 +29,7 @@ export default function SystemBodyWorkspace({
   apiFetch = null,
   accessCode = "",
   onWorkspaceNavigate = null,
+  onSignOut = null,
   onUploadComplete = null,
   isLoading = false,
   isEmptyStructuralState = false,
@@ -119,6 +120,9 @@ export default function SystemBodyWorkspace({
               <ul>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Setup & data connections</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => switchDomainMode(domainMode === "aquatic" ? "cultivation" : "aquatic")} disabled={settingsBusy}>{domainMode === "aquatic" ? "Switch to cultivation mode" : "Switch to aquatic mode"}</button></li>
+                {typeof onSignOut === "function" ? (
+                  <li><button type="button" className="system-gate__settings-action" onClick={onSignOut} disabled={settingsBusy}>Sign out</button></li>
+                ) : null}
                 <li><button type="button" className="system-gate__settings-action" onClick={() => setAdvancedOpen((value) => !value)} disabled={settingsBusy}>{advancedOpen ? "Hide advanced" : "Advanced"}</button></li>
               </ul>
               {advancedOpen ? (
