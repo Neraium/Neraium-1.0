@@ -23,49 +23,14 @@ from app.services.data_connections import (
     test_data_connection,
     upsert_registered_data_connection,
 )
-from app.services.upload_jobs import latest_completed_job_summary
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
 
 
-def enrich_connections_with_uploaded_telemetry(connections: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep the UI from treating uploaded telemetry as if no data exists.
-
-    File uploads are not the same thing as a live telemetry stream, but once a
-    completed upload exists the customer UI should say an imported telemetry
-    source is active instead of showing contradictory "awaiting telemetry" copy.
-    """
-    summary = latest_completed_job_summary()
-    if not summary:
-        return connections
-
-    enriched: list[dict[str, Any]] = []
-    for index, connection in enumerate(connections):
-        next_connection = {**connection}
-        if index == 0 or next_connection.get("connection_id") == "rest-telemetry-intake":
-            next_connection.setdefault("last_success_at", summary.get("last_processed_at"))
-            next_connection.setdefault("last_poll_at", summary.get("last_processed_at"))
-            next_connection.setdefault("latest_telemetry_timestamp", summary.get("last_processed_at"))
-            next_connection["current_scenario"] = next_connection.get("current_scenario") or "Monitoring uploaded telemetry"
-            next_connection["last_ingestion_source"] = next_connection.get("last_ingestion_source") or "file_upload"
-            next_connection["baseline_source"] = next_connection.get("baseline_source") or "uploaded_file"
-            next_connection["baseline_status"] = next_connection.get("baseline_status") or "active"
-            next_connection["baseline_samples_collected"] = next_connection.get("baseline_samples_collected") or summary.get("rows_processed", 0)
-            next_connection["baseline_samples_required"] = next_connection.get("baseline_samples_required") or summary.get("rows_processed", 0)
-            next_connection["last_baseline_update"] = next_connection.get("last_baseline_update") or summary.get("last_processed_at")
-            next_connection["readings_received"] = max(next_connection.get("readings_received", 0), summary.get("rows_processed", 0) or 0)
-            next_connection["readings_accepted"] = max(next_connection.get("readings_accepted", 0), summary.get("rows_processed", 0) or 0)
-            next_connection["sensors_detected"] = max(next_connection.get("sensors_detected", 0), summary.get("columns_detected", 0) or 0)
-            if next_connection.get("status") in {None, "offline", "error"}:
-                next_connection["status"] = "online"
-        enriched.append(next_connection)
-    return enriched
-
-
 @router.get("/data-connections", response_model=DataConnectionsListResponse)
 def read_data_connections() -> dict[str, Any]:
-    return {"connections": enrich_connections_with_uploaded_telemetry(list_registered_data_connections())}
+    return {"connections": list_registered_data_connections()}
 
 
 @router.post("/data-connections", response_model=DataConnectionActionResponse)

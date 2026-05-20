@@ -44,7 +44,6 @@ export default function useFacilityRuntime({
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [domainMode, setDomainModeState] = useState("aquatic");
   const healthCheckAttemptsRef = useRef(0);
-  const facilitySystemsFetchDisabledRef = useRef(false);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) {
@@ -83,7 +82,7 @@ export default function useFacilityRuntime({
   }, [accessCode, formatClockTime, formatEndpoint, hasAccess]);
 
   const loadFacilitySystems = useCallback(async () => {
-    if (!hasAccess || facilitySystemsFetchDisabledRef.current) {
+    if (!hasAccess) {
       return false;
     }
 
@@ -101,20 +100,7 @@ export default function useFacilityRuntime({
         setBackendError(authMessage);
         return false;
       }
-      if (error instanceof Response && error.status === 404) {
-        facilitySystemsFetchDisabledRef.current = true;
-      }
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
-      const lowerMessage = String(normalizedMessage || "").toLowerCase();
-      if (
-        lowerMessage.includes("404")
-        || lowerMessage.includes("unexpected response")
-        || lowerMessage.includes("failed to fetch")
-        || lowerMessage.includes("networkerror")
-        || lowerMessage.includes("cors")
-      ) {
-        facilitySystemsFetchDisabledRef.current = true;
-      }
       setSystems(FALLBACK_SYSTEMS);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
@@ -151,7 +137,6 @@ export default function useFacilityRuntime({
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
-      facilitySystemsFetchDisabledRef.current = false;
       await loadFacilitySystems();
     }
   }, [checkApiHealth, loadFacilitySystems]);
