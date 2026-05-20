@@ -64,7 +64,14 @@ export default function HealthOrb({ systemState = "stable", intensity = 0.4, ani
       className={`health-orb health-orb--gate-iris ${palette.className} ${animated ? "health-orb--gate-iris-animated" : ""}`}
       style={{ "--iris-intensity": resolvedIntensity }}
     >
-      <svg className="health-orb__svg health-orb__svg--gate-iris" viewBox="0 0 320 280" role="img" aria-label="Aletheia Gate governed aperture">
+      <svg
+        className="health-orb__svg health-orb__svg--gate-iris"
+        viewBox="0 0 320 280"
+        role="img"
+        aria-label="Aletheia Gate governed aperture"
+        shapeRendering="geometricPrecision"
+        textRendering="geometricPrecision"
+      >
         <g className="gate-iris">
           <circle className="gate-iris__outer-ring" cx="160" cy="140" r="96" stroke={palette.ring} />
           <circle className="gate-iris__inner-ring" cx="160" cy="140" r="62" stroke={palette.ring} />
