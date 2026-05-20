@@ -192,9 +192,19 @@ function App() {
     setAllowPersistedLatest(false);
     setGuidedDemo({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
     setDemoDataConnectionsTab(null);
+    await Promise.allSettled([
+      apiFetch("/api/data/reset", {
+        method: "POST",
+        accessCode,
+      }),
+      apiFetch("/api/data-connections/reset-all", {
+        method: "POST",
+        accessCode,
+      }),
+    ]);
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
-  }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+  }, [accessCode, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const applyDemoStep = useCallback((index) => {
     const step = DEMO_STEPS[index] ?? DEMO_STEPS[0];
