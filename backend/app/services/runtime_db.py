@@ -180,7 +180,7 @@ def read_upload_job(job_id: str) -> dict[str, Any] | None:
     return json.loads(row["payload_json"])
 
 
-def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]: 
     init_runtime_db()
     query = "SELECT payload_json FROM upload_jobs"
     params: list[Any] = []
@@ -191,7 +191,35 @@ def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[s
     params.append(limit)
     with db_connection() as connection:
         rows = connection.execute(query, tuple(params)).fetchall()
-    return [json.loads(row["payload_json"]) for row in rows]
+    return [json.loads(row["payload_json"]) for row in rows] 
+
+
+def upload_duration_samples(limit: int = 200) -> list[float]:
+    init_runtime_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT payload_json FROM upload_jobs
+            WHERE status = 'COMPLETE'
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    samples: list[float] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        value = payload.get("processing_duration_seconds")
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric > 0:
+            samples.append(numeric)
+    return samples
 
 
 def enqueue_upload_job(job_id: str) -> None:

@@ -9,10 +9,20 @@ from app.core.security import require_api_access
 from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
 from app.services.evidence_store import list_evidence_runs
-from app.services.runtime_db import audit_events_count, queue_metrics
+from app.services.runtime_db import audit_events_count, queue_metrics, upload_duration_samples
+from app.services.upload_jobs import read_upload_cache_stats
 
 
-router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access)])
+router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access)]) 
+
+
+def percentile(values: list[float], point: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = int(round((len(ordered) - 1) * point))
+    index = max(0, min(index, len(ordered) - 1))
+    return round(ordered[index], 3)
 
 
 @router.get("/observability/summary", response_model=ObservabilitySummaryResponse)
@@ -59,7 +69,33 @@ def get_observability_metrics() -> PlainTextResponse:
         "# TYPE neraium_audit_events_total gauge",
         f"neraium_audit_events_total {audit_events_count()}",
     ]
-    return PlainTextResponse("\n".join(lines) + "\n")
+    return PlainTextResponse("\n".join(lines) + "\n") 
+
+
+@router.get("/observability/performance")
+def get_observability_performance(window: int = 200) -> dict:
+    queue = queue_metrics()
+    durations = upload_duration_samples(limit=max(10, min(window, 1000)))
+    cache_stats = read_upload_cache_stats()
+    hits = cache_stats.get("hash_cache_hits", 0)
+    misses = cache_stats.get("hash_cache_misses", 0)
+    total = hits + misses
+    hit_rate = (hits / total) if total > 0 else None
+    return {
+        "queue_depth": queue.get("pending", 0) + queue.get("processing", 0),
+        "queue": queue,
+        "upload_duration_seconds": {
+            "samples": len(durations),
+            "p50": percentile(durations, 0.50),
+            "p95": percentile(durations, 0.95),
+            "max": round(max(durations), 3) if durations else None,
+        },
+        "cache": {
+            "hash_cache_hits": hits,
+            "hash_cache_misses": misses,
+            "hash_cache_hit_rate": round(hit_rate, 4) if hit_rate is not None else None,
+        },
+    }
 
 
 @router.get("/observability/evp-governance")

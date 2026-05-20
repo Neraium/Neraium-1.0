@@ -7,9 +7,10 @@ export default function GovernanceAdminWorkspace({
   EmptyState,
   onBackToGate = null,
 }) {
-  const [payload, setPayload] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [payload, setPayload] = useState(null); 
+  const [performance, setPerformance] = useState(null);
+  const [error, setError] = useState(""); 
+  const [loading, setLoading] = useState(true); 
 
   useEffect(() => {
     let mounted = true;
@@ -17,13 +18,18 @@ export default function GovernanceAdminWorkspace({
       try {
         setLoading(true);
         setError("");
-        const response = await apiFetch("/api/observability/evp-governance?limit=200", { accessCode });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(String(data?.detail ?? `Unexpected response: ${response.status}`));
-        }
-        if (!mounted) return;
-        setPayload(data);
+        const [governanceResponse, performanceResponse] = await Promise.all([
+          apiFetch("/api/observability/evp-governance?limit=200", { accessCode }),
+          apiFetch("/api/observability/performance?window=200", { accessCode }),
+        ]);
+        const data = await governanceResponse.json().catch(() => ({})); 
+        if (!governanceResponse.ok) { 
+          throw new Error(String(data?.detail ?? `Unexpected response: ${governanceResponse.status}`)); 
+        } 
+        const perf = await performanceResponse.json().catch(() => ({}));
+        if (!mounted) return; 
+        setPayload(data); 
+        setPerformance(perf);
       } catch (err) {
         if (!mounted) return;
         setError(String(err?.message ?? err));
@@ -83,18 +89,26 @@ export default function GovernanceAdminWorkspace({
   return (
     <section className="workspace-surface">
       {backControl}
-      <Panel
-        title="Governance Admin"
-        subtitle="Internal custody view for Aletheia Gate PASS/NO_PASS EVP receipts. Operator UI remains PASS-only."
-      >
-        <div className="metric-grid">
+      <Panel 
+        title="Governance Admin" 
+        subtitle="Internal custody view for Aletheia Gate PASS/NO_PASS EVP receipts. Operator UI remains PASS-only." 
+      > 
+        <div className="metric-grid"> 
           <article className="metric-card"><span className="metric-label">Total Records</span><strong className="metric-value">{payload?.total ?? 0}</strong></article>
           <article className="metric-card"><span className="metric-label">PASS</span><strong className="metric-value">{payload?.pass_count ?? 0}</strong></article>
-          <article className="metric-card"><span className="metric-label">NO_PASS</span><strong className="metric-value">{payload?.no_pass_count ?? 0}</strong></article>
+          <article className="metric-card"><span className="metric-label">NO_PASS</span><strong className="metric-value">{payload?.no_pass_count ?? 0}</strong></article> 
+        </div> 
+      </Panel> 
+      <Panel title="Performance" subtitle="Runtime upload and queue performance window">
+        <div className="metric-grid">
+          <article className="metric-card"><span className="metric-label">Queue Depth</span><strong className="metric-value">{performance?.queue_depth ?? 0}</strong></article>
+          <article className="metric-card"><span className="metric-label">Upload p50 (s)</span><strong className="metric-value">{performance?.upload_duration_seconds?.p50 ?? "-"}</strong></article>
+          <article className="metric-card"><span className="metric-label">Upload p95 (s)</span><strong className="metric-value">{performance?.upload_duration_seconds?.p95 ?? "-"}</strong></article>
+          <article className="metric-card"><span className="metric-label">Hash Cache Hit Rate</span><strong className="metric-value">{performance?.cache?.hash_cache_hit_rate != null ? `${Math.round(performance.cache.hash_cache_hit_rate * 100)}%` : "-"}</strong></article>
         </div>
       </Panel>
 
-      <div className="workspace-grid workspace-grid--two">
+      <div className="workspace-grid workspace-grid--two"> 
         {rows.map((record) => (
           <Panel
             key={record.evp_id}

@@ -69,6 +69,10 @@ LATEST_UPLOAD_CACHE: dict[str, Any] = {
     "summary": None,
     "result": None,
 }
+UPLOAD_CACHE_STATS: dict[str, int] = {
+    "hash_cache_hits": 0,
+    "hash_cache_misses": 0,
+}
 
 def configure_runtime_dir(runtime_dir: Path) -> None: 
     global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR 
@@ -359,6 +363,7 @@ def process_upload_job(job_id: str) -> None:
         if hash_cache_key:
             cached_payload = read_latest_payload(hash_cache_key)
             if isinstance(cached_payload, dict) and isinstance(cached_payload.get("result"), dict) and isinstance(cached_payload.get("summary"), dict):
+                UPLOAD_CACHE_STATS["hash_cache_hits"] += 1
                 completed_at = now_iso()
                 result = cached_payload["result"]
                 summary = {**cached_payload["summary"], "last_processed_at": completed_at}
@@ -381,6 +386,7 @@ def process_upload_job(job_id: str) -> None:
                 complete_upload_queue_job(job_id, "completed")
                 logger.info("upload_job_completed_from_hash_cache job_id=%s input_hash=%s", job_id, metadata.get("input_hash"))
                 return
+            UPLOAD_CACHE_STATS["hash_cache_misses"] += 1
 
         logger.info( 
             "upload_job_started job_id=%s filename=%s size_bytes=%s", 
@@ -1318,6 +1324,13 @@ def reset_latest_upload_state() -> None:
 def warm_latest_upload_cache() -> None:
     LATEST_UPLOAD_CACHE["summary"] = read_latest_payload("latest_upload_summary")
     LATEST_UPLOAD_CACHE["result"] = read_latest_payload("latest_upload_result")
+
+
+def read_upload_cache_stats() -> dict[str, int]:
+    return {
+        "hash_cache_hits": int(UPLOAD_CACHE_STATS.get("hash_cache_hits", 0)),
+        "hash_cache_misses": int(UPLOAD_CACHE_STATS.get("hash_cache_misses", 0)),
+    }
 
 
 def truncate_engine_result(engine_result: dict[str, Any]) -> dict[str, Any]:
