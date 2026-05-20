@@ -14,7 +14,6 @@ export default function IntakeStatusPanel({
   hasActiveSession,
   hasResumedSession,
   hasCurrentUploadResult,
-  hasRealSiiOutput,
   onResumePreviousSession,
   onOpenUpload,
   adaptiveLearning = {},
@@ -24,7 +23,7 @@ export default function IntakeStatusPanel({
   uploadJob = null,
   latestUploadResult = null,
 }) {
-  const showAnalysis = hasActiveSession && hasRealSiiOutput && (hasCurrentUploadResult || hasResumedSession);
+  const showAnalysis = hasActiveSession && (hasCurrentUploadResult || hasResumedSession);
   const calibration = adaptiveLearning?.calibration ?? {};
   const adaptiveBaseline = adaptiveLearning?.adaptive_baseline ?? {};
   const eventMemory = adaptiveLearning?.event_memory ?? {};

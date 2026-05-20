@@ -92,7 +92,6 @@ export default function DataConnectionsWorkspace({
   hasActiveSession,
   hasResumedSession,
   hasCurrentUploadResult,
-  hasRealSiiOutput,
   roomContext,
   onUploadComplete,
   onResetDemo,
@@ -498,7 +497,7 @@ export default function DataConnectionsWorkspace({
   const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
   const workflowStage = activeTab === "connect-live"
     ? "setup"
-    : (hasRealSiiOutput || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload");
+    : (hasActiveSession || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload");
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -562,9 +561,8 @@ export default function DataConnectionsWorkspace({
             uploadDiffSummary={uploadDiffSummary}
             hasActiveSession={hasActiveSession}
             hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult} 
-            hasRealSiiOutput={hasRealSiiOutput} 
-            onResumePreviousSession={onResumePreviousSession} 
+            hasCurrentUploadResult={hasCurrentUploadResult}
+            onResumePreviousSession={onResumePreviousSession}
             onOpenUpload={() => setActiveTab("upload")} 
             adaptiveLearning={adaptiveLearning}
             latestRunId={latestRunId}
@@ -576,7 +574,7 @@ export default function DataConnectionsWorkspace({
           <PilotReadinessPanel
             apiStatus={apiStatus}
             latestUploadSnapshot={latestUploadSnapshot}
-            hasRealSiiOutput={hasRealSiiOutput}
+            hasActiveSession={hasActiveSession}
             formatClockTime={formatClockTime}
           />
         </> 

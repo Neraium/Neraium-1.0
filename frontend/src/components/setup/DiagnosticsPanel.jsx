@@ -76,7 +76,6 @@ export default function DiagnosticsPanel({
   hasActiveSession,
   hasCurrentUploadResult,
   hasResumedSession,
-  hasRealSiiOutput,
   apiFetch,
   accessCode,
   uploadStateView,
@@ -90,7 +89,7 @@ export default function DiagnosticsPanel({
   );
 
   useEffect(() => {
-    if (!hasActiveSession || !hasRealSiiOutput || !activeJobId) {
+    if (!hasActiveSession || !activeJobId) {
       setReplayFrames([]);
       setReplayError("");
       return;
@@ -115,9 +114,9 @@ export default function DiagnosticsPanel({
     return () => {
       cancelled = true;
     };
-  }, [accessCode, activeJobId, apiFetch, hasActiveSession, hasRealSiiOutput]);
+  }, [accessCode, activeJobId, apiFetch, hasActiveSession]);
 
-  const showAnalysis = hasActiveSession && hasRealSiiOutput && (hasCurrentUploadResult || hasResumedSession);
+  const showAnalysis = hasActiveSession && (hasCurrentUploadResult || hasResumedSession);
   const fallbackSummary = replaySummaryFromResult(latestUploadResult);
   const frameSummary = replaySummaryFromFrames(replayFrames);
   const summary = frameSummary.frameCount > 0 ? frameSummary : fallbackSummary;

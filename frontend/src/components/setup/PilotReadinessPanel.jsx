@@ -9,7 +9,7 @@ function asEpoch(value) {
 export default function PilotReadinessPanel({
   apiStatus,
   latestUploadSnapshot,
-  hasRealSiiOutput,
+  hasActiveSession,
   formatClockTime,
 }) {
   const baselineStatus = String(latestUploadSnapshot?.baseline_status ?? "none").toLowerCase();
@@ -25,7 +25,7 @@ export default function PilotReadinessPanel({
     { label: "Baseline status", ok: baselineStatus === "active", detail: baselineStatus === "active" ? "Baseline active" : "Baseline pending" },
     { label: "Analysis freshness", ok: isFresh, detail: lastProcessedAt ? formatClockTime(lastProcessedAt) : "No analysis timestamp" },
     { label: "Read-only boundary", ok: true, detail: "Read-only. No control or actuation paths enabled." },
-    { label: "SII result availability", ok: Boolean(hasRealSiiOutput), detail: hasRealSiiOutput ? "SII output available" : "No completed SII output yet" },
+    { label: "Session data availability", ok: Boolean(hasActiveSession), detail: hasActiveSession ? "Uploaded or resumed session is available" : "No upload session available yet" },
   ];
   const passed = checks.filter((item) => item.ok).length;
   const total = checks.length;
