@@ -44,6 +44,10 @@ export default function IntakeStatusPanel({
   const processingMode = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
   const ingestRequestId = uploadJob?.ingest_request_id ?? null;
   const requestId = uploadJob?.request_id ?? null;
+  const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? latestUploadResult?.filename ?? null;
+  const baselineReference = activeFilename
+    ? `${activeFilename} (internal baseline)`
+    : "Awaiting uploaded telemetry";
   return (
     <>
       <Panel title="Intake Status" className="span-7 uploaded-intelligence-panel">
@@ -74,7 +78,7 @@ export default function IntakeStatusPanel({
           <MetricGrid
             metrics={[
               { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
-              { label: "Baseline Reference", value: latestUploadSnapshot?.history?.[1]?.filename },
+              { label: "Baseline Reference", value: baselineReference },
               { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
               { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
             ]}

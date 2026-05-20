@@ -141,6 +141,35 @@ export default function DataConnectionsWorkspace({
   }, [latestUploadResult]);
 
   useEffect(() => {
+    if (!latestUploadSnapshot) return;
+    const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
+    const hasPersistedSession =
+      snapshotStatus === "complete"
+      || snapshotStatus === "running_sii"
+      || snapshotStatus === "parsing"
+      || snapshotStatus === "baseline_modeling"
+      || Boolean(latestUploadSnapshot.last_filename)
+      || Boolean(latestUploadSnapshot.latest_result);
+
+    if (!hasPersistedSession) return;
+
+    setUploadState(snapshotStatus || "idle");
+    setUploadJob((current) => ({
+      ...(current ?? {}),
+      job_id: current?.job_id ?? latestUploadSnapshot.history?.[0]?.job_id ?? latestUploadSnapshot.latest_result?.job_id ?? null,
+      status: String(latestUploadSnapshot.status ?? current?.status ?? "PENDING").toUpperCase(),
+      progress_label: current?.progress_label ?? latestUploadSnapshot.message ?? "Session restored from persisted state.",
+      message: latestUploadSnapshot.message ?? current?.message ?? "Session restored from persisted state.",
+      filename: current?.filename ?? latestUploadSnapshot.last_filename ?? null,
+      rows_processed: Number.isFinite(latestUploadSnapshot.rows_processed) ? latestUploadSnapshot.rows_processed : (current?.rows_processed ?? 0),
+      columns_detected: Number.isFinite(latestUploadSnapshot.columns_detected) ? latestUploadSnapshot.columns_detected : (current?.columns_detected ?? 0),
+      runner_used: latestUploadSnapshot.runner_used ?? current?.runner_used ?? false,
+      runner_module: latestUploadSnapshot.runner_module ?? current?.runner_module ?? null,
+      core_engine: latestUploadSnapshot.core_engine ?? current?.core_engine ?? null,
+    }));
+  }, [latestUploadSnapshot]);
+
+  useEffect(() => {
     if (!demoTabId) return;
     if (demoTabId === "upload") {
       setActiveTab("upload");
