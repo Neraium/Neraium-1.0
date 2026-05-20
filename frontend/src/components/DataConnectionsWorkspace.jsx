@@ -557,24 +557,24 @@ export default function DataConnectionsWorkspace({
 function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false }) {
   const hintedRetry = Number(payload?.retry_after_ms);
   if (Number.isFinite(hintedRetry) && hintedRetry >= 1000) {
-    return Math.min(Math.max(hintedRetry, 1000), 30000);
+    return Math.min(Math.max(hintedRetry, 800), 12000);
   }
 
   const percent = Number(payload?.percent);
   const progress = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
-  let baseDelay = 2000;
+  let baseDelay = 1200;
 
   if (failedAttempt) {
-    baseDelay = Math.min(2000 + failureCount * 1500, 15000);
+    baseDelay = Math.min(1200 + failureCount * 900, 8000);
   } else if (progress != null) {
-    if (progress < 20) baseDelay = 1400;
-    else if (progress < 70) baseDelay = 2200;
-    else if (progress < 95) baseDelay = 3200;
-    else baseDelay = 4200;
+    if (progress < 20) baseDelay = 900;
+    else if (progress < 70) baseDelay = 1300;
+    else if (progress < 95) baseDelay = 1700;
+    else baseDelay = 2200;
   } else {
-    baseDelay = 2600;
+    baseDelay = 1500;
   }
 
-  const hiddenMultiplier = typeof document !== "undefined" && document.visibilityState === "hidden" ? 1.75 : 1;
+  const hiddenMultiplier = typeof document !== "undefined" && document.visibilityState === "hidden" ? 1.35 : 1;
   return Math.round(baseDelay * hiddenMultiplier);
 }

@@ -22,6 +22,16 @@ BASE_URL=https://app.neraium.com python scripts/pilot_rehearsal_check.py
 The production smoke script now performs the basic API probes plus a tiny telemetry upload that must reach `COMPLETE`, use the SII runner, and advance the visible runtime state.
 The pilot rehearsal script adds deterministic bad-telemetry fixtures, captures endpoint/upload outcomes, and writes an evidence report under `output/pilot-rehearsal/`.
 
+## CSV Throughput Tuning (Pilot)
+
+For large CSV exports where operator turnaround matters more than full-file parsing, set:
+
+```bash
+NERAIUM_MAX_PARSE_ROWS=120000
+```
+
+This caps parsed rows per upload job and returns results faster while preserving read-only behavior and evidence output. Use only for pilot-speed tuning.
+
 If metrics requires auth:
 
 ```bash

@@ -74,7 +74,7 @@ def configure_runtime_dir(runtime_dir: Path) -> None:
     LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 
 
-def parse_positive_int_env(name: str, default: int) -> int:
+def parse_positive_int_env(name: str, default: int) -> int: 
     raw_value = os.getenv(name)
     if raw_value is None or raw_value.strip() == "":
         return default
@@ -83,12 +83,25 @@ def parse_positive_int_env(name: str, default: int) -> int:
     except ValueError:
         logger.warning("invalid_integer_env name=%s value=%s default=%s", name, raw_value, default)
         return default
-    return value if value > 0 else default
+    return value if value > 0 else default 
 
 
-CHUNK_SIZE_ROWS = parse_positive_int_env("NERAIUM_UPLOAD_CHUNK_SIZE_ROWS", 10_000)
-MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000)
-MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000)
+def parse_optional_positive_int_env(name: str) -> int | None:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return None
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning("invalid_integer_env name=%s value=%s default=%s", name, raw_value, "none")
+        return None
+    return value if value > 0 else None
+
+
+CHUNK_SIZE_ROWS = parse_positive_int_env("NERAIUM_UPLOAD_CHUNK_SIZE_ROWS", 10_000) 
+MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000) 
+MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000) 
+MAX_PARSE_ROWS = parse_optional_positive_int_env("NERAIUM_MAX_PARSE_ROWS")
 
 PROGRESS_LABELS = {
     "PENDING": "File accepted. Background intake job is queued.",
@@ -571,7 +584,7 @@ def process_json_payload(
     )
 
 
-def stream_csv_windows(
+def stream_csv_windows( 
     file_path: Path,
     status_callback: Any | None = None,
 ) -> tuple[list[str], list[list[str]], int, dict[str, Any]]:
@@ -588,7 +601,8 @@ def stream_csv_windows(
     malformed_rows = 0
     chunk_count = 0
     columns: list[str] | None = None
-    last_bytes_processed = 0
+    last_bytes_processed = 0 
+    parse_capped = False
 
     try:
         csv_file = file_path.open("r", encoding="utf-8-sig", newline="")
@@ -613,12 +627,16 @@ def stream_csv_windows(
             )
         room_index = first_room_column_index(columns)
 
-        for row in reader:
-            if not any(cell.strip() for cell in row):
-                continue
-            total_rows += 1
-            if room_index is not None and room_index < len(row) and row[room_index].strip():
-                room_counts[row[room_index].strip()] += 1
+        for row in reader: 
+            if not any(cell.strip() for cell in row): 
+                continue 
+            total_rows += 1 
+            if MAX_PARSE_ROWS is not None and total_rows > MAX_PARSE_ROWS:
+                parse_capped = True
+                total_rows = MAX_PARSE_ROWS
+                break
+            if room_index is not None and room_index < len(row) and row[room_index].strip(): 
+                room_counts[row[room_index].strip()] += 1 
             if len(row) != len(columns):
                 malformed_rows += 1
             if len(first_rows) < edge_window: 
@@ -685,14 +703,15 @@ def stream_csv_windows(
         chunk_count,
     )
 
-    return columns, data_rows, total_rows, {
+    return columns, data_rows, total_rows, { 
         "chunk_count": chunk_count,
         "sampled_rows": len(data_rows),
         "sii_sampled_rows": min(len(data_rows), MAX_SII_ROWS),
         "malformed_rows": malformed_rows,
         "memory_estimate_bytes": estimate_rows_memory(data_rows),
-        "used_streaming": True,
-        "engine_runtime_seconds": 0,
+        "used_streaming": True, 
+        "parse_capped": parse_capped,
+        "engine_runtime_seconds": 0, 
         "file_size_bytes": file_size_bytes,
         "bytes_processed": last_bytes_processed,
         "timings": {"parse_seconds": round(time.perf_counter() - parse_started, 4)},
@@ -721,8 +740,12 @@ def build_upload_result(
         warnings.append(
             f"Large upload was processed with streaming windows: {processing_stats['sampled_rows']} representative rows modeled from {total_rows} total rows."
         )
-    if processing_stats.get("malformed_rows"):
-        warnings.append(f"{processing_stats['malformed_rows']} rows had a different column count than the header.")
+    if processing_stats.get("malformed_rows"): 
+        warnings.append(f"{processing_stats['malformed_rows']} rows had a different column count than the header.") 
+    if processing_stats.get("parse_capped"):
+        warnings.append(
+            "Upload parse was capped by NERAIUM_MAX_PARSE_ROWS for faster pilot throughput; analysis is based on the capped window."
+        )
     detected_timestamp_column = detect_timestamp_column(columns)
     if detected_timestamp_column is None:
         warnings.append("No obvious timestamp column detected.")
