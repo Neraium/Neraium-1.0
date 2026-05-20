@@ -331,8 +331,8 @@
 }
 
 .system-gate__center .system-body-orb-panel {
-  min-height: clamp(420px, 64vh, 720px);
-  width: clamp(420px, 74vw, 1200px);
+  min-height: clamp(500px, 72vh, 860px);
+  width: clamp(520px, 82vw, 1380px);
   max-width: calc(100vw - 44px);
   border: 0;
   background: transparent;
@@ -631,8 +631,8 @@
   }
 
   .system-gate__center .system-body-orb-panel {
-    width: clamp(460px, 36vw, 820px);
-    min-height: clamp(520px, 68vh, 820px);
+    width: clamp(560px, 44vw, 980px);
+    min-height: clamp(600px, 76vh, 980px);
   }
 
   .system-gate__state {
