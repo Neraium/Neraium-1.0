@@ -15,6 +15,7 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [connection, setConnection] = useState(initialConnection);
   const [connectionTestState, setConnectionTestState] = useState("idle");
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const activeStepRef = useRef(null);
 
@@ -77,24 +78,36 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
         label: "Quick Verify",
         render: () => (
           <Panel title="Quick Verify" className="span-12">
-            <p className="narrative-text">Read-only connectivity check.</p>
+            <p className="narrative-text">Run one read-only check, then finish setup.</p>
             <div className="intake-flow__controls">
               <button
                 type="button"
                 className="secondary-command-button"
                 onClick={() => setConnectionTestState("passed")}
               >
-                Run Test
+                Run Read-Only Check
               </button>
             </div>
             <p className="narrative-text">
-              {connectionTestState === "idle" ? "No test run yet." : "Connection test passed."}
+              {connectionTestState === "idle" ? "No verification run yet." : "Read-only verification passed."}
             </p>
+            {connectionTestState === "passed" ? (
+              <div className="intake-flow__controls">
+                <button
+                  type="button"
+                  className="command-button"
+                  onClick={() => setIsSetupComplete(true)}
+                >
+                  Finish Setup
+                </button>
+              </div>
+            ) : null}
+            {isSetupComplete ? <p className="narrative-text">Setup complete. You can move directly into operations.</p> : null}
           </Panel>
         ),
       },
     ],
-    [connection, connectionTestState, tagMapRows],
+    [connection, connectionTestState, isSetupComplete, tagMapRows],
   );
 
   const activeStep = steps[activeStepIndex] ?? steps[0];
@@ -134,15 +147,17 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
           >
             Back
           </button>
-          <button
-            type="button"
-            className="command-button"
-            onClick={() => goToStep(activeStepIndex + 1)}
-            disabled={isLastStep || !canGoNext}
-            data-testid="onboarding-next-button"
-          >
-            Next
-          </button>
+          {!isLastStep ? (
+            <button
+              type="button"
+              className="command-button"
+              onClick={() => goToStep(activeStepIndex + 1)}
+              disabled={!canGoNext}
+              data-testid="onboarding-next-button"
+            >
+              Next
+            </button>
+          ) : null}
         </div>
       </Panel>
       <div ref={activeStepRef} data-testid={activeStepTestId}>
