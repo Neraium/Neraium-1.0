@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay, state_compat
+from app.routers import app_info, audit, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
 from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
@@ -120,9 +120,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(audit.router, prefix="/api")
     app.include_router(ecosystem.router, prefix="/api")
     app.include_router(distributed_cognition.router, prefix="/api")
-    # Keep compatibility routes mounted after canonical routers so they do not
-    # override pilot contracts used by operator workflows and smoke tests.
-    app.include_router(state_compat.router, prefix="/api")
 
     @app.middleware("http")
     async def add_request_id_header(request: Request, call_next):
