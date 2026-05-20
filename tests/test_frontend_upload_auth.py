@@ -42,11 +42,12 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 
 def test_upload_and_polling_use_shared_api_helper() -> None:
     source = read_upload_surface()
+    system_api_source = read_frontend(SYSTEM_API)
 
     assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
     assert 'apiFetch("/api/data/latest-upload?include_persisted=1"' in source
     assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
-    assert 'apiFetch("/api/facility/systems?include_persisted=0"' in read_frontend(SYSTEM_API)
+    assert "apiFetch(`/api/facility/systems?include_persisted=0${domainQuery}`" in system_api_source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
@@ -137,6 +138,6 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Historian Setup"' in workspaces_source
+    assert 'label: "Telemetry Setup"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
-    assert 'title="Historian Intake"' in source
+    assert "HistorianSetupWorkspace" in source

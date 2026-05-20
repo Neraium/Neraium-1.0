@@ -1,5 +1,4 @@
 from pathlib import Path
-import shutil
 import sys
 
 import pytest
@@ -9,15 +8,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app.core.config import get_settings
 from app.main import create_app
+from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
+from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
+from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
 from app.services.runtime_db import init_runtime_db
 
 
 @pytest.fixture(autouse=True)
-def isolate_runtime(monkeypatch):
+def isolate_runtime(monkeypatch, tmp_path):
     monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "all")
-    runtime_dir = get_settings().runtime_dir
-    if runtime_dir.exists():
-        shutil.rmtree(runtime_dir, ignore_errors=True)
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(runtime_dir))
+
+    # Keep service module globals aligned with per-test runtime isolation.
+    configure_runtime_db_dir(runtime_dir)
+    configure_upload_jobs_dir(runtime_dir)
+    configure_sii_runner_dir(runtime_dir)
+
+    # Warm config from the current environment to avoid stale cross-test paths.
+    get_settings()
     init_runtime_db()
     yield
 

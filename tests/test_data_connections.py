@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.core.config import Settings
 from app.main import create_app
@@ -88,6 +89,7 @@ def test_connection_test_failure_returns_clean_json(monkeypatch, tmp_path) -> No
     assert payload["normalized_preview"] == []
 
 
+@pytest.mark.slow
 def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payloads = [
@@ -157,6 +159,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     assert status_payload["sensors_detected"] == 3
 
 
+@pytest.mark.slow
 def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payloads = [
@@ -195,6 +198,7 @@ def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monke
     assert status.json()["baseline_status"] == "active"
 
 
+@pytest.mark.slow
 def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payloads = [
@@ -231,6 +235,7 @@ def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_p
     assert post_reset_status.json()["baseline_samples_collected"] == 1
 
 
+@pytest.mark.slow
 def test_reset_all_connections_clears_active_source_state(monkeypatch, tmp_path) -> None:
     client = build_client(tmp_path)
     payload = payload_for(

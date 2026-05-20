@@ -385,6 +385,7 @@ def test_latest_upload_endpoint_returns_completed_summary() -> None:
     assert payload["history"][0]["filename"] == "latest.csv"
 
 
+@pytest.mark.slow
 def test_latest_upload_endpoint_returns_recent_history_and_score_diff() -> None:
     client = TestClient(create_app())
     first_rows = "\n".join(
@@ -772,6 +773,7 @@ def test_processing_helper_distinguishes_calm_and_drifted_uploads() -> None:
     assert drift_intelligence["urgency"] != calm_intelligence["urgency"]
 
 
+@pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     client = TestClient(create_app())
@@ -789,6 +791,7 @@ def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     assert payload["runner_used"] is True
 
 
+@pytest.mark.slow
 def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-100k.csv"
@@ -805,6 +808,7 @@ def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -
     assert result["processing_stats"]["chunk_count"] == 10
 
 
+@pytest.mark.slow
 def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-300k.csv"
@@ -824,6 +828,7 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
     assert result["processing_trace"]["rows_processed"] == 300_000
 
 
+@pytest.mark.slow
 def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-500k.csv"
