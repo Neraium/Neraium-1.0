@@ -123,27 +123,39 @@ export default function IntakeFlowPanel({
             )}
           </div>
         </form>
-        <div className="connector-json-hint">
-          <div className="connector-json-hint__header">
-            <p className="section-token">JSON upload schema</p>
-            <div className="connector-json-hint__actions">
-              <button className="secondary-command-button" type="button" onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
-                  setCopyState("copied");
-                } catch {
-                  setCopyState("error");
-                }
-              }}>
-                {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
-              </button>
-              <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
-                {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
-              </button>
+        {pendingUploadKind === "json" || isJsonSchemaOpen ? (
+          <div className="connector-json-hint">
+            <div className="connector-json-hint__header">
+              <p className="section-token">JSON upload schema</p>
+              <div className="connector-json-hint__actions">
+                <button className="secondary-command-button" type="button" onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
+                    setCopyState("copied");
+                  } catch {
+                    setCopyState("error");
+                  }
+                }}>
+                  {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
+                </button>
+                <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
+                  {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
+                </button>
+              </div>
             </div>
+            {isJsonSchemaOpen ? <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre> : null}
           </div>
-          {isJsonSchemaOpen && <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre>}
-        </div>
+        ) : (
+          <div className="intake-flow__controls">
+            <button
+              type="button"
+              className="secondary-command-button"
+              onClick={() => setIsJsonSchemaOpen(true)}
+            >
+              Show JSON Schema
+            </button>
+          </div>
+        )}
       </Panel>
       <Panel title="Model Construction State" className="span-5 upload-cognition-state">
         <WorkflowStages items={intakeStages} />
