@@ -1,17 +1,20 @@
-from __future__ import annotations
-
-import json
-import sqlite3
-from contextlib import contextmanager
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Iterator
+from __future__ import annotations 
+ 
+import json 
+import sqlite3 
+from contextlib import contextmanager 
+from datetime import UTC, datetime 
+from pathlib import Path 
+from typing import Any, Iterator 
+import os
 
 from app.core.config import get_settings
 
 
 RUNTIME_DIR = get_settings().runtime_dir
-DB_PATH = RUNTIME_DIR / "runtime.db"
+DB_PATH = RUNTIME_DIR / "runtime.db" 
+UPLOAD_QUEUE_RETENTION_DAYS = int(os.getenv("NERAIUM_UPLOAD_QUEUE_RETENTION_DAYS", "14"))
+EVIDENCE_RUN_RETENTION_DAYS = int(os.getenv("NERAIUM_EVIDENCE_RUN_RETENTION_DAYS", "45"))
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
     global RUNTIME_DIR, DB_PATH
@@ -39,10 +42,10 @@ def db_connection() -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
-def init_runtime_db() -> None:
-    with db_connection() as connection:
-        connection.executescript(
-            """
+def init_runtime_db() -> None: 
+    with db_connection() as connection: 
+        connection.executescript( 
+            """ 
             CREATE TABLE IF NOT EXISTS upload_jobs (
                 job_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
@@ -88,16 +91,55 @@ def init_runtime_db() -> None:
                 payload_json TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS data_connections (
-                connection_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                status TEXT NOT NULL,
-                polling_enabled INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL
-            );
+            CREATE TABLE IF NOT EXISTS data_connections ( 
+                connection_id TEXT PRIMARY KEY, 
+                name TEXT NOT NULL, 
+                status TEXT NOT NULL, 
+                polling_enabled INTEGER NOT NULL DEFAULT 0, 
+                updated_at TEXT NOT NULL, 
+                payload_json TEXT NOT NULL 
+            ); 
+
+            CREATE INDEX IF NOT EXISTS idx_upload_jobs_updated_at ON upload_jobs(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_upload_jobs_status_updated ON upload_jobs(status, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_upload_queue_status_created ON upload_queue(status, created_at ASC);
+            CREATE INDEX IF NOT EXISTS idx_upload_queue_updated_at ON upload_queue(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_evidence_runs_created_at ON evidence_runs(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_evidence_runs_status_created ON evidence_runs(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_latest_payloads_updated_at ON latest_payloads(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_data_connections_updated_at ON data_connections(updated_at DESC);
+            """ 
+        ) 
+
+
+def prune_runtime_db_records() -> dict[str, int]:
+    init_runtime_db()
+    now = datetime.now(UTC)
+    queue_cutoff = now.timestamp() - max(UPLOAD_QUEUE_RETENTION_DAYS, 1) * 86400
+    evidence_cutoff = now.timestamp() - max(EVIDENCE_RUN_RETENTION_DAYS, 1) * 86400
+    queue_cutoff_iso = datetime.fromtimestamp(queue_cutoff, UTC).isoformat()
+    evidence_cutoff_iso = datetime.fromtimestamp(evidence_cutoff, UTC).isoformat()
+    with db_connection() as connection:
+        queue_deleted = connection.execute(
             """
-        )
+            DELETE FROM upload_queue
+            WHERE status IN ('completed', 'failed')
+              AND updated_at < ?
+            """,
+            (queue_cutoff_iso,),
+        ).rowcount
+        evidence_deleted = connection.execute(
+            """
+            DELETE FROM evidence_runs
+            WHERE created_at < ?
+            """,
+            (evidence_cutoff_iso,),
+        ).rowcount
+    return {
+        "upload_queue_deleted": int(queue_deleted or 0),
+        "evidence_runs_deleted": int(evidence_deleted or 0),
+    }
 
 
 def upsert_upload_job(payload: dict[str, Any]) -> None:

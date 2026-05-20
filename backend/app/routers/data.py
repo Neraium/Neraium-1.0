@@ -1,6 +1,6 @@
-from pathlib import Path
-from typing import Any
-import logging
+from pathlib import Path 
+from typing import Any 
+import logging 
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -34,9 +34,9 @@ from app.services.upload_jobs import (
 from app.services.data_connections import clear_all_connection_runtime_state
 
 router = APIRouter(tags=["data"], dependencies=[Depends(require_api_access)])
-logger = logging.getLogger(__name__)
-DEFAULT_CONNECTION_ID = "rest-telemetry-intake"
-MULTIPART_ENVELOPE_ALLOWANCE_BYTES = 5 * 1024 * 1024
+logger = logging.getLogger(__name__) 
+DEFAULT_CONNECTION_ID = "rest-telemetry-intake" 
+MULTIPART_ENVELOPE_ALLOWANCE_BYTES = 5 * 1024 * 1024 
 
 
 def format_upload_capacity(size_bytes: int) -> str:
@@ -454,9 +454,9 @@ def completed_metadata_from_summary(job_id: str, summary: dict[str, Any]) -> dic
     }
 
 
-@router.get("/data/latest-upload", response_model=LatestUploadResponse)
-def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
-    summary = latest_completed_job_summary()
+@router.get("/data/latest-upload", response_model=LatestUploadResponse) 
+def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]: 
+    summary = latest_completed_job_summary() 
     detailed_result = read_latest_upload_result()
     latest_state = read_latest_sii_state()
     try:
@@ -479,7 +479,7 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
             if baseline_status == "building"
             else "No data connected yet."
         )
-        payload = {
+        payload = { 
             "status": status,
             "source": "none",
             "message": message,
@@ -500,9 +500,9 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
             "baseline_samples_required": live_connection.get("baseline_samples_required", 0) if live_connection else 0,
             "last_baseline_update": live_connection.get("last_baseline_update") if live_connection else None,
             "adaptive_learning": {},
-        }
-        logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"])
-        return payload
+        } 
+        logger.info("latest_result_served status=%s source=%s state_available=%s", payload["status"], payload["source"], payload["state_available"]) 
+        return payload 
     summary = summary or {}
     live_baseline_source = (live_connection or {}).get("baseline_source")
     live_baseline_status = (live_connection or {}).get("baseline_status")
@@ -558,7 +558,7 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
         "last_baseline_update": live_baseline_last_updated or summary.get("last_baseline_update"),
         "adaptive_learning": build_adaptive_snapshot(detailed_result or {}, summary or {}) if detailed_result else {},
     }
-    logger.info(
+    logger.info( 
         "latest_result_served status=%s source=%s filename=%s rows=%s columns=%s state_available=%s",
         payload["status"],
         payload["source"],
@@ -566,16 +566,16 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
         payload["rows_processed"],
         payload["columns_detected"],
         payload["state_available"],
-    )
-    return payload
+    ) 
+    return payload 
 
 
 @router.post("/data/reset")
-def reset_data_session() -> dict[str, Any]:
-    reset_latest_upload_state()
-    reset_latest_sii_state()
-    clear_all_connection_runtime_state()
-    return {
+def reset_data_session() -> dict[str, Any]: 
+    reset_latest_upload_state() 
+    reset_latest_sii_state() 
+    clear_all_connection_runtime_state() 
+    return { 
         "status": "reset",
         "message": "Demo session cleared. Baseline pending with no active telemetry result.",
         "snapshot": {

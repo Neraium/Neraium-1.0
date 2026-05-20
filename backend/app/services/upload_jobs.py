@@ -70,12 +70,14 @@ LATEST_UPLOAD_CACHE: dict[str, Any] = {
     "result": None,
 }
 
-def configure_runtime_dir(runtime_dir: Path) -> None:
-    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
-    RUNTIME_DIR = runtime_dir
-    UPLOAD_DIR = RUNTIME_DIR / "uploads"
-    JOB_DIR = RUNTIME_DIR / "upload_jobs"
-    LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
+def configure_runtime_dir(runtime_dir: Path) -> None: 
+    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR 
+    RUNTIME_DIR = runtime_dir 
+    UPLOAD_DIR = RUNTIME_DIR / "uploads" 
+    JOB_DIR = RUNTIME_DIR / "upload_jobs" 
+    LEGACY_JOB_DIR = RUNTIME_DIR / "jobs" 
+    LATEST_UPLOAD_CACHE["summary"] = None
+    LATEST_UPLOAD_CACHE["result"] = None
 
 
 def parse_positive_int_env(name: str, default: int) -> int: 

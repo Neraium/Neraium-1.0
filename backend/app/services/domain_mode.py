@@ -5,7 +5,7 @@ from typing import Any
 from app.services.aquatic_domain import INTEGRATION_STUBS as AQUATIC_INTEGRATION_STUBS
 from app.services.runtime_db import now_iso, read_latest_payload, upsert_latest_payload
 
-DEFAULT_DOMAIN_MODE = "aquatic"
+DEFAULT_DOMAIN_MODE = "cultivation" 
 SUPPORTED_DOMAIN_MODES = {"aquatic", "cultivation"}
 DOMAIN_MODE_KEY = "neraium_domain_mode"
 
