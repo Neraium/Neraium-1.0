@@ -466,6 +466,9 @@ export default function DataConnectionsWorkspace({
   const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending"; 
   const adaptiveLearning = latestUploadSnapshot?.adaptive_learning ?? uploadResult?.adaptive_learning ?? latestUploadResult?.adaptive_learning ?? {};
   const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
+  const workflowStage = activeTab === "connect-live"
+    ? "setup"
+    : (hasRealSiiOutput || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload");
   return ( 
     <div className="workspace-grid workspace-grid--connections">
       <ConnectionsHeaderPanel
@@ -477,6 +480,7 @@ export default function DataConnectionsWorkspace({
         onResumePreviousSession={onResumePreviousSession}
         onOpenUpload={() => setActiveTab("upload")}
         disableActions={isUploadProcessing(uploadState)}
+        workflowStage={workflowStage}
       />
 
       {activeTab === "connect-live" && (

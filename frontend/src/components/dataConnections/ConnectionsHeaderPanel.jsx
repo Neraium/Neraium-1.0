@@ -9,9 +9,26 @@ export default function ConnectionsHeaderPanel({
   onResumePreviousSession,
   onOpenUpload,
   disableActions = false,
+  workflowStage = "setup",
 }) {
+  const railSteps = [
+    { id: "setup", label: "Setup" },
+    { id: "upload", label: "Upload" },
+    { id: "status", label: "Status" },
+  ];
+
   return (
     <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
+      <div className="intake-stage-rail" aria-label="Intake workflow">
+        {railSteps.map((step) => (
+          <span
+            key={step.id}
+            className={`intake-stage-chip ${workflowStage === step.id ? "is-active" : ""}`}
+          >
+            {step.label}
+          </span>
+        ))}
+      </div>
       <div className="intake-flow__controls" role="tablist" aria-label="Historian intake sections">
         {tabs.map((tab) => (
           <button

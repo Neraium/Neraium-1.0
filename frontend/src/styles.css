@@ -11871,3 +11871,43 @@ nav[aria-label="Workspaces"] a {
     radial-gradient(circle at 72% 35%, rgba(102, 124, 142, 0.12), transparent 42%);
   pointer-events: none;
 }
+
+.intake-stage-rail {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.intake-stage-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 165, 196, 0.32);
+  background: rgba(8, 16, 28, 0.44);
+  color: rgba(201, 218, 236, 0.86);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.intake-stage-chip.is-active {
+  border-color: rgba(113, 203, 174, 0.7);
+  background: rgba(32, 82, 69, 0.48);
+  color: rgba(224, 247, 238, 0.96);
+}
+
+@media (max-width: 900px) {
+  .intake-stage-rail {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .intake-stage-chip {
+    font-size: 0.72rem;
+    padding: 5px 8px;
+  }
+
+  .intake-flow__controls > button {
+    min-height: 40px;
+  }
+}

@@ -15,37 +15,36 @@ test.describe("Setup + Upload regression", () => {
     await expect(page.getByTestId("onboarding-root")).toBeVisible();
     const stepTitle = page.getByTestId("onboarding-step-title");
     const nextButton = page.getByTestId("onboarding-next-button");
+    const setupPanel = page.getByTestId("onboarding-data-source-step");
 
     await expect(stepTitle).toContainText("Step 1 of");
-    await expect(stepTitle).toContainText("Historian / BMS / SCADA");
+    await expect(stepTitle).toContainText("Connection Info");
+    await expect(setupPanel).toBeVisible();
 
-    await nextButton.click();
-    await expect(stepTitle).toContainText("Read-only Ingestion");
-
-    await nextButton.click();
-    await expect(page.getByTestId("onboarding-data-source-step")).toBeVisible();
-    await expect(stepTitle).toContainText("Connection Method");
+    await page.getByLabel("Source type").fill("Historian");
+    await page.getByLabel("Endpoint").fill("https://example.local");
+    await expect(nextButton).toBeEnabled();
 
     await nextButton.click();
     await expect(page.getByTestId("signal-mapping-step")).toBeVisible();
     await expect(stepTitle).toContainText("Signal Mapping");
 
     await nextButton.click();
-    await expect(stepTitle).toContainText("Connection Test");
-    await page.getByRole("button", { name: "Run Test" }).click();
-    const continueToBaselineButton = page.getByRole("button", { name: "Continue to Baseline Builder" });
-    await expect(continueToBaselineButton).toBeEnabled();
-    await continueToBaselineButton.click();
-
-    await expect(stepTitle).toContainText("Baseline Builder");
-    await expect(nextButton).toBeDisabled();
+    await expect(stepTitle).toContainText("Quick Verify");
+    await expect(nextButton).toHaveCount(0);
+    await page.getByRole("button", { name: "Run Read-Only Check" }).click();
+    await expect(page.getByText("Read-only verification passed.")).toBeVisible();
+    await page.getByRole("button", { name: "Finish Setup" }).click();
+    await expect(page.getByRole("button", { name: "Go to Upload" })).toBeVisible();
+    await page.getByRole("button", { name: "Go to Upload" }).click();
+    await expect(page.getByRole("tab", { name: "Upload Data" })).toHaveAttribute("aria-selected", "true");
   });
 
   test("enables upload processing after file selection", async ({ page }) => {
     await openDataConnections(page);
     await page.getByRole("tab", { name: "Upload Data" }).click();
 
-    const processButton = page.getByRole("button", { name: /Process CSV/i });
+    const processButton = page.getByRole("button", { name: "Process Upload" });
     await expect(processButton).toBeDisabled();
     await expect(page.getByTestId("onboarding-demo-csv-option")).toBeVisible();
 

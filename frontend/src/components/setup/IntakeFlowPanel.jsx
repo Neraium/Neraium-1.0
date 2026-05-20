@@ -47,6 +47,9 @@ export default function IntakeFlowPanel({
   const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
   const successCount = batchResults.filter((entry) => entry.status === "success").length;
   const siiContractFailed = uploadJob?.error_type === "sii_completion_missing" || String(latestMessage || "").toLowerCase().includes("sii completion");
+  const hasSelectedFiles = selectedFiles?.length > 0;
+  const hasUploadError = uploadState === "error" || uploadState === "failed";
+  const hasValidationError = uploadState === "validation_error";
 
   return (
     <>
@@ -75,6 +78,37 @@ export default function IntakeFlowPanel({
               </button>
             </div>
           </div>
+          {!hasSelectedFiles && !isUploadProcessing(uploadState) ? (
+            <div className="upload-partial-alert" role="status" aria-live="polite">
+              <strong>No Upload Selected</strong>
+              <span>Select CSV first for the fastest setup path, then process upload.</span>
+            </div>
+          ) : null}
+          {hasValidationError || hasUploadError ? (
+            <div className="upload-partial-alert" role="alert" aria-live="assertive">
+              <strong>{hasValidationError ? "Upload Validation Error" : "Upload Processing Error"}</strong>
+              <span>{latestMessage}</span>
+              <div className="intake-flow__controls">
+                <button
+                  type="button"
+                  className="secondary-command-button"
+                  onClick={() => openFilePicker("csv")}
+                  disabled={isUploadProcessing(uploadState)}
+                >
+                  Select New File
+                </button>
+                {hasSelectedFiles ? (
+                  <button
+                    type="submit"
+                    className="command-button"
+                    disabled={isUploadProcessing(uploadState)}
+                  >
+                    Retry Upload
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
             <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{uploadJob?.progress_label || latestMessage}</span>
             <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
