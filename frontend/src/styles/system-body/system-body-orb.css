@@ -18,17 +18,17 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: clamp(360px, 82%, 780px);
+  width: clamp(420px, 88%, 920px);
   max-width: 100%;
-  min-width: min(100%, 360px);
-  min-height: clamp(360px, 52vw, 780px);
-  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.3));
+  min-width: min(100%, 420px);
+  min-height: clamp(420px, 60vw, 920px);
+  filter: drop-shadow(0 22px 36px rgba(0, 0, 0, 0.34));
 }
 
 .system-body-orb-panel__stage .health-orb {
   width: 100%;
-  min-width: min(100%, 360px);
-  max-width: 820px;
+  min-width: min(100%, 420px);
+  max-width: 960px;
 }
 
 .system-body-orb-panel--compact-preview {
