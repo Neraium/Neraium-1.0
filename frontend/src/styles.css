@@ -11975,6 +11975,15 @@ nav[aria-label="Workspaces"] a {
   color: var(--text-muted);
 }
 
+.workspace-grid--connections-clean {
+  min-height: calc(100svh - 120px);
+  padding: 12px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(99, 188, 211, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(10, 14, 17, 0.96), rgba(7, 10, 12, 0.98));
+}
+
 @media (max-width: 900px) {
   .intake-stage-rail {
     gap: 6px;

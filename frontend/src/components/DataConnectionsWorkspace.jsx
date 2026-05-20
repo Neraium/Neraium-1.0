@@ -471,7 +471,7 @@ export default function DataConnectionsWorkspace({
     ? "setup"
     : (hasRealSiiOutput || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload");
   return ( 
-    <div className="workspace-grid workspace-grid--connections">
+    <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
         tabs={tabs}
         activeTab={activeTab}

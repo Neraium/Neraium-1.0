@@ -9,16 +9,19 @@ export default function TagMappingPanel({ rows, onContinue = null }) {
   return (
     <Panel title="Tag Mapping" className="span-12">
       <p className="narrative-text">
-        Review core mappings, then continue. You can refine non-critical tags later without blocking setup.
+        Review required signal coverage, then continue. Full mapping detail is available below.
       </p>
       <div className="intake-flow__controls" style={{ alignItems: "flex-start", flexDirection: "column", gap: 6 }}>
         <p className="narrative-text">Mapped signals: {rows.length}</p>
         <p className="narrative-text">Required signal coverage: {mappedRequiredCount}/{requiredSignals.length} ({mappingHealth}%)</p>
       </div>
-      <DataTable
-        columns={["Raw Tag", "Normalized Name", "Subsystem", "Equipment", "Unit", "Sample Rate", "Quality"]}
-        rows={rows}
-      />
+      <details className="technical-detail-panel">
+        <summary>View full mapping table</summary>
+        <DataTable
+          columns={["Raw Tag", "Normalized Name", "Subsystem", "Equipment", "Unit", "Sample Rate", "Quality"]}
+          rows={rows}
+        />
+      </details>
       {typeof onContinue === "function" ? (
         <div className="intake-flow__controls">
           <button type="button" className="command-button" onClick={onContinue}>

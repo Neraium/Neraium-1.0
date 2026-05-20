@@ -161,16 +161,6 @@ export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = nul
         <p className="narrative-text" data-testid="onboarding-step-title">
           Step {activeStepIndex + 1} of {steps.length}: {activeStep.label}
         </p>
-        <div className="setup-stepper" aria-hidden="true">
-          {steps.map((step, index) => (
-            <span
-              key={step.id}
-              className={index === activeStepIndex ? "is-active" : index < activeStepIndex ? "is-complete" : ""}
-            >
-              {index + 1}
-            </span>
-          ))}
-        </div>
         <div className="intake-flow__controls">
           <button
             type="button"

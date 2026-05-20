@@ -58,10 +58,14 @@ function App() {
     }),
     [latestUploadResult, latestUploadSnapshot],
   );
-  const effectiveSessionIntent = hasRealSiiOutput && sessionIntent === "neutral" ? "resumed" : sessionIntent;
-  const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasRealSiiOutput;
-  const hasResumedSession = effectiveSessionIntent === "resumed" && hasRealSiiOutput;
-  const hasActiveSession = hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput;
+  const hasObservableUploadSession = useMemo(
+    () => uploadStateView.hasActiveTelemetrySnapshot(latestUploadSnapshot) || uploadStateView.hasFullUploadResult(latestUploadResult),
+    [latestUploadResult, latestUploadSnapshot],
+  );
+  const effectiveSessionIntent = hasObservableUploadSession && sessionIntent === "neutral" ? "resumed" : sessionIntent;
+  const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasObservableUploadSession;
+  const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
+  const hasActiveSession = hasCurrentUploadResult || hasResumedSession || hasObservableUploadSession;
   const effectiveLatestUploadResult = hasActiveSession ? latestUploadResult : null;
   const effectiveLatestUploadSnapshot = latestUploadSnapshot;
   const roomContext = useMemo(
