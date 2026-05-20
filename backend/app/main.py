@@ -13,7 +13,7 @@ from app.services.data_connection_poller import start_data_connection_poller, st
 from app.services.data_connections import ensure_default_data_connection
 from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
-from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
+from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir, warm_latest_upload_cache 
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
 
 logger = logging.getLogger(__name__)
@@ -34,15 +34,20 @@ async def app_lifespan(app: FastAPI):
     upload_worker_started = False
     data_poller_started = False
 
-    try:
-        init_runtime_db()
-        recovered_jobs = clear_stale_processing_queue_jobs()
+    try: 
+        init_runtime_db() 
+        recovered_jobs = clear_stale_processing_queue_jobs() 
         if recovered_jobs:
             logger.warning("recovered_stale_processing_jobs count=%s", recovered_jobs)
-        STARTUP_STATUS["runtime_db_ready"] = True
-    except Exception as error:
+        STARTUP_STATUS["runtime_db_ready"] = True 
+    except Exception as error: 
         STARTUP_STATUS["failed_modules"].append(f"runtime_db: {error}")
-        logger.exception("runtime_db_startup_failure")
+        logger.exception("runtime_db_startup_failure") 
+
+    try:
+        warm_latest_upload_cache()
+    except Exception:
+        logger.exception("latest_upload_cache_warmup_failure")
 
     try:
         ensure_default_data_connection(settings)

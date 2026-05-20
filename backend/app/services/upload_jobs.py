@@ -63,8 +63,12 @@ UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 logger = logging.getLogger(__name__)
-WRITE_RETRY_ATTEMPTS = 6
-WRITE_RETRY_DELAY_SECONDS = 0.02
+WRITE_RETRY_ATTEMPTS = 6 
+WRITE_RETRY_DELAY_SECONDS = 0.02 
+LATEST_UPLOAD_CACHE: dict[str, Any] = {
+    "summary": None,
+    "result": None,
+}
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
     global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
@@ -124,9 +128,15 @@ class UploadTooLargeError(ValueError):
         self.max_size_bytes = max_size_bytes
 
 
-def ensure_runtime_dirs() -> None:
+def ensure_runtime_dirs() -> None: 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    JOB_DIR.mkdir(parents=True, exist_ok=True)
+    JOB_DIR.mkdir(parents=True, exist_ok=True) 
+
+
+def upload_hash_cache_key(input_hash: str | None) -> str | None:
+    if not input_hash:
+        return None
+    return f"upload_result_by_hash:{input_hash}"
 
 
 def delete_upload_file(metadata: dict[str, Any] | None) -> None:
@@ -335,17 +345,44 @@ def timed_status(status_callback: Any | None, status: str, processing_stats: dic
         status_callback(status, timings=processing_stats.get("timings", {}), **updates)
 
 
-def process_upload_job(job_id: str) -> None:
+def process_upload_job(job_id: str) -> None: 
     metadata = read_job(job_id)
     if metadata is None:
         logger.warning("upload_job_start_missing_metadata job_id=%s validation_failure_reason=%s", job_id, "upload_session_missing")
         return
 
-    started = time.perf_counter()
-    try:
-        logger.info(
-            "upload_job_started job_id=%s filename=%s size_bytes=%s",
-            job_id,
+    started = time.perf_counter() 
+    try: 
+        hash_cache_key = upload_hash_cache_key(str(metadata.get("input_hash") or ""))
+        if hash_cache_key:
+            cached_payload = read_latest_payload(hash_cache_key)
+            if isinstance(cached_payload, dict) and isinstance(cached_payload.get("result"), dict) and isinstance(cached_payload.get("summary"), dict):
+                completed_at = now_iso()
+                result = cached_payload["result"]
+                summary = {**cached_payload["summary"], "last_processed_at": completed_at}
+                write_latest_upload_summary(job_id, summary)
+                write_latest_upload_result(job_id, result)
+                upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
+                update_job(
+                    job_id,
+                    status="COMPLETE",
+                    rows_processed=summary.get("rows_processed"),
+                    columns_detected=summary.get("columns_detected"),
+                    completed_at=completed_at,
+                    processing_duration_seconds=round(time.perf_counter() - started, 4),
+                    result_available=True,
+                    first_usable_available=True,
+                    sii_completed=True,
+                    error=None,
+                    result_summary=summary,
+                )
+                complete_upload_queue_job(job_id, "completed")
+                logger.info("upload_job_completed_from_hash_cache job_id=%s input_hash=%s", job_id, metadata.get("input_hash"))
+                return
+
+        logger.info( 
+            "upload_job_started job_id=%s filename=%s size_bytes=%s", 
+            job_id, 
             metadata.get("filename"),
             metadata.get("file_size_bytes"),
         )
@@ -384,9 +421,11 @@ def process_upload_job(job_id: str) -> None:
         if latest_state:
             write_latest_sii_state({**latest_state, "adaptive_learning": result["adaptive_learning"]})
         duration = round(time.perf_counter() - started, 4) 
-        write_latest_upload_summary(job_id, summary)
-        write_latest_upload_result(job_id, result)
-        upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
+        write_latest_upload_summary(job_id, summary) 
+        write_latest_upload_result(job_id, result) 
+        if hash_cache_key:
+            upsert_latest_payload(hash_cache_key, {"summary": summary, "result": result, "cached_at": completed_at})
+        upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed")) 
         update_job(
             job_id,
             status="COMPLETE",
@@ -1075,11 +1114,12 @@ def latest_upload_history_path() -> Path:
     return RUNTIME_DIR / "upload_history.json"
 
 
-def write_latest_upload_summary(job_id: str, summary: dict[str, Any], *, append_history: bool = True) -> None:
+def write_latest_upload_summary(job_id: str, summary: dict[str, Any], *, append_history: bool = True) -> None: 
     ensure_runtime_dirs()
     path = latest_upload_path()
-    upsert_latest_payload("latest_upload_summary", {"job_id": job_id, **summary})
-    atomic_write_json(path, {"job_id": job_id, **summary})
+    upsert_latest_payload("latest_upload_summary", {"job_id": job_id, **summary}) 
+    LATEST_UPLOAD_CACHE["summary"] = {"job_id": job_id, **summary}
+    atomic_write_json(path, {"job_id": job_id, **summary}) 
     if append_history:
         append_upload_history({"job_id": job_id, **summary})
     logger.info(
@@ -1091,12 +1131,13 @@ def write_latest_upload_summary(job_id: str, summary: dict[str, Any], *, append_
     )
 
 
-def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
+def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None: 
     ensure_runtime_dirs()
     path = latest_upload_result_path()
-    persistable = build_persistable_upload_result(job_id, result)
-    upsert_latest_payload("latest_upload_result", persistable)
-    atomic_write_json(path, persistable)
+    persistable = build_persistable_upload_result(job_id, result) 
+    upsert_latest_payload("latest_upload_result", persistable) 
+    LATEST_UPLOAD_CACHE["result"] = persistable
+    atomic_write_json(path, persistable) 
     logger.info(
         "upload_result_persisted kind=detailed job_id=%s filename=%s rows=%s columns=%s",
         job_id,
@@ -1106,32 +1147,42 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
     )
 
 
-def read_latest_upload_summary() -> dict[str, Any] | None:
-    ensure_runtime_dirs()
-    db_payload = read_latest_payload("latest_upload_summary")
-    if db_payload is not None:
-        return db_payload
+def read_latest_upload_summary() -> dict[str, Any] | None: 
+    ensure_runtime_dirs() 
+    if isinstance(LATEST_UPLOAD_CACHE.get("summary"), dict):
+        return LATEST_UPLOAD_CACHE["summary"]
+    db_payload = read_latest_payload("latest_upload_summary") 
+    if db_payload is not None: 
+        LATEST_UPLOAD_CACHE["summary"] = db_payload
+        return db_payload 
     path = latest_upload_path()
     if not path.exists():
         return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    try: 
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        LATEST_UPLOAD_CACHE["summary"] = payload
+        return payload
+    except (OSError, json.JSONDecodeError): 
+        return None 
 
 
-def read_latest_upload_result() -> dict[str, Any] | None:
-    ensure_runtime_dirs()
-    db_payload = read_latest_payload("latest_upload_result")
-    if db_payload is not None:
-        return db_payload
+def read_latest_upload_result() -> dict[str, Any] | None: 
+    ensure_runtime_dirs() 
+    if isinstance(LATEST_UPLOAD_CACHE.get("result"), dict):
+        return LATEST_UPLOAD_CACHE["result"]
+    db_payload = read_latest_payload("latest_upload_result") 
+    if db_payload is not None: 
+        LATEST_UPLOAD_CACHE["result"] = db_payload
+        return db_payload 
     path = latest_upload_result_path()
     if not path.exists():
         return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    try: 
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        LATEST_UPLOAD_CACHE["result"] = payload
+        return payload
+    except (OSError, json.JSONDecodeError): 
+        return None 
 
 
 def read_upload_history(limit: int = 5) -> list[dict[str, Any]]:
@@ -1246,18 +1297,25 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
     return result_summary
 
 
-def reset_latest_upload_state() -> None:
+def reset_latest_upload_state() -> None: 
     """Clear persisted latest upload summary/result/history for runtime reset flows."""
     ensure_runtime_dirs()
-    upsert_latest_payload("latest_upload_reset_at", now_iso())
-    upsert_latest_payload("latest_upload_summary", None)
-    upsert_latest_payload("latest_upload_result", None)
+    upsert_latest_payload("latest_upload_reset_at", now_iso()) 
+    upsert_latest_payload("latest_upload_summary", None) 
+    upsert_latest_payload("latest_upload_result", None) 
+    LATEST_UPLOAD_CACHE["summary"] = None
+    LATEST_UPLOAD_CACHE["result"] = None
     atomic_write_json_list(latest_upload_history_path(), [])
     for path in (latest_upload_path(), latest_upload_result_path()):
         try:
             path.unlink(missing_ok=True)
         except OSError:
-            logger.warning("latest_upload_state_reset_file_cleanup_failed path=%s", path)
+            logger.warning("latest_upload_state_reset_file_cleanup_failed path=%s", path) 
+
+
+def warm_latest_upload_cache() -> None:
+    LATEST_UPLOAD_CACHE["summary"] = read_latest_payload("latest_upload_summary")
+    LATEST_UPLOAD_CACHE["result"] = read_latest_payload("latest_upload_result")
 
 
 def truncate_engine_result(engine_result: dict[str, Any]) -> dict[str, Any]:

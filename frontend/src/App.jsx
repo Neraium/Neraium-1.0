@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiFetch } from "./config";
-import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
-import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
-import StructuralReplayWorkspace from "./components/StructuralReplayWorkspace";
-import GovernanceAdminWorkspace from "./components/GovernanceAdminWorkspace";
-import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel";
-import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
-import useFacilityRuntime from "./hooks/useFacilityRuntime";
-import * as uploadStateView from "./viewModels/uploadState";
-import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
-import { deriveCurrentSession } from "./viewModels/currentSession";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react"; 
+import { apiFetch } from "./config"; 
+import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace"; 
+import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace"; 
+import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel"; 
+import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives"; 
+import useFacilityRuntime from "./hooks/useFacilityRuntime"; 
+import * as uploadStateView from "./viewModels/uploadState"; 
+import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState"; 
+import { deriveCurrentSession } from "./viewModels/currentSession"; 
+
+const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
+const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 
@@ -305,44 +306,48 @@ function App() {
     );
   }
 
-  if (activeWorkspace === "historical-replay") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <StructuralReplayWorkspace
-        apiFetch={apiFetch}
-        accessCode={accessCode}
-        expertMode={false}
-        normalizeErrorMessage={(value) => String(value ?? "")}
-        formatClockTime={formatClockTime}
-        Panel={Panel}
-        MetricGrid={MetricGrid}
-        EmptyState={EmptyState}
-        hasActiveSession={hasActiveSession}
-        hasCurrentUploadResult={hasCurrentUploadResult}
-        hasResumedSession={hasResumedSession}
-        hasRealSiiOutput={hasRealSiiOutput}
-        currentSession={currentSession}
-        domainMode={domainMode}
-        onReplayFrameChange={handleReplayFrameChange}
-        onReplayModeChange={handleReplayModeChange}
-      />
-      </div>
-    );
-  }
+  if (activeWorkspace === "historical-replay") { 
+    return renderWithBackControl( 
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}> 
+      <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Replay" className="span-12"><p className="narrative-text">Preparing replay workspace...</p></Panel></div>}>
+        <StructuralReplayWorkspace 
+          apiFetch={apiFetch} 
+          accessCode={accessCode} 
+          expertMode={false} 
+          normalizeErrorMessage={(value) => String(value ?? "")} 
+          formatClockTime={formatClockTime} 
+          Panel={Panel} 
+          MetricGrid={MetricGrid} 
+          EmptyState={EmptyState} 
+          hasActiveSession={hasActiveSession} 
+          hasCurrentUploadResult={hasCurrentUploadResult} 
+          hasResumedSession={hasResumedSession} 
+          hasRealSiiOutput={hasRealSiiOutput} 
+          currentSession={currentSession} 
+          domainMode={domainMode} 
+          onReplayFrameChange={handleReplayFrameChange} 
+          onReplayModeChange={handleReplayModeChange} 
+        />
+      </Suspense>
+      </div> 
+    ); 
+  } 
 
-  if (activeWorkspace === "governance-admin") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <GovernanceAdminWorkspace
-        apiFetch={apiFetch}
-        accessCode={accessCode}
-        Panel={Panel}
-        EmptyState={EmptyState}
+  if (activeWorkspace === "governance-admin") { 
+    return renderWithBackControl( 
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}> 
+      <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Governance" className="span-12"><p className="narrative-text">Preparing governance workspace...</p></Panel></div>}>
+        <GovernanceAdminWorkspace 
+          apiFetch={apiFetch} 
+          accessCode={accessCode} 
+          Panel={Panel} 
+          EmptyState={EmptyState}
         onBackToGate={() => setActiveWorkspace("system-body")}
-      />
-      </div>
-    );
-  }
+        /> 
+      </Suspense>
+      </div> 
+    ); 
+  } 
 
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
