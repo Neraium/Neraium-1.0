@@ -130,7 +130,7 @@ export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = nul
         ),
       },
     ],
-    [connection, connectionTestState, isSetupComplete, tagMapRows],
+    [connection, connectionTestState, isSetupComplete, onOpenUpload, showAdvanced, tagMapRows],
   );
 
   const activeStep = steps[activeStepIndex] ?? steps[0];
