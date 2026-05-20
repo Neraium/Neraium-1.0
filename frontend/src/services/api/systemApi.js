@@ -1,5 +1,6 @@
-export async function fetchFacilitySystems({ apiFetch, accessCode }) {
-  const response = await apiFetch("/api/facility/systems?include_persisted=0", { accessCode });
+export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null }) {
+  const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
+  const response = await apiFetch(`/api/facility/systems?include_persisted=0${domainQuery}`, { accessCode });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       throw response;
@@ -15,4 +16,21 @@ export async function fetchFacilitySystems({ apiFetch, accessCode }) {
 
 export async function fetchEngineIdentity({ apiFetch, accessCode }) {
   return apiFetch("/api/intelligence/engine-identity", { accessCode });
+}
+
+export async function fetchDomainMode({ apiFetch, accessCode }) {
+  const response = await apiFetch("/api/domain/mode", { accessCode });
+  if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
+  return response.json();
+}
+
+export async function updateDomainMode({ apiFetch, accessCode, mode }) {
+  const response = await apiFetch("/api/domain/mode", {
+    accessCode,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
+  return response.json();
 }

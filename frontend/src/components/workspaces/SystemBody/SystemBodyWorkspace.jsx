@@ -32,6 +32,8 @@ export default function SystemBodyWorkspace({
   onUploadComplete = null,
   isLoading = false,
   isEmptyStructuralState = false,
+  domainMode = "aquatic",
+  onDomainModeChange = null,
 }) {
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
@@ -53,6 +55,16 @@ export default function SystemBodyWorkspace({
       setSettingsOpen(false);
       setAdvancedOpen(false);
     }
+
+  async function switchDomainMode(nextMode) {
+    if (settingsBusy || typeof onDomainModeChange !== "function" || !nextMode || nextMode === domainMode) return;
+    setSettingsBusy(true);
+    try {
+      await onDomainModeChange(nextMode);
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
 
   return (
     <PageContainer className="system-body system-body--gate">
@@ -96,6 +108,7 @@ export default function SystemBodyWorkspace({
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Setup & data connections</button></li>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => switchDomainMode(domainMode === "aquatic" ? "cultivation" : "aquatic")} disabled={settingsBusy}>{domainMode === "aquatic" ? "Switch to cultivation mode" : "Switch to aquatic mode"}</button></li>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => setAdvancedOpen((value) => !value)} disabled={settingsBusy}>{advancedOpen ? "Hide advanced" : "Advanced"}</button></li>
               </ul>
               {advancedOpen ? (

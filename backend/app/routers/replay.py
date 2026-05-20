@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
+from app.services.domain_mode import domain_profile, normalize_domain_mode, read_domain_mode
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.upload_jobs import read_latest_upload_result
 from demo.aquatic_replay_payload import build_aquatic_demo_replay_payload
@@ -21,7 +22,12 @@ def replay_timeline(
     intervals: int = Query(24, ge=6, le=120),
     replay_compression: int = Query(1, ge=1, le=12),
     mode: str = Query("live"),
+    domain_mode: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
+    demo_mode = domain_profile(selected_mode)["replay_demo_mode"]
+    if mode == "demo":
+        mode = demo_mode
     if mode == "demo":
         return build_canonical_demo_replay_payload(intervals=intervals)
     if mode == "aquatic_demo":
@@ -52,7 +58,12 @@ def replay_frame(
     timestamp: str,
     intervals: int = Query(24, ge=6, le=120),
     mode: str = Query("live"),
+    domain_mode: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
+    demo_mode = domain_profile(selected_mode)["replay_demo_mode"]
+    if mode == "demo":
+        mode = demo_mode
     if mode == "demo":
         timeline = build_canonical_demo_replay_payload(intervals=intervals).get("timeline", [])
         frame = next((item for item in timeline if str(item.get("timestamp")) == timestamp), timeline[-1] if timeline else {})
@@ -84,7 +95,12 @@ def replay_range(
     end_timestamp: str = Query(..., min_length=5),
     intervals: int = Query(24, ge=6, le=120),
     mode: str = Query("live"),
+    domain_mode: str | None = Query(default=None),
 ) -> dict[str, Any]:
+    selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
+    demo_mode = domain_profile(selected_mode)["replay_demo_mode"]
+    if mode == "demo":
+        mode = demo_mode
     if mode == "demo":
         timeline = build_canonical_demo_replay_payload(intervals=intervals).get("timeline", [])
         frames = [f for f in timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]

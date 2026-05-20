@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE_URL, API_CONFIG_WARNING, apiFetch } from "../config";
 import useStableInterval from "./useStableInterval";
 import { fetchApiHealth } from "../services/api/healthApi";
-import { fetchEngineIdentity, fetchFacilitySystems as fetchSystemFacility } from "../services/api/systemApi";
+import {
+  fetchDomainMode,
+  fetchEngineIdentity,
+  fetchFacilitySystems as fetchSystemFacility,
+  updateDomainMode as saveDomainMode,
+} from "../services/api/systemApi";
 import { fetchLatestUploadState } from "../services/api/uploadApi";
 import * as uploadStateView from "../viewModels/uploadState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
@@ -37,6 +42,7 @@ export default function useFacilityRuntime({
   const [allowPersistedLatest, setAllowPersistedLatest] = useState(true);
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [domainMode, setDomainModeState] = useState("aquatic");
   const healthCheckAttemptsRef = useRef(0);
   const facilitySystemsFetchDisabledRef = useRef(false);
 
@@ -82,8 +88,9 @@ export default function useFacilityRuntime({
     }
 
     try {
-      const payload = await fetchSystemFacility({ apiFetch, accessCode });
+      const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode });
       setSystems(payload.systems);
+      setDomainModeState(payload.domain_mode ?? domainMode);
       setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("ready");
       setBackendError(API_CONFIG_WARNING);
@@ -122,7 +129,7 @@ export default function useFacilityRuntime({
       });
       return false;
     }
-  }, [accessCode, apiStatus.state, buildProtectedRequestMessage, hasAccess]);
+  }, [accessCode, apiStatus.state, buildProtectedRequestMessage, domainMode, hasAccess]);
 
   const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
     if (!hasAccess) {
@@ -156,9 +163,16 @@ export default function useFacilityRuntime({
 
   useEffect(() => {
     if (!hasAccess) return;
+    fetchDomainMode({ apiFetch, accessCode })
+      .then((payload) => setDomainModeState(payload.mode || "aquatic"))
+      .catch(() => {});
+  }, [accessCode, hasAccess]);
+
+  useEffect(() => {
+    if (!hasAccess) return;
     loadFacilitySystems();
     loadLatestUploadState();
-  }, [hasAccess, loadFacilitySystems, loadLatestUploadState]);
+  }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -191,6 +205,13 @@ export default function useFacilityRuntime({
     setDemoScenario,
     isDemoMode,
     setIsDemoMode,
+    domainMode,
+    setDomainMode: async (mode) => {
+      const payload = await saveDomainMode({ apiFetch, accessCode, mode });
+      setDomainModeState(payload.mode || "aquatic");
+      await loadFacilitySystems();
+      return payload.mode || "aquatic";
+    },
     loadFacilitySystems,
     loadLatestUploadState,
     allowPersistedLatest,

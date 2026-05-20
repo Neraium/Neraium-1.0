@@ -16,6 +16,7 @@ export default function ReplayWorkspace({
   Panel,
   MetricGrid,
   mode = "live",
+  domainMode = null,
   hasActiveSession = false,
   hasCurrentUploadResult = false,
   hasResumedSession = false,
@@ -74,8 +75,8 @@ export default function ReplayWorkspace({
           };
         } else {
           const [primary, comparison] = await Promise.all([
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode }),
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode }),
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode, domainMode }),
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode, domainMode }),
           ]);
           nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
           nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
@@ -135,7 +136,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, mode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, mode, domainMode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -160,7 +161,7 @@ export default function ReplayWorkspace({
       const end = timeline[Math.min(timeline.length - 1, frameIndex + 4)]?.timestamp;
       if (!start || !end) return;
       try {
-        const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode });
+        const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode, domainMode });
         setRangePreviewCount(preview.frame_count ?? 0);
       } catch {
         const localFrames = timeline.filter((frame) => {
@@ -171,7 +172,7 @@ export default function ReplayWorkspace({
       }
     }
     loadRangePreview();
-  }, [accessCode, apiFetch, frameIndex, mode, timeline, shouldRequestReplay]);
+  }, [accessCode, apiFetch, frameIndex, mode, domainMode, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "-";

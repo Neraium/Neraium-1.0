@@ -39,6 +39,8 @@ function App() {
     loadLatestUploadState,
     setAllowPersistedLatest,
     telemetryTick,
+    domainMode,
+    setDomainMode,
   } = useFacilityRuntime({
     hasAccess: true,
     accessCode,
@@ -305,6 +307,7 @@ function App() {
         hasResumedSession={hasResumedSession}
         hasRealSiiOutput={hasRealSiiOutput}
         currentSession={currentSession}
+        domainMode={domainMode}
         onReplayFrameChange={handleReplayFrameChange}
         onReplayModeChange={handleReplayModeChange}
       />
@@ -334,6 +337,8 @@ function App() {
       accessCode={accessCode}
       onWorkspaceNavigate={setActiveWorkspace}
       onUploadComplete={handleGateUploadComplete}
+      domainMode={domainMode}
+      onDomainModeChange={setDomainMode}
     />
   );
 }

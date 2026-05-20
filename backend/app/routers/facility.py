@@ -3,8 +3,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from app.core.security import require_api_access
 from api.cognition_contracts import build_canonical_cognition_state_response
+from app.services.domain_mode import domain_profile, normalize_domain_mode, read_domain_mode
 from app.services.engine_identity import build_engine_identity
-from app.services.aquatic_domain import INTEGRATION_STUBS
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 from app.services.upload_jobs import read_latest_upload_result
@@ -13,56 +13,21 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 
 
 @router.get("/facility/systems")
-def read_facility_systems(include_persisted: bool = Query(True)) -> dict[str, Any]:
+def read_facility_systems(include_persisted: bool = Query(True), domain_mode: str | None = Query(default=None)) -> dict[str, Any]:
+    selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
+    profile = domain_profile(selected_mode)
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     adaptive_learning = {}
     if include_persisted and isinstance(latest_result, dict) and isinstance(latest_result.get("adaptive_learning"), dict):
         adaptive_learning = latest_result.get("adaptive_learning", {})
     return {
-        "systems": [
-            {
-                "name": "Circulation",
-                "scope": "Hydraulic flow continuity, pump behavior, and pressure response",
-            },
-            {
-                "name": "Filtration",
-                "scope": "Filter pressure, flow resistance, and cycle stability",
-            },
-            {
-                "name": "Thermal control",
-                "scope": "Pool/spa thermal stability, heater runtime, and heat retention",
-            },
-            {
-                "name": "Water chemistry",
-                "scope": "ORP, pH, and sanitizer feed relationship behavior",
-            },
-            {
-                "name": "Hydraulic routing",
-                "scope": "Valve state transitions and distribution path consistency",
-            },
-            {
-                "name": "Operational context",
-                "scope": "Occupancy load, ambient heat effects, and overnight stabilization",
-            },
-        ],
-        "driver_categories": [
-            "circulation_degradation",
-            "filter_restriction_buildup",
-            "pump_cavitation",
-            "abnormal_thermal_drift",
-            "heater_efficiency_degradation",
-            "orp_instability",
-            "chemical_feed_inconsistencies",
-            "abnormal_overnight_heat_loss",
-            "low_flow_conditions",
-            "pressure_instability",
-            "dead_zone_circulation_patterns",
-            "sensor_disagreement_anomalies",
-        ],
+        "systems": profile["systems"],
+        "driver_categories": profile["driver_categories"],
+        "domain_mode": selected_mode,
         "intelligence": intelligence,
         "adaptive_learning": adaptive_learning,
-        "integration_stubs": INTEGRATION_STUBS,
+        "integration_stubs": profile["integration_stubs"],
         "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
 

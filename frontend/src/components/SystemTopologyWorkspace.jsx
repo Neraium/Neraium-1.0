@@ -26,9 +26,11 @@ export default function SystemTopologyWorkspace({
   onSelectTarget,
   apiFetch,
   accessCode,
-  onWorkspaceNavigate,
-  onUploadComplete,
-}) {
+  onWorkspaceNavigate, 
+  onUploadComplete, 
+  domainMode = "aquatic",
+  onDomainModeChange = null,
+}) { 
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
   const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
   const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
@@ -113,10 +115,12 @@ export default function SystemTopologyWorkspace({
       apiFetch={apiFetch}
       accessCode={accessCode}
       onWorkspaceNavigate={onWorkspaceNavigate}
-      onUploadComplete={onUploadComplete}
-    />
-  );
-}
+      onUploadComplete={onUploadComplete} 
+      domainMode={domainMode}
+      onDomainModeChange={onDomainModeChange}
+    /> 
+  ); 
+} 
 
 function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
   const intelligence = liveOps?.sourceIntelligence ?? null;

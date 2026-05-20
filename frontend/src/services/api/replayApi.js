@@ -1,6 +1,7 @@
-export async function fetchReplayTimeline({ apiFetch, accessCode, intervals = 24, replayCompression = 1, mode = "live" }) {
+export async function fetchReplayTimeline({ apiFetch, accessCode, intervals = 24, replayCompression = 1, mode = "live", domainMode = null }) {
+  const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
   const response = await apiFetch(
-    `/api/replay/timeline?intervals=${encodeURIComponent(intervals)}&replay_compression=${encodeURIComponent(replayCompression)}&mode=${encodeURIComponent(mode)}`,
+    `/api/replay/timeline?intervals=${encodeURIComponent(intervals)}&replay_compression=${encodeURIComponent(replayCompression)}&mode=${encodeURIComponent(mode)}${domainQuery}`,
     { accessCode },
   );
   if (!response.ok) {
@@ -9,9 +10,10 @@ export async function fetchReplayTimeline({ apiFetch, accessCode, intervals = 24
   return response.json();
 }
 
-export async function fetchReplayFrame({ apiFetch, accessCode, timestamp, intervals = 24, mode = "live" }) {
+export async function fetchReplayFrame({ apiFetch, accessCode, timestamp, intervals = 24, mode = "live", domainMode = null }) {
+  const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
   const response = await apiFetch(
-    `/api/replay/frame/${encodeURIComponent(timestamp)}?intervals=${encodeURIComponent(intervals)}&mode=${encodeURIComponent(mode)}`,
+    `/api/replay/frame/${encodeURIComponent(timestamp)}?intervals=${encodeURIComponent(intervals)}&mode=${encodeURIComponent(mode)}${domainQuery}`,
     { accessCode },
   );
   if (!response.ok) {
@@ -27,9 +29,11 @@ export async function fetchReplayRange({
   endTimestamp,
   intervals = 24,
   mode = "live",
+  domainMode = null,
 }) {
+  const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
   const response = await apiFetch(
-    `/api/replay/range?start_timestamp=${encodeURIComponent(startTimestamp)}&end_timestamp=${encodeURIComponent(endTimestamp)}&intervals=${encodeURIComponent(intervals)}&mode=${encodeURIComponent(mode)}`,
+    `/api/replay/range?start_timestamp=${encodeURIComponent(startTimestamp)}&end_timestamp=${encodeURIComponent(endTimestamp)}&intervals=${encodeURIComponent(intervals)}&mode=${encodeURIComponent(mode)}${domainQuery}`,
     { accessCode },
   );
   if (!response.ok) {
