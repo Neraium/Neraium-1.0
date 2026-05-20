@@ -1,32 +1,71 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DataTable, Panel } from "../workspacePrimitives";
-import ConnectionModeCards from "./ConnectionModeCards";
-import HistorianSourcePanel from "./HistorianSourcePanel";
+import { Panel } from "../workspacePrimitives";
 import TagMappingPanel from "./TagMappingPanel";
-import BaselineWindowPanel from "./BaselineWindowPanel";
-import ReadOnlySafetyPanel from "./ReadOnlySafetyPanel";
+
+function initialConnection() {
+  return {
+    sourceType: "",
+    endpoint: "",
+    authMethod: "",
+    pollingMinutes: "5",
+  };
+}
 
 export default function HistorianSetupWorkspace({ tagMapRows }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [connection, setConnection] = useState(initialConnection);
   const [connectionTestState, setConnectionTestState] = useState("idle");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const activeStepRef = useRef(null);
 
   const steps = useMemo(
     () => [
       {
-        id: "historian-source",
-        label: "Historian / BMS / SCADA",
-        render: () => <HistorianSourcePanel />,
-      },
-      {
-        id: "read-only-ingestion",
-        label: "Read-only Ingestion",
-        render: () => <ReadOnlySafetyPanel />,
-      },
-      {
-        id: "connection-method",
-        label: "Connection Method",
-        render: () => <ConnectionModeCards />,
+        id: "required-info",
+        label: "Connection Info",
+        render: () => (
+          <Panel title="Required Connection Info" className="span-12 workspace-hero-panel">
+            <p className="narrative-text">Enter only the required fields to start ingesting telemetry.</p>
+            <div className="intake-flow__controls" style={{ display: "grid", gap: 10 }}>
+              <input
+                aria-label="Source type"
+                placeholder="Source type (Historian, API, BMS/BAS)"
+                value={connection.sourceType}
+                onChange={(event) => setConnection((current) => ({ ...current, sourceType: event.target.value }))}
+              />
+              <input
+                aria-label="Endpoint"
+                placeholder="Host / endpoint"
+                value={connection.endpoint}
+                onChange={(event) => setConnection((current) => ({ ...current, endpoint: event.target.value }))}
+              />
+              <button
+                type="button"
+                className="secondary-command-button"
+                onClick={() => setShowAdvanced((current) => !current)}
+                aria-expanded={showAdvanced}
+              >
+                {showAdvanced ? "Hide Advanced" : "Show Advanced"}
+              </button>
+              {showAdvanced ? (
+                <>
+              <input
+                aria-label="Authentication"
+                placeholder="Auth method (token/basic/service account)"
+                value={connection.authMethod}
+                onChange={(event) => setConnection((current) => ({ ...current, authMethod: event.target.value }))}
+              />
+              <input
+                aria-label="Polling interval"
+                placeholder="Polling interval in minutes"
+                value={connection.pollingMinutes}
+                onChange={(event) => setConnection((current) => ({ ...current, pollingMinutes: event.target.value }))}
+              />
+                </>
+              ) : null}
+            </div>
+          </Panel>
+        ),
       },
       {
         id: "signal-mapping",
@@ -34,13 +73,11 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
         render: () => <TagMappingPanel rows={tagMapRows} />,
       },
       {
-        id: "connection-test",
-        label: "Connection Test",
-        render: ({ goToNextStep }) => (
-          <Panel title="Connection Test" className="span-12">
-            <p className="narrative-text">
-              Run a read-only connectivity check before baseline construction. This validates source reachability and telemetry heartbeat.
-            </p>
+        id: "quick-verify",
+        label: "Quick Verify",
+        render: () => (
+          <Panel title="Quick Verify" className="span-12">
+            <p className="narrative-text">Read-only connectivity check.</p>
             <div className="intake-flow__controls">
               <button
                 type="button"
@@ -49,13 +86,6 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
               >
                 Run Test
               </button>
-              <button
-                type="button"
-                className="command-button"
-                onClick={goToNextStep}
-              >
-                Continue to Baseline Builder
-              </button>
             </div>
             <p className="narrative-text">
               {connectionTestState === "idle" ? "No test run yet." : "Connection test passed."}
@@ -63,14 +93,9 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
           </Panel>
         ),
       },
-      {
-        id: "baseline-window",
-        label: "Baseline Builder",
-        render: () => <BaselineWindowPanel />,
-      },
     ],
-    [connectionTestState, tagMapRows], 
-  ); 
+    [connection, connectionTestState, tagMapRows],
+  );
 
   const activeStep = steps[activeStepIndex] ?? steps[0];
   const isFirstStep = activeStepIndex === 0;
@@ -85,7 +110,10 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
     setActiveStepIndex(next);
   }
 
-  const activeStepTestId = activeStep?.id === "connection-method"
+  const canGoNext =
+    activeStep.id !== "required-info"
+      || (connection.sourceType.trim() && connection.endpoint.trim());
+  const activeStepTestId = activeStep?.id === "required-info"
     ? "onboarding-data-source-step"
     : activeStep?.id === "signal-mapping"
       ? "signal-mapping-step"
@@ -93,22 +121,10 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
 
   return (
     <div data-testid="onboarding-root">
-      <Panel title="Setup Progress" className="span-12 workspace-hero-panel">
-        <DataTable
-          columns={["Step", "Status"]}
-          rows={steps.map((step, index) => [
-            `${index + 1}. ${step.label}`,
-            index < activeStepIndex ? "Complete" : index === activeStepIndex ? "Active" : "Pending",
-          ])}
-        />
-      </Panel>
-      <div ref={activeStepRef} data-testid={activeStepTestId}>
-        {activeStep.render({
-          goToNextStep: () => goToStep(activeStepIndex + 1),
-          goToPreviousStep: () => goToStep(activeStepIndex - 1),
-        })}
-      </div>
-      <Panel title="Step Navigation" className="span-12">
+      <Panel title="Quick Setup" className="span-12 workspace-hero-panel">
+        <p className="narrative-text" data-testid="onboarding-step-title">
+          Step {activeStepIndex + 1} of {steps.length}: {activeStep.label}
+        </p>
         <div className="intake-flow__controls">
           <button
             type="button"
@@ -122,16 +138,19 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
             type="button"
             className="command-button"
             onClick={() => goToStep(activeStepIndex + 1)}
-            disabled={isLastStep}
+            disabled={isLastStep || !canGoNext}
             data-testid="onboarding-next-button"
           >
             Next
           </button>
         </div>
-        <p className="narrative-text" data-testid="onboarding-step-title">
-          Step {activeStepIndex + 1} of {steps.length}: {activeStep.label}
-        </p>
       </Panel>
+      <div ref={activeStepRef} data-testid={activeStepTestId}>
+        {activeStep.render({
+          goToNextStep: () => goToStep(activeStepIndex + 1),
+          goToPreviousStep: () => goToStep(activeStepIndex - 1),
+        })}
+      </div>
     </div>
   );
 }
