@@ -2,12 +2,14 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { apiFetch } from "./config"; 
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace"; 
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace"; 
+import AuthScreen from "./components/AuthScreen";
 import { DEMO_STEPS, STEP_DURATION_MS } from "./components/setup/DemoModePanel"; 
 import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives"; 
 import useFacilityRuntime from "./hooks/useFacilityRuntime"; 
 import * as uploadStateView from "./viewModels/uploadState"; 
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState"; 
 import { deriveCurrentSession } from "./viewModels/currentSession"; 
+import { fetchCurrentUser, logoutUser } from "./services/api/authApi";
 
 const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
@@ -28,6 +30,9 @@ function App() {
   const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
   const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
   const [appReady, setAppReady] = useState(false);
+  const [authBooting, setAuthBooting] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authError, setAuthError] = useState("");
 
   const {
     apiStatus,
@@ -249,6 +254,28 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadAuthSession() {
+      try {
+        const payload = await fetchCurrentUser();
+        if (cancelled) return;
+        setCurrentUser(payload?.authenticated ? payload.user : null);
+        setAuthError("");
+      } catch (error) {
+        if (cancelled) return;
+        setCurrentUser(null);
+        setAuthError(String(error?.message ?? "Unable to verify auth session."));
+      } finally {
+        if (!cancelled) setAuthBooting(false);
+      }
+    }
+    loadAuthSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!guidedDemo.active || !guidedDemo.isPlaying) return;
     const timer = window.setInterval(() => {
       setGuidedDemo((current) => {
@@ -285,8 +312,49 @@ function App() {
         >
           Back to Gate
         </button>
+        <button
+          type="button"
+          className="system-gate__settings-action"
+          onClick={async () => {
+            await logoutUser();
+            setCurrentUser(null);
+          }}
+          aria-label="Sign out"
+          style={{
+            position: "fixed",
+            top: "max(12px, env(safe-area-inset-top, 0px))",
+            right: "max(12px, env(safe-area-inset-right, 0px))",
+            zIndex: 1000,
+            width: "fit-content",
+            paddingInline: "12px",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          Sign out
+        </button>
         {content}
       </div>
+    );
+  }
+
+  if (authBooting) {
+    return (
+      <div className="workspace-grid">
+        <Panel title="Loading Session" className="span-12">
+          <p className="narrative-text">Checking authentication session...</p>
+        </Panel>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <AuthScreen
+        onAuthenticated={(user) => {
+          setCurrentUser(user);
+          setAuthError("");
+        }}
+      />
     );
   }
 
@@ -365,6 +433,27 @@ function App() {
 
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+    <button
+      type="button"
+      className="system-gate__settings-action"
+      onClick={async () => {
+        await logoutUser();
+        setCurrentUser(null);
+      }}
+      aria-label="Sign out"
+      style={{
+        position: "fixed",
+        top: "max(12px, env(safe-area-inset-top, 0px))",
+        right: "max(12px, env(safe-area-inset-right, 0px))",
+        zIndex: 1000,
+        width: "fit-content",
+        paddingInline: "12px",
+        backdropFilter: "blur(10px)",
+      }}
+    >
+      Sign out
+    </button>
+    {authError ? <p className="narrative-text" style={{ position: "fixed", top: "70px", right: "20px", zIndex: 1000 }}>{authError}</p> : null}
     <SystemTopologyWorkspace
       liveOps={historianReplayState.enabled && historianReplayState.frame
         ? { ...liveOps, ...historianReplayState.frame }

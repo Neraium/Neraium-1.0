@@ -11999,3 +11999,82 @@ nav[aria-label="Workspaces"] a {
     min-height: 40px;
   }
 }
+
+.auth-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgba(17, 128, 255, 0.18), transparent 70%),
+    radial-gradient(900px 450px at 10% 120%, rgba(13, 245, 162, 0.16), transparent 65%),
+    linear-gradient(160deg, #08131d 0%, #0b1c2b 45%, #09121d 100%);
+}
+
+.auth-panel {
+  width: min(100%, 460px);
+  padding: 28px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(151, 177, 206, 0.26);
+  background: rgba(6, 13, 22, 0.82);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.auth-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167, 198, 229, 0.84);
+}
+
+.auth-copy {
+  margin: 8px 0 18px;
+  color: rgba(207, 223, 241, 0.86);
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(188, 211, 235, 0.94);
+}
+
+.auth-form input {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(137, 164, 194, 0.4);
+  background: rgba(16, 26, 40, 0.82);
+  color: #f1f7ff;
+  padding: 0 12px;
+}
+
+.auth-form input:focus {
+  outline: 2px solid rgba(17, 128, 255, 0.44);
+  outline-offset: 1px;
+}
+
+.auth-error {
+  margin: 2px 0 0;
+  color: #ff9ea3;
+  font-size: 13px;
+}
+
+.auth-submit {
+  margin-top: 6px;
+}
+
+.auth-switch {
+  margin-top: 14px;
+  border: 0;
+  background: transparent;
+  color: #9ec5ff;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
