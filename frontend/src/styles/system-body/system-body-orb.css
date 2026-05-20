@@ -37,10 +37,11 @@
 }
 
 .system-body-orb-panel--compact-preview .system-body-orb-panel__stage {
-  width: min(100%, 520px);
+  width: min(100%, 620px);
   min-width: 0;
   min-height: auto;
   aspect-ratio: 1 / 1;
+  filter: drop-shadow(0 28px 48px rgba(0, 0, 0, 0.46));
 }
 
 .system-body-orb-panel--compact-preview .system-body-orb-panel__stage .health-orb {
@@ -266,7 +267,7 @@
 .health-orb__svg--gate-iris {
   width: 100%;
   height: auto;
-  max-width: 860px;
+  max-width: 980px;
   overflow: visible;
   image-rendering: auto;
 }
