@@ -45,7 +45,7 @@ def format_upload_capacity(size_bytes: int) -> str:
     return f"{size_bytes / (1024 * 1024):.0f} MB"
 
 
-def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = None) -> dict[str, Any]:
+def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = None) -> dict[str, Any]: 
     if metadata is None:
         return {
             "job_id": job_id,
@@ -79,8 +79,10 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
             "sii_completed": False,
             "sii_completion_artifacts": {},
             "timings": {},
-            "result_summary": None,
-        }
+            "result_summary": None, 
+            "ingest_request_id": None,
+            "request_id": None,
+        } 
 
     normalized_status = str(metadata.get("status", "PENDING")).upper()
     progress_map = {
@@ -154,9 +156,11 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "first_usable_available": bool(metadata.get("first_usable_available") or normalized_status in {"COGNITION_READY", "GENERATING_REPLAY", "GENERATING_EVIDENCE", "COMPLETE"}),
         "sii_completed": sii_completed and normalized_status == "COMPLETE",
         "sii_completion_artifacts": artifacts if isinstance(artifacts, dict) else {},
-        "timings": metadata.get("timings", {}),
-        "result_summary": metadata.get("result_summary"),
-    }
+        "timings": metadata.get("timings", {}), 
+        "result_summary": metadata.get("result_summary"), 
+        "ingest_request_id": metadata.get("ingest_request_id"),
+        "request_id": None,
+    } 
 
 
 @router.post("/data/upload", status_code=status.HTTP_202_ACCEPTED, response_model=UploadAcceptedResponse)
@@ -207,12 +211,13 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="Only .csv and .json telemetry files are supported.")
 
     auth_context = getattr(request.state, "auth_context", {})
-    try:
-        metadata = await create_upload_job(
-            file,
-            initiated_by=auth_context.get("auth_subject", "anonymous"),
-            max_size_bytes=settings.max_upload_size_bytes,
-        )
+    try: 
+        metadata = await create_upload_job( 
+            file, 
+            initiated_by=auth_context.get("auth_subject", "anonymous"), 
+            ingest_request_id=auth_context.get("request_id"),
+            max_size_bytes=settings.max_upload_size_bytes, 
+        ) 
     except UploadTooLargeError:
         logger.warning(
             "upload_rejected_oversize filename=%s max_size_bytes=%s auth_subject=%s auth_source=%s",
@@ -295,6 +300,7 @@ def read_upload_status(request: Request, job_id: str) -> dict[str, Any]:
         )
         return JSONResponse(status_code=404, content=upload_status_payload(None, job_id))
     payload = upload_status_payload(metadata, job_id)
+    payload["request_id"] = auth_context.get("request_id")
     logger.info(
         "upload_status_polled polling_job_id=%s persisted_job_id=%s status=%s rows=%s chunks=%s auth_subject=%s auth_source=%s metadata_exists=%s",
         job_id,

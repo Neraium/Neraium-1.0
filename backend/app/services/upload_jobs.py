@@ -164,11 +164,12 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-async def create_upload_job(
-    file: UploadFile,
-    initiated_by: str = "anonymous",
-    max_size_bytes: int | None = None,
-) -> dict[str, Any]:
+async def create_upload_job( 
+    file: UploadFile, 
+    initiated_by: str = "anonymous", 
+    ingest_request_id: str | None = None,
+    max_size_bytes: int | None = None, 
+) -> dict[str, Any]: 
     ensure_runtime_dirs()
     job_id = uuid.uuid4().hex
     filename = Path(file.filename or "telemetry.csv").name
@@ -222,8 +223,9 @@ async def create_upload_job(
         "error": None,
         "result_summary": None,
         "input_hash": hasher.hexdigest(),
-        "initiated_by": initiated_by,
-    }
+        "initiated_by": initiated_by, 
+        "ingest_request_id": ingest_request_id,
+    } 
     upload_duration = round(time.perf_counter() - upload_started, 4)
     metadata["timings"] = {"upload_receive_seconds": upload_duration, "file_save_seconds": round(time.perf_counter() - save_started, 4)}
     write_job(metadata)
@@ -367,6 +369,7 @@ def process_upload_job(job_id: str) -> None:
                 completed_at = now_iso()
                 result = cached_payload["result"]
                 summary = {**cached_payload["summary"], "last_processed_at": completed_at}
+                summary["upload_processing_mode"] = "hash_cache_reused"
                 write_latest_upload_summary(job_id, summary)
                 write_latest_upload_result(job_id, result)
                 upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
@@ -424,7 +427,8 @@ def process_upload_job(job_id: str) -> None:
         completed_at = now_iso()
         update_site_memory_from_result(result, completed_at)
         result["adaptive_learning"] = build_adaptive_snapshot(result, {"last_processed_at": completed_at})
-        summary = summarize_result(result, completed_at)
+        summary = summarize_result(result, completed_at) 
+        summary["upload_processing_mode"] = "full_processing"
         latest_state = read_latest_sii_state() or {}
         if latest_state:
             write_latest_sii_state({**latest_state, "adaptive_learning": result["adaptive_learning"]})

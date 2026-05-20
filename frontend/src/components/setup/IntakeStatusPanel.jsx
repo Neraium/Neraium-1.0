@@ -21,6 +21,8 @@ export default function IntakeStatusPanel({
   latestRunId = null,
   feedbackState = { status: "idle", category: null, message: "" },
   onOperatorFeedback = null,
+  uploadJob = null,
+  latestUploadResult = null,
 }) {
   const showAnalysis = hasActiveSession && hasRealSiiOutput && (hasCurrentUploadResult || hasResumedSession);
   const calibration = adaptiveLearning?.calibration ?? {};
@@ -34,6 +36,14 @@ export default function IntakeStatusPanel({
   const baselineAge = adaptiveBaseline?.baseline_age?.label ?? "Unavailable";
   const calibrationConfidence = calibration?.calibration_confidence ?? null;
   const similarEvents = eventMemory?.historical_similar_events ?? 0;
+  const timings = latestUploadResult?.processing_stats?.timings ?? uploadJob?.timings ?? {};
+  const parseSeconds = timings?.parse_seconds ?? null;
+  const baselineSeconds = timings?.baseline_build_seconds ?? null;
+  const scoreSeconds = timings?.structural_scoring_seconds ?? null;
+  const totalSeconds = timings?.total_job_seconds ?? latestUploadResult?.processing_stats?.engine_runtime_seconds ?? uploadJob?.processing_duration_seconds ?? null;
+  const processingMode = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
+  const ingestRequestId = uploadJob?.ingest_request_id ?? null;
+  const requestId = uploadJob?.request_id ?? null;
   return (
     <>
       <Panel title="Intake Status" className="span-7 uploaded-intelligence-panel">
@@ -105,6 +115,28 @@ export default function IntakeStatusPanel({
           {feedbackState?.message ? <p className="narrative-text">{feedbackState.message}</p> : null}
         </Panel>
       ) : null}
+      <Panel title="Processing Breakdown" className="span-6 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <MetricGrid
+          metrics={[
+            { label: "Processing Mode", value: processingMode === "hash_cache_reused" ? "Hash Cache Reused" : processingMode ? "Full Processing" : "Unavailable" },
+            { label: "Parse (s)", value: parseSeconds },
+            { label: "Baseline (s)", value: baselineSeconds },
+            { label: "Scoring (s)", value: scoreSeconds },
+            { label: "Total (s)", value: totalSeconds },
+          ]}
+          compact
+        />
+      </Panel>
+      <Panel title="Trace Correlation" className="span-6 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <CompactList
+          items={[
+            `Upload Job ID: ${latestRunId ?? "n/a"}`,
+            `Ingest Request ID: ${ingestRequestId ?? "n/a"}`,
+            `Last Poll Request ID: ${requestId ?? "n/a"}`,
+          ]}
+          emptyText="No trace identifiers available."
+        />
+      </Panel>
     </>
   );
 }

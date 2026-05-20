@@ -541,6 +541,8 @@ export default function DataConnectionsWorkspace({
             latestRunId={latestRunId}
             feedbackState={feedbackState}
             onOperatorFeedback={handleOperatorFeedback}
+            uploadJob={uploadJob}
+            latestUploadResult={uploadResult ?? latestUploadResult}
           /> 
           <PilotReadinessPanel
             apiStatus={apiStatus}
