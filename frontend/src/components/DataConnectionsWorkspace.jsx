@@ -481,7 +481,7 @@ export default function DataConnectionsWorkspace({
 
       {activeTab === "connect-live" && (
         <>
-          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
+          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} onOpenUpload={() => setActiveTab("upload")} />
         </> 
       )} 
 
