@@ -47,3 +47,15 @@ def test_replay_frame_and_range_endpoints() -> None:
     range_payload = range_response.json()
     assert range_payload["frame_count"] >= 1
     assert len(range_payload["frames"]) == range_payload["frame_count"]
+
+
+def test_aquatic_demo_mode_replay_timeline_available() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/replay/timeline?mode=aquatic_demo&intervals=18")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "aquatic_demo"
+    assert payload["meta"]["domain"] == "commercial_aquatic_hospitality"
+    assert payload["meta"]["frame_count"] >= 18

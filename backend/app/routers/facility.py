@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from app.core.security import require_api_access
 from api.cognition_contracts import build_canonical_cognition_state_response
 from app.services.engine_identity import build_engine_identity
+from app.services.aquatic_domain import INTEGRATION_STUBS
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 from app.services.upload_jobs import read_latest_upload_result
@@ -21,41 +22,47 @@ def read_facility_systems(include_persisted: bool = Query(True)) -> dict[str, An
     return {
         "systems": [
             {
-                "name": "HVAC",
-                "scope": "Temperature conditioning and equipment runtime behavior",
+                "name": "Circulation",
+                "scope": "Hydraulic flow continuity, pump behavior, and pressure response",
             },
             {
-                "name": "Humidity control",
-                "scope": "Dehumidification, humidification, and room moisture balance",
+                "name": "Filtration",
+                "scope": "Filter pressure, flow resistance, and cycle stability",
             },
             {
-                "name": "Airflow",
-                "scope": "Air movement patterns, circulation, and room exchange signals",
+                "name": "Thermal control",
+                "scope": "Pool/spa thermal stability, heater runtime, and heat retention",
             },
             {
-                "name": "Irrigation",
-                "scope": "Irrigation events, timing, and environmental response context",
+                "name": "Water chemistry",
+                "scope": "ORP, pH, and sanitizer feed relationship behavior",
             },
             {
-                "name": "Lighting",
-                "scope": "Lighting schedules and environmental response windows",
+                "name": "Hydraulic routing",
+                "scope": "Valve state transitions and distribution path consistency",
             },
             {
-                "name": "Sensor network",
-                "scope": "Room sensors, facility exports, and historical readings",
+                "name": "Operational context",
+                "scope": "Occupancy load, ambient heat effects, and overnight stabilization",
             },
         ],
         "driver_categories": [
-            "humidity_control",
-            "hvac_instability",
-            "airflow_restriction",
-            "irrigation_timing",
-            "lighting_schedule",
-            "sensor_network",
-            "unknown_system_drift",
+            "circulation_degradation",
+            "filter_restriction_buildup",
+            "pump_cavitation",
+            "abnormal_thermal_drift",
+            "heater_efficiency_degradation",
+            "orp_instability",
+            "chemical_feed_inconsistencies",
+            "abnormal_overnight_heat_loss",
+            "low_flow_conditions",
+            "pressure_instability",
+            "dead_zone_circulation_patterns",
+            "sensor_disagreement_anomalies",
         ],
         "intelligence": intelligence,
         "adaptive_learning": adaptive_learning,
+        "integration_stubs": INTEGRATION_STUBS,
         "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
 

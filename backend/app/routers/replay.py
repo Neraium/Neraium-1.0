@@ -8,6 +8,7 @@ from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.upload_jobs import read_latest_upload_result
+from demo.aquatic_replay_payload import build_aquatic_demo_replay_payload
 from demo.canonical_replay_payload import build_canonical_demo_replay_payload
 from replay.structural_replay_engine import StructuralReplayEngine
 
@@ -23,6 +24,8 @@ def replay_timeline(
 ) -> dict[str, Any]:
     if mode == "demo":
         return build_canonical_demo_replay_payload(intervals=intervals)
+    if mode == "aquatic_demo":
+        return build_aquatic_demo_replay_payload(intervals=intervals)
     intelligence = current_intelligence()
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
@@ -54,6 +57,10 @@ def replay_frame(
         timeline = build_canonical_demo_replay_payload(intervals=intervals).get("timeline", [])
         frame = next((item for item in timeline if str(item.get("timestamp")) == timestamp), timeline[-1] if timeline else {})
         return {"source": "demo", "frame": frame}
+    if mode == "aquatic_demo":
+        timeline = build_aquatic_demo_replay_payload(intervals=intervals).get("timeline", [])
+        frame = next((item for item in timeline if str(item.get("timestamp")) == timestamp), timeline[-1] if timeline else {})
+        return {"source": "aquatic_demo", "frame": frame}
     intelligence = current_intelligence()
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
@@ -82,6 +89,10 @@ def replay_range(
         timeline = build_canonical_demo_replay_payload(intervals=intervals).get("timeline", [])
         frames = [f for f in timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
         return {"source": "demo", "frames": frames, "frame_count": len(frames)}
+    if mode == "aquatic_demo":
+        timeline = build_aquatic_demo_replay_payload(intervals=intervals).get("timeline", [])
+        frames = [f for f in timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
+        return {"source": "aquatic_demo", "frames": frames, "frame_count": len(frames)}
     intelligence = current_intelligence()
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None

@@ -14,11 +14,11 @@ def _compatibility_cognition_payload(mode: str = "live") -> dict[str, Any]:
     return {
         "cognition_state": "Drift observed",
         "structural_stability": "WATCH",
-        "active_archetypes": ["COMPENSATION_MASKING", "THERMAL_LAG_PROPAGATION"],
-        "propagation_pathways": ["humidity_control_to_thermal_response"],
+        "active_archetypes": ["CIRCULATION_DEGRADATION", "THERMAL_RESPONSE_LAG"],
+        "propagation_pathways": ["flow_rate_to_filter_pressure_instability"],
         "evidence_lineage": {
             "integrity": "MODERATE",
-            "sources": ["sample_cultivation_cognition"],
+            "sources": ["sample_aquatic_cognition"],
             "confidence_basis": "Compatibility payload available while live cognition initializes.",
         },
         "structural_memory_matches": [],
@@ -53,21 +53,20 @@ def facility_systems_compat() -> dict[str, Any]:
     cognition = _compatibility_cognition_payload("live")
     return {
         "systems": [
-            {"name": "HVAC", "scope": "Temperature conditioning and equipment runtime behavior"},
-            {"name": "Humidity control", "scope": "Dehumidification, humidification, and room moisture balance"},
-            {"name": "Airflow", "scope": "Air movement patterns, circulation, and room exchange signals"},
-            {"name": "Irrigation", "scope": "Irrigation events, timing, and environmental response context"},
-            {"name": "Lighting", "scope": "Lighting schedules and environmental response windows"},
-            {"name": "Sensor network", "scope": "Room sensors, facility exports, and historical readings"},
+            {"name": "Circulation", "scope": "Hydraulic flow continuity and pump behavior"},
+            {"name": "Filtration", "scope": "Filter pressure and resistance behavior"},
+            {"name": "Thermal control", "scope": "Pool/spa temperature and heater response"},
+            {"name": "Water chemistry", "scope": "ORP, pH, and sanitizer feed behavior"},
+            {"name": "Hydraulic routing", "scope": "Valve path transitions and distribution consistency"},
+            {"name": "Sensor network", "scope": "Telemetry continuity and agreement checks"},
         ],
         "driver_categories": [
-            "humidity_control",
-            "hvac_instability",
-            "airflow_restriction",
-            "irrigation_timing",
-            "lighting_schedule",
-            "sensor_network",
-            "unknown_system_drift",
+            "circulation_degradation",
+            "filter_restriction_buildup",
+            "abnormal_thermal_drift",
+            "orp_instability",
+            "dead_zone_circulation_patterns",
+            "sensor_disagreement_anomalies",
         ],
         "intelligence": cognition,
         "intelligence_status": {

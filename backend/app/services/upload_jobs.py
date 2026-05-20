@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.engine import run_engine_analysis
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.adaptive_learning import append_event_memory, build_adaptive_snapshot, derive_interpretive_archetypes, derive_site_key, update_site_memory_from_result
+from app.services.aquatic_domain import analyze_aquatic_instability, map_aquatic_schema
 from app.services.csv_parser import parse_csv_content, preview_rows
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import (
@@ -782,6 +783,19 @@ def build_upload_result(
         cultivation_mapping=schema_mapping,
         numeric_profiles=numeric_profiles,
     )
+    aquatic_assessment = analyze_aquatic_instability(
+        columns=columns,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+    )
+    if aquatic_assessment["signals"]:
+        engine_result["signals"] = [*engine_result.get("signals", []), *aquatic_assessment["signals"]]
+    if aquatic_assessment["evidence"]:
+        engine_result["evidence"] = [*engine_result.get("evidence", []), *aquatic_assessment["evidence"]]
+    if aquatic_assessment["recommended_checks"]:
+        engine_result["recommended_checks"] = list(
+            dict.fromkeys([*engine_result.get("recommended_checks", []), *aquatic_assessment["recommended_checks"]])
+        )
     processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
     record_timing(processing_stats, "structural_scoring", stage_started)
     stage_started = time.perf_counter()
@@ -819,6 +833,20 @@ def build_upload_result(
         mode=intelligence_mode,
         source_metadata=intelligence_source_metadata,
     )
+    sii_intelligence["operational_domain"] = "commercial_aquatic_hospitality"
+    sii_intelligence["aquatic_schema"] = map_aquatic_schema(columns)
+    sii_intelligence["aquatic_instability"] = {
+        "admitted_candidates": aquatic_assessment["admitted_candidates"],
+        "relationship_map": aquatic_assessment["relationship_map"],
+        "integration_stubs": aquatic_assessment["integration_stubs"],
+        "explainability": {
+            "why_watch_or_alert": [item["relationship_explanation"] for item in aquatic_assessment["admitted_candidates"][:3]],
+            "what_changed_relative_to_baseline": [item["timeline"] for item in aquatic_assessment["admitted_candidates"][:3]],
+            "confidence_basis": [item["confidence_persistence_score"] for item in aquatic_assessment["admitted_candidates"][:3]],
+            "opaque_hidden_scoring": False,
+            "autonomous_actions": False,
+        },
+    }
     processing_trace = build_processing_trace(
         engine_result=engine_result,
         driver_attribution=driver_attribution,

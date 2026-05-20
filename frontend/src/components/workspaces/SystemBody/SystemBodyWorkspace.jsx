@@ -88,7 +88,7 @@ export default function SystemBodyWorkspace({
               orbData={null}
               compactPreview
             />
-            <p className="system-gate__state">{stateLabel || EMPTY_VALUE}</p>
+            <p className="system-gate__state">{renderGateStateLabel(stateLabel, statusLight)}</p>
             <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
             {hasAdmittedFinding ? <p className="system-gate__inspect">Tap to Inspect</p> : null}
           </div>
@@ -147,8 +147,14 @@ export default function SystemBodyWorkspace({
 
 function statusLightLabel(light) {
   if (light === "yellow") return "Watch";
-  if (light === "red") return "Alert";
+  if (light === "red") return "Admission";
   return "Stable";
+}
+
+function renderGateStateLabel(stateLabel, statusLight) {
+  const normalized = String(stateLabel || "").trim();
+  if (normalized) return normalized;
+  return statusLightLabel(statusLight).toUpperCase();
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {

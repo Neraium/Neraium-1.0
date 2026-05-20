@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neraium.local/schemas/commercial_aquatic_admission_event.schema.json",
+  "title": "CommercialAquaticAdmissionEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "archetype",
+    "subsystem",
+    "timeline",
+    "contributing_signals",
+    "evidence_graph",
+    "severity_trajectory",
+    "relationship_explanation",
+    "confidence_persistence_score"
+  ],
+  "properties": {
+    "archetype": { "type": "string" },
+    "subsystem": { "type": "string" },
+    "timeline": { "type": "string" },
+    "contributing_signals": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string" }
+    },
+    "evidence_graph": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "target", "relationship"],
+        "properties": {
+          "source": { "type": "string" },
+          "target": { "type": "string" },
+          "relationship": { "type": "string" }
+        }
+      }
+    },
+    "severity_trajectory": {
+      "type": "string",
+      "enum": ["monitoring", "escalating"]
+    },
+    "relationship_explanation": { "type": "string" },
+    "confidence_persistence_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    }
+  }
+}

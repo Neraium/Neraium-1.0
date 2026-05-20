@@ -27,7 +27,19 @@ def test_connector_types_endpoint_lists_supported_connectors(tmp_path) -> None:
     assert response.status_code == 200
     payload = response.json()
     connector_types = {item["connector_type"] for item in payload["types"]}
-    assert {"csv", "rest", "database", "mqtt", "opcua", "bacnet"} <= connector_types
+    assert {
+        "csv",
+        "rest",
+        "database",
+        "mqtt",
+        "opcua",
+        "bacnet",
+        "pentair",
+        "hayward",
+        "modbus",
+        "nodered",
+        "bas_bms",
+    } <= connector_types
 
 
 def test_csv_connector_upload_normalizes_records_and_updates_health(tmp_path) -> None:

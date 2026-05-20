@@ -4,7 +4,17 @@ from typing import Any
 
 from app.connectors.csv_connector import CSVConnector
 from app.connectors.models import ConnectorDescriptor
-from app.connectors.placeholders import BACnetConnector, DatabaseConnector, MQTTConnector, OPCUAConnector
+from app.connectors.placeholders import (
+    BACnetConnector,
+    BASBMSConnector,
+    DatabaseConnector,
+    HaywardConnector,
+    MQTTConnector,
+    ModbusConnector,
+    NodeRedConnector,
+    OPCUAConnector,
+    PentairConnector,
+)
 from app.connectors.rest_connector import RESTConnector
 
 CONNECTOR_CLASSES = {
@@ -14,6 +24,11 @@ CONNECTOR_CLASSES = {
     "mqtt": MQTTConnector,
     "opcua": OPCUAConnector,
     "bacnet": BACnetConnector,
+    "pentair": PentairConnector,
+    "hayward": HaywardConnector,
+    "modbus": ModbusConnector,
+    "nodered": NodeRedConnector,
+    "bas_bms": BASBMSConnector,
 }
 
 
@@ -63,6 +78,41 @@ def build_connector_descriptors() -> list[ConnectorDescriptor]:
             display_name="BACnet / BMS",
             functional=False,
             description="Scaffold for building management telemetry ingestion.",
+            supports_streaming=True,
+        ),
+        ConnectorDescriptor(
+            connector_type="pentair",
+            display_name="Pentair",
+            functional=False,
+            description="Read-only adapter scaffold for Pentair telemetry ingestion.",
+            supports_streaming=True,
+        ),
+        ConnectorDescriptor(
+            connector_type="hayward",
+            display_name="Hayward",
+            functional=False,
+            description="Read-only adapter scaffold for Hayward telemetry ingestion.",
+            supports_streaming=True,
+        ),
+        ConnectorDescriptor(
+            connector_type="modbus",
+            display_name="Modbus",
+            functional=False,
+            description="Read-only adapter scaffold for Modbus telemetry ingestion.",
+            supports_streaming=True,
+        ),
+        ConnectorDescriptor(
+            connector_type="nodered",
+            display_name="Node-RED",
+            functional=False,
+            description="Read-only adapter scaffold for Node-RED telemetry ingestion.",
+            supports_streaming=True,
+        ),
+        ConnectorDescriptor(
+            connector_type="bas_bms",
+            display_name="BAS / BMS",
+            functional=False,
+            description="Read-only adapter scaffold for BAS/BMS telemetry ingestion.",
             supports_streaming=True,
         ),
     ]

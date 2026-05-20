@@ -3,13 +3,13 @@ export const WORKSPACES = [
     id: "system-body",
     label: "Structural State",
     eyebrow: "Operator View",
-    description: "Primary infrastructure condition, escalation direction, and operational focus.",
+    description: "Primary aquatic infrastructure condition, escalation direction, and operational focus.",
   },
   {
     id: "data-connections",
-    label: "Historian Setup",
+    label: "Telemetry Setup",
     eyebrow: "Intake",
-    description: "Configure read-only historian intake and upload pilot telemetry.",
+    description: "Configure read-only telemetry intake and upload aquatic pilot telemetry.",
   },
   {
     id: "historical-replay",
@@ -27,28 +27,28 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "HVAC",
-    scope: "Room temperature control, equipment activity, and zone balancing.",
+    name: "Circulation",
+    scope: "Hydraulic flow continuity, pump behavior, and pressure response.",
   },
   {
-    name: "Humidity control",
-    scope: "Dehumidification, humidification, and moisture stability.",
+    name: "Filtration",
+    scope: "Filter pressure, flow resistance, and cycle stability.",
   },
   {
-    name: "Airflow",
-    scope: "Circulation, pressure movement, and room exchange behavior.",
+    name: "Thermal control",
+    scope: "Pool/spa thermal stability and heater response windows.",
   },
   {
-    name: "Irrigation",
-    scope: "Irrigation timing, cycle review, and environmental response context.",
+    name: "Water chemistry",
+    scope: "ORP/pH/feed coupling and chemistry behavior over time.",
   },
   {
-    name: "Lighting",
-    scope: "Photoperiod windows, fixture response, and environmental coupling.",
+    name: "Hydraulic routing",
+    scope: "Valve path changes and distribution consistency.",
   },
   {
-    name: "Sensor network",
-    scope: "Room sensors, gateway exports, and telemetry continuity.",
+    name: "Operational context",
+    scope: "Occupancy, ambient heat, and overnight stabilization context.",
   },
 ];
 

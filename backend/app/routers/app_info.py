@@ -7,10 +7,10 @@ router = APIRouter(tags=["app"])
 def read_app_metadata() -> dict[str, str]:
     return {
         "name": "Neraium",
-        "subtitle": "Environmental drift intelligence for cannabis grow facilities",
+        "subtitle": "Operational relationship intelligence for hospitality aquatic infrastructure",
         "description": (
-            "Neraium helps cannabis cultivation teams detect and explain "
-            "environmental drift before it becomes visible crop stress."
+            "Neraium helps resort pool and spa operations teams detect and explain "
+            "persistent relationship instability across telemetry domains."
         ),
         "environment": "development",
         "version": "0.1.0",

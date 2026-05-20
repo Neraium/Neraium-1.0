@@ -3,24 +3,24 @@ import React, { useMemo } from "react";
 const BASE_NODES = [
   { id: "baseline", label: "Baseline", x: 118, y: 190, group: "anchor" },
   { id: "thermal", label: "Thermal", x: 250, y: 116, group: "environment" },
-  { id: "humidity", label: "Humidity", x: 428, y: 142, group: "environment" },
-  { id: "airflow", label: "Airflow", x: 602, y: 202, group: "propagation" },
-  { id: "irrigation", label: "Irrigation", x: 522, y: 344, group: "support" },
-  { id: "canopy", label: "Canopy", x: 334, y: 382, group: "support" },
+  { id: "chemistry", label: "Chemistry", x: 428, y: 142, group: "environment" },
+  { id: "flow", label: "Flow", x: 602, y: 202, group: "propagation" },
+  { id: "filtration", label: "Filtration", x: 522, y: 344, group: "support" },
+  { id: "occupancy", label: "Occupancy", x: 334, y: 382, group: "support" },
   { id: "operator", label: "Recovery", x: 172, y: 318, group: "recovery" },
 ];
 
 const LINKS = [
   ["baseline", "thermal"],
-  ["thermal", "humidity"],
-  ["humidity", "airflow"],
-  ["airflow", "irrigation"],
-  ["irrigation", "canopy"],
-  ["canopy", "operator"],
+  ["thermal", "chemistry"],
+  ["chemistry", "flow"],
+  ["flow", "filtration"],
+  ["filtration", "occupancy"],
+  ["occupancy", "operator"],
   ["operator", "baseline"],
-  ["thermal", "canopy"],
-  ["humidity", "canopy"],
-  ["airflow", "operator"],
+  ["thermal", "occupancy"],
+  ["chemistry", "occupancy"],
+  ["flow", "operator"],
 ];
 
 function clamp(value, min, max) {

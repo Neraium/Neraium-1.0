@@ -52,3 +52,28 @@ class OPCUAConnector(PlaceholderConnector):
 class BACnetConnector(PlaceholderConnector):
     connector_type = "bacnet"
     display_name = "BACnet / BMS"
+
+
+class PentairConnector(PlaceholderConnector):
+    connector_type = "pentair"
+    display_name = "Pentair"
+
+
+class HaywardConnector(PlaceholderConnector):
+    connector_type = "hayward"
+    display_name = "Hayward"
+
+
+class ModbusConnector(PlaceholderConnector):
+    connector_type = "modbus"
+    display_name = "Modbus"
+
+
+class NodeRedConnector(PlaceholderConnector):
+    connector_type = "nodered"
+    display_name = "Node-RED"
+
+
+class BASBMSConnector(PlaceholderConnector):
+    connector_type = "bas_bms"
+    display_name = "BAS / BMS"

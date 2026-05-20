@@ -229,9 +229,9 @@
 }
 
 .system-body--gate {
-  max-width: min(1280px, 100vw);
+  max-width: 100vw;
   margin: 0 auto;
-  min-height: calc(100dvh - 20px);
+  min-height: 100dvh;
 }
 
 .platform-shell--gate {
@@ -247,14 +247,14 @@
 }
 
 .workspace-view--system-body {
-  min-height: 100svh;
-  padding: clamp(10px, 2vw, 18px);
+  min-height: 100dvh;
+  padding: clamp(6px, 1.2vw, 14px);
   overflow: hidden;
 }
 
 .system-gate {
   position: relative;
-  min-height: calc(100dvh - 32px);
+  min-height: calc(100dvh - 12px);
   height: 100%;
   border: 1px solid rgba(177, 190, 198, 0.08);
   border-radius: clamp(20px, 4vw, 32px);
@@ -322,7 +322,7 @@
 
 .system-gate__center .system-body-orb-panel {
   min-height: clamp(420px, 64vh, 720px);
-  width: clamp(360px, 38vw, 760px);
+  width: clamp(420px, 74vw, 1200px);
   max-width: calc(100vw - 44px);
   border: 0;
   background: transparent;

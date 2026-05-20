@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neraium.local/schemas/commercial_aquatic_telemetry.schema.json",
+  "title": "CommercialAquaticTelemetryRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "timestamp",
+    "orp",
+    "ph",
+    "pool_temperature",
+    "spa_temperature",
+    "flow_rate",
+    "filter_pressure",
+    "pump_amperage",
+    "pump_runtime",
+    "heater_runtime",
+    "sanitizer_feed_rate",
+    "water_level",
+    "valve_states",
+    "occupancy_estimate",
+    "ambient_temperature"
+  ],
+  "properties": {
+    "timestamp": { "type": "string", "format": "date-time" },
+    "orp": { "type": "number" },
+    "ph": { "type": "number" },
+    "pool_temperature": { "type": "number" },
+    "spa_temperature": { "type": "number" },
+    "flow_rate": { "type": "number" },
+    "filter_pressure": { "type": "number" },
+    "pump_amperage": { "type": "number" },
+    "pump_runtime": { "type": "number" },
+    "heater_runtime": { "type": "number" },
+    "sanitizer_feed_rate": { "type": "number" },
+    "water_level": { "type": "number" },
+    "valve_states": { "type": "string" },
+    "occupancy_estimate": { "type": "number" },
+    "ambient_temperature": { "type": "number" }
+  }
+}
