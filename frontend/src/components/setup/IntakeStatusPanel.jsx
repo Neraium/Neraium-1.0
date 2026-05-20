@@ -28,6 +28,7 @@ export default function IntakeStatusPanel({
   const eventMemory = adaptiveLearning?.event_memory ?? {};
   const feedbackHistory = eventMemory?.recent_feedback_history ?? [];
   const feedbackOptions = adaptiveLearning?.operator_feedback_options ?? [];
+  const hasFeedbackData = feedbackHistory.length > 0 || Boolean(latestRunId);
   const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) : "No Active Session";
   const learningStatus = adaptiveLearning?.learning_status ?? "warming_up";
   const baselineAge = adaptiveBaseline?.baseline_age?.label ?? "Unavailable";
@@ -80,28 +81,30 @@ export default function IntakeStatusPanel({
           </div>
         </Panel>
       )}
-      <Panel title="Operator Feedback History" className="span-6 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
-        <CompactList
-          items={feedbackHistory.map((item) => `${item.feedback_category ?? item.category ?? "feedback"}${item.feedback_recorded_at ? ` at ${item.feedback_recorded_at}` : ""}`)}
-          emptyText="No operator feedback recorded yet."
-        />
-        {latestRunId && typeof onOperatorFeedback === "function" ? (
-          <div className="intake-flow__controls">
-            {feedbackOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={feedbackState?.category === option && feedbackState?.status === "submitting" ? "command-button" : "secondary-command-button"}
-                onClick={() => onOperatorFeedback(option)}
-                disabled={feedbackState?.status === "submitting"}
-              >
-                {labelFeedbackOption(option)}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {feedbackState?.message ? <p className="narrative-text">{feedbackState.message}</p> : null}
-      </Panel>
+      {hasFeedbackData ? (
+        <Panel title="Operator Feedback History" className="span-6 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+          <CompactList
+            items={feedbackHistory.map((item) => `${item.feedback_category ?? item.category ?? "feedback"}${item.feedback_recorded_at ? ` at ${item.feedback_recorded_at}` : ""}`)}
+            emptyText="No operator feedback recorded yet."
+          />
+          {latestRunId && typeof onOperatorFeedback === "function" ? (
+            <div className="intake-flow__controls">
+              {feedbackOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={feedbackState?.category === option && feedbackState?.status === "submitting" ? "command-button" : "secondary-command-button"}
+                  onClick={() => onOperatorFeedback(option)}
+                  disabled={feedbackState?.status === "submitting"}
+                >
+                  {labelFeedbackOption(option)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {feedbackState?.message ? <p className="narrative-text">{feedbackState.message}</p> : null}
+        </Panel>
+      ) : null}
     </>
   );
 }
