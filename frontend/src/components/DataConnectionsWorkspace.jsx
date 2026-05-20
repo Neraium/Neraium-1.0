@@ -102,7 +102,7 @@ export default function DataConnectionsWorkspace({
 }) {
   const tabs = useMemo(() => [
     { id: "connect-live", label: "Setup" },
-    { id: "upload", label: "Upload Data" },
+    { id: "upload", label: "Upload" },
   ], []);
 
   const [selectedFiles, setSelectedFiles] = useState([]);

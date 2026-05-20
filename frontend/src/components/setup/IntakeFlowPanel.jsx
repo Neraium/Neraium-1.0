@@ -58,17 +58,17 @@ export default function IntakeFlowPanel({
           <div className="intake-flow__header">
             <div>
               <p className="section-token">Telemetry Intake</p>
-              <h3>Upload and Process</h3>
+              <h3>Upload</h3>
             </div>
-            <p>Upload CSV or JSON telemetry and start read-only analysis.</p>
+            <p>CSV or JSON only. Processing remains read-only.</p>
           </div>
           <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
               <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Choose CSV or JSON telemetry export."}</p>
-              <p>{uploadReadinessMessage(selectedFiles?.[0] ?? null)}</p>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Choose a telemetry file to continue."}</p>
+              <p className="upload-file-card__note">{uploadReadinessMessage(selectedFiles?.[0] ?? null)}</p>
             </div>
             <div className="upload-file-card__actions">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>

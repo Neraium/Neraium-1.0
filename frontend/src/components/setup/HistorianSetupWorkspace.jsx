@@ -23,62 +23,76 @@ export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = nul
     () => [
       {
         id: "required-info",
-        label: "Connection Info",
+        label: "Connection",
         render: () => (
           <Panel title="Required Connection Info" className="span-12 workspace-hero-panel">
-            <p className="narrative-text">Enter only the required fields to start ingesting telemetry.</p>
-            <div className="intake-flow__controls" style={{ display: "grid", gap: 10 }}>
-              <input
-                aria-label="Source type"
-                placeholder="Source type (Historian, API, BMS/BAS)"
-                value={connection.sourceType}
-                onChange={(event) => setConnection((current) => ({ ...current, sourceType: event.target.value }))}
-              />
-              <input
-                aria-label="Endpoint"
-                placeholder="Host / endpoint"
-                value={connection.endpoint}
-                onChange={(event) => setConnection((current) => ({ ...current, endpoint: event.target.value }))}
-              />
+            <p className="narrative-text">Add source type and endpoint, then continue.</p>
+            <div className="setup-grid">
+              <label>
+                <span>Source Type</span>
+                <input
+                  aria-label="Source type"
+                  placeholder="Historian, API, BMS/BAS"
+                  value={connection.sourceType}
+                  onChange={(event) => setConnection((current) => ({ ...current, sourceType: event.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Endpoint</span>
+                <input
+                  aria-label="Endpoint"
+                  placeholder="Host / endpoint"
+                  value={connection.endpoint}
+                  onChange={(event) => setConnection((current) => ({ ...current, endpoint: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="intake-flow__controls">
               <button
                 type="button"
                 className="secondary-command-button"
                 onClick={() => setShowAdvanced((current) => !current)}
                 aria-expanded={showAdvanced}
               >
-                {showAdvanced ? "Hide Advanced" : "Show Advanced"}
+                {showAdvanced ? "Hide Optional Fields" : "Show Optional Fields"}
               </button>
-              {showAdvanced ? (
-                <>
-              <input
-                aria-label="Authentication"
-                placeholder="Auth method (token/basic/service account)"
-                value={connection.authMethod}
-                onChange={(event) => setConnection((current) => ({ ...current, authMethod: event.target.value }))}
-              />
-              <input
-                aria-label="Polling interval"
-                placeholder="Polling interval in minutes"
-                value={connection.pollingMinutes}
-                onChange={(event) => setConnection((current) => ({ ...current, pollingMinutes: event.target.value }))}
-              />
-                </>
-              ) : null}
             </div>
+            {showAdvanced ? (
+              <div className="setup-grid">
+                <label>
+                  <span>Authentication</span>
+                  <input
+                    aria-label="Authentication"
+                    placeholder="Token, basic, service account"
+                    value={connection.authMethod}
+                    onChange={(event) => setConnection((current) => ({ ...current, authMethod: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span>Polling Interval (min)</span>
+                  <input
+                    aria-label="Polling interval"
+                    placeholder="5"
+                    value={connection.pollingMinutes}
+                    onChange={(event) => setConnection((current) => ({ ...current, pollingMinutes: event.target.value }))}
+                  />
+                </label>
+              </div>
+            ) : null}
           </Panel>
         ),
       },
       {
         id: "signal-mapping",
-        label: "Signal Mapping",
+        label: "Mapping",
         render: () => <TagMappingPanel rows={tagMapRows} />,
       },
       {
         id: "quick-verify",
-        label: "Quick Verify",
+        label: "Verify",
         render: () => (
           <Panel title="Quick Verify" className="span-12">
-            <p className="narrative-text">Run one read-only check, then finish setup.</p>
+            <p className="narrative-text">Run one read-only check, then finish.</p>
             <div className="intake-flow__controls">
               <button
                 type="button"
@@ -147,6 +161,16 @@ export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = nul
         <p className="narrative-text" data-testid="onboarding-step-title">
           Step {activeStepIndex + 1} of {steps.length}: {activeStep.label}
         </p>
+        <div className="setup-stepper" aria-hidden="true">
+          {steps.map((step, index) => (
+            <span
+              key={step.id}
+              className={index === activeStepIndex ? "is-active" : index < activeStepIndex ? "is-complete" : ""}
+            >
+              {index + 1}
+            </span>
+          ))}
+        </div>
         <div className="intake-flow__controls">
           <button
             type="button"
