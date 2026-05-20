@@ -1,11 +1,9 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
-import { normalizeOperationalState } from "../viewModels/operationalUiState";
-import {
-  ESCALATION_LAYERS,
-  LIFECYCLE_RAIL_ACTIVE_BASE,
-  LIFECYCLE_RAIL_NEUTRAL,
-} from "../viewModels/operationalVocabulary";
+import { normalizeOperationalState } from "../viewModels/operationalUiState"; 
+import { 
+  ESCALATION_LAYERS, 
+} from "../viewModels/operationalVocabulary"; 
 import { EMPTY_VALUE } from "../viewModels/emptyValue";
 
 const FALLBACK_STATE = {
@@ -13,14 +11,7 @@ const FALLBACK_STATE = {
   description: "Telemetry baseline is still forming. Evidence remains insufficient for structural classification.",
 };
 
-const STRUCTURAL_PHASES = [
-  { label: "Phase 1 - Initial Deviation", description: "Relationship variance detected outside baseline behavior." },
-  { label: "Phase 2 - Persistence Confirmation", description: "Repeated multi-window corroboration observed." },
-  { label: "Phase 3 - Drift Expansion", description: "Relationship instability propagating across adjacent telemetry groups." },
-  { label: "Phase 4 - Structural Instability", description: "Persistent relational divergence exceeding baseline containment." },
-  { label: "Phase 5 - Escalation Candidate", description: "Subsystem-level propagation and recovery degradation observed." },
-];
-export default function SystemTopologyWorkspace({
+export default function SystemTopologyWorkspace({ 
   liveOps,
   selectedTarget,
   onSelectTarget,
@@ -46,8 +37,6 @@ export default function SystemTopologyWorkspace({
     : (governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
-  const findings = liveOps.findings?.slice(0, 2) ?? [];
-
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce(
       (sum, row) => sum + Math.abs(Number(row.pair_weight ?? row.change ?? 0)),
@@ -260,10 +249,6 @@ function statusLightFromAdmitted(admittedState, hasPass) {
   return "gray";
 }
 
-function showEvpForAdmitted(admittedState) {
-  return admittedState === "WATCH" || admittedState === "ALERT";
-}
-
 function orbStateFromStatusLight(statusLight) {
   if (statusLight === "yellow") return "watching";
   if (statusLight === "red") return "propagation_active";
@@ -320,23 +305,6 @@ function deriveEscalationLayer({ awaitingSii, uiState, liveOps }) {
   return 2;
 }
 
-function buildLifecycleRail({ awaitingSii, layer }) {
-  if (awaitingSii) return LIFECYCLE_RAIL_NEUTRAL;
-  return LIFECYCLE_RAIL_ACTIVE_BASE.map((item) => ({
-    label: item.label,
-    status: item.level < layer ? "Confirmed" : item.level === layer ? "Active" : "Standby",
-  }));
-}
-
-function buildStructuralProgressionItems(layer) {
-  const count = Math.min(Math.max(layer, 4), 5);
-  return STRUCTURAL_PHASES.slice(0, count).map((phase, index) => ({
-    label: phase.label,
-    value: phase.description,
-    state: index + 1 <= layer ? "warning" : "neutral",
-  }));
-}
-
 function buildOrbData(liveOps, primaryItem, coherence, layer) {
   const instabilityDensity = Math.round((1 - Math.max(0, Math.min(1, coherence))) * 100);
   const evidenceConfidence = Number(primaryItem?.confidence ?? liveOps.primaryWindow?.confidence ?? 0);
@@ -367,14 +335,3 @@ function concise(value, max = 80) {
   return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
 }
 
-function deriveOrbOperationalState({ awaitingSii, layer, liveOps, primaryItem }) {
-  if (awaitingSii) return "unknown";
-  const convergenceSignal = String(primaryItem?.recoveryConvergence ?? liveOps.primaryWindow?.recoveryConvergence ?? liveOps.heroSubline ?? "").toLowerCase();
-  if (convergenceSignal.includes("recover") || convergenceSignal.includes("convergen") || convergenceSignal.includes("stabiliz")) {
-    return "recovery";
-  }
-  if (layer >= 7) return "propagation_active";
-  if (layer >= 5) return "drift";
-  if (layer >= 3) return "watching";
-  return "stable";
-}

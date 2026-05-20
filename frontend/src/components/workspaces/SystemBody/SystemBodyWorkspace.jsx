@@ -43,11 +43,7 @@ export default function SystemBodyWorkspace({
   const hasAdmittedFinding = statusLight !== "gray";
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
 
-  const operatorFocus =
-    narrativeItems?.find((item) => item.label?.toLowerCase().includes("operator"))?.value
-    || EMPTY_VALUE;
-
-    function openWorkspace(workspaceId) {
+    function openWorkspace(workspaceId) { 
       if (settingsBusy) return;
       if (typeof onWorkspaceNavigate === "function") {
         onWorkspaceNavigate(workspaceId);

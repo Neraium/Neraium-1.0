@@ -26,6 +26,7 @@ function App() {
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
   const [guidedDemo, setGuidedDemo] = useState({ active: false, isPlaying: false, stepIndex: 0, elapsedMs: 0 });
   const [demoDataConnectionsTab, setDemoDataConnectionsTab] = useState(null);
+  const [appReady, setAppReady] = useState(false);
 
   const {
     apiStatus,
@@ -222,6 +223,17 @@ function App() {
   }, [effectiveSessionIntent]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute("data-domain-mode", domainMode || "aquatic");
+  }, [domainMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setAppReady(true);
+    window.__NERAIUM_APP_READY__ = true;
+  }, []);
+
+  useEffect(() => {
     if (!guidedDemo.active || !guidedDemo.isPlaying) return;
     const timer = window.setInterval(() => {
       setGuidedDemo((current) => {
@@ -265,6 +277,7 @@ function App() {
 
   if (activeWorkspace === "data-connections") {
     return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <DataConnectionsWorkspace
         accessCode={accessCode}
         apiFetch={apiFetch}
@@ -288,11 +301,13 @@ function App() {
         onNextDemoStep={() => gotoGuidedDemoStep(guidedDemo.stepIndex + 1)}
         onRestartDemo={restartGuidedDemo}
       />
+      </div>
     );
   }
 
   if (activeWorkspace === "historical-replay") {
     return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <StructuralReplayWorkspace
         apiFetch={apiFetch}
         accessCode={accessCode}
@@ -311,11 +326,13 @@ function App() {
         onReplayFrameChange={handleReplayFrameChange}
         onReplayModeChange={handleReplayModeChange}
       />
+      </div>
     );
   }
 
   if (activeWorkspace === "governance-admin") {
     return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <GovernanceAdminWorkspace
         apiFetch={apiFetch}
         accessCode={accessCode}
@@ -323,10 +340,12 @@ function App() {
         EmptyState={EmptyState}
         onBackToGate={() => setActiveWorkspace("system-body")}
       />
+      </div>
     );
   }
 
   return (
+    <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
     <SystemTopologyWorkspace
       liveOps={historianReplayState.enabled && historianReplayState.frame
         ? { ...liveOps, ...historianReplayState.frame }
@@ -340,6 +359,7 @@ function App() {
       domainMode={domainMode}
       onDomainModeChange={setDomainMode}
     />
+    </div>
   );
 }
 

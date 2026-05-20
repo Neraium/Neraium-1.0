@@ -41,7 +41,8 @@ test.describe("Domain mode wiring", () => {
       await route.continue();
     });
 
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     await openSettings(page);
 
     const toCultivation = page.getByRole("button", { name: "Switch to cultivation mode" });

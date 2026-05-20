@@ -256,10 +256,10 @@
   position: relative;
   min-height: calc(100dvh - 12px);
   height: 100%;
-  border: 1px solid rgba(177, 190, 198, 0.08);
+  border: 1px solid rgba(var(--mode-accent-soft-rgb), 0.14);
   border-radius: clamp(20px, 4vw, 32px);
   background:
-    radial-gradient(circle at 50% 44%, rgba(154, 163, 173, 0.048), transparent 34%),
+    radial-gradient(circle at 50% 44%, var(--mode-bg-tint), transparent 34%),
     linear-gradient(180deg, rgba(9, 13, 16, 0.995), rgba(4, 7, 9, 0.98));
   overflow: hidden;
   isolation: isolate;
@@ -389,7 +389,7 @@
   top: 14px;
   right: 14px;
   z-index: 3;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--mode-accent-soft-rgb), 0.28);
   border-radius: 999px;
   background: rgba(9, 13, 16, 0.62);
   color: rgba(228, 236, 236, 0.72);

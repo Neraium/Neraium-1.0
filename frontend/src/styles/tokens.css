@@ -34,4 +34,20 @@
   --surface-padding-tight: var(--space-14);
   --surface-gap: var(--space-14);
   --surface-gap-wide: var(--space-20);
+  --mode-accent-rgb: 108, 186, 156;
+  --mode-accent-soft-rgb: 138, 184, 196;
+  --mode-bg-tint: rgba(108, 186, 156, 0.08);
+  --mode-label: "aquatic";
+}
+
+:root[data-domain-mode="aquatic"] {
+  --mode-accent-rgb: 108, 186, 156;
+  --mode-accent-soft-rgb: 138, 184, 196;
+  --mode-bg-tint: rgba(108, 186, 156, 0.08);
+}
+
+:root[data-domain-mode="cultivation"] {
+  --mode-accent-rgb: 200, 160, 106;
+  --mode-accent-soft-rgb: 190, 150, 98;
+  --mode-bg-tint: rgba(200, 160, 106, 0.08);
 }

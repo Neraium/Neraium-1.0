@@ -69,8 +69,8 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
         render: () => <BaselineWindowPanel />,
       },
     ],
-    [tagMapRows],
-  );
+    [connectionTestState, tagMapRows], 
+  ); 
 
   const activeStep = steps[activeStepIndex] ?? steps[0];
   const isFirstStep = activeStepIndex === 0;

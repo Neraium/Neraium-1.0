@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 async function openGate(page, viewport) {
   await page.setViewportSize(viewport);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await expect(page.getByRole("button", { name: "Open Gate settings" })).toBeVisible();
 }
 

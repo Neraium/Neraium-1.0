@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -15,6 +16,13 @@ from replay.structural_replay_engine import StructuralReplayEngine
 
 router = APIRouter(tags=["replay"], dependencies=[Depends(require_api_access)])
 _engine = StructuralReplayEngine()
+MAX_INTERVALS_BY_SOURCE = {
+    "sample": 72,
+    "uploaded": 120,
+    "rest_poll": 96,
+}
+_TIMELINE_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
+_MAX_CACHE_ITEMS = 10
 
 
 @router.get("/replay/timeline")
@@ -33,6 +41,16 @@ def replay_timeline(
     if mode == "aquatic_demo":
         return build_aquatic_demo_replay_payload(intervals=intervals)
     intelligence = current_intelligence()
+    bounded_intervals = min(intervals, max_intervals_for_intelligence(intelligence))
+    cache_key = cache_key_for_timeline(
+        intelligence=intelligence,
+        mode=mode,
+        intervals=bounded_intervals,
+        replay_compression=replay_compression,
+    )
+    cached = read_timeline_cache(cache_key)
+    if cached is not None:
+        return cached
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
     if isinstance(persisted_timeline, list) and persisted_timeline:
@@ -42,14 +60,16 @@ def replay_timeline(
             "source": intelligence.get("source", "uploaded"),
             "facility_state": intelligence.get("facility_state"),
         }
+        write_timeline_cache(cache_key, payload)
         return payload
     payload = _engine.build_timeline(
         intelligence=intelligence,
-        intervals=intervals,
+        intervals=bounded_intervals,
         replay_compression=replay_compression,
     )
     payload["source"] = intelligence.get("source", "sample")
     payload["facility_state"] = intelligence.get("facility_state")
+    write_timeline_cache(cache_key, payload)
     return payload
 
 
@@ -137,3 +157,40 @@ def current_intelligence() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
     return intelligence or build_sample_intelligence()
+
+
+def max_intervals_for_intelligence(intelligence: dict[str, Any]) -> int:
+    source = str(intelligence.get("source") or "sample")
+    return MAX_INTERVALS_BY_SOURCE.get(source, 96)
+
+
+def cache_key_for_timeline(
+    *,
+    intelligence: dict[str, Any],
+    mode: str,
+    intervals: int,
+    replay_compression: int,
+) -> str:
+    marker = (
+        intelligence.get("last_processed_at")
+        or intelligence.get("last_updated")
+        or intelligence.get("filename")
+        or "no-marker"
+    )
+    source = intelligence.get("source", "sample")
+    return f"{source}|{marker}|{mode}|{intervals}|{replay_compression}"
+
+
+def read_timeline_cache(key: str) -> dict[str, Any] | None:
+    payload = _TIMELINE_CACHE.get(key)
+    if payload is None:
+        return None
+    _TIMELINE_CACHE.move_to_end(key)
+    return payload
+
+
+def write_timeline_cache(key: str, payload: dict[str, Any]) -> None:
+    _TIMELINE_CACHE[key] = payload
+    _TIMELINE_CACHE.move_to_end(key)
+    while len(_TIMELINE_CACHE) > _MAX_CACHE_ITEMS:
+        _TIMELINE_CACHE.popitem(last=False)

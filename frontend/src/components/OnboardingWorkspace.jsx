@@ -156,11 +156,6 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
     setFlow((current) => ({ ...current, api: { ...current.api, [field]: value } }));
   }
 
-  function nextStep() {
-    if (!canContinue) return;
-    updateFlow({ step: Math.min(flow.step + 1, STEPS.length - 1) });
-  }
-
   function prevStep() {
     updateFlow({ step: Math.max(flow.step - 1, 0) });
   }

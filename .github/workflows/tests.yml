@@ -24,7 +24,6 @@ jobs:
       - name: Run backend tests
         run: |
           PYTHONPATH=./backend pytest tests/ -v --tb=short
-        continue-on-error: true
       - name: Run linters
         run: |
           pip install pylint flake8
@@ -49,7 +48,7 @@ jobs:
           cd frontend && npm run build
       - name: Lint frontend
         run: |
-          cd frontend && npm run lint || true
+          cd frontend && npm run lint:ci
 
   docker:
     runs-on: ubuntu-latest

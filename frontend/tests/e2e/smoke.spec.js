@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test.describe("Neraium frontend smoke", () => {
   test("loads operator shell", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
     await expect(settingsButton).toBeVisible();
@@ -14,7 +15,8 @@ test.describe("Neraium frontend smoke", () => {
   test("mobile settings opens and closes", async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
     await expect(settingsButton).toBeVisible();
