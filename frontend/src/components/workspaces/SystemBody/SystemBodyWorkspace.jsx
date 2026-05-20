@@ -43,14 +43,15 @@ export default function SystemBodyWorkspace({
   const hasAdmittedFinding = statusLight !== "gray";
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
 
-    function openWorkspace(workspaceId) { 
-      if (settingsBusy) return;
-      if (typeof onWorkspaceNavigate === "function") {
-        onWorkspaceNavigate(workspaceId);
-      }
-      setSettingsOpen(false);
-      setAdvancedOpen(false);
+  function openWorkspace(workspaceId) {
+    if (settingsBusy) return;
+    if (typeof onWorkspaceNavigate === "function") {
+      onWorkspaceNavigate(workspaceId);
     }
+    setSettingsOpen(false);
+    setAdvancedOpen(false);
+    setDetailOpen(false);
+  }
 
   async function switchDomainMode(nextMode) {
     if (settingsBusy || typeof onDomainModeChange !== "function" || !nextMode || nextMode === domainMode) return;
@@ -77,12 +78,25 @@ export default function SystemBodyWorkspace({
               </span>
             ) : null}
           </div>
-          <button type="button" className="system-gate__settings" aria-label="Open Gate settings" onClick={() => setSettingsOpen((v) => !v)}>
-            SET
+          <button
+            type="button"
+            className="system-gate__settings"
+            aria-label="Open Gate settings"
+            onClick={() => {
+              setSettingsOpen((v) => !v);
+              setDetailOpen(false);
+            }}
+          >
+            MENU
           </button>
-          <div className="system-gate__center" role="button" tabIndex={0} onClick={() => hasAdmittedFinding && setDetailOpen(true)} onKeyDown={(event) => {
+          <div className="system-gate__center" role="button" tabIndex={0} onClick={() => {
+            if (!hasAdmittedFinding) return;
+            setSettingsOpen(false);
+            setDetailOpen(true);
+          }} onKeyDown={(event) => {
             if ((event.key === "Enter" || event.key === " ") && hasAdmittedFinding) {
               event.preventDefault();
+              setSettingsOpen(false);
               setDetailOpen(true);
             }
           }}>
@@ -93,12 +107,12 @@ export default function SystemBodyWorkspace({
               stateLabel={stateLabel}
               lastUpdate={lastUpdate}
               focusLabel={focusLabel}
-              orbData={null}
+              orbData={orbData}
               compactPreview
             />
             <p className="system-gate__state">{renderGateStateLabel(stateLabel, statusLight)}</p>
             <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
-            {hasAdmittedFinding ? <p className="system-gate__inspect">Tap to Inspect</p> : null}
+            {hasAdmittedFinding ? <p className="system-gate__inspect">Inspect Details</p> : null}
           </div>
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
@@ -170,6 +184,9 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
   if (text.includes("offline") || text.includes("disconnected")) {
     return { label: "Offline", tone: "offline" };
+  }
+  if (text.includes("awaiting") || text.includes("pending")) {
+    return { label: "Awaiting telemetry", tone: "syncing" };
   }
   if (text.includes("replay")) {
     return { label: "Replay running", tone: "syncing" };
