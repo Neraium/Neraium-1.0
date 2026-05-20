@@ -128,11 +128,10 @@ export default function useFacilityRuntime({
       setLatestUploadResult(payload.latestResult);
       return Boolean(payload.latestResult);
     } catch {
-      setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
-      setLatestUploadResult(null);
-      return false;
+      // Preserve the most recent known upload session on transient failures so refreshes do not clear state.
+      return Boolean(latestUploadResult);
     }
-  }, [accessCode, allowPersistedLatest, hasAccess]);
+  }, [accessCode, allowPersistedLatest, hasAccess, latestUploadResult]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");

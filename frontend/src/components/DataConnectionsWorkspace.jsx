@@ -21,6 +21,13 @@ import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const DATA_CONNECTIONS_TAB_STORAGE_KEY = "neraium.data_connections.active_tab";
+
+function readStoredDataConnectionsTab() {
+  if (typeof window === "undefined") return "connect-live";
+  const value = window.localStorage.getItem(DATA_CONNECTIONS_TAB_STORAGE_KEY);
+  return value === "connect-live" || value === "upload" ? value : "connect-live";
+}
 
 function formatTransferSpeed(bytesPerSecond) {
   if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "measuring speed";
@@ -105,7 +112,7 @@ export default function DataConnectionsWorkspace({
   ], []);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [activeTab, setActiveTab] = useState("connect-live");
+  const [activeTab, setActiveTab] = useState(() => readStoredDataConnectionsTab());
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState("idle");
   const [uploadError, setUploadError] = useState("");
@@ -176,6 +183,11 @@ export default function DataConnectionsWorkspace({
     }
     setActiveTab("connect-live");
   }, [demoTabId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(DATA_CONNECTIONS_TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
