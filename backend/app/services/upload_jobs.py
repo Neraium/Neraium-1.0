@@ -37,6 +37,7 @@ from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.operator_report import build_operator_report
 from app.services.runtime_db import (
     claim_next_upload_job,
+    clear_upload_runtime_tables,
     complete_upload_queue_job,
     enqueue_upload_job,
     list_upload_jobs,
@@ -1309,7 +1310,7 @@ def latest_completed_job_summary() -> dict[str, Any] | None:
     return result_summary
 
 
-def reset_latest_upload_state() -> None: 
+def reset_latest_upload_state(*, purge_job_records: bool = False) -> None: 
     """Clear persisted latest upload summary/result/history for runtime reset flows."""
     ensure_runtime_dirs()
     upsert_latest_payload("latest_upload_reset_at", now_iso()) 
@@ -1318,6 +1319,17 @@ def reset_latest_upload_state() -> None:
     LATEST_UPLOAD_CACHE["summary"] = None
     LATEST_UPLOAD_CACHE["result"] = None
     atomic_write_json_list(latest_upload_history_path(), [])
+    if purge_job_records:
+        clear_upload_runtime_tables()
+        for directory in (UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR):
+            if not directory.exists():
+                continue
+            for child in directory.iterdir():
+                try:
+                    if child.is_file():
+                        child.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("latest_upload_state_reset_job_cleanup_failed path=%s", child)
     for path in (latest_upload_path(), latest_upload_result_path()):
         try:
             path.unlink(missing_ok=True)

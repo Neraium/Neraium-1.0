@@ -11,7 +11,7 @@ function initialConnection() {
   };
 }
 
-export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = null }) {
+export default function HistorianSetupWorkspace({ tagMapRows }) {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [connection, setConnection] = useState(initialConnection);
   const [connectionTestState, setConnectionTestState] = useState("idle");
@@ -118,19 +118,14 @@ export default function HistorianSetupWorkspace({ tagMapRows, onOpenUpload = nul
             ) : null}
             {isSetupComplete ? (
               <div className="intake-flow__controls" style={{ alignItems: "flex-start", flexDirection: "column", gap: 8 }}>
-                <p className="narrative-text">Setup complete. Continue to upload telemetry data.</p>
-                {typeof onOpenUpload === "function" ? (
-                  <button type="button" className="command-button" onClick={onOpenUpload}>
-                    Go to Upload
-                  </button>
-                ) : null}
+                <p className="narrative-text">Setup complete. Continue in the Upload tab to submit CSV or JSON telemetry.</p>
               </div>
             ) : null}
           </Panel>
         ),
       },
     ],
-    [connection, connectionTestState, isSetupComplete, onOpenUpload, showAdvanced, tagMapRows],
+    [connection, connectionTestState, isSetupComplete, showAdvanced, tagMapRows],
   );
 
   const activeStep = steps[activeStepIndex] ?? steps[0];

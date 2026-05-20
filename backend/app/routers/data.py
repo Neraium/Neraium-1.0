@@ -579,7 +579,7 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
 
 @router.post("/data/reset")
 def reset_data_session() -> dict[str, Any]: 
-    reset_latest_upload_state() 
+    reset_latest_upload_state(purge_job_records=True) 
     reset_latest_sii_state() 
     clear_all_connection_runtime_state() 
     return { 

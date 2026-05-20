@@ -173,7 +173,7 @@ def reset_all_data_connections() -> list[dict[str, Any]]:
         }
         reset_connections.append(upsert_registered_data_connection(reset_payload))
 
-    reset_latest_upload_state()
+    reset_latest_upload_state(purge_job_records=True)
     return reset_connections
 
 

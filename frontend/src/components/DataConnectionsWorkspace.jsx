@@ -104,7 +104,6 @@ export default function DataConnectionsWorkspace({
   onResetDemo,
   onResumePreviousSession,
   formatClockTime,
-  demoTabId,
 }) {
   const tabs = useMemo(() => [
     { id: "connect-live", label: "Setup" },
@@ -174,15 +173,6 @@ export default function DataConnectionsWorkspace({
       core_engine: latestUploadSnapshot.core_engine ?? current?.core_engine ?? null,
     }));
   }, [latestUploadSnapshot]);
-
-  useEffect(() => {
-    if (!demoTabId) return;
-    if (demoTabId === "upload") {
-      setActiveTab("upload");
-      return;
-    }
-    setActiveTab("connect-live");
-  }, [demoTabId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -526,7 +516,7 @@ export default function DataConnectionsWorkspace({
 
       {activeTab === "connect-live" && (
         <>
-          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} onOpenUpload={() => setActiveTab("upload")} />
+          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
         </> 
       )} 
 

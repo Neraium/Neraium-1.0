@@ -325,6 +325,13 @@ def queue_metrics() -> dict[str, int]:
     return metrics
 
 
+def clear_upload_runtime_tables() -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute("DELETE FROM upload_queue")
+        connection.execute("DELETE FROM upload_jobs")
+
+
 def upsert_latest_payload(key: str, payload: Any) -> None:
     init_runtime_db()
     with db_connection() as connection:
