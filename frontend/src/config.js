@@ -180,3 +180,6 @@ export const API_CONFIG_WARNING = configuredApiBaseUrl
     : "VITE_API_BASE_URL is not configured. Using local development API.";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
+
+// Admission Gate is intentionally disabled until Exponent defines the final semantics.
+export const ENABLE_ADMISSION_GATE = String(import.meta.env.VITE_ENABLE_ADMISSION_GATE ?? "0") === "1";

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react"; 
 import { apiFetch } from "./config"; 
+import { ENABLE_ADMISSION_GATE } from "./config";
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace"; 
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace"; 
 import AuthScreen from "./components/AuthScreen";
@@ -95,7 +96,7 @@ function App() {
       ?? null;
     const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
     const gateOutcome = String(governance?.gate_outcome ?? "").toUpperCase();
-    const hasPass = gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
+    const hasPass = ENABLE_ADMISSION_GATE && gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
 
     const heartbeatSource =
       effectiveLatestUploadSnapshot?.last_processed_at

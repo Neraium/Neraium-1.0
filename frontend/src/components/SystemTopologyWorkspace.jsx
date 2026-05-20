@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
+import { ENABLE_ADMISSION_GATE } from "../config";
 import { normalizeOperationalState } from "../viewModels/operationalUiState"; 
 import { 
   ESCALATION_LAYERS, 
@@ -121,7 +122,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
 
   const outcome = gateOutcome(governance);
   const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
-  const hasPass = outcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
+  const hasPass = ENABLE_ADMISSION_GATE && outcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
   const statusLight = statusLightFromAdmitted(admittedState, hasPass);
 
   if (!hasPass) {
