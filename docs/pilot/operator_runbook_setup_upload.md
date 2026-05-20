@@ -50,6 +50,7 @@ Use these fixtures to verify graceful degradation:
 Run:
 ```bash
 python -m pytest -q tests/test_telemetry_integrity_simulations.py
+python scripts/pilot_rehearsal_check.py
 ```
 
 Expected result:

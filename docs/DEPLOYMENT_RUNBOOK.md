@@ -9,15 +9,18 @@ git status --short
 npm --prefix frontend run build
 python -m pytest tests/test_health.py tests/test_data_upload.py -q
 node scripts/smoke-production.js
+python scripts/pilot_rehearsal_check.py
 ```
 
 For production smoke tests:
 
 ```bash
 BASE_URL=https://app.neraium.com node scripts/smoke-production.js
+BASE_URL=https://app.neraium.com python scripts/pilot_rehearsal_check.py
 ```
 
 The production smoke script now performs the basic API probes plus a tiny telemetry upload that must reach `COMPLETE`, use the SII runner, and advance the visible runtime state.
+The pilot rehearsal script adds deterministic bad-telemetry fixtures, captures endpoint/upload outcomes, and writes an evidence report under `output/pilot-rehearsal/`.
 
 If metrics requires auth:
 
