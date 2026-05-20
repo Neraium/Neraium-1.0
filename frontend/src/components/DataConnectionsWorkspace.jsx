@@ -16,7 +16,6 @@ import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { TAG_MAP_ROWS } from "./setup/setupConstants";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
-import SessionControlsPanel from "./dataConnections/SessionControlsPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -475,16 +474,13 @@ export default function DataConnectionsWorkspace({
         onSelectTab={setActiveTab}
         onResetEverything={handleResetDemoClick}
         disableReset={isUploadProcessing(uploadState)}
+        onResumePreviousSession={onResumePreviousSession}
+        onOpenUpload={() => setActiveTab("upload")}
+        disableActions={isUploadProcessing(uploadState)}
       />
 
       {activeTab === "connect-live" && (
         <>
-          <SessionControlsPanel
-            onResetEverything={handleResetDemoClick}
-            onResumePreviousSession={onResumePreviousSession}
-            onOpenUpload={() => setActiveTab("upload")}
-            disableActions={isUploadProcessing(uploadState)}
-          />
           <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
         </> 
       )} 

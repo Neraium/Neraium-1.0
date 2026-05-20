@@ -6,6 +6,9 @@ export default function ConnectionsHeaderPanel({
   onSelectTab,
   onResetEverything,
   disableReset,
+  onResumePreviousSession,
+  onOpenUpload,
+  disableActions = false,
 }) {
   return (
     <Panel title="Historian Intake" className="span-12 workspace-hero-panel">
@@ -31,6 +34,26 @@ export default function ConnectionsHeaderPanel({
         >
           Reset Everything
         </button>
+        {activeTab === "connect-live" ? (
+          <>
+            <button
+              type="button"
+              className="secondary-command-button"
+              onClick={onResumePreviousSession}
+              disabled={disableActions}
+            >
+              Resume Session
+            </button>
+            <button
+              type="button"
+              className="command-button"
+              onClick={onOpenUpload}
+              disabled={disableActions}
+            >
+              Upload Data
+            </button>
+          </>
+        ) : null}
       </div>
     </Panel>
   );
