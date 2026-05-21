@@ -636,6 +636,10 @@ def test_facility_systems_uses_multi_room_state_after_upload() -> None:
 
     assert payload["intelligence"]["room_summary"]["room_count"] == 4
     assert len(payload["intelligence"]["rooms"]) == 4
+    room_records = {room["room"]: room for room in payload["intelligence"]["rooms"]}
+    assert room_records["Flower Room 2"]["urgency"] == "review"
+    assert room_records["Flower Room 2"]["room_state"] == "Insufficient telemetry"
+    assert "flagged because" in room_records["Flower Room 2"]["why_flagged"].lower()
 
 
 def test_one_column_csv_reports_runner_error_without_failed_job() -> None:
@@ -769,6 +773,45 @@ def test_processing_helper_distinguishes_calm_and_drifted_uploads() -> None:
 
     assert drift_intelligence["neraium_score"] < calm_intelligence["neraium_score"]
     assert drift_intelligence["urgency"] != calm_intelligence["urgency"]
+
+
+def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_explanations() -> None:
+    result = process_csv_content(
+        filename="room-specific-evidence.csv",
+        content=(
+            "timestamp,room,temperature,humidity,airflow\n"
+            "2026-05-01T08:00:00Z,Flower Room 1,74,55,300\n"
+            "2026-05-01T08:05:00Z,Flower Room 1,74,55,301\n"
+            "2026-05-01T08:10:00Z,Flower Room 1,75,56,303\n"
+            "2026-05-01T08:15:00Z,Flower Room 1,80,66,360\n"
+            "2026-05-01T08:20:00Z,Flower Room 1,82,68,380\n"
+            "2026-05-01T08:25:00Z,Flower Room 1,83,69,390\n"
+            "2026-05-01T08:00:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:05:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:10:00Z,Flower Room 2,75,56,306\n"
+            "2026-05-01T08:15:00Z,Flower Room 2,75,56,306\n"
+            "2026-05-01T08:20:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:25:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:00:00Z,Veg Room A,74,55,301\n"
+            "2026-05-01T08:05:00Z,Veg Room A,74,55,301\n"
+            "2026-05-01T08:10:00Z,Veg Room A,74,55,301\n"
+        ).encode(),
+    )
+
+    rooms = result["sii_intelligence"]["rooms"]
+    room_map = {room["room"]: room for room in rooms}
+    primary = room_map["Flower Room 1"]
+    secondary = room_map["Flower Room 2"]
+    sparse = room_map["Veg Room A"]
+
+    assert secondary["relationship_evidence"] != primary["relationship_evidence"]
+    assert secondary["structural_explanation"] != primary["structural_explanation"]
+    assert secondary["relationship_evidence"][0].startswith("Flower Room 2:")
+    assert secondary["structural_explanation"][0].startswith("Flower Room 2:")
+
+    assert sparse["relationship_evidence"] != primary["relationship_evidence"]
+    assert sparse["structural_explanation"] != primary["structural_explanation"]
+    assert "limited due to sparse telemetry" in " ".join(sparse["relationship_evidence"]).lower()
 
 
 @pytest.mark.slow

@@ -894,6 +894,12 @@ def build_upload_result(
         },
         engine_result=engine_result,
     )
+    room_assessments = build_room_assessments(
+        columns=columns,
+        rows=data_rows,
+        room_summary=room_summary,
+        numeric_profiles=numeric_profiles,
+    )
     sii_intelligence = build_upload_intelligence(
         filename=filename,
         row_count=total_rows,
@@ -904,6 +910,7 @@ def build_upload_result(
         operator_report=operator_report,
         timestamp_profile=timestamp_profile,
         room_summary=room_summary,
+        room_assessments=room_assessments,
         source=intelligence_source,
         mode=intelligence_mode,
         source_metadata=intelligence_source_metadata,
@@ -1708,6 +1715,168 @@ def build_room_summary(columns: list[str], rows: list[list[str]], total_rows: in
         if room_index < len(row) and row[room_index].strip():
             room_counts[row[room_index].strip()] += 1
     return room_summary_from_counts(room_counts, total_rows if total_rows is not None else len(rows))
+
+
+def build_room_assessments(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    room_summary: dict[str, Any] | None,
+    numeric_profiles: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    room_index = first_room_column_index(columns)
+    if room_index is None:
+        return {}
+
+    numeric_columns = [profile["column"] for profile in numeric_profiles if profile.get("column") in columns]
+    if not numeric_columns:
+        return {}
+    numeric_indexes = [columns.index(column) for column in numeric_columns]
+
+    grouped: dict[str, list[list[float]]] = {}
+    for row in rows:
+        if room_index >= len(row):
+            continue
+        room_name = row[room_index].strip()
+        if not room_name:
+            continue
+        values: list[float] = []
+        for idx in numeric_indexes:
+            raw = row[idx].strip() if idx < len(row) else ""
+            try:
+                values.append(float(raw))
+            except ValueError:
+                values.append(float("nan"))
+        if values and not all(np.isnan(value) for value in values):
+            grouped.setdefault(room_name, []).append(values)
+
+    detail_map = {
+        str(item.get("room")): int(item.get("row_count") or 0)
+        for item in ((room_summary or {}).get("rooms") or [])
+        if isinstance(item, dict) and item.get("room")
+    }
+
+    assessments: dict[str, dict[str, Any]] = {}
+    for room_name, vectors in grouped.items():
+        row_count = detail_map.get(room_name, len(vectors))
+        if len(vectors) < 4:
+            assessments[room_name] = {
+                "urgency": "review",
+                "room_state": "Insufficient telemetry",
+                "primary_driver": "Insufficient per-room telemetry context",
+                "why_flagged": "insufficient room-level telemetry to confirm a stable trend",
+                "supporting_evidence": [
+                    f"Only {len(vectors)} usable numeric row(s) were available for this room.",
+                    "Additional room-level telemetry is required to assess drift confidence.",
+                ],
+                "what_to_check": [
+                    "Collect additional room-level telemetry for this system.",
+                    "Verify room tags and timestamp consistency for this source.",
+                ],
+                "recommended_operator_review": "Collect more room telemetry before clearing this system",
+                "relationship_evidence": [
+                    "Room-level relationship evidence is limited due to sparse telemetry.",
+                    "Signal coupling cannot be confirmed until more room samples are available.",
+                ],
+                "structural_explanation": [
+                    "This room does not yet have enough telemetry depth for a structural coupling read.",
+                    "Additional readings are required before drift and coupling can be validated.",
+                    "Treat this as a telemetry sufficiency alert, not a failure prediction.",
+                ],
+                "projected_time_to_failure": "Unknown until additional telemetry is available",
+                "projected_time_to_failure_hours": None,
+                "confidence": 52,
+            }
+            continue
+
+        arr = np.asarray(vectors, dtype=float)
+        split = max(2, min(len(arr) // 2, 20))
+        baseline = arr[:split]
+        recent = arr[-split:]
+        baseline_mean = np.nan_to_num(np.nanmean(baseline, axis=0), nan=0.0)
+        recent_mean = np.nan_to_num(np.nanmean(recent, axis=0), nan=0.0)
+        safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
+        normalized_delta = np.abs(recent_mean - baseline_mean) / safe_baseline
+        drift_score = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 3.0))
+        transition = np.abs(recent[-1] - recent[0]) / safe_baseline
+        transition_score = float(np.clip(np.nan_to_num(np.nanmean(transition), nan=0.0), 0.0, 3.0))
+        variability_score = float(np.clip(np.nan_to_num(np.nanstd(recent), nan=0.0), 0.0, 3.0))
+
+        if drift_score >= 0.3:
+            urgency = "unstable"
+            state = "Needs action"
+            confidence = 86
+            why = "room-level telemetry drift is strong relative to this room baseline"
+            projected = "Approximately 8 hours at current trajectory"
+            projected_hours = 8
+        elif drift_score >= 0.12:
+            urgency = "review"
+            state = "Drift observed"
+            confidence = 74
+            why = "room-level telemetry moved away from baseline and should be reviewed"
+            projected = "Approximately 2 days at current trajectory"
+            projected_hours = 48
+        else:
+            urgency = "nominal"
+            state = "Stable"
+            confidence = 66
+            why = "room-level telemetry remains near recent operating baseline"
+            projected = "More than 3 weeks at current trajectory"
+            projected_hours = 504
+
+        if urgency == "unstable":
+            relationship_evidence = [
+                "Cross-signal room coupling is shifting faster than recent baseline behavior.",
+                "Transition-to-recovery timing between room signals is widening.",
+            ]
+            structural_explanation = [
+                "Room-level drift and transition pressure indicate active structural divergence.",
+                "Signal relationships are moving in the same direction as the observed room drift.",
+                "Intervention timing is likely compressing if this trend persists.",
+            ]
+        elif urgency == "review":
+            relationship_evidence = [
+                "Room signal relationships are less synchronized than the recent baseline.",
+                "Transition behavior suggests moderate coupling drift that should be reviewed.",
+            ]
+            structural_explanation = [
+                "Room-level drift is present but not yet in an acute range.",
+                "Coupling behavior has shifted enough to warrant operator review.",
+                "Monitoring continuity is important before trend confirmation.",
+            ]
+        else:
+            relationship_evidence = [
+                "Room signal relationships are broadly consistent with baseline behavior.",
+                "No meaningful cross-signal decoupling is currently visible.",
+            ]
+            structural_explanation = [
+                "Room topology appears behaviorally stable over recent windows.",
+                "Drift remains low and relationship coupling is not degrading.",
+                "Continue routine monitoring for any transition changes.",
+            ]
+
+        assessments[room_name] = {
+            "urgency": urgency,
+            "room_state": state,
+            "primary_driver": "Room-level telemetry trend",
+            "why_flagged": why,
+            "supporting_evidence": [
+                f"Room drift score is {round(drift_score, 4)} from {row_count} telemetry row(s).",
+                f"Room transition score is {round(transition_score, 4)} with variability {round(variability_score, 4)}.",
+                "Baseline and recent room windows were compared using numeric channel means.",
+            ],
+            "relationship_evidence": relationship_evidence,
+            "structural_explanation": structural_explanation,
+            "what_to_check": [
+                f"Review {room_name} trend shift against recent facility logs.",
+                "Validate room-level sampling consistency and timestamp continuity.",
+            ],
+            "recommended_operator_review": f"Review {room_name} room-level drift trend",
+            "projected_time_to_failure": projected,
+            "projected_time_to_failure_hours": projected_hours,
+            "confidence": confidence,
+        }
+    return assessments
 
 
 def room_summary_from_counts(room_counts: Counter[str], total_rows: int) -> dict[str, Any]:

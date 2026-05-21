@@ -181,6 +181,7 @@ def build_upload_intelligence(
     operator_report: dict[str, Any],
     timestamp_profile: dict[str, Any],
     room_summary: dict[str, Any] | None = None,
+    room_assessments: dict[str, dict[str, Any]] | None = None,
     source: str = "uploaded",
     mode: str = "live",
     source_metadata: dict[str, Any] | None = None,
@@ -240,6 +241,7 @@ def build_upload_intelligence(
         projected_time_to_failure_hours=projected_time_to_failure_hours,
         last_updated=last_updated,
         confidence=confidence_number(driver_attribution),
+        room_assessments=room_assessments,
     )
     primary_room_record = room_records[0]
     candidate = {
@@ -298,38 +300,83 @@ def build_upload_room_records(
     projected_time_to_failure_hours: int,
     last_updated: str,
     confidence: int,
+    room_assessments: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     summary_rooms = room_summary.get("rooms", []) if isinstance(room_summary, dict) else []
-    room_names = [
-        str(item.get("room"))
+    room_details = [
+        {
+            "room": str(item.get("room")),
+            "row_count": int(item.get("row_count") or 0),
+        }
         for item in summary_rooms
         if isinstance(item, dict) and item.get("room")
     ]
+    room_names = [item["room"] for item in room_details]
     if not room_names:
-        room_names = [fallback_room or "Current room"]
+        fallback = fallback_room or "Current room"
+        room_names = [fallback]
+        room_details = [{"room": fallback, "row_count": 0}]
 
     records = []
     for index, room_name in enumerate(room_names):
+        detail = room_details[index] if index < len(room_details) else {"room": room_name, "row_count": 0}
+        assessment = (room_assessments or {}).get(room_name, {})
+        room_count_context = (
+            f" across {detail['row_count']} telemetry row(s)"
+            if detail["row_count"] > 0
+            else ""
+        )
+        derived_why = str(assessment.get("why_flagged") or why_flagged)
+        room_specific_why = why_flagged if index == 0 else f"{room_name} is flagged because {derived_why.lower()}{room_count_context}."
+        room_supporting_evidence = (
+            supporting_evidence
+            if index == 0
+            else [f"{room_name}: {line}" for line in (assessment.get("supporting_evidence") or supporting_evidence)[:3]]
+        )
+        room_relationship_evidence = (
+            relationship_evidence
+            if index == 0
+            else [f"{room_name}: {line}" for line in (assessment.get("relationship_evidence") or relationship_evidence)[:3]]
+        )
+        room_structural_explanation = (
+            structural_explanation
+            if index == 0
+            else [f"{room_name}: {line}" for line in (assessment.get("structural_explanation") or structural_explanation)[:3]]
+        )
+        room_checks = (
+            what_to_check
+            if index == 0
+            else [f"{room_name}: {line}" for line in (assessment.get("what_to_check") or what_to_check)[:3]]
+        )
+        room_urgency = urgency if index == 0 else str(assessment.get("urgency") or "review")
+        room_state_value = room_state if index == 0 else str(assessment.get("room_state") or state_from_urgency(room_urgency))
+        room_intervention_window = intervention_window if index == 0 else window_from_urgency(room_urgency)
+        room_driver = primary_driver if index == 0 else str(assessment.get("primary_driver") or "Room telemetry indicates a separate operating pattern.")
+        room_confidence = confidence if index == 0 else int(assessment.get("confidence") or max(confidence - 6, 0))
         records.append(
             {
                 "room": room_name,
-                "room_state": room_state if index == 0 else "Monitoring",
-                "urgency": urgency if index == 0 else "nominal",
-                "intervention_window": intervention_window if index == 0 else "Monitoring",
-                "primary_driver": primary_driver if index == 0 else "Room telemetry included in latest upload.",
-                "supporting_evidence": supporting_evidence if index == 0 else [f"{room_name} was detected in the uploaded telemetry."],
-                "relationship_evidence": relationship_evidence,
-                "structural_explanation": structural_explanation,
+                "room_state": room_state_value,
+                "urgency": room_urgency,
+                "intervention_window": room_intervention_window,
+                "primary_driver": room_driver,
+                "supporting_evidence": room_supporting_evidence,
+                "relationship_evidence": room_relationship_evidence,
+                "structural_explanation": room_structural_explanation,
                 "confidence_basis": confidence_basis,
-                "recommended_operator_review": recommended_operator_review if index == 0 else "Continue monitoring",
-                "what_to_check": what_to_check,
-                "why_flagged": why_flagged if index == 0 else f"{room_name} is part of the uploaded room set.",
+                "recommended_operator_review": (
+                    recommended_operator_review
+                    if index == 0
+                    else str(assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
+                ),
+                "what_to_check": room_checks,
+                "why_flagged": room_specific_why,
                 "baseline_comparison": baseline_comparison,
                 "observed_persistence": observed_persistence,
-                "projected_time_to_failure": projected_time_to_failure if index == 0 else "Monitoring",
-                "projected_time_to_failure_hours": projected_time_to_failure_hours if index == 0 else None,
+                "projected_time_to_failure": projected_time_to_failure if index == 0 else (assessment.get("projected_time_to_failure") or "Monitoring"),
+                "projected_time_to_failure_hours": projected_time_to_failure_hours if index == 0 else assessment.get("projected_time_to_failure_hours"),
                 "last_updated": last_updated,
-                "confidence": confidence if index == 0 else max(confidence - 8, 0),
+                "confidence": room_confidence,
             }
         )
     return records
