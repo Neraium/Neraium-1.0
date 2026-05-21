@@ -23,14 +23,3 @@ export async function fetchDomainMode({ apiFetch, accessCode }) {
   if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
   return response.json();
 }
-
-export async function updateDomainMode({ apiFetch, accessCode, mode }) {
-  const response = await apiFetch("/api/domain/mode", {
-    accessCode,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode }),
-  });
-  if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
-  return response.json();
-}

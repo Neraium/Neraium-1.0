@@ -34,7 +34,6 @@ export default function SystemBodyWorkspace({
   isLoading = false,
   isEmptyStructuralState = false,
   domainMode = "aquatic",
-  onDomainModeChange = null,
 }) {
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
@@ -43,7 +42,6 @@ export default function SystemBodyWorkspace({
   const [settingsBusy, setSettingsBusy] = useState(false);
   const hasAdmittedFinding = statusLight !== "gray";
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
-
   function openWorkspace(workspaceId) {
     if (settingsBusy) return;
     if (typeof onWorkspaceNavigate === "function") {
@@ -52,16 +50,6 @@ export default function SystemBodyWorkspace({
     setSettingsOpen(false);
     setAdvancedOpen(false);
     setDetailOpen(false);
-  }
-
-  async function switchDomainMode(nextMode) {
-    if (settingsBusy || typeof onDomainModeChange !== "function" || !nextMode || nextMode === domainMode) return;
-    setSettingsBusy(true);
-    try {
-      await onDomainModeChange(nextMode);
-    } finally {
-      setSettingsBusy(false);
-    }
   }
 
   return (
@@ -119,7 +107,7 @@ export default function SystemBodyWorkspace({
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
                 <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Setup & data connections</button></li>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => switchDomainMode(domainMode === "aquatic" ? "cultivation" : "aquatic")} disabled={settingsBusy}>{domainMode === "aquatic" ? "Switch to cultivation mode" : "Switch to aquatic mode"}</button></li>
+                <li><span className="system-gate__settings-message">Detected data type: {domainModeLabel(domainMode)}</span></li>
                 {typeof onSignOut === "function" ? (
                   <li><button type="button" className="system-gate__settings-action" onClick={onSignOut} disabled={settingsBusy}>Sign out</button></li>
                 ) : null}
@@ -202,4 +190,11 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
     return { label: "Connection degraded", tone: "degraded" };
   }
   return { label: "Neraium online", tone: "online" };
+}
+
+function domainModeLabel(domainMode) {
+  const normalized = String(domainMode ?? "").trim().toLowerCase();
+  if (normalized === "cultivation") return "Cultivation";
+  if (normalized === "aquatic") return "Aquatic";
+  return "Auto-detected";
 }

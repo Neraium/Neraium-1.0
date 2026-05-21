@@ -22,7 +22,6 @@ export default function SystemTopologyWorkspace({
   onSignOut = null,
   onUploadComplete, 
   domainMode = "aquatic",
-  onDomainModeChange = null,
 }) { 
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
   const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
@@ -109,7 +108,6 @@ export default function SystemTopologyWorkspace({
       onSignOut={onSignOut}
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
-      onDomainModeChange={onDomainModeChange}
     /> 
   ); 
 } 

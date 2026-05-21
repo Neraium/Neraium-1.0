@@ -6,7 +6,6 @@ import {
   fetchDomainMode,
   fetchEngineIdentity,
   fetchFacilitySystems as fetchSystemFacility,
-  updateDomainMode as saveDomainMode,
 } from "../services/api/systemApi";
 import { fetchLatestUploadState } from "../services/api/uploadApi";
 import * as uploadStateView from "../viewModels/uploadState";
@@ -148,9 +147,9 @@ export default function useFacilityRuntime({
   useEffect(() => {
     if (!hasAccess) return;
     fetchDomainMode({ apiFetch, accessCode })
-      .then((payload) => setDomainModeState(payload.mode || "aquatic"))
+      .then((payload) => setDomainModeState(payload.domain_mode || payload.mode || "aquatic"))
       .catch(() => {});
-  }, [accessCode, hasAccess]);
+  }, [accessCode, apiFetch, hasAccess]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -190,12 +189,6 @@ export default function useFacilityRuntime({
     isDemoMode,
     setIsDemoMode,
     domainMode,
-    setDomainMode: async (mode) => {
-      const payload = await saveDomainMode({ apiFetch, accessCode, mode });
-      setDomainModeState(payload.mode || "aquatic");
-      await loadFacilitySystems();
-      return payload.mode || "aquatic";
-    },
     loadFacilitySystems,
     loadLatestUploadState,
     allowPersistedLatest,

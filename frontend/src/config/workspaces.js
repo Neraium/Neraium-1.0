@@ -3,13 +3,13 @@ export const WORKSPACES = [
     id: "system-body",
     label: "Structural State",
     eyebrow: "Operator View",
-    description: "Primary aquatic infrastructure condition, escalation direction, and operational focus.",
+    description: "Primary infrastructure condition, detected data type, escalation direction, and operational focus.",
   },
   {
     id: "data-connections",
     label: "Telemetry Setup",
     eyebrow: "Intake",
-    description: "Configure read-only telemetry intake and upload aquatic pilot telemetry.",
+    description: "Configure read-only telemetry intake and upload facility telemetry.",
   },
   {
     id: "historical-replay",

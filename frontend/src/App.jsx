@@ -45,7 +45,6 @@ function App() {
     setAllowPersistedLatest,
     telemetryTick,
     domainMode,
-    setDomainMode,
   } = useFacilityRuntime({
     hasAccess: true,
     accessCode,
@@ -378,9 +377,8 @@ function App() {
       onSignOut={handleSignOut}
       onUploadComplete={handleGateUploadComplete}
       domainMode={domainMode}
-      onDomainModeChange={setDomainMode}
     />
-    </div>
+  </div>
   );
 }
 
