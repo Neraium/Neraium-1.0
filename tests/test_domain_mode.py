@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import create_app
 from app.services.upload_jobs import write_latest_upload_result
 
@@ -102,3 +103,25 @@ def test_domain_mode_detects_aquatic_from_water_treatment_shape() -> None:
     facility = client.get("/api/facility/systems")
     assert facility.status_code == 200
     assert facility.json()["domain_mode"] == "aquatic"
+
+
+def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> None:
+    client = TestClient(
+        create_app(
+            Settings(
+                app_env="test",
+                backend_host="127.0.0.1",
+                backend_port=8000,
+                cors_origins=["http://localhost"],
+                runtime_dir=tmp_path,
+            )
+        )
+    )
+
+    status = client.get("/api/domain/mode")
+
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["source"] == "default"
+    assert payload["confidence"] == 0
+    assert payload["evidence"] == []

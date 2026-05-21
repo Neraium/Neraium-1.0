@@ -6,13 +6,10 @@ export default function ConnectionsHeaderPanel({
   onSelectTab,
   onResetEverything,
   disableReset,
-  onResumePreviousSession,
-  onOpenUpload,
-  disableActions = false,
   workflowStage = "setup",
 }) {
   const railSteps = [
-    { id: "setup", label: "Setup" },
+    { id: "setup", label: "Connect" },
     { id: "upload", label: "Upload" },
     { id: "status", label: "Status" },
   ];
@@ -51,26 +48,6 @@ export default function ConnectionsHeaderPanel({
         >
           Reset Everything
         </button>
-        {activeTab === "connect-live" ? (
-          <>
-            <button
-              type="button"
-              className="secondary-command-button"
-              onClick={onResumePreviousSession}
-              disabled={disableActions}
-            >
-              Resume Session
-            </button>
-            <button
-              type="button"
-              className="command-button"
-              onClick={onOpenUpload}
-              disabled={disableActions}
-            >
-              Upload Data
-            </button>
-          </>
-        ) : null}
       </div>
     </Panel>
   );

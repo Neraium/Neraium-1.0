@@ -287,6 +287,7 @@
   background: rgba(16, 26, 40, 0.82);
   color: #f1f7ff;
   padding: 0 12px;
+  font-size: 16px;
 }
 
 .auth-form input:focus {
@@ -316,5 +317,37 @@
 
 .auth-switch:hover {
   color: #c2dcff;
+}
+
+@media (max-width: 640px) {
+  .auth-shell {
+    align-items: center;
+    padding: max(14px, env(safe-area-inset-top, 0px)) 14px max(18px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-panel {
+    width: min(100%, 420px);
+    padding: 20px 16px;
+    border-radius: 16px;
+  }
+
+  .auth-kicker {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+
+  .auth-form label {
+    font-size: 14px;
+  }
+
+  .auth-form input {
+    height: 44px;
+  }
+
+  .auth-copy,
+  .auth-error,
+  .auth-switch {
+    font-size: 14px;
+  }
 }
 

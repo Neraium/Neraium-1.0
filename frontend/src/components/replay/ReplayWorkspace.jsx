@@ -72,6 +72,7 @@ export default function ReplayWorkspace({
             ...(scoped.meta ?? {}),
             replay_source: "upload_job",
             replay_job_id: scoped.jobId,
+            message: scoped.message,
           };
         } else {
           const [primary, comparison] = await Promise.all([
@@ -94,6 +95,7 @@ export default function ReplayWorkspace({
               ...(fallback.meta ?? {}),
               replay_source: "upload_job",
               replay_job_id: fallback.jobId,
+              message: fallback.message,
             };
           }
         }
@@ -102,7 +104,7 @@ export default function ReplayWorkspace({
         setComparisonTimeline(nextComparison);
         setMeta(nextMeta);
         setFrameIndex(Math.max(0, nextTimeline.length - 1));
-        setError("");
+        setError(nextTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
       } catch (loadError) {
         if (cancelled) return;
         try {
@@ -118,10 +120,11 @@ export default function ReplayWorkspace({
               canonical_flow: [],
               replay_source: "upload_job",
               replay_job_id: fallback.jobId,
+              message: fallback.message,
               ...(fallback.meta ?? {}),
             });
             setFrameIndex(Math.max(0, fallback.timeline.length - 1));
-            setError("");
+            setError(fallback.timeline.length > 0 ? "" : (fallback.message ?? "No replay snapshots are available for this session."));
             return;
           }
         } catch {
@@ -348,7 +351,12 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   const replayPayload = await replayResponse.json();
   const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  return { jobId: targetJobId, timeline, meta };
+  return {
+    jobId: targetJobId,
+    timeline,
+    meta,
+    message: typeof replayPayload?.message === "string" ? replayPayload.message : "",
+  };
 }
 
 const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];

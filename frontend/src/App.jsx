@@ -39,6 +39,7 @@ function App() {
     intelligenceStatus,
     latestUploadResult,
     latestUploadSnapshot,
+    domainDetection,
     setIsDemoMode,
     loadFacilitySystems,
     loadLatestUploadState,
@@ -93,6 +94,7 @@ function App() {
     const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
     const gateOutcome = String(governance?.gate_outcome ?? "").toUpperCase();
     const hasPass = ENABLE_ADMISSION_GATE && gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
+    const uploadTone = deriveUploadTone(effectiveLatestUploadResult);
 
     const heartbeatSource =
       effectiveLatestUploadSnapshot?.last_processed_at
@@ -105,7 +107,7 @@ function App() {
         ? admittedState === "ALERT"
           ? "critical"
           : "watch"
-        : "stable")
+        : uploadTone)
       : "empty";
 
     const intelligenceMode = hasTelemetryHeartbeat
@@ -157,6 +159,7 @@ function App() {
       relationshipRows: effectiveLatestUploadResult?.baseline_analysis?.relationship_drift ?? [],
       distributed_cognition_governance: governance,
       sourceIntelligence: intelligence,
+      latestUploadResult: effectiveLatestUploadResult,
       systems,
       systemsState,
       intelligenceStatus,
@@ -219,7 +222,11 @@ function App() {
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    document.documentElement.setAttribute("data-domain-mode", domainMode || "aquatic");
+    if (domainMode) {
+      document.documentElement.setAttribute("data-domain-mode", domainMode);
+    } else {
+      document.documentElement.removeAttribute("data-domain-mode");
+    }
   }, [domainMode]);
 
   useEffect(() => {
@@ -377,9 +384,23 @@ function App() {
       onSignOut={handleSignOut}
       onUploadComplete={handleGateUploadComplete}
       domainMode={domainMode}
+      domainDetection={domainDetection}
     />
   </div>
   );
+}
+
+function deriveUploadTone(result) {
+  if (!result) return "stable";
+  const operatingState = String(result?.operating_state ?? result?.sii_intelligence?.facility_state ?? "").toLowerCase();
+  const urgency = String(result?.drift_status ?? result?.sii_intelligence?.urgency ?? "").toLowerCase();
+
+  if (!operatingState && !urgency) return "stable";
+  if (operatingState.includes("needs action") || urgency === "unstable" || operatingState.includes("unstable")) return "critical";
+  if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) return "warning";
+  if (operatingState.includes("needs review") || urgency === "review" || operatingState.includes("review")) return "review";
+  if (operatingState.includes("stable") || operatingState.includes("monitor")) return "stable";
+  return "stable";
 }
 
 function formatClockTime(value) {

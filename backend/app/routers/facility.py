@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from app.core.security import require_api_access
 from api.cognition_contracts import build_canonical_cognition_state_response
-from app.services.domain_mode import domain_profile, normalize_domain_mode, read_domain_mode
+from app.services.domain_mode import detect_domain_mode, domain_profile, normalize_domain_mode, read_domain_mode
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
@@ -14,6 +14,7 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 
 @router.get("/facility/systems")
 def read_facility_systems(include_persisted: bool = Query(True), domain_mode: str | None = Query(default=None)) -> dict[str, Any]:
+    detection = detect_domain_mode()
     selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
     profile = domain_profile(selected_mode)
     latest_result = read_latest_upload_result()
@@ -25,6 +26,9 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
         "systems": profile["systems"],
         "driver_categories": profile["driver_categories"],
         "domain_mode": selected_mode,
+        "domain_source": detection["source"],
+        "domain_confidence": detection["confidence"],
+        "domain_evidence": detection["evidence"],
         "intelligence": intelligence,
         "adaptive_learning": adaptive_learning,
         "integration_stubs": profile["integration_stubs"],

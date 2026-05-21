@@ -41,7 +41,8 @@ export default function useFacilityRuntime({
   const [allowPersistedLatest, setAllowPersistedLatest] = useState(true);
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
-  const [domainMode, setDomainModeState] = useState("aquatic");
+  const [domainMode, setDomainModeState] = useState(null);
+  const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
@@ -88,7 +89,13 @@ export default function useFacilityRuntime({
     try {
       const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode });
       setSystems(payload.systems);
-      setDomainModeState(payload.domain_mode ?? domainMode);
+      setDomainDetection({
+        mode: payload.domain_mode ?? null,
+        source: payload.domain_source ?? "default",
+        confidence: Number(payload.domain_confidence ?? 0),
+        evidence: Array.isArray(payload.domain_evidence) ? payload.domain_evidence : [],
+      });
+      setDomainModeState(payload.domain_source === "upload_shape" ? (payload.domain_mode ?? null) : null);
       setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("ready");
       setBackendError(API_CONFIG_WARNING);
@@ -147,7 +154,15 @@ export default function useFacilityRuntime({
   useEffect(() => {
     if (!hasAccess) return;
     fetchDomainMode({ apiFetch, accessCode })
-      .then((payload) => setDomainModeState(payload.domain_mode || payload.mode || "aquatic"))
+      .then((payload) => {
+        setDomainDetection({
+          mode: payload.mode ?? null,
+          source: payload.source ?? "default",
+          confidence: Number(payload.confidence ?? 0),
+          evidence: Array.isArray(payload.evidence) ? payload.evidence : [],
+        });
+        setDomainModeState(payload.source === "upload_shape" ? (payload.mode ?? null) : null);
+      })
       .catch(() => {});
   }, [accessCode, apiFetch, hasAccess]);
 
@@ -184,6 +199,7 @@ export default function useFacilityRuntime({
     backendError,
     latestUploadResult,
     latestUploadSnapshot,
+    domainDetection,
     demoScenario,
     setDemoScenario,
     isDemoMode,

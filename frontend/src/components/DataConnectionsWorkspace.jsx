@@ -11,11 +11,9 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import HistorianSetupWorkspace from "./setup/HistorianSetupWorkspace";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import PilotReadinessPanel from "./setup/PilotReadinessPanel";
-import { TAG_MAP_ROWS } from "./setup/setupConstants";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -24,9 +22,9 @@ const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const DATA_CONNECTIONS_TAB_STORAGE_KEY = "neraium.data_connections.active_tab";
 
 function readStoredDataConnectionsTab() {
-  if (typeof window === "undefined") return "connect-live";
+  if (typeof window === "undefined") return "upload";
   const value = window.localStorage.getItem(DATA_CONNECTIONS_TAB_STORAGE_KEY);
-  return value === "connect-live" || value === "upload" ? value : "connect-live";
+  return value === "upload" ? value : "upload";
 }
 
 function formatTransferSpeed(bytesPerSecond) {
@@ -106,7 +104,6 @@ export default function DataConnectionsWorkspace({
   formatClockTime,
 }) {
   const tabs = useMemo(() => [
-    { id: "connect-live", label: "Setup" },
     { id: "upload", label: "Upload" },
   ], []);
 
@@ -497,9 +494,7 @@ export default function DataConnectionsWorkspace({
   const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending"; 
   const adaptiveLearning = latestUploadSnapshot?.adaptive_learning ?? uploadResult?.adaptive_learning ?? latestUploadResult?.adaptive_learning ?? {};
   const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
-  const workflowStage = activeTab === "connect-live"
-    ? "setup"
-    : (hasActiveSession || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload");
+  const workflowStage = hasActiveSession || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload";
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -508,79 +503,65 @@ export default function DataConnectionsWorkspace({
         onSelectTab={setActiveTab}
         onResetEverything={handleResetDemoClick}
         disableReset={isUploadProcessing(uploadState)}
-        onResumePreviousSession={onResumePreviousSession}
-        onOpenUpload={() => setActiveTab("upload")}
-        disableActions={isUploadProcessing(uploadState)}
         workflowStage={workflowStage}
       />
-
-      {activeTab === "connect-live" && (
-        <>
-          <HistorianSetupWorkspace tagMapRows={TAG_MAP_ROWS} />
-        </> 
-      )} 
-
-      {activeTab === "upload" && (
-        <>
-          <IntakeFlowPanel
-            handleUpload={handleUpload}
-            uploadInputRef={uploadInputRef}
-            handleFileSelection={handleFileSelection}
-            selectedFiles={selectedFiles}
-            latestUploadSnapshot={latestUploadSnapshot}
-            pendingUploadKind={pendingUploadKind}
-            selectedFileSize={selectedFileSize}
-            uploadReadinessMessage={uploadReadinessMessage}
-            isUploadProcessing={isUploadProcessing}
-            uploadState={uploadState}
-            openFilePicker={openFilePicker}
-            uploadJob={uploadJob}
-            latestMessage={latestMessage}
-            visibleProgressPercent={visibleProgressPercent}
-            uploadTransfer={uploadTransfer}
-            formatFileSize={formatFileSize}
-            formatTransferSpeed={formatTransferSpeed}
-            uploadStateMessage={uploadStateMessage}
-            setCopyState={setCopyState}
-            copyState={copyState}
-            isJsonSchemaOpen={isJsonSchemaOpen}
-            setIsJsonSchemaOpen={setIsJsonSchemaOpen}
-            intakeStages={intakeStages}
-            batchResults={batchResults}
-            onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
-            onReprocessCurrentBatch={handleReprocessCurrentBatch}
-          />
-          <IntakeStatusPanel
-            uploadStateView={uploadStateView}
-            latestStatus={latestStatus}
-            uploadState={uploadState}
-            displayUploadError={displayUploadError}
-            apiStatus={apiStatus}
-            latestUploadSnapshot={latestUploadSnapshot}
-            formatClockTime={formatClockTime}
-            baselineMessage={baselineMessage}
-            roomContext={roomContext}
-            uploadDiffSummary={uploadDiffSummary}
-            hasActiveSession={hasActiveSession}
-            hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult}
-            onResumePreviousSession={onResumePreviousSession}
-            onOpenUpload={() => setActiveTab("upload")} 
-            adaptiveLearning={adaptiveLearning}
-            latestRunId={latestRunId}
-            feedbackState={feedbackState}
-            onOperatorFeedback={handleOperatorFeedback}
-            uploadJob={uploadJob}
-            latestUploadResult={uploadResult ?? latestUploadResult}
-          /> 
-          <PilotReadinessPanel
-            apiStatus={apiStatus}
-            latestUploadSnapshot={latestUploadSnapshot}
-            hasActiveSession={hasActiveSession}
-            formatClockTime={formatClockTime}
-          />
-        </> 
-      )} 
+      <IntakeFlowPanel
+        handleUpload={handleUpload}
+        uploadInputRef={uploadInputRef}
+        handleFileSelection={handleFileSelection}
+        selectedFiles={selectedFiles}
+        latestUploadSnapshot={latestUploadSnapshot}
+        pendingUploadKind={pendingUploadKind}
+        selectedFileSize={selectedFileSize}
+        uploadReadinessMessage={uploadReadinessMessage}
+        isUploadProcessing={isUploadProcessing}
+        uploadState={uploadState}
+        openFilePicker={openFilePicker}
+        uploadJob={uploadJob}
+        latestMessage={latestMessage}
+        visibleProgressPercent={visibleProgressPercent}
+        uploadTransfer={uploadTransfer}
+        formatFileSize={formatFileSize}
+        formatTransferSpeed={formatTransferSpeed}
+        uploadStateMessage={uploadStateMessage}
+        setCopyState={setCopyState}
+        copyState={copyState}
+        isJsonSchemaOpen={isJsonSchemaOpen}
+        setIsJsonSchemaOpen={setIsJsonSchemaOpen}
+        intakeStages={intakeStages}
+        batchResults={batchResults}
+        onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
+        onReprocessCurrentBatch={handleReprocessCurrentBatch}
+      />
+      <IntakeStatusPanel
+        uploadStateView={uploadStateView}
+        latestStatus={latestStatus}
+        uploadState={uploadState}
+        displayUploadError={displayUploadError}
+        apiStatus={apiStatus}
+        latestUploadSnapshot={latestUploadSnapshot}
+        formatClockTime={formatClockTime}
+        baselineMessage={baselineMessage}
+        roomContext={roomContext}
+        uploadDiffSummary={uploadDiffSummary}
+        hasActiveSession={hasActiveSession}
+        hasResumedSession={hasResumedSession}
+        hasCurrentUploadResult={hasCurrentUploadResult}
+        onResumePreviousSession={onResumePreviousSession}
+        onOpenUpload={() => setActiveTab("upload")} 
+        adaptiveLearning={adaptiveLearning}
+        latestRunId={latestRunId}
+        feedbackState={feedbackState}
+        onOperatorFeedback={handleOperatorFeedback}
+        uploadJob={uploadJob}
+        latestUploadResult={uploadResult ?? latestUploadResult}
+      /> 
+      <PilotReadinessPanel
+        apiStatus={apiStatus}
+        latestUploadSnapshot={latestUploadSnapshot}
+        hasActiveSession={hasActiveSession}
+        formatClockTime={formatClockTime}
+      />
     </div>
   );
 }

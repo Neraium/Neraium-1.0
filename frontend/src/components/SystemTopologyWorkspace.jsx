@@ -20,8 +20,9 @@ export default function SystemTopologyWorkspace({
   accessCode,
   onWorkspaceNavigate, 
   onSignOut = null,
-  onUploadComplete, 
+  onUploadComplete,
   domainMode = "aquatic",
+  domainDetection = null,
 }) { 
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
   const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
@@ -32,10 +33,11 @@ export default function SystemTopologyWorkspace({
     uiState,
     layer,
   });
+  const uploadSignal = deriveUploadSignal(liveOps.latestUploadResult);
 
   const stateLabel = awaitingSii
     ? "No Data"
-    : (governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
+    : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
@@ -46,7 +48,7 @@ export default function SystemTopologyWorkspace({
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = orbStateFromStatusLight(governed.statusLight);
+  const systemState = uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight);
   const primaryMessage = awaitingSii
     ? "Upload or connect telemetry to begin monitoring."
     : governed.hasPass
@@ -108,9 +110,36 @@ export default function SystemTopologyWorkspace({
       onSignOut={onSignOut}
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
+      domainDetection={domainDetection}
     /> 
   ); 
 } 
+
+function deriveUploadSignal(latestUploadResult) {
+  if (!latestUploadResult) {
+    return { systemState: null, label: "" };
+  }
+
+  const operatingState = String(latestUploadResult?.operating_state ?? latestUploadResult?.sii_intelligence?.facility_state ?? "").toLowerCase();
+  const urgency = String(latestUploadResult?.drift_status ?? latestUploadResult?.sii_intelligence?.urgency ?? "").toLowerCase();
+
+  if (!operatingState && !urgency) {
+    return { systemState: null, label: "" };
+  }
+  if (operatingState.includes("needs action") || urgency === "unstable" || operatingState.includes("unstable")) {
+    return { systemState: "propagation_active", label: "Needs action" };
+  }
+  if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) {
+    return { systemState: "watching", label: "Needs review" };
+  }
+  if (operatingState.includes("needs review") || urgency === "review" || operatingState.includes("review")) {
+    return { systemState: "watching", label: "Needs review" };
+  }
+  if (operatingState.includes("stable") || operatingState.includes("monitor")) {
+    return { systemState: "stable", label: "Stable" };
+  }
+  return { systemState: null, label: "" };
+}
 
 function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
   const intelligence = liveOps?.sourceIntelligence ?? null;

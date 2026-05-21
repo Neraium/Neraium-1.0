@@ -21,6 +21,7 @@ from app.services.upload_jobs import (
     latest_completed_job_summary,
     now_iso,
     process_next_queued_upload_job,
+    process_telemetry_file,
     read_upload_history,
     read_latest_upload_summary,
     read_latest_upload_result,
@@ -422,17 +423,59 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
     if metadata is None:
         raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
     latest_result = read_latest_upload_result()
-    if not latest_result or latest_result.get("job_id") != job_id:
-        return {"job_id": job_id, "frame_count": 0, "timeline": [], "meta": {}, "message": "No replay frames available."}
-    replay = ((latest_result.get("sii_intelligence") or {}).get("replay_timeline") or {})
-    timeline = replay.get("timeline") if isinstance(replay, dict) else []
-    if not isinstance(timeline, list):
-        timeline = []
+    if latest_result and latest_result.get("job_id") == job_id:
+        replay = ((latest_result.get("sii_intelligence") or {}).get("replay_timeline") or {})
+        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        if isinstance(timeline, list) and timeline:
+            return {
+                "job_id": job_id,
+                "frame_count": len(timeline),
+                "timeline": timeline,
+                "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
+            }
+
+    source_replay = rebuild_upload_replay_from_source(metadata)
+    if source_replay is not None:
+        return source_replay
+
     return {
         "job_id": job_id,
+        "frame_count": 0,
+        "timeline": [],
+        "meta": {},
+        "message": "No replay frames are available for this CSV yet. The source file may be missing, or the upload did not retain replayable timestamp and numeric signals.",
+    }
+
+
+def rebuild_upload_replay_from_source(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    raw_path = metadata.get("file_path")
+    if not raw_path:
+        return None
+    path = Path(str(raw_path))
+    if not path.exists() or not path.is_file():
+        return None
+    filename = str(metadata.get("filename") or path.name)
+    try:
+        rebuilt = process_telemetry_file(file_path=path, filename=filename)
+    except Exception as exc:
+        logger.warning(
+            "upload_replay_rebuild_failed job_id=%s filename=%s error_type=%s",
+            metadata.get("job_id"),
+            filename,
+            type(exc).__name__,
+        )
+        return None
+
+    replay = ((rebuilt.get("sii_intelligence") or {}).get("replay_timeline") or {})
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if not isinstance(timeline, list) or not timeline:
+        return None
+    return {
+        "job_id": metadata.get("job_id"),
         "frame_count": len(timeline),
         "timeline": timeline,
         "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
+        "message": "Replay reconstructed from the retained source CSV.",
     }
 
 

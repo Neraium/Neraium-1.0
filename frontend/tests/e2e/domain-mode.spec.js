@@ -46,6 +46,24 @@ test.describe("Domain mode wiring", () => {
       }
       await route.continue();
     });
+    await page.route("**/api/facility/systems*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          systems: mode === "aquatic" ? [{ name: "Circulation", scope: "" }] : [{ name: "HVAC", scope: "" }],
+          driver_categories: [],
+          domain_mode: mode,
+          domain_source: "upload_shape",
+          domain_confidence: 0.88,
+          domain_evidence: ["detected columns"],
+          intelligence: {},
+          adaptive_learning: {},
+          integration_stubs: [],
+          intelligence_status: {},
+        }),
+      });
+    });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
