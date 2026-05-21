@@ -1956,6 +1956,8 @@ def classify_telemetry_profile(
     scorecard: dict[str, int] = {
         "pool_hottub_systems": 0,
         "cultivation_climate": 0,
+        "hvac_systems": 0,
+        "electrical_systems": 0,
         "energy_schedule": 0,
         "sensor_health": 0,
         "irrigation_events": 0,
@@ -1991,6 +1993,37 @@ def classify_telemetry_profile(
             "light",
             "irrigation",
             "substrate",
+        ],
+        "hvac_systems": [
+            "hvac",
+            "air handler",
+            "ahu",
+            "supply temp",
+            "return temp",
+            "static pressure",
+            "damper",
+            "compressor",
+            "chiller",
+            "boiler",
+            "ventilation",
+            "cfm",
+            "duct",
+            "coil",
+        ],
+        "electrical_systems": [
+            "voltage",
+            "current",
+            "amp",
+            "kw",
+            "kwh",
+            "power factor",
+            "breaker",
+            "phase",
+            "transformer",
+            "harmonic",
+            "frequency",
+            "panel",
+            "bus",
         ],
         "energy_schedule": [
             "power",
@@ -2047,7 +2080,7 @@ def classify_telemetry_profile(
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
     if top_score < 2:
-        telemetry_profile = "mixed"
+        telemetry_profile = "unknown"
         confidence = "low"
     elif top_score >= 4 and top_score >= (second_score + 2):
         telemetry_profile = top_profile
@@ -2056,14 +2089,16 @@ def classify_telemetry_profile(
         telemetry_profile = top_profile
         confidence = "medium"
     else:
-        telemetry_profile = "mixed"
+        telemetry_profile = "unknown"
         confidence = "low"
 
     modality = "event" if telemetry_profile == "irrigation_events" else "continuous"
-    if telemetry_profile == "mixed" and event_like_columns > 0:
-        modality = "mixed"
+    if telemetry_profile == "unknown":
+        modality = "unknown"
 
-    profile_signals = matched_signals.get(top_profile if telemetry_profile != "mixed" else "irrigation_events", [])
+    profile_signals = matched_signals.get(top_profile, [])
+    if telemetry_profile == "unknown":
+        profile_signals = []
     return {
         "telemetry_profile": telemetry_profile,
         "telemetry_profile_confidence": confidence,

@@ -906,8 +906,58 @@ def test_processing_helper_classifies_cultivation_climate_profile() -> None:
     )
 
     intelligence = result["sii_intelligence"]
-    assert intelligence["telemetry_profile"] in {"cultivation_climate", "mixed"}
+    assert intelligence["telemetry_profile"] in {"cultivation_climate", "unknown"}
     assert intelligence["telemetry_profile_confidence"] in {"low", "medium", "high"}
+
+
+def test_processing_helper_classifies_hvac_profile() -> None:
+    result = process_csv_content(
+        filename="hvac-profile.csv",
+        content=(
+            "timestamp,room,supply_temp,return_temp,static_pressure,compressor_runtime,air_handler_status\n"
+            "2026-05-01T08:00:00Z,AHU-1,54,72,1.8,22,1\n"
+            "2026-05-01T08:05:00Z,AHU-1,54.2,72.1,1.9,23,1\n"
+            "2026-05-01T08:10:00Z,AHU-1,54.4,72.2,1.9,24,1\n"
+            "2026-05-01T08:15:00Z,AHU-1,54.7,72.5,2.0,25,1\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] == "hvac_systems"
+    assert intelligence["telemetry_profile_confidence"] in {"medium", "high"}
+
+
+def test_processing_helper_classifies_electrical_profile() -> None:
+    result = process_csv_content(
+        filename="electrical-profile.csv",
+        content=(
+            "timestamp,room,voltage_l1,current_l1,kw_demand,power_factor,frequency_hz,panel_temp\n"
+            "2026-05-01T08:00:00Z,Panel A,480,52,38,0.96,60,84\n"
+            "2026-05-01T08:05:00Z,Panel A,479,53,39,0.95,60,84.2\n"
+            "2026-05-01T08:10:00Z,Panel A,481,51,37,0.97,60,84.1\n"
+            "2026-05-01T08:15:00Z,Panel A,480,54,40,0.95,60,84.3\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] == "electrical_systems"
+    assert intelligence["telemetry_profile_confidence"] in {"medium", "high"}
+
+
+def test_processing_helper_low_confidence_profile_makes_no_claim() -> None:
+    result = process_csv_content(
+        filename="low-confidence-profile.csv",
+        content=(
+            "timestamp,room,x1,x2,x3\n"
+            "2026-05-01T08:00:00Z,Room A,1,2,3\n"
+            "2026-05-01T08:05:00Z,Room A,2,3,4\n"
+            "2026-05-01T08:10:00Z,Room A,3,4,5\n"
+            "2026-05-01T08:15:00Z,Room A,4,5,6\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] == "unknown"
+    assert intelligence["telemetry_profile_confidence"] == "low"
+    assert intelligence["telemetry_profile_signals"] == []
+    assert intelligence["system_identity"]["claim_made"] is False
 
 
 @pytest.mark.slow

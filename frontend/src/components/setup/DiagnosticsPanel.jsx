@@ -162,6 +162,15 @@ export default function DiagnosticsPanel({
         confidence: latestUploadResult?.sii_intelligence?.confidence_basis ?? DASH,
       }
     : { topology: DASH, propagation: DASH, recovery: DASH, confidence: DASH };
+  const systemIdentity = showAnalysis
+    ? (latestUploadResult?.sii_intelligence?.system_identity ?? {
+      profile: latestUploadResult?.sii_intelligence?.telemetry_profile ?? "unknown",
+      confidence: latestUploadResult?.sii_intelligence?.telemetry_profile_confidence ?? "low",
+      modality: latestUploadResult?.sii_intelligence?.telemetry_modality ?? "unknown",
+      signals: latestUploadResult?.sii_intelligence?.telemetry_profile_signals ?? [],
+      claim_made: ["medium", "high"].includes(String(latestUploadResult?.sii_intelligence?.telemetry_profile_confidence ?? "").toLowerCase()),
+    })
+    : null;
   const roomConfidenceRows = showAnalysis && Array.isArray(latestUploadResult?.sii_intelligence?.rooms)
     ? latestUploadResult.sii_intelligence.rooms.map((room) => {
       const components = room?.confidence_components ?? {};
@@ -196,6 +205,25 @@ export default function DiagnosticsPanel({
               ]}
               compact
             />
+          </Panel>
+          <Panel title="System Identity" className="span-12">
+            <MetricGrid
+              metrics={[
+                { label: "Profile", value: systemIdentity?.profile ?? DASH },
+                { label: "Confidence", value: systemIdentity?.confidence ?? DASH },
+                { label: "Modality", value: systemIdentity?.modality ?? DASH },
+                { label: "Claim Made", value: systemIdentity?.claim_made ? "Yes" : "No" },
+              ]}
+              compact
+            />
+            {Array.isArray(systemIdentity?.signals) && systemIdentity.signals.length > 0 ? (
+              <DataTable
+                columns={["Identity Signal"]}
+                rows={systemIdentity.signals.map((signal) => [signal])}
+              />
+            ) : (
+              <p className="narrative-text">Profile confidence is low, so Neraium is not making a system-type claim.</p>
+            )}
           </Panel>
           <Panel title="Per-Room Confidence Breakdown" className="span-12">
             {roomConfidenceRows.length > 0 ? (
