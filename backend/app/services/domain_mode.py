@@ -60,7 +60,7 @@ def detect_domain_mode() -> dict[str, Any]:
     if not isinstance(latest_result, dict):
         return {
             "mode": DEFAULT_DOMAIN_MODE,
-            "source": "default",
+            "source": "unclassified",
             "confidence": 0.0,
             "evidence": [],
         }
@@ -72,7 +72,7 @@ def detect_domain_mode() -> dict[str, Any]:
     if aquatic_score == 0 and cultivation_score == 0:
         return {
             "mode": DEFAULT_DOMAIN_MODE,
-            "source": "default",
+            "source": "unclassified",
             "confidence": 0.0,
             "evidence": [],
         }

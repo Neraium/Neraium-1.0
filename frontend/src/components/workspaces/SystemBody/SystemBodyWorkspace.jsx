@@ -248,9 +248,13 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
 }
 
 function domainModeLabel(domainMode, domainDetection) {
-  if (domainDetection && String(domainDetection.source ?? "").toLowerCase() !== "upload_shape") return "Auto-detected";
+  const source = String(domainDetection?.source ?? "").toLowerCase();
+  const confidence = Number(domainDetection?.confidence ?? 0);
+  if (source === "unclassified" || source === "default") return "Unclassified";
+  if (source !== "upload_shape") return "Auto-detected";
+  if (confidence > 0 && confidence < 0.65) return "Uncertain";
   const normalized = String(domainMode ?? "").trim().toLowerCase();
   if (normalized === "cultivation") return "Cultivation";
   if (normalized === "aquatic") return "Aquatic";
-  return "Auto-detected";
+  return "Uncertain";
 }

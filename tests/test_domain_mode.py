@@ -122,6 +122,6 @@ def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> No
 
     assert status.status_code == 200
     payload = status.json()
-    assert payload["source"] == "default"
+    assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
