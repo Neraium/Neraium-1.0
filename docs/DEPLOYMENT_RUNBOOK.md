@@ -15,7 +15,7 @@ python scripts/pilot_rehearsal_check.py
 For production smoke tests:
 
 ```bash
-BASE_URL=https://app.neraium.com node scripts/smoke-production.js
+API_BASE_URL=https://api.neraium.com node scripts/smoke-production.js
 BASE_URL=https://app.neraium.com python scripts/pilot_rehearsal_check.py
 ```
 
@@ -35,7 +35,7 @@ This caps parsed rows per upload job and returns results faster while preserving
 If metrics requires auth:
 
 ```bash
-BASE_URL=https://app.neraium.com NERAIUM_API_TOKEN=$NERAIUM_API_TOKEN node scripts/smoke-production.js
+API_BASE_URL=https://api.neraium.com NERAIUM_API_TOKEN=$NERAIUM_API_TOKEN node scripts/smoke-production.js
 ```
 
 ## GitHub Workflow Discovery
