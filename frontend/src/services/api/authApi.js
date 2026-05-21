@@ -1,8 +1,6 @@
 import { apiFetch } from "../../config";
 
-const LOCAL_AUTH_USERS_KEY = "neraium.local_auth.users";
 const LOCAL_AUTH_SESSION_KEY = "neraium.local_auth.session";
-const LOCAL_AUTH_HASH_VERSION = "sha256-v1";
 
 async function safeAuthFetch(path, options) {
   try {
@@ -26,27 +24,6 @@ function detailMessage(payload, fallback) {
   return fallback;
 }
 
-function loadLocalUsers() {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(LOCAL_AUTH_USERS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalUsers(users) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCAL_AUTH_USERS_KEY, JSON.stringify(users));
-}
-
-function readLocalSessionEmail() {
-  if (typeof window === "undefined") return "";
-  return String(window.localStorage.getItem(LOCAL_AUTH_SESSION_KEY) ?? "");
-}
-
 function setLocalSessionEmail(email) {
   if (typeof window === "undefined") return;
   if (!email) {
@@ -56,110 +33,8 @@ function setLocalSessionEmail(email) {
   window.localStorage.setItem(LOCAL_AUTH_SESSION_KEY, String(email).trim().toLowerCase());
 }
 
-function resolveLocalUserByEmail(email) {
-  const normalized = String(email ?? "").trim().toLowerCase();
-  return loadLocalUsers().find((user) => String(user?.email ?? "").toLowerCase() === normalized) ?? null;
-}
-
-function bytesToHex(bytes) {
-  return Array.from(bytes)
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function randomSaltHex() {
-  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    window.crypto.getRandomValues(bytes);
-    return bytesToHex(bytes);
-  }
-  return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 18)}`;
-}
-
-async function sha256Hex(value) {
-  if (!(typeof window !== "undefined" && window.crypto?.subtle)) {
-    return "";
-  }
-  const encoded = new TextEncoder().encode(String(value ?? ""));
-  const digest = await window.crypto.subtle.digest("SHA-256", encoded);
-  return bytesToHex(new Uint8Array(digest));
-}
-
-async function createLocalPasswordRecord(password) {
-  const salt = randomSaltHex();
-  const hash = await sha256Hex(`${salt}:${String(password ?? "")}`);
-  return { salt, hash, version: LOCAL_AUTH_HASH_VERSION };
-}
-
-async function verifyLocalPassword(user, password) {
-  if (!user || typeof user !== "object") return false;
-  const candidate = String(password ?? "");
-  const salt = String(user?.password_salt ?? "");
-  const expectedHash = String(user?.password_hash ?? "");
-  if (salt && expectedHash) {
-    const candidateHash = await sha256Hex(`${salt}:${candidate}`);
-    return Boolean(candidateHash) && candidateHash === expectedHash;
-  }
-  // Backward compatibility for pre-hash local fallback users.
-  return String(user?.password ?? "") === candidate;
-}
-
 function isNotFoundResponse(response) {
   return Number(response?.status) === 404;
-}
-
-export async function fetchCurrentUser() {
-  const response = await safeAuthFetch("/api/auth/me");
-  if (!response || !response.ok || isNotFoundResponse(response)) {
-    const email = readLocalSessionEmail();
-    const user = email ? resolveLocalUserByEmail(email) : null;
-    return { authenticated: Boolean(user), user };
-  }
-  const payload = await readJson(response);
-  return payload;
-}
-
-export async function signupUser({ name, email, password }) {
-  const normalizedEmail = String(email ?? "").trim().toLowerCase();
-  const response = await safeAuthFetch("/api/auth/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
-  });
-  if (!response || !response.ok) {
-    const payload = await readJson(response);
-    const detail = detailMessage(payload, "");
-    const canFallbackLocal =
-      !response
-      || isNotFoundResponse(response)
-      || response.status >= 500
-      || detail.toLowerCase().includes("not found")
-      || detail.toLowerCase().includes("unavailable");
-    if (!canFallbackLocal) {
-      throw new Error(detailMessage(payload, "Sign up failed."));
-    }
-    if (!normalizedEmail || !normalizedEmail.includes("@")) throw new Error("Enter a valid email address.");
-    if (String(password ?? "").length < 8) throw new Error("Password must be at least 8 characters.");
-    const users = loadLocalUsers();
-    if (users.some((user) => String(user?.email ?? "").toLowerCase() === normalizedEmail)) {
-      throw new Error("An account with this email already exists.");
-    }
-    const passwordRecord = await createLocalPasswordRecord(password);
-    const user = {
-      email: normalizedEmail,
-      name: String(name ?? "").trim() || normalizedEmail.split("@", 1)[0],
-      created_at: new Date().toISOString(),
-      password_hash: passwordRecord.hash,
-      password_salt: passwordRecord.salt,
-      password_hash_version: passwordRecord.version,
-    };
-    users.push(user);
-    saveLocalUsers(users);
-    setLocalSessionEmail(normalizedEmail);
-    return { authenticated: true, user: { email: user.email, name: user.name, created_at: user.created_at } };
-  }
-  const payload = await readJson(response);
-  return payload;
 }
 
 export async function loginUser({ email, password }) {
@@ -171,18 +46,9 @@ export async function loginUser({ email, password }) {
   });
   const payload = await readJson(response);
   if (!response || !response.ok) {
-    // Resilient fallback: when server auth is unavailable or state was reset,
-    // still allow local-login accounts created in this browser.
-    const localUser = resolveLocalUserByEmail(normalizedEmail);
-    if (localUser && await verifyLocalPassword(localUser, password)) {
-      setLocalSessionEmail(normalizedEmail);
-      return {
-        authenticated: true,
-        user: { email: localUser.email, name: localUser.name, created_at: localUser.created_at },
-      };
-    }
-    throw new Error(detailMessage(payload, "Invalid email or password. If this is your first login here, create account again."));
+    throw new Error(detailMessage(payload, "Invalid email or password."));
   }
+  setLocalSessionEmail(normalizedEmail);
   return payload;
 }
 
