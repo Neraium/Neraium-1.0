@@ -3,11 +3,45 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.aquatic_domain import INTEGRATION_STUBS as AQUATIC_INTEGRATION_STUBS
-from app.services.runtime_db import now_iso, read_latest_payload, upsert_latest_payload
+from app.services.upload_jobs import read_latest_upload_result
 
 DEFAULT_DOMAIN_MODE = "cultivation" 
 SUPPORTED_DOMAIN_MODES = {"aquatic", "cultivation"}
-DOMAIN_MODE_KEY = "neraium_domain_mode"
+
+AQUATIC_HINTS = (
+    "orp",
+    "chlorine",
+    "ph",
+    "pool",
+    "spa",
+    "sanitizer",
+    "filter",
+    "pump",
+    "valve",
+    "water_level",
+    "heater",
+    "circulation",
+    "pressure",
+)
+
+CULTIVATION_HINTS = (
+    "hvac",
+    "humidity",
+    "dehumid",
+    "airflow",
+    "irrigation",
+    "lighting",
+    "co2",
+    "vpd",
+    "flower",
+    "veg",
+    "mother",
+    "clone",
+    "grow",
+    "canopy",
+    "exhaust",
+    "fan",
+)
 
 
 def normalize_domain_mode(value: str | None) -> str:
@@ -18,23 +52,93 @@ def normalize_domain_mode(value: str | None) -> str:
 
 
 def read_domain_mode() -> str:
-    payload = read_latest_payload(DOMAIN_MODE_KEY)
-    if isinstance(payload, dict):
-        return normalize_domain_mode(payload.get("mode"))
-    if isinstance(payload, str):
-        return normalize_domain_mode(payload)
-    return DEFAULT_DOMAIN_MODE
+    return detect_domain_mode()["mode"]
 
 
-def write_domain_mode(mode: str, actor: str = "operator") -> dict[str, Any]:
-    normalized = normalize_domain_mode(mode)
-    payload = {
-        "mode": normalized,
-        "updated_at": now_iso(),
-        "actor": actor,
+def detect_domain_mode() -> dict[str, Any]:
+    latest_result = read_latest_upload_result()
+    if not isinstance(latest_result, dict):
+        return {
+            "mode": DEFAULT_DOMAIN_MODE,
+            "source": "default",
+            "confidence": 0.0,
+            "evidence": [],
+        }
+
+    columns = _domain_detection_inputs(latest_result)
+    aquatic_score, aquatic_evidence = _score_domain(columns, AQUATIC_HINTS, latest_result.get("aquatic_schema"))
+    cultivation_score, cultivation_evidence = _score_domain(columns, CULTIVATION_HINTS)
+
+    if aquatic_score == 0 and cultivation_score == 0:
+        return {
+            "mode": DEFAULT_DOMAIN_MODE,
+            "source": "default",
+            "confidence": 0.0,
+            "evidence": [],
+        }
+
+    if aquatic_score > cultivation_score:
+        mode = "aquatic"
+        score = aquatic_score
+        runner_up = cultivation_score
+        evidence = aquatic_evidence
+    elif cultivation_score > aquatic_score:
+        mode = "cultivation"
+        score = cultivation_score
+        runner_up = aquatic_score
+        evidence = cultivation_evidence
+    else:
+        mode = DEFAULT_DOMAIN_MODE
+        score = cultivation_score
+        runner_up = aquatic_score
+        evidence = cultivation_evidence if mode == "cultivation" else aquatic_evidence
+
+    confidence = _confidence_from_scores(score, runner_up)
+    return {
+        "mode": mode,
+        "source": "upload_shape",
+        "confidence": confidence,
+        "evidence": evidence,
     }
-    upsert_latest_payload(DOMAIN_MODE_KEY, payload)
-    return payload
+
+
+def _domain_detection_inputs(latest_result: dict[str, Any]) -> list[str]:
+    columns = [str(column) for column in latest_result.get("columns", []) if str(column).strip()]
+    room_summary = latest_result.get("room_summary")
+    if isinstance(room_summary, dict):
+        rooms = room_summary.get("rooms")
+        if isinstance(rooms, list):
+            for room in rooms:
+                if isinstance(room, dict):
+                    room_name = room.get("room")
+                    if room_name:
+                        columns.append(str(room_name))
+    return columns
+
+
+def _score_domain(items: list[str], hints: tuple[str, ...], extra: Any = None) -> tuple[int, list[str]]:
+    evidence: list[str] = []
+    lowered_items = [str(item).lower() for item in items]
+    for item, lowered in zip(items, lowered_items):
+        if any(hint in lowered for hint in hints):
+            evidence.append(str(item))
+
+    if isinstance(extra, dict):
+        mapped_count = extra.get("mapped_column_count")
+        if isinstance(mapped_count, int) and mapped_count > 0:
+            evidence.append("aquatic schema")
+            evidence.append(f"mapped_columns:{min(mapped_count, 5)}")
+
+    unique_evidence = list(dict.fromkeys(evidence))
+    return len(unique_evidence), unique_evidence
+
+
+def _confidence_from_scores(winner: int, runner_up: int) -> float:
+    total = winner + runner_up
+    if total <= 0:
+        return 0.0
+    spread = (winner - runner_up) / total
+    return round(0.55 + max(0.0, spread) * 0.4, 3)
 
 
 def domain_profile(mode: str) -> dict[str, Any]:

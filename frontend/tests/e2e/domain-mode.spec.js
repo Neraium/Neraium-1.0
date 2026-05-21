@@ -8,8 +8,21 @@ async function openSettings(page) {
 }
 
 test.describe("Domain mode wiring", () => {
-  test("switches between aquatic and cultivation and persists across reload", async ({ page }) => {
+  test("shows the detected data type from the backend", async ({ page }) => {
     let mode = "aquatic";
+    await page.addInitScript(() => {
+      window.localStorage.setItem(
+        "neraium.local_auth.users",
+        JSON.stringify([
+          {
+            email: "operator@facility.com",
+            name: "Operator",
+            created_at: "2026-05-21T00:00:00.000Z",
+          },
+        ]),
+      );
+      window.localStorage.setItem("neraium.local_auth.session", "operator@facility.com");
+    });
     await page.route("**/api/domain/mode*", async (route) => {
       const request = route.request();
       if (request.method() === "GET") {
@@ -18,22 +31,15 @@ test.describe("Domain mode wiring", () => {
           contentType: "application/json",
           body: JSON.stringify({
             mode,
+            source: "upload_shape",
+            confidence: 0.88,
+            evidence: ["pool_water_temp", "orp_mv", "chlorine_ppm"],
             supported_modes: ["aquatic", "cultivation"],
-            profile: {},
-          }),
-        });
-        return;
-      }
-      if (request.method() === "POST") {
-        const payload = request.postDataJSON?.() ?? {};
-        mode = payload.mode === "cultivation" ? "cultivation" : "aquatic";
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            mode,
-            updated_at: new Date().toISOString(),
-            profile: {},
+            profile: {
+              subtitle: "",
+              description: "",
+              replay_demo_mode: "aquatic_demo",
+            },
           }),
         });
         return;
@@ -42,26 +48,15 @@ test.describe("Domain mode wiring", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
+    await expect(settingsButton).toBeVisible();
     await openSettings(page);
+    await expect(page.getByText("Detected data type: Aquatic")).toBeVisible();
 
-    const toCultivation = page.getByRole("button", { name: "Switch to cultivation mode" });
-    const toAquatic = page.getByRole("button", { name: "Switch to aquatic mode" });
-    let expectedAfterReload;
-
-    if (await toCultivation.isVisible()) {
-      expectedAfterReload = page.getByRole("button", { name: "Switch to aquatic mode" });
-      await toCultivation.click();
-      await expect(expectedAfterReload).toBeVisible();
-    } else {
-      await expect(toAquatic).toBeVisible();
-      expectedAfterReload = page.getByRole("button", { name: "Switch to cultivation mode" });
-      await toAquatic.click();
-      await expect(expectedAfterReload).toBeVisible();
-    }
+    mode = "cultivation";
 
     await page.reload();
     await openSettings(page);
-    await expect(expectedAfterReload).toBeVisible();
+    await expect(page.getByText("Detected data type: Cultivation")).toBeVisible();
   });
 });
