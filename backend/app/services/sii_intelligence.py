@@ -255,12 +255,12 @@ def build_upload_intelligence(
         "mode": mode,
         "facility_state": primary_room_record["room_state"],
         "room_state": primary_room_record["room_state"],
-        "urgency": urgency,
-        "intervention_window": intervention_window,
+        "urgency": primary_room_record["urgency"],
+        "intervention_window": primary_room_record["intervention_window"],
         "neraium_score": score,
         "primary_room": primary_room_record["room"],
         "priority_room": primary_room_record["room"],
-        "primary_driver": primary_driver,
+        "primary_driver": primary_room_record["primary_driver"],
         "driver_category": primary_room_record.get("driver_category") or driver_attribution.get("driver_category"),
         "attribution_confidence": primary_room_record.get("attribution_confidence") or driver_attribution.get("attribution_confidence"),
         "supporting_evidence": supporting_evidence,
@@ -358,11 +358,11 @@ def build_upload_room_records(
             if index == 0
             else [f"{room_name}: {line}" for line in (assessment.get("what_to_check") or what_to_check)[:3]]
         )
-        room_urgency = urgency if index == 0 else str(assessment.get("urgency") or "review")
-        room_state_value = room_state if index == 0 else str(assessment.get("room_state") or state_from_urgency(room_urgency))
-        room_intervention_window = intervention_window if index == 0 else window_from_urgency(room_urgency)
-        room_driver = primary_driver if index == 0 else str(assessment.get("primary_driver") or "Room telemetry indicates a separate operating pattern.")
-        room_confidence = confidence if index == 0 else int(assessment.get("confidence") or max(confidence - 6, 0))
+        room_urgency = str(assessment.get("urgency") or urgency)
+        room_state_value = str(assessment.get("room_state") or (room_state if index == 0 else state_from_urgency(room_urgency)))
+        room_intervention_window = str(assessment.get("intervention_window") or (intervention_window if index == 0 else window_from_urgency(room_urgency)))
+        room_driver = str(assessment.get("primary_driver") or (primary_driver if index == 0 else "Room telemetry indicates a separate operating pattern."))
+        room_confidence = int(assessment.get("confidence") or (confidence if index == 0 else max(confidence - 6, 0)))
         room_driver_category = (
             str(assessment.get("driver_category") or "unknown_system_drift")
             if index > 0
@@ -399,14 +399,22 @@ def build_upload_room_records(
                 "confidence_basis": room_confidence_basis,
                 "confidence_components": room_confidence_components,
                 "recommended_operator_review": (
-                    recommended_operator_review
-                    if index == 0
-                    else str(assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
+                    str(assessment.get("recommended_operator_review"))
+                    if assessment.get("recommended_operator_review")
+                    else (
+                        recommended_operator_review
+                        if index == 0
+                        else room_checks[0].replace(f"{room_name}: ", "")
+                    )
                 ),
                 "next_operator_move": (
-                    recommended_operator_review
-                    if index == 0
-                    else str(assessment.get("next_operator_move") or assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
+                    str(assessment.get("next_operator_move"))
+                    if assessment.get("next_operator_move")
+                    else (
+                        recommended_operator_review
+                        if index == 0
+                        else str(assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
+                    )
                 ),
                 "what_to_check": room_checks,
                 "why_flagged": room_specific_why,

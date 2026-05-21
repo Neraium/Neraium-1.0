@@ -828,6 +828,51 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
     assert sparse["attribution_confidence"] == "low"
 
 
+def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states() -> None:
+    result = process_csv_content(
+        filename="mixed-room-regression.csv",
+        content=(
+            "timestamp,room,temperature,humidity,airflow\n"
+            "2026-05-01T08:00:00Z,Flower Room 1,74,55,300\n"
+            "2026-05-01T08:05:00Z,Flower Room 1,74,55,301\n"
+            "2026-05-01T08:10:00Z,Flower Room 1,75,56,303\n"
+            "2026-05-01T08:15:00Z,Flower Room 1,98,82,520\n"
+            "2026-05-01T08:20:00Z,Flower Room 1,101,84,545\n"
+            "2026-05-01T08:25:00Z,Flower Room 1,104,86,565\n"
+            "2026-05-01T08:00:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:05:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:10:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:15:00Z,Flower Room 2,75,56,306\n"
+            "2026-05-01T08:20:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:25:00Z,Flower Room 2,75,56,305\n"
+            "2026-05-01T08:00:00Z,Veg Room A,74,55,301\n"
+            "2026-05-01T08:05:00Z,Veg Room A,74,55,301\n"
+            "2026-05-01T08:10:00Z,Veg Room A,74,55,301\n"
+        ).encode(),
+    )
+
+    rooms = {room["room"]: room for room in result["sii_intelligence"]["rooms"]}
+    unstable_room = rooms["Flower Room 1"]
+    nominal_room = rooms["Flower Room 2"]
+    sparse_room = rooms["Veg Room A"]
+
+    assert unstable_room["urgency"] == "unstable"
+    assert unstable_room["driver_category"] == "process_timing"
+    assert unstable_room["attribution_confidence"] == "high"
+    assert unstable_room["confidence_components"]["signal_strength"] == "high"
+
+    assert nominal_room["urgency"] == "nominal"
+    assert nominal_room["driver_category"] == "stable_monitoring"
+    assert nominal_room["attribution_confidence"] == "medium"
+    assert nominal_room["confidence_components"]["signal_strength"] == "low"
+
+    assert sparse_room["urgency"] == "review"
+    assert sparse_room["room_state"] == "Insufficient telemetry"
+    assert sparse_room["driver_category"] == "sensor_network"
+    assert sparse_room["attribution_confidence"] == "low"
+    assert sparse_room["confidence_components"]["data_sufficiency"] == "low"
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)

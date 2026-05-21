@@ -9,6 +9,12 @@ import {
 
 const DASH = "-";
 
+function formatConfidenceComponentValue(value) {
+  if (!value) return DASH;
+  const text = String(value);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function readPrimaryContributors(result) {
   const frameContributors = result?.sii_intelligence?.replay_timeline?.timeline?.at?.(-1)?.primary_contributors;
   if (Array.isArray(frameContributors) && frameContributors.length) {
@@ -156,6 +162,21 @@ export default function DiagnosticsPanel({
         confidence: latestUploadResult?.sii_intelligence?.confidence_basis ?? DASH,
       }
     : { topology: DASH, propagation: DASH, recovery: DASH, confidence: DASH };
+  const roomConfidenceRows = showAnalysis && Array.isArray(latestUploadResult?.sii_intelligence?.rooms)
+    ? latestUploadResult.sii_intelligence.rooms.map((room) => {
+      const components = room?.confidence_components ?? {};
+      return [
+        room?.room ?? DASH,
+        room?.urgency ?? DASH,
+        room?.driver_category ?? DASH,
+        room?.attribution_confidence ?? DASH,
+        formatConfidenceComponentValue(components?.data_sufficiency),
+        formatConfidenceComponentValue(components?.signal_strength),
+        formatConfidenceComponentValue(components?.relationship_support),
+        formatConfidenceComponentValue(components?.persistence),
+      ];
+    })
+    : [];
 
   return (
     <Panel title="Diagnostics" className="span-12">
@@ -175,6 +196,29 @@ export default function DiagnosticsPanel({
               ]}
               compact
             />
+          </Panel>
+          <Panel title="Per-Room Confidence Breakdown" className="span-12">
+            {roomConfidenceRows.length > 0 ? (
+              <DataTable
+                columns={[
+                  "Room",
+                  "Urgency",
+                  "Driver Category",
+                  "Attribution",
+                  "Data Sufficiency",
+                  "Signal Strength",
+                  "Relationship Support",
+                  "Persistence",
+                ]}
+                rows={roomConfidenceRows}
+              />
+            ) : (
+              <EmptyState
+                title="No per-room confidence data"
+                body="Upload telemetry with room-level intelligence output to view confidence components."
+                compact
+              />
+            )}
           </Panel>
           {/* TODO: Backend replay frame persistence should always provide frame-level topology details per upload job. */}
         </>
