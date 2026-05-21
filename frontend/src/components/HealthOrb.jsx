@@ -9,27 +9,27 @@ function tone(state) {
   if (state === "alert") {
     return {
       className: "health-orb--iris-alert",
-      ring: "rgba(223, 98, 84, 0.92)",
-      plate: "rgba(118, 36, 30, 0.26)",
-      line: "rgba(236, 126, 112, 0.82)",
-      node: "rgba(255, 224, 220, 0.96)",
+      ring: "rgba(67, 144, 255, 0.96)",
+      plate: "rgba(14, 48, 92, 0.28)",
+      line: "rgba(126, 183, 255, 0.9)",
+      node: "rgba(226, 240, 255, 0.98)",
     };
   }
   if (state === "watch") {
     return {
       className: "health-orb--iris-watch",
-      ring: "rgba(198, 158, 94, 0.9)",
-      plate: "rgba(110, 84, 40, 0.22)",
-      line: "rgba(204, 164, 100, 0.72)",
-      node: "rgba(245, 228, 190, 0.95)",
+      ring: "rgba(52, 122, 255, 0.92)",
+      plate: "rgba(20, 44, 84, 0.24)",
+      line: "rgba(102, 168, 255, 0.82)",
+      node: "rgba(218, 236, 255, 0.96)",
     };
   }
   return {
     className: "health-orb--iris-stable",
-    ring: "rgba(168, 182, 196, 0.94)",
-    plate: "rgba(92, 106, 118, 0.26)",
-    line: "rgba(176, 190, 203, 0.72)",
-    node: "rgba(238, 246, 252, 0.96)",
+    ring: "rgba(124, 183, 255, 0.94)",
+    plate: "rgba(38, 66, 108, 0.25)",
+    line: "rgba(154, 203, 255, 0.8)",
+    node: "rgba(236, 246, 255, 0.98)",
   };
 }
 
