@@ -1764,6 +1764,8 @@ def build_room_assessments(
                 "urgency": "review",
                 "room_state": "Insufficient telemetry",
                 "primary_driver": "Insufficient per-room telemetry context",
+                "driver_category": "sensor_network",
+                "attribution_confidence": "low",
                 "why_flagged": "insufficient room-level telemetry to confirm a stable trend",
                 "supporting_evidence": [
                     f"Only {len(vectors)} usable numeric row(s) were available for this room.",
@@ -1774,6 +1776,7 @@ def build_room_assessments(
                     "Verify room tags and timestamp consistency for this source.",
                 ],
                 "recommended_operator_review": "Collect more room telemetry before clearing this system",
+                "next_operator_move": "Collect more room telemetry before clearing this system",
                 "relationship_evidence": [
                     "Room-level relationship evidence is limited due to sparse telemetry.",
                     "Signal coupling cannot be confirmed until more room samples are available.",
@@ -1786,6 +1789,12 @@ def build_room_assessments(
                 "projected_time_to_failure": "Unknown until additional telemetry is available",
                 "projected_time_to_failure_hours": None,
                 "confidence": 52,
+                "confidence_components": {
+                    "data_sufficiency": "low",
+                    "signal_strength": "low",
+                    "relationship_support": "low",
+                    "persistence": "low",
+                },
             }
             continue
 
@@ -1809,6 +1818,14 @@ def build_room_assessments(
             why = "room-level telemetry drift is strong relative to this room baseline"
             projected = "Approximately 8 hours at current trajectory"
             projected_hours = 8
+            driver_category = "process_timing"
+            attribution_confidence = "high"
+            confidence_components = {
+                "data_sufficiency": "high",
+                "signal_strength": "high",
+                "relationship_support": "high",
+                "persistence": "high",
+            }
         elif drift_score >= 0.12:
             urgency = "review"
             state = "Drift observed"
@@ -1816,6 +1833,14 @@ def build_room_assessments(
             why = "room-level telemetry moved away from baseline and should be reviewed"
             projected = "Approximately 2 days at current trajectory"
             projected_hours = 48
+            driver_category = "thermal_control"
+            attribution_confidence = "medium"
+            confidence_components = {
+                "data_sufficiency": "medium",
+                "signal_strength": "medium",
+                "relationship_support": "medium",
+                "persistence": "medium",
+            }
         else:
             urgency = "nominal"
             state = "Stable"
@@ -1823,6 +1848,14 @@ def build_room_assessments(
             why = "room-level telemetry remains near recent operating baseline"
             projected = "More than 3 weeks at current trajectory"
             projected_hours = 504
+            driver_category = "stable_monitoring"
+            attribution_confidence = "medium"
+            confidence_components = {
+                "data_sufficiency": "medium",
+                "signal_strength": "low",
+                "relationship_support": "medium",
+                "persistence": "medium",
+            }
 
         if urgency == "unstable":
             relationship_evidence = [
@@ -1859,6 +1892,8 @@ def build_room_assessments(
             "urgency": urgency,
             "room_state": state,
             "primary_driver": "Room-level telemetry trend",
+            "driver_category": driver_category,
+            "attribution_confidence": attribution_confidence,
             "why_flagged": why,
             "supporting_evidence": [
                 f"Room drift score is {round(drift_score, 4)} from {row_count} telemetry row(s).",
@@ -1872,9 +1907,11 @@ def build_room_assessments(
                 "Validate room-level sampling consistency and timestamp continuity.",
             ],
             "recommended_operator_review": f"Review {room_name} room-level drift trend",
+            "next_operator_move": f"Review {room_name} room-level drift trend",
             "projected_time_to_failure": projected,
             "projected_time_to_failure_hours": projected_hours,
             "confidence": confidence,
+            "confidence_components": confidence_components,
         }
     return assessments
 

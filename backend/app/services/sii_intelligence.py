@@ -244,6 +244,12 @@ def build_upload_intelligence(
         room_assessments=room_assessments,
     )
     primary_room_record = room_records[0]
+    top_level_confidence_components = primary_room_record.get("confidence_components") or {
+        "data_sufficiency": "medium",
+        "signal_strength": "medium",
+        "relationship_support": "medium",
+        "persistence": "medium",
+    }
     candidate = {
         "source": source,
         "mode": mode,
@@ -255,11 +261,15 @@ def build_upload_intelligence(
         "primary_room": primary_room_record["room"],
         "priority_room": primary_room_record["room"],
         "primary_driver": primary_driver,
+        "driver_category": primary_room_record.get("driver_category") or driver_attribution.get("driver_category"),
+        "attribution_confidence": primary_room_record.get("attribution_confidence") or driver_attribution.get("attribution_confidence"),
         "supporting_evidence": supporting_evidence,
         "relationship_evidence": relationship_evidence,
         "structural_explanation": structural_explanation,
         "confidence_basis": primary_room_record["confidence_basis"],
+        "confidence_components": top_level_confidence_components,
         "recommended_operator_review": primary_room_record["recommended_operator_review"],
+        "next_operator_move": primary_room_record["recommended_operator_review"],
         "what_to_check": what_to_check,
         "why_flagged": why_flagged,
         "baseline_comparison": primary_room_record["baseline_comparison"],
@@ -353,6 +363,27 @@ def build_upload_room_records(
         room_intervention_window = intervention_window if index == 0 else window_from_urgency(room_urgency)
         room_driver = primary_driver if index == 0 else str(assessment.get("primary_driver") or "Room telemetry indicates a separate operating pattern.")
         room_confidence = confidence if index == 0 else int(assessment.get("confidence") or max(confidence - 6, 0))
+        room_driver_category = (
+            str(assessment.get("driver_category") or "unknown_system_drift")
+            if index > 0
+            else str((room_assessments or {}).get(room_name, {}).get("driver_category") or "unknown_system_drift")
+        )
+        room_attribution_confidence = (
+            str(assessment.get("attribution_confidence") or "low")
+            if index > 0
+            else str((room_assessments or {}).get(room_name, {}).get("attribution_confidence") or "medium")
+        )
+        room_confidence_components = (
+            assessment.get("confidence_components")
+            if index > 0
+            else ((room_assessments or {}).get(room_name, {}).get("confidence_components"))
+        ) or {
+            "data_sufficiency": "medium",
+            "signal_strength": "medium",
+            "relationship_support": "medium",
+            "persistence": "medium",
+        }
+        room_confidence_basis = confidence_basis if index == 0 else confidence_basis_from_components(room_confidence_components)
         records.append(
             {
                 "room": room_name,
@@ -360,14 +391,22 @@ def build_upload_room_records(
                 "urgency": room_urgency,
                 "intervention_window": room_intervention_window,
                 "primary_driver": room_driver,
+                "driver_category": room_driver_category,
+                "attribution_confidence": room_attribution_confidence,
                 "supporting_evidence": room_supporting_evidence,
                 "relationship_evidence": room_relationship_evidence,
                 "structural_explanation": room_structural_explanation,
-                "confidence_basis": confidence_basis,
+                "confidence_basis": room_confidence_basis,
+                "confidence_components": room_confidence_components,
                 "recommended_operator_review": (
                     recommended_operator_review
                     if index == 0
                     else str(assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
+                ),
+                "next_operator_move": (
+                    recommended_operator_review
+                    if index == 0
+                    else str(assessment.get("next_operator_move") or assessment.get("recommended_operator_review") or room_checks[0].replace(f"{room_name}: ", ""))
                 ),
                 "what_to_check": room_checks,
                 "why_flagged": room_specific_why,
@@ -380,6 +419,20 @@ def build_upload_room_records(
             }
         )
     return records
+
+
+def confidence_basis_from_components(components: dict[str, Any]) -> str:
+    data = str(components.get("data_sufficiency", "unknown")).lower()
+    signal = str(components.get("signal_strength", "unknown")).lower()
+    relationship = str(components.get("relationship_support", "unknown")).lower()
+    persistence = str(components.get("persistence", "unknown")).lower()
+    return (
+        "Confidence components: "
+        f"data_sufficiency={data}, "
+        f"signal_strength={signal}, "
+        f"relationship_support={relationship}, "
+        f"persistence={persistence}."
+    )
 
 
 def project_time_to_failure_hours(

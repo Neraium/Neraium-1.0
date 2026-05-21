@@ -804,14 +804,28 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
     secondary = room_map["Flower Room 2"]
     sparse = room_map["Veg Room A"]
 
+    assert "driver_category" in secondary
+    assert "attribution_confidence" in secondary
+    assert "next_operator_move" in secondary
+    assert "confidence_components" in secondary
+    assert set(secondary["confidence_components"].keys()) == {
+        "data_sufficiency",
+        "signal_strength",
+        "relationship_support",
+        "persistence",
+    }
+
     assert secondary["relationship_evidence"] != primary["relationship_evidence"]
     assert secondary["structural_explanation"] != primary["structural_explanation"]
     assert secondary["relationship_evidence"][0].startswith("Flower Room 2:")
     assert secondary["structural_explanation"][0].startswith("Flower Room 2:")
+    assert "confidence components:" in secondary["confidence_basis"].lower()
 
     assert sparse["relationship_evidence"] != primary["relationship_evidence"]
     assert sparse["structural_explanation"] != primary["structural_explanation"]
     assert "limited due to sparse telemetry" in " ".join(sparse["relationship_evidence"]).lower()
+    assert sparse["driver_category"] == "sensor_network"
+    assert sparse["attribution_confidence"] == "low"
 
 
 @pytest.mark.slow
