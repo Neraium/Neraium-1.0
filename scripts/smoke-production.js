@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE_URL = "https://app.neraium.com";
-const BASE_URL = (process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
+const DEFAULT_API_BASE_URL = "https://api.neraium.com";
+const API_BASE_URL = (process.env.API_BASE_URL || process.env.BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const TOKEN = process.env.NERAIUM_API_TOKEN || process.env.API_TOKEN || "";
 const UPLOAD_TIMEOUT_MS = Number(process.env.SMOKE_UPLOAD_TIMEOUT_MS || 45000);
 const POLL_INTERVAL_MS = Number(process.env.SMOKE_POLL_INTERVAL_MS || 1000);
+const CLOCK_SKEW_TOLERANCE_MS = Number(process.env.SMOKE_CLOCK_SKEW_TOLERANCE_MS || 120000);
 
 const endpoints = [
   { name: "health", path: "/api/health", required: true },
@@ -44,7 +45,7 @@ function authHeaders(accept = "application/json,*/*") {
 }
 
 function toAbsoluteUrl(path) {
-  return /^https?:\/\//i.test(path) ? path : `${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  return /^https?:\/\//i.test(path) ? path : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function asEpochMillis(value) {
@@ -156,114 +157,127 @@ async function pollUploadStatus(statusUrl, { timeoutMs = UPLOAD_TIMEOUT_MS } = {
   throw new Error(`Upload did not reach a terminal state within ${timeoutMs}ms. last=${summary}`);
 }
 
-if (typeof fetch !== "function") {
-  console.error("Node fetch is unavailable. Use Node 18 or newer.");
-  process.exit(2);
-}
-
-console.log(`Neraium production smoke test`);
-console.log(`BASE_URL=${BASE_URL}`);
-
-const results = [];
-const resultByName = new Map();
-for (const endpoint of endpoints) {
-  const result = await probe(endpoint);
-  results.push(result);
-  resultByName.set(endpoint.name, result);
-  const marker = result.ok ? "PASS" : result.hardFail ? "FAIL" : "WARN";
-  console.log(`\n[${marker}] ${endpoint.name} ${endpoint.path}`);
-  console.log(`status=${result.status} content-type=${result.contentType || "n/a"} duration_ms=${result.durationMs}`);
-  if (result.warning) {
-    console.log(`warning=${result.warning}`);
-  }
-  console.log(`snippet=${snippet(result.body) || "<empty>"}`);
-}
-
-const failed = results.filter((result) => result.hardFail);
-if (failed.length) {
-  console.error(`\nSmoke test failed: ${failed.map((result) => result.endpoint.name).join(", ")}`);
-  process.exit(1);
-}
-
-let uploadPhaseFailed = false;
-const beforeRunnerStatus = resultByName.get("runner_status")?.json || {};
-const beforeProcessedAt = beforeRunnerStatus.last_processed_at || null;
-const uploadStartedAt = new Date().toISOString();
-console.log(`\n[STEP] upload smoke telemetry batch`);
-
-try {
-  const upload = await uploadSmokeTelemetry();
-  const uploadOk = upload.response.ok && upload.json && upload.json.job_id && upload.json.status_url;
-  console.log(`status=${upload.response.status} filename=${upload.filename}`);
-  console.log(`snippet=${snippet(upload.body) || "<empty>"}`);
-  if (!uploadOk) {
-    throw new Error(`Upload was not accepted. body=${snippet(upload.body) || "<empty>"}`);
+async function main() {
+  if (typeof fetch !== "function") {
+    console.error("Node fetch is unavailable. Use Node 18 or newer.");
+    process.exit(2);
   }
 
-  const terminal = await pollUploadStatus(upload.json.status_url);
-  console.log(`terminal_status=${terminal.status} job_id=${terminal.job_id} runner_used=${terminal.runner_used}`);
+  console.log(`Neraium production smoke test`);
+  console.log(`API_BASE_URL=${API_BASE_URL}`);
 
-  const latestUpload = await fetchJson("/api/data/latest-upload");
-  const latestPayload = latestUpload.json || {};
-  const afterRunner = await fetchJson("/api/intelligence/runner-status");
-  const runnerPayload = afterRunner.json || {};
-  const uploadIssues = [];
-
-  if (terminal.status !== "COMPLETE") {
-    uploadIssues.push(`upload finished with ${terminal.status}`);
-  }
-  if (!terminal.runner_used) {
-    uploadIssues.push("upload completed without SII runner");
-  }
-  if (latestUpload.response.status !== 200) {
-    uploadIssues.push(`/api/data/latest-upload returned ${latestUpload.response.status}`);
-  }
-  if (afterRunner.response.status !== 200) {
-    uploadIssues.push(`/api/intelligence/runner-status returned ${afterRunner.response.status}`);
-  }
-  if (latestPayload.last_filename !== upload.filename) {
-    uploadIssues.push(`latest upload filename did not advance to ${upload.filename}`);
-  }
-  if (latestPayload.state_available !== true) {
-    uploadIssues.push("latest upload did not expose visible runtime state");
-  }
-  if (runnerPayload.state_available !== true) {
-    uploadIssues.push("runner status did not report visible runtime state");
-  }
-  if (!runnerPayload.last_processed_at) {
-    uploadIssues.push("runner status did not report last_processed_at");
+  const results = [];
+  const resultByName = new Map();
+  for (const endpoint of endpoints) {
+    const result = await probe(endpoint);
+    results.push(result);
+    resultByName.set(endpoint.name, result);
+    const marker = result.ok ? "PASS" : result.hardFail ? "FAIL" : "WARN";
+    console.log(`\n[${marker}] ${endpoint.name} ${endpoint.path}`);
+    console.log(`status=${result.status} content-type=${result.contentType || "n/a"} duration_ms=${result.durationMs}`);
+    if (result.warning) {
+      console.log(`warning=${result.warning}`);
+    }
+    console.log(`snippet=${snippet(result.body) || "<empty>"}`);
   }
 
-  const afterProcessedAtMs = asEpochMillis(runnerPayload.last_processed_at);
-  const beforeProcessedAtMs = asEpochMillis(beforeProcessedAt);
-  const uploadStartedAtMs = asEpochMillis(uploadStartedAt);
-  if (runnerPayload.last_processed_at && afterProcessedAtMs === null) {
-    uploadIssues.push("runner status returned an invalid last_processed_at timestamp");
-  }
-  if (beforeProcessedAtMs !== null && afterProcessedAtMs !== null && afterProcessedAtMs <= beforeProcessedAtMs) {
-    uploadIssues.push("runner last_processed_at did not move forward after the smoke upload");
-  }
-  if (uploadStartedAtMs !== null && afterProcessedAtMs !== null && afterProcessedAtMs < uploadStartedAtMs) {
-    uploadIssues.push("runner state is older than the smoke upload start time");
+  const failed = results.filter((result) => result.hardFail);
+  if (failed.length) {
+    console.error(`\nSmoke test failed: ${failed.map((result) => result.endpoint.name).join(", ")}`);
+    process.exit(1);
   }
 
-  console.log(`latest_upload_last_filename=${latestPayload.last_filename || "n/a"} state_available=${latestPayload.state_available}`);
-  console.log(`runner_last_processed_at=${runnerPayload.last_processed_at || "n/a"} state_age_seconds=${runnerPayload.state_age_seconds ?? "n/a"}`);
+  let uploadPhaseFailed = false;
+  const beforeRunnerStatus = resultByName.get("runner_status")?.json || {};
+  const beforeProcessedAt = beforeRunnerStatus.last_processed_at || null;
+  const uploadStartedAt = new Date().toISOString();
+  console.log(`\n[STEP] upload smoke telemetry batch`);
 
-  if (uploadIssues.length) {
+  try {
+    const upload = await uploadSmokeTelemetry();
+    const uploadOk = upload.response.ok && upload.json && upload.json.job_id && upload.json.status_url;
+    console.log(`status=${upload.response.status} filename=${upload.filename}`);
+    console.log(`snippet=${snippet(upload.body) || "<empty>"}`);
+    if (!uploadOk) {
+      throw new Error(`Upload was not accepted. body=${snippet(upload.body) || "<empty>"}`);
+    }
+
+    const terminal = await pollUploadStatus(upload.json.status_url);
+    console.log(`terminal_status=${terminal.status} job_id=${terminal.job_id} runner_used=${terminal.runner_used}`);
+
+    const latestUpload = await fetchJson("/api/data/latest-upload");
+    const latestPayload = latestUpload.json || {};
+    const afterRunner = await fetchJson("/api/intelligence/runner-status");
+    const runnerPayload = afterRunner.json || {};
+    const uploadIssues = [];
+
+    if (terminal.status !== "COMPLETE") {
+      uploadIssues.push(`upload finished with ${terminal.status}`);
+    }
+    if (!terminal.runner_used) {
+      uploadIssues.push("upload completed without SII runner");
+    }
+    if (latestUpload.response.status !== 200) {
+      uploadIssues.push(`/api/data/latest-upload returned ${latestUpload.response.status}`);
+    }
+    if (afterRunner.response.status !== 200) {
+      uploadIssues.push(`/api/intelligence/runner-status returned ${afterRunner.response.status}`);
+    }
+    if (latestPayload.last_filename !== upload.filename) {
+      uploadIssues.push(`latest upload filename did not advance to ${upload.filename}`);
+    }
+    if (latestPayload.state_available !== true) {
+      uploadIssues.push("latest upload did not expose visible runtime state");
+    }
+    if (runnerPayload.state_available !== true) {
+      uploadIssues.push("runner status did not report visible runtime state");
+    }
+    if (!runnerPayload.last_processed_at) {
+      uploadIssues.push("runner status did not report last_processed_at");
+    }
+
+    const afterProcessedAtMs = asEpochMillis(runnerPayload.last_processed_at);
+    const beforeProcessedAtMs = asEpochMillis(beforeProcessedAt);
+    const uploadStartedAtMs = asEpochMillis(uploadStartedAt);
+    if (runnerPayload.last_processed_at && afterProcessedAtMs === null) {
+      uploadIssues.push("runner status returned an invalid last_processed_at timestamp");
+    }
+    if (beforeProcessedAtMs !== null && afterProcessedAtMs !== null && afterProcessedAtMs <= beforeProcessedAtMs) {
+      uploadIssues.push("runner last_processed_at did not move forward after the smoke upload");
+    }
+    if (
+      uploadStartedAtMs !== null &&
+      afterProcessedAtMs !== null &&
+      afterProcessedAtMs < uploadStartedAtMs - CLOCK_SKEW_TOLERANCE_MS
+    ) {
+      uploadIssues.push(
+        `runner state is older than smoke upload start beyond tolerance (${CLOCK_SKEW_TOLERANCE_MS}ms)`
+      );
+    }
+
+    console.log(`latest_upload_last_filename=${latestPayload.last_filename || "n/a"} state_available=${latestPayload.state_available}`);
+    console.log(`runner_last_processed_at=${runnerPayload.last_processed_at || "n/a"} state_age_seconds=${runnerPayload.state_age_seconds ?? "n/a"}`);
+
+    if (uploadIssues.length) {
+      uploadPhaseFailed = true;
+      console.error(`upload_smoke_failures=${uploadIssues.join("; ")}`);
+    } else {
+      console.log("upload smoke passed.");
+    }
+  } catch (error) {
     uploadPhaseFailed = true;
-    console.error(`upload_smoke_failures=${uploadIssues.join("; ")}`);
-  } else {
-    console.log("upload smoke passed.");
+    console.error(`upload_smoke_error=${error?.message || String(error)}`);
   }
-} catch (error) {
-  uploadPhaseFailed = true;
-  console.error(`upload_smoke_error=${error?.message || String(error)}`);
+
+  if (uploadPhaseFailed) {
+    console.error("\nSmoke test failed after basic API health passed. This would have been a false green before the split-ECS worker smoke step.");
+    process.exit(1);
+  }
+
+  console.log("\nSmoke test passed, including worker/SII smoke upload.");
 }
 
-if (uploadPhaseFailed) {
-  console.error("\nSmoke test failed after basic API health passed. This would have been a false green before the split-ECS worker smoke step.");
+main().catch((error) => {
+  console.error(`fatal_smoke_error=${error?.message || String(error)}`);
   process.exit(1);
-}
-
-console.log("\nSmoke test passed, including worker/SII smoke upload.");
+});
