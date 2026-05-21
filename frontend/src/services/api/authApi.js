@@ -2,6 +2,7 @@ import { apiFetch } from "../../config";
 
 const LOCAL_AUTH_USERS_KEY = "neraium.local_auth.users";
 const LOCAL_AUTH_SESSION_KEY = "neraium.local_auth.session";
+const LOCAL_AUTH_HASH_VERSION = "sha256-v1";
 
 async function safeAuthFetch(path, options) {
   try {
@@ -60,6 +61,49 @@ function resolveLocalUserByEmail(email) {
   return loadLocalUsers().find((user) => String(user?.email ?? "").toLowerCase() === normalized) ?? null;
 }
 
+function bytesToHex(bytes) {
+  return Array.from(bytes)
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function randomSaltHex() {
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    return bytesToHex(bytes);
+  }
+  return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 18)}`;
+}
+
+async function sha256Hex(value) {
+  if (!(typeof window !== "undefined" && window.crypto?.subtle)) {
+    return "";
+  }
+  const encoded = new TextEncoder().encode(String(value ?? ""));
+  const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function createLocalPasswordRecord(password) {
+  const salt = randomSaltHex();
+  const hash = await sha256Hex(`${salt}:${String(password ?? "")}`);
+  return { salt, hash, version: LOCAL_AUTH_HASH_VERSION };
+}
+
+async function verifyLocalPassword(user, password) {
+  if (!user || typeof user !== "object") return false;
+  const candidate = String(password ?? "");
+  const salt = String(user?.password_salt ?? "");
+  const expectedHash = String(user?.password_hash ?? "");
+  if (salt && expectedHash) {
+    const candidateHash = await sha256Hex(`${salt}:${candidate}`);
+    return Boolean(candidateHash) && candidateHash === expectedHash;
+  }
+  // Backward compatibility for pre-hash local fallback users.
+  return String(user?.password ?? "") === candidate;
+}
+
 function isNotFoundResponse(response) {
   return Number(response?.status) === 404;
 }
@@ -100,11 +144,14 @@ export async function signupUser({ name, email, password }) {
     if (users.some((user) => String(user?.email ?? "").toLowerCase() === normalizedEmail)) {
       throw new Error("An account with this email already exists.");
     }
+    const passwordRecord = await createLocalPasswordRecord(password);
     const user = {
       email: normalizedEmail,
       name: String(name ?? "").trim() || normalizedEmail.split("@", 1)[0],
       created_at: new Date().toISOString(),
-      password,
+      password_hash: passwordRecord.hash,
+      password_salt: passwordRecord.salt,
+      password_hash_version: passwordRecord.version,
     };
     users.push(user);
     saveLocalUsers(users);
@@ -127,7 +174,7 @@ export async function loginUser({ email, password }) {
     // Resilient fallback: when server auth is unavailable or state was reset,
     // still allow local-login accounts created in this browser.
     const localUser = resolveLocalUserByEmail(normalizedEmail);
-    if (localUser && String(localUser?.password ?? "") === String(password ?? "")) {
+    if (localUser && await verifyLocalPassword(localUser, password)) {
       setLocalSessionEmail(normalizedEmail);
       return {
         authenticated: true,
