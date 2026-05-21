@@ -247,6 +247,12 @@
   border: 1px solid rgba(151, 177, 206, 0.26);
   background: rgba(6, 13, 22, 0.82);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  color: #e6f1ff;
+}
+
+.auth-panel h1 {
+  margin: 0;
+  color: #f1f7ff;
 }
 
 .auth-kicker {
@@ -306,5 +312,9 @@
   cursor: pointer;
   padding: 0;
   font-size: 13px;
+}
+
+.auth-switch:hover {
+  color: #c2dcff;
 }
 
