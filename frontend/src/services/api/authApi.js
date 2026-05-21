@@ -58,13 +58,12 @@ function isNotFoundResponse(response) {
 
 export async function fetchCurrentUser() {
   const response = await apiFetch("/api/auth/me");
-  if (isNotFoundResponse(response)) {
+  if (!response.ok || isNotFoundResponse(response)) {
     const email = readLocalSessionEmail();
     const user = email ? resolveLocalUserByEmail(email) : null;
     return { authenticated: Boolean(user), user };
   }
   const payload = await readJson(response);
-  if (!response.ok) throw new Error(detailMessage(payload, "Failed to load session."));
   return payload;
 }
 
@@ -75,7 +74,17 @@ export async function signupUser({ name, email, password }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
   });
-  if (isNotFoundResponse(response)) {
+  if (!response.ok) {
+    const payload = await readJson(response);
+    const detail = detailMessage(payload, "");
+    const canFallbackLocal =
+      isNotFoundResponse(response)
+      || response.status >= 500
+      || detail.toLowerCase().includes("not found")
+      || detail.toLowerCase().includes("unavailable");
+    if (!canFallbackLocal) {
+      throw new Error(detailMessage(payload, "Sign up failed."));
+    }
     if (!normalizedEmail || !normalizedEmail.includes("@")) throw new Error("Enter a valid email address.");
     if (String(password ?? "").length < 8) throw new Error("Password must be at least 8 characters.");
     const users = loadLocalUsers();
@@ -94,7 +103,6 @@ export async function signupUser({ name, email, password }) {
     return { authenticated: true, user: { email: user.email, name: user.name, created_at: user.created_at } };
   }
   const payload = await readJson(response);
-  if (!response.ok) throw new Error(detailMessage(payload, "Sign up failed."));
   return payload;
 }
 
@@ -105,16 +113,20 @@ export async function loginUser({ email, password }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (isNotFoundResponse(response)) {
-    const user = resolveLocalUserByEmail(normalizedEmail);
-    if (!user || String(user?.password ?? "") !== String(password ?? "")) {
-      throw new Error("Invalid email or password.");
-    }
-    setLocalSessionEmail(normalizedEmail);
-    return { authenticated: true, user: { email: user.email, name: user.name, created_at: user.created_at } };
-  }
   const payload = await readJson(response);
-  if (!response.ok) throw new Error(detailMessage(payload, "Login failed."));
+  if (!response.ok) {
+    // Resilient fallback: when server auth is unavailable or state was reset,
+    // still allow local-login accounts created in this browser.
+    const localUser = resolveLocalUserByEmail(normalizedEmail);
+    if (localUser && String(localUser?.password ?? "") === String(password ?? "")) {
+      setLocalSessionEmail(normalizedEmail);
+      return {
+        authenticated: true,
+        user: { email: localUser.email, name: localUser.name, created_at: localUser.created_at },
+      };
+    }
+    throw new Error(detailMessage(payload, "Invalid email or password. If this is your first login here, create account again."));
+  }
   return payload;
 }
 
