@@ -1086,6 +1086,8 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             if isinstance(room, dict) and str(room.get("urgency", "")).lower() in {"review", "unstable"}
         ]
     )
+    telemetry_profile = str(intelligence.get("telemetry_profile") or "unknown")
+    telemetry_profile_confidence = str(intelligence.get("telemetry_profile_confidence") or "low")
     previous = result.get("previous_upload_summary") or {}
     current_score = intelligence.get("neraium_score")
     previous_score = previous.get("neraium_score")
@@ -1134,6 +1136,9 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             "room_count": room_count,
             "sparse_room_count": sparse_room_count,
             "flagged_room_count": flagged_room_count,
+            "telemetry_profile": telemetry_profile,
+            "telemetry_profile_confidence": telemetry_profile_confidence,
+            "unknown_profile": telemetry_profile == "unknown" or telemetry_profile_confidence == "low",
         },
         "adaptive_learning": result.get("adaptive_learning", {}),
     }

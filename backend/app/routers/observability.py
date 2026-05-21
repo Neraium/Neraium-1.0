@@ -33,6 +33,7 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0
+    unknown_profile_upload_count = 0
     total_room_count = 0
     total_flagged_room_count = 0
     for item in upload_history:
@@ -40,11 +41,15 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
         room_count = int(metrics.get("room_count", 0) or 0)
         sparse_room_count = int(metrics.get("sparse_room_count", 0) or 0)
         flagged_room_count = int(metrics.get("flagged_room_count", 0) or 0)
+        unknown_profile = bool(metrics.get("unknown_profile"))
         if sparse_room_count > 0:
             sparse_upload_count += 1
+        if unknown_profile:
+            unknown_profile_upload_count += 1
         total_room_count += max(room_count, 0)
         total_flagged_room_count += max(flagged_room_count, 0)
     sparse_upload_rate = round(sparse_upload_count / upload_count, 4) if upload_count > 0 else None
+    unknown_profile_rate = round(unknown_profile_upload_count / upload_count, 4) if upload_count > 0 else None
     flagged_room_rate = round(total_flagged_room_count / total_room_count, 4) if total_room_count > 0 else None
     alerts: list[dict[str, str | int]] = []
     if queue.get("pending", 0) > 0:
@@ -53,6 +58,10 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
         alerts.append({"level": "warning", "message": "Evidence trail includes failed runs.", "count": status_counts["failed"]})
     if sparse_upload_rate is not None and sparse_upload_rate > 0.2:
         alerts.append({"level": "warning", "message": "Sparse telemetry appears in a high share of uploads.", "count": sparse_upload_count})
+    if unknown_profile_rate is not None and unknown_profile_rate > 0.15:
+        alerts.append({"level": "warning", "message": "Unknown-profile uploads are above threshold.", "count": unknown_profile_upload_count})
+    if flagged_room_rate is not None and flagged_room_rate > 0.35:
+        alerts.append({"level": "warning", "message": "Review/unstable room share is elevated.", "count": total_flagged_room_count})
     return ObservabilitySummaryResponse(
         queue=queue,
         evidence_runs={
@@ -63,6 +72,8 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
                 "upload_count": upload_count,
                 "sparse_upload_count": sparse_upload_count,
                 "sparse_upload_rate": sparse_upload_rate,
+                "unknown_profile_upload_count": unknown_profile_upload_count,
+                "unknown_profile_rate": unknown_profile_rate,
                 "room_count": total_room_count,
                 "flagged_room_count": total_flagged_room_count,
                 "flagged_room_rate": flagged_room_rate,
@@ -81,6 +92,7 @@ def get_observability_metrics() -> PlainTextResponse:
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0
+    unknown_profile_upload_count = 0
     total_room_count = 0
     total_flagged_room_count = 0
     for item in upload_history:
@@ -88,11 +100,15 @@ def get_observability_metrics() -> PlainTextResponse:
         room_count = int(metrics.get("room_count", 0) or 0)
         sparse_room_count = int(metrics.get("sparse_room_count", 0) or 0)
         flagged_room_count = int(metrics.get("flagged_room_count", 0) or 0)
+        unknown_profile = bool(metrics.get("unknown_profile"))
         if sparse_room_count > 0:
             sparse_upload_count += 1
+        if unknown_profile:
+            unknown_profile_upload_count += 1
         total_room_count += max(room_count, 0)
         total_flagged_room_count += max(flagged_room_count, 0)
     sparse_upload_rate = (sparse_upload_count / upload_count) if upload_count > 0 else 0.0
+    unknown_profile_rate = (unknown_profile_upload_count / upload_count) if upload_count > 0 else 0.0
     flagged_room_rate = (total_flagged_room_count / total_room_count) if total_room_count > 0 else 0.0
     lines = [
         "# HELP neraium_queue_pending Pending upload jobs in queue.",
@@ -116,6 +132,9 @@ def get_observability_metrics() -> PlainTextResponse:
         "# HELP neraium_flagged_room_rate Share of recent rooms flagged review/unstable.",
         "# TYPE neraium_flagged_room_rate gauge",
         f"neraium_flagged_room_rate {round(flagged_room_rate, 4)}",
+        "# HELP neraium_unknown_profile_rate Share of recent uploads with unknown telemetry profile.",
+        "# TYPE neraium_unknown_profile_rate gauge",
+        f"neraium_unknown_profile_rate {round(unknown_profile_rate, 4)}",
     ]
     return PlainTextResponse("\n".join(lines) + "\n") 
 
