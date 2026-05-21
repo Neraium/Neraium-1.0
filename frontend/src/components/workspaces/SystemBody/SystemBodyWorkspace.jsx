@@ -120,7 +120,7 @@ export default function SystemBodyWorkspace({
               {advancedOpen ? (
                 <div className="system-gate__settings-advanced">
                   <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("historical-replay")} disabled={settingsBusy}>
-                    Replay controls
+                    Open CSV replay
                   </button>
                   <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("governance-admin")} disabled={settingsBusy}>
                     Governance/admin access
@@ -159,19 +159,31 @@ export default function SystemBodyWorkspace({
                   <li><span>EVP Reference</span><strong>{governedDetail.evpPreview || EMPTY_VALUE}</strong></li>
                 </ul>
               ) : (
-                <ul>
-                  <li><span>File</span><strong>{uploadDetail.filename || EMPTY_VALUE}</strong></li>
-                  <li><span>Assessment</span><strong>{uploadDetail.assessment || EMPTY_VALUE}</strong></li>
-                  <li><span>Urgency</span><strong>{uploadDetail.urgency || EMPTY_VALUE}</strong></li>
-                  <li><span>State</span><strong>{uploadDetail.state || EMPTY_VALUE}</strong></li>
-                  <li><span>Primary Room</span><strong>{uploadDetail.primaryRoom || EMPTY_VALUE}</strong></li>
-                  <li><span>Score</span><strong>{uploadDetail.score || EMPTY_VALUE}</strong></li>
-                  <li><span>Rows Processed</span><strong>{uploadDetail.rowsProcessed || EMPTY_VALUE}</strong></li>
-                  <li><span>Columns Detected</span><strong>{uploadDetail.columnsDetected || EMPTY_VALUE}</strong></li>
-                  <li><span>Replay</span><strong>{uploadDetail.replay || EMPTY_VALUE}</strong></li>
-                  <li><span>Replay Frames</span><strong>{uploadDetail.replayFrames || EMPTY_VALUE}</strong></li>
-                  <li><span>Preview Range</span><strong>{uploadDetail.previewRange || EMPTY_VALUE}</strong></li>
-                </ul>
+                <>
+                  <ul>
+                    <li><span>File</span><strong>{uploadDetail.filename || EMPTY_VALUE}</strong></li>
+                    <li><span>Assessment</span><strong>{uploadDetail.assessment || EMPTY_VALUE}</strong></li>
+                    <li><span>Urgency</span><strong>{uploadDetail.urgency || EMPTY_VALUE}</strong></li>
+                    <li><span>State</span><strong>{uploadDetail.state || EMPTY_VALUE}</strong></li>
+                    <li><span>Primary Room</span><strong>{uploadDetail.primaryRoom || EMPTY_VALUE}</strong></li>
+                    <li><span>Score</span><strong>{uploadDetail.score || EMPTY_VALUE}</strong></li>
+                    <li><span>Rows Processed</span><strong>{uploadDetail.rowsProcessed || EMPTY_VALUE}</strong></li>
+                    <li><span>Columns Detected</span><strong>{uploadDetail.columnsDetected || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay</span><strong>{uploadDetail.replay || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay Frames</span><strong>{uploadDetail.replayFrames || EMPTY_VALUE}</strong></li>
+                    <li><span>Preview Range</span><strong>{uploadDetail.previewRange || EMPTY_VALUE}</strong></li>
+                  </ul>
+                  <div className="system-gate__settings-advanced" style={{ marginTop: "12px" }}>
+                    <button
+                      type="button"
+                      className="system-gate__settings-action"
+                      onClick={() => openWorkspace("historical-replay")}
+                      disabled={settingsBusy}
+                    >
+                      Open CSV replay
+                    </button>
+                  </div>
+                </>
               )}
             </aside>
           ) : null}
@@ -201,6 +213,7 @@ function buildUploadDetail(result) {
     rowsProcessed: result?.rows_processed ?? result?.row_count ?? EMPTY_VALUE,
     columnsDetected: result?.columns_detected ?? result?.column_count ?? EMPTY_VALUE,
     replay: Array.isArray(replayTimeline) && replayTimeline.length > 0 ? "Available" : "Unavailable",
+    replayAvailable: Array.isArray(replayTimeline) && replayTimeline.length > 0,
     replayFrames: Array.isArray(replayTimeline) ? replayTimeline.length : EMPTY_VALUE,
     previewRange: result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
       ? `${result.timestamp_profile.first_timestamp} to ${result.timestamp_profile.last_timestamp}`
