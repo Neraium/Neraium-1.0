@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { loginUser, signupUser } from "../services/api/authApi";
 
+const LAST_EMAIL_KEY = "neraium.auth.last_email";
+
 export default function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return String(window.localStorage.getItem(LAST_EMAIL_KEY) ?? "");
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,6 +30,9 @@ export default function AuthScreen({ onAuthenticated }) {
       const payload = mode === "signup"
         ? await signupUser({ name: name.trim(), email: email.trim(), password })
         : await loginUser({ email: email.trim(), password });
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LAST_EMAIL_KEY, email.trim());
+      }
       if (typeof onAuthenticated === "function") {
         onAuthenticated(payload?.user ?? null);
       }
@@ -80,4 +88,3 @@ export default function AuthScreen({ onAuthenticated }) {
     </div>
   );
 }
-

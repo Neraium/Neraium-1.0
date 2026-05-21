@@ -3,6 +3,14 @@ import { apiFetch } from "../../config";
 const LOCAL_AUTH_USERS_KEY = "neraium.local_auth.users";
 const LOCAL_AUTH_SESSION_KEY = "neraium.local_auth.session";
 
+async function safeAuthFetch(path, options) {
+  try {
+    return await apiFetch(path, options);
+  } catch {
+    return null;
+  }
+}
+
 async function readJson(response) {
   try {
     return await response.json();
@@ -57,8 +65,8 @@ function isNotFoundResponse(response) {
 }
 
 export async function fetchCurrentUser() {
-  const response = await apiFetch("/api/auth/me");
-  if (!response.ok || isNotFoundResponse(response)) {
+  const response = await safeAuthFetch("/api/auth/me");
+  if (!response || !response.ok || isNotFoundResponse(response)) {
     const email = readLocalSessionEmail();
     const user = email ? resolveLocalUserByEmail(email) : null;
     return { authenticated: Boolean(user), user };
@@ -69,16 +77,17 @@ export async function fetchCurrentUser() {
 
 export async function signupUser({ name, email, password }) {
   const normalizedEmail = String(email ?? "").trim().toLowerCase();
-  const response = await apiFetch("/api/auth/signup", {
+  const response = await safeAuthFetch("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
   });
-  if (!response.ok) {
+  if (!response || !response.ok) {
     const payload = await readJson(response);
     const detail = detailMessage(payload, "");
     const canFallbackLocal =
-      isNotFoundResponse(response)
+      !response
+      || isNotFoundResponse(response)
       || response.status >= 500
       || detail.toLowerCase().includes("not found")
       || detail.toLowerCase().includes("unavailable");
@@ -108,13 +117,13 @@ export async function signupUser({ name, email, password }) {
 
 export async function loginUser({ email, password }) {
   const normalizedEmail = String(email ?? "").trim().toLowerCase();
-  const response = await apiFetch("/api/auth/login", {
+  const response = await safeAuthFetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
   const payload = await readJson(response);
-  if (!response.ok) {
+  if (!response || !response.ok) {
     // Resilient fallback: when server auth is unavailable or state was reset,
     // still allow local-login accounts created in this browser.
     const localUser = resolveLocalUserByEmail(normalizedEmail);
@@ -131,8 +140,8 @@ export async function loginUser({ email, password }) {
 }
 
 export async function logoutUser() {
-  const response = await apiFetch("/api/auth/logout", { method: "POST" });
-  if (isNotFoundResponse(response)) {
+  const response = await safeAuthFetch("/api/auth/logout", { method: "POST" });
+  if (!response || isNotFoundResponse(response)) {
     setLocalSessionEmail("");
     return { authenticated: false };
   }

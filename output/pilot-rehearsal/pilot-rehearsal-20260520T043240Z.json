@@ -1,0 +1,67 @@
+{
+  "started_at": "2026-05-20T04:32:37.289514+00:00",
+  "base_url": "https://app.neraium.com",
+  "checks": {
+    "/api/health": {
+      "status": 404,
+      "payload": {
+        "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+      }
+    },
+    "/api/ready": {
+      "status": 404,
+      "payload": {
+        "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+      }
+    },
+    "/api/data/latest-upload": {
+      "status": 404,
+      "payload": {
+        "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+      }
+    },
+    "/api/data/latest-upload (after)": {
+      "status": 404,
+      "payload": {
+        "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+      }
+    }
+  },
+  "uploads": {
+    "primary_smoke": {
+      "accepted": false,
+      "status": 404,
+      "payload": {
+        "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+      }
+    },
+    "bad_telemetry_fixtures": {
+      "missing_timestamps.csv": {
+        "accepted": false,
+        "status": 404,
+        "payload": {
+          "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+        }
+      },
+      "flatlined_signal.csv": {
+        "accepted": false,
+        "status": 404,
+        "payload": {
+          "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+        }
+      },
+      "out_of_order.csv": {
+        "accepted": false,
+        "status": 404,
+        "payload": {
+          "error": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Neraium</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DXjapRkw.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DZ8D_i_R.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+        }
+      }
+    }
+  },
+  "summary": {
+    "readiness_endpoints_ok": false,
+    "primary_upload_terminal_contract_ok": false,
+    "completed_at": "2026-05-20T04:32:40.129454+00:00"
+  }
+}

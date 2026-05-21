@@ -11,7 +11,7 @@
   border-radius: 28px;
   background:
     radial-gradient(circle at 78% 24%, rgba(var(--state-accent-rgb), 0.09), transparent 34%),
-    radial-gradient(circle at 18% 18%, rgba(108, 186, 156, 0.04), transparent 24%),
+    radial-gradient(circle at 18% 18%, rgba(52, 122, 255, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(16, 23, 28, 0.98), rgba(8, 12, 15, 0.96));
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
 }
