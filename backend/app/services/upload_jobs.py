@@ -1061,6 +1061,22 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
     stats = result.get("processing_stats", {})
     intelligence = result.get("sii_intelligence", {})
     ingestion_metadata = result.get("ingestion_metadata", {}) if isinstance(result.get("ingestion_metadata"), dict) else {}
+    rooms = intelligence.get("rooms", []) if isinstance(intelligence.get("rooms"), list) else []
+    room_count = len([room for room in rooms if isinstance(room, dict)])
+    sparse_room_count = len(
+        [
+            room
+            for room in rooms
+            if isinstance(room, dict) and str(room.get("room_state", "")).lower() == "insufficient telemetry"
+        ]
+    )
+    flagged_room_count = len(
+        [
+            room
+            for room in rooms
+            if isinstance(room, dict) and str(room.get("urgency", "")).lower() in {"review", "unstable"}
+        ]
+    )
     previous = result.get("previous_upload_summary") or {}
     current_score = intelligence.get("neraium_score")
     previous_score = previous.get("neraium_score")
@@ -1104,6 +1120,11 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             "sensors_detected": ingestion_metadata.get("sensors_detected"),
             "rejection_reasons": ingestion_metadata.get("rejection_reasons", {}),
             "parsing_notes": ingestion_metadata.get("parsing_notes", []),
+        },
+        "intelligence_metrics": {
+            "room_count": room_count,
+            "sparse_room_count": sparse_room_count,
+            "flagged_room_count": flagged_room_count,
         },
         "adaptive_learning": result.get("adaptive_learning", {}),
     }

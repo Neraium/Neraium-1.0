@@ -10,7 +10,7 @@ from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
 from app.services.evidence_store import list_evidence_runs
 from app.services.runtime_db import audit_events_count, queue_metrics, upload_duration_samples
-from app.services.upload_jobs import read_upload_cache_stats
+from app.services.upload_jobs import read_upload_cache_stats, read_upload_history
 
 
 router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access)]) 
@@ -29,18 +29,44 @@ def percentile(values: list[float], point: float) -> float | None:
 def get_observability_summary() -> ObservabilitySummaryResponse:
     queue = queue_metrics()
     evidence_runs = list_evidence_runs(limit=100)
+    upload_history = read_upload_history(limit=100)
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
+    upload_count = len(upload_history)
+    sparse_upload_count = 0
+    total_room_count = 0
+    total_flagged_room_count = 0
+    for item in upload_history:
+        metrics = item.get("intelligence_metrics", {}) if isinstance(item, dict) else {}
+        room_count = int(metrics.get("room_count", 0) or 0)
+        sparse_room_count = int(metrics.get("sparse_room_count", 0) or 0)
+        flagged_room_count = int(metrics.get("flagged_room_count", 0) or 0)
+        if sparse_room_count > 0:
+            sparse_upload_count += 1
+        total_room_count += max(room_count, 0)
+        total_flagged_room_count += max(flagged_room_count, 0)
+    sparse_upload_rate = round(sparse_upload_count / upload_count, 4) if upload_count > 0 else None
+    flagged_room_rate = round(total_flagged_room_count / total_room_count, 4) if total_room_count > 0 else None
     alerts: list[dict[str, str | int]] = []
     if queue.get("pending", 0) > 0:
         alerts.append({"level": "warning", "message": "Upload queue has pending jobs.", "count": queue["pending"]})
     if status_counts.get("failed", 0) > 0:
         alerts.append({"level": "warning", "message": "Evidence trail includes failed runs.", "count": status_counts["failed"]})
+    if sparse_upload_rate is not None and sparse_upload_rate > 0.2:
+        alerts.append({"level": "warning", "message": "Sparse telemetry appears in a high share of uploads.", "count": sparse_upload_count})
     return ObservabilitySummaryResponse(
         queue=queue,
         evidence_runs={
             "total": len(evidence_runs),
             "status_counts": dict(status_counts),
             "latest_completed_at": evidence_runs[0].get("completed_at") if evidence_runs else None,
+            "intelligence_metrics": {
+                "upload_count": upload_count,
+                "sparse_upload_count": sparse_upload_count,
+                "sparse_upload_rate": sparse_upload_rate,
+                "room_count": total_room_count,
+                "flagged_room_count": total_flagged_room_count,
+                "flagged_room_rate": flagged_room_rate,
+            },
         },
         audit={"event_count": audit_events_count()},
         alerts=alerts,
@@ -51,7 +77,23 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
 def get_observability_metrics() -> PlainTextResponse:
     queue = queue_metrics()
     evidence_runs = list_evidence_runs(limit=100)
+    upload_history = read_upload_history(limit=100)
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
+    upload_count = len(upload_history)
+    sparse_upload_count = 0
+    total_room_count = 0
+    total_flagged_room_count = 0
+    for item in upload_history:
+        metrics = item.get("intelligence_metrics", {}) if isinstance(item, dict) else {}
+        room_count = int(metrics.get("room_count", 0) or 0)
+        sparse_room_count = int(metrics.get("sparse_room_count", 0) or 0)
+        flagged_room_count = int(metrics.get("flagged_room_count", 0) or 0)
+        if sparse_room_count > 0:
+            sparse_upload_count += 1
+        total_room_count += max(room_count, 0)
+        total_flagged_room_count += max(flagged_room_count, 0)
+    sparse_upload_rate = (sparse_upload_count / upload_count) if upload_count > 0 else 0.0
+    flagged_room_rate = (total_flagged_room_count / total_room_count) if total_room_count > 0 else 0.0
     lines = [
         "# HELP neraium_queue_pending Pending upload jobs in queue.",
         "# TYPE neraium_queue_pending gauge",
@@ -68,6 +110,12 @@ def get_observability_metrics() -> PlainTextResponse:
         "# HELP neraium_audit_events_total Runtime audit event count.",
         "# TYPE neraium_audit_events_total gauge",
         f"neraium_audit_events_total {audit_events_count()}",
+        "# HELP neraium_sparse_upload_rate Share of recent uploads containing at least one sparse-telemetry room.",
+        "# TYPE neraium_sparse_upload_rate gauge",
+        f"neraium_sparse_upload_rate {round(sparse_upload_rate, 4)}",
+        "# HELP neraium_flagged_room_rate Share of recent rooms flagged review/unstable.",
+        "# TYPE neraium_flagged_room_rate gauge",
+        f"neraium_flagged_room_rate {round(flagged_room_rate, 4)}",
     ]
     return PlainTextResponse("\n".join(lines) + "\n") 
 
