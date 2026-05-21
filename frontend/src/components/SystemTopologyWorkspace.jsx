@@ -101,7 +101,7 @@ export default function SystemTopologyWorkspace({
       orbData={orbData}
       isLoading={awaitingSii}
       isEmptyStructuralState={awaitingSii || uiState === "neutral"}
-      statusLight={governed.statusLight}
+      statusLight={uploadSignal.statusLight || governed.statusLight}
       governedOnly
       governedDetail={governed.detail}
       apiFetch={apiFetch}
@@ -111,6 +111,7 @@ export default function SystemTopologyWorkspace({
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
       domainDetection={domainDetection}
+      latestUploadResult={liveOps.latestUploadResult}
     /> 
   ); 
 } 
@@ -124,21 +125,21 @@ function deriveUploadSignal(latestUploadResult) {
   const urgency = String(latestUploadResult?.drift_status ?? latestUploadResult?.sii_intelligence?.urgency ?? "").toLowerCase();
 
   if (!operatingState && !urgency) {
-    return { systemState: null, label: "" };
+    return { systemState: null, label: "", statusLight: null };
   }
   if (operatingState.includes("needs action") || urgency === "unstable" || operatingState.includes("unstable")) {
-    return { systemState: "propagation_active", label: "Needs action" };
+    return { systemState: "alert", label: "Needs action", statusLight: "red" };
   }
   if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) {
-    return { systemState: "watching", label: "Needs review" };
+    return { systemState: "watching", label: "Needs review", statusLight: "yellow" };
   }
   if (operatingState.includes("needs review") || urgency === "review" || operatingState.includes("review")) {
-    return { systemState: "watching", label: "Needs review" };
+    return { systemState: "watching", label: "Needs review", statusLight: "yellow" };
   }
   if (operatingState.includes("stable") || operatingState.includes("monitor")) {
-    return { systemState: "stable", label: "Stable" };
+    return { systemState: "stable", label: "Stable", statusLight: "gray" };
   }
-  return { systemState: null, label: "" };
+  return { systemState: null, label: "", statusLight: null };
 }
 
 function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {

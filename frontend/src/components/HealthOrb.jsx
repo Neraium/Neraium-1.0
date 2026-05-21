@@ -9,10 +9,10 @@ function tone(state) {
   if (state === "alert") {
     return {
       className: "health-orb--iris-alert",
-      ring: "rgba(67, 144, 255, 0.96)",
-      plate: "rgba(14, 48, 92, 0.28)",
-      line: "rgba(126, 183, 255, 0.9)",
-      node: "rgba(226, 240, 255, 0.98)",
+      ring: "rgba(255, 93, 93, 0.96)",
+      plate: "rgba(92, 18, 18, 0.28)",
+      line: "rgba(255, 145, 145, 0.9)",
+      node: "rgba(255, 236, 236, 0.98)",
     };
   }
   if (state === "watch") {
