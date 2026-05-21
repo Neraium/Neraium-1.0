@@ -1,10 +1,10 @@
 :root {
-  --state-neutral-accent: #8a9aa6;
-  --state-neutral-rgb: 138, 154, 166;
-  --state-stable-accent: #6cba9c;
-  --state-stable-rgb: 108, 186, 156;
-  --state-watch-accent: #8ab8c4;
-  --state-watch-rgb: 138, 184, 196;
+  --state-neutral-accent: #8fa7bf;
+  --state-neutral-rgb: 143, 167, 191;
+  --state-stable-accent: #4f85ff;
+  --state-stable-rgb: 79, 133, 255;
+  --state-watch-accent: #74a4ff;
+  --state-watch-rgb: 116, 164, 255;
   --state-warning-accent: #c8a06a;
   --state-warning-rgb: 200, 160, 106;
   --state-critical-accent: #d17b73;
@@ -149,9 +149,9 @@
  backdrop-filter: blur(8px);
 }
 
-.health-orb--neutral { --orb-hue: #9aa3ad; }
-.health-orb--stable { --orb-hue: #6cba9c; }
-.health-orb--watch { --orb-hue: #8ab8c4; }
+.health-orb--neutral { --orb-hue: #8fa7bf; }
+.health-orb--stable { --orb-hue: #4f85ff; }
+.health-orb--watch { --orb-hue: #74a4ff; }
 .health-orb--warning { --orb-hue: #c8a06a; }
 .health-orb--critical { --orb-hue: #d17b73; }
 

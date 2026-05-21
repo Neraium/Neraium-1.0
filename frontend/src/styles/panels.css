@@ -138,7 +138,7 @@
 
 .structural-replay-controls input[type="range"] {
  grid-column: 1 / -1;
- accent-color: rgba(131, 206, 187, 0.88);
+ accent-color: rgba(var(--mode-accent-rgb), 0.88);
 }
 
 .structural-replay-controls select {
@@ -172,12 +172,12 @@
 
 .historian-replay-status__badge {
  color: var(--text-primary);
- border-color: rgba(131, 206, 187, 0.32) !important;
- background: rgba(69, 136, 126, 0.14) !important;
+ border-color: rgba(var(--mode-accent-rgb), 0.34) !important;
+ background: rgba(var(--mode-accent-rgb), 0.12) !important;
 }
 
 .historian-replay-status--active .historian-replay-status__badge {
- color: rgba(211, 246, 234, 0.96);
+ color: rgba(231, 242, 255, 0.96);
 }
 
 .propagation-map {
@@ -196,7 +196,7 @@
  border-radius: 12px;
  padding: 12px;
  background:
-  radial-gradient(circle at 12% 10%, rgba(96, 205, 190, calc(var(--pressure, 0.25) * 0.25)), rgba(13, 21, 29, 0.92)),
+  radial-gradient(circle at 12% 10%, rgba(var(--mode-accent-rgb), calc(var(--pressure, 0.25) * 0.22)), rgba(13, 21, 29, 0.92)),
   linear-gradient(180deg, rgba(12, 20, 26, 0.96), rgba(7, 11, 15, 0.98));
  display: grid;
  gap: 6px;
