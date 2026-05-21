@@ -900,6 +900,15 @@ def build_upload_result(
         room_summary=room_summary,
         numeric_profiles=numeric_profiles,
     )
+    telemetry_profile = classify_telemetry_profile(
+        columns=columns,
+        rows=data_rows,
+        numeric_profiles=numeric_profiles,
+    )
+    effective_source_metadata = {
+        **(intelligence_source_metadata or {}),
+        **telemetry_profile,
+    }
     sii_intelligence = build_upload_intelligence(
         filename=filename,
         row_count=total_rows,
@@ -913,7 +922,7 @@ def build_upload_result(
         room_assessments=room_assessments,
         source=intelligence_source,
         mode=intelligence_mode,
-        source_metadata=intelligence_source_metadata,
+        source_metadata=effective_source_metadata,
     )
     sii_intelligence["operational_domain"] = "commercial_aquatic_hospitality"
     sii_intelligence["aquatic_schema"] = map_aquatic_schema(columns)
@@ -1050,7 +1059,7 @@ def build_upload_result(
         "processing_trace": processing_trace,
         "processing_stats": processing_stats,
         "room_summary": room_summary,
-        "ingestion_metadata": intelligence_source_metadata or {},
+        "ingestion_metadata": effective_source_metadata,
         "previous_upload_summary": previous_upload_summary,
         "validation_provenance": VALIDATION_PROVENANCE,
     } 
@@ -1935,6 +1944,170 @@ def build_room_assessments(
             "confidence_components": confidence_components,
         }
     return assessments
+
+
+def classify_telemetry_profile(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    numeric_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lowered_columns = [str(column).lower().replace("_", " ") for column in columns]
+    scorecard: dict[str, int] = {
+        "pool_hottub_systems": 0,
+        "cultivation_climate": 0,
+        "energy_schedule": 0,
+        "sensor_health": 0,
+        "irrigation_events": 0,
+    }
+    matched_signals: dict[str, list[str]] = {key: [] for key in scorecard}
+
+    keyword_sets = {
+        "pool_hottub_systems": [
+            "pool",
+            "spa",
+            "hot tub",
+            "hottub",
+            "jacuzzi",
+            "water temp",
+            "orp",
+            "chlorine",
+            "bromine",
+            "ph",
+            "alkalinity",
+            "circulation",
+            "heater",
+            "filter pump",
+            "sanitizer",
+        ],
+        "cultivation_climate": [
+            "humidity",
+            "temperature",
+            "co2",
+            "vpd",
+            "dehumid",
+            "hvac",
+            "airflow",
+            "light",
+            "irrigation",
+            "substrate",
+        ],
+        "energy_schedule": [
+            "power",
+            "kw",
+            "kwh",
+            "load",
+            "demand",
+            "voltage",
+            "current",
+            "schedule",
+            "tariff",
+            "phase",
+        ],
+        "sensor_health": [
+            "battery",
+            "signal",
+            "rssi",
+            "latency",
+            "packet",
+            "stale",
+            "quality",
+            "uptime",
+            "status",
+        ],
+        "irrigation_events": [
+            "event",
+            "valve",
+            "dose",
+            "feed",
+            "cycle",
+            "pulse",
+            "on off",
+            "irrigation event",
+            "pump on",
+        ],
+    }
+
+    for column in lowered_columns:
+        for profile, keywords in keyword_sets.items():
+            for keyword in keywords:
+                if keyword in column:
+                    scorecard[profile] += 1
+                    if keyword not in matched_signals[profile]:
+                        matched_signals[profile].append(keyword)
+                    break
+
+    event_like_columns = estimate_event_like_columns(columns=columns, rows=rows, numeric_profiles=numeric_profiles)
+    if event_like_columns > 0:
+        scorecard["irrigation_events"] += event_like_columns
+        matched_signals["irrigation_events"].append(f"event_like_columns={event_like_columns}")
+
+    ranked = sorted(scorecard.items(), key=lambda item: item[1], reverse=True)
+    top_profile, top_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0
+
+    if top_score < 2:
+        telemetry_profile = "mixed"
+        confidence = "low"
+    elif top_score >= 4 and top_score >= (second_score + 2):
+        telemetry_profile = top_profile
+        confidence = "high"
+    elif top_score > second_score:
+        telemetry_profile = top_profile
+        confidence = "medium"
+    else:
+        telemetry_profile = "mixed"
+        confidence = "low"
+
+    modality = "event" if telemetry_profile == "irrigation_events" else "continuous"
+    if telemetry_profile == "mixed" and event_like_columns > 0:
+        modality = "mixed"
+
+    profile_signals = matched_signals.get(top_profile if telemetry_profile != "mixed" else "irrigation_events", [])
+    return {
+        "telemetry_profile": telemetry_profile,
+        "telemetry_profile_confidence": confidence,
+        "telemetry_profile_signals": profile_signals[:8],
+        "telemetry_modality": modality,
+    }
+
+
+def estimate_event_like_columns(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    numeric_profiles: list[dict[str, Any]],
+) -> int:
+    numeric_columns = [profile["column"] for profile in numeric_profiles if profile.get("column") in columns]
+    if not numeric_columns or not rows:
+        return 0
+
+    event_name_tokens = ("event", "valve", "cycle", "dose", "feed", "on_off", "on off", "status", "command")
+    event_candidate_columns = [
+        column
+        for column in numeric_columns
+        if any(token in column.lower().replace("_", " ") for token in event_name_tokens)
+    ]
+    if not event_candidate_columns:
+        return 0
+
+    column_indexes = [columns.index(column) for column in event_candidate_columns]
+    event_like_count = 0
+    for idx in column_indexes:
+        observed: set[float] = set()
+        for row in rows[:250]:
+            raw = row[idx].strip() if idx < len(row) else ""
+            if not raw:
+                continue
+            try:
+                observed.add(float(raw))
+            except ValueError:
+                continue
+            if len(observed) > 3:
+                break
+        if observed and len(observed) <= 3:
+            event_like_count += 1
+    return event_like_count
 
 
 def room_summary_from_counts(room_counts: Counter[str], total_rows: int) -> dict[str, Any]:

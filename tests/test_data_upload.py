@@ -873,6 +873,43 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
     assert sparse_room["confidence_components"]["data_sufficiency"] == "low"
 
 
+def test_processing_helper_classifies_pool_and_hot_tub_telemetry_profile() -> None:
+    result = process_csv_content(
+        filename="pool-hottub-telemetry.csv",
+        content=(
+            "timestamp,room,pool_water_temp,spa_water_temp,orp_mv,chlorine_ppm,ph_level,alkalinity_ppm,heater_runtime,circulation_pump_runtime\n"
+            "2026-05-01T08:00:00Z,Pool,81,101,690,2.8,7.4,100,18,57\n"
+            "2026-05-01T08:05:00Z,Pool,81.2,101.1,695,2.9,7.4,101,19,58\n"
+            "2026-05-01T08:10:00Z,Pool,81.4,101.3,700,3.0,7.5,101,19,58\n"
+            "2026-05-01T08:15:00Z,Spa,101.8,103.5,705,3.1,7.5,102,22,62\n"
+            "2026-05-01T08:20:00Z,Spa,102.0,103.7,710,3.1,7.6,102,23,63\n"
+        ).encode(),
+    )
+
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] == "pool_hottub_systems"
+    assert intelligence["telemetry_profile_confidence"] in {"medium", "high"}
+    assert isinstance(intelligence["telemetry_profile_signals"], list)
+    assert len(intelligence["telemetry_profile_signals"]) >= 1
+
+
+def test_processing_helper_classifies_cultivation_climate_profile() -> None:
+    result = process_csv_content(
+        filename="cultivation-profile.csv",
+        content=(
+            "timestamp,room,temp_air,rh_percent,co2,hvac_runtime,dehu_runtime,light_intensity,irrigation_event\n"
+            "2026-05-01T08:00:00Z,Flower 1,75,58,920,21,11,580,0\n"
+            "2026-05-01T08:05:00Z,Flower 1,75.1,58.1,925,22,11,582,0\n"
+            "2026-05-01T08:10:00Z,Flower 1,75.3,58.2,930,22,12,584,1\n"
+            "2026-05-01T08:15:00Z,Flower 1,75.4,58.2,932,23,12,586,0\n"
+        ).encode(),
+    )
+
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] in {"cultivation_climate", "mixed"}
+    assert intelligence["telemetry_profile_confidence"] in {"low", "medium", "high"}
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
