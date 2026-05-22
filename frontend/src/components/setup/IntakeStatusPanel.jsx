@@ -25,7 +25,7 @@ export default function IntakeStatusPanel({
   const scoreSeconds = timings?.structural_scoring_seconds ?? null;
   const totalSeconds = timings?.total_job_seconds ?? latestUploadResult?.processing_stats?.engine_runtime_seconds ?? uploadJob?.processing_duration_seconds ?? null;
   const processingMode = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
-  const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? latestUploadResult?.filename ?? null;
+  const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? null;
   const baselineReference = activeFilename
     ? `${activeFilename} (internal baseline)`
     : "Awaiting uploaded telemetry";
