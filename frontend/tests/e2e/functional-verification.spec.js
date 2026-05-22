@@ -18,7 +18,26 @@ async function openDataConnections(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
+  const uploadInput = page.locator("input#csv-upload");
+  const processUploadButton = page.getByRole("button", { name: /Process Upload/i });
+  await expect.poll(async () => {
+    const checks = await Promise.all([
+      uploadTab.isVisible().catch(() => false),
+      uploadInput.isVisible().catch(() => false),
+      processUploadButton.isVisible().catch(() => false),
+      page.getByRole("button", { name: /Setup & data connections|Data connections/i }).isVisible().catch(() => false),
+      page.getByRole("button", { name: /Open Gate settings|Gate settings/i }).isVisible().catch(() => false),
+    ]);
+    return checks.some(Boolean);
+  }, { timeout: 30000 }).toBe(true);
+
   if (await uploadTab.isVisible().catch(() => false)) {
+    return;
+  }
+  if (await uploadInput.isVisible().catch(() => false)) {
+    return;
+  }
+  if (await processUploadButton.isVisible().catch(() => false)) {
     return;
   }
 
