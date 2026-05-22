@@ -2807,14 +2807,33 @@ def build_structural_replay_timeline(
         )
         phase = replay_state_to_phase(structural_state)
 
-        sample_row_position = vector_rows["row_indexes"][sample_index]
-        sample_window_position = vector_rows["row_indexes"][window_start]
+        sample_row_position = int(vector_rows["row_indexes"][sample_index])
+        sample_window_position = int(vector_rows["row_indexes"][window_start])
+
+        sample_row_position = min(max(sample_row_position, 0), len(rows) - 1)
+        sample_window_position = min(max(sample_window_position, 0), len(rows) - 1)
+
         if row_indexes and len(row_indexes) == len(rows):
-            global_row_start = min(total_rows - 1, max(0, int(row_indexes[sample_window_position])))
-            global_row_end = min(total_rows - 1, max(0, int(row_indexes[sample_row_position])))
+            global_row_start = min(
+                total_rows - 1,
+                max(0, int(row_indexes[sample_window_position])),
+            )
+            global_row_end = min(
+                total_rows - 1,
+                max(0, int(row_indexes[sample_row_position])),
+            )
         else:
-            global_row_start = min(total_rows - 1, int(round((sample_window_position / max(len(rows) - 1, 1)) * (total_rows - 1))))
-            global_row_end = min(total_rows - 1, int(round((sample_row_position / max(len(rows) - 1, 1)) * (total_rows - 1))))
+            global_row_start = min(
+                total_rows - 1,
+                int(round((sample_window_position / max(len(rows) - 1, 1)) * (total_rows - 1))),
+            )
+            global_row_end = min(
+                total_rows - 1,
+                int(round((sample_row_position / max(len(rows) - 1, 1)) * (total_rows - 1))),
+            )
+
+        if global_row_end < global_row_start:
+            global_row_start, global_row_end = global_row_end, global_row_start
 
         start_ts = parse_runner_timestamp(columns, rows[sample_window_position], timestamp_column, sample_window_position)
         end_ts = parse_runner_timestamp(columns, rows[sample_row_position], timestamp_column, sample_row_position)
