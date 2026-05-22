@@ -112,12 +112,25 @@ def parse_optional_positive_int_env(name: str) -> int | None:
     return value if value > 0 else None
 
 
+def parse_bool_env(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 CHUNK_SIZE_ROWS = parse_positive_int_env("NERAIUM_UPLOAD_CHUNK_SIZE_ROWS", 10_000) 
 # Default row budget now comfortably covers 180 days at 5-minute cadence (~51,840 rows).
 MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 60_000) 
 # Keep SII fidelity substantially higher by default for long-window uploads.
 MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 30_000) 
 MAX_PARSE_ROWS = parse_optional_positive_int_env("NERAIUM_MAX_PARSE_ROWS")
+DISABLE_UPLOAD_HASH_CACHE = parse_bool_env("NERAIUM_DISABLE_UPLOAD_HASH_CACHE", False)
 
 PROGRESS_LABELS = {
     "PENDING": "File accepted. Background intake job is queued.",
@@ -392,7 +405,7 @@ def process_upload_job(job_id: str) -> None:
     started = time.perf_counter() 
     try: 
         hash_cache_key = upload_hash_cache_key(str(metadata.get("input_hash") or ""))
-        if hash_cache_key:
+        if hash_cache_key and not DISABLE_UPLOAD_HASH_CACHE:
             cached_payload = read_latest_payload(hash_cache_key)
             if isinstance(cached_payload, dict) and isinstance(cached_payload.get("result"), dict) and isinstance(cached_payload.get("summary"), dict):
                 if upload_job_superseded_by_reset(metadata):
@@ -492,7 +505,7 @@ def process_upload_job(job_id: str) -> None:
         duration = round(time.perf_counter() - started, 4) 
         write_latest_upload_summary(job_id, summary) 
         write_latest_upload_result(job_id, result, completed_at=completed_at) 
-        if hash_cache_key:
+        if hash_cache_key and not DISABLE_UPLOAD_HASH_CACHE:
             upsert_latest_payload(hash_cache_key, {"summary": summary, "result": result, "cached_at": completed_at})
         upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed")) 
         update_job(
