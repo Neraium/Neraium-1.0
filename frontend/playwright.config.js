@@ -24,6 +24,11 @@ export default defineConfig({
     port: 3010,
     timeout: 240_000,
     reuseExistingServer: !process.env.CI,
+    env: {
+      ...process.env,
+      VITE_API_BASE_URL: "http://127.0.0.1:8010",
+      VITE_API_FALLBACK_BASE_URL: "",
+    },
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

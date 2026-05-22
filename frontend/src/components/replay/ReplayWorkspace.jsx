@@ -305,9 +305,13 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     const latestResult = latestPayload?.latest_result ?? {};
     const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
     targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
-  }
-  if (!targetJobId) {
-    return { jobId: null, timeline: [], meta: {} };
+    if (!targetJobId) {
+      const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
+      if (globalFallback.timeline.length > 0) {
+        return globalFallback;
+      }
+      return { jobId: null, timeline: [], meta: {} };
+    }
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (statusResponse.ok) {
@@ -324,16 +328,42 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   }
   const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (!replayResponse.ok) {
+    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
+    if (globalFallback.timeline.length > 0) {
+      return globalFallback;
+    }
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
   const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
+  if (!timeline.length) {
+    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
+    if (globalFallback.timeline.length > 0) {
+      return globalFallback;
+    }
+  }
   return {
     jobId: targetJobId,
     timeline,
     meta,
     message: typeof replayPayload?.message === "string" ? replayPayload.message : "",
+  };
+}
+
+async function fetchGlobalReplayFallback({ apiFetch, accessCode }) {
+  const response = await apiFetch("/api/replay/timeline?intervals=96&replay_compression=1&mode=live", { accessCode });
+  if (!response.ok) {
+    return { jobId: null, timeline: [], meta: {} };
+  }
+  const payload = await response.json();
+  const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];
+  const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
+  return {
+    jobId: null,
+    timeline,
+    meta: { ...meta, replay_source: "global_timeline_fallback" },
+    message: typeof payload?.message === "string" ? payload.message : "",
   };
 }
 

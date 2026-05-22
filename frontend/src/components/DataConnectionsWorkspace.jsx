@@ -180,11 +180,40 @@ export default function DataConnectionsWorkspace({
   async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
     if (!pollingJobId) throw new Error("Upload polling could not start.");
+    let completeWithoutReplayCount = 0;
+    let notFoundCount = 0;
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
+        if (String(payload?.status ?? "").toUpperCase() === "NOT_FOUND") {
+          notFoundCount += 1;
+          if (notFoundCount >= 3) {
+            const latestPayload = await loadLatestUpload();
+            const recoveredStatus = normalizeUploadStatus(latestPayload?.status ?? "");
+            if (latestPayload?.latest_result && ["active", "complete"].includes(recoveredStatus)) {
+              const recoveredPayload = {
+                ...payload,
+                status: "COMPLETE",
+                replay_ready: true,
+                replay_frame_count:
+                  Number(
+                    latestPayload?.latest_result?.replay_timeline?.timeline?.length
+                    ?? latestPayload?.latest_result?.sii_intelligence?.replay_timeline?.timeline?.length
+                    ?? 0,
+                  ) || 1,
+                progress_label: "Telemetry processing complete.",
+                message: "Telemetry processing complete.",
+              };
+              setUploadJob(recoveredPayload);
+              setUploadState("complete");
+              return recoveredPayload;
+            }
+          }
+        } else {
+          notFoundCount = 0;
+        }
         pollFailureCountRef.current = 0;
         uploadJobIdRef.current = payload.job_id ?? pollingJobId;
         if (typeof window !== "undefined" && uploadJobIdRef.current) {
@@ -196,6 +225,18 @@ export default function DataConnectionsWorkspace({
         const replayReady = Boolean(payload?.replay_ready) || Number(payload?.replay_frame_count ?? 0) > 0;
         if (nextStatus === "complete" && replayReady) return payload;
         if (nextStatus === "complete" && !replayReady) {
+          completeWithoutReplayCount += 1;
+          if (completeWithoutReplayCount >= 5) {
+            const completedPayload = {
+              ...payload,
+              replay_pending: true,
+              progress_label: payload?.progress_label ?? "Telemetry processing complete. Replay is finalizing.",
+              message: payload?.message ?? "Telemetry processing complete. Replay is finalizing.",
+            };
+            setUploadJob(completedPayload);
+            setUploadState("complete");
+            return completedPayload;
+          }
           setUploadState("generating_replay");
         }
         if (nextStatus === "failed") throw buildUploadRequestError(response, payload, "poll");
