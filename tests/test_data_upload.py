@@ -967,6 +967,88 @@ def test_processing_helper_low_confidence_profile_makes_no_claim() -> None:
     assert intelligence["system_identity"]["claim_made"] is False
 
 
+def test_processing_helper_classifies_operational_mechanical_profile() -> None:
+    result = process_csv_content(
+        filename="mechanical-profile.csv",
+        content=(
+            "timestamp,room,pump_amperage,pump_discharge_pressure,motor_temperature,vfd_frequency,bearing_temperature,shaft_vibration\n"
+            "2026-05-01T08:00:00Z,Plant A,14.2,42.1,168.4,58.1,142.2,0.12\n"
+            "2026-05-01T08:05:00Z,Plant A,14.4,42.6,168.9,58.0,142.4,0.13\n"
+            "2026-05-01T08:10:00Z,Plant A,14.7,43.0,169.1,57.8,142.9,0.14\n"
+            "2026-05-01T08:15:00Z,Plant A,14.9,43.5,169.6,57.7,143.2,0.15\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["operational_signal_profile"] == "mechanical_systems"
+    assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
+    assert intelligence["system_identity"]["operational_profile"] == "mechanical_systems"
+
+
+def test_processing_helper_classifies_operational_events_profile() -> None:
+    result = process_csv_content(
+        filename="ops-events-profile.csv",
+        content=(
+            "timestamp,room,alarm_acknowledgements,manual_override_events,setpoint_changes,maintenance_actions,operator_interventions\n"
+            "2026-05-01T08:00:00Z,Plant A,2,1,4,0,3\n"
+            "2026-05-01T08:05:00Z,Plant A,3,1,5,1,4\n"
+            "2026-05-01T08:10:00Z,Plant A,3,2,6,1,5\n"
+            "2026-05-01T08:15:00Z,Plant A,4,2,6,2,5\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["operational_signal_profile"] == "operational_events"
+    assert intelligence["operational_signal_modality"] == "event"
+    assert intelligence["system_identity"]["operational_modality"] == "event"
+
+
+def test_processing_helper_classifies_operational_water_profile() -> None:
+    result = process_csv_content(
+        filename="water-profile.csv",
+        content=(
+            "timestamp,room,flow_rate,totalized_flow,water_pressure,filter_differential_pressure,tank_level,water_turnover_rate\n"
+            "2026-05-01T08:00:00Z,Water Plant,142,2100,39.2,4.1,76.5,6.2\n"
+            "2026-05-01T08:05:00Z,Water Plant,143,2140,39.4,4.2,76.2,6.3\n"
+            "2026-05-01T08:10:00Z,Water Plant,145,2184,39.7,4.4,75.8,6.5\n"
+            "2026-05-01T08:15:00Z,Water Plant,146,2228,39.9,4.5,75.4,6.6\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["operational_signal_profile"] == "water_systems"
+    assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
+
+
+def test_processing_helper_classifies_operational_utility_profile() -> None:
+    result = process_csv_content(
+        filename="utility-profile.csv",
+        content=(
+            "timestamp,room,distribution_pressure,leak_detection_indicator,pump_station_output,reservoir_refill_rate,sewer_flow,treatment_plant_flow\n"
+            "2026-05-01T08:00:00Z,Utility Grid,57.1,0,188,4.6,122,245\n"
+            "2026-05-01T08:05:00Z,Utility Grid,57.0,1,190,4.7,124,248\n"
+            "2026-05-01T08:10:00Z,Utility Grid,56.8,1,191,4.8,126,251\n"
+            "2026-05-01T08:15:00Z,Utility Grid,56.7,0,193,4.9,127,254\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["operational_signal_profile"] == "utility_infrastructure"
+    assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
+
+
+def test_processing_helper_classifies_operational_network_profile() -> None:
+    result = process_csv_content(
+        filename="network-profile.csv",
+        content=(
+            "timestamp,room,cpu_utilization,memory_utilization,network_throughput,packet_loss,latency,api_response_time,error_rate\n"
+            "2026-05-01T08:00:00Z,DC-1,61,72,845,0.2,24,180,0.9\n"
+            "2026-05-01T08:05:00Z,DC-1,63,73,852,0.3,25,184,1.0\n"
+            "2026-05-01T08:10:00Z,DC-1,66,75,861,0.3,26,190,1.2\n"
+            "2026-05-01T08:15:00Z,DC-1,67,76,869,0.4,27,196,1.3\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["operational_signal_profile"] == "network_digital_infrastructure"
+    assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)

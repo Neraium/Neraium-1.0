@@ -905,9 +905,15 @@ def build_upload_result(
         rows=data_rows,
         numeric_profiles=numeric_profiles,
     )
+    operational_signal_profile = classify_operational_signal_profile(
+        columns=columns,
+        rows=data_rows,
+        numeric_profiles=numeric_profiles,
+    )
     effective_source_metadata = {
         **(intelligence_source_metadata or {}),
         **telemetry_profile,
+        **operational_signal_profile,
     }
     sii_intelligence = build_upload_intelligence(
         filename=filename,
@@ -1138,7 +1144,12 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
             "flagged_room_count": flagged_room_count,
             "telemetry_profile": telemetry_profile,
             "telemetry_profile_confidence": telemetry_profile_confidence,
-            "unknown_profile": telemetry_profile == "unknown" or telemetry_profile_confidence == "low",
+            "operational_signal_profile": str(intelligence.get("operational_signal_profile") or "unknown"),
+            "operational_signal_profile_confidence": str(intelligence.get("operational_signal_profile_confidence") or "low"),
+            "unknown_profile": (
+                (telemetry_profile == "unknown" or telemetry_profile_confidence == "low")
+                and str(intelligence.get("operational_signal_profile") or "unknown") == "unknown"
+            ),
         },
         "adaptive_learning": result.get("adaptive_learning", {}),
     }
@@ -1434,6 +1445,7 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "schema_mapping": result.get("schema_mapping", result["cultivation_mapping"]),
         "aquatic_schema": result.get("aquatic_schema", {}),
         "telemetry_profile": result.get("telemetry_profile"),
+        "operational_signal_profile": result.get("operational_signal_profile"),
         "operator_report": result.get("operator_report", {}),
         "engine_result": result["engine_result"],
         "driver_attribution": result.get("driver_attribution", {}),
@@ -2113,6 +2125,88 @@ def classify_telemetry_profile(
         "telemetry_profile_confidence": confidence,
         "telemetry_profile_signals": profile_signals[:8],
         "telemetry_modality": modality,
+    }
+
+
+def classify_operational_signal_profile(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    numeric_profiles: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lowered_columns = [str(column).lower().replace("_", " ") for column in columns]
+    scorecard: dict[str, int] = {
+        "mechanical_systems": 0,
+        "water_systems": 0,
+        "pool_aquatics": 0,
+        "hvac_systems": 0,
+        "electrical_systems": 0,
+        "facility_operations": 0,
+        "environmental_data": 0,
+        "industrial_process_data": 0,
+        "utility_infrastructure": 0,
+        "network_digital_infrastructure": 0,
+        "operational_events": 0,
+    }
+    matched_signals: dict[str, list[str]] = {key: [] for key in scorecard}
+
+    keyword_sets = {
+        "mechanical_systems": ["pump", "motor", "fan", "compressor", "bearing", "vibration", "vfd", "gearbox", "shaft", "lubrication"],
+        "water_systems": ["flow", "pressure", "reservoir", "tank", "basin", "sump", "backwash", "filter", "turnover", "water age"],
+        "pool_aquatics": ["pool", "spa", "orp", "chlorine", "bromine", "alkalinity", "hardness", "turbidity", "uv", "bather"],
+        "hvac_systems": ["hvac", "ahu", "supply air", "return air", "mixed air", "duct", "damper", "chiller", "condenser", "evaporator"],
+        "electrical_systems": ["voltage", "current", "frequency", "power factor", "energy", "demand", "transformer", "generator", "ups", "breaker"],
+        "facility_operations": ["occupancy", "guest", "visitor", "door", "access", "parking", "elevator", "lighting", "security", "work order"],
+        "environmental_data": ["ambient", "rainfall", "wind", "solar", "uv index", "air quality", "particulate", "noise", "groundwater", "flood"],
+        "industrial_process_data": ["production", "throughput", "batch", "yield", "reject", "scrap", "cycle time", "downtime", "utilization", "inventory"],
+        "utility_infrastructure": ["distribution pressure", "leak", "non-revenue water", "pump station", "lift station", "sewer", "overflow", "treatment", "sludge", "chlorine residual"],
+        "network_digital_infrastructure": ["cpu", "memory", "storage", "network throughput", "packet loss", "latency", "api response", "error rate", "database", "authentication"],
+        "operational_events": ["alarm", "acknowledg", "suppression", "intervention", "setpoint", "manual override", "maintenance", "inspection", "calibration", "event"],
+    }
+
+    for column in lowered_columns:
+        for profile, keywords in keyword_sets.items():
+            for keyword in keywords:
+                if keyword in column:
+                    scorecard[profile] += 1
+                    if keyword not in matched_signals[profile]:
+                        matched_signals[profile].append(keyword)
+                    break
+
+    event_like_columns = estimate_event_like_columns(columns=columns, rows=rows, numeric_profiles=numeric_profiles)
+    if event_like_columns > 0:
+        scorecard["operational_events"] += event_like_columns
+        matched_signals["operational_events"].append(f"event_like_columns={event_like_columns}")
+
+    ranked = sorted(scorecard.items(), key=lambda item: item[1], reverse=True)
+    top_profile, top_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0
+
+    if top_score < 2:
+        profile = "unknown"
+        confidence = "low"
+    elif top_score >= 4 and top_score >= (second_score + 2):
+        profile = top_profile
+        confidence = "high"
+    elif top_score > second_score:
+        profile = top_profile
+        confidence = "medium"
+    else:
+        profile = "unknown"
+        confidence = "low"
+
+    modality = "event" if profile == "operational_events" else "continuous"
+    if profile == "unknown":
+        modality = "unknown"
+
+    profile_signals = matched_signals.get(top_profile, [])
+    if profile == "unknown":
+        profile_signals = []
+    return {
+        "operational_signal_profile": profile,
+        "operational_signal_profile_confidence": confidence,
+        "operational_signal_profile_signals": profile_signals[:8],
+        "operational_signal_modality": modality,
     }
 
 

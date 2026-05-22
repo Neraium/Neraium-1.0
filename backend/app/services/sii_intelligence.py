@@ -284,12 +284,23 @@ def build_upload_intelligence(
         "telemetry_profile_confidence": (source_metadata or {}).get("telemetry_profile_confidence", "low"),
         "telemetry_profile_signals": (source_metadata or {}).get("telemetry_profile_signals", []),
         "telemetry_modality": (source_metadata or {}).get("telemetry_modality", "unknown"),
+        "operational_signal_profile": (source_metadata or {}).get("operational_signal_profile", "unknown"),
+        "operational_signal_profile_confidence": (source_metadata or {}).get("operational_signal_profile_confidence", "low"),
+        "operational_signal_profile_signals": (source_metadata or {}).get("operational_signal_profile_signals", []),
+        "operational_signal_modality": (source_metadata or {}).get("operational_signal_modality", "unknown"),
         "system_identity": {
             "profile": (source_metadata or {}).get("telemetry_profile", "unknown"),
             "confidence": (source_metadata or {}).get("telemetry_profile_confidence", "low"),
             "signals": (source_metadata or {}).get("telemetry_profile_signals", []),
             "modality": (source_metadata or {}).get("telemetry_modality", "unknown"),
-            "claim_made": (source_metadata or {}).get("telemetry_profile_confidence") in {"medium", "high"},
+            "operational_profile": (source_metadata or {}).get("operational_signal_profile", "unknown"),
+            "operational_confidence": (source_metadata or {}).get("operational_signal_profile_confidence", "low"),
+            "operational_signals": (source_metadata or {}).get("operational_signal_profile_signals", []),
+            "operational_modality": (source_metadata or {}).get("operational_signal_modality", "unknown"),
+            "claim_made": (
+                (source_metadata or {}).get("telemetry_profile_confidence") in {"medium", "high"}
+                or (source_metadata or {}).get("operational_signal_profile_confidence") in {"medium", "high"}
+            ),
         },
         "room_summary": room_summary or {},
         "rooms": room_records,

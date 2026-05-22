@@ -180,6 +180,10 @@ export default function SystemBodyWorkspace({
                     <li><span>Replay Velocity</span><strong>{uploadDetail.replayVelocity || EMPTY_VALUE}</strong></li>
                     <li><span>Propagation</span><strong>{uploadDetail.replayPropagation || EMPTY_VALUE}</strong></li>
                     <li><span>Replay Confidence</span><strong>{uploadDetail.replayConfidence || EMPTY_VALUE}</strong></li>
+                    <li><span>Operational Profile</span><strong>{uploadDetail.operationalProfile || EMPTY_VALUE}</strong></li>
+                    <li><span>Operational Confidence</span><strong>{uploadDetail.operationalConfidence || EMPTY_VALUE}</strong></li>
+                    <li><span>Operational Modality</span><strong>{uploadDetail.operationalModality || EMPTY_VALUE}</strong></li>
+                    <li><span>Operational Signals</span><strong>{uploadDetail.operationalSignals || EMPTY_VALUE}</strong></li>
                   </ul>
                   <div className="system-gate__settings-advanced" style={{ marginTop: "12px" }}>
                     <button
@@ -243,7 +247,34 @@ function buildUploadDetail(result, replayFrame) {
     replayVelocity: hasReplayFrame ? (replayFrame?.drift_velocity ?? EMPTY_VALUE) : EMPTY_VALUE,
     replayPropagation: hasReplayFrame ? (replayPropagation.dominant_paths?.length ? replayPropagation.dominant_paths.join(", ") : EMPTY_VALUE) : EMPTY_VALUE,
     replayConfidence: hasReplayFrame ? String(replayEvidence.corroboration_strength ?? EMPTY_VALUE) : EMPTY_VALUE,
+    operationalProfile: normalizeOperationalLabel(
+      result?.sii_intelligence?.operational_signal_profile
+      ?? result?.sii_intelligence?.system_identity?.operational_profile
+    ),
+    operationalConfidence: normalizeOperationalLabel(
+      result?.sii_intelligence?.operational_signal_profile_confidence
+      ?? result?.sii_intelligence?.system_identity?.operational_confidence
+    ),
+    operationalModality: normalizeOperationalLabel(
+      result?.sii_intelligence?.operational_signal_modality
+      ?? result?.sii_intelligence?.system_identity?.operational_modality
+    ),
+    operationalSignals: formatOperationalSignals(
+      result?.sii_intelligence?.operational_signal_profile_signals
+      ?? result?.sii_intelligence?.system_identity?.operational_signals
+    ),
   };
+}
+
+function normalizeOperationalLabel(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return EMPTY_VALUE;
+  return text.replaceAll("_", " ");
+}
+
+function formatOperationalSignals(value) {
+  if (!Array.isArray(value) || value.length === 0) return EMPTY_VALUE;
+  return value.slice(0, 5).join(", ");
 }
 
 function detectSourceType(result, replayFrame) {

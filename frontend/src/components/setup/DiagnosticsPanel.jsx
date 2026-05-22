@@ -168,6 +168,10 @@ export default function DiagnosticsPanel({
       confidence: latestUploadResult?.sii_intelligence?.telemetry_profile_confidence ?? "low",
       modality: latestUploadResult?.sii_intelligence?.telemetry_modality ?? "unknown",
       signals: latestUploadResult?.sii_intelligence?.telemetry_profile_signals ?? [],
+      operational_profile: latestUploadResult?.sii_intelligence?.operational_signal_profile ?? "unknown",
+      operational_confidence: latestUploadResult?.sii_intelligence?.operational_signal_profile_confidence ?? "low",
+      operational_modality: latestUploadResult?.sii_intelligence?.operational_signal_modality ?? "unknown",
+      operational_signals: latestUploadResult?.sii_intelligence?.operational_signal_profile_signals ?? [],
       claim_made: ["medium", "high"].includes(String(latestUploadResult?.sii_intelligence?.telemetry_profile_confidence ?? "").toLowerCase()),
     })
     : null;
@@ -212,6 +216,9 @@ export default function DiagnosticsPanel({
                 { label: "Profile", value: systemIdentity?.profile ?? DASH },
                 { label: "Confidence", value: systemIdentity?.confidence ?? DASH },
                 { label: "Modality", value: systemIdentity?.modality ?? DASH },
+                { label: "Operational Profile", value: systemIdentity?.operational_profile ?? DASH },
+                { label: "Operational Confidence", value: systemIdentity?.operational_confidence ?? DASH },
+                { label: "Operational Modality", value: systemIdentity?.operational_modality ?? DASH },
                 { label: "Claim Made", value: systemIdentity?.claim_made ? "Yes" : "No" },
               ]}
               compact
@@ -224,6 +231,12 @@ export default function DiagnosticsPanel({
             ) : (
               <p className="narrative-text">Profile confidence is low, so Neraium is not making a system-type claim.</p>
             )}
+            {Array.isArray(systemIdentity?.operational_signals) && systemIdentity.operational_signals.length > 0 ? (
+              <DataTable
+                columns={["Operational Signal"]}
+                rows={systemIdentity.operational_signals.map((signal) => [signal])}
+              />
+            ) : null}
           </Panel>
           <Panel title="Per-Room Confidence Breakdown" className="span-12">
             {roomConfidenceRows.length > 0 ? (
