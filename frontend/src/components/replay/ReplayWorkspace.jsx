@@ -43,6 +43,13 @@ export default function ReplayWorkspace({
     || hasResumedSession
     || hasRealSiiOutput
   );
+  const embeddedReplay = useMemo(() => {
+    const result = currentSession?.latestUploadResult;
+    const replay = result?.replay_timeline ?? result?.sii_intelligence?.replay_timeline ?? null;
+    const timeline = Array.isArray(replay?.timeline) ? replay.timeline : [];
+    const meta = replay?.meta && typeof replay.meta === "object" ? replay.meta : {};
+    return { timeline, meta };
+  }, [currentSession]);
   const [replayMode, setReplayMode] = useState(false);
   const togglePlayback = () => {
     setIsPlaying((value) => {
@@ -75,11 +82,17 @@ export default function ReplayWorkspace({
           replay_job_id: scoped.jobId,
           message: scoped.message,
         };
-        setTimeline(nextTimeline);
+        const fallbackTimeline = embeddedReplay.timeline;
+        const fallbackMeta = embeddedReplay.meta;
+        const effectiveTimeline = nextTimeline.length > 0 ? nextTimeline : fallbackTimeline;
+        const effectiveMeta = nextTimeline.length > 0
+          ? nextMeta
+          : { ...fallbackMeta, replay_source: "latest_upload_result_fallback", replay_job_id: scoped.jobId };
+        setTimeline(effectiveTimeline);
         setComparisonTimeline([]);
-        setMeta(nextMeta);
-        setFrameIndex(Math.max(0, nextTimeline.length - 1));
-        setError(nextTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
+        setMeta(effectiveMeta);
+        setFrameIndex(Math.max(0, effectiveTimeline.length - 1));
+        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
       } catch (loadError) {
         if (cancelled) return;
         setTimeline([]);
@@ -91,7 +104,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, embeddedReplay.meta, embeddedReplay.timeline, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
