@@ -1324,9 +1324,15 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None:
 def read_latest_upload_summary() -> dict[str, Any] | None: 
     ensure_runtime_dirs() 
     if isinstance(LATEST_UPLOAD_CACHE.get("summary"), dict):
+        if payload_superseded_by_reset(LATEST_UPLOAD_CACHE["summary"], is_summary=True):
+            LATEST_UPLOAD_CACHE["summary"] = None
+            return None
         return LATEST_UPLOAD_CACHE["summary"]
     db_payload = read_latest_payload("latest_upload_summary") 
     if db_payload is not None: 
+        if payload_superseded_by_reset(db_payload, is_summary=True):
+            LATEST_UPLOAD_CACHE["summary"] = None
+            return None
         LATEST_UPLOAD_CACHE["summary"] = db_payload
         return db_payload 
     path = latest_upload_path()
@@ -1334,6 +1340,9 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
         return None
     try: 
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload_superseded_by_reset(payload, is_summary=True):
+            LATEST_UPLOAD_CACHE["summary"] = None
+            return None
         LATEST_UPLOAD_CACHE["summary"] = payload
         return payload
     except (OSError, json.JSONDecodeError): 
@@ -1343,9 +1352,15 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
 def read_latest_upload_result() -> dict[str, Any] | None: 
     ensure_runtime_dirs() 
     if isinstance(LATEST_UPLOAD_CACHE.get("result"), dict):
+        if payload_superseded_by_reset(LATEST_UPLOAD_CACHE["result"], is_summary=False):
+            LATEST_UPLOAD_CACHE["result"] = None
+            return None
         return LATEST_UPLOAD_CACHE["result"]
     db_payload = read_latest_payload("latest_upload_result") 
     if db_payload is not None: 
+        if payload_superseded_by_reset(db_payload, is_summary=False):
+            LATEST_UPLOAD_CACHE["result"] = None
+            return None
         LATEST_UPLOAD_CACHE["result"] = db_payload
         return db_payload 
     path = latest_upload_result_path()
@@ -1353,6 +1368,9 @@ def read_latest_upload_result() -> dict[str, Any] | None:
         return None
     try: 
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload_superseded_by_reset(payload, is_summary=False):
+            LATEST_UPLOAD_CACHE["result"] = None
+            return None
         LATEST_UPLOAD_CACHE["result"] = payload
         return payload
     except (OSError, json.JSONDecodeError): 
@@ -1580,6 +1598,35 @@ def parse_timestamp(value: str | None) -> datetime | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def payload_superseded_by_reset(payload: dict[str, Any] | None, *, is_summary: bool) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    reset_marker = read_latest_payload("latest_upload_reset_at")
+    reset_at = parse_timestamp(reset_marker) if isinstance(reset_marker, str) else None
+    if reset_at is None:
+        return False
+    completed_at = parse_timestamp(
+        str(
+            payload.get("last_processed_at")
+            or payload.get("completed_at")
+            or (
+                payload.get("processing_trace", {}).get("completed_at")
+                if isinstance(payload.get("processing_trace"), dict)
+                else ""
+            )
+            or (
+                payload.get("sii_intelligence", {}).get("last_updated")
+                if isinstance(payload.get("sii_intelligence"), dict)
+                else ""
+            )
+        )
+    )
+    if completed_at is None:
+        # If we cannot prove freshness post-reset, treat as superseded.
+        return True
+    return completed_at <= reset_at
 
 
 def first_present(mapping: dict[str, Any], keys: list[str]) -> Any:
