@@ -20,5 +20,11 @@ export function resolveSessionJobId(currentSession) {
   const snapshot = currentSession?.latestUploadSnapshot ?? null;
   const result = currentSession?.latestUploadResult ?? null;
   const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
-  return result?.job_id ?? history[0]?.job_id ?? null;
+  return (
+    result?.job_id
+    ?? snapshot?.latest_result?.job_id
+    ?? snapshot?.latest_upload?.job_id
+    ?? history[0]?.job_id
+    ?? null
+  );
 }

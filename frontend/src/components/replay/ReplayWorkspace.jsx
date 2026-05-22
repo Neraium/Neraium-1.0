@@ -36,8 +36,14 @@ export default function ReplayWorkspace({
   const [error, setError] = useState("");
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
-  const shouldRequestReplay = Boolean(hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
+  const shouldRequestReplay = Boolean(
+    sessionJobId
+    || hasActiveSession
+    || hasCurrentUploadResult
+    || hasResumedSession
+    || hasRealSiiOutput
+  );
   const [replayMode, setReplayMode] = useState(false);
   const togglePlayback = () => {
     setIsPlaying((value) => {
