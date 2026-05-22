@@ -1097,7 +1097,10 @@ def build_upload_result(
     if isinstance(runner_latest_state, dict):
         runner_instability_index = runner_latest_state.get("instability_index")
         if isinstance(runner_instability_index, dict):
-            sii_intelligence["instability_index"] = runner_instability_index
+            if not isinstance(sii_intelligence.get("instability_index"), dict):
+                sii_intelligence["instability_index"] = runner_instability_index
+            else:
+                sii_intelligence["instability_index_legacy_runner"] = runner_instability_index
         runner_projection_hours = runner_latest_state.get("projected_time_to_failure_hours")
         runner_projection = runner_latest_state.get("projected_time_to_failure")
         if runner_projection:

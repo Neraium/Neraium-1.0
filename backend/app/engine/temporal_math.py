@@ -41,11 +41,13 @@ def evaluate_temporal_math(
     entropy_growth_series = _entropy_growth_series(baseline, active)
     rate_metrics = _rate_of_change(state_drift_series)
     correlation_drift = _correlation_drift(baseline, active)
-    relationship_drift = correlation_drift["score"]
     mi_drift = _mutual_information_drift(baseline, active)
+    relationship_drift = float(
+        np.clip((correlation_drift["score"] * 0.7) + (mi_drift["score"] * 0.3), 0.0, 1.0)
+    )
     lag_drift = _lag_relationship_drift(baseline, active, max_lag=cfg.max_lag)
     regime = _regime_change(state_drift_series)
-    topology = _topology_propagation_score(correlation_drift, lag_drift)
+    topology = _topology_propagation_score(lag_drift=lag_drift, regime=regime)
 
     evidence_vector = {
         "state_drift": float(np.clip(np.nanmean(state_drift_series), 0.0, 1.0)),
@@ -295,10 +297,10 @@ def _regime_change(state_drift_series: np.ndarray) -> dict[str, Any]:
     return {"score": round(score, 6), "change_points": points[:5]}
 
 
-def _topology_propagation_score(correlation_drift: dict[str, Any], lag_drift: dict[str, Any]) -> float:
-    corr = float(correlation_drift.get("score", 0.0))
+def _topology_propagation_score(*, lag_drift: dict[str, Any], regime: dict[str, Any]) -> float:
     lag = float(lag_drift.get("score", 0.0))
-    return float(np.clip((corr * 0.6) + (lag * 0.4), 0.0, 1.0))
+    regime_shift = float(regime.get("score", 0.0))
+    return float(np.clip((lag * 0.65) + (regime_shift * 0.35), 0.0, 1.0))
 
 
 def _evidence_accumulation(evidence_vector: dict[str, float], *, trigger: float) -> dict[str, Any]:
@@ -354,13 +356,13 @@ def _instability_index(evidence_vector: dict[str, float], confidence: dict[str, 
         "topology_propagation": float(np.clip(evidence_vector.get("topology_propagation", 0.0), 0.0, 1.0)),
     }
     score = (
-        components["state_drift"] * 0.23
-        + components["relationship_drift"] * 0.17
-        + components["entropy_growth"] * 0.12
-        + components["variance_growth"] * 0.14
+        components["state_drift"] * 0.26
+        + components["relationship_drift"] * 0.15
+        + components["entropy_growth"] * 0.14
+        + components["variance_growth"] * 0.16
         + components["acceleration"] * 0.11
         + components["causal_evidence"] * 0.13
-        + components["topology_propagation"] * 0.10
+        + components["topology_propagation"] * 0.05
     )
     return {"score": round(float(np.clip(score, 0.0, 1.0)), 6), "components": {k: round(v, 6) for k, v in components.items()}, "model": {"name": "temporal_math_engine", "version": "v1"}}
 
