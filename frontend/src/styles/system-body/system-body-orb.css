@@ -9,8 +9,8 @@
   overflow: hidden;
   border-radius: 28px;
   background:
-    radial-gradient(circle at center, rgba(255, 160, 80, 0.12), transparent 65%),
-    linear-gradient(180deg, #000 0%, #071019 55%, #000 100%);
+    radial-gradient(circle at center, rgba(156, 163, 175, 0.12), transparent 65%),
+    linear-gradient(180deg, #05070a 0%, #0b1016 55%, #05070a 100%);
 }
 
 .system-body-orb-panel__stage {
@@ -122,7 +122,7 @@
   position: absolute;
   inset: 0;
   opacity: 0.03;
-  background-image: radial-gradient(circle at center, #ffb36b 0%, transparent 60%);
+  background-image: radial-gradient(circle at center, #9ca3af 0%, transparent 60%);
   background-size: 200% 200%;
   animation: orbAmbientMotion 18s ease-in-out infinite alternate;
 }
@@ -465,4 +465,103 @@
   0%, 100% { opacity: 0.62; }
   35% { opacity: 1; }
   70% { opacity: 0.72; }
+}
+
+.health-orb--premium {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  filter:
+    drop-shadow(0 22px 42px rgba(0, 0, 0, 0.46))
+    drop-shadow(0 0 36px color-mix(in srgb, var(--orb-accent-soft) 88%, transparent));
+}
+
+.health-orb__svg--premium {
+  width: 100%;
+  height: auto;
+  max-width: 920px;
+  overflow: visible;
+}
+
+.premium-orb__rim,
+.premium-orb__equator,
+.premium-orb__arc {
+  fill: none;
+  stroke: var(--orb-accent);
+  opacity: 0.68;
+  vector-effect: non-scaling-stroke;
+}
+
+.premium-orb__rim--outer {
+  stroke-width: 1.35;
+  opacity: 0.52;
+}
+
+.premium-orb__rim--inner {
+  stroke-width: 1.1;
+  opacity: 0.42;
+}
+
+.premium-orb__equator {
+  stroke-width: 1.1;
+  opacity: 0.36;
+}
+
+.premium-orb__arc {
+  stroke-width: 1.25;
+}
+
+.premium-orb__arc--a {
+  stroke-dasharray: 8 7;
+}
+
+.premium-orb__arc--b {
+  stroke-dasharray: 4 8;
+  opacity: 0.48;
+}
+
+.premium-orb__shell {
+  stroke: color-mix(in srgb, var(--orb-accent) 40%, rgba(255, 255, 255, 0.12));
+  stroke-width: 1.1;
+}
+
+.premium-orb__core {
+  fill: var(--orb-accent);
+  opacity: calc(0.26 + (var(--orb-intensity, 0.4) * 0.48));
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--orb-accent) 40%, transparent));
+}
+
+.premium-orb__spec {
+  fill: rgba(255, 255, 255, 0.2);
+  opacity: 0.74;
+}
+
+.health-orb--premium-animated .premium-orb__halo {
+  animation: premiumHaloBreathe 7.4s ease-in-out infinite;
+}
+
+.health-orb--premium-animated .premium-orb__equator {
+  animation: premiumEquatorDrift 14s linear infinite;
+  transform-origin: 160px 140px;
+}
+
+.health-orb--premium-animated .premium-orb__arc--a,
+.health-orb--premium-animated .premium-orb__arc--b {
+  animation: premiumArcPulse 6.8s ease-in-out infinite;
+}
+
+@keyframes premiumHaloBreathe {
+  0%, 100% { opacity: 0.34; transform: scale(0.994); }
+  50% { opacity: 0.52; transform: scale(1.012); }
+}
+
+@keyframes premiumEquatorDrift {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes premiumArcPulse {
+  0%, 100% { opacity: 0.32; }
+  50% { opacity: 0.72; }
 }
