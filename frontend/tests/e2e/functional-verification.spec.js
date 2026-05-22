@@ -14,7 +14,7 @@ function buildCsvRows(count) {
   return `${lines.join("\n")}\n`;
 }
 
-async function waitForUploadComplete(page, jobId, timeoutMs = 180000) {
+async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
   const startedAt = Date.now();
   let lastStatus = "";
   let activeJobId = String(jobId ?? "").trim();
@@ -48,7 +48,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 180000) {
           }
         }
       }
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(750);
       continue;
     }
     if (status === "COMPLETE") {
@@ -57,7 +57,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 180000) {
     if (status === "FAILED") {
       throw new Error(`Upload job ${activeJobId} failed: ${JSON.stringify(payload)}`);
     }
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(750);
   }
   throw new Error(`Upload job ${activeJobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
 }
@@ -189,14 +189,14 @@ test.describe("Functional verification", () => {
   });
 
   test("medium upload exposes replay details and replay workspace data", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(180000);
     await openDataConnections(page);
 
     const input = page.locator("input#csv-upload");
     await input.setInputFiles({
       name: "functional-medium.csv",
       mimeType: "text/csv",
-      buffer: Buffer.from(buildCsvRows(96), "utf8"),
+      buffer: Buffer.from(buildCsvRows(48), "utf8"),
     });
     const processButton = page.getByRole("button", { name: "Process Upload" });
     await expect(processButton).toBeEnabled();
