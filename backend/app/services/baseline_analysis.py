@@ -3,6 +3,8 @@ from typing import Any
 
 from app.services.data_quality import round_number, variability_flag
 
+BASELINE_WINDOW_TARGET = 100
+# Backward-compatible export for legacy relationship analysis imports.
 BASELINE_WINDOW_FRACTION = 0.2
 MIN_BASELINE_ROWS = 5
 
@@ -23,19 +25,20 @@ def build_baseline_analysis(
             "warnings": ["At least 5 data rows are needed for baseline comparison."],
         }
 
-    window_size = max(1, math.ceil(len(rows) * BASELINE_WINDOW_FRACTION))
-    if window_size * 2 > len(rows):
+    baseline_window_size = min(BASELINE_WINDOW_TARGET, max(1, len(rows) // 2))
+    recent_window_size = min(BASELINE_WINDOW_TARGET, len(rows) - baseline_window_size)
+    if recent_window_size <= 0:
         return {
-            "baseline_window_rows": window_size,
-            "recent_window_rows": window_size,
+            "baseline_window_rows": baseline_window_size,
+            "recent_window_rows": recent_window_size,
             "columns_analyzed": 0,
             "column_drift": [],
             "overall_assessment": "needs_review",
             "warnings": ["Not enough rows to compare separate baseline and recent windows."],
         }
 
-    baseline_rows = rows[:window_size]
-    recent_rows = rows[-window_size:]
+    baseline_rows = rows[:baseline_window_size]
+    recent_rows = rows[-recent_window_size:]
     numeric_columns = {profile["column"] for profile in numeric_profiles}
     column_drift: list[dict[str, Any]] = []
 
@@ -91,8 +94,8 @@ def build_baseline_analysis(
     )
 
     return {
-        "baseline_window_rows": window_size,
-        "recent_window_rows": window_size,
+        "baseline_window_rows": baseline_window_size,
+        "recent_window_rows": recent_window_size,
         "columns_analyzed": len(column_drift),
         "column_drift": column_drift,
         "overall_assessment": overall_assessment,

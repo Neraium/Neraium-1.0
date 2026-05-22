@@ -2625,7 +2625,7 @@ def replay_target_frames(total_rows: int) -> int:
 
 
 def replay_baseline_rows(total_rows: int) -> int:
-    return max(10, int(total_rows * 0.15))
+    return max(10, min(100, total_rows))
 
 
 def classify_structural_state(
@@ -2684,7 +2684,7 @@ def build_structural_replay_timeline(
         )
 
     baseline_rows_total = replay_baseline_rows(total_rows)
-    baseline_count = max(3, min(sample_count - 2, int(round(sample_count * (baseline_rows_total / max(total_rows, 1))))))
+    baseline_count = max(3, min(sample_count - 2, baseline_rows_total))
     available = sample_count - baseline_count
     if available <= 1:
         return build_minimal_replay_timeline(
