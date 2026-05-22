@@ -19,6 +19,7 @@ import numpy as np
 from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import get_settings
 from app.engine import run_engine_analysis
+from app.engine.temporal_math import evaluate_temporal_math
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.adaptive_learning import append_event_memory, build_adaptive_snapshot, derive_interpretive_archetypes, derive_site_key, update_site_memory_from_result
 from app.services.aquatic_domain import analyze_aquatic_instability, map_aquatic_schema
@@ -909,6 +910,12 @@ def build_upload_result(
         cultivation_mapping=schema_mapping,
         numeric_profiles=numeric_profiles,
     )
+    temporal_math = evaluate_temporal_math(
+        columns=columns,
+        rows=data_rows,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=detected_timestamp_column,
+    )
     aquatic_assessment = analyze_aquatic_instability(
         columns=columns,
         baseline_analysis=baseline_analysis,
@@ -981,6 +988,36 @@ def build_upload_result(
         mode=intelligence_mode,
         source_metadata=effective_source_metadata,
     )
+    sii_intelligence["temporal_math_engine"] = temporal_math
+    temporal_instability = temporal_math.get("instability_index", {}) if isinstance(temporal_math, dict) else {}
+    if isinstance(temporal_instability, dict):
+        sii_intelligence["instability_index"] = temporal_instability
+    decision_state = temporal_math.get("decision_thresholding", {}).get("state") if isinstance(temporal_math, dict) else None
+    if isinstance(decision_state, str) and decision_state:
+        decision_map = {
+            "Normal": ("Stable", "nominal"),
+            "Watch": ("Drift observed", "review"),
+            "Investigate": ("Needs review", "review"),
+            "Act": ("Needs action", "elevated"),
+            "Critical": ("Needs action", "unstable"),
+        }
+        sii_intelligence["decision_threshold_state"] = decision_state
+        if decision_state in {"Act", "Critical"}:
+            mapped_state, mapped_urgency = decision_map.get(decision_state, ("Monitoring", "review"))
+            sii_intelligence["facility_state"] = mapped_state
+            sii_intelligence["room_state"] = mapped_state
+            sii_intelligence["urgency"] = mapped_urgency
+            if isinstance(sii_intelligence.get("rooms"), list) and sii_intelligence["rooms"] and isinstance(sii_intelligence["rooms"][0], dict):
+                sii_intelligence["rooms"][0]["room_state"] = mapped_state
+                sii_intelligence["rooms"][0]["urgency"] = mapped_urgency
+    lead_time = temporal_math.get("lead_time_estimate", {}) if isinstance(temporal_math, dict) else {}
+    if isinstance(lead_time, dict):
+        lead_rows = lead_time.get("rows_before_event")
+        lead_ts = lead_time.get("timestamp")
+        if isinstance(lead_rows, int) and lead_rows > 0:
+            sii_intelligence["lead_time_detected_rows_before_event"] = lead_rows
+        if isinstance(lead_ts, str) and lead_ts.strip():
+            sii_intelligence["lead_time_detected_at"] = lead_ts
     sii_intelligence["operational_domain"] = "commercial_aquatic_hospitality"
     sii_intelligence["aquatic_schema"] = map_aquatic_schema(columns)
     sii_intelligence["aquatic_instability"] = {
@@ -1115,6 +1152,7 @@ def build_upload_result(
         "schema_mapping": schema_mapping,
         "operator_report": operator_report,
         "engine_result": truncate_engine_result(engine_result),
+        "temporal_math": temporal_math,
         "driver_attribution": driver_attribution,
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": truncate_runner_result(sii_runner_result),
