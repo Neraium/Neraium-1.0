@@ -1218,6 +1218,13 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
     if isinstance(current_score, (int, float)) and isinstance(previous_score, (int, float)):
         score_delta = round(float(current_score) - float(previous_score), 2)
     artifacts = sii_completion_artifacts(result)
+    replay_timeline = (
+        (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None)
+        or result.get("replay_timeline")
+        or {}
+    )
+    replay_frames = replay_timeline.get("timeline") if isinstance(replay_timeline, dict) else []
+    replay_frame_count = len(replay_frames) if isinstance(replay_frames, list) else 0
     return {
         "filename": result["filename"],
         "rows_processed": result["row_count"],
@@ -1238,6 +1245,8 @@ def summarize_result(result: dict[str, Any], completed_at: str) -> dict[str, Any
         "upload_result_source": "file_upload",
         "sii_completed": all(artifacts.values()),
         "sii_completion_artifacts": artifacts,
+        "replay_ready": replay_frame_count > 0,
+        "replay_frame_count": replay_frame_count,
         "diff": {
             "previous_filename": previous.get("filename"),
             "previous_processed_at": previous.get("last_processed_at"),

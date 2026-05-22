@@ -55,6 +55,8 @@ class UploadStatusResponse(BaseModel):
     result_available: bool = False
     first_usable_available: bool = False
     sii_completed: bool = False
+    replay_ready: bool = False
+    replay_frame_count: int = 0
     sii_completion_artifacts: dict[str, bool] = Field(default_factory=dict)
     timings: dict[str, Any] = Field(default_factory=dict) 
     result_summary: dict[str, Any] | None = None 

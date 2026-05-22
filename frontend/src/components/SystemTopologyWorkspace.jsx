@@ -23,11 +23,13 @@ export default function SystemTopologyWorkspace({
   onUploadComplete,
   domainMode = "aquatic",
   domainDetection = null,
+  gateProcessing = null,
 }) { 
+  const processingActive = Boolean(gateProcessing?.active);
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
   const awaitingSii = (liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing")
     && !liveOps.latestUploadResult;
-  const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
+  const uiState = processingActive || awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
   const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
   const governed = deriveGovernedOutput(liveOps, {
     awaitingSii,
@@ -36,7 +38,9 @@ export default function SystemTopologyWorkspace({
   });
   const uploadSignal = deriveUploadSignal(liveOps.latestUploadResult);
 
-  const stateLabel = awaitingSii
+  const stateLabel = processingActive
+    ? "Processing"
+    : awaitingSii
     ? "No Data"
     : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = buildStateDescription(layer);
@@ -49,7 +53,9 @@ export default function SystemTopologyWorkspace({
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight));
+  const systemState = processingActive
+    ? "unknown"
+    : (awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight)));
   const primaryMessage = awaitingSii
     ? "Upload or connect telemetry to begin monitoring."
     : governed.hasPass
@@ -102,7 +108,7 @@ export default function SystemTopologyWorkspace({
       orbData={orbData}
       isLoading={awaitingSii}
       isEmptyStructuralState={awaitingSii || uiState === "neutral"}
-      statusLight={uploadSignal.statusLight || governed.statusLight}
+      statusLight={processingActive ? "gray" : (uploadSignal.statusLight || governed.statusLight)}
       governedOnly
       governedDetail={governed.detail}
       apiFetch={apiFetch}
@@ -113,6 +119,7 @@ export default function SystemTopologyWorkspace({
       domainDetection={domainDetection}
       latestUploadResult={awaitingSii ? null : liveOps.latestUploadResult}
       latestReplayFrame={replayFrame}
+      gateProcessing={gateProcessing}
     /> 
   ); 
 } 

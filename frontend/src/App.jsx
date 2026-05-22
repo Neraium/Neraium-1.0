@@ -9,6 +9,7 @@ import * as uploadStateView from "./viewModels/uploadState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState"; 
 import { deriveCurrentSession } from "./viewModels/currentSession"; 
 import { logoutUser } from "./services/api/authApi";
+import { normalizeUploadStatus, uploadStateMessage } from "./viewModels/uploadFlow";
 
 const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
@@ -170,6 +171,7 @@ function App() {
       telemetryTick,
     };
   }, [apiStatus.state, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
     setHistorianReplayState((current) => ({ ...current, frame, meta }));
@@ -353,9 +355,43 @@ function App() {
       onUploadComplete={handleGateUploadComplete}
       domainMode={domainMode}
       domainDetection={domainDetection}
+      gateProcessing={gateProcessing}
     />
   </div>
   );
+}
+
+function deriveGateProcessing(snapshot) {
+  const rawStatus = String(snapshot?.status ?? snapshot?.processing_state ?? "");
+  const status = normalizeUploadStatus(rawStatus);
+  const processingStates = new Set([
+    "uploading",
+    "queued",
+    "validating_schema",
+    "parsing",
+    "baseline_modeling",
+    "structural_scoring",
+    "cognition_ready",
+    "generating_replay",
+    "writing_state",
+  ]);
+  const percentByStage = {
+    uploading: 12,
+    queued: 20,
+    validating_schema: 30,
+    parsing: 45,
+    baseline_modeling: 60,
+    structural_scoring: 75,
+    cognition_ready: 86,
+    generating_replay: 93,
+    writing_state: 97,
+  };
+  const percent = Number(snapshot?.percent ?? snapshot?.progress);
+  return {
+    active: processingStates.has(status),
+    percent: Number.isFinite(percent) ? Math.max(1, Math.min(99, Math.round(percent))) : (percentByStage[status] ?? 0),
+    label: String(snapshot?.progress_label ?? snapshot?.message ?? uploadStateMessage(status)),
+  };
 }
 
 function deriveUploadTone(result) {

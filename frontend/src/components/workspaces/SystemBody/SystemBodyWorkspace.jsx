@@ -36,6 +36,7 @@ export default function SystemBodyWorkspace({
   domainDetection = null,
   latestUploadResult = null,
   latestReplayFrame = null,
+  gateProcessing = null,
 }) {
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
@@ -71,6 +72,14 @@ export default function SystemBodyWorkspace({
               </span>
             ) : null}
           </div>
+          {gateProcessing?.active ? (
+            <div className="system-gate__upload-progress-wrap" aria-label="Processing status">
+              <div className="system-gate__upload-progress">
+                <span style={{ width: `${Math.max(1, Math.min(99, Number(gateProcessing.percent) || 1))}%` }} />
+              </div>
+              <span className="system-gate__upload-progress-label">{String(gateProcessing.label || "Processing").slice(0, 64)}</span>
+            </div>
+          ) : null}
           <button
             type="button"
             className="system-gate__settings"

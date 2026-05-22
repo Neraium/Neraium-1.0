@@ -193,7 +193,11 @@ export default function DataConnectionsWorkspace({
         setUploadJob(payload);
         const nextStatus = normalizeUploadStatus(payload.status);
         setUploadState(nextStatus);
-        if (nextStatus === "complete") return payload;
+        const replayReady = Boolean(payload?.replay_ready) || Number(payload?.replay_frame_count ?? 0) > 0;
+        if (nextStatus === "complete" && replayReady) return payload;
+        if (nextStatus === "complete" && !replayReady) {
+          setUploadState("generating_replay");
+        }
         if (nextStatus === "failed") throw buildUploadRequestError(response, payload, "poll");
         const delayMs = nextUploadPollDelay({ payload, failureCount: pollFailureCountRef.current });
         await new Promise((resolve) => {

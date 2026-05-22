@@ -118,11 +118,16 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     summary = metadata.get("result_summary") if isinstance(metadata.get("result_summary"), dict) else {}
     artifacts = metadata.get("sii_completion_artifacts") or summary.get("sii_completion_artifacts") or {}
     sii_completed = bool(metadata.get("sii_completed") or summary.get("sii_completed"))
+    replay_frame_count = int(metadata.get("replay_frame_count") or summary.get("replay_frame_count") or 0)
+    replay_ready = bool(metadata.get("replay_ready") or summary.get("replay_ready") or replay_frame_count > 0)
     is_summary_fallback = bool(metadata.get("summary_fallback"))
     if normalized_status == "COMPLETE" and not sii_completed and not is_summary_fallback:
         normalized_status = "FAILED"
         measured_percent = 100
         error_type = "sii_completion_missing"
+    if normalized_status == "COMPLETE" and sii_completed and not replay_ready:
+        normalized_status = "GENERATING_REPLAY"
+        measured_percent = 96
     return {
         "job_id": metadata.get("job_id"),
         "status": normalized_status,
@@ -157,6 +162,8 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         "result_available": bool(metadata.get("result_available") or normalized_status == "COMPLETE"),
         "first_usable_available": bool(metadata.get("first_usable_available") or normalized_status in {"COGNITION_READY", "GENERATING_REPLAY", "GENERATING_EVIDENCE", "COMPLETE"}),
         "sii_completed": sii_completed and normalized_status == "COMPLETE",
+        "replay_ready": replay_ready and normalized_status == "COMPLETE",
+        "replay_frame_count": replay_frame_count,
         "sii_completion_artifacts": artifacts if isinstance(artifacts, dict) else {},
         "timings": metadata.get("timings", {}), 
         "result_summary": metadata.get("result_summary"), 
