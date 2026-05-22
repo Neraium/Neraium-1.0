@@ -410,7 +410,7 @@ def process_upload_job(job_id: str) -> None:
                 summary = {**cached_payload["summary"], "last_processed_at": completed_at}
                 summary["upload_processing_mode"] = "hash_cache_reused"
                 write_latest_upload_summary(job_id, summary)
-                write_latest_upload_result(job_id, result)
+                write_latest_upload_result(job_id, result, completed_at=completed_at)
                 upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
                 update_job(
                     job_id,
@@ -487,7 +487,7 @@ def process_upload_job(job_id: str) -> None:
             write_latest_sii_state({**latest_state, "adaptive_learning": result["adaptive_learning"]})
         duration = round(time.perf_counter() - started, 4) 
         write_latest_upload_summary(job_id, summary) 
-        write_latest_upload_result(job_id, result) 
+        write_latest_upload_result(job_id, result, completed_at=completed_at) 
         if hash_cache_key:
             upsert_latest_payload(hash_cache_key, {"summary": summary, "result": result, "cached_at": completed_at})
         upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed")) 
@@ -1305,10 +1305,15 @@ def write_latest_upload_summary(job_id: str, summary: dict[str, Any], *, append_
     )
 
 
-def write_latest_upload_result(job_id: str, result: dict[str, Any]) -> None: 
+def write_latest_upload_result(job_id: str, result: dict[str, Any], *, completed_at: str | None = None) -> None: 
     ensure_runtime_dirs()
     path = latest_upload_result_path()
     persistable = build_persistable_upload_result(job_id, result) 
+    if completed_at:
+        persistable["completed_at"] = completed_at
+        persistable["last_processed_at"] = completed_at
+        if isinstance(persistable.get("sii_intelligence"), dict):
+            persistable["sii_intelligence"]["last_updated"] = completed_at
     upsert_latest_payload("latest_upload_result", persistable) 
     LATEST_UPLOAD_CACHE["result"] = persistable
     atomic_write_json(path, persistable) 
@@ -1554,8 +1559,17 @@ def truncate_runner_result(runner_result: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    processing_trace = result.get("processing_trace", {}) if isinstance(result.get("processing_trace"), dict) else {}
+    sii_intelligence = result.get("sii_intelligence", {}) if isinstance(result.get("sii_intelligence"), dict) else {}
+    completed_at = (
+        processing_trace.get("completed_at")
+        or sii_intelligence.get("last_updated")
+        or now_iso()
+    )
     return {
         "job_id": job_id,
+        "last_processed_at": completed_at,
+        "completed_at": completed_at,
         "filename": result["filename"],
         "row_count": result["row_count"],
         "column_count": result["column_count"],
@@ -1576,9 +1590,9 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "engine_result": result["engine_result"],
         "driver_attribution": result.get("driver_attribution", {}),
         "sii_intelligence": result["sii_intelligence"],
-        "replay_timeline": result.get("sii_intelligence", {}).get("replay_timeline", {}),
+        "replay_timeline": sii_intelligence.get("replay_timeline", {}),
         "sii_runner_result": result.get("sii_runner_result", {}),
-        "processing_trace": result.get("processing_trace", {}),
+        "processing_trace": processing_trace,
         "processing_stats": result.get("processing_stats", {}),
         "room_summary": result.get("room_summary", {}),
         "ingestion_metadata": result.get("ingestion_metadata", {}),

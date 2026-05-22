@@ -140,4 +140,5 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
 
     assert 'label: "Telemetry Setup"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
-    assert "HistorianSetupWorkspace" in source
+    assert "DataConnectionsWorkspace" in source
+    assert "HistorianSetupWorkspace" not in source
