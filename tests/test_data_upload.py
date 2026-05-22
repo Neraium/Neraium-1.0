@@ -1081,7 +1081,7 @@ def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -
 
     assert result["row_count"] == 100_000
     assert result["processing_stats"]["used_streaming"] is True
-    assert result["processing_stats"]["sampled_rows"] == 20_000
+    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
     assert result["processing_stats"]["chunk_count"] == 10
 
 
@@ -1099,7 +1099,7 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-300k.csv")
 
     assert result["row_count"] == 300_000
-    assert result["processing_stats"]["sampled_rows"] == 20_000
+    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
     assert result["processing_stats"]["chunk_count"] == 30
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 300_000
@@ -1119,7 +1119,7 @@ def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-500k.csv")
 
     assert result["row_count"] == 500_000
-    assert result["processing_stats"]["sampled_rows"] == 20_000
+    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
     assert result["processing_stats"]["chunk_count"] == 50
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 500_000

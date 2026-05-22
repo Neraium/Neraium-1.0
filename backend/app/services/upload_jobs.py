@@ -112,8 +112,10 @@ def parse_optional_positive_int_env(name: str) -> int | None:
 
 
 CHUNK_SIZE_ROWS = parse_positive_int_env("NERAIUM_UPLOAD_CHUNK_SIZE_ROWS", 10_000) 
-MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 20_000) 
-MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 5_000) 
+# Default row budget now comfortably covers 180 days at 5-minute cadence (~51,840 rows).
+MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 60_000) 
+# Keep SII fidelity substantially higher by default for long-window uploads.
+MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 30_000) 
 MAX_PARSE_ROWS = parse_optional_positive_int_env("NERAIUM_MAX_PARSE_ROWS")
 
 PROGRESS_LABELS = {
