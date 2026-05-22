@@ -80,9 +80,10 @@ def test_persisted_upload_result_exposes_replay_without_source_file(tmp_path: Pa
     assert payload["meta"]["frame_count"] == 2
 
 
-def test_replay_endpoint_uses_latest_persisted_frames_when_job_metadata_missing() -> None:
+def test_replay_endpoint_uses_canonical_per_job_persisted_frames() -> None:
+    job_id = "missing-job-id"
     write_latest_upload_result(
-        "latest-job",
+        job_id,
         {
             "filename": "telemetry.csv",
             "row_count": 12,
@@ -111,7 +112,71 @@ def test_replay_endpoint_uses_latest_persisted_frames_when_job_metadata_missing(
     )
 
     client = TestClient(create_app())
-    payload = client.get("/api/data/replay/missing-job-id").json()
+    payload = client.get(f"/api/data/replay/{job_id}").json()
 
     assert payload["frame_count"] == 1
     assert len(payload["timeline"]) == 1
+
+
+def test_intake_result_reads_canonical_per_job_artifact_not_just_latest() -> None:
+    first_job_id = "job-one"
+    second_job_id = "job-two"
+    for job_id in (first_job_id, second_job_id):
+        write_job(
+            {
+                "job_id": job_id,
+                "filename": f"{job_id}.csv",
+                "file_path": f"/tmp/{job_id}.csv",
+                "status": "COMPLETE",
+                "result_available": True,
+                "first_usable_available": True,
+                "result_summary": {"rows_processed": 10},
+            }
+        )
+
+    write_latest_upload_result(
+        first_job_id,
+        {
+            "filename": "job-one.csv",
+            "row_count": 10,
+            "column_count": 3,
+            "columns": ["timestamp", "x", "y"],
+            "preview_rows": [],
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"categories": {}},
+            "sii_intelligence": {"source": "uploaded", "mode": "live", "rooms": []},
+            "driver_attribution": {},
+            "processing_trace": {},
+            "processing_stats": {},
+            "room_summary": {"room_count": 0, "rooms": []},
+        },
+    )
+    # Make another job latest to ensure intake lookup is job-scoped.
+    write_latest_upload_result(
+        second_job_id,
+        {
+            "filename": "job-two.csv",
+            "row_count": 20,
+            "column_count": 3,
+            "columns": ["timestamp", "x", "y"],
+            "preview_rows": [],
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"categories": {}},
+            "sii_intelligence": {"source": "uploaded", "mode": "live", "rooms": []},
+            "driver_attribution": {},
+            "processing_trace": {},
+            "processing_stats": {},
+            "room_summary": {"room_count": 0, "rooms": []},
+        },
+    )
+
+    client = TestClient(create_app())
+    response = client.get(f"/api/data/intake/{first_job_id}/result")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["result_available"] is True
+    assert payload["result"]["job_id"] == first_job_id
+    assert payload["result"]["filename"] == "job-one.csv"

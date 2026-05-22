@@ -40,6 +40,7 @@ from app.services.runtime_db import (
     claim_next_upload_job,
     clear_upload_runtime_tables,
     complete_upload_queue_job,
+    delete_latest_payload_prefix,
     enqueue_upload_job,
     list_upload_jobs,
     mark_queue_job_failed,
@@ -1315,6 +1316,7 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any], *, completed
         if isinstance(persistable.get("sii_intelligence"), dict):
             persistable["sii_intelligence"]["last_updated"] = completed_at
     upsert_latest_payload("latest_upload_result", persistable) 
+    upsert_latest_payload(upload_result_key(job_id), persistable)
     LATEST_UPLOAD_CACHE["result"] = persistable
     atomic_write_json(path, persistable) 
     logger.info(
@@ -1324,6 +1326,22 @@ def write_latest_upload_result(job_id: str, result: dict[str, Any], *, completed
         persistable.get("row_count"),
         persistable.get("column_count"),
     )
+
+
+def upload_result_key(job_id: str) -> str:
+    return f"upload_result:{job_id}"
+
+
+def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
+    if not job_id:
+        return None
+    payload = read_latest_payload(upload_result_key(job_id))
+    if isinstance(payload, dict):
+        return payload
+    latest = read_latest_upload_result()
+    if isinstance(latest, dict) and str(latest.get("job_id")) == str(job_id):
+        return latest
+    return None
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None: 
@@ -1500,6 +1518,7 @@ def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
     upsert_latest_payload("latest_upload_reset_at", now_iso()) 
     upsert_latest_payload("latest_upload_summary", None) 
     upsert_latest_payload("latest_upload_result", None) 
+    delete_latest_payload_prefix("upload_result:")
     LATEST_UPLOAD_CACHE["summary"] = None
     LATEST_UPLOAD_CACHE["result"] = None
     atomic_write_json_list(latest_upload_history_path(), [])

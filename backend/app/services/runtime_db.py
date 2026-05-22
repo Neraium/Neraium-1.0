@@ -359,6 +359,16 @@ def read_latest_payload(key: str) -> Any | None:
     return json.loads(row["payload_json"])
 
 
+def delete_latest_payload_prefix(prefix: str) -> int:
+    init_runtime_db()
+    with db_connection() as connection:
+        deleted = connection.execute(
+            "DELETE FROM latest_payloads WHERE key LIKE ?",
+            (f"{prefix}%",),
+        ).rowcount
+    return int(deleted or 0)
+
+
 def upsert_evidence_run_db(record: dict[str, Any]) -> None:
     init_runtime_db()
     with db_connection() as connection:

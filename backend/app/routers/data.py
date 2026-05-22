@@ -25,6 +25,7 @@ from app.services.upload_jobs import (
     read_upload_history,
     read_latest_upload_summary,
     read_latest_upload_result,
+    read_upload_result_by_job_id,
     read_job,
     reset_latest_upload_state,
     sii_completion_artifacts,
@@ -399,13 +400,13 @@ def read_intake_result(job_id: str) -> dict[str, Any]:
             "message": "Intake result is not available yet; continue polling status.",
             "status_url": f"/api/data/intake/{job_id}/status",
         }
-    latest_result = read_latest_upload_result()
-    if latest_result and latest_result.get("job_id") == job_id:
+    job_result = read_upload_result_by_job_id(job_id)
+    if job_result:
         return {
             "job_id": job_id,
             "status": metadata.get("status", "COMPLETE"),
             "result_available": True,
-            "result": latest_result,
+            "result": job_result,
             "summary": metadata.get("result_summary"),
         }
     return {
@@ -419,9 +420,9 @@ def read_intake_result(job_id: str) -> dict[str, Any]:
 
 @router.get("/data/replay/{job_id}")
 def read_upload_replay(job_id: str) -> dict[str, Any]:
-    latest_result = read_latest_upload_result()
+    job_result = read_upload_result_by_job_id(job_id)
     metadata = read_job(job_id)
-    persisted = replay_payload_from_result(latest_result, job_id=job_id)
+    persisted = replay_payload_from_result(job_result, job_id=job_id)
     if persisted is not None:
         return persisted
     if metadata is None:
