@@ -24,6 +24,7 @@ REQUIRED_INTELLIGENCE_FIELDS = [
     "baseline_comparison",
     "observed_persistence",
     "last_updated",
+    "core_sii_outputs",
 ]
 
 
@@ -166,6 +167,7 @@ def build_sample_intelligence() -> dict[str, Any]:
             *rooms[0]["structural_explanation"][:2],
         ],
     }
+    candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
     candidate["aletheia_gate"] = govern_candidate(candidate)
     return candidate
 
@@ -307,8 +309,36 @@ def build_upload_intelligence(
         "source_metadata": source_metadata or {},
         **structural_cognition,
     }
+    candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
     candidate["aletheia_gate"] = govern_candidate(candidate)
     return candidate
+
+
+def build_core_sii_outputs(intelligence: dict[str, Any]) -> dict[str, Any]:
+    supporting_evidence = intelligence.get("supporting_evidence")
+    contributing_factors = (
+        supporting_evidence[:5]
+        if isinstance(supporting_evidence, list)
+        else []
+    )
+    lead_time_hours = intelligence.get("projected_time_to_failure_hours")
+    lead_time_text = intelligence.get("projected_time_to_failure")
+    return {
+        "emerging_instability": {
+            "state": intelligence.get("facility_state"),
+            "urgency": intelligence.get("urgency"),
+        },
+        "affected_system": {
+            "primary": intelligence.get("primary_room") or intelligence.get("priority_room"),
+        },
+        "contributing_factors": contributing_factors,
+        # Lead time is explicitly an inference product of the three core outputs, not a hard-coded rule.
+        "lead_time_inference": {
+            "hours": lead_time_hours if isinstance(lead_time_hours, (int, float)) else None,
+            "summary": lead_time_text if isinstance(lead_time_text, str) and lead_time_text.strip() else None,
+            "confidence_basis": intelligence.get("confidence_basis"),
+        },
+    }
 
 
 def build_upload_room_records(

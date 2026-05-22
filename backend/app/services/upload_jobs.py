@@ -47,7 +47,7 @@ from app.services.runtime_db import (
     upsert_latest_payload,
     upsert_upload_job,
 )
-from app.services.sii_intelligence import build_upload_intelligence
+from app.services.sii_intelligence import build_core_sii_outputs, build_upload_intelligence
 from app.services.sii_runner import (
     CORE_ENGINE,
     RUNNER_MODULE,
@@ -1160,11 +1160,22 @@ def sii_completion_artifacts(result: dict[str, Any]) -> dict[str, bool]:
     intelligence = result.get("sii_intelligence") if isinstance(result, dict) else None
     processing_trace = result.get("processing_trace") if isinstance(result, dict) else None
     engine_result = result.get("engine_result") if isinstance(result, dict) else None
+    core_outputs = intelligence.get("core_sii_outputs") if isinstance(intelligence, dict) else None
+    if isinstance(intelligence, dict) and not isinstance(core_outputs, dict):
+        core_outputs = build_core_sii_outputs(intelligence)
+        intelligence["core_sii_outputs"] = core_outputs
+    emerging_instability_present = isinstance(core_outputs, dict) and isinstance(core_outputs.get("emerging_instability"), dict) and bool(core_outputs.get("emerging_instability", {}).get("state"))
+    affected_system_present = isinstance(core_outputs, dict) and isinstance(core_outputs.get("affected_system"), dict) and bool(core_outputs.get("affected_system", {}).get("primary"))
+    factors = core_outputs.get("contributing_factors") if isinstance(core_outputs, dict) else None
+    contributing_factors_present = isinstance(factors, list) and len([item for item in factors if str(item).strip()]) > 0
     return {
         "runner_used": bool(runner and runner.get("runner_used")),
         "intelligence_present": isinstance(intelligence, dict) and bool(intelligence),
         "processing_trace_present": isinstance(processing_trace, dict) and bool(processing_trace),
         "engine_result_present": isinstance(engine_result, dict) and bool(engine_result),
+        "core_emerging_instability_present": emerging_instability_present,
+        "core_affected_system_present": affected_system_present,
+        "core_contributing_factors_present": contributing_factors_present,
     }
 
 
