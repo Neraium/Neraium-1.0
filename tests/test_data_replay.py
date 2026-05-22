@@ -28,6 +28,27 @@ def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
     assert payload["message"] == "Replay reconstructed from the retained source CSV."
 
 
+def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_signal_is_sparse(tmp_path: Path) -> None:
+    csv_path = tmp_path / "events.csv"
+    rows = "\n".join(
+        f"2026-05-21T08:{minute:02d}:00Z,phase-{minute % 3},status-{minute % 2}"
+        for minute in range(40)
+    )
+    csv_path.write_text(f"timestamp,phase,status\n{rows}\n", encoding="utf-8")
+
+    payload = rebuild_upload_replay_from_source({
+        "job_id": "job-fallback",
+        "file_path": str(csv_path),
+        "filename": "events.csv",
+    })
+
+    assert payload is not None
+    assert payload["job_id"] == "job-fallback"
+    assert payload["frame_count"] > 0
+    assert payload["timeline"]
+    assert payload["meta"].get("replay_mode") == "minimal_timestamp_fallback"
+
+
 def test_persisted_upload_result_exposes_replay_without_source_file(tmp_path: Path) -> None:
     job_id = "persisted-replay-job"
     write_job(

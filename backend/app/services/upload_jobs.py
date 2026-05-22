@@ -2660,13 +2660,27 @@ def build_structural_replay_timeline(
     vectors = vector_rows["vectors"]
     sample_count = len(vectors)
     if sample_count < 4:
-        return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
+        return build_minimal_replay_timeline(
+            columns=columns,
+            rows=rows,
+            total_rows=total_rows,
+            timestamp_column=timestamp_column,
+            primary_room=primary_room,
+            row_indexes=row_indexes,
+        )
 
     baseline_rows_total = replay_baseline_rows(total_rows)
     baseline_count = max(3, min(sample_count - 2, int(round(sample_count * (baseline_rows_total / max(total_rows, 1))))))
     available = sample_count - baseline_count
     if available <= 1:
-        return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
+        return build_minimal_replay_timeline(
+            columns=columns,
+            rows=rows,
+            total_rows=total_rows,
+            timestamp_column=timestamp_column,
+            primary_room=primary_room,
+            row_indexes=row_indexes,
+        )
 
     frame_target = replay_target_frames(total_rows)
     frame_count = max(2, min(300, frame_target, available))
@@ -2861,6 +2875,131 @@ def build_structural_replay_timeline(
             "baseline_rows": baseline_rows_total,
             "sampled_rows": sample_count,
             "total_rows": total_rows,
+            "playback_speeds": [0.5, 1.0, 1.5, 2.0, 4.0],
+            "canonical_flow": [
+                "stable_topology",
+                "relationship_weakening",
+                "propagation_activation",
+                "structural_fragmentation",
+                "recovery_or_escalation",
+            ],
+        },
+        "timeline": timeline,
+    }
+
+
+def build_minimal_replay_timeline(
+    *,
+    columns: list[str],
+    rows: list[list[str]],
+    total_rows: int,
+    timestamp_column: str | None,
+    primary_room: str,
+    row_indexes: list[int] | None = None,
+) -> dict[str, Any]:
+    if not rows:
+        return {"meta": {"frame_count": 0, "frame_target": 0}, "timeline": []}
+
+    sample_count = len(rows)
+    frame_target = replay_target_frames(max(total_rows, sample_count))
+    frame_count = max(2, min(120, frame_target, sample_count))
+    frame_positions = sorted(set(np.linspace(0, sample_count - 1, num=frame_count, dtype=int).tolist()))
+    if frame_positions[-1] != sample_count - 1:
+        frame_positions.append(sample_count - 1)
+
+    timeline: list[dict[str, Any]] = []
+    previous_position = 0
+    for frame_index, sample_position in enumerate(frame_positions):
+        window_start = previous_position if frame_index > 0 else 0
+        previous_position = sample_position
+
+        if row_indexes and len(row_indexes) == len(rows):
+            global_row_start = min(total_rows - 1, max(0, int(row_indexes[window_start])))
+            global_row_end = min(total_rows - 1, max(0, int(row_indexes[sample_position])))
+        else:
+            global_row_start = min(total_rows - 1, max(0, window_start))
+            global_row_end = min(total_rows - 1, max(0, sample_position))
+
+        start_ts = parse_runner_timestamp(columns, rows[window_start], timestamp_column, window_start)
+        end_ts = parse_runner_timestamp(columns, rows[sample_position], timestamp_column, sample_position)
+        stability_state = "Watch" if frame_index > 0 else "Healthy / Stable"
+        phase = replay_state_to_phase(stability_state)
+
+        timeline.append(
+            {
+                "timestamp": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                "frame_index": frame_index,
+                "row_range": {"start": global_row_start + 1, "end": global_row_end + 1},
+                "timestamp_range": {
+                    "start": datetime.fromtimestamp(start_ts, tz=UTC).isoformat(),
+                    "end": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                },
+                "topology_state": {
+                    "phase": phase,
+                    "drift_index": 0.0,
+                    "fragmentation_indicator": 0.0,
+                    "stability_state": stability_state,
+                },
+                "subsystem_pressure": {
+                    "pressure_score": 0.0,
+                    "volatility_index": 0.0,
+                    "compression_intensity": "LOW_COMPRESSION",
+                },
+                "active_archetypes": [],
+                "propagation_state": {
+                    "dominant_paths": [],
+                    "activation_intensity": 0.0,
+                    "propagation_acceleration": 0.0,
+                    "recovery_convergence": "STABILIZING",
+                },
+                "evidence_state": {
+                    "corroboration_strength": "LOW",
+                    "lineage_events": [],
+                },
+                "cognition_state": {
+                    "facility_state": stability_state,
+                    "confidence_tier": "BASELINE_EVIDENCE",
+                    "state_evolution": f"frame_{frame_index + 1}_of_{len(frame_positions)}",
+                    "canonical_phase": phase,
+                    "operational_phase": phase,
+                },
+                "memory_similarity": [],
+                "continuation_window": {
+                    "active_scenario": "Uploaded telemetry replay",
+                    "window": stability_state,
+                    "timing_window": f"rows {global_row_start + 1}-{global_row_end + 1}",
+                },
+                "baseline_distance": 0.0,
+                "drift_velocity": 0.0,
+                "drift_acceleration": 0.0,
+                "relationship_drift": None,
+                "primary_contributors": [],
+                "affected_subsystem": primary_room,
+                "evidence_confidence": 0.5,
+                "operator_interpretation": "Replay window captured from uploaded telemetry timeline.",
+                "total_frames": len(frame_positions),
+                "timestamp_start": datetime.fromtimestamp(start_ts, tz=UTC).isoformat(),
+                "timestamp_end": datetime.fromtimestamp(end_ts, tz=UTC).isoformat(),
+                "row_start": global_row_start + 1,
+                "row_end": global_row_end + 1,
+                "structural_state": stability_state,
+                "baseline_separation": 0.0,
+                "relationship_changes": [],
+                "topology_state_label": phase,
+                "affected_area": primary_room,
+                "operator_focus": "Collect additional numeric signal columns for full structural drift scoring.",
+                "operator_summary": f"Replay window rows {global_row_start + 1}-{global_row_end + 1}.",
+            }
+        )
+
+    return {
+        "meta": {
+            "frame_count": len(timeline),
+            "frame_target": frame_target,
+            "baseline_rows": 0,
+            "sampled_rows": sample_count,
+            "total_rows": total_rows,
+            "replay_mode": "minimal_timestamp_fallback",
             "playback_speeds": [0.5, 1.0, 1.5, 2.0, 4.0],
             "canonical_flow": [
                 "stable_topology",
