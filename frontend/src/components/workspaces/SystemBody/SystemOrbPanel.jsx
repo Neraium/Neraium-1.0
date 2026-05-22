@@ -16,7 +16,7 @@ function normalizePanelState(systemState) {
   if (value === "stable") return "stable";
   if (value === "watching" || value === "watch") return "watching";
   if (value === "drift" || value === "warning") return "drift";
-  if (value === "propagation_active" || value === "critical" || value === "propagation") return "propagation_active";
+  if (value === "propagation_active" || value === "critical" || value === "propagation" || value === "alert") return "propagation_active";
   if (value === "recovery" || value === "recovering") return "recovery";
   return "unknown";
 }
