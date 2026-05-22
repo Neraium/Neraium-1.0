@@ -324,7 +324,7 @@ function App() {
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
     <SystemTopologyWorkspace
-      liveOps={historianReplayState.enabled && historianReplayState.frame
+      liveOps={historianReplayState.frame
         ? { ...liveOps, ...historianReplayState.frame }
         : liveOps}
       selectedTarget={null}

@@ -190,13 +190,13 @@ export default function ReplayWorkspace({
 
   useEffect(() => {
     if (typeof onReplayFrameChange === "function") {
-      onReplayFrameChange(replayMode ? shownFrame : null, {
+      onReplayFrameChange(hasReplaySnapshots ? shownFrame : null, {
         frameIndex: Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1)),
         totalFrames: operativeTimeline.length,
         isPlaying,
       });
     }
-  }, [frameIndex, isPlaying, onReplayFrameChange, operativeTimeline.length, replayMode, shownFrame]);
+  }, [frameIndex, hasReplaySnapshots, isPlaying, onReplayFrameChange, operativeTimeline.length, shownFrame]);
 
   useEffect(() => {
     if (!hasReplaySnapshots && replayMode) {

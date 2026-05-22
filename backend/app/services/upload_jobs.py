@@ -1438,6 +1438,7 @@ def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict
         "engine_result": result["engine_result"],
         "driver_attribution": result.get("driver_attribution", {}),
         "sii_intelligence": result["sii_intelligence"],
+        "replay_timeline": result.get("sii_intelligence", {}).get("replay_timeline", {}),
         "sii_runner_result": result.get("sii_runner_result", {}),
         "processing_trace": result.get("processing_trace", {}),
         "processing_stats": result.get("processing_stats", {}),

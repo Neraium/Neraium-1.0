@@ -424,7 +424,11 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
     latest_result = read_latest_upload_result()
     if latest_result and latest_result.get("job_id") == job_id:
-        replay = ((latest_result.get("sii_intelligence") or {}).get("replay_timeline") or {})
+        replay = (
+            latest_result.get("replay_timeline")
+            or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
+            or {}
+        )
         timeline = replay.get("timeline") if isinstance(replay, dict) else []
         if isinstance(timeline, list) and timeline:
             return {
