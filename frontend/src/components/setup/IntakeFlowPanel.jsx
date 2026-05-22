@@ -1,4 +1,4 @@
-import { Panel, WorkflowStages } from "../workspacePrimitives";
+import { Panel } from "../workspacePrimitives";
 import { JSON_UPLOAD_SCHEMA_EXAMPLE } from "./setupConstants";
 
 export default function IntakeFlowPanel({
@@ -24,26 +24,10 @@ export default function IntakeFlowPanel({
   copyState,
   isJsonSchemaOpen,
   setIsJsonSchemaOpen,
-  intakeStages,
   batchResults = [],
   onRetryFailedUploads,
   onReprocessCurrentBatch,
 }) {
-  const jsonIngestion = uploadJob?.result_summary?.json_ingestion;
-  const hasJsonDiagnostics = Boolean(
-    jsonIngestion
-    && (
-      Number.isFinite(jsonIngestion.readings_received)
-      || Number.isFinite(jsonIngestion.readings_accepted)
-      || Number.isFinite(jsonIngestion.readings_rejected)
-    )
-  );
-  const rejectionSummary = jsonIngestion?.rejection_reasons
-    ? Object.entries(jsonIngestion.rejection_reasons)
-      .filter(([, count]) => Number(count) > 0)
-      .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
-      .slice(0, 4)
-    : [];
   const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
   const successCount = batchResults.filter((entry) => entry.status === "success").length;
   const siiContractFailed = uploadJob?.error_type === "sii_completion_missing" || String(latestMessage || "").toLowerCase().includes("sii completion");
@@ -116,18 +100,6 @@ export default function IntakeFlowPanel({
               </div>
             )}
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
-            {hasJsonDiagnostics && (
-              <span>
-                {`JSON accepted ${jsonIngestion.readings_accepted ?? 0}/${jsonIngestion.readings_received ?? 0} readings`}
-                {Number(jsonIngestion.readings_rejected ?? 0) > 0 ? ` (${jsonIngestion.readings_rejected} rejected).` : "."}
-              </span>
-            )}
-            {rejectionSummary.length > 0 && (
-              <span>{`Rejected details: ${rejectionSummary.join(" | ")}`}</span>
-            )}
-            {Array.isArray(jsonIngestion?.parsing_notes) && jsonIngestion.parsing_notes.length > 0 && (
-              <span>{jsonIngestion.parsing_notes.slice(0, 2).join(" ")}</span>
-            )}
             {batchResults.length > 0 && (
               <div className="intake-flow__batch-results">
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
@@ -137,10 +109,6 @@ export default function IntakeFlowPanel({
                     <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
                   </div>
                 )}
-                {batchResults.slice(0, 5).map((entry) => (
-                  <span key={entry.id}>{`${entry.fileName}: ${entry.status}${entry.message ? ` - ${entry.message}` : ""}`}</span>
-                ))}
-                {batchResults.length > 5 ? <span>{`+${batchResults.length - 5} more files`}</span> : null}
                 {failedCount > 0 && (
                   <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads} disabled={isUploadProcessing(uploadState)}>
                     Retry Failed Files
@@ -182,9 +150,7 @@ export default function IntakeFlowPanel({
           </div>
         ) : null}
       </Panel>
-      <Panel title="Model Construction State" className="span-5 upload-cognition-state">
-        <WorkflowStages items={intakeStages} />
-      </Panel>
+      
     </>
   );
 }

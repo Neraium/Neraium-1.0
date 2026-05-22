@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildIntakeStages,
   buildUploadRequestError,
   classifyUploadError,
   isUploadProcessing,
@@ -11,7 +10,6 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 
@@ -478,11 +476,6 @@ export default function DataConnectionsWorkspace({
   const effectiveSnapshot = isResetViewActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : latestUploadSnapshot;
-  const intakeStages = uploadJob
-    ? buildIntakeStages(uploadResult, uploadState, roomContext, uploadJob)
-    : uploadResult
-      ? buildIntakeStages(uploadResult, uploadState, roomContext, null)
-      : uploadStateView.buildConnectionStateStages({ latestUploadSnapshot: effectiveSnapshot, uploadState, uploadError: displayUploadError, roomContext });
   const latestStatus = hasActiveSession ? (effectiveSnapshot?.status ?? "empty") : "empty";
   const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(effectiveSnapshot?.history ?? []);
   const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || effectiveSnapshot?.message || uploadStateMessage(uploadState));
@@ -532,33 +525,11 @@ export default function DataConnectionsWorkspace({
         copyState={copyState}
         isJsonSchemaOpen={isJsonSchemaOpen}
         setIsJsonSchemaOpen={setIsJsonSchemaOpen}
-        intakeStages={intakeStages}
         batchResults={batchResults}
         onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
         onReprocessCurrentBatch={handleReprocessCurrentBatch}
       />
-      <IntakeStatusPanel
-        uploadStateView={uploadStateView}
-        latestStatus={latestStatus}
-        uploadState={uploadState}
-        displayUploadError={displayUploadError}
-        apiStatus={apiStatus}
-        latestUploadSnapshot={effectiveSnapshot}
-        formatClockTime={formatClockTime}
-        baselineMessage={baselineMessage}
-        hasActiveSession={hasActiveSession}
-        hasResumedSession={hasResumedSession}
-        hasCurrentUploadResult={hasCurrentUploadResult}
-        onResumePreviousSession={async () => {
-          setIsResetViewActive(false);
-          if (typeof onResumePreviousSession === "function") {
-            await onResumePreviousSession();
-          }
-        }}
-        onOpenUpload={() => setActiveTab("upload")} 
-        uploadJob={uploadJob}
-        latestUploadResult={uploadResult ?? latestUploadResult}
-      /> 
+      
     </div>
   );
 }
