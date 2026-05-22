@@ -120,6 +120,18 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
     sii_completed = bool(metadata.get("sii_completed") or summary.get("sii_completed"))
     replay_frame_count = int(metadata.get("replay_frame_count") or summary.get("replay_frame_count") or 0)
     replay_ready = bool(metadata.get("replay_ready") or summary.get("replay_ready") or replay_frame_count > 0)
+    if normalized_status == "COMPLETE" and not replay_ready:
+        persisted_result = read_upload_result_by_job_id(str(metadata.get("job_id") or ""))
+        if isinstance(persisted_result, dict):
+            replay = (
+                persisted_result.get("replay_timeline")
+                or (persisted_result.get("sii_intelligence") or {}).get("replay_timeline")
+                or {}
+            )
+            timeline = replay.get("timeline") if isinstance(replay, dict) else []
+            if isinstance(timeline, list) and timeline:
+                replay_frame_count = len(timeline)
+                replay_ready = True
     is_summary_fallback = bool(metadata.get("summary_fallback"))
     if normalized_status == "COMPLETE" and not sii_completed and not is_summary_fallback:
         normalized_status = "FAILED"
