@@ -98,10 +98,13 @@ function App() {
     const uploadTone = deriveUploadTone(effectiveLatestUploadResult);
 
     const heartbeatSource =
-      effectiveLatestUploadSnapshot?.last_processed_at
-      ?? effectiveLatestUploadSnapshot?.last_upload_at
-      ?? intelligenceStatus?.last_processed_at
-      ?? null;
+      hasObservableUploadSession
+        ? (
+          effectiveLatestUploadSnapshot?.last_processed_at
+          ?? effectiveLatestUploadSnapshot?.last_upload_at
+          ?? null
+        )
+        : null;
     const hasTelemetryHeartbeat = Boolean(heartbeatSource);
     const facilityTone = hasTelemetryHeartbeat
       ? (hasPass
