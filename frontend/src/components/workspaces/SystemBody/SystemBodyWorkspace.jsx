@@ -211,53 +211,72 @@ function buildUploadDetail(result, replayFrame) {
 
   const intelligence = result?.sii_intelligence ?? {};
   const replayTimeline = intelligence?.replay_timeline?.timeline;
-  const replayState = replayFrame?.cognition_state ?? {};
-  const replayTopology = replayFrame?.topology_state ?? {};
-  const replayPropagation = replayFrame?.propagation_state ?? {};
-  const replayEvidence = replayFrame?.evidence_state ?? {};
-  const replayCount = Number(replayFrame?.total_frames ?? 0);
-  const hasReplayFrame = Boolean(replayFrame && typeof replayFrame === "object");
+  const fallbackReplayFrame = Array.isArray(replayTimeline) && replayTimeline.length > 0 ? replayTimeline[replayTimeline.length - 1] : null;
+  const effectiveReplayFrame = replayFrame && typeof replayFrame === "object" ? replayFrame : fallbackReplayFrame;
+  const replayState = effectiveReplayFrame?.cognition_state ?? {};
+  const replayTopology = effectiveReplayFrame?.topology_state ?? {};
+  const replayPropagation = effectiveReplayFrame?.propagation_state ?? {};
+  const replayEvidence = effectiveReplayFrame?.evidence_state ?? {};
+  const replayCount = Number(effectiveReplayFrame?.total_frames ?? 0);
+  const hasReplayFrame = Boolean(effectiveReplayFrame && typeof effectiveReplayFrame === "object");
+  const sourceMetadata = intelligence?.source_metadata ?? {};
   return {
     filename: result?.filename ?? "",
-    sourceType: detectSourceType(result, replayFrame),
+    sourceType: detectSourceType(result, effectiveReplayFrame),
     assessment: String(replayState.facility_state ?? result?.operating_state ?? intelligence?.facility_state ?? "").trim() || "Monitoring",
     urgency: String(result?.drift_status ?? intelligence?.urgency ?? replayState.confidence_tier ?? "").trim() || "info",
     state: String(replayState.facility_state ?? result?.sii_intelligence?.facility_state ?? result?.operating_state ?? "").trim() || "Unknown",
-    primaryRoom: String(replayFrame?.affected_subsystem ?? replayFrame?.affected_area ?? result?.primary_room ?? intelligence?.primary_room ?? "").trim() || "Unknown",
-    score: replayFrame?.evidence_confidence ?? replayTopology?.drift_index ?? result?.neraium_score ?? intelligence?.neraium_score ?? EMPTY_VALUE,
-    rowsProcessed: hasReplayFrame && Number.isFinite(Number(replayFrame?.row_start)) && Number.isFinite(Number(replayFrame?.row_end))
-      ? `${replayFrame.row_start} to ${replayFrame.row_end}`
+    primaryRoom: String(effectiveReplayFrame?.affected_subsystem ?? effectiveReplayFrame?.affected_area ?? result?.primary_room ?? intelligence?.primary_room ?? "").trim() || "Unknown",
+    score: effectiveReplayFrame?.evidence_confidence ?? replayTopology?.drift_index ?? result?.neraium_score ?? intelligence?.neraium_score ?? EMPTY_VALUE,
+    rowsProcessed: hasReplayFrame && Number.isFinite(Number(effectiveReplayFrame?.row_start)) && Number.isFinite(Number(effectiveReplayFrame?.row_end))
+      ? `${effectiveReplayFrame.row_start} to ${effectiveReplayFrame.row_end}`
       : (result?.rows_processed ?? result?.row_count ?? EMPTY_VALUE),
     columnsDetected: result?.columns_detected ?? result?.column_count ?? EMPTY_VALUE,
     replay: hasReplayFrame || (Array.isArray(replayTimeline) && replayTimeline.length > 0) ? "Available" : "Unavailable",
     replayAvailable: hasReplayFrame || (Array.isArray(replayTimeline) && replayTimeline.length > 0),
     replayFrames: Number.isFinite(replayCount) && replayCount > 0 ? replayCount : (Array.isArray(replayTimeline) ? replayTimeline.length : EMPTY_VALUE),
-    previewRange: hasReplayFrame && replayFrame?.timestamp_start && replayFrame?.timestamp_end
-      ? `${replayFrame.timestamp_start} to ${replayFrame.timestamp_end}`
+    previewRange: hasReplayFrame && effectiveReplayFrame?.timestamp_start && effectiveReplayFrame?.timestamp_end
+      ? `${effectiveReplayFrame.timestamp_start} to ${effectiveReplayFrame.timestamp_end}`
       : (result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
         ? `${result.timestamp_profile.first_timestamp} to ${result.timestamp_profile.last_timestamp}`
         : EMPTY_VALUE),
     replayState: hasReplayFrame ? String(replayState.facility_state ?? EMPTY_VALUE) : EMPTY_VALUE,
     replayPhase: hasReplayFrame ? String(replayState.canonical_phase ?? EMPTY_VALUE).replaceAll("_", " ") : EMPTY_VALUE,
     replayDrift: hasReplayFrame ? (replayTopology.drift_index ?? EMPTY_VALUE) : EMPTY_VALUE,
-    replayVelocity: hasReplayFrame ? (replayFrame?.drift_velocity ?? EMPTY_VALUE) : EMPTY_VALUE,
-    replayPropagation: hasReplayFrame ? (replayPropagation.dominant_paths?.length ? replayPropagation.dominant_paths.join(", ") : EMPTY_VALUE) : EMPTY_VALUE,
+    replayVelocity: hasReplayFrame ? (effectiveReplayFrame?.drift_velocity ?? EMPTY_VALUE) : EMPTY_VALUE,
+    replayPropagation: hasReplayFrame
+      ? (
+        replayPropagation.dominant_paths?.length
+          ? replayPropagation.dominant_paths.join(", ")
+          : (Array.isArray(effectiveReplayFrame?.relationship_changes) && effectiveReplayFrame.relationship_changes.length
+            ? effectiveReplayFrame.relationship_changes.join(", ")
+            : EMPTY_VALUE)
+      )
+      : EMPTY_VALUE,
     replayConfidence: hasReplayFrame ? String(replayEvidence.corroboration_strength ?? EMPTY_VALUE) : EMPTY_VALUE,
     operationalProfile: normalizeOperationalLabel(
       result?.sii_intelligence?.operational_signal_profile
       ?? result?.sii_intelligence?.system_identity?.operational_profile
+      ?? result?.operational_signal_profile
+      ?? sourceMetadata?.operational_signal_profile
     ),
     operationalConfidence: normalizeOperationalLabel(
       result?.sii_intelligence?.operational_signal_profile_confidence
       ?? result?.sii_intelligence?.system_identity?.operational_confidence
+      ?? result?.operational_signal_profile_confidence
+      ?? sourceMetadata?.operational_signal_profile_confidence
     ),
     operationalModality: normalizeOperationalLabel(
       result?.sii_intelligence?.operational_signal_modality
       ?? result?.sii_intelligence?.system_identity?.operational_modality
+      ?? result?.operational_signal_modality
+      ?? sourceMetadata?.operational_signal_modality
     ),
     operationalSignals: formatOperationalSignals(
       result?.sii_intelligence?.operational_signal_profile_signals
       ?? result?.sii_intelligence?.system_identity?.operational_signals
+      ?? result?.operational_signal_profile_signals
+      ?? sourceMetadata?.operational_signal_profile_signals
     ),
   };
 }
