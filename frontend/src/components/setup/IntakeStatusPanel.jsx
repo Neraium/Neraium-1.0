@@ -1,4 +1,4 @@
-import { CompactList, MetricGrid, Panel } from "../workspacePrimitives";
+import { MetricGrid, Panel } from "../workspacePrimitives";
 
 export default function IntakeStatusPanel({
   uploadStateView,
@@ -9,17 +9,11 @@ export default function IntakeStatusPanel({
   latestUploadSnapshot,
   formatClockTime,
   baselineMessage,
-  roomContext,
-  uploadDiffSummary,
   hasActiveSession,
   hasResumedSession,
   hasCurrentUploadResult,
   onResumePreviousSession,
   onOpenUpload,
-  adaptiveLearning = {},
-  latestRunId = null,
-  feedbackState = { status: "idle", category: null, message: "" },
-  onOperatorFeedback = null,
   uploadJob = null,
   latestUploadResult = null,
 }) {
@@ -37,15 +31,13 @@ export default function IntakeStatusPanel({
     : "Awaiting uploaded telemetry";
   return (
     <>
-      <Panel title="Intake Status" className="span-7 uploaded-intelligence-panel">
+      <Panel title="Status" className="span-7 uploaded-intelligence-panel">
         <MetricGrid
           metrics={[
             { label: "Session", value: sessionState },
-            { label: "Control Plane", value: apiStatus.label },
+            { label: "Backend", value: apiStatus.label },
             { label: "Last Analysis", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
             { label: "Baseline", value: baselineMessage },
-            { label: "Operational Mode", value: showAnalysis ? latestUploadSnapshot?.scenario : null },
-            { label: "Environment", value: roomContext.primary },
           ]}
         />
       </Panel>
@@ -62,7 +54,7 @@ export default function IntakeStatusPanel({
         />
       </Panel>
       {showAnalysis ? (
-        <Panel title="Recent Structural Analysis" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <Panel title="Latest Analysis" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <MetricGrid
             metrics={[
               { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
@@ -72,7 +64,6 @@ export default function IntakeStatusPanel({
             ]}
             compact
           />
-          <CompactList items={uploadDiffSummary.lines} emptyText="Awaiting meaningful structural change." />
         </Panel>
       ) : (
         <Panel title="No Active Structural Analysis" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">

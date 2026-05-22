@@ -111,8 +111,8 @@ export default function SystemBodyWorkspace({
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
-                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Setup & data connections</button></li>
-                <li><span className="system-gate__settings-message">Detected data type: {domainModeLabel(domainMode, domainDetection)}</span></li>
+                <li><button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")} disabled={settingsBusy}>Data connections</button></li>
+                <li><span className="system-gate__settings-message">Data profile: {domainModeLabel(domainMode, domainDetection)}</span></li>
                 {typeof onSignOut === "function" ? (
                   <li><button type="button" className="system-gate__settings-action" onClick={onSignOut} disabled={settingsBusy}>Sign out</button></li>
                 ) : null}

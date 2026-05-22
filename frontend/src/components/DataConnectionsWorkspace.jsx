@@ -493,7 +493,6 @@ export default function DataConnectionsWorkspace({
   const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending"; 
   const adaptiveLearning = latestUploadSnapshot?.adaptive_learning ?? uploadResult?.adaptive_learning ?? latestUploadResult?.adaptive_learning ?? {};
   const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
-  const workflowStage = hasActiveSession || normalizeUploadStatus(uploadState) === "complete" ? "status" : "upload";
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -502,7 +501,6 @@ export default function DataConnectionsWorkspace({
         onSelectTab={setActiveTab}
         onResetEverything={handleResetDemoClick}
         disableReset={isUploadProcessing(uploadState)}
-        workflowStage={workflowStage}
       />
       <IntakeFlowPanel
         handleUpload={handleUpload}
@@ -541,17 +539,11 @@ export default function DataConnectionsWorkspace({
         latestUploadSnapshot={latestUploadSnapshot}
         formatClockTime={formatClockTime}
         baselineMessage={baselineMessage}
-        roomContext={roomContext}
-        uploadDiffSummary={uploadDiffSummary}
         hasActiveSession={hasActiveSession}
         hasResumedSession={hasResumedSession}
         hasCurrentUploadResult={hasCurrentUploadResult}
         onResumePreviousSession={onResumePreviousSession}
         onOpenUpload={() => setActiveTab("upload")} 
-        adaptiveLearning={adaptiveLearning}
-        latestRunId={latestRunId}
-        feedbackState={feedbackState}
-        onOperatorFeedback={handleOperatorFeedback}
         uploadJob={uploadJob}
         latestUploadResult={uploadResult ?? latestUploadResult}
       /> 
