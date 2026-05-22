@@ -27,6 +27,7 @@ function App() {
   const [sessionIntent, setSessionIntent] = useState(() => readStoredSessionIntent());
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
   const [appReady, setAppReady] = useState(false);
+  const [resetGuardActive, setResetGuardActive] = useState(false);
 
   const {
     apiStatus,
@@ -51,23 +52,26 @@ function App() {
     buildProtectedRequestMessage,
   });
 
+  const guardedLatestUploadResult = resetGuardActive ? null : latestUploadResult;
+  const guardedLatestUploadSnapshot = resetGuardActive ? uploadStateView.buildEmptyLatestUploadSnapshot() : latestUploadSnapshot;
+
   const hasRealSiiOutput = useMemo(
     () => uploadStateView.hasVerifiedSiiCompletion({
-      latestResult: latestUploadResult,
-      latestSnapshot: latestUploadSnapshot,
+      latestResult: guardedLatestUploadResult,
+      latestSnapshot: guardedLatestUploadSnapshot,
     }),
-    [latestUploadResult, latestUploadSnapshot],
+    [guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
   const hasObservableUploadSession = useMemo(
-    () => uploadStateView.hasActiveTelemetrySnapshot(latestUploadSnapshot) || uploadStateView.hasFullUploadResult(latestUploadResult),
-    [latestUploadResult, latestUploadSnapshot],
+    () => uploadStateView.hasActiveTelemetrySnapshot(guardedLatestUploadSnapshot) || uploadStateView.hasFullUploadResult(guardedLatestUploadResult),
+    [guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
   const effectiveSessionIntent = hasObservableUploadSession && sessionIntent === "neutral" ? "resumed" : sessionIntent;
   const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasObservableUploadSession;
   const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
   const hasActiveSession = hasCurrentUploadResult || hasResumedSession || hasObservableUploadSession;
-  const effectiveLatestUploadResult = hasActiveSession ? latestUploadResult : null;
-  const effectiveLatestUploadSnapshot = latestUploadSnapshot;
+  const effectiveLatestUploadResult = hasActiveSession ? guardedLatestUploadResult : null;
+  const effectiveLatestUploadSnapshot = guardedLatestUploadSnapshot;
   const roomContext = useMemo(
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
@@ -173,6 +177,7 @@ function App() {
   }, []);
 
   const handleGateUploadComplete = useCallback(async () => {
+    setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     const hasResult = await loadLatestUploadState({ includePersisted: true });
@@ -181,6 +186,7 @@ function App() {
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
+    setResetGuardActive(false);
     setAllowPersistedLatest(true);
     const hasResult = await loadLatestUploadState({ includePersisted: true });
     setSessionIntent(hasResult ? "resumed" : "neutral");
@@ -189,6 +195,7 @@ function App() {
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest]);
 
   const handleResetDemo = useCallback(async () => {
+    setResetGuardActive(true);
     setSessionIntent("neutral");
     setIsDemoMode(false);
     setAllowPersistedLatest(false);

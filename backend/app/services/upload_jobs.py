@@ -165,6 +165,17 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def upload_job_superseded_by_reset(metadata: dict[str, Any] | None) -> bool:
+    reset_marker = read_latest_payload("latest_upload_reset_at")
+    reset_at = parse_timestamp(reset_marker) if isinstance(reset_marker, str) else None
+    if reset_at is None:
+        return False
+    started_at = parse_timestamp(str((metadata or {}).get("started_at") or ""))
+    if started_at is None:
+        return True
+    return started_at <= reset_at
+
+
 async def create_upload_job( 
     file: UploadFile, 
     initiated_by: str = "anonymous", 
@@ -359,6 +370,19 @@ def process_upload_job(job_id: str) -> None:
     if metadata is None:
         logger.warning("upload_job_start_missing_metadata job_id=%s validation_failure_reason=%s", job_id, "upload_session_missing")
         return
+    if upload_job_superseded_by_reset(metadata):
+        update_job(
+            job_id,
+            status="FAILED",
+            completed_at=now_iso(),
+            error="Upload job superseded by runtime reset.",
+            errors=["upload_job_superseded_by_reset"],
+            result_available=False,
+            first_usable_available=False,
+        )
+        complete_upload_queue_job(job_id, "failed", "upload_job_superseded_by_reset")
+        delete_upload_file(metadata)
+        return
 
     started = time.perf_counter() 
     try: 
@@ -366,6 +390,19 @@ def process_upload_job(job_id: str) -> None:
         if hash_cache_key:
             cached_payload = read_latest_payload(hash_cache_key)
             if isinstance(cached_payload, dict) and isinstance(cached_payload.get("result"), dict) and isinstance(cached_payload.get("summary"), dict):
+                if upload_job_superseded_by_reset(metadata):
+                    update_job(
+                        job_id,
+                        status="FAILED",
+                        completed_at=now_iso(),
+                        error="Upload job superseded by runtime reset.",
+                        errors=["upload_job_superseded_by_reset"],
+                        result_available=False,
+                        first_usable_available=False,
+                    )
+                    complete_upload_queue_job(job_id, "failed", "upload_job_superseded_by_reset")
+                    delete_upload_file(metadata)
+                    return
                 UPLOAD_CACHE_STATS["hash_cache_hits"] += 1
                 completed_at = now_iso()
                 result = cached_payload["result"]
@@ -426,6 +463,20 @@ def process_upload_job(job_id: str) -> None:
             timings=result.get("processing_stats", {}).get("timings", {}),
         )
         completed_at = now_iso()
+        if upload_job_superseded_by_reset(metadata):
+            update_job(
+                job_id,
+                status="FAILED",
+                completed_at=completed_at,
+                processing_duration_seconds=round(time.perf_counter() - started, 4),
+                error="Upload job superseded by runtime reset.",
+                errors=["upload_job_superseded_by_reset"],
+                result_available=False,
+                first_usable_available=False,
+            )
+            complete_upload_queue_job(job_id, "failed", "upload_job_superseded_by_reset")
+            delete_upload_file(metadata)
+            return
         update_site_memory_from_result(result, completed_at)
         result["adaptive_learning"] = build_adaptive_snapshot(result, {"last_processed_at": completed_at})
         summary = summarize_result(result, completed_at) 
