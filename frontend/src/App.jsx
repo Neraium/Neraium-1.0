@@ -327,6 +327,7 @@ function App() {
       liveOps={historianReplayState.frame
         ? { ...liveOps, ...historianReplayState.frame }
         : liveOps}
+      replayFrame={historianReplayState.frame}
       selectedTarget={null}
       onSelectTarget={() => {}}
       apiFetch={apiFetch}

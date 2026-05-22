@@ -318,7 +318,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
                 <input
                   ref={csvInputRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.json,text/csv,application/json"
                   style={{ display: "none" }}
                   onChange={handleCsvFileSelection}
                 />

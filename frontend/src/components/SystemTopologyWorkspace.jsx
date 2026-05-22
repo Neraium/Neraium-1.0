@@ -14,6 +14,7 @@ const FALLBACK_STATE = {
 
 export default function SystemTopologyWorkspace({ 
   liveOps,
+  replayFrame = null,
   selectedTarget,
   onSelectTarget,
   apiFetch,
@@ -112,6 +113,7 @@ export default function SystemTopologyWorkspace({
       domainMode={domainMode}
       domainDetection={domainDetection}
       latestUploadResult={liveOps.latestUploadResult}
+      latestReplayFrame={replayFrame}
     /> 
   ); 
 } 

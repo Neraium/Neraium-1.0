@@ -142,6 +142,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     assert latest_payload["latest_result"]["sii_intelligence"]["source"] == "rest_poll"
     assert latest_payload["latest_result"]["ingestion_metadata"]["tick"] == 16
     assert latest_payload["latest_result"]["ingestion_metadata"]["scenario"] == "airflow_instability"
+    assert latest_payload["latest_result"]["sii_intelligence"]["replay_timeline"]["timeline"]
 
     facility_payload = facility.json()
     assert facility_payload["intelligence"]["source"] == "rest_poll"

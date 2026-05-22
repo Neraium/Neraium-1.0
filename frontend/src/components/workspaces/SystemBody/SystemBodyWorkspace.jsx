@@ -36,6 +36,7 @@ export default function SystemBodyWorkspace({
   domainMode = "aquatic",
   domainDetection = null,
   latestUploadResult = null,
+  latestReplayFrame = null,
 }) {
   void isLoading;
   const [detailOpen, setDetailOpen] = useState(false);
@@ -43,7 +44,7 @@ export default function SystemBodyWorkspace({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const hasAdmittedFinding = statusLight !== "gray";
-  const uploadDetail = buildUploadDetail(latestUploadResult);
+  const uploadDetail = buildUploadDetail(latestUploadResult, latestReplayFrame);
   const canInspectDetails = hasAdmittedFinding || Boolean(uploadDetail);
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   function openWorkspace(workspaceId) {
@@ -132,7 +133,7 @@ export default function SystemBodyWorkspace({
           {detailOpen && (governedDetail || uploadDetail) ? (
             <aside className="system-gate__detail" aria-label="Governed admitted detail view">
               <header>
-                <strong>{governedDetail ? "Gate State Detail" : "CSV Analysis Detail"}</strong>
+                <strong>{governedDetail ? "Gate State Detail" : (uploadDetail?.replayAvailable ? "CSV Replay Detail" : "CSV Analysis Detail")}</strong>
                 <button type="button" className="btn btn--secondary" onClick={() => setDetailOpen(false)}>Close</button>
               </header>
               {governedDetail ? (
@@ -162,6 +163,7 @@ export default function SystemBodyWorkspace({
                 <>
                   <ul>
                     <li><span>File</span><strong>{uploadDetail.filename || EMPTY_VALUE}</strong></li>
+                    <li><span>Source Type</span><strong>{uploadDetail.sourceType || EMPTY_VALUE}</strong></li>
                     <li><span>Assessment</span><strong>{uploadDetail.assessment || EMPTY_VALUE}</strong></li>
                     <li><span>Urgency</span><strong>{uploadDetail.urgency || EMPTY_VALUE}</strong></li>
                     <li><span>State</span><strong>{uploadDetail.state || EMPTY_VALUE}</strong></li>
@@ -172,6 +174,12 @@ export default function SystemBodyWorkspace({
                     <li><span>Replay</span><strong>{uploadDetail.replay || EMPTY_VALUE}</strong></li>
                     <li><span>Replay Frames</span><strong>{uploadDetail.replayFrames || EMPTY_VALUE}</strong></li>
                     <li><span>Preview Range</span><strong>{uploadDetail.previewRange || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay State</span><strong>{uploadDetail.replayState || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay Phase</span><strong>{uploadDetail.replayPhase || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay Drift</span><strong>{uploadDetail.replayDrift || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay Velocity</span><strong>{uploadDetail.replayVelocity || EMPTY_VALUE}</strong></li>
+                    <li><span>Propagation</span><strong>{uploadDetail.replayPropagation || EMPTY_VALUE}</strong></li>
+                    <li><span>Replay Confidence</span><strong>{uploadDetail.replayConfidence || EMPTY_VALUE}</strong></li>
                   </ul>
                   <div className="system-gate__settings-advanced" style={{ marginTop: "12px" }}>
                     <button
@@ -198,27 +206,55 @@ function statusLightLabel(light) {
   return "Stable";
 }
 
-function buildUploadDetail(result) {
+function buildUploadDetail(result, replayFrame) {
   if (!result) return null;
 
   const intelligence = result?.sii_intelligence ?? {};
   const replayTimeline = intelligence?.replay_timeline?.timeline;
+  const replayState = replayFrame?.cognition_state ?? {};
+  const replayTopology = replayFrame?.topology_state ?? {};
+  const replayPropagation = replayFrame?.propagation_state ?? {};
+  const replayEvidence = replayFrame?.evidence_state ?? {};
+  const replayCount = Number(replayFrame?.total_frames ?? 0);
+  const hasReplayFrame = Boolean(replayFrame && typeof replayFrame === "object");
   return {
     filename: result?.filename ?? "",
-    assessment: String(result?.operating_state ?? intelligence?.facility_state ?? "").trim() || "Monitoring",
-    urgency: String(result?.drift_status ?? intelligence?.urgency ?? "").trim() || "info",
-    state: String(result?.sii_intelligence?.facility_state ?? result?.operating_state ?? "").trim() || "Unknown",
-    primaryRoom: String(result?.primary_room ?? intelligence?.primary_room ?? "").trim() || "Unknown",
-    score: result?.neraium_score ?? intelligence?.neraium_score ?? EMPTY_VALUE,
-    rowsProcessed: result?.rows_processed ?? result?.row_count ?? EMPTY_VALUE,
+    sourceType: detectSourceType(result, replayFrame),
+    assessment: String(replayState.facility_state ?? result?.operating_state ?? intelligence?.facility_state ?? "").trim() || "Monitoring",
+    urgency: String(result?.drift_status ?? intelligence?.urgency ?? replayState.confidence_tier ?? "").trim() || "info",
+    state: String(replayState.facility_state ?? result?.sii_intelligence?.facility_state ?? result?.operating_state ?? "").trim() || "Unknown",
+    primaryRoom: String(replayFrame?.affected_subsystem ?? replayFrame?.affected_area ?? result?.primary_room ?? intelligence?.primary_room ?? "").trim() || "Unknown",
+    score: replayFrame?.evidence_confidence ?? replayTopology?.drift_index ?? result?.neraium_score ?? intelligence?.neraium_score ?? EMPTY_VALUE,
+    rowsProcessed: hasReplayFrame && Number.isFinite(Number(replayFrame?.row_start)) && Number.isFinite(Number(replayFrame?.row_end))
+      ? `${replayFrame.row_start} to ${replayFrame.row_end}`
+      : (result?.rows_processed ?? result?.row_count ?? EMPTY_VALUE),
     columnsDetected: result?.columns_detected ?? result?.column_count ?? EMPTY_VALUE,
-    replay: Array.isArray(replayTimeline) && replayTimeline.length > 0 ? "Available" : "Unavailable",
-    replayAvailable: Array.isArray(replayTimeline) && replayTimeline.length > 0,
-    replayFrames: Array.isArray(replayTimeline) ? replayTimeline.length : EMPTY_VALUE,
-    previewRange: result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
-      ? `${result.timestamp_profile.first_timestamp} to ${result.timestamp_profile.last_timestamp}`
-      : EMPTY_VALUE,
+    replay: hasReplayFrame || (Array.isArray(replayTimeline) && replayTimeline.length > 0) ? "Available" : "Unavailable",
+    replayAvailable: hasReplayFrame || (Array.isArray(replayTimeline) && replayTimeline.length > 0),
+    replayFrames: Number.isFinite(replayCount) && replayCount > 0 ? replayCount : (Array.isArray(replayTimeline) ? replayTimeline.length : EMPTY_VALUE),
+    previewRange: hasReplayFrame && replayFrame?.timestamp_start && replayFrame?.timestamp_end
+      ? `${replayFrame.timestamp_start} to ${replayFrame.timestamp_end}`
+      : (result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
+        ? `${result.timestamp_profile.first_timestamp} to ${result.timestamp_profile.last_timestamp}`
+        : EMPTY_VALUE),
+    replayState: hasReplayFrame ? String(replayState.facility_state ?? EMPTY_VALUE) : EMPTY_VALUE,
+    replayPhase: hasReplayFrame ? String(replayState.canonical_phase ?? EMPTY_VALUE).replaceAll("_", " ") : EMPTY_VALUE,
+    replayDrift: hasReplayFrame ? (replayTopology.drift_index ?? EMPTY_VALUE) : EMPTY_VALUE,
+    replayVelocity: hasReplayFrame ? (replayFrame?.drift_velocity ?? EMPTY_VALUE) : EMPTY_VALUE,
+    replayPropagation: hasReplayFrame ? (replayPropagation.dominant_paths?.length ? replayPropagation.dominant_paths.join(", ") : EMPTY_VALUE) : EMPTY_VALUE,
+    replayConfidence: hasReplayFrame ? String(replayEvidence.corroboration_strength ?? EMPTY_VALUE) : EMPTY_VALUE,
   };
+}
+
+function detectSourceType(result, replayFrame) {
+  const source = String(result?.source ?? result?.sii_intelligence?.source ?? "").toLowerCase();
+  const sourceType = String(result?.source_type ?? result?.ingestion_metadata?.source_type ?? result?.sii_intelligence?.source_metadata?.source_type ?? "").toLowerCase();
+  const filename = String(result?.filename ?? "").toLowerCase();
+  if (source === "rest_poll" || sourceType.includes("rest")) return "Live stream";
+  if (filename.endsWith(".json") || sourceType.includes("json")) return "JSON upload";
+  if (filename.endsWith(".csv") || source === "uploaded") return "CSV upload";
+  if (replayFrame?.timestamp_start || replayFrame?.timestamp_end) return "Replay-derived";
+  return "Telemetry input";
 }
 
 function renderGateStateLabel(stateLabel, statusLight) {

@@ -60,9 +60,9 @@ export default function IntakeFlowPanel({
               <p className="section-token">Telemetry Intake</p>
               <h3>Upload</h3>
             </div>
-            <p>CSV or JSON only. Processing remains read-only.</p>
+            <p>CSV uploads are the primary path. JSON import/export lives in Advanced. Processing remains read-only.</p>
           </div>
-          <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
+          <input ref={uploadInputRef} accept=".csv,.json,text/csv,application/json" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
@@ -72,9 +72,16 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-file-card__actions">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
-              <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>Use JSON</button>
               <button className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
                 {isUploadProcessing(uploadState) ? "Processing" : "Process Upload"}
+              </button>
+              <button
+                className="secondary-command-button"
+                type="button"
+                disabled={isUploadProcessing(uploadState)}
+                onClick={() => setIsJsonSchemaOpen((current) => !current)}
+              >
+                {isJsonSchemaOpen ? "Close Advanced" : "Advanced"}
               </button>
             </div>
           </div>
@@ -157,11 +164,14 @@ export default function IntakeFlowPanel({
             )}
           </div>
         </form>
-        {pendingUploadKind === "json" || isJsonSchemaOpen ? (
+        {isJsonSchemaOpen ? (
           <div className="connector-json-hint">
             <div className="connector-json-hint__header">
-              <p className="section-token">JSON upload schema</p>
+              <p className="section-token">Developer / Integration Tools</p>
               <div className="connector-json-hint__actions">
+                <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
+                  Use JSON
+                </button>
                 <button className="secondary-command-button" type="button" onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(JSON_UPLOAD_SCHEMA_EXAMPLE);
@@ -173,22 +183,14 @@ export default function IntakeFlowPanel({
                   {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed" : "Copy Example"}
                 </button>
                 <button className="secondary-command-button" type="button" onClick={() => setIsJsonSchemaOpen((current) => !current)}>
-                  {isJsonSchemaOpen ? "Hide Schema" : "Show Schema"}
+                  Hide Advanced
                 </button>
               </div>
             </div>
             {isJsonSchemaOpen ? <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre> : null}
           </div>
         ) : (
-          <div className="intake-flow__controls">
-            <button
-              type="button"
-              className="secondary-command-button"
-              onClick={() => setIsJsonSchemaOpen(true)}
-            >
-              Show JSON Schema
-            </button>
-          </div>
+          <p className="metadata-text">Advanced tools include JSON import/export and schema examples.</p>
         )}
       </Panel>
       <Panel title="Model Construction State" className="span-5 upload-cognition-state">

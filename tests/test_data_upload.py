@@ -697,14 +697,21 @@ def test_processing_helper_accepts_live_shape_json_payload() -> None:
                 {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 55, "unit": "%", "quality": "good"},
                 {"timestamp": "2026-05-01T08:05:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 75, "unit": "F", "quality": "good"},
                 {"timestamp": "2026-05-01T08:05:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 56, "unit": "%", "quality": "good"},
+                {"timestamp": "2026-05-01T08:10:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 76, "unit": "F", "quality": "good"},
+                {"timestamp": "2026-05-01T08:10:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 57, "unit": "%", "quality": "good"},
+                {"timestamp": "2026-05-01T08:15:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 77, "unit": "F", "quality": "good"},
+                {"timestamp": "2026-05-01T08:15:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 58, "unit": "%", "quality": "good"},
+                {"timestamp": "2026-05-01T08:20:00Z", "sensor_id": "temp-001", "sensor_name": "temperature", "value": 78, "unit": "F", "quality": "good"},
+                {"timestamp": "2026-05-01T08:20:00Z", "sensor_id": "humidity-001", "sensor_name": "humidity", "value": 59, "unit": "%", "quality": "good"},
             ],
         },
     )
 
     assert result["filename"] == "pilot-upload.json"
-    assert result["row_count"] == 2
+    assert result["row_count"] == 5
     assert result["room_summary"]["room_count"] == 1
     assert result["sii_intelligence"]["source"] == "uploaded"
+    assert result["sii_intelligence"]["replay_timeline"]["timeline"]
 
 
 def test_processing_helper_preserves_profile_metadata() -> None:
