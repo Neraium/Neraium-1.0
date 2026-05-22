@@ -361,8 +361,26 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
-  const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
+  let timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
+  if (timeline.length === 0) {
+    try {
+      const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
+      if (latestResponse.ok) {
+        const latestPayload = await latestResponse.json();
+        const latestResult = latestPayload?.latest_result ?? {};
+        const embedded =
+          latestResult?.replay_timeline?.timeline
+          ?? latestResult?.sii_intelligence?.replay_timeline?.timeline
+          ?? [];
+        if (Array.isArray(embedded) && embedded.length > 0) {
+          timeline = embedded;
+        }
+      }
+    } catch {
+      // Keep original empty timeline and let caller show replay notice.
+    }
+  }
   return {
     jobId: targetJobId,
     timeline,

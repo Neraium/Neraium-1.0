@@ -1,6 +1,7 @@
 import { NO_DATA_LABEL, noDataGuidance } from "./uiStateText";
 
 export function hasFullUploadResult(result) {
+  const replayTimeline = result?.replay_timeline?.timeline ?? result?.sii_intelligence?.replay_timeline?.timeline;
   return Boolean(
     result
     && (
@@ -12,6 +13,9 @@ export function hasFullUploadResult(result) {
       || result.processing_trace
       || result.row_count
       || result.rows_processed
+      || (Array.isArray(replayTimeline) && replayTimeline.length > 0)
+      || result.job_id
+      || result.filename
     )
   );
 }
@@ -19,7 +23,7 @@ export function hasFullUploadResult(result) {
 export function hasActiveTelemetrySnapshot(snapshot) {
   const status = String(snapshot?.status ?? snapshot?.processing_state ?? "").toLowerCase();
   const explicitlyInactive = ["empty", "idle", "cleared", "reset", "none", "no_data"].includes(status);
-  if (explicitlyInactive || snapshot?.latest_result === null || snapshot?.latest_upload === null) {
+  if (explicitlyInactive) {
     return false;
   }
   if (["active", "baseline_active"].includes(status) && !snapshot?.latest_result && snapshot?.sii_completed !== true) {
