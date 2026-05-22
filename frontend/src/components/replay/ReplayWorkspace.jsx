@@ -244,7 +244,7 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Infrastructure Diagnostics" className="span-12 workspace-hero-panel" subtitle="Technical replay, topology, and evidence overlays separated from the operator flow.">
+      <Panel title="Infrastructure Diagnostics" className="span-12 workspace-hero-panel" subtitle="Replay, topology, and evidence diagnostics for deep analysis.">
         <MetricGrid metrics={metrics} />
         {expertMode ? (
           <div className="structural-replay-controls">
