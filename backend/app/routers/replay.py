@@ -166,6 +166,21 @@ def replay_range(
 def current_intelligence() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
+    if not intelligence and isinstance(latest_result, dict):
+        persisted = latest_result.get("sii_intelligence")
+        replay_timeline = (
+            latest_result.get("replay_timeline")
+            or (persisted.get("replay_timeline") if isinstance(persisted, dict) else None)
+        )
+        if isinstance(persisted, dict) and isinstance(replay_timeline, dict):
+            timeline = replay_timeline.get("timeline")
+            if isinstance(timeline, list) and timeline:
+                merged = dict(persisted)
+                merged["source"] = str(merged.get("source") or "uploaded")
+                merged["replay_timeline"] = replay_timeline
+                if not merged.get("facility_state"):
+                    merged["facility_state"] = "Monitoring"
+                return merged
     return intelligence or build_sample_intelligence()
 
 

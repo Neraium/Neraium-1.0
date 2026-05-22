@@ -419,24 +419,13 @@ def read_intake_result(job_id: str) -> dict[str, Any]:
 
 @router.get("/data/replay/{job_id}")
 def read_upload_replay(job_id: str) -> dict[str, Any]:
+    latest_result = read_latest_upload_result()
     metadata = read_job(job_id)
+    persisted = replay_payload_from_result(latest_result, job_id=job_id)
+    if persisted is not None:
+        return persisted
     if metadata is None:
         raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
-    latest_result = read_latest_upload_result()
-    if latest_result and latest_result.get("job_id") == job_id:
-        replay = (
-            latest_result.get("replay_timeline")
-            or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
-            or {}
-        )
-        timeline = replay.get("timeline") if isinstance(replay, dict) else []
-        if isinstance(timeline, list) and timeline:
-            return {
-                "job_id": job_id,
-                "frame_count": len(timeline),
-                "timeline": timeline,
-                "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
-            }
 
     source_replay = rebuild_upload_replay_from_source(metadata)
     if source_replay is not None:
@@ -448,6 +437,25 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
         "timeline": [],
         "meta": {},
         "message": "No replay frames are available for this CSV yet. The source file may be missing, or the upload did not retain replayable timestamp and numeric signals.",
+    }
+
+
+def replay_payload_from_result(result: dict[str, Any] | None, *, job_id: str) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    replay = (
+        result.get("replay_timeline")
+        or (result.get("sii_intelligence") or {}).get("replay_timeline")
+        or {}
+    )
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if not isinstance(timeline, list) or not timeline:
+        return None
+    return {
+        "job_id": job_id,
+        "frame_count": len(timeline),
+        "timeline": timeline,
+        "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
     }
 
 

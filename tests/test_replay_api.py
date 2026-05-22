@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
+from app.services.upload_jobs import write_latest_upload_result
 
 
 def test_replay_timeline_returns_structural_frames() -> None:
@@ -74,3 +75,43 @@ def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
     assert isinstance(payload.get("timeline"), list)
     if payload["timeline"]:
         assert payload["timeline"][0].get("live_causal", {}).get("lookahead_free") is True
+
+
+def test_replay_timeline_falls_back_to_latest_persisted_replay_frames() -> None:
+    write_latest_upload_result(
+        "fallback-upload-job",
+        {
+            "filename": "telemetry.csv",
+            "row_count": 120,
+            "column_count": 4,
+            "columns": ["timestamp", "flow", "pressure", "power"],
+            "preview_rows": [],
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"categories": {}},
+            # Intentionally minimal intelligence object (missing required fields),
+            # to validate replay fallback for large persisted uploads.
+            "sii_intelligence": {
+                "source": "uploaded",
+                "replay_timeline": {
+                    "meta": {"frame_count": 2},
+                    "timeline": [
+                        {"timestamp": "2026-05-21T08:00:00+00:00", "timestamp_end": "2026-05-21T08:05:00+00:00"},
+                        {"timestamp": "2026-05-21T08:05:00+00:00", "timestamp_end": "2026-05-21T08:10:00+00:00"},
+                    ],
+                },
+            },
+            "driver_attribution": {},
+            "processing_trace": {},
+            "processing_stats": {},
+            "room_summary": {"room_count": 1, "rooms": [{"room": "Loop A", "row_count": 120}]},
+        },
+    )
+    client = TestClient(create_app())
+
+    response = client.get("/api/replay/timeline?mode=live&intervals=24")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("source") == "uploaded"
+    assert len(payload.get("timeline", [])) == 2
