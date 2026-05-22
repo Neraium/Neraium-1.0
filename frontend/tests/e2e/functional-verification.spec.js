@@ -17,10 +17,9 @@ function buildCsvRows(count) {
 async function openDataConnections(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  const appRoot = page.getByTestId("app-ready-root");
-  await expect(appRoot).toBeVisible({ timeout: 30000 });
-  await expect.poll(async () => appRoot.getAttribute("data-app-ready"), { timeout: 30000 }).toBe("1");
-  await page.getByRole("button", { name: "Open Gate settings" }).click();
+  const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
+  await expect(settingsButton).toBeVisible({ timeout: 30000 });
+  await settingsButton.click();
   await page.getByRole("button", { name: /Data connections/i }).click();
   await expect(page.getByRole("tab", { name: /^Upload$/i })).toBeVisible();
 }
