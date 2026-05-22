@@ -14,7 +14,8 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
   const status = String(normalizedSnapshot?.status ?? normalizedSnapshot?.processing_state ?? "").toLowerCase();
   const shouldDowngradeActive =
     ["active", "baseline_active"].includes(status)
-    && (!normalizedLatestResult || normalizedSnapshot?.sii_completed !== true);
+    && !normalizedLatestResult
+    && normalizedSnapshot?.sii_completed !== true;
 
   return {
     snapshot: shouldDowngradeActive

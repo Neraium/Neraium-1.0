@@ -22,7 +22,7 @@ export function hasActiveTelemetrySnapshot(snapshot) {
   if (explicitlyInactive || snapshot?.latest_result === null || snapshot?.latest_upload === null) {
     return false;
   }
-  if (["active", "baseline_active"].includes(status) && snapshot?.sii_completed !== true) {
+  if (["active", "baseline_active"].includes(status) && !snapshot?.latest_result && snapshot?.sii_completed !== true) {
     return false;
   }
   return Boolean(
