@@ -301,6 +301,19 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   if (!targetJobId) {
     return { jobId: null, timeline: [], meta: {} };
   }
+  const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
+  if (statusResponse.ok) {
+    const statusPayload = await statusResponse.json();
+    const status = String(statusPayload?.status ?? "").toUpperCase();
+    if (status && !["COMPLETE", "FAILED"].includes(status)) {
+      return {
+        jobId: targetJobId,
+        timeline: [],
+        meta: { status, replay_pending: true },
+        message: `Replay is still building for this upload job (${status.toLowerCase()}).`,
+      };
+    }
+  }
   const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (!replayResponse.ok) {
     throw new Error(`Unexpected response: ${replayResponse.status}`);

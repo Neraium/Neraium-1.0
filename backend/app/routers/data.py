@@ -428,15 +428,36 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
     if metadata is None:
         raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
 
+    normalized_status = str(metadata.get("status", "PENDING")).upper()
+    if normalized_status not in {"COMPLETE", "FAILED"}:
+        return {
+            "job_id": job_id,
+            "frame_count": 0,
+            "timeline": [],
+            "meta": {"status": normalized_status, "replay_pending": True},
+            "message": f"Replay is still building for this upload job ({normalized_status.lower()}).",
+        }
+
     source_replay = rebuild_upload_replay_from_source(metadata)
     if source_replay is not None:
         return source_replay
+
+    raw_path = metadata.get("file_path")
+    source_exists = bool(raw_path and Path(str(raw_path)).exists())
+    if normalized_status == "COMPLETE" and not source_exists:
+        return {
+            "job_id": job_id,
+            "frame_count": 0,
+            "timeline": [],
+            "meta": {"status": normalized_status, "source_missing": True},
+            "message": "Replay unavailable for this completed upload because the original source CSV is no longer present.",
+        }
 
     return {
         "job_id": job_id,
         "frame_count": 0,
         "timeline": [],
-        "meta": {},
+        "meta": {"status": normalized_status},
         "message": "No replay frames are available for this CSV yet. The source file may be missing, or the upload did not retain replayable timestamp and numeric signals.",
     }
 
