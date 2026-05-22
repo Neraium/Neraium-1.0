@@ -59,3 +59,18 @@ def test_aquatic_demo_mode_replay_timeline_available() -> None:
     assert payload["source"] == "aquatic_demo"
     assert payload["meta"]["domain"] == "commercial_aquatic_hospitality"
     assert payload["meta"]["frame_count"] >= 18
+
+
+def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
+    write_latest_sii_state(build_sample_intelligence())
+    client = TestClient(create_app())
+
+    response = client.get("/api/replay/timeline?mode=live_causal&intervals=12")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("meta", {}).get("mode") == "live_causal"
+    assert payload.get("meta", {}).get("lookahead_free") is True
+    assert isinstance(payload.get("timeline"), list)
+    if payload["timeline"]:
+        assert payload["timeline"][0].get("live_causal", {}).get("lookahead_free") is True

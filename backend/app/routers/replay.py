@@ -60,6 +60,8 @@ def replay_timeline(
             "source": intelligence.get("source", "uploaded"),
             "facility_state": intelligence.get("facility_state"),
         }
+        if mode == "live_causal":
+            payload = build_live_causal_payload(payload)
         write_timeline_cache(cache_key, payload)
         return payload
     payload = _engine.build_timeline(
@@ -69,6 +71,8 @@ def replay_timeline(
     )
     payload["source"] = intelligence.get("source", "sample")
     payload["facility_state"] = intelligence.get("facility_state")
+    if mode == "live_causal":
+        payload = build_live_causal_payload(payload)
     write_timeline_cache(cache_key, payload)
     return payload
 
@@ -96,7 +100,10 @@ def replay_frame(
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
     if isinstance(persisted_timeline, list) and persisted_timeline:
-        frame = next((item for item in persisted_timeline if str(item.get("timestamp")) == timestamp), persisted_timeline[-1])
+        timeline = persisted_timeline
+        if mode == "live_causal":
+            timeline = build_live_causal_payload({"timeline": persisted_timeline, "meta": persisted.get("meta", {})}).get("timeline", [])
+        frame = next((item for item in timeline if str(item.get("timestamp")) == timestamp), timeline[-1])
         return {"source": intelligence.get("source", "uploaded"), "frame": frame}
     frame = _engine.frame_at_timestamp(
         intelligence=intelligence,
@@ -133,7 +140,10 @@ def replay_range(
     persisted = (intelligence.get("replay_timeline") if isinstance(intelligence, dict) else None) or {}
     persisted_timeline = persisted.get("timeline") if isinstance(persisted, dict) else None
     if isinstance(persisted_timeline, list) and persisted_timeline:
-        frames = [f for f in persisted_timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
+        timeline = persisted_timeline
+        if mode == "live_causal":
+            timeline = build_live_causal_payload({"timeline": persisted_timeline, "meta": persisted.get("meta", {})}).get("timeline", [])
+        frames = [f for f in timeline if start_timestamp <= str(f.get("timestamp")) <= end_timestamp]
         return {
             "source": intelligence.get("source", "uploaded"),
             "start_timestamp": start_timestamp,
@@ -194,3 +204,65 @@ def write_timeline_cache(key: str, payload: dict[str, Any]) -> None:
     _TIMELINE_CACHE.move_to_end(key)
     while len(_TIMELINE_CACHE) > _MAX_CACHE_ITEMS:
         _TIMELINE_CACHE.popitem(last=False)
+
+
+def build_live_causal_payload(base_payload: dict[str, Any]) -> dict[str, Any]:
+    timeline = base_payload.get("timeline") if isinstance(base_payload, dict) else None
+    if not isinstance(timeline, list) or not timeline:
+        return {**base_payload, "meta": {**(base_payload.get("meta", {}) if isinstance(base_payload, dict) else {}), "mode": "live_causal"}}
+
+    first_review_index: int | None = None
+    first_action_index: int | None = None
+    first_review_timestamp: str | None = None
+    first_action_timestamp: str | None = None
+    causal_timeline: list[dict[str, Any]] = []
+
+    for index, frame in enumerate(timeline):
+        state_text = (
+            str((frame.get("cognition_state") or {}).get("facility_state") or "")
+            + " "
+            + str((frame.get("topology_state") or {}).get("stability_state") or "")
+        ).lower()
+        level = "stable"
+        if any(token in state_text for token in ("needs action", "unstable", "alert", "deterior", "fragment")):
+            level = "action"
+        elif any(token in state_text for token in ("needs review", "review", "watch", "drift", "instability", "separation")):
+            level = "review"
+
+        timestamp = str(frame.get("timestamp") or frame.get("timestamp_end") or "")
+        if level in {"review", "action"} and first_review_index is None:
+            first_review_index = index
+            first_review_timestamp = timestamp or None
+        if level == "action" and first_action_index is None:
+            first_action_index = index
+            first_action_timestamp = timestamp or None
+
+        causal_frame = {
+            **frame,
+            "live_causal": {
+                "lookahead_free": True,
+                "detection_level": level,
+                "first_review_frame_index": first_review_index,
+                "first_review_timestamp": first_review_timestamp,
+                "first_action_frame_index": first_action_index,
+                "first_action_timestamp": first_action_timestamp,
+            },
+        }
+        causal_timeline.append(causal_frame)
+
+    meta = dict(base_payload.get("meta", {})) if isinstance(base_payload, dict) and isinstance(base_payload.get("meta"), dict) else {}
+    meta.update(
+        {
+            "mode": "live_causal",
+            "lookahead_free": True,
+            "first_review_frame_index": first_review_index,
+            "first_review_timestamp": first_review_timestamp,
+            "first_action_frame_index": first_action_index,
+            "first_action_timestamp": first_action_timestamp,
+        }
+    )
+    return {
+        **base_payload,
+        "meta": meta,
+        "timeline": causal_timeline,
+    }

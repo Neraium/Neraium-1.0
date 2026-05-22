@@ -30,6 +30,7 @@ export default function ReplayWorkspace({
   const [frameIndex, setFrameIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [replayCompression, setReplayCompression] = useState(1);
+  const [executionMode, setExecutionMode] = useState(mode || "live");
   const [comparisonMode, setComparisonMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState("");
@@ -76,8 +77,8 @@ export default function ReplayWorkspace({
           };
         } else {
           const [primary, comparison] = await Promise.all([
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode, domainMode }),
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode, domainMode }),
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode: executionMode, domainMode }),
+            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode: executionMode, domainMode }),
           ]);
           nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
           nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
@@ -85,7 +86,7 @@ export default function ReplayWorkspace({
         }
         if (cancelled) return;
 
-        if (mode !== "demo" && nextTimeline.length === 0) {
+        if (executionMode !== "demo" && nextTimeline.length === 0) {
           const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
           if (!cancelled && fallback.timeline.length > 0) {
             nextTimeline = fallback.timeline;
@@ -139,7 +140,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, mode, domainMode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, executionMode, domainMode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -164,7 +165,7 @@ export default function ReplayWorkspace({
       const end = timeline[Math.min(timeline.length - 1, frameIndex + 4)]?.timestamp;
       if (!start || !end) return;
       try {
-        const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode, domainMode });
+        const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode: executionMode, domainMode });
         setRangePreviewCount(preview.frame_count ?? 0);
       } catch {
         const localFrames = timeline.filter((frame) => {
@@ -175,7 +176,7 @@ export default function ReplayWorkspace({
       }
     }
     loadRangePreview();
-  }, [accessCode, apiFetch, frameIndex, mode, domainMode, timeline, shouldRequestReplay]);
+  }, [accessCode, apiFetch, executionMode, frameIndex, domainMode, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "-";
@@ -261,6 +262,10 @@ export default function ReplayWorkspace({
           </div>
         ) : (
           <div className="structural-replay-controls">
+            <select value={executionMode} onChange={(event) => setExecutionMode(String(event.target.value))}>
+              <option value="live">Replay</option>
+              <option value="live_causal">Live Replay (No Lookahead)</option>
+            </select>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
             <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
@@ -273,6 +278,7 @@ export default function ReplayWorkspace({
         {hasReplaySnapshots ? (
           <div className={`historian-replay-status ${replayMode ? "historian-replay-status--active" : ""}`}>
             <span className="historian-replay-status__badge">{replayMode ? "Replay Mode Active" : "Replay Preview"}</span>
+            <span>{executionMode === "live_causal" ? "No-lookahead mode" : "Standard replay mode"}</span>
             <span>Frame {Math.min(frameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
             <span>{currentPercent}% through dataset</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
