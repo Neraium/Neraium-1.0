@@ -25,7 +25,8 @@ export default function SystemTopologyWorkspace({
   domainDetection = null,
 }) { 
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
-  const awaitingSii = liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing";
+  const awaitingSii = (liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing")
+    && !liveOps.latestUploadResult;
   const uiState = awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
   const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
   const governed = deriveGovernedOutput(liveOps, {
