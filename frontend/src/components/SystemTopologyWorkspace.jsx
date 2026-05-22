@@ -139,10 +139,10 @@ function deriveUploadSignal(latestUploadResult) {
     return { systemState: "alert", label: "Needs action", statusLight: "red" };
   }
   if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) {
-    return { systemState: "watching", label: "Needs review", statusLight: "yellow" };
+    return { systemState: "watching", label: "Needs review", statusLight: "gray" };
   }
   if (operatingState.includes("needs review") || urgency === "review" || operatingState.includes("review")) {
-    return { systemState: "watching", label: "Needs review", statusLight: "yellow" };
+    return { systemState: "watching", label: "Needs review", statusLight: "gray" };
   }
   if (operatingState.includes("stable") || operatingState.includes("monitor")) {
     return { systemState: "stable", label: "Stable", statusLight: "gray" };
