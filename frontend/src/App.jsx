@@ -40,6 +40,7 @@ function App() {
     loadFacilitySystems,
     loadLatestUploadState,
     setAllowPersistedLatest,
+    clearUploadSessionState,
     telemetryTick,
     domainMode,
   } = useFacilityRuntime({
@@ -191,6 +192,8 @@ function App() {
     setSessionIntent("neutral");
     setIsDemoMode(false);
     setAllowPersistedLatest(false);
+    clearUploadSessionState();
+    setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await Promise.allSettled([
       apiFetch("/api/data/reset", {
         method: "POST",
@@ -203,7 +206,7 @@ function App() {
     ]);
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
-  }, [accessCode, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+  }, [accessCode, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
 
   const handleSignOut = useCallback(async () => {

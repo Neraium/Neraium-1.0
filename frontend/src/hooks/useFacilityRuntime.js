@@ -44,6 +44,10 @@ export default function useFacilityRuntime({
   const [domainMode, setDomainModeState] = useState(null);
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
+  const clearUploadSessionState = useCallback(() => {
+    setLatestUploadResult(null);
+    setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
+  }, []);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) {
@@ -58,7 +62,7 @@ export default function useFacilityRuntime({
       await fetchApiHealth({ apiFetch, accessCode });
       setApiStatus({
         state: "online",
-        label: "API Connected",
+        label: "Backend Online",
         detail: `Last sync ${formatClockTime(checkTime)} CT.`,
         checkedAt: checkTime.toISOString(),
         attemptCount,
@@ -69,7 +73,7 @@ export default function useFacilityRuntime({
     } catch {
       setApiStatus({
         state: "offline",
-        label: "API Offline",
+        label: "Backend Offline",
         detail: "Backend connection unavailable. System data could not be loaded.",
         checkedAt: checkTime.toISOString(),
         attemptCount,
@@ -134,10 +138,14 @@ export default function useFacilityRuntime({
       setLatestUploadResult(payload.latestResult);
       return Boolean(payload.latestResult);
     } catch {
-      // Preserve the most recent known upload session on transient failures so refreshes do not clear state.
+      if (!shouldIncludePersisted) {
+        clearUploadSessionState();
+        return false;
+      }
+      // Preserve the most recent known upload session on transient failures for live monitoring mode.
       return Boolean(latestUploadResult);
     }
-  }, [accessCode, allowPersistedLatest, hasAccess, latestUploadResult]);
+  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess, latestUploadResult]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
@@ -209,6 +217,7 @@ export default function useFacilityRuntime({
     loadLatestUploadState,
     allowPersistedLatest,
     setAllowPersistedLatest,
+    clearUploadSessionState,
     retryBackendConnection,
   };
 }

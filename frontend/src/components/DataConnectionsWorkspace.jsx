@@ -13,7 +13,6 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeStatusPanel from "./setup/IntakeStatusPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
-import PilotReadinessPanel from "./setup/PilotReadinessPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -556,12 +555,6 @@ export default function DataConnectionsWorkspace({
         uploadJob={uploadJob}
         latestUploadResult={uploadResult ?? latestUploadResult}
       /> 
-      <PilotReadinessPanel
-        apiStatus={apiStatus}
-        latestUploadSnapshot={latestUploadSnapshot}
-        hasActiveSession={hasActiveSession}
-        formatClockTime={formatClockTime}
-      />
     </div>
   );
 }
