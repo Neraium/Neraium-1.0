@@ -514,6 +514,26 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = isUploadProcessing(uploadState)
     ? Math.max(1, Math.min(99, preferredPercent))
     : (normalizeUploadStatus(uploadState) === "complete" ? 100 : null);
+  const latestReplayFrames =
+    Number(
+      latestUploadResult?.replay_timeline?.timeline?.length
+      ?? latestUploadResult?.sii_intelligence?.replay_timeline?.timeline?.length
+      ?? 0,
+    ) || 0;
+  const statusDebug = [
+    ["Job ID", uploadJob?.job_id ?? effectiveSnapshot?.history?.[0]?.job_id ?? "none"],
+    ["Upload State", normalizeUploadStatus(uploadState)],
+    ["Job Status", String(uploadJob?.status ?? "none")],
+    ["Processing State", String(uploadJob?.processing_state ?? "none")],
+    ["Percent", String(uploadJob?.percent ?? uploadJob?.progress ?? "n/a")],
+    ["Replay Ready", String(Boolean(uploadJob?.replay_ready))],
+    ["Replay Frame Count", String(uploadJob?.replay_frame_count ?? 0)],
+    ["Snapshot Status", String(effectiveSnapshot?.status ?? "none")],
+    ["Snapshot SII Completed", String(Boolean(effectiveSnapshot?.sii_completed))],
+    ["Latest Result Present", String(Boolean(latestUploadResult))],
+    ["Latest Replay Frames", String(latestReplayFrames)],
+    ["Replay Source", String(uploadJob?.replay_source ?? latestUploadResult?.replay_timeline?.meta?.replay_source ?? latestUploadResult?.sii_intelligence?.replay_timeline?.meta?.replay_source ?? "unknown")],
+  ];
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -550,6 +570,18 @@ export default function DataConnectionsWorkspace({
         onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
         onReprocessCurrentBatch={handleReprocessCurrentBatch}
       />
+      <section className="panel span-12" aria-label="Replay debug status">
+        <header className="panel-header">
+          <h3>Debug Status</h3>
+        </header>
+        <div className="panel-body">
+          <ul className="system-body-timeline-list">
+            {statusDebug.map(([label, value]) => (
+              <li key={label}><span>{label}</span><strong>{value}</strong></li>
+            ))}
+          </ul>
+        </div>
+      </section>
       
     </div>
   );
