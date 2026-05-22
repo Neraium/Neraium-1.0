@@ -210,7 +210,10 @@ function buildUploadDetail(result, replayFrame) {
   if (!result) return null;
 
   const intelligence = result?.sii_intelligence ?? {};
-  const replayTimeline = intelligence?.replay_timeline?.timeline;
+  const replayTimeline = (
+    intelligence?.replay_timeline?.timeline
+    ?? result?.replay_timeline?.timeline
+  );
   const fallbackReplayFrame = Array.isArray(replayTimeline) && replayTimeline.length > 0 ? replayTimeline[replayTimeline.length - 1] : null;
   const effectiveReplayFrame = replayFrame && typeof replayFrame === "object" ? replayFrame : fallbackReplayFrame;
   const replayState = effectiveReplayFrame?.cognition_state ?? {};
