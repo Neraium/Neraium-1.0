@@ -131,7 +131,7 @@ function App() {
       online: apiStatus.state === "online",
     });
     const siiVerification = {
-      verified: effectiveLatestUploadSnapshot?.sii_completed === true,
+      verified: Boolean(hasRealSiiOutput || effectiveLatestUploadSnapshot?.sii_completed === true),
       artifacts: effectiveLatestUploadSnapshot?.sii_completion_artifacts || {},
     };
 
