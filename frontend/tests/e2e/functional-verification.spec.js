@@ -17,11 +17,23 @@ function buildCsvRows(count) {
 async function openDataConnections(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
+  const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
+  if (await uploadTab.isVisible().catch(() => false)) {
+    return;
+  }
+
+  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
+  if (await directDataConnections.isVisible().catch(() => false)) {
+    await directDataConnections.click();
+    await expect(uploadTab).toBeVisible({ timeout: 30000 });
+    return;
+  }
+
+  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
   await expect(settingsButton).toBeVisible({ timeout: 30000 });
   await settingsButton.click();
-  await page.getByRole("button", { name: /Data connections/i }).click();
-  await expect(page.getByRole("tab", { name: /^Upload$/i })).toBeVisible();
+  await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
+  await expect(uploadTab).toBeVisible({ timeout: 30000 });
 }
 
 test.describe("Functional verification", () => {
