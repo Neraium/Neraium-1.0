@@ -10,9 +10,21 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
   const payload = await response.json();
   const latestResult = payload?.latest_result;
   const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
+  const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
+  const status = String(normalizedSnapshot?.status ?? normalizedSnapshot?.processing_state ?? "").toLowerCase();
+  const shouldDowngradeActive =
+    ["active", "baseline_active"].includes(status)
+    && (!normalizedLatestResult || normalizedSnapshot?.sii_completed !== true);
 
   return {
-    snapshot: payload ?? uploadStateView.buildEmptyLatestUploadSnapshot(),
+    snapshot: shouldDowngradeActive
+      ? {
+        ...uploadStateView.buildEmptyLatestUploadSnapshot(),
+        status: "empty",
+        source: "none",
+        message: "No data connected yet.",
+      }
+      : normalizedSnapshot,
     latestResult: normalizedLatestResult,
   };
 }
