@@ -45,7 +45,7 @@ export default function SystemBodyWorkspace({
   const [settingsBusy, setSettingsBusy] = useState(false);
   const hasAdmittedFinding = statusLight !== "gray";
   const uploadDetail = buildUploadDetail(latestUploadResult, latestReplayFrame);
-  const canInspectDetails = hasAdmittedFinding || Boolean(uploadDetail);
+  const canInspectDetails = !isEmptyStructuralState && (hasAdmittedFinding || Boolean(uploadDetail));
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   function openWorkspace(workspaceId) {
     if (settingsBusy) return;
