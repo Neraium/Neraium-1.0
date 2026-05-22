@@ -203,6 +203,9 @@ function App() {
     setIsDemoMode(false);
     setAllowPersistedLatest(false);
     clearUploadSessionState();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("neraium.last_upload_job_id");
+    }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await Promise.allSettled([
       apiFetch("/api/data/reset", {

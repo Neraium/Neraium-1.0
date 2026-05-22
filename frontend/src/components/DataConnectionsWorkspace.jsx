@@ -17,6 +17,7 @@ const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const DATA_CONNECTIONS_TAB_STORAGE_KEY = "neraium.data_connections.active_tab";
+const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 
 function readStoredDataConnectionsTab() {
   if (typeof window === "undefined") return "upload";
@@ -184,6 +185,9 @@ export default function DataConnectionsWorkspace({
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
         pollFailureCountRef.current = 0;
         uploadJobIdRef.current = payload.job_id ?? pollingJobId;
+        if (typeof window !== "undefined" && uploadJobIdRef.current) {
+          window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
+        }
         setUploadJob(payload);
         const nextStatus = normalizeUploadStatus(payload.status);
         setUploadState(nextStatus);
@@ -330,6 +334,9 @@ export default function DataConnectionsWorkspace({
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
           if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
           uploadJobIdRef.current = payload.job_id;
+          if (typeof window !== "undefined" && uploadJobIdRef.current) {
+            window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
+          }
           setUploadJob(payload);
           setUploadState(normalizeUploadStatus(payload.status));
           await pollUploadStatus(payload.job_id);
@@ -433,6 +440,9 @@ export default function DataConnectionsWorkspace({
     setCopyState("idle");
     setIsJsonSchemaOpen(false);
     uploadJobIdRef.current = null;
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+    }
     pollFailureCountRef.current = 0;
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);

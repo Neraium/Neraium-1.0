@@ -344,6 +344,11 @@ export default function ReplayWorkspace({
 async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   let targetJobId = jobId;
   if (!targetJobId) {
+    if (typeof window !== "undefined") {
+      targetJobId = window.localStorage.getItem("neraium.last_upload_job_id");
+    }
+  }
+  if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
     if (!latestResponse.ok) {
       throw new Error(`Unexpected response: ${latestResponse.status}`);
