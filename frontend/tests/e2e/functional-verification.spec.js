@@ -14,6 +14,27 @@ function buildCsvRows(count) {
   return `${lines.join("\n")}\n`;
 }
 
+async function waitForUploadComplete(page, jobId, timeoutMs = 180000) {
+  const startedAt = Date.now();
+  let lastStatus = "";
+  while (Date.now() - startedAt < timeoutMs) {
+    const response = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(jobId)}`);
+    const payload = await response.json().catch(() => ({}));
+    const status = String(payload?.status ?? "").toUpperCase();
+    if (status) {
+      lastStatus = status;
+    }
+    if (status === "COMPLETE") {
+      return payload;
+    }
+    if (status === "FAILED") {
+      throw new Error(`Upload job ${jobId} failed: ${JSON.stringify(payload)}`);
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw new Error(`Upload job ${jobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
+}
+
 async function openDataConnections(page) {
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
   const uploadInput = page.locator("input#csv-upload");
@@ -103,14 +124,17 @@ test.describe("Functional verification", () => {
       ),
     });
     await expect(page.getByRole("button", { name: "Process Upload" })).toBeEnabled();
+    const uploadAcceptedPromise = page.waitForResponse(
+      (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
+      { timeout: 30000 },
+    );
     await page.getByRole("button", { name: "Process Upload" }).click();
-
-    await expect.poll(async () => {
-      const response = await page.request.get("http://127.0.0.1:8010/api/data/latest-upload?include_persisted=1");
-      if (!response.ok()) return "request_failed";
-      const payload = await response.json();
-      return String(payload?.status ?? "unknown").toLowerCase();
-    }, { timeout: 120000 }).toBe("active");
+    const uploadAccepted = await uploadAcceptedPromise;
+    expect(uploadAccepted.ok()).toBeTruthy();
+    const uploadPayload = await uploadAccepted.json();
+    const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
+    expect(uploadJobId.length).toBeGreaterThan(0);
+    await waitForUploadComplete(page, uploadJobId, 180000);
 
     await page.getByRole("button", { name: /Back to Gate/i }).click();
     await expect(page.locator(".system-gate__state")).not.toHaveText(/No Data/i);
@@ -160,12 +184,7 @@ test.describe("Functional verification", () => {
     const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
     expect(uploadJobId.length).toBeGreaterThan(0);
 
-    await expect.poll(async () => {
-      const statusResponse = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(uploadJobId)}`);
-      if (!statusResponse.ok()) return "";
-      const statusPayload = await statusResponse.json();
-      return String(statusPayload?.status ?? "").toLowerCase();
-    }, { timeout: 45000 }).toMatch(/pending|active|complete|sii_completed|writing_state|generating_replay|cognition_ready/);
+    await waitForUploadComplete(page, uploadJobId, 180000);
 
     await page.getByRole("button", { name: /Back to Gate/i }).click();
     await expect(page.locator(".system-gate__state")).toBeVisible();
