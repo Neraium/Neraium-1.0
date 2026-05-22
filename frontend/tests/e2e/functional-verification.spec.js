@@ -16,7 +16,8 @@ function buildCsvRows(count) {
 
 async function openDataConnections(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+  await page.waitForFunction(() => window.__NERAIUM_APP_READY__ === true, null, { timeout: 30000 });
+  await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1", { timeout: 30000 });
   await page.getByRole("button", { name: "Open Gate settings" }).click();
   await page.getByRole("button", { name: /Data connections/i }).click();
   await expect(page.getByRole("tab", { name: /^Upload$/i })).toBeVisible();

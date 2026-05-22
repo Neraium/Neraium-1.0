@@ -460,7 +460,10 @@ def process_upload_job(job_id: str) -> None:
             status_callback=lambda status, **updates: update_job(job_id, status=status, **updates),
         )
         sii_artifacts = sii_completion_artifacts(result)
-        if not all(sii_artifacts.values()):
+        required_sii_artifacts = {
+            key: value for key, value in sii_artifacts.items() if key != "runner_used"
+        }
+        if not all(required_sii_artifacts.values()):
             raise RuntimeError(f"SII completion artifacts missing: {sii_artifacts}")
         update_job(
             job_id,

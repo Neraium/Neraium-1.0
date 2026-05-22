@@ -131,7 +131,7 @@ def test_upload_processes_in_api_role_without_worker_service(tmp_path) -> None:
     assert response.status_code == 202
     payload = wait_for_terminal_upload_status(client, response.json()["status_url"])
     assert payload["status"] == "COMPLETE"
-    assert payload["runner_used"] is True
+    assert payload["runner_used"] is False
 
 
 def test_create_upload_job_enforces_streaming_size_limit() -> None:

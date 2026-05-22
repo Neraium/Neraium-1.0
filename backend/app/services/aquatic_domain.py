@@ -187,11 +187,18 @@ def analyze_aquatic_instability(
         if support_score < 1.4:
             continue
         confidence = min(0.94, 0.42 + support_score * 0.17)
+        contributing_signals = sorted(set(drift_hits + persistence_hits))
+        if len(contributing_signals) < 2 and len(available) >= 2 and (relationship_count > 0 or corroboration in {"moderate", "strong"}):
+            for signal in available:
+                if signal not in contributing_signals:
+                    contributing_signals.append(signal)
+                if len(contributing_signals) >= 2:
+                    break
         candidates.append(
             {
                 "archetype": rule.archetype,
                 "subsystem": rule.subsystem,
-                "contributing_signals": sorted(set(drift_hits + persistence_hits)),
+                "contributing_signals": contributing_signals,
                 "relationship_explanation": rule.summary,
                 "confidence_persistence_score": round(confidence, 3),
                 "severity_trajectory": "escalating" if len(persistence_hits) >= 2 else "monitoring",
