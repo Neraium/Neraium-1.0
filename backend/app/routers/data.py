@@ -629,12 +629,39 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
     columns_detected = summary.get("columns_detected", 0)
     if not columns_detected and detailed_result:
         columns_detected = detailed_result.get("column_count", 0)
+    replay_timeline = (
+        (detailed_result or {}).get("replay_timeline")
+        or ((detailed_result or {}).get("sii_intelligence") or {}).get("replay_timeline")
+        or {}
+    )
+    replay_frames = replay_timeline.get("timeline") if isinstance(replay_timeline, dict) else []
+    replay_frame_count = len(replay_frames) if isinstance(replay_frames, list) else 0
+    replay_ready = replay_frame_count > 0
+    derived_artifacts = sii_completion_artifacts(detailed_result or {}) if detailed_result else {}
+    summary_artifacts = (summary or {}).get("sii_completion_artifacts", {})
+    merged_artifacts = {
+        **(summary_artifacts if isinstance(summary_artifacts, dict) else {}),
+        **derived_artifacts,
+    }
+    sii_completed = bool((summary or {}).get("sii_completed")) or bool(detailed_result and all(derived_artifacts.values()))
+    if detailed_result is None:
+        latest_status = "baseline_active" if (live_connection or {}).get("baseline_status") == "active" else "building_baseline"
+    elif not sii_completed:
+        latest_status = "running_sii"
+    elif not replay_ready:
+        latest_status = "generating_replay"
+    else:
+        latest_status = "active"
     payload = {
-        "status": "active" if (detailed_result is not None and bool((summary or {}).get("sii_completed"))) else ("baseline_active" if (live_connection or {}).get("baseline_status") == "active" else "building_baseline"),
+        "status": latest_status,
         "source": summary.get("source") or (detailed_result or {}).get("sii_intelligence", {}).get("source") or "uploaded",
         "message": (
             "Latest result active."
-            if detailed_result is not None
+            if latest_status == "active"
+            else "Generating replay frames from latest telemetry."
+            if latest_status == "generating_replay"
+            else "Running SII analysis on uploaded telemetry."
+            if latest_status == "running_sii"
             else "Live baseline active. Waiting for the next telemetry comparison."
         ),
         "last_filename": last_filename,
@@ -647,8 +674,10 @@ def read_latest_upload(include_persisted: bool = Query(True)) -> dict[str, Any]:
         "connection_status": "connected",
         "result_source": summary.get("upload_result_source") or "file_upload",
         "history": read_upload_history(limit=6),
-        "sii_completed": bool((summary or {}).get("sii_completed")),
-        "sii_completion_artifacts": (summary or {}).get("sii_completion_artifacts", {}),
+        "sii_completed": sii_completed,
+        "sii_completion_artifacts": merged_artifacts,
+        "replay_ready": replay_ready,
+        "replay_frame_count": replay_frame_count,
         "runner_used": summary.get("runner_used", False),
         "chunk_count": summary.get("chunk_count", 0),
         "memory_estimate_bytes": summary.get("memory_estimate_bytes", 0),

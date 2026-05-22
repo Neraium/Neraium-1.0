@@ -146,8 +146,29 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     if (!latestUploadSnapshot) return;
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
+    const snapshotReplayFrameCount =
+      Number(
+        latestUploadSnapshot?.replay_frame_count
+        ?? latestUploadSnapshot?.latest_result?.replay_timeline?.timeline?.length
+        ?? latestUploadSnapshot?.latest_result?.sii_intelligence?.replay_timeline?.timeline?.length
+        ?? 0,
+      ) || 0;
+    const snapshotReplayReady = Boolean(latestUploadSnapshot?.replay_ready) || snapshotReplayFrameCount > 0;
+    const snapshotSiiCompleted = Boolean(latestUploadSnapshot?.sii_completed);
+    const restoredUploadState = snapshotStatus === "active"
+      ? (snapshotSiiCompleted
+        ? (snapshotReplayReady ? "complete" : "generating_replay")
+        : "structural_scoring")
+      : snapshotStatus;
+    const restoredBackendStatus = {
+      complete: "COMPLETE",
+      generating_replay: "GENERATING_REPLAY",
+      structural_scoring: "RUNNING_SII",
+      writing_state: "GENERATING_EVIDENCE",
+    }[restoredUploadState] ?? String(latestUploadSnapshot.status ?? "PENDING").toUpperCase();
     const hasPersistedSession =
       snapshotStatus === "complete"
+      || snapshotStatus === "active"
       || snapshotStatus === "running_sii"
       || snapshotStatus === "parsing"
       || snapshotStatus === "baseline_modeling"
@@ -156,16 +177,18 @@ export default function DataConnectionsWorkspace({
 
     if (!hasPersistedSession) return;
 
-    setUploadState(snapshotStatus || "idle");
+    setUploadState(restoredUploadState || "idle");
     setUploadJob((current) => ({
       ...(current ?? {}),
       job_id: current?.job_id ?? latestUploadSnapshot.history?.[0]?.job_id ?? latestUploadSnapshot.latest_result?.job_id ?? null,
-      status: String(latestUploadSnapshot.status ?? current?.status ?? "PENDING").toUpperCase(),
+      status: restoredBackendStatus,
       progress_label: current?.progress_label ?? latestUploadSnapshot.message ?? "Session restored from persisted state.",
       message: latestUploadSnapshot.message ?? current?.message ?? "Session restored from persisted state.",
       filename: current?.filename ?? latestUploadSnapshot.last_filename ?? null,
       rows_processed: Number.isFinite(latestUploadSnapshot.rows_processed) ? latestUploadSnapshot.rows_processed : (current?.rows_processed ?? 0),
       columns_detected: Number.isFinite(latestUploadSnapshot.columns_detected) ? latestUploadSnapshot.columns_detected : (current?.columns_detected ?? 0),
+      replay_ready: snapshotReplayReady,
+      replay_frame_count: snapshotReplayFrameCount,
       runner_used: latestUploadSnapshot.runner_used ?? current?.runner_used ?? false,
       runner_module: latestUploadSnapshot.runner_module ?? current?.runner_module ?? null,
       core_engine: latestUploadSnapshot.core_engine ?? current?.core_engine ?? null,
