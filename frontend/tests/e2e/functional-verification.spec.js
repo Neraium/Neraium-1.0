@@ -15,21 +15,39 @@ function buildCsvRows(count) {
 }
 
 async function openDataConnections(page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
   const uploadInput = page.locator("input#csv-upload");
   const processUploadButton = page.getByRole("button", { name: /Process Upload/i });
-  await expect.poll(async () => {
+  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
+  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
+
+  const hasEntrySignal = async () => {
     const checks = await Promise.all([
       uploadTab.isVisible().catch(() => false),
       uploadInput.isVisible().catch(() => false),
       processUploadButton.isVisible().catch(() => false),
-      page.getByRole("button", { name: /Setup & data connections|Data connections/i }).isVisible().catch(() => false),
-      page.getByRole("button", { name: /Open Gate settings|Gate settings/i }).isVisible().catch(() => false),
+      directDataConnections.isVisible().catch(() => false),
+      settingsButton.isVisible().catch(() => false),
     ]);
     return checks.some(Boolean);
-  }, { timeout: 30000 }).toBe(true);
+  };
+
+  let entryReady = false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.goto("/", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 15000) {
+      if (await hasEntrySignal()) {
+        entryReady = true;
+        break;
+      }
+      await page.waitForTimeout(500);
+    }
+    if (entryReady) break;
+    await page.reload({ waitUntil: "load" }).catch(() => {});
+  }
+  expect(entryReady).toBe(true);
 
   if (await uploadTab.isVisible().catch(() => false)) {
     return;
@@ -41,14 +59,12 @@ async function openDataConnections(page) {
     return;
   }
 
-  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
   if (await directDataConnections.isVisible().catch(() => false)) {
     await directDataConnections.click();
     await expect(uploadTab).toBeVisible({ timeout: 30000 });
     return;
   }
 
-  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
   await expect(settingsButton).toBeVisible({ timeout: 30000 });
   await settingsButton.click();
   await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
