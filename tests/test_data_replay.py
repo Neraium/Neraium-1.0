@@ -31,7 +31,7 @@ def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
 def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_signal_is_sparse(tmp_path: Path) -> None:
     csv_path = tmp_path / "events.csv"
     rows = "\n".join(
-        f"2026-05-21T08:{minute:02d}:00Z,phase-{minute % 3},status-{minute % 2}"
+        f"2026-05-21T08:{minute:02d}:00Z,phaseA,statusON"
         for minute in range(40)
     )
     csv_path.write_text(f"timestamp,phase,status\n{rows}\n", encoding="utf-8")
@@ -47,6 +47,26 @@ def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_si
     assert payload["frame_count"] > 0
     assert payload["timeline"]
     assert payload["meta"].get("replay_mode") == "minimal_timestamp_fallback"
+
+
+def test_rebuild_upload_replay_from_source_parses_mixed_numeric_formats_and_non_hint_timestamp(tmp_path: Path) -> None:
+    csv_path = tmp_path / "plant.csv"
+    rows = "\n".join(
+        f"2026-05-21 08:{minute:02d}:00,\"{1200 + minute * 0.5:.1f} kW\",\"{45 + (minute % 5):.1f}%\""
+        for minute in range(50)
+    )
+    csv_path.write_text(f"logged_at,power_draw,efficiency\n{rows}\n", encoding="utf-8")
+
+    payload = rebuild_upload_replay_from_source({
+        "job_id": "job-mixed-numeric",
+        "file_path": str(csv_path),
+        "filename": "plant.csv",
+    })
+
+    assert payload is not None
+    assert payload["frame_count"] > 0
+    assert payload["timeline"]
+    assert payload["meta"].get("replay_mode") != "minimal_timestamp_fallback"
 
 
 def test_persisted_upload_result_exposes_replay_without_source_file(tmp_path: Path) -> None:

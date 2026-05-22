@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.data_quality import parse_numeric_value
 
 import numpy as np
 
@@ -313,10 +314,11 @@ def build_sensor_vectors(
         values: list[float] = []
         for column_index in column_indexes:
             raw_value = row[column_index].strip() if column_index < len(row) else ""
-            try:
-                values.append(float(raw_value))
-            except ValueError:
+            parsed_value = parse_numeric_value(raw_value)
+            if parsed_value is None:
                 values.append(float("nan"))
+            else:
+                values.append(parsed_value)
         if values and not all(np.isnan(value) for value in values):
             vectors.append(values)
             row_indexes.append(row_index)
@@ -332,16 +334,16 @@ def parse_timestamp(columns: list[str], row: list[str], timestamp_column: str | 
         column_index = columns.index(timestamp_column)
         raw_value = row[column_index].strip() if column_index < len(row) else ""
         if raw_value:
+            numeric_value = parse_numeric_value(raw_value)
+            if numeric_value is not None:
+                return numeric_value
             try:
-                return float(raw_value)
+                parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                return parsed.timestamp()
             except ValueError:
-                try:
-                    parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
-                    if parsed.tzinfo is None:
-                        parsed = parsed.replace(tzinfo=UTC)
-                    return parsed.timestamp()
-                except ValueError:
-                    pass
+                pass
     return float(fallback_index + 1)
 
 

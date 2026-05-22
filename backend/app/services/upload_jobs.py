@@ -29,6 +29,7 @@ from app.services.data_quality import (
     build_data_quality,
     build_warnings,
     detect_timestamp_column,
+    parse_numeric_value,
     profile_numeric_columns,
     profile_timestamps,
 )
@@ -853,7 +854,7 @@ def build_upload_result(
         warnings.append(
             "Upload parse was capped by NERAIUM_MAX_PARSE_ROWS for faster pilot throughput; analysis is based on the capped window."
         )
-    detected_timestamp_column = detect_timestamp_column(columns)
+    detected_timestamp_column = detect_timestamp_column(columns, data_rows)
     if detected_timestamp_column is None:
         warnings.append("No obvious timestamp column detected.")
     sampled_row_indexes = processing_stats.get("sampled_row_indexes")
@@ -1984,10 +1985,11 @@ def build_room_assessments(
         values: list[float] = []
         for idx in numeric_indexes:
             raw = row[idx].strip() if idx < len(row) else ""
-            try:
-                values.append(float(raw))
-            except ValueError:
+            parsed = parse_numeric_value(raw)
+            if parsed is None:
                 values.append(float("nan"))
+            else:
+                values.append(parsed)
         if values and not all(np.isnan(value) for value in values):
             grouped.setdefault(room_name, []).append(values)
 
@@ -2427,10 +2429,10 @@ def estimate_event_like_columns(
             raw = row[idx].strip() if idx < len(row) else ""
             if not raw:
                 continue
-            try:
-                observed.add(float(raw))
-            except ValueError:
+            parsed = parse_numeric_value(raw)
+            if parsed is None:
                 continue
+            observed.add(parsed)
             if len(observed) > 3:
                 break
         if observed and len(observed) <= 3:
@@ -2581,11 +2583,10 @@ def build_replay_rows_from_full_csv(
                 raw = row[column_index].strip()
                 if raw == "":
                     continue
-                try:
-                    value = float(raw)
-                except ValueError:
+                parsed = parse_numeric_value(raw)
+                if parsed is None:
                     continue
-                sums[column_index] = sums.get(column_index, 0.0) + value
+                sums[column_index] = sums.get(column_index, 0.0) + parsed
                 counts[column_index] = counts.get(column_index, 0) + 1
         flush_bin()
 

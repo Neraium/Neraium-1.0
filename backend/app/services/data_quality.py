@@ -25,11 +25,34 @@ def build_warnings(columns: list[str], rows: list[list[str]]) -> list[str]:
     return warnings
 
 
-def detect_timestamp_column(columns: list[str]) -> str | None:
+def detect_timestamp_column(columns: list[str], rows: list[list[str]] | None = None) -> str | None:
     normalized_columns = [(column, column.lower().replace(" ", "_")) for column in columns]
     for column, normalized in normalized_columns:
         if normalized in TIMESTAMP_COLUMN_HINTS or "timestamp" in normalized:
             return column
+    if not rows:
+        return None
+    sample_rows = rows[: min(200, len(rows))]
+    best_column: str | None = None
+    best_ratio = 0.0
+    for index, column in enumerate(columns):
+        valid = 0
+        observed = 0
+        for row in sample_rows:
+            raw_value = row[index].strip() if index < len(row) else ""
+            if not raw_value:
+                continue
+            observed += 1
+            if parse_timestamp(raw_value) is not None:
+                valid += 1
+        if observed < 3:
+            continue
+        ratio = valid / observed
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_column = column
+    if best_column is not None and best_ratio >= 0.6:
+        return best_column
     return None
 
 
@@ -47,17 +70,17 @@ def profile_numeric_columns(columns: list[str], rows: list[list[str]]) -> list[d
             if raw_value == "":
                 missing_count += 1
                 continue
-            try:
-                value = float(raw_value)
-            except ValueError:
+            value = parse_numeric_value(raw_value)
+            if value is None:
                 has_non_numeric = True
-                break
+                continue
             if not math.isfinite(value):
                 has_non_numeric = True
-                break
+                continue
             values.append(value)
 
-        if has_non_numeric or not values:
+        numeric_ratio = (len(values) / max(1, row_count - missing_count)) if row_count else 0.0
+        if not values or len(values) < 3 or numeric_ratio < 0.4:
             continue
 
         minimum = min(values)
@@ -174,6 +197,31 @@ def parse_timestamp(raw_value: str) -> datetime | None:
             continue
 
     return None
+
+
+def parse_numeric_value(raw_value: str) -> float | None:
+    normalized = raw_value.strip()
+    if not normalized:
+        return None
+    normalized = normalized.replace(",", "")
+    lowered = normalized.lower()
+    if lowered in {"nan", "null", "none", "n/a", "na", "-"}:
+        return None
+    pieces = normalized.split()
+    candidate = pieces[0] if pieces else normalized
+    try:
+        value = float(candidate)
+    except ValueError:
+        filtered = "".join(char for char in candidate if char.isdigit() or char in {".", "-", "+"})
+        if filtered in {"", "-", "+", ".", "-.", "+."}:
+            return None
+        try:
+            value = float(filtered)
+        except ValueError:
+            return None
+    if not math.isfinite(value):
+        return None
+    return value
 
 
 def normalize_timestamp(timestamp: datetime) -> datetime:
