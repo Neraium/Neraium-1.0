@@ -117,6 +117,8 @@ export default function DataConnectionsWorkspace({
   const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false); 
   const [copyState, setCopyState] = useState("idle"); 
   const [feedbackState, setFeedbackState] = useState({ status: "idle", category: null, message: "" });
+  void uploadResult;
+  void feedbackState;
   const [isResetViewActive, setIsResetViewActive] = useState(false);
   const uploadJobIdRef = useRef(null); 
   const pollTimerRef = useRef(null);
@@ -452,42 +454,10 @@ export default function DataConnectionsWorkspace({
     if (onResetDemo) await onResetDemo(); 
   } 
 
-  async function handleOperatorFeedback(category) {
-    const latestRunId = latestUploadSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id;
-    if (!latestRunId) {
-      setFeedbackState({ status: "error", category, message: "No recent event is available for operator feedback yet." });
-      return;
-    }
-    setFeedbackState({ status: "submitting", category, message: "Recording operator feedback." });
-    try {
-      const response = await apiFetch(`/api/evidence/runs/${latestRunId}/feedback`, {
-        method: "POST",
-        accessCode,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category }),
-      });
-      const payload = await readJsonPayload(response);
-      if (!response.ok) throw buildUploadRequestError(response, payload, "upload");
-      const refreshed = await loadLatestUpload();
-      if (refreshed?.latest_result) {
-        setUploadResult(refreshed.latest_result);
-      }
-      setFeedbackState({ status: "complete", category, message: "Operator feedback recorded in evidence memory." });
-      if (typeof onUploadComplete === "function" && refreshed) {
-        await onUploadComplete({ ...(refreshed.latest_result ?? {}), ...refreshed });
-      }
-    } catch (error) {
-      const classified = classifyUploadError(error, "upload");
-      setFeedbackState({ status: "error", category, message: classified.message });
-    }
-  }
- 
   const displayUploadError = uploadError; 
   const effectiveSnapshot = isResetViewActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : latestUploadSnapshot;
-  const latestStatus = hasActiveSession ? (effectiveSnapshot?.status ?? "empty") : "empty";
-  const uploadDiffSummary = uploadStateView.buildUploadDiffSummary(effectiveSnapshot?.history ?? []);
   const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || effectiveSnapshot?.message || uploadStateMessage(uploadState));
   const selectedFileSize = formatFileSize(selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0));
   const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
@@ -499,10 +469,6 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = isUploadProcessing(uploadState)
     ? Math.max(1, Math.min(99, preferredPercent))
     : (normalizeUploadStatus(uploadState) === "complete" ? 100 : null);
-  const baselineStatus = effectiveSnapshot?.baseline_status; 
-  const baselineMessage = baselineStatus === "building" ? "Baseline Pending" : baselineStatus === "active" ? "Baseline Active" : "Baseline Pending"; 
-  const adaptiveLearning = effectiveSnapshot?.adaptive_learning ?? uploadResult?.adaptive_learning ?? latestUploadResult?.adaptive_learning ?? {};
-  const latestRunId = effectiveSnapshot?.history?.[0]?.job_id ?? uploadResult?.job_id ?? latestUploadResult?.job_id ?? null;
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel

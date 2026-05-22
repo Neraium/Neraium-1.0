@@ -169,7 +169,7 @@ function App() {
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
     setHistorianReplayState((current) => ({ ...current, frame, meta }));

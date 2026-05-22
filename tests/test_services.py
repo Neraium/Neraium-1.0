@@ -54,6 +54,9 @@ def test_data_quality_profiles_numeric_and_timestamp_data() -> None:
     rows = [
         ["2026-05-01T08:00:00Z", "74", "55"],
         ["2026-05-01T08:05:00Z", "76", ""],
+        ["2026-05-01T08:10:00Z", "75", "56"],
+        ["2026-05-01T08:15:00Z", "77", "54"],
+        ["2026-05-01T08:20:00Z", "78", "53"],
     ]
 
     timestamp_column = detect_timestamp_column(columns)
@@ -87,8 +90,8 @@ def test_baseline_analysis_compares_first_and_last_windows() -> None:
 
     analysis = build_baseline_analysis(columns, rows, numeric_profiles)
 
-    assert analysis["baseline_window_rows"] == 2
-    assert analysis["recent_window_rows"] == 2
+    assert analysis["baseline_window_rows"] == 3
+    assert analysis["recent_window_rows"] == 3
     assert analysis["column_drift"][0]["direction"] == "up"
     assert analysis["column_drift"][0]["drift_flag"] == "review"
 

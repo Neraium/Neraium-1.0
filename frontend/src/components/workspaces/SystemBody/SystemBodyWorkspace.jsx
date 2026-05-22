@@ -41,7 +41,7 @@ export default function SystemBodyWorkspace({
   const [detailOpen, setDetailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [settingsBusy, setSettingsBusy] = useState(false);
+  const settingsBusy = false;
   const hasAdmittedFinding = statusLight !== "gray";
   const uploadDetail = buildUploadDetail(latestUploadResult, latestReplayFrame);
   const canInspectDetails = !isEmptyStructuralState && (hasAdmittedFinding || Boolean(uploadDetail));

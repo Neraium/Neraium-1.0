@@ -23,7 +23,7 @@ async function openDataConnections(page) {
 }
 
 test.describe("Functional verification", () => {
-  test("upload, analysis, gate visibility, reset, and refresh states work end-to-end", async ({ page }) => {
+  test("upload, analysis, gate visibility, reset, and refresh states work end-to-end", async ({ page, request }) => {
     const consoleErrors = [];
     const requestFailures = [];
 
@@ -56,7 +56,7 @@ test.describe("Functional verification", () => {
     await page.getByRole("button", { name: "Process Upload" }).click();
 
     await expect.poll(async () => {
-      const response = await page.request.get("http://127.0.0.1:8010/api/data/latest-upload?include_persisted=1");
+      const response = await request.get("http://127.0.0.1:8010/api/data/latest-upload?include_persisted=1");
       if (!response.ok()) return "request_failed";
       const payload = await response.json();
       return String(payload?.status ?? "unknown").toLowerCase();
@@ -87,7 +87,7 @@ test.describe("Functional verification", () => {
     expect(consoleErrors, `Console warnings/errors detected:\n${consoleErrors.join("\n")}`).toEqual([]);
   });
 
-  test("medium upload exposes replay details and replay workspace data", async ({ page }) => {
+  test("medium upload exposes replay details and replay workspace data", async ({ page, request }) => {
     test.setTimeout(240000);
     await openDataConnections(page);
 
@@ -111,7 +111,7 @@ test.describe("Functional verification", () => {
     expect(uploadJobId.length).toBeGreaterThan(0);
 
     await expect.poll(async () => {
-      const statusResponse = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(uploadJobId)}`);
+      const statusResponse = await request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(uploadJobId)}`);
       if (!statusResponse.ok()) return "";
       const statusPayload = await statusResponse.json();
       return String(statusPayload?.status ?? "").toLowerCase();

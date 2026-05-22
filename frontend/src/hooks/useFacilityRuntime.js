@@ -172,7 +172,7 @@ export default function useFacilityRuntime({
         setDomainModeState(payload.source === "upload_shape" ? (payload.mode ?? null) : null);
       })
       .catch(() => {});
-  }, [accessCode, apiFetch, hasAccess]);
+  }, [accessCode, hasAccess]);
 
   useEffect(() => {
     if (!hasAccess) return;
