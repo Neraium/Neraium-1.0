@@ -1058,6 +1058,9 @@ def build_upload_result(
     record_timing(processing_stats, "replay_generation", stage_started)
     runner_latest_state = sii_runner_result.get("latest_state") if isinstance(sii_runner_result, dict) else None
     if isinstance(runner_latest_state, dict):
+        runner_instability_index = runner_latest_state.get("instability_index")
+        if isinstance(runner_instability_index, dict):
+            sii_intelligence["instability_index"] = runner_instability_index
         runner_projection_hours = runner_latest_state.get("projected_time_to_failure_hours")
         runner_projection = runner_latest_state.get("projected_time_to_failure")
         if runner_projection:
@@ -1075,6 +1078,8 @@ def build_upload_result(
                         room["projected_time_to_failure_hours"] = runner_projection_hours
                 elif "projected_time_to_failure" not in room:
                     room["projected_time_to_failure"] = "Monitoring"
+    if "core_sii_outputs" in sii_intelligence:
+        sii_intelligence["core_sii_outputs"] = build_core_sii_outputs(sii_intelligence)
     write_latest_sii_state( 
         { 
             **sii_intelligence, 

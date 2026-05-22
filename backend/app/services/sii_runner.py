@@ -84,6 +84,11 @@ class BackendSiiRunner:
         instability_score = float(
             np.clip(structural_drift * 0.55 + transition_pressure * 0.3 + variability_pressure * 0.15, 0.0, 1.0)
         )
+        instability_components = {
+            "drift": round(float(np.clip(structural_drift, 0.0, 1.0)), 6),
+            "relationship_degradation": round(float(np.clip(transition_pressure, 0.0, 1.0)), 6),
+            "entropy_growth": round(float(np.clip(variability_pressure, 0.0, 1.0)), 6),
+        }
         velocity = instability_score - (self._instability_history[-1] if self._instability_history else instability_score)
 
         regime, urgency = classify_state(len(self._history), instability_score, transition_pressure)
@@ -100,6 +105,7 @@ class BackendSiiRunner:
             "regime": regime,
             "urgency": urgency,
             "instability_score": round(instability_score, 6),
+            "instability_components": instability_components,
             "structural_drift": round(structural_drift, 6),
             "transition_pressure": round(transition_pressure, 6),
             "confidence": round(confidence, 6),
@@ -251,8 +257,10 @@ def run_sii_runner(
 
     latest_state = states[-1]
     projected_hours = project_time_to_failure_hours_from_state(latest_state)
+    instability_index = build_instability_index(latest_state)
     latest_state = {
         **latest_state,
+        "instability_index": instability_index,
         "projected_time_to_failure_hours": projected_hours,
         "projected_time_to_failure": format_projected_time_to_failure_hours(projected_hours),
     }
@@ -345,6 +353,7 @@ def summarize_runner_outputs(states: list[dict[str, Any]]) -> dict[str, Any]:
         "latest_regime": latest.get("regime"),
         "latest_urgency": latest.get("urgency"),
         "latest_instability_score": latest.get("instability_score"),
+        "latest_instability_components": latest.get("instability_components", {}),
         "max_instability_score": round(max(scores), 6) if scores else 0.0,
         "latest_structural_drift": latest.get("structural_drift"),
         "latest_confidence": latest.get("confidence"),
@@ -391,6 +400,11 @@ def build_runtime_state(
         "last_updated": now_iso(),
         "confidence": round(float(latest_state.get("confidence", 0.0)) * 100),
     }
+    instability_index = (
+        latest_state.get("instability_index")
+        if isinstance(latest_state.get("instability_index"), dict)
+        else build_instability_index(latest_state)
+    )
     return {
         "source": "uploaded",
         "mode": "live",
@@ -418,9 +432,31 @@ def build_runtime_state(
         "runner_module": RUNNER_MODULE,
         "core_engine": CORE_ENGINE,
         "latest_state": latest_state,
+        "instability_index": instability_index,
         "last_updated": room["last_updated"],
         "last_processed_at": room["last_updated"],
         "processing_trace": processing_trace,
+    }
+
+
+def build_instability_index(latest_state: dict[str, Any]) -> dict[str, Any]:
+    components = latest_state.get("instability_components", {}) if isinstance(latest_state, dict) else {}
+    drift = float(components.get("drift", latest_state.get("structural_drift", 0.0)))
+    relationship = float(components.get("relationship_degradation", latest_state.get("transition_pressure", 0.0)))
+    entropy = float(components.get("entropy_growth", 0.0))
+    causal = float(latest_state.get("confidence", 0.0))
+    topology = float(np.clip((drift * 0.6) + (relationship * 0.4), 0.0, 1.0))
+    score = float(np.clip((drift * 0.35) + (relationship * 0.25) + (entropy * 0.15) + (causal * 0.15) + (topology * 0.10), 0.0, 1.0))
+    return {
+        "score": round(score, 6),
+        "components": {
+            "drift": round(float(np.clip(drift, 0.0, 1.0)), 6),
+            "relationship_degradation": round(float(np.clip(relationship, 0.0, 1.0)), 6),
+            "entropy_growth": round(float(np.clip(entropy, 0.0, 1.0)), 6),
+            "causal_evidence": round(float(np.clip(causal, 0.0, 1.0)), 6),
+            "topology_propagation": round(float(np.clip(topology, 0.0, 1.0)), 6),
+        },
+        "model": {"name": "sii_instability_index", "version": "phase1-v1"},
     }
 
 

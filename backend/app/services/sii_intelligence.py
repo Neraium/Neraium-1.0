@@ -327,6 +327,7 @@ def build_core_sii_outputs(intelligence: dict[str, Any]) -> dict[str, Any]:
         "emerging_instability": {
             "state": intelligence.get("facility_state"),
             "urgency": intelligence.get("urgency"),
+            "instability_index": intelligence.get("instability_index"),
         },
         "affected_system": {
             "primary": intelligence.get("primary_room") or intelligence.get("priority_room"),
