@@ -112,7 +112,7 @@ export default function SystemTopologyWorkspace({
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
       domainDetection={domainDetection}
-      latestUploadResult={liveOps.latestUploadResult}
+      latestUploadResult={awaitingSii ? null : liveOps.latestUploadResult}
       latestReplayFrame={replayFrame}
     /> 
   ); 
