@@ -17,22 +17,49 @@ function buildCsvRows(count) {
 async function waitForUploadComplete(page, jobId, timeoutMs = 180000) {
   const startedAt = Date.now();
   let lastStatus = "";
+  let activeJobId = String(jobId ?? "").trim();
+  let notFoundCount = 0;
   while (Date.now() - startedAt < timeoutMs) {
-    const response = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(jobId)}`);
+    if (!activeJobId) {
+      throw new Error("Upload job id is missing.");
+    }
+    const response = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
     const payload = await response.json().catch(() => ({}));
     const status = String(payload?.status ?? "").toUpperCase();
     if (status) {
       lastStatus = status;
     }
+    if (status === "NOT_FOUND") {
+      notFoundCount += 1;
+      if (notFoundCount >= 3) {
+        const latestResponse = await page.request.get("http://127.0.0.1:8010/api/data/latest-upload?include_persisted=1");
+        if (latestResponse.ok()) {
+          const latestPayload = await latestResponse.json().catch(() => ({}));
+          const recoveredJobId = String(
+            latestPayload?.latest_result?.job_id
+            ?? latestPayload?.history?.[0]?.job_id
+            ?? "",
+          ).trim();
+          if (recoveredJobId && recoveredJobId !== activeJobId) {
+            activeJobId = recoveredJobId;
+            notFoundCount = 0;
+            await page.waitForTimeout(500);
+            continue;
+          }
+        }
+      }
+      await page.waitForTimeout(1000);
+      continue;
+    }
     if (status === "COMPLETE") {
       return payload;
     }
     if (status === "FAILED") {
-      throw new Error(`Upload job ${jobId} failed: ${JSON.stringify(payload)}`);
+      throw new Error(`Upload job ${activeJobId} failed: ${JSON.stringify(payload)}`);
     }
     await page.waitForTimeout(1000);
   }
-  throw new Error(`Upload job ${jobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
+  throw new Error(`Upload job ${activeJobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
 }
 
 async function openDataConnections(page) {
