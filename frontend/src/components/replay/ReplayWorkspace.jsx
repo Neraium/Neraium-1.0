@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchReplayRange, fetchReplayTimeline } from "../../services/api/replayApi";
 import PropagationMap from "../PropagationMap";
 import StructuralMemoryPanel from "../StructuralMemoryPanel";
 import EvidenceLineagePanel from "../EvidenceLineagePanel";
@@ -67,76 +66,22 @@ export default function ReplayWorkspace({
     let cancelled = false;
     async function loadReplay() {
       try {
-        let nextTimeline = [];
-        let nextComparison = [];
-        let nextMeta = {};
-
-        if (sessionJobId) {
-          const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
-          nextTimeline = scoped.timeline;
-          nextComparison = [];
-          nextMeta = {
-            ...(scoped.meta ?? {}),
-            replay_source: "upload_job",
-            replay_job_id: scoped.jobId,
-            message: scoped.message,
-          };
-        } else {
-          const [primary, comparison] = await Promise.all([
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression, mode: executionMode, domainMode }),
-            fetchReplayTimeline({ apiFetch, accessCode, intervals: 32, replayCompression: Math.min(replayCompression + 1, 4), mode: executionMode, domainMode }),
-          ]);
-          nextTimeline = Array.isArray(primary.timeline) ? primary.timeline : [];
-          nextComparison = Array.isArray(comparison.timeline) ? comparison.timeline : [];
-          nextMeta = primary.meta ?? {};
-        }
+        const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
         if (cancelled) return;
-
-        if (executionMode !== "demo" && nextTimeline.length === 0) {
-          const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
-          if (!cancelled && fallback.timeline.length > 0) {
-            nextTimeline = fallback.timeline;
-            nextComparison = [];
-            nextMeta = {
-              ...(nextMeta ?? {}),
-              ...(fallback.meta ?? {}),
-              replay_source: "upload_job",
-              replay_job_id: fallback.jobId,
-              message: fallback.message,
-            };
-          }
-        }
-
+        const nextTimeline = scoped.timeline;
+        const nextMeta = {
+          ...(scoped.meta ?? {}),
+          replay_source: "upload_job",
+          replay_job_id: scoped.jobId,
+          message: scoped.message,
+        };
         setTimeline(nextTimeline);
-        setComparisonTimeline(nextComparison);
+        setComparisonTimeline([]);
         setMeta(nextMeta);
         setFrameIndex(Math.max(0, nextTimeline.length - 1));
         setError(nextTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
       } catch (loadError) {
         if (cancelled) return;
-        try {
-          const fallback = await fetchUploadScopedReplay({ apiFetch, accessCode });
-          if (cancelled) return;
-          if (fallback.timeline.length > 0) {
-            setTimeline(fallback.timeline);
-            setComparisonTimeline([]);
-            setMeta({
-              frame_count: fallback.timeline.length,
-              intervals: 32,
-              replay_compression: replayCompression,
-              canonical_flow: [],
-              replay_source: "upload_job",
-              replay_job_id: fallback.jobId,
-              message: fallback.message,
-              ...(fallback.meta ?? {}),
-            });
-            setFrameIndex(Math.max(0, fallback.timeline.length - 1));
-            setError(fallback.timeline.length > 0 ? "" : (fallback.message ?? "No replay snapshots are available for this session."));
-            return;
-          }
-        } catch {
-          // Fall through to user-facing replay notice.
-        }
         setTimeline([]);
         setComparisonTimeline([]);
         setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
@@ -146,7 +91,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, executionMode, domainMode, normalizeErrorMessage, replayCompression, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -162,7 +107,7 @@ export default function ReplayWorkspace({
       setRangePreviewCount(0);
       return () => {};
     }
-    async function loadRangePreview() {
+    function loadRangePreview() {
       if (timeline.length < 2) {
         setRangePreviewCount(0);
         return;
@@ -170,19 +115,14 @@ export default function ReplayWorkspace({
       const start = timeline[Math.max(0, frameIndex - 4)]?.timestamp;
       const end = timeline[Math.min(timeline.length - 1, frameIndex + 4)]?.timestamp;
       if (!start || !end) return;
-      try {
-        const preview = await fetchReplayRange({ apiFetch, accessCode, startTimestamp: start, endTimestamp: end, intervals: timeline.length, mode: executionMode, domainMode });
-        setRangePreviewCount(preview.frame_count ?? 0);
-      } catch {
-        const localFrames = timeline.filter((frame) => {
-          const frameTimestamp = String(frame?.timestamp ?? "");
-          return frameTimestamp >= start && frameTimestamp <= end;
-        });
-        setRangePreviewCount(localFrames.length);
-      }
+      const localFrames = timeline.filter((frame) => {
+        const frameTimestamp = String(frame?.timestamp ?? "");
+        return frameTimestamp >= start && frameTimestamp <= end;
+      });
+      setRangePreviewCount(localFrames.length);
     }
     loadRangePreview();
-  }, [accessCode, apiFetch, executionMode, frameIndex, domainMode, timeline, shouldRequestReplay]);
+  }, [frameIndex, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "-";
@@ -366,26 +306,8 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
-  let timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
+  const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  if (timeline.length === 0) {
-    try {
-      const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
-      if (latestResponse.ok) {
-        const latestPayload = await latestResponse.json();
-        const latestResult = latestPayload?.latest_result ?? {};
-        const embedded =
-          latestResult?.replay_timeline?.timeline
-          ?? latestResult?.sii_intelligence?.replay_timeline?.timeline
-          ?? [];
-        if (Array.isArray(embedded) && embedded.length > 0) {
-          timeline = embedded;
-        }
-      }
-    } catch {
-      // Keep original empty timeline and let caller show replay notice.
-    }
-  }
   return {
     jobId: targetJobId,
     timeline,
