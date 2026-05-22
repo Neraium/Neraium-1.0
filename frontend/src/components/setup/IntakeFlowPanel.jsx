@@ -57,18 +57,15 @@ export default function IntakeFlowPanel({
         <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <div>
-              <p className="section-token">Telemetry Intake</p>
               <h3>Upload</h3>
             </div>
-            <p>CSV uploads are the primary path. JSON import/export lives in Advanced. Processing remains read-only.</p>
           </div>
           <input ref={uploadInputRef} accept=".csv,.json,text/csv,application/json" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
               <span className="upload-file-card__label">Telemetry source</span>
               <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Choose a telemetry file to continue."}</p>
-              <p className="upload-file-card__note">{uploadReadinessMessage(selectedFiles?.[0] ?? null)}</p>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a file to continue."}</p>
             </div>
             <div className="upload-file-card__actions">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
@@ -85,12 +82,6 @@ export default function IntakeFlowPanel({
               </button>
             </div>
           </div>
-          {!hasSelectedFiles && !isUploadProcessing(uploadState) ? (
-            <div className="upload-partial-alert" role="status" aria-live="polite">
-              <strong>No Upload Selected</strong>
-              <span>Select CSV first for the fastest setup path, then process upload.</span>
-            </div>
-          ) : null}
           {hasValidationError || hasUploadError ? (
             <div className="upload-partial-alert" role="alert" aria-live="assertive">
               <strong>{hasValidationError ? "Upload Validation Error" : "Upload Processing Error"}</strong>
@@ -189,13 +180,10 @@ export default function IntakeFlowPanel({
             </div>
             {isJsonSchemaOpen ? <pre className="connector-json-hint__code">{JSON_UPLOAD_SCHEMA_EXAMPLE}</pre> : null}
           </div>
-        ) : (
-          <p className="metadata-text">Advanced tools include JSON import/export and schema examples.</p>
-        )}
+        ) : null}
       </Panel>
       <Panel title="Model Construction State" className="span-5 upload-cognition-state">
         <WorkflowStages items={intakeStages} />
-        <p className="narrative-text">Processing remains read-only and does not actuate infrastructure.</p>
       </Panel>
     </>
   );
