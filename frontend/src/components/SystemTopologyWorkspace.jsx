@@ -49,7 +49,7 @@ export default function SystemTopologyWorkspace({
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight);
+  const systemState = awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight));
   const primaryMessage = awaitingSii
     ? "Upload or connect telemetry to begin monitoring."
     : governed.hasPass

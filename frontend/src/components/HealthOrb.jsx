@@ -1,11 +1,20 @@
 function normalizeGateState(systemState) {
-  const value = String(systemState ?? "").toLowerCase();
+  const value = String(systemState ?? "").toLowerCase().trim();
+  if (["", "empty", "none", "no data", "no_data", "unknown", "offline", "reset"].includes(value)) return "neutral";
   if (["watch", "watching", "drift", "warning"].includes(value)) return "watch";
   if (["alert", "critical", "propagation", "propagation_active"].includes(value)) return "alert";
   return "stable";
 }
 
 function paletteFor(state) {
+  if (state === "neutral") {
+    return {
+      className: "health-orb--iris-neutral",
+      accent: "#9ca3af",
+      accentSoft: "rgba(156, 163, 175, 0.18)",
+      core: "#e5e7eb",
+    };
+  }
   if (state === "alert") {
     return {
       className: "health-orb--iris-alert",
@@ -30,7 +39,7 @@ function paletteFor(state) {
   };
 }
 
-export default function HealthOrb({ systemState = "stable", intensity = 0.4, animated = true }) {
+export default function HealthOrb({ systemState = "neutral", intensity = 0.4, animated = true }) {
   const state = normalizeGateState(systemState);
   const palette = paletteFor(state);
   const resolvedIntensity = Math.max(0, Math.min(1, Number(intensity) || 0.4));
