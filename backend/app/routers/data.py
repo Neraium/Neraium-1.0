@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, File, UploadFile
+from fastapi.responses import JSONResponse
 from app.services import upload_jobs
 
 router = APIRouter(prefix="/data", tags=["data"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/upload")
@@ -18,15 +22,26 @@ async def upload_status(job_id: str):
     status = upload_jobs.read_upload_status(job_id)
     if status:
         return status
-    return {
+    payload = {
         "job_id": job_id,
-        "status": "MISSING",
+        "status": "NOT_FOUND",
         "processing_state": "missing",
         "percent": 0,
         "replay_ready": False,
         "replay_frame_count": 0,
         "result_available": False,
+        "error_type": "upload_session_missing",
+        "error": "upload_session_missing",
+        "message": "Upload session expired or was not found.",
     }
+    logger.warning(
+        "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
+        job_id,
+    )
+    return JSONResponse(
+        status_code=404,
+        content=payload,
+    )
 
 
 @router.get("/latest-upload")

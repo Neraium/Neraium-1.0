@@ -214,7 +214,7 @@ export default function DataConnectionsWorkspace({
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
-        if (String(payload?.status ?? "").toUpperCase() === "NOT_FOUND") {
+        if (["NOT_FOUND", "MISSING"].includes(String(payload?.status ?? "").toUpperCase())) {
           notFoundCount += 1;
           if (notFoundCount >= 3) {
             const latestPayload = await loadLatestUpload();

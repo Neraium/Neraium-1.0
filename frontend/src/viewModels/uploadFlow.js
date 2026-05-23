@@ -108,8 +108,15 @@ export function normalizeErrorMessage(error) {
 }
 
 export function buildUploadRequestError(response, payload, phase) {
-  const errorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
-  const isMissingStatusDuringPoll = phase === "poll" && response.status === 404 && errorType === "upload_session_missing";
+  const payloadStatus = String(payload?.status ?? "").toUpperCase();
+  const fallbackErrorType = ["NOT_FOUND", "MISSING"].includes(payloadStatus) ? "upload_session_missing" : null;
+  const errorType = payload?.error_type ?? payload?.detail?.error_type ?? fallbackErrorType;
+  const isMissingStatusDuringPoll =
+    phase === "poll"
+    && (
+      (response.status === 404 && errorType === "upload_session_missing")
+      || ["NOT_FOUND", "MISSING"].includes(payloadStatus)
+    );
   return {
     name: "UploadRequestError",
     status: response.status,
