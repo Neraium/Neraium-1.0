@@ -132,6 +132,7 @@ MAX_ANALYSIS_ROWS = parse_positive_int_env("NERAIUM_MAX_ANALYSIS_ROWS", 60_000)
 MAX_SII_ROWS = parse_positive_int_env("NERAIUM_MAX_SII_ROWS", 30_000) 
 MAX_PARSE_ROWS = parse_optional_positive_int_env("NERAIUM_MAX_PARSE_ROWS")
 DISABLE_UPLOAD_HASH_CACHE = parse_bool_env("NERAIUM_DISABLE_UPLOAD_HASH_CACHE", False)
+STRUCTURAL_SCORING_TIMEOUT_SECONDS = parse_positive_int_env("NERAIUM_STRUCTURAL_SCORING_TIMEOUT_SECONDS", 180)
 
 PROGRESS_LABELS = {
     "PENDING": "File accepted. Background intake job is queued.",
@@ -586,7 +587,13 @@ def process_upload_job(job_id: str) -> None:
         )
         complete_upload_queue_job(job_id, "failed", f"{type(exc).__name__}: {exc}")
     finally:
-        delete_upload_file(metadata)
+        latest_result = read_upload_result_by_job_id(job_id)
+        replay = ((latest_result or {}).get("replay_timeline") or ((latest_result or {}).get("sii_intelligence") or {}).get("replay_timeline") or {})
+        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        if isinstance(timeline, list) and timeline:
+            delete_upload_file(metadata)
+        else:
+            logger.warning("upload_file_retained_until_replay_persists job_id=%s", job_id)
 
 
 def process_next_queued_upload_job() -> None:

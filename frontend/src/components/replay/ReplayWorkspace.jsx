@@ -325,7 +325,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
       pendingReplayMessage = `Replay is still building for this upload job (${status.toLowerCase()}).`;
     }
   }
-  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
+  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
   if (!replayResponse.ok) {
     const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
     if (globalFallback.timeline.length > 0) {
