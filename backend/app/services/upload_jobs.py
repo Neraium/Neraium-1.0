@@ -1252,8 +1252,32 @@ def build_upload_result(
             row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
             progress_callback=emit_replay_progress,
         )
-        sii_runner_result = runner_future.result()
-        replay_timeline = replay_future.result()
+        try:
+            replay_timeline = replay_future.result(timeout=90)
+        except Exception as exc:
+            logger.exception("replay_timeline_generation_failed")
+            replay_timeline = build_minimal_replay_timeline(
+                columns=columns,
+                rows=replay_rows,
+                total_rows=total_rows,
+                timestamp_column=detected_timestamp_column,
+                primary_room=primary_room,
+                row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
+            )
+
+        try:
+            sii_runner_result = runner_future.result(timeout=90)
+        except Exception as exc:
+            logger.exception("sii_runner_failed_after_replay")
+            sii_runner_result = {
+                "runner_used": False,
+                "runner_module": RUNNER_MODULE,
+                "core_engine": CORE_ENGINE,
+                "latest_state": {},
+                "evidence": [],
+                "errors": [f"{type(exc).__name__}: {exc}"],
+            }
+
     sii_intelligence["replay_timeline"] = replay_timeline
     processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
     record_timing(processing_stats, "replay_generation", stage_started)
