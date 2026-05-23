@@ -547,10 +547,16 @@ export default function DataConnectionsWorkspace({
       ?? latestUploadResult?.sii_intelligence?.replay_timeline?.timeline?.length
       ?? 0,
     ) || 0;
+  const uploadStatePercent = Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0;
+  const jobStatusPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
+    ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
+    : uploadStatePercent;
   const statusDebug = [
     ["Job ID", uploadJob?.job_id ?? effectiveSnapshot?.history?.[0]?.job_id ?? "none"],
     ["Upload State", normalizeUploadStatus(uploadState)],
+    ["Upload State %", `${uploadStatePercent}%`],
     ["Job Status", String(uploadJob?.status ?? "none")],
+    ["Job Status %", `${jobStatusPercent}%`],
     ["Processing State", String(uploadJob?.processing_state ?? "none")],
     ["Percent", String(uploadJob?.percent ?? uploadJob?.progress ?? "n/a")],
     ["Replay Ready", String(Boolean(uploadJob?.replay_ready))],
