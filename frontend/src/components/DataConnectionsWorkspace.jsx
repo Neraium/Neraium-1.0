@@ -351,6 +351,10 @@ export default function DataConnectionsWorkspace({
   }
 
   async function processUploadBatch(filesToProcess) {
+    if (pollTimerRef.current) {
+      window.clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     const validationError = filesToProcess.length === 0
       ? "Choose one or more CSV/JSON telemetry files to upload."
       : validateTelemetryFile(filesToProcess[0], pendingUploadKind);
@@ -564,7 +568,7 @@ export default function DataConnectionsWorkspace({
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onResetEverything={handleResetDemoClick}
-        disableReset={isUploadProcessing(uploadState)}
+        disableReset={false}
       />
       <IntakeFlowPanel
         handleUpload={handleUpload}

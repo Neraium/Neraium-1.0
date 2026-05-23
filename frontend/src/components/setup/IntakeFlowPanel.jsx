@@ -52,8 +52,8 @@ export default function IntakeFlowPanel({
               <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a file to continue."}</p>
             </div>
             <div className="upload-file-card__actions">
-              <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("csv")}>Select CSV</button>
-              <button className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
+              <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Select CSV</button>
+              <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
                 {isUploadProcessing(uploadState) ? "Processing" : "Process Upload"}
               </button>
               <button
@@ -75,7 +75,6 @@ export default function IntakeFlowPanel({
                   type="button"
                   className="secondary-command-button"
                   onClick={() => openFilePicker("csv")}
-                  disabled={isUploadProcessing(uploadState)}
                 >
                   Select New File
                 </button>
@@ -83,7 +82,6 @@ export default function IntakeFlowPanel({
                   <button
                     type="submit"
                     className="command-button"
-                    disabled={isUploadProcessing(uploadState)}
                   >
                     Retry Upload
                   </button>
@@ -110,12 +108,12 @@ export default function IntakeFlowPanel({
                   </div>
                 )}
                 {failedCount > 0 && (
-                  <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads} disabled={isUploadProcessing(uploadState)}>
+                  <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads}>
                     Retry Failed Files
                   </button>
                 )}
                 {siiContractFailed && (
-                  <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch} disabled={isUploadProcessing(uploadState)}>
+                  <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch}>
                     Reprocess Job
                   </button>
                 )}
@@ -128,7 +126,7 @@ export default function IntakeFlowPanel({
             <div className="connector-json-hint__header">
               <p className="section-token">Developer / Integration Tools</p>
               <div className="connector-json-hint__actions">
-                <button className="secondary-command-button" type="button" disabled={isUploadProcessing(uploadState)} onClick={() => openFilePicker("json")}>
+                <button className="secondary-command-button" type="button" onClick={() => openFilePicker("json")}>
                   Use JSON
                 </button>
                 <button className="secondary-command-button" type="button" onClick={async () => {
