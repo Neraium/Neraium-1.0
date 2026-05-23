@@ -248,7 +248,6 @@ def process_upload_bytes(filename: str, content: bytes, job_id: str | None = Non
     return summary
 
 
-
 def process_csv_content(content: bytes | str, filename: str = "telemetry.csv", job_id: str | None = None) -> dict[str, Any]:
     """Compatibility wrapper used by tests and older upload callers."""
     if isinstance(content, str):
