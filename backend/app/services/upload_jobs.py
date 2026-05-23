@@ -83,8 +83,8 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     return payload
 
 
-def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
-    job_id = uuid.uuid4().hex
+def process_upload_bytes(filename: str, content: bytes, job_id: str | None = None) -> dict[str, Any]:
+    job_id = job_id or uuid.uuid4().hex
     _set_status(job_id, "PROCESSING", 10, "Parsing CSV")
 
     text = content.decode("utf-8-sig", errors="replace")
@@ -489,7 +489,7 @@ def build_upload_result(
         else:
             writer.writerow(row)
 
-    summary = process_upload_bytes(filename, output.getvalue().encode("utf-8"))
+    summary = process_upload_bytes(filename, output.getvalue().encode("utf-8"), job_id=kwargs.get("job_id"))
     result = read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
     return result
 

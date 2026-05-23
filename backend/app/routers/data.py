@@ -88,18 +88,15 @@ def _process_uploaded_file(job_id: str, file_path: str, filename: str, content_t
         if lowered.endswith(".json") or "json" in content_type:
             content = path.read_bytes()
             summary = upload_jobs.process_json_payload(content, filename=filename)
+            summary["job_id"] = job_id
         else:
-            result = upload_jobs.process_csv_file(path)
-            summary = upload_jobs.read_latest_upload_summary() or {}
+            content = path.read_bytes()
+            summary = upload_jobs.process_upload_bytes(filename, content, job_id=job_id)
             summary["job_id"] = job_id
             summary["filename"] = filename
             summary["runner_used"] = True
             summary["runner_module"] = RUNNER_MODULE
             summary["core_engine"] = CORE_ENGINE
-            summary.setdefault("status", "COMPLETE")
-            summary.setdefault("processing_state", "complete")
-            summary.setdefault("percent", 100)
-            summary.setdefault("progress", 100)
             summary["last_processed_at"] = summary.get("last_processed_at") or _now_iso()
             upload_jobs.write_latest_upload_summary(summary)
             latest_result = upload_jobs.read_latest_upload_result() or {}
@@ -108,9 +105,6 @@ def _process_uploaded_file(job_id: str, file_path: str, filename: str, content_t
                 latest_result["job_id"] = job_id
                 upload_jobs.write_latest_upload_result(job_id, latest_result)
                 upload_jobs.write_latest_upload_result(latest_result)
-            if isinstance(result, dict):
-                summary["rows_processed"] = summary.get("rows_processed", result.get("rows_processed", result.get("row_count", 0)))
-                summary["columns_detected"] = summary.get("columns_detected", result.get("columns_detected", result.get("column_count", 0)))
 
         summary = dict(summary or {})
         summary["job_id"] = job_id
