@@ -457,7 +457,7 @@ def process_upload_job(job_id: str) -> None:
                     )
                     complete_upload_queue_job(job_id, "completed")
                     logger.info("upload_job_completed_from_hash_cache job_id=%s input_hash=%s", job_id, metadata.get("input_hash"))
-                    return            UPLOAD_CACHE_STATS["hash_cache_misses"] += 1
+            UPLOAD_CACHE_STATS["hash_cache_misses"] += 1
 
         logger.info( 
             "upload_job_started job_id=%s filename=%s size_bytes=%s", 
