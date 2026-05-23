@@ -1,4 +1,4 @@
-import { buildAccessHeaders, buildApiUrl } from "../../config";
+import { buildAccessHeaders, buildApiCandidateUrls } from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
@@ -56,18 +56,10 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       return;
     }
 
-    const xhr = new XMLHttpRequest();
     const formData = new FormData();
     const startedAt = Date.now();
+    const uploadUrls = buildApiCandidateUrls("/api/data/upload");
     formData.append("file", file);
-
-    xhr.open("POST", buildApiUrl("/api/data/upload"), true);
-    xhr.withCredentials = true;
-    xhr.timeout = timeoutMs;
-
-    Object.entries(buildAccessHeaders()).forEach(([key, value]) => {
-      xhr.setRequestHeader(key, value);
-    });
 
     onProgress?.({
       stage: "upload_started",
@@ -78,55 +70,82 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       message: "Upload started.",
     });
 
-    xhr.upload.onprogress = (event) => {
-      const loaded = event.loaded ?? 0;
-      const total = event.lengthComputable ? event.total : file.size;
-      const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
-      onProgress?.({
-        stage: "uploading",
-        loaded,
-        total,
-        percent: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null,
-        speedBytesPerSecond: loaded / elapsedSeconds,
-        message: "Uploading telemetry export.",
+    const shouldRetryStatus = (status) => status >= 500 || status === 404 || status === 405 || status === 408 || status === 425 || status === 429;
+
+    const uploadAttempt = (index) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", uploadUrls[index], true);
+      xhr.withCredentials = true;
+      xhr.timeout = timeoutMs;
+
+      Object.entries(buildAccessHeaders()).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
       });
-    };
 
-    xhr.onload = () => {
-      const payload = readJsonResponse(xhr);
-      const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
-      if (response.ok) {
+      xhr.upload.onprogress = (event) => {
+        const loaded = event.loaded ?? 0;
+        const total = event.lengthComputable ? event.total : file.size;
+        const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
         onProgress?.({
-          stage: "accepted",
-          loaded: file.size,
-          total: file.size,
-          percent: 100,
-          speedBytesPerSecond: file.size / Math.max((Date.now() - startedAt) / 1000, 0.001),
-          message: payload?.message ?? "File accepted.",
+          stage: "uploading",
+          loaded,
+          total,
+          percent: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null,
+          speedBytesPerSecond: loaded / elapsedSeconds,
+          message: "Uploading telemetry export.",
         });
-        resolve(response);
-        return;
-      }
-      const error = new Error(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? `Unexpected response: ${xhr.status}`);
-      error.name = "UploadRequestError";
-      error.status = xhr.status;
-      error.payload = payload;
-      reject(error);
+      };
+
+      xhr.onload = () => {
+        const payload = readJsonResponse(xhr);
+        const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
+        if (response.ok) {
+          onProgress?.({
+            stage: "accepted",
+            loaded: file.size,
+            total: file.size,
+            percent: 100,
+            speedBytesPerSecond: file.size / Math.max((Date.now() - startedAt) / 1000, 0.001),
+            message: payload?.message ?? "File accepted.",
+          });
+          resolve(response);
+          return;
+        }
+        if (index < uploadUrls.length - 1 && shouldRetryStatus(xhr.status)) {
+          uploadAttempt(index + 1);
+          return;
+        }
+        const error = new Error(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? `Unexpected response: ${xhr.status}`);
+        error.name = "UploadRequestError";
+        error.status = xhr.status;
+        error.payload = payload;
+        reject(error);
+      };
+
+      xhr.onerror = () => {
+        if (index < uploadUrls.length - 1) {
+          uploadAttempt(index + 1);
+          return;
+        }
+        const error = new Error("Secure telemetry ingestion unavailable.");
+        error.name = "ApiNetworkError";
+        reject(error);
+      };
+
+      xhr.ontimeout = () => {
+        if (index < uploadUrls.length - 1) {
+          uploadAttempt(index + 1);
+          return;
+        }
+        const error = new Error(`Upload request timed out after ${timeoutMs}ms.`);
+        error.name = "ApiTimeoutError";
+        error.timeoutMs = timeoutMs;
+        reject(error);
+      };
+
+      xhr.send(formData);
     };
 
-    xhr.onerror = () => {
-      const error = new Error("Secure telemetry ingestion unavailable.");
-      error.name = "ApiNetworkError";
-      reject(error);
-    };
-
-    xhr.ontimeout = () => {
-      const error = new Error(`Upload request timed out after ${timeoutMs}ms.`);
-      error.name = "ApiTimeoutError";
-      error.timeoutMs = timeoutMs;
-      reject(error);
-    };
-
-    xhr.send(formData);
+    uploadAttempt(0);
   });
 }

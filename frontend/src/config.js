@@ -87,6 +87,10 @@ export function buildApiUrl(path) {
   return buildUrl(API_BASE_URL, path);
 }
 
+export function buildApiCandidateUrls(path) {
+  return apiBaseCandidates().map((apiBaseUrl) => buildUrl(apiBaseUrl, path));
+}
+
 function shouldRetryAgainstFallback(error) {
   return error instanceof TypeError || error?.name === "ApiNetworkError";
 }
