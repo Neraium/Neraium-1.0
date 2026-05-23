@@ -145,6 +145,9 @@ export default function DataConnectionsWorkspace({
 
   useEffect(() => {
     if (!latestUploadSnapshot) return;
+    const currentJobId = uploadJob?.job_id ?? uploadJobIdRef.current;
+    // Do not let background snapshot polling overwrite an active in-flight upload job.
+    if (currentJobId && isUploadProcessing(uploadState)) return;
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
     const snapshotReplayFrameCount =
       Number(
@@ -193,7 +196,7 @@ export default function DataConnectionsWorkspace({
       runner_module: latestUploadSnapshot.runner_module ?? current?.runner_module ?? null,
       core_engine: latestUploadSnapshot.core_engine ?? current?.core_engine ?? null,
     }));
-  }, [latestUploadSnapshot]);
+  }, [latestUploadSnapshot, uploadJob?.job_id, uploadState]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
