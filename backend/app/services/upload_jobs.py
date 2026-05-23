@@ -1262,7 +1262,6 @@ def build_upload_result(
             row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
             progress_callback=emit_replay_progress,
         )
-<<<<<<< HEAD
         try:
             replay_timeline = replay_future.result(timeout=90)
         except Exception:
