@@ -365,6 +365,16 @@ export default function DataConnectionsWorkspace({
         ...(latestPayload ?? {}),
       };
       setUploadResult(completedPayload);
+      setUploadJob((current) => ({
+        ...(current ?? {}),
+        status: "COMPLETE",
+        processing_state: "complete",
+        percent: 100,
+        progress: 100,
+        result_available: true,
+        progress_label: "Telemetry processing complete.",
+        message: "Telemetry processing complete.",
+      }));
       setIsResetViewActive(false);
       if (typeof onUploadComplete === "function") {
         await onUploadComplete(completedPayload);
@@ -570,7 +580,7 @@ export default function DataConnectionsWorkspace({
   const preferredPercent = [uploadTransferPercent, backendPercent, statusFallbackPercent]
     .filter((value) => Number.isFinite(value))
     .reduce((maxValue, value) => Math.max(maxValue, value), 0);
-  const visibleProgressPercent = backendPercent >= 100 || normalizeUploadStatus(uploadState) === "complete"
+  const visibleProgressPercent = backendPercent >= 100 || effectiveUploadState === "complete"
     ? 100
     : isUploadProcessing(uploadState)
       ? Math.max(1, Math.min(99, preferredPercent))
@@ -583,13 +593,18 @@ export default function DataConnectionsWorkspace({
     ) || 0;
   const effectiveReplayReady = Boolean(uploadJob?.replay_ready) || Number(uploadJob?.replay_frame_count ?? 0) > 0 || latestReplayFrames > 0;
   const effectiveReplayFrameCount = Math.max(Number(uploadJob?.replay_frame_count ?? 0) || 0, latestReplayFrames);
-  const uploadStatePercent = Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0;
+  const backendComplete = String(uploadJob?.processing_state ?? "").toLowerCase() === "complete"
+    || Number(uploadJob?.percent ?? uploadJob?.progress ?? 0) >= 100
+    || Boolean(uploadJob?.result_available)
+    || Boolean(latestUploadResult);
+  const effectiveUploadState = backendComplete ? "complete" : normalizeUploadStatus(uploadState);
+  const uploadStatePercent = effectiveUploadState === "complete" ? 100 : (Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0);
   const jobStatusPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
     ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
     : uploadStatePercent;
   const statusDebug = [
     ["Job ID", uploadJob?.job_id ?? effectiveSnapshot?.history?.[0]?.job_id ?? "none"],
-    ["Upload State", normalizeUploadStatus(uploadState)],
+    ["Upload State", effectiveUploadState],
     ["Upload State %", `${uploadStatePercent}%`],
     ["Job Status", String(uploadJob?.status ?? "none")],
     ["Job Status %", `${jobStatusPercent}%`],
