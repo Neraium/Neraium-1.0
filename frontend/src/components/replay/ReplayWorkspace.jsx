@@ -317,7 +317,10 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   if (statusResponse.ok) {
     const statusPayload = await statusResponse.json();
     const status = String(statusPayload?.status ?? "").toUpperCase();
-    if (status && !["COMPLETE", "FAILED"].includes(status)) {
+    const replayReady = Boolean(statusPayload?.replay_ready) || Number(statusPayload?.replay_frame_count ?? 0) > 0;
+    const resultAvailable = Boolean(statusPayload?.result_available);
+    const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || replayReady || resultAvailable;
+    if (status && !terminalOrFetchable) {
       return {
         jobId: targetJobId,
         timeline: [],

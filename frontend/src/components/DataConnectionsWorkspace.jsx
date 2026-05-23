@@ -547,6 +547,8 @@ export default function DataConnectionsWorkspace({
       ?? latestUploadResult?.sii_intelligence?.replay_timeline?.timeline?.length
       ?? 0,
     ) || 0;
+  const effectiveReplayReady = Boolean(uploadJob?.replay_ready) || Number(uploadJob?.replay_frame_count ?? 0) > 0 || latestReplayFrames > 0;
+  const effectiveReplayFrameCount = Math.max(Number(uploadJob?.replay_frame_count ?? 0) || 0, latestReplayFrames);
   const uploadStatePercent = Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0;
   const jobStatusPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
     ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
@@ -559,8 +561,8 @@ export default function DataConnectionsWorkspace({
     ["Job Status %", `${jobStatusPercent}%`],
     ["Processing State", String(uploadJob?.processing_state ?? "none")],
     ["Percent", String(uploadJob?.percent ?? uploadJob?.progress ?? "n/a")],
-    ["Replay Ready", String(Boolean(uploadJob?.replay_ready))],
-    ["Replay Frame Count", String(uploadJob?.replay_frame_count ?? 0)],
+    ["Replay Ready", String(effectiveReplayReady)],
+    ["Replay Frame Count", String(effectiveReplayFrameCount)],
     ["Snapshot Status", String(effectiveSnapshot?.status ?? "none")],
     ["Snapshot SII Completed", String(Boolean(effectiveSnapshot?.sii_completed))],
     ["Latest Result Present", String(Boolean(latestUploadResult))],
