@@ -23,10 +23,23 @@ def evaluate_temporal_math(
     numeric_profiles: list[dict[str, Any]],
     timestamp_column: str | None,
     config: TemporalMathConfig | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
+    started = __import__("time").perf_counter()
+    step_timings: dict[str, float] = {}
+    def mark(step: str, progress: float) -> None:
+        step_timings[step] = round(__import__("time").perf_counter() - started, 4)
+        if progress_callback:
+            try:
+                progress_callback(step, float(progress), dict(step_timings))
+            except Exception:
+                pass
+
+    mark("prepare_numeric_matrix", 0.06)
     cfg = config or TemporalMathConfig()
     matrix, used_columns = _build_numeric_matrix(columns=columns, rows=rows, numeric_profiles=numeric_profiles, max_rows=cfg.max_rows)
     if matrix.shape[0] < max(8, cfg.min_baseline_rows + 4) or matrix.shape[1] < 1:
+        mark("insufficient_numeric_history", 1.0)
         return _empty_result(reason="insufficient_numeric_history")
 
     baseline_count = max(cfg.min_baseline_rows, int(matrix.shape[0] * cfg.baseline_fraction))
@@ -34,18 +47,27 @@ def evaluate_temporal_math(
     baseline = matrix[:baseline_count]
     active = matrix[baseline_count:]
     if active.shape[0] < 2:
+        mark("insufficient_active_window", 1.0)
         return _empty_result(reason="insufficient_active_window")
 
+    mark("state_drift", 0.14)
     state_drift_series = _state_drift_series(baseline, active)
+    mark("variance_growth", 0.25)
     variance_growth_series = _variance_growth_series(baseline, active)
+    mark("entropy_growth", 0.38)
     entropy_growth_series = _entropy_growth_series(baseline, active)
+    mark("rate_of_change", 0.44)
     rate_metrics = _rate_of_change(state_drift_series)
+    mark("correlation_drift", 0.56)
     correlation_drift = _correlation_drift(baseline, active)
+    mark("mutual_information", 0.66)
     mi_drift = _mutual_information_drift(baseline, active)
     relationship_drift = float(
         np.clip((correlation_drift["score"] * 0.7) + (mi_drift["score"] * 0.3), 0.0, 1.0)
     )
+    mark("lag_relationships", 0.74)
     lag_drift = _lag_relationship_drift(baseline, active, max_lag=cfg.max_lag)
+    mark("regime_topology", 0.80)
     regime = _regime_change(state_drift_series)
     topology = _topology_propagation_score(lag_drift=lag_drift, regime=regime)
 
@@ -60,6 +82,7 @@ def evaluate_temporal_math(
         "regime_shift": regime["score"],
         "topology_propagation": topology,
     }
+    mark("evidence_confidence", 0.88)
     evidence = _evidence_accumulation(evidence_vector, trigger=cfg.evidence_trigger)
     confidence = _confidence_score(
         evidence,
@@ -67,6 +90,7 @@ def evaluate_temporal_math(
         feature_count=int(matrix.shape[1]),
         consistency=_consistency_score(evidence_vector),
     )
+    mark("instability_decision", 0.94)
     instability_index = _instability_index(evidence_vector, confidence)
     state = _decision_state(
         instability_index["score"],
@@ -74,6 +98,7 @@ def evaluate_temporal_math(
         persistence_score=float(evidence.get("persistence_score", 0.0)),
     )
     uncertainty = _uncertainty_summary(evidence=evidence, confidence=confidence)
+    mark("lead_time", 0.98)
     lead_time = _lead_time_estimate(
         state_drift_series=state_drift_series,
         relationship_series=correlation_drift["series"],
@@ -85,6 +110,7 @@ def evaluate_temporal_math(
         columns=columns,
     )
 
+    mark("complete", 1.0)
     return {
         "engine": {"name": "temporal_math_engine", "version": "v1"},
         "columns_used": used_columns,
@@ -109,6 +135,7 @@ def evaluate_temporal_math(
         "instability_index": instability_index,
         "decision_thresholding": {"state": state},
         "lead_time_estimate": lead_time,
+        "step_timings": step_timings,
     }
 
 

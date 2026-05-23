@@ -923,6 +923,25 @@ def build_upload_result(
     stage_started = time.perf_counter()
     timed_status(status_callback, "STRUCTURAL_SCORING", processing_stats, rows_processed=total_rows, columns_detected=len(columns))
     engine_started = time.perf_counter()
+    def emit_structural_progress(step: str, progress: float, step_timings: dict[str, float]) -> None:
+        if not status_callback:
+            return
+        bounded = max(0.0, min(1.0, float(progress)))
+        percent = 74 + int(round(bounded * 10))
+        timed_status(
+            status_callback,
+            "STRUCTURAL_SCORING",
+            processing_stats,
+            rows_processed=total_rows,
+            columns_detected=len(columns),
+            percent=min(84, max(74, percent)),
+            progress_label=f"Structural scoring: {step.replace('_', ' ')}",
+            timings={
+                **processing_stats.get("timings", {}),
+                "temporal_math_step_timings": step_timings,
+            },
+        )
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         engine_future = executor.submit(
             run_engine_analysis,
@@ -939,6 +958,7 @@ def build_upload_result(
             rows=data_rows,
             numeric_profiles=numeric_profiles,
             timestamp_column=detected_timestamp_column,
+            progress_callback=emit_structural_progress,
         )
         engine_result = engine_future.result()
         temporal_math = temporal_future.result()
