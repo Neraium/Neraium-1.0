@@ -1069,6 +1069,34 @@ def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
 
 
 @pytest.mark.slow
+def test_75k_upload_status_polling_completes_with_extended_timeout() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
+        for index in range(75_000)
+    )
+
+    upload_response = post_csv(client, "telemetry-75k.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    upload_payload = upload_response.json()
+    if upload_payload.get("status_url"):
+        payload = wait_for_terminal_upload_status(client, upload_payload["status_url"], timeout_seconds=30.0)
+    elif upload_payload.get("job_id"):
+        payload = wait_for_terminal_upload_status(
+            client,
+            f"/api/data/upload-status/{upload_payload['job_id']}",
+            timeout_seconds=30.0,
+        )
+    else:
+        payload = upload_payload
+
+    assert payload["status"] == "COMPLETE"
+    rows_processed = payload.get("rows_processed", payload.get("row_count"))
+    assert rows_processed == 75_000
+    if "runner_used" in payload:
+        assert payload["runner_used"] in {True, False}
+
+
+@pytest.mark.slow
 def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-100k.csv"
