@@ -1,5 +1,6 @@
 import { buildAccessHeaders, buildApiCandidateUrls } from "../../config";
-import * as uploadStateView from "../../viewModels/uploadState";\nimport { normalizeUploadJob } from "../../viewModels/uploadContract";
+import * as uploadStateView from "../../viewModels/uploadState";
+import { normalizeUploadJob } from "../../viewModels/uploadContract";
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
   const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });

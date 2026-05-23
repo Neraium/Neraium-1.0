@@ -8,7 +8,8 @@ import {
   readJsonPayload,
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
-import * as uploadStateView from "../viewModels/uploadState";\nimport { normalizeUploadJob } from "../viewModels/uploadContract";
+import * as uploadStateView from "../viewModels/uploadState";
+import { normalizeUploadJob } from "../viewModels/uploadContract";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
