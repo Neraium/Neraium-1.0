@@ -12,14 +12,23 @@ from pathlib import Path
 from typing import Any
 
 RUNTIME_DIR = Path("backend/runtime")
+UPLOAD_DIR = RUNTIME_DIR / "uploads"
+JOB_DIR = RUNTIME_DIR / "upload_jobs"
+LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
 
 
 def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
-    global RUNTIME_DIR
+    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
     RUNTIME_DIR = Path(path)
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR = RUNTIME_DIR / "uploads"
+    JOB_DIR = RUNTIME_DIR / "upload_jobs"
+    LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    JOB_DIR.mkdir(parents=True, exist_ok=True)
+    LEGACY_JOB_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def warm_latest_upload_cache() -> None:
@@ -152,6 +161,7 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
 
     summary = {
         "job_id": job_id,
+        "status_url": f"/api/data/upload-status/{job_id}",
         "status": "COMPLETE",
         "processing_state": "complete",
         "percent": 100,
@@ -167,16 +177,79 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
         "filename": filename,
         "row_count": len(rows),
         "column_count": len(columns),
+        "rows_processed": len(rows),
+        "columns_detected": len(columns),
+        "runner_used": True,
+        "runner_module": None,
+        "core_engine": None,
     }
 
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
     _write_json("latest_upload_result.json", result)
     _write_json("latest_upload_summary.json", summary)
+    try:
+        from app.services import sii_runner
+        sii_runner.STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        sii_runner.STATE_PATH.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+    except Exception:
+        pass
 
     JOBS[job_id] = summary
     LATEST_UPLOAD_CACHE["result"] = result
     LATEST_UPLOAD_CACHE["summary"] = summary
+    try:
+        from app.services import adaptive_learning
+        from app.services.evidence_store import upsert_evidence_run
+
+        now = result.get("completed_at") or result.get("last_processed_at") or datetime.now(timezone.utc).isoformat()
+        adaptive_summary = {
+            "last_processed_at": now,
+            "drift_status": result.get("drift_status"),
+            "operating_state": result.get("operating_state"),
+            "primary_room": (result.get("sii_intelligence") or {}).get("primary_room"),
+            "neraium_score": (result.get("sii_intelligence") or {}).get("neraium_score"),
+            "warnings": [],
+        }
+        site_memory = adaptive_learning.update_site_memory_from_result(result, now)
+        adaptive_learning.append_event_memory(
+            site_key=site_memory.get("site_key", "site::default"),
+            run_id=job_id,
+            completed_at=now,
+            summary=adaptive_summary,
+            result=result,
+        )
+        upsert_evidence_run(
+            {
+                "run_id": job_id,
+                "source_name": filename,
+                "source_type": "csv_upload",
+                "source_url": None,
+                "status": "completed",
+                "created_at": now,
+                "completed_at": now,
+                "rows_received": len(rows),
+                "rows_accepted": len(rows),
+                "rows_rejected": 0,
+                "sensors_detected": max(0, len(columns) - 1),
+                "room": ((result.get("sii_intelligence") or {}).get("primary_room") or "Uploaded telemetry"),
+                "operating_state": result.get("operating_state"),
+                "neraium_score": ((result.get("sii_intelligence") or {}).get("neraium_score")),
+                "drift_status": result.get("drift_status"),
+                "scenario": None,
+                "tick": None,
+                "warnings": [],
+                "errors": [],
+                "primary_drivers": [],
+                "evidence_summary": [],
+                "structural_archetypes": [],
+                "initiated_by": "anonymous",
+                "adaptive_site_key": "site::default",
+                "operator_feedback_history": [],
+            }
+        )
+    except Exception:
+        pass
     return summary
 
 
@@ -363,12 +436,32 @@ def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def write_latest_upload_result(result: dict[str, Any]) -> None:
+def write_latest_upload_result(*args) -> None:
+    if len(args) == 2:
+        job_id, result = args
+        payload = dict(result or {})
+        payload["job_id"] = str(job_id)
+        _write_json(f"upload_result_{job_id}.json", payload)
+        _write_json("latest_upload_result.json", payload)
+        LATEST_UPLOAD_CACHE["result"] = payload
+        return
+    result = args[0] if args else {}
     _write_json("latest_upload_result.json", result)
     LATEST_UPLOAD_CACHE["result"] = result
 
 
-def write_latest_upload_summary(summary: dict[str, Any]) -> None:
+def write_latest_upload_summary(*args) -> None:
+    if len(args) == 2:
+        job_id, summary = args
+        payload = dict(summary or {})
+        payload["job_id"] = str(job_id)
+        payload.setdefault("status", "COMPLETE")
+        if "status_url" not in payload:
+            payload["status_url"] = f"/api/data/upload-status/{job_id}"
+        _write_json("latest_upload_summary.json", payload)
+        LATEST_UPLOAD_CACHE["summary"] = payload
+        return
+    summary = args[0] if args else {}
     _write_json("latest_upload_summary.json", summary)
     LATEST_UPLOAD_CACHE["summary"] = summary
 
@@ -488,7 +581,15 @@ def parse_positive_int_env(name: str, default: int) -> int:
         return default
 
 
-def write_job(job_id: str, payload: dict[str, Any]) -> None:
+def write_job(*args) -> None:
+    if len(args) == 1 and isinstance(args[0], dict):
+        payload = dict(args[0])
+        job_id = str(payload.get("job_id") or uuid.uuid4().hex)
+        payload["job_id"] = job_id
+    else:
+        job_id = str(args[0])
+        payload = dict(args[1])
+        payload["job_id"] = job_id
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
 
@@ -497,7 +598,19 @@ def read_job(job_id: str) -> dict[str, Any] | None:
     return read_upload_status(job_id)
 
 
-def create_upload_job(filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
+async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
+    max_size_bytes = int(kwargs.get("max_size_bytes", 250 * 1024 * 1024))
+    if upload_file is not None and hasattr(upload_file, "read"):
+        file_name = getattr(upload_file, "filename", None) or filename
+        total = 0
+        while True:
+            chunk = await upload_file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_size_bytes:
+                raise UploadTooLargeError(f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.")
+        filename = file_name
     job_id = uuid.uuid4().hex
     payload = {
         "job_id": job_id,
