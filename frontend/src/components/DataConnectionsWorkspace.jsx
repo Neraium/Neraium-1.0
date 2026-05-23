@@ -474,18 +474,30 @@ export default function DataConnectionsWorkspace({
         });
         try {
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
-          if (!payload?.job_id) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
-          uploadJobIdRef.current = payload.job_id;
+          const returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
+          if (!returnedJobId) {
+            throw buildUploadRequestError(
+              { status },
+              {
+                ...payload,
+                error_type: "upload_session_missing",
+                message: "Upload completed but no job ID was returned by the server.",
+              },
+              "upload",
+            );
+          }
+          uploadJobIdRef.current = returnedJobId;
           if (typeof window !== "undefined" && uploadJobIdRef.current) {
             window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
           }
-          setUploadJob(payload);
-          setUploadState(normalizeUploadStatus(payload.status));
-          await pollUploadStatus(payload.job_id);
+          const normalizedPayload = { ...payload, job_id: returnedJobId };
+          setUploadJob(normalizedPayload);
+          setUploadState(normalizeUploadStatus(normalizedPayload.status));
+          await pollUploadStatus(returnedJobId);
           aggregateLoaded += file.size || 0;
           successCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
-            ? { ...entry, status: "success", message: "Processed", jobId: payload.job_id }
+            ? { ...entry, status: "success", message: "Processed", jobId: returnedJobId }
             : entry)));
         } catch (fileError) {
           const uploadRequestError = fileError?.name === "UploadRequestError" && fileError?.payload
