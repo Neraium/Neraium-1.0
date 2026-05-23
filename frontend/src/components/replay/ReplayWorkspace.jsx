@@ -314,6 +314,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     }
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
+  let pendingReplayMessage = "";
   if (statusResponse.ok) {
     const statusPayload = await statusResponse.json();
     const status = String(statusPayload?.status ?? "").toUpperCase();
@@ -321,12 +322,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     const resultAvailable = Boolean(statusPayload?.result_available);
     const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || replayReady || resultAvailable;
     if (status && !terminalOrFetchable) {
-      return {
-        jobId: targetJobId,
-        timeline: [],
-        meta: { status, replay_pending: true },
-        message: `Replay is still building for this upload job (${status.toLowerCase()}).`,
-      };
+      pendingReplayMessage = `Replay is still building for this upload job (${status.toLowerCase()}).`;
     }
   }
   const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
@@ -349,8 +345,10 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   return {
     jobId: targetJobId,
     timeline,
-    meta,
-    message: typeof replayPayload?.message === "string" ? replayPayload.message : "",
+    meta: timeline.length ? meta : { ...meta, replay_pending: Boolean(pendingReplayMessage) },
+    message: timeline.length
+      ? (typeof replayPayload?.message === "string" ? replayPayload.message : "")
+      : (pendingReplayMessage || (typeof replayPayload?.message === "string" ? replayPayload.message : "")),
   };
 }
 
