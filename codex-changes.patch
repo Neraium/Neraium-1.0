@@ -1,0 +1,16 @@
+diff --cc frontend/src/components/DataConnectionsWorkspace.jsx
+index c8febfb,cff4f50..0000000
+--- a/frontend/src/components/DataConnectionsWorkspace.jsx
++++ b/frontend/src/components/DataConnectionsWorkspace.jsx
+@@@ -103,7 -103,7 +103,11 @@@ export default function DataConnections
+    formatClockTime,
+  }) {
+    const tabs = useMemo(() => [
+++<<<<<<< HEAD
+ +    { id: "upload", label: "Uploads" },
+++=======
++     { id: "upload", label: "Upload" },
+++>>>>>>> parent of 0acaa28 (Restore uploads tab label)
+    ], []);
+  
+    const [selectedFiles, setSelectedFiles] = useState([]);
