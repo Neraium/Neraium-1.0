@@ -56,10 +56,8 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       return;
     }
 
-    const formData = new FormData();
     const startedAt = Date.now();
     const uploadUrls = buildApiCandidateUrls("/api/data/upload");
-    formData.append("file", file);
 
     onProgress?.({
       stage: "upload_started",
@@ -74,6 +72,8 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
 
     const uploadAttempt = (index) => {
       const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("file", file);
       xhr.open("POST", uploadUrls[index], true);
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;
@@ -129,6 +129,9 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
         }
         const error = new Error("Secure telemetry ingestion unavailable.");
         error.name = "ApiNetworkError";
+        error.apiBaseUrl = uploadUrls[index];
+        error.attempt = index + 1;
+        error.attemptedUrls = uploadUrls.slice(0, index + 1);
         reject(error);
       };
 
