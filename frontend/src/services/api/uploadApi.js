@@ -123,26 +123,55 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       };
 
       xhr.onerror = () => {
+        console.error("Upload network error", {
+          url: uploadUrls[index],
+          attempt: index + 1,
+          readyState: xhr.readyState,
+          status: xhr.status,
+          responseText: xhr.responseText,
+          attemptedUrls: uploadUrls.slice(0, index + 1),
+        });
+
         if (index < uploadUrls.length - 1) {
           uploadAttempt(index + 1);
           return;
         }
-        const error = new Error("Secure telemetry ingestion unavailable.");
+
+        const error = new Error(
+          `Upload network error before server accepted the file. Failed URL: ${uploadUrls[index]}`
+        );
         error.name = "ApiNetworkError";
         error.apiBaseUrl = uploadUrls[index];
         error.attempt = index + 1;
+        error.status = xhr.status;
+        error.responseText = xhr.responseText;
         error.attemptedUrls = uploadUrls.slice(0, index + 1);
         reject(error);
       };
 
       xhr.ontimeout = () => {
+        console.error("Upload timeout", {
+          url: uploadUrls[index],
+          attempt: index + 1,
+          timeoutMs,
+          readyState: xhr.readyState,
+          status: xhr.status,
+          responseText: xhr.responseText,
+          attemptedUrls: uploadUrls.slice(0, index + 1),
+        });
+
         if (index < uploadUrls.length - 1) {
           uploadAttempt(index + 1);
           return;
         }
-        const error = new Error(`Upload request timed out after ${timeoutMs}ms.`);
+
+        const error = new Error(
+          `Upload request timed out before server accepted the file. Failed URL: ${uploadUrls[index]}`
+        );
         error.name = "ApiTimeoutError";
         error.timeoutMs = timeoutMs;
+        error.status = xhr.status;
+        error.responseText = xhr.responseText;
         reject(error);
       };
 
