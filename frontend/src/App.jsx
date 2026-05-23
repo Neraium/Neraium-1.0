@@ -15,6 +15,7 @@ const StructuralReplayWorkspace = lazy(() => import("./components/StructuralRepl
 const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
+const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
 
 function readStoredSessionIntent() {
   if (typeof window === "undefined") return "neutral";
@@ -185,6 +186,9 @@ function App() {
     setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
+    }
     const hasResult = await loadLatestUploadState({ includePersisted: true });
     setSessionIntent(hasResult ? "current" : "neutral");
     await loadFacilitySystems();
@@ -193,6 +197,9 @@ function App() {
   const handleResumePreviousSession = useCallback(async () => {
     setResetGuardActive(false);
     setAllowPersistedLatest(true);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
+    }
     const hasResult = await loadLatestUploadState({ includePersisted: true });
     setSessionIntent(hasResult ? "resumed" : "neutral");
     await loadFacilitySystems();
@@ -207,6 +214,7 @@ function App() {
     clearUploadSessionState();
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
     }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await Promise.allSettled([
