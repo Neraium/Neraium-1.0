@@ -410,44 +410,54 @@ def process_upload_job(job_id: str) -> None:
         if hash_cache_key and not DISABLE_UPLOAD_HASH_CACHE:
             cached_payload = read_latest_payload(hash_cache_key)
             if isinstance(cached_payload, dict) and isinstance(cached_payload.get("result"), dict) and isinstance(cached_payload.get("summary"), dict):
-                if upload_job_superseded_by_reset(metadata):
+                cached_result = cached_payload.get("result") or {}
+                cached_replay = (
+                    cached_result.get("replay_timeline")
+                    or (cached_result.get("sii_intelligence") or {}).get("replay_timeline")
+                    or {}
+                )
+                cached_timeline = cached_replay.get("timeline") if isinstance(cached_replay, dict) else []
+                if not isinstance(cached_timeline, list) or len(cached_timeline) == 0:
+                    logger.warning("upload_hash_cache_rejected_missing_replay input_hash=%s", metadata.get("input_hash"))
+                    cached_payload = None
+                else:
+                    if upload_job_superseded_by_reset(metadata):
+                        update_job(
+                            job_id,
+                            status="FAILED",
+                            completed_at=now_iso(),
+                            error="Upload job superseded by runtime reset.",
+                            errors=["upload_job_superseded_by_reset"],
+                            result_available=False,
+                            first_usable_available=False,
+                        )
+                        complete_upload_queue_job(job_id, "failed", "upload_job_superseded_by_reset")
+                        delete_upload_file(metadata)
+                        return
+                    UPLOAD_CACHE_STATS["hash_cache_hits"] += 1
+                    completed_at = now_iso()
+                    result = cached_payload["result"]
+                    summary = {**cached_payload["summary"], "last_processed_at": completed_at}
+                    summary["upload_processing_mode"] = "hash_cache_reused"
+                    write_latest_upload_summary(job_id, summary)
+                    write_latest_upload_result(job_id, result, completed_at=completed_at)
+                    upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
                     update_job(
                         job_id,
-                        status="FAILED",
-                        completed_at=now_iso(),
-                        error="Upload job superseded by runtime reset.",
-                        errors=["upload_job_superseded_by_reset"],
-                        result_available=False,
-                        first_usable_available=False,
+                        status="COMPLETE",
+                        rows_processed=summary.get("rows_processed"),
+                        columns_detected=summary.get("columns_detected"),
+                        completed_at=completed_at,
+                        processing_duration_seconds=round(time.perf_counter() - started, 4),
+                        result_available=True,
+                        first_usable_available=True,
+                        sii_completed=True,
+                        error=None,
+                        result_summary=summary,
                     )
-                    complete_upload_queue_job(job_id, "failed", "upload_job_superseded_by_reset")
-                    delete_upload_file(metadata)
-                    return
-                UPLOAD_CACHE_STATS["hash_cache_hits"] += 1
-                completed_at = now_iso()
-                result = cached_payload["result"]
-                summary = {**cached_payload["summary"], "last_processed_at": completed_at}
-                summary["upload_processing_mode"] = "hash_cache_reused"
-                write_latest_upload_summary(job_id, summary)
-                write_latest_upload_result(job_id, result, completed_at=completed_at)
-                upsert_evidence_run(build_evidence_record(metadata, result, summary, completed_at, "completed"))
-                update_job(
-                    job_id,
-                    status="COMPLETE",
-                    rows_processed=summary.get("rows_processed"),
-                    columns_detected=summary.get("columns_detected"),
-                    completed_at=completed_at,
-                    processing_duration_seconds=round(time.perf_counter() - started, 4),
-                    result_available=True,
-                    first_usable_available=True,
-                    sii_completed=True,
-                    error=None,
-                    result_summary=summary,
-                )
-                complete_upload_queue_job(job_id, "completed")
-                logger.info("upload_job_completed_from_hash_cache job_id=%s input_hash=%s", job_id, metadata.get("input_hash"))
-                return
-            UPLOAD_CACHE_STATS["hash_cache_misses"] += 1
+                    complete_upload_queue_job(job_id, "completed")
+                    logger.info("upload_job_completed_from_hash_cache job_id=%s input_hash=%s", job_id, metadata.get("input_hash"))
+                    return            UPLOAD_CACHE_STATS["hash_cache_misses"] += 1
 
         logger.info( 
             "upload_job_started job_id=%s filename=%s size_bytes=%s", 
