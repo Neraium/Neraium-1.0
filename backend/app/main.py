@@ -184,9 +184,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
                 headers=cors_error_headers(request),
             )
+        logger.exception("upload_request_failed path=%s", request.url.path)
+        debug_detail = f"{type(exc).__name__}: {exc}"
         return JSONResponse(
             status_code=500,
-            content=upload_error_payload("Unexpected processing error", status_code=500),
+            content=upload_error_payload(debug_detail, status_code=500),
             headers=cors_error_headers(request),
         )
 
