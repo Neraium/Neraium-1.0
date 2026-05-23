@@ -942,6 +942,15 @@ def build_upload_result(
         )
         engine_result = engine_future.result()
         temporal_math = temporal_future.result()
+    timed_status(
+        status_callback,
+        "STRUCTURAL_SCORING",
+        processing_stats,
+        rows_processed=total_rows,
+        columns_detected=len(columns),
+        percent=76,
+        progress_label="Structural scoring: core drift and temporal math completed.",
+    )
     aquatic_assessment = analyze_aquatic_instability(
         columns=columns,
         baseline_analysis=baseline_analysis,
@@ -955,6 +964,15 @@ def build_upload_result(
         engine_result["recommended_checks"] = list(
             dict.fromkeys([*engine_result.get("recommended_checks", []), *aquatic_assessment["recommended_checks"]])
         )
+    timed_status(
+        status_callback,
+        "STRUCTURAL_SCORING",
+        processing_stats,
+        rows_processed=total_rows,
+        columns_detected=len(columns),
+        percent=78,
+        progress_label="Structural scoring: domain instability signals integrated.",
+    )
     processing_stats["engine_runtime_seconds"] = round(time.perf_counter() - engine_started, 4)
     record_timing(processing_stats, "structural_scoring", stage_started)
     stage_started = time.perf_counter()
@@ -978,11 +996,29 @@ def build_upload_result(
         },
         engine_result=engine_result,
     )
+    timed_status(
+        status_callback,
+        "STRUCTURAL_SCORING",
+        processing_stats,
+        rows_processed=total_rows,
+        columns_detected=len(columns),
+        percent=80,
+        progress_label="Structural scoring: driver attribution resolved.",
+    )
     room_assessments = build_room_assessments(
         columns=columns,
         rows=data_rows,
         room_summary=room_summary,
         numeric_profiles=numeric_profiles,
+    )
+    timed_status(
+        status_callback,
+        "STRUCTURAL_SCORING",
+        processing_stats,
+        rows_processed=total_rows,
+        columns_detected=len(columns),
+        percent=82,
+        progress_label="Structural scoring: room-level assessments prepared.",
     )
     telemetry_profile = classify_telemetry_profile(
         columns=columns,
@@ -1013,6 +1049,15 @@ def build_upload_result(
         source=intelligence_source,
         mode=intelligence_mode,
         source_metadata=effective_source_metadata,
+    )
+    timed_status(
+        status_callback,
+        "STRUCTURAL_SCORING",
+        processing_stats,
+        rows_processed=total_rows,
+        columns_detected=len(columns),
+        percent=84,
+        progress_label="Structural scoring: SII cognition package assembled.",
     )
     sii_intelligence["temporal_math_engine"] = temporal_math
     temporal_instability = temporal_math.get("instability_index", {}) if isinstance(temporal_math, dict) else {}
