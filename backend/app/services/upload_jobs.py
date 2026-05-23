@@ -257,10 +257,55 @@ def process_upload_bytes(filename: str, content: bytes, job_id: str | None = Non
 
 
 
-def process_csv_file(file_path, job_id=None):
+def process_csv_file(file_path, job_id=None, filename: str | None = None, **kwargs):
     """Compatibility wrapper for callers/tests that pass a CSV file path."""
     path = Path(file_path)
-    return process_upload_bytes(path.name, path.read_bytes(), job_id=job_id)
+    resolved_name = filename or path.name
+    resolved_job_id = kwargs.get("job_id", job_id)
+    return process_upload_bytes(resolved_name, path.read_bytes(), job_id=resolved_job_id)
+
+
+def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
+    """
+    Compatibility helper for tests/callers that upload JSON telemetry payloads.
+    Converts JSON into a CSV-like tabular representation and reuses CSV processing.
+    """
+    if isinstance(payload, bytes):
+        payload = json.loads(payload.decode("utf-8"))
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+
+    if isinstance(payload, dict) and isinstance(payload.get("readings"), list):
+        grouped: dict[str, dict[str, Any]] = {}
+        for reading in payload.get("readings", []):
+            if not isinstance(reading, dict):
+                continue
+            ts = str(reading.get("timestamp") or payload.get("timestamp") or "")
+            record = grouped.setdefault(ts, {"timestamp": ts})
+            sensor_name = str(reading.get("sensor_name") or reading.get("sensor_id") or "value")
+            record[sensor_name] = reading.get("value")
+        rows = list(grouped.values())
+    else:
+        rows = payload if isinstance(payload, list) else payload.get("rows") or payload.get("data") or []
+        if not rows:
+            rows = [payload if isinstance(payload, dict) else {"value": payload}]
+
+    columns = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
+    if not columns:
+        columns = ["timestamp", "value"]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(columns)
+    for row in rows:
+        if isinstance(row, dict):
+            writer.writerow([row.get(col, "") for col in columns])
+        else:
+            writer.writerow(["", row])
+
+    csv_text = output.getvalue()
+    resolved_job_id = kwargs.get("job_id")
+    return process_csv_content(csv_text, filename=filename, job_id=resolved_job_id)
 
 def replay_payload(job_id: str | None = None) -> dict[str, Any]:
     result = read_upload_result_by_job_id(job_id) if job_id else None
