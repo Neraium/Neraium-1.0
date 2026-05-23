@@ -1,10 +1,11 @@
 from pathlib import Path
+import time
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.routers.data import rebuild_upload_replay_from_source
-from app.services.upload_jobs import write_job, write_latest_upload_result
+from app.services.upload_jobs import read_job, write_job, write_latest_upload_result
 
 
 def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
@@ -221,3 +222,87 @@ def test_intake_result_reads_canonical_per_job_artifact_not_just_latest() -> Non
     assert payload["result_available"] is True
     assert payload["result"]["job_id"] == first_job_id
     assert payload["result"]["filename"] == "job-one.csv"
+
+
+def _wait_for_terminal_status(client: TestClient, job_id: str, timeout_seconds: float = 120.0) -> dict:
+    deadline = time.time() + timeout_seconds
+    last_payload: dict | None = None
+    while time.time() < deadline:
+        response = client.get(f"/api/data/upload-status/{job_id}")
+        assert response.status_code == 200
+        last_payload = response.json()
+        if last_payload.get("status") in {"COMPLETE", "FAILED"}:
+            return last_payload
+        time.sleep(0.05)
+    raise AssertionError(f"Upload did not complete. Last payload: {last_payload}")
+
+
+def test_historian_style_csv_upload_persists_replay_after_source_removed() -> None:
+    client = TestClient(create_app())
+    row_count = 50_000
+    rows = []
+    for index in range(row_count):
+        rows.append(
+            ",".join(
+                [
+                    f"2026-05-01 {index % 24:02d}:{(index // 24) % 60:02d}:{index % 60:02d}",
+                    f"{42.0 + ((index % 37) * 0.07):.3f}",
+                    f"{49.5 + ((index % 41) * 0.06):.3f}",
+                    f"{850 + (index % 120)}",
+                    f"{210 + ((index * 3) % 140)}",
+                    f"{18.0 + ((index % 25) * 0.09):.3f}",
+                    f"{55 + (index % 35)}%",
+                    f"{300 + ((index * 5) % 170)}",
+                    f"{40 + (index % 45)}",
+                    str(index % 4),
+                    "filter_inspection" if index % 9000 == 0 else "",
+                    "manual" if index % 7000 == 0 else "",
+                ]
+            )
+        )
+    csv_content = (
+        "timestamp,chilled_water_supply_temp_f,chilled_water_return_temp_f,flow_gpm,pump_power_kw,"
+        "differential_pressure_psi,chiller_load_pct,compressor_power_kw,building_cooling_demand_pct,"
+        "alarm_count,maintenance_event,operator_override\n"
+        + "\n".join(rows)
+    )
+
+    upload_response = client.post(
+        "/api/data/upload",
+        files={"file": ("chilled_water_system_data.csv", csv_content, "text/csv")},
+    )
+    assert upload_response.status_code == 202
+    job_id = upload_response.json()["job_id"]
+
+    status_payload = _wait_for_terminal_status(client, job_id, timeout_seconds=180.0)
+    assert status_payload["status"] == "COMPLETE"
+    assert status_payload["replay_ready"] is True
+    assert int(status_payload["replay_frame_count"]) > 0
+
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    latest_result = latest_payload.get("latest_result") or {}
+    latest_timeline = (
+        ((latest_result.get("replay_timeline") or {}).get("timeline"))
+        or (((latest_result.get("sii_intelligence") or {}).get("replay_timeline") or {}).get("timeline"))
+        or []
+    )
+    assert isinstance(latest_timeline, list)
+    assert len(latest_timeline) > 0
+
+    replay_before_delete = client.get(f"/api/data/replay/{job_id}")
+    assert replay_before_delete.status_code == 200
+    replay_before_delete_payload = replay_before_delete.json()
+    assert replay_before_delete_payload["frame_count"] > 0
+    assert len(replay_before_delete_payload["timeline"]) > 0
+
+    job_metadata = read_job(job_id)
+    assert isinstance(job_metadata, dict)
+    source_path = Path(str(job_metadata.get("file_path")))
+    if source_path.exists():
+        source_path.unlink()
+
+    replay_after_delete = client.get(f"/api/data/replay/{job_id}")
+    assert replay_after_delete.status_code == 200
+    replay_after_delete_payload = replay_after_delete.json()
+    assert replay_after_delete_payload["frame_count"] > 0
+    assert len(replay_after_delete_payload["timeline"]) > 0

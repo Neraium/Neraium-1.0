@@ -1262,9 +1262,10 @@ def build_upload_result(
             row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
             progress_callback=emit_replay_progress,
         )
+<<<<<<< HEAD
         try:
             replay_timeline = replay_future.result(timeout=90)
-        except Exception as exc:
+        except Exception:
             logger.exception("replay_timeline_generation_failed")
             replay_timeline = build_minimal_replay_timeline(
                 columns=columns,
@@ -1287,7 +1288,22 @@ def build_upload_result(
                 "evidence": [],
                 "errors": [f"{type(exc).__name__}: {exc}"],
             }
-
+    replay_frames = replay_timeline.get("timeline") if isinstance(replay_timeline, dict) else []
+    if not isinstance(replay_frames, list) or not replay_frames:
+        replay_timeline = build_minimal_replay_timeline(
+            columns=columns,
+            rows=replay_rows,
+            total_rows=total_rows,
+            timestamp_column=detected_timestamp_column,
+            primary_room=primary_room,
+            row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
+        )
+        replay_timeline.setdefault("meta", {})
+        replay_timeline["meta"]["replay_mode"] = "structural_zero_frame_fallback"
+    replay_timeline.setdefault("meta", {})
+    replay_timeline["meta"]["frame_count"] = len(
+        replay_timeline.get("timeline", []) if isinstance(replay_timeline.get("timeline"), list) else []
+    )
     sii_intelligence["replay_timeline"] = replay_timeline
     processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
     record_timing(processing_stats, "replay_generation", stage_started)
@@ -1372,6 +1388,7 @@ def build_upload_result(
         "engine_result": truncate_engine_result(engine_result),
         "temporal_math": temporal_math,
         "driver_attribution": driver_attribution,
+        "replay_timeline": replay_timeline,
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": truncate_runner_result(sii_runner_result),
         "processing_trace": processing_trace,
@@ -2849,6 +2866,8 @@ def build_replay_rows_from_full_csv(
 
 
 def replay_target_frames(total_rows: int) -> int:
+    if total_rows >= 20:
+        return 120
     if total_rows < 10_000:
         return 60
     if total_rows < 100_000:
@@ -2907,7 +2926,20 @@ def build_structural_replay_timeline(
     row_indexes: list[int] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
-    vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
+    context_columns = {
+        "alarm_count",
+        "maintenance_event",
+        "operator_override",
+        "fault_code",
+        "event",
+        "status",
+    }
+    effective_numeric_profiles = [
+        profile
+        for profile in numeric_profiles
+        if str(profile.get("column", "")).strip().lower() not in context_columns
+    ]
+    vector_rows = build_sensor_vectors(columns, rows, effective_numeric_profiles)
     vectors = vector_rows["vectors"]
     sample_count = len(vectors)
     if sample_count < 4:
