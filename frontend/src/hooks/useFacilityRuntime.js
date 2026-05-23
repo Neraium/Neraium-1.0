@@ -14,14 +14,6 @@ import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
 const OPERATIONAL_CADENCE_MS = 30000;
 const LIVE_REFRESH_INTERVAL_MS = 5000;
-const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
-
-function readPersistedLatestPreference() {
-  if (typeof window === "undefined") return true;
-  const raw = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
-  if (raw == null) return true;
-  return raw === "1";
-}
 
 export default function useFacilityRuntime({
   hasAccess,
@@ -46,7 +38,7 @@ export default function useFacilityRuntime({
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
-  const [allowPersistedLatest, setAllowPersistedLatest] = useState(() => readPersistedLatestPreference());
+  const [allowPersistedLatest, setAllowPersistedLatest] = useState(true);
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [domainMode, setDomainModeState] = useState(null);
@@ -165,9 +157,6 @@ export default function useFacilityRuntime({
   const updateAllowPersistedLatest = useCallback((value) => {
     setAllowPersistedLatest((current) => {
       const next = typeof value === "function" ? value(current) : value;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, next ? "1" : "0");
-      }
       return Boolean(next);
     });
   }, []);

@@ -137,9 +137,10 @@ def upload_status_payload(metadata: dict[str, Any] | None, job_id: str | None = 
         normalized_status = "FAILED"
         measured_percent = 100
         error_type = "sii_completion_missing"
+    # Do not downgrade a completed SII-contract-valid job just because replay
+    # frames are not ready yet. Replay availability is reported separately.
     if normalized_status == "COMPLETE" and sii_completed and not replay_ready:
-        normalized_status = "GENERATING_REPLAY"
-        measured_percent = 96
+        replay_ready = False
     return {
         "job_id": metadata.get("job_id"),
         "status": normalized_status,
