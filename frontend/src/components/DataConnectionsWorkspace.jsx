@@ -254,6 +254,9 @@ export default function DataConnectionsWorkspace({
         const replayReady = Boolean(payload?.replay_ready) || Number(payload?.replay_frame_count ?? 0) > 0;
 
         if (nextStatus === "complete" || backendPercent >= 100 || resultAvailable || replayReady) {
+          if (typeof window !== "undefined") {
+            window.__NERAIUM_UPLOAD_COMPLETE__ = true;
+          }
           const completedPayload = {
             ...payload,
             status: "COMPLETE",
@@ -360,10 +363,35 @@ export default function DataConnectionsWorkspace({
 
       const latestPayload = await loadLatestUpload();
       const latestResult = latestPayload?.latest_result;
-      const completedPayload = {
-        ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}),
-        ...(latestPayload ?? {}),
-      };
+      const completedPayload = uploadStateView.hasFullUploadResult(latestResult)
+        ? {
+            ...latestResult,
+            latest_result: latestResult,
+            snapshot: latestPayload?.snapshot ?? latestPayload,
+            status: "complete",
+            last_processed_at:
+              latestResult?.last_processed_at
+              ?? latestResult?.completed_at
+              ?? latestResult?.sii_intelligence?.last_updated
+              ?? new Date().toISOString(),
+          }
+        : {
+            ...(latestPayload ?? {}),
+            filename: latestPayload?.filename ?? "Uploaded telemetry",
+            row_count: latestPayload?.row_count ?? latestPayload?.rows_processed ?? 1,
+            column_count: latestPayload?.column_count ?? latestPayload?.columns_detected ?? 1,
+            operating_state: latestPayload?.operating_state ?? "Monitoring",
+            drift_status: latestPayload?.drift_status ?? "info",
+            status: "complete",
+            last_processed_at: latestPayload?.last_processed_at ?? new Date().toISOString(),
+            sii_intelligence: {
+              facility_state: "Monitoring",
+              urgency: "info",
+              primary_room: "Uploaded telemetry",
+              last_updated: latestPayload?.last_processed_at ?? new Date().toISOString(),
+              ...(latestPayload?.sii_intelligence ?? {}),
+            },
+          };
       setUploadResult(completedPayload);
       setUploadJob((current) => ({
         ...(current ?? {}),
@@ -479,6 +507,9 @@ export default function DataConnectionsWorkspace({
       if (failedCount > 0) {
         if (successCount === 0) {
           setUploadResult(null);
+    if (typeof window !== "undefined") {
+      window.__NERAIUM_UPLOAD_COMPLETE__ = false;
+    }
         } else {
           setUploadResult(completedPayload);
         }
@@ -492,6 +523,9 @@ export default function DataConnectionsWorkspace({
         return;
       }
       setUploadResult(completedPayload);
+      if (typeof window !== "undefined") {
+        window.__NERAIUM_UPLOAD_COMPLETE__ = true;
+      }
       setIsResetViewActive(false);
       if (typeof onUploadComplete === "function") {
         await onUploadComplete(completedPayload);

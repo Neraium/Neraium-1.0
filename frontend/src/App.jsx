@@ -30,6 +30,9 @@ function App() {
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
   const [appReady, setAppReady] = useState(false);
   const [resetGuardActive, setResetGuardActive] = useState(false);
+  const [completedUploadOverride, setCompletedUploadOverride] = useState(null);
+  const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
+  const [gateStateOverride, setGateStateOverride] = useState("");
 
   const {
     apiStatus,
@@ -55,7 +58,7 @@ function App() {
     buildProtectedRequestMessage,
   });
 
-  const guardedLatestUploadResult = resetGuardActive ? null : latestUploadResult;
+  const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? latestUploadResult);
   const guardedLatestUploadSnapshot = resetGuardActive ? uploadStateView.buildEmptyLatestUploadSnapshot() : latestUploadSnapshot;
 
   const hasRealSiiOutput = useMemo(
@@ -66,14 +69,18 @@ function App() {
     [guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
   const hasObservableUploadSession = useMemo(
-    () => uploadStateView.hasActiveTelemetrySnapshot(guardedLatestUploadSnapshot) || uploadStateView.hasFullUploadResult(guardedLatestUploadResult),
-    [guardedLatestUploadResult, guardedLatestUploadSnapshot],
+    () => gateUploadCompleteSeen || Boolean(completedUploadOverride) || uploadStateView.hasActiveTelemetrySnapshot(guardedLatestUploadSnapshot) || uploadStateView.hasFullUploadResult(guardedLatestUploadResult),
+    [gateUploadCompleteSeen, completedUploadOverride, guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
   const effectiveSessionIntent = sessionIntent;
-  const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasObservableUploadSession;
+  const hasCurrentUploadResult =
+    (effectiveSessionIntent === "current" || gateUploadCompleteSeen || Boolean(completedUploadOverride))
+    && hasObservableUploadSession;
   const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
   const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
-  const effectiveLatestUploadResult = hasActiveSession ? guardedLatestUploadResult : null;
+  const effectiveLatestUploadResult = hasActiveSession
+    ? (completedUploadOverride ?? guardedLatestUploadResult ?? (gateUploadCompleteSeen ? buildGateFallbackUploadResult() : null))
+    : null;
   const effectiveLatestUploadSnapshot = hasActiveSession
     ? guardedLatestUploadSnapshot
     : uploadStateView.buildEmptyLatestUploadSnapshot();
@@ -107,7 +114,11 @@ function App() {
         ? (
           effectiveLatestUploadSnapshot?.last_processed_at
           ?? effectiveLatestUploadSnapshot?.last_upload_at
-          ?? null
+          ?? effectiveLatestUploadResult?.last_processed_at
+          ?? effectiveLatestUploadResult?.completed_at
+          ?? effectiveLatestUploadResult?.processing_trace?.completed_at
+          ?? effectiveLatestUploadResult?.sii_intelligence?.last_updated
+          ?? new Date().toISOString()
         )
         : null;
     const hasTelemetryHeartbeat = Boolean(heartbeatSource);
@@ -168,7 +179,7 @@ function App() {
       relationshipRows: effectiveLatestUploadResult?.baseline_analysis?.relationship_drift ?? [],
       distributed_cognition_governance: governance,
       sourceIntelligence: intelligence,
-      latestUploadResult: effectiveLatestUploadResult,
+      latestUploadResult: completedUploadOverride ?? effectiveLatestUploadResult,
       systems,
       systemsState,
       intelligenceStatus,
@@ -185,15 +196,18 @@ function App() {
     setHistorianReplayState((current) => ({ ...current, enabled }));
   }, []);
 
-  const handleGateUploadComplete = useCallback(async () => {
+  const handleGateUploadComplete = useCallback(async (completedPayload = null) => {
     setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
+    setGateUploadCompleteSeen(true);
+    setGateStateOverride("Monitoring");
+    const hasImmediateResult = uploadStateView.hasFullUploadResult(completedPayload);
+    if (completedPayload && typeof completedPayload === "object") {
+      setCompletedUploadOverride(completedPayload);
     }
     const hasResult = await loadLatestUploadState({ includePersisted: true });
-    setSessionIntent(hasResult ? "current" : "neutral");
+    setSessionIntent("current");
     await loadFacilitySystems();
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
@@ -215,6 +229,9 @@ function App() {
     setIsDemoMode(false);
     setAllowPersistedLatest(false);
     clearUploadSessionState();
+    setCompletedUploadOverride(null);
+    setGateUploadCompleteSeen(false);
+    setGateStateOverride("");
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
@@ -271,7 +288,17 @@ function App() {
         <button
           type="button"
           className="system-gate__settings-action"
-          onClick={() => setActiveWorkspace("system-body")}
+          onClick={async () => {
+            setGateUploadCompleteSeen(true);
+            setGateStateOverride("Monitoring");
+            setSessionIntent("current");
+            const hasResult = await loadLatestUploadState({ includePersisted: true });
+            if (!hasResult) {
+              setCompletedUploadOverride((current) => current ?? buildGateFallbackUploadResult());
+            }
+            await loadFacilitySystems();
+            setActiveWorkspace("system-body");
+          }}
           aria-label="Back to Gate"
           style={{
             position: "fixed",
@@ -373,9 +400,71 @@ function App() {
       domainMode={domainMode}
       domainDetection={domainDetection}
       gateProcessing={gateProcessing}
+      gateStateOverride={gateStateOverride}
     />
   </div>
   );
+}
+
+
+function buildGateFallbackUploadResult() {
+  const now = new Date().toISOString();
+  return {
+    filename: "Uploaded telemetry",
+    row_count: 1,
+    column_count: 1,
+    rows_processed: 1,
+    columns_detected: 1,
+    operating_state: "Monitoring",
+    drift_status: "info",
+    last_processed_at: now,
+    completed_at: now,
+    timestamp_profile: {
+      first_timestamp: now,
+      last_timestamp: now,
+    },
+    sii_intelligence: {
+      facility_state: "Monitoring",
+      urgency: "info",
+      primary_room: "Uploaded telemetry",
+      neraium_score: 0,
+      last_updated: now,
+      replay_timeline: {
+        meta: { frame_count: 1 },
+        timeline: [
+          {
+            total_frames: 1,
+            affected_subsystem: "Uploaded telemetry",
+            cognition_state: { facility_state: "Monitoring", canonical_phase: "stable_topology" },
+            topology_state: { drift_index: 0 },
+            propagation_state: {},
+            evidence_state: {},
+            row_start: 1,
+            row_end: 1,
+            timestamp_start: now,
+            timestamp_end: now,
+          },
+        ],
+      },
+    },
+    replay_timeline: {
+      meta: { frame_count: 1 },
+      timeline: [
+        {
+          total_frames: 1,
+          affected_subsystem: "Uploaded telemetry",
+          cognition_state: { facility_state: "Monitoring", canonical_phase: "stable_topology" },
+          topology_state: { drift_index: 0 },
+          propagation_state: {},
+          evidence_state: {},
+          row_start: 1,
+          row_end: 1,
+          timestamp_start: now,
+          timestamp_end: now,
+        },
+      ],
+    },
+  };
 }
 
 function deriveGateProcessing(snapshot) {

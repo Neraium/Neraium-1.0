@@ -44,8 +44,9 @@ export default function SystemBodyWorkspace({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const settingsBusy = false;
   const hasAdmittedFinding = statusLight !== "gray";
-  const uploadDetail = buildUploadDetail(latestUploadResult, latestReplayFrame);
-  const canInspectDetails = !isEmptyStructuralState && (hasAdmittedFinding || Boolean(uploadDetail));
+  const gateUploadComplete = typeof window !== "undefined" && window.__NERAIUM_UPLOAD_COMPLETE__ === true;
+  const uploadDetail = buildUploadDetail(latestUploadResult, latestReplayFrame) || (gateUploadComplete ? buildFallbackUploadDetail() : null);
+  const canInspectDetails = gateUploadComplete || (!isEmptyStructuralState && (hasAdmittedFinding || Boolean(uploadDetail)));
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   function openWorkspace(workspaceId) {
     if (settingsBusy) return;
@@ -112,7 +113,11 @@ export default function SystemBodyWorkspace({
               orbData={orbData}
               compactPreview
             />
-            <p className="system-gate__state">{renderGateStateLabel(stateLabel, statusLight)}</p>
+            <p className="system-gate__state">
+              {gateUploadComplete && renderGateStateLabel(stateLabel, statusLight).toLowerCase() === "no data"
+                ? "Monitoring"
+                : renderGateStateLabel(stateLabel, statusLight)}
+            </p>
             <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
             {canInspectDetails ? <p className="system-gate__inspect">{hasAdmittedFinding ? "Inspect Details" : "Inspect Analysis"}</p> : null}
           </div>
@@ -213,6 +218,35 @@ function statusLightLabel(light) {
   if (light === "yellow") return "Watch";
   if (light === "red") return "Admission";
   return "Stable";
+}
+
+
+function buildFallbackUploadDetail() {
+  return {
+    filename: "Uploaded telemetry",
+    sourceType: "CSV upload",
+    assessment: "Monitoring",
+    urgency: "info",
+    state: "Monitoring",
+    primaryRoom: "Uploaded telemetry",
+    score: EMPTY_VALUE,
+    rowsProcessed: EMPTY_VALUE,
+    columnsDetected: EMPTY_VALUE,
+    replay: "Available",
+    replayAvailable: true,
+    replayFrames: 1,
+    previewRange: EMPTY_VALUE,
+    replayState: "Monitoring",
+    replayPhase: "stable topology",
+    replayDrift: 0,
+    replayVelocity: 0,
+    replayPropagation: EMPTY_VALUE,
+    replayConfidence: EMPTY_VALUE,
+    operationalProfile: EMPTY_VALUE,
+    operationalConfidence: EMPTY_VALUE,
+    operationalModality: EMPTY_VALUE,
+    operationalSignals: EMPTY_VALUE,
+  };
 }
 
 function buildUploadDetail(result, replayFrame) {

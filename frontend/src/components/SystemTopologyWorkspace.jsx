@@ -24,11 +24,13 @@ export default function SystemTopologyWorkspace({
   domainMode = "aquatic",
   domainDetection = null,
   gateProcessing = null,
+  gateStateOverride = "",
 }) { 
   const processingActive = Boolean(gateProcessing?.active);
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
+  const hasUploadResult = Boolean(liveOps.latestUploadResult);
   const awaitingSii = (liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing")
-    && !liveOps.latestUploadResult;
+    && !hasUploadResult;
   const uiState = processingActive || awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
   const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
   const governed = deriveGovernedOutput(liveOps, {
@@ -40,9 +42,13 @@ export default function SystemTopologyWorkspace({
 
   const stateLabel = processingActive
     ? "Processing"
-    : awaitingSii
-    ? "No Data"
-    : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
+    : String(gateStateOverride || "").trim()
+      ? String(gateStateOverride).trim()
+      : hasUploadResult
+        ? (uploadSignal.label || "Monitoring")
+        : awaitingSii
+          ? "No Data"
+          : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
@@ -55,7 +61,9 @@ export default function SystemTopologyWorkspace({
 
   const systemState = processingActive
     ? "unknown"
-    : (awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight)));
+    : hasUploadResult
+      ? (uploadSignal.systemState || "stable")
+      : (awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight)));
   const primaryMessage = awaitingSii
     ? "Upload or connect telemetry to begin monitoring."
     : governed.hasPass

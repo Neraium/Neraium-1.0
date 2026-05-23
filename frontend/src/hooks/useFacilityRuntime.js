@@ -150,6 +150,7 @@ export default function useFacilityRuntime({
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
+      await loadLatestUploadState({ includePersisted: true });
       await loadFacilitySystems();
     }
   }, [checkApiHealth, loadFacilitySystems]);
@@ -183,8 +184,8 @@ export default function useFacilityRuntime({
 
   useEffect(() => {
     if (!hasAccess) return;
+    loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
-    loadLatestUploadState();
   }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
 
   useEffect(() => {
@@ -201,7 +202,7 @@ export default function useFacilityRuntime({
   }, OPERATIONAL_CADENCE_MS, hasAccess);
 
   useStableInterval(() => {
-    loadLatestUploadState();
+    loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
