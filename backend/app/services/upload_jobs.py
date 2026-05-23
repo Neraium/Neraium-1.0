@@ -8,6 +8,7 @@ import time
 import uuid
 import hashlib
 import math
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -922,20 +923,25 @@ def build_upload_result(
     stage_started = time.perf_counter()
     timed_status(status_callback, "STRUCTURAL_SCORING", processing_stats, rows_processed=total_rows, columns_detected=len(columns))
     engine_started = time.perf_counter()
-    engine_result = run_engine_analysis(
-        columns=columns,
-        rows=data_rows,
-        data_quality=data_quality,
-        baseline_analysis=baseline_analysis,
-        cultivation_mapping=schema_mapping,
-        numeric_profiles=numeric_profiles,
-    )
-    temporal_math = evaluate_temporal_math(
-        columns=columns,
-        rows=data_rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=detected_timestamp_column,
-    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        engine_future = executor.submit(
+            run_engine_analysis,
+            columns=columns,
+            rows=data_rows,
+            data_quality=data_quality,
+            baseline_analysis=baseline_analysis,
+            cultivation_mapping=schema_mapping,
+            numeric_profiles=numeric_profiles,
+        )
+        temporal_future = executor.submit(
+            evaluate_temporal_math,
+            columns=columns,
+            rows=data_rows,
+            numeric_profiles=numeric_profiles,
+            timestamp_column=detected_timestamp_column,
+        )
+        engine_result = engine_future.result()
+        temporal_math = temporal_future.result()
     aquatic_assessment = analyze_aquatic_instability(
         columns=columns,
         baseline_analysis=baseline_analysis,
@@ -1091,25 +1097,48 @@ def build_upload_result(
         processing_stats["replay_rows_count"] = len(replay_rows)
     if replay_rows_mode == "sampled_windows" and processing_stats.get("used_streaming"):
         warnings.append("Replay timeline was generated from sampled windows because full-timeline replay extraction was unavailable.")
-    sii_runner_result = run_sii_runner(
-        columns=columns,
-        rows=sii_rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=detected_timestamp_column,
-        primary_room=primary_room,
-        driver_attribution=driver_attribution,
-        engine_result=engine_result,
-        processing_trace=processing_trace,
-    )
-    replay_timeline = build_structural_replay_timeline(
-        columns=columns,
-        rows=replay_rows,
-        total_rows=total_rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=detected_timestamp_column,
-        primary_room=primary_room,
-        row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
-    )
+    def emit_replay_progress(frame_index: int, frame_total: int) -> None:
+        if not status_callback or frame_total <= 0:
+            return
+        # Keep replay generation progress in the upper processing band.
+        replay_progress = 88 + int(round((max(frame_index, 0) / max(frame_total, 1)) * 10))
+        timed_status(
+            status_callback,
+            "GENERATING_REPLAY",
+            processing_stats,
+            rows_processed=total_rows,
+            columns_detected=len(columns),
+            result_available=True,
+            first_usable_available=True,
+            percent=min(98, max(88, replay_progress)),
+            progress_label=f"Generating replay frames ({min(frame_index, frame_total)}/{frame_total})",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        runner_future = executor.submit(
+            run_sii_runner,
+            columns=columns,
+            rows=sii_rows,
+            numeric_profiles=numeric_profiles,
+            timestamp_column=detected_timestamp_column,
+            primary_room=primary_room,
+            driver_attribution=driver_attribution,
+            engine_result=engine_result,
+            processing_trace=processing_trace,
+        )
+        replay_future = executor.submit(
+            build_structural_replay_timeline,
+            columns=columns,
+            rows=replay_rows,
+            total_rows=total_rows,
+            numeric_profiles=numeric_profiles,
+            timestamp_column=detected_timestamp_column,
+            primary_room=primary_room,
+            row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
+            progress_callback=emit_replay_progress,
+        )
+        sii_runner_result = runner_future.result()
+        replay_timeline = replay_future.result()
     sii_intelligence["replay_timeline"] = replay_timeline
     processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
     record_timing(processing_stats, "replay_generation", stage_started)
@@ -2681,6 +2710,7 @@ def build_structural_replay_timeline(
     timestamp_column: str | None,
     primary_room: str,
     row_indexes: list[int] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
     vectors = vector_rows["vectors"]
@@ -2912,6 +2942,8 @@ def build_structural_replay_timeline(
 
         prev_distance = baseline_distance
         prev_velocity = drift_velocity
+        if progress_callback and (frame_index == len(frame_positions) - 1 or frame_index % 8 == 0):
+            progress_callback(frame_index + 1, len(frame_positions))
 
     return {
         "meta": {
