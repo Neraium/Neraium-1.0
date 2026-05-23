@@ -103,7 +103,7 @@ export default function DataConnectionsWorkspace({
   formatClockTime,
 }) {
   const tabs = useMemo(() => [
-    { id: "upload", label: "Uploads" },
+    { id: "upload", label: "Upload" },
   ], []);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -686,29 +686,26 @@ export default function DataConnectionsWorkspace({
         handleFileSelection={handleFileSelection}
         selectedFiles={selectedFiles}
         latestUploadSnapshot={effectiveSnapshot}
+        pendingUploadKind={pendingUploadKind}
+        selectedFileSize={selectedFileSize}
+        uploadReadinessMessage={uploadReadinessMessage}
+        isUploadProcessing={isUploadProcessing}
+        uploadState={uploadState}
+        openFilePicker={openFilePicker}
+        uploadJob={uploadJob}
         latestMessage={latestMessage}
         visibleProgressPercent={visibleProgressPercent}
         uploadTransfer={uploadTransfer}
-        selectedFileSize={selectedFileSize}
-        batchResults={batchResults}
-        openFilePicker={openFilePicker}
-        pendingUploadKind={pendingUploadKind}
-        uploadState={uploadState}
-        uploadError={uploadError}
+        formatFileSize={formatFileSize}
+        formatTransferSpeed={formatTransferSpeed}
+        uploadStateMessage={uploadStateMessage}
+        setCopyState={setCopyState}
+        copyState={copyState}
         isJsonSchemaOpen={isJsonSchemaOpen}
         setIsJsonSchemaOpen={setIsJsonSchemaOpen}
-        handleReprocessCurrentBatch={handleReprocessCurrentBatch}
-        hasActiveSession={hasActiveSession}
-        hasResumedSession={hasResumedSession}
-        hasCurrentUploadResult={hasCurrentUploadResult}
-        onResumePreviousSession={onResumePreviousSession}
-        roomContext={roomContext}
-        apiStatus={apiStatus}
-        copyState={copyState}
-        setCopyState={setCopyState}
-        formatClockTime={formatClockTime}
-        statusDebug={statusDebug}
-        debugProgressValue={debugProgressValue}
+        batchResults={batchResults}
+        onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
+        onReprocessCurrentBatch={handleReprocessCurrentBatch}
       />
     </div>
   );
