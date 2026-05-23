@@ -4,9 +4,12 @@ from typing import Any
 
 TIMESTAMP_COLUMN_HINTS = (
     "timestamp",
+    "time_stamp",
     "time",
     "datetime",
+    "date_time",
     "date",
+    "logged_at",
     "recorded_at",
     "created_at",
 )
@@ -181,10 +184,12 @@ def build_data_quality(
 
 def parse_timestamp(raw_value: str) -> datetime | None:
     normalized = raw_value.strip()
+    if not normalized:
+        return None
     if normalized.endswith("Z"):
         normalized = f"{normalized[:-1]}+00:00"
 
-    for candidate in (normalized, normalized.replace("/", "-")):
+    for candidate in (normalized, normalized.replace("/", "-"), normalized.replace(" ", "T")):
         try:
             return normalize_timestamp(datetime.fromisoformat(candidate))
         except ValueError:
@@ -203,7 +208,7 @@ def parse_numeric_value(raw_value: str) -> float | None:
     normalized = raw_value.strip()
     if not normalized:
         return None
-    normalized = normalized.replace(",", "")
+    normalized = normalized.replace(",", "").replace("%", "")
     lowered = normalized.lower()
     if lowered in {"nan", "null", "none", "n/a", "na", "-"}:
         return None
