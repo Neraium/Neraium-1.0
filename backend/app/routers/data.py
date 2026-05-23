@@ -444,10 +444,27 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
     persisted = replay_payload_from_result(job_result, job_id=job_id)
     if persisted is not None:
         return persisted
+    # Fallback to latest persisted result when per-job artifact is missing but
+    # latest payload still belongs to this job.
+    latest_result = read_latest_upload_result()
+    if isinstance(latest_result, dict) and str(latest_result.get("job_id") or "") == str(job_id):
+        latest_replay = replay_payload_from_result(latest_result, job_id=job_id)
+        if latest_replay is not None:
+            return latest_replay
     if metadata is None:
         raise HTTPException(status_code=404, detail={"error_type": "upload_session_missing", "message": "Upload session expired or was not found."})
 
+    # Attempt source replay reconstruction before status gating so a drifted
+    # status label cannot permanently block replay availability.
+    source_replay = rebuild_upload_replay_from_source(metadata)
+    if source_replay is not None:
+        return source_replay
+
     normalized_status = str(metadata.get("status", "PENDING")).upper()
+    if normalized_status == "ACTIVE":
+        normalized_status = "COMPLETE" if (metadata.get("result_available") or metadata.get("sii_completed")) else "PENDING"
+    if normalized_status == "ACTIVE" and metadata.get("result_available"):
+        normalized_status = "COMPLETE"
     if normalized_status not in {"COMPLETE", "FAILED"}:
         return {
             "job_id": job_id,
@@ -456,10 +473,6 @@ def read_upload_replay(job_id: str) -> dict[str, Any]:
             "meta": {"status": normalized_status, "replay_pending": True},
             "message": f"Replay is still building for this upload job ({normalized_status.lower()}).",
         }
-
-    source_replay = rebuild_upload_replay_from_source(metadata)
-    if source_replay is not None:
-        return source_replay
 
     raw_path = metadata.get("file_path")
     source_exists = bool(raw_path and Path(str(raw_path)).exists())
