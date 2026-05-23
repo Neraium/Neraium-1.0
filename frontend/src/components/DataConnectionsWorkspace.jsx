@@ -124,6 +124,7 @@ export default function DataConnectionsWorkspace({
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const uploadInputRef = useRef(null);
+  const uploadInFlightRef = useRef(false);
 
   const loadLatestUpload = useCallback(async () => {
     try {
@@ -292,6 +293,7 @@ export default function DataConnectionsWorkspace({
 
   async function handleUpload(event) {
     event.preventDefault();
+    if (uploadInFlightRef.current) return;
     await processUploadBatch(selectedFiles);
   }
 
@@ -354,6 +356,8 @@ export default function DataConnectionsWorkspace({
   }
 
   async function processUploadBatch(filesToProcess) {
+    if (uploadInFlightRef.current) return;
+    uploadInFlightRef.current = true;
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -468,6 +472,8 @@ export default function DataConnectionsWorkspace({
       const classified = classifyUploadError(uploadRequestError, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
+    } finally {
+      uploadInFlightRef.current = false;
     }
   }
 
@@ -526,6 +532,7 @@ export default function DataConnectionsWorkspace({
       pollTimerRef.current = null;
     }
     if (uploadInputRef.current) uploadInputRef.current.value = "";
+    uploadInFlightRef.current = false;
     if (onResetDemo) await onResetDemo(); 
   } 
 
