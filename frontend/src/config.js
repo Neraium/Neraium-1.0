@@ -6,7 +6,7 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
   ? configuredApiTimeoutMs
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 300000);
-const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
+const PRODUCTION_API_FALLBACK = "";
 const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
