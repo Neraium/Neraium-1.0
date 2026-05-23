@@ -598,11 +598,6 @@ export default function DataConnectionsWorkspace({
     ) || 0;
   const effectiveReplayReady = Boolean(uploadJob?.replay_ready) || Number(uploadJob?.replay_frame_count ?? 0) > 0 || latestReplayFrames > 0;
   const effectiveReplayFrameCount = Math.max(Number(uploadJob?.replay_frame_count ?? 0) || 0, latestReplayFrames);
-  const backendComplete = String(uploadJob?.processing_state ?? "").toLowerCase() === "complete"
-    || Number(uploadJob?.percent ?? uploadJob?.progress ?? 0) >= 100
-    || Boolean(uploadJob?.result_available)
-    || Boolean(latestUploadResult);
-  const effectiveUploadState = backendComplete ? "complete" : normalizeUploadStatus(uploadState);
   const uploadStatePercent = effectiveUploadState === "complete" ? 100 : (Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0);
   const jobStatusPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
     ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
