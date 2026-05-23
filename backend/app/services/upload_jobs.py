@@ -454,3 +454,76 @@ def process_next_queued_upload_job() -> bool:
     V2 processes uploads synchronously in /api/data/upload.
     """
     return False
+
+
+class UploadTooLargeError(ValueError):
+    pass
+
+
+def parse_positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+        return value if value > 0 else default
+    except Exception:
+        return default
+
+
+def write_job(job_id: str, payload: dict[str, Any]) -> None:
+    JOBS[job_id] = payload
+    _write_json(f"upload_status_{job_id}.json", payload)
+
+
+def read_job(job_id: str) -> dict[str, Any] | None:
+    return read_upload_status(job_id)
+
+
+def create_upload_job(filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
+    job_id = uuid.uuid4().hex
+    payload = {
+        "job_id": job_id,
+        "filename": filename,
+        "status": "QUEUED",
+        "processing_state": "queued",
+        "percent": 0,
+        "progress": 0,
+    }
+    write_job(job_id, payload)
+    return payload
+
+
+def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    summary = process_upload_bytes(filename, content)
+    return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+
+
+def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
+    p = Path(path)
+    return process_csv_content(p.read_bytes(), filename=p.name, **kwargs)
+
+
+def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
+    if isinstance(payload, bytes):
+        payload = json.loads(payload.decode("utf-8"))
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+
+    rows = payload if isinstance(payload, list) else payload.get("rows") or payload.get("data") or []
+    if not rows:
+        rows = [payload if isinstance(payload, dict) else {"value": payload}]
+
+    columns = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
+    if not columns:
+        columns = ["timestamp", "value"]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(columns)
+    for row in rows:
+        if isinstance(row, dict):
+            writer.writerow([row.get(col, "") for col in columns])
+        else:
+            writer.writerow(["", row])
+
+    return process_csv_content(output.getvalue(), filename=filename)
