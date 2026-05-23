@@ -64,3 +64,7 @@ async def data_replay(job_id: str):
 async def reset_data():
     upload_jobs.reset_upload_state()
     return {"ok": True, "status": "reset"}
+
+
+def rebuild_upload_replay_from_source(job_id: str | None = None, *args, **kwargs):
+    return upload_jobs.replay_payload(job_id)
