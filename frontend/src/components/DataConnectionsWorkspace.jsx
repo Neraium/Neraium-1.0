@@ -428,6 +428,7 @@ export default function DataConnectionsWorkspace({
     if (validationError) {
       setUploadError(validationError);
       setUploadState("validation_error");
+      uploadInFlightRef.current = false;
       return;
     }
     setUploadState("uploading");
