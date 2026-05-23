@@ -1337,8 +1337,25 @@ def build_upload_result(
         primary_room,
     )
 
+    replay_timeline = sii_intelligence.get("replay_timeline") if isinstance(sii_intelligence, dict) else None
+    replay_frames = replay_timeline.get("timeline") if isinstance(replay_timeline, dict) else []
+
+    if not isinstance(replay_frames, list) or len(replay_frames) == 0:
+        logger.warning("replay_timeline_missing_before_return rebuilding_minimal_replay filename=%s rows=%s", filename, len(replay_rows))
+        replay_timeline = build_minimal_replay_timeline(
+            columns=columns,
+            rows=replay_rows if replay_rows else data_rows,
+            total_rows=total_rows,
+            timestamp_column=detected_timestamp_column,
+            primary_room=primary_room,
+            row_indexes=replay_row_indexes if isinstance(replay_row_indexes, list) else None,
+        )
+        sii_intelligence["replay_timeline"] = replay_timeline
+        processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
+
     return {
         "filename": filename,
+        "replay_timeline": sii_intelligence.get("replay_timeline", {}),
         "row_count": total_rows,
         "column_count": len(columns),
         "columns": columns,
