@@ -248,9 +248,31 @@ export default function DataConnectionsWorkspace({
         }
         setUploadJob(payload);
         const nextStatus = normalizeUploadStatus(payload.status);
-        setUploadState(nextStatus);
+        const backendPercent = Number(payload?.percent ?? payload?.progress ?? 0);
+        const resultAvailable = Boolean(payload?.result_available);
+        const firstUsableAvailable = Boolean(payload?.first_usable_available);
         const replayReady = Boolean(payload?.replay_ready) || Number(payload?.replay_frame_count ?? 0) > 0;
-        if (nextStatus === "complete" && replayReady) return payload;
+
+        if (nextStatus === "complete" || backendPercent >= 100 || resultAvailable || replayReady) {
+          const completedPayload = {
+            ...payload,
+            status: "COMPLETE",
+            percent: 100,
+            progress: 100,
+            processing_state: "complete",
+            progress_label: payload?.progress_label || "Telemetry processing complete.",
+            message: payload?.message || "Telemetry processing complete.",
+          };
+          setUploadJob(completedPayload);
+          setUploadState("complete");
+          return completedPayload;
+        }
+
+        if (firstUsableAvailable && nextStatus === "cognition_ready") {
+          setUploadState("cognition_ready");
+        } else {
+          setUploadState(nextStatus);
+        }
         if (nextStatus === "complete" && !replayReady) {
           completeWithoutReplayCount += 1;
           if (completeWithoutReplayCount >= 5) {
@@ -548,9 +570,11 @@ export default function DataConnectionsWorkspace({
   const preferredPercent = [uploadTransferPercent, backendPercent, statusFallbackPercent]
     .filter((value) => Number.isFinite(value))
     .reduce((maxValue, value) => Math.max(maxValue, value), 0);
-  const visibleProgressPercent = isUploadProcessing(uploadState)
-    ? Math.max(1, Math.min(99, preferredPercent))
-    : (normalizeUploadStatus(uploadState) === "complete" ? 100 : null);
+  const visibleProgressPercent = backendPercent >= 100 || normalizeUploadStatus(uploadState) === "complete"
+    ? 100
+    : isUploadProcessing(uploadState)
+      ? Math.max(1, Math.min(99, preferredPercent))
+      : null;
   const latestReplayFrames =
     Number(
       latestUploadResult?.replay_timeline?.timeline?.length
