@@ -256,6 +256,12 @@ def process_upload_bytes(filename: str, content: bytes, job_id: str | None = Non
     return summary
 
 
+
+def process_csv_file(file_path, job_id=None):
+    """Compatibility wrapper for callers/tests that pass a CSV file path."""
+    path = Path(file_path)
+    return process_upload_bytes(path.name, path.read_bytes(), job_id=job_id)
+
 def replay_payload(job_id: str | None = None) -> dict[str, Any]:
     result = read_upload_result_by_job_id(job_id) if job_id else None
     result = result or read_latest_upload_result() or {}

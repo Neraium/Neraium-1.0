@@ -103,7 +103,7 @@ export default function DataConnectionsWorkspace({
   formatClockTime,
 }) {
   const tabs = useMemo(() => [
-    { id: "upload", label: "Upload" },
+    { id: "upload", label: "Uploads" },
   ], []);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
