@@ -185,7 +185,7 @@ function App() {
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, completedUploadOverride, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
   const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
@@ -202,11 +202,10 @@ function App() {
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
     setGateStateOverride("Monitoring");
-    const hasImmediateResult = uploadStateView.hasFullUploadResult(completedPayload);
     if (completedPayload && typeof completedPayload === "object") {
       setCompletedUploadOverride(completedPayload);
     }
-    const hasResult = await loadLatestUploadState({ includePersisted: true });
+    await loadLatestUploadState({ includePersisted: true });
     setSessionIntent("current");
     await loadFacilitySystems();
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);

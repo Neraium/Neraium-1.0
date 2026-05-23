@@ -64,14 +64,33 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 
 async function openDataConnections(page) {
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
+  const dataConnectionsHeading = page.getByRole("heading", { name: /^Data Connections$/i });
   const uploadInput = page.locator("input#csv-upload");
   const processUploadButton = page.getByRole("button", { name: /Process Upload/i });
   const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
   const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
 
+  const isDataConnectionsReady = async () => {
+    const checks = await Promise.all([
+      uploadTab.isVisible().catch(() => false),
+      dataConnectionsHeading.isVisible().catch(() => false),
+      uploadInput.isVisible().catch(() => false),
+      processUploadButton.isVisible().catch(() => false),
+    ]);
+    return checks.some(Boolean);
+  };
+
+  const expectDataConnectionsReady = async () => {
+    await expect.poll(
+      async () => isDataConnectionsReady(),
+      { timeout: 30000, message: "Expected Data Connections workspace to be visible." },
+    ).toBe(true);
+  };
+
   const hasEntrySignal = async () => {
     const checks = await Promise.all([
       uploadTab.isVisible().catch(() => false),
+      dataConnectionsHeading.isVisible().catch(() => false),
       uploadInput.isVisible().catch(() => false),
       processUploadButton.isVisible().catch(() => false),
       directDataConnections.isVisible().catch(() => false),
@@ -109,14 +128,14 @@ async function openDataConnections(page) {
 
   if (await directDataConnections.isVisible().catch(() => false)) {
     await directDataConnections.click();
-    await expect(uploadTab).toBeVisible({ timeout: 30000 });
+    await expectDataConnectionsReady();
     return;
   }
 
   await expect(settingsButton).toBeVisible({ timeout: 30000 });
   await settingsButton.click();
   await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
-  await expect(uploadTab).toBeVisible({ timeout: 30000 });
+  await expectDataConnectionsReady();
 }
 
 test.describe("Functional verification", () => {

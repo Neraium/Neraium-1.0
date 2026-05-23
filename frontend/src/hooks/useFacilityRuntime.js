@@ -153,7 +153,7 @@ export default function useFacilityRuntime({
       await loadLatestUploadState({ includePersisted: true });
       await loadFacilitySystems();
     }
-  }, [checkApiHealth, loadFacilitySystems]);
+  }, [checkApiHealth, loadFacilitySystems, loadLatestUploadState]);
 
   const updateAllowPersistedLatest = useCallback((value) => {
     setAllowPersistedLatest((current) => {
