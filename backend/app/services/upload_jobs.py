@@ -54,6 +54,26 @@ def reset_upload_state() -> None:
     LATEST_UPLOAD_CACHE["result"] = None
 
 
+def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") -> dict[str, Any]:
+    """
+    Persist upload progress so live uploads always have a job id/status.
+    This restores the status helper used by process_upload_bytes().
+    """
+    payload = {
+        "job_id": job_id,
+        "status": status,
+        "processing_state": str(status).lower(),
+        "percent": progress,
+        "progress": progress,
+        "message": message,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    JOBS[job_id] = payload
+    _write_json(f"upload_status_{job_id}.json", payload)
+    LATEST_UPLOAD_CACHE["summary"] = payload
+    return payload
+
+
 def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
     _set_status(job_id, "PROCESSING", 10, "Parsing CSV")
