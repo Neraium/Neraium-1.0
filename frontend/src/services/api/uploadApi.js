@@ -1,5 +1,5 @@
 import { buildAccessHeaders, buildApiCandidateUrls } from "../../config";
-import * as uploadStateView from "../../viewModels/uploadState";
+import * as uploadStateView from "../../viewModels/uploadState";\nimport { normalizeUploadJob } from "../../viewModels/uploadContract";
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
   const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });
@@ -97,7 +97,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       };
 
       xhr.onload = () => {
-        const payload = readJsonResponse(xhr);
+        const payload = normalizeUploadJob(readJsonResponse(xhr));
         const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
         if (response.ok) {
           onProgress?.({

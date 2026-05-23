@@ -8,7 +8,7 @@ import {
   readJsonPayload,
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
-import * as uploadStateView from "../viewModels/uploadState";
+import * as uploadStateView from "../viewModels/uploadState";\nimport { normalizeUploadJob } from "../viewModels/uploadContract";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
@@ -212,7 +212,7 @@ export default function DataConnectionsWorkspace({
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
-        const payload = await readJsonPayload(response);
+        const payload = normalizeUploadJob(await readJsonPayload(response));
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
         if (["NOT_FOUND", "MISSING"].includes(String(payload?.status ?? "").toUpperCase())) {
           notFoundCount += 1;
@@ -454,7 +454,7 @@ export default function DataConnectionsWorkspace({
         const startingLoaded = aggregateLoaded;
         const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
         setBatchResults((current) => current.map((entry) => (entry.id === fileId ? { ...entry, status: "uploading", message: "Uploading" } : entry)));
-        const { ok, status, payload } = await uploadTelemetryFileWithProgress({
+        const { ok, status, payload: rawPayload } = await uploadTelemetryFileWithProgress({
           file,
           timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
           onProgress: (progress) => {
@@ -473,6 +473,7 @@ export default function DataConnectionsWorkspace({
           },
         });
         try {
+          const payload = normalizeUploadJob(rawPayload);
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
           const returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
           if (!returnedJobId) {
