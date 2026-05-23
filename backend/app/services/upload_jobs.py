@@ -64,10 +64,6 @@ def reset_upload_state() -> None:
 
 
 def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") -> dict[str, Any]:
-    """
-    Persist upload progress so live uploads always have a job id/status.
-    This restores the status helper used by process_upload_bytes().
-    """
     payload = {
         "job_id": job_id,
         "status": status,
@@ -400,11 +396,9 @@ def _write_json(name: str, payload: dict[str, Any]) -> None:
     (RUNTIME_DIR / name).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
-# Compatibility stubs for older imports.
 def read_upload_cache_stats() -> dict[str, int]:
     return {"hash_cache_hits": 0, "hash_cache_misses": 0}
 
-# --- Compatibility layer for existing Neraium imports ---
 
 def reset_latest_upload_state() -> None:
     reset_upload_state()
@@ -472,10 +466,6 @@ def build_upload_result(
     filename: str = "telemetry.csv",
     **kwargs,
 ) -> dict[str, Any]:
-    """
-    Compatibility entrypoint for live/data-connection code.
-    Converts rows into CSV bytes and runs the V2 upload replay pipeline.
-    """
     columns = columns or kwargs.get("columns") or []
     rows = rows or kwargs.get("rows") or []
 
@@ -495,10 +485,6 @@ def build_upload_result(
 
 
 def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
-    """
-    Compatibility helper for observability.
-    V2 stores latest upload plus per-job upload_result_*.json files.
-    """
     items: list[dict[str, Any]] = []
     try:
         paths = sorted(
@@ -562,10 +548,6 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
 
 
 def process_next_queued_upload_job() -> bool:
-    """
-    Compatibility stub for the old upload worker.
-    V2 processes uploads synchronously in /api/data/upload.
-    """
     return False
 
 
@@ -619,44 +601,9 @@ async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv
         "processing_state": "queued",
         "percent": 0,
         "progress": 0,
+        "file_size_bytes": kwargs.get("file_size_bytes", 0),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "result_available": False,
     }
-    write_job(job_id, payload)
+    write_job(payload)
     return payload
-
-
-def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
-    if isinstance(content, str):
-        content = content.encode("utf-8")
-    summary = process_upload_bytes(filename, content)
-    return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
-
-
-def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
-    p = Path(path)
-    return process_csv_content(p.read_bytes(), filename=p.name, **kwargs)
-
-
-def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
-    if isinstance(payload, bytes):
-        payload = json.loads(payload.decode("utf-8"))
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-
-    rows = payload if isinstance(payload, list) else payload.get("rows") or payload.get("data") or []
-    if not rows:
-        rows = [payload if isinstance(payload, dict) else {"value": payload}]
-
-    columns = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
-    if not columns:
-        columns = ["timestamp", "value"]
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(columns)
-    for row in rows:
-        if isinstance(row, dict):
-            writer.writerow([row.get(col, "") for col in columns])
-        else:
-            writer.writerow(["", row])
-
-    return process_csv_content(output.getvalue(), filename=filename)
