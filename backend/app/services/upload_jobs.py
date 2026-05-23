@@ -163,7 +163,7 @@ def ensure_runtime_dirs() -> None:
 def upload_hash_cache_key(input_hash: str | None) -> str | None:
     if not input_hash:
         return None
-    return f"upload_result_by_hash:{input_hash}"
+    return f"upload_result_by_hash:v2_replay_required:{input_hash}"
 
 
 def delete_upload_file(metadata: dict[str, Any] | None) -> None:
