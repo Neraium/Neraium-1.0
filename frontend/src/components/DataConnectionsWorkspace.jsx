@@ -561,6 +561,11 @@ export default function DataConnectionsWorkspace({
     ["Latest Replay Frames", String(latestReplayFrames)],
     ["Replay Source", String(uploadJob?.replay_source ?? latestUploadResult?.replay_timeline?.meta?.replay_source ?? latestUploadResult?.sii_intelligence?.replay_timeline?.meta?.replay_source ?? "unknown")],
   ];
+  const debugProgressValue = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
+    ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
+    : Number.isFinite(visibleProgressPercent)
+      ? Math.max(0, Math.min(100, Number(visibleProgressPercent)))
+      : 0;
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -607,6 +612,18 @@ export default function DataConnectionsWorkspace({
               <li key={label}><span>{label}</span><strong>{value}</strong></li>
             ))}
           </ul>
+          <div style={{ marginTop: "0.6rem" }}>
+            <div
+              className="upload-progress-meter"
+              aria-label="Debug upload progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={debugProgressValue}
+              role="progressbar"
+            >
+              <span style={{ width: `${debugProgressValue}%` }} />
+            </div>
+          </div>
         </div>
       </section>
       
