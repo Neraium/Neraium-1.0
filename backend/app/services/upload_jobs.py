@@ -78,6 +78,13 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
 
+\n
+def process_csv_content(content: bytes | str, filename: str = "telemetry.csv", job_id: str | None = None) -> dict[str, Any]:
+    """Compatibility wrapper used by backend tests and older upload callers."""
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    return process_upload_bytes(filename, content, job_id=job_id)
+
 
 def process_upload_bytes(filename: str, content: bytes, job_id: str | None = None) -> dict[str, Any]:
     job_id = job_id or uuid.uuid4().hex
