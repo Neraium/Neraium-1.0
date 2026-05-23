@@ -6,7 +6,7 @@ from tempfile import NamedTemporaryFile
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Request, UploadFile
 from fastapi.responses import JSONResponse
 from app.services import adaptive_learning
 from app.services.evidence_store import upsert_evidence_run
@@ -17,127 +17,131 @@ router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/upload", status_code=202)
-async def upload_data(request: Request, file: UploadFile = File(...)):
-    content = await file.read()
-    settings = request.app.state.settings
-    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
-    if len(content) > max_size_bytes:
-        return JSONResponse(
-            status_code=413,
-            content={
-                "status": "FAILED",
-                "error_type": "upload_too_large",
-                "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
-            },
-        )
-    metrics = queue_metrics()
-    if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
-        return JSONResponse(
-            status_code=503,
-            headers={"retry-after": "30"},
-            content={
-                "status": "FAILED",
-                "error_type": "upload_queue_saturated",
-                "message": "Upload queue is saturated. Retry shortly.",
-            },
-        )
-    filename = file.filename or "upload.csv"
-    lowered = filename.lower()
-    content_type = (file.content_type or "").lower()
-    auth_context = getattr(request.state, "auth_context", {})
-    actor = (
-        auth_context.get("auth_subject")
-        or request.headers.get("X-Neraium-User")
-        or request.headers.get("X-Authenticated-User")
-        or request.headers.get("X-Forwarded-Email")
-        or "anonymous"
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _write_upload_failure(job_id: str, filename: str, actor: str, exc: Exception) -> None:
+    failed_at = _now_iso()
+    error_message = str(exc)
+    upload_jobs.write_job(
+        {
+            "job_id": job_id,
+            "filename": filename,
+            "status": "FAILED",
+            "processing_state": "failed",
+            "percent": 100,
+            "progress": 100,
+            "error": error_message,
+            "errors": [error_message],
+            "message": "Telemetry processing failed.",
+            "progress_label": "Telemetry processing failed.",
+            "result_available": False,
+            "completed_at": failed_at,
+        }
     )
+    upsert_evidence_run(
+        {
+            "run_id": job_id,
+            "source_name": filename,
+            "source_type": "csv_upload",
+            "status": "failed",
+            "created_at": failed_at,
+            "completed_at": failed_at,
+            "rows_received": 0,
+            "rows_accepted": 0,
+            "rows_rejected": 0,
+            "sensors_detected": 0,
+            "room": "Uploaded telemetry",
+            "operating_state": "error",
+            "drift_status": "error",
+            "warnings": [],
+            "errors": [error_message],
+            "primary_drivers": [],
+            "evidence_summary": [],
+            "structural_archetypes": [],
+            "initiated_by": actor,
+            "adaptive_site_key": "site::default",
+            "operator_feedback_history": [],
+        }
+    )
+
+
+def _process_uploaded_file(job_id: str, file_path: str, filename: str, content_type: str, actor: str) -> None:
     try:
+        upload_jobs.write_job(
+            {
+                "job_id": job_id,
+                "filename": filename,
+                "status": "RUNNING_SII",
+                "processing_state": "running_sii",
+                "percent": 18,
+                "progress": 18,
+                "message": "Telemetry batch processing in progress.",
+                "progress_label": "Parsing uploaded telemetry file.",
+                "result_available": False,
+                "started_at": _now_iso(),
+            }
+        )
+        lowered = filename.lower()
+        path = Path(file_path)
         if lowered.endswith(".json") or "json" in content_type:
+            content = path.read_bytes()
             summary = upload_jobs.process_json_payload(content, filename=filename)
         else:
-            with NamedTemporaryFile(delete=False, suffix=".csv") as temp:
-                temp.write(content)
-                temp_path = temp.name
-            try:
-                result = upload_jobs.process_csv_file(temp_path)
-            finally:
-                Path(temp_path).unlink(missing_ok=True)
+            result = upload_jobs.process_csv_file(path)
             summary = upload_jobs.read_latest_upload_summary() or {}
-            summary["job_id"] = result.get("job_id", summary.get("job_id"))
+            summary["job_id"] = job_id
             summary["filename"] = filename
             summary["runner_used"] = True
             summary["runner_module"] = RUNNER_MODULE
             summary["core_engine"] = CORE_ENGINE
+            summary.setdefault("status", "COMPLETE")
+            summary.setdefault("processing_state", "complete")
+            summary.setdefault("percent", 100)
+            summary.setdefault("progress", 100)
+            summary["last_processed_at"] = summary.get("last_processed_at") or _now_iso()
             upload_jobs.write_latest_upload_summary(summary)
             latest_result = upload_jobs.read_latest_upload_result() or {}
             if latest_result:
                 latest_result["filename"] = filename
-                latest_result["job_id"] = summary.get("job_id")
-                upload_jobs.write_latest_upload_result(summary.get("job_id"), latest_result)
+                latest_result["job_id"] = job_id
+                upload_jobs.write_latest_upload_result(job_id, latest_result)
                 upload_jobs.write_latest_upload_result(latest_result)
-        run_id = summary.get("job_id")
-        if run_id:
-            record = upsert_evidence_run(
-                {
-                    "run_id": run_id,
-                    "source_name": filename,
-                    "source_type": "csv_upload",
-                    "status": "completed",
-                    "created_at": summary.get("last_processed_at"),
-                    "completed_at": summary.get("last_processed_at"),
-                    "rows_received": summary.get("rows_processed", summary.get("row_count", 0)),
-                    "rows_accepted": summary.get("rows_processed", summary.get("row_count", 0)),
-                    "rows_rejected": 0,
-                    "sensors_detected": summary.get("columns_detected", summary.get("column_count", 0)),
-                    "room": "Uploaded telemetry",
-                    "operating_state": "Monitoring",
-                    "drift_status": "info",
-                    "warnings": [],
-                    "errors": [],
-                    "primary_drivers": [],
-                    "evidence_summary": [],
-                    "structural_archetypes": [],
-                    "initiated_by": actor,
-                    "adaptive_site_key": "site::default",
-                    "operator_feedback_history": [],
-                }
-            )
-            if record:
-                upsert_evidence_run(record)
-    except Exception as exc:
-        failed_job_id = uuid.uuid4().hex
-        failed_at = datetime.now(timezone.utc).isoformat()
-        upload_jobs.write_job(
-            {
-                "job_id": failed_job_id,
-                "filename": filename,
-                "status": "FAILED",
-                "processing_state": "failed",
-                "error": str(exc),
-                "message": "Telemetry processing failed.",
-                "progress_label": "Telemetry processing failed.",
-                "result_available": False,
-            }
-        )
+            if isinstance(result, dict):
+                summary["rows_processed"] = summary.get("rows_processed", result.get("rows_processed", result.get("row_count", 0)))
+                summary["columns_detected"] = summary.get("columns_detected", result.get("columns_detected", result.get("column_count", 0)))
+
+        summary = dict(summary or {})
+        summary["job_id"] = job_id
+        summary["filename"] = filename
+        summary["status"] = "COMPLETE"
+        summary["processing_state"] = "complete"
+        summary["percent"] = 100
+        summary["progress"] = 100
+        summary["message"] = "Telemetry processing complete."
+        summary["progress_label"] = "Telemetry processing complete."
+        summary["result_available"] = True
+        upload_jobs.write_job(summary)
+        upload_jobs.write_latest_upload_summary(summary)
+
         upsert_evidence_run(
             {
-                "run_id": failed_job_id,
+                "run_id": job_id,
                 "source_name": filename,
                 "source_type": "csv_upload",
-                "status": "failed",
-                "created_at": failed_at,
-                "completed_at": failed_at,
-                "rows_received": 0,
-                "rows_accepted": 0,
+                "status": "completed",
+                "created_at": summary.get("last_processed_at"),
+                "completed_at": summary.get("last_processed_at"),
+                "rows_received": summary.get("rows_processed", summary.get("row_count", 0)),
+                "rows_accepted": summary.get("rows_processed", summary.get("row_count", 0)),
                 "rows_rejected": 0,
-                "sensors_detected": 0,
+                "sensors_detected": summary.get("columns_detected", summary.get("column_count", 0)),
                 "room": "Uploaded telemetry",
-                "operating_state": "error",
-                "drift_status": "error",
+                "operating_state": "Monitoring",
+                "drift_status": "info",
                 "warnings": [],
-                "errors": [str(exc)],
+                "errors": [],
                 "primary_drivers": [],
                 "evidence_summary": [],
                 "structural_archetypes": [],
@@ -146,14 +150,99 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "operator_feedback_history": [],
             }
         )
-        summary = {"job_id": failed_job_id}
+    except Exception as exc:
+        logger.exception("upload_processing_failed job_id=%s filename=%s", job_id, filename)
+        _write_upload_failure(job_id, filename, actor, exc)
+    finally:
+        Path(file_path).unlink(missing_ok=True)
+
+
+@router.post("/upload", status_code=202)
+async def upload_data(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    settings = request.app.state.settings
+    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
+    filename = file.filename or "upload.csv"
+    lowered = filename.lower()
+    content_type = (file.content_type or "").lower()
+    if not (lowered.endswith(".csv") or lowered.endswith(".json") or "csv" in content_type or "json" in content_type or content_type in {"", "text/plain"}):
+        return JSONResponse(
+            status_code=400,
+            content={"status": "FAILED", "error_type": "unsupported_upload_type", "message": "Only CSV and JSON telemetry files are supported."},
+        )
+
+    auth_context = getattr(request.state, "auth_context", {})
+    actor = (
+        auth_context.get("auth_subject")
+        or request.headers.get("X-Neraium-User")
+        or request.headers.get("X-Authenticated-User")
+        or request.headers.get("X-Forwarded-Email")
+        or "anonymous"
+    )
+    metrics = queue_metrics()
+    if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
+        return JSONResponse(
+            status_code=503,
+            headers={"retry-after": "30"},
+            content={"status": "FAILED", "error_type": "upload_queue_saturated", "message": "Upload queue is saturated. Retry shortly."},
+        )
+
+    suffix = ".json" if lowered.endswith(".json") or "json" in content_type else ".csv"
+    job_id = uuid.uuid4().hex
+    bytes_written = 0
+    with NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+        temp_path = temp.name
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            bytes_written += len(chunk)
+            if bytes_written > max_size_bytes:
+                Path(temp_path).unlink(missing_ok=True)
+                return JSONResponse(
+                    status_code=413,
+                    content={"status": "FAILED", "error_type": "upload_too_large", "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes."},
+                )
+            temp.write(chunk)
+
+    if bytes_written <= 0:
+        Path(temp_path).unlink(missing_ok=True)
+        return JSONResponse(status_code=400, content={"status": "FAILED", "error_type": "empty_upload", "message": "Uploaded telemetry file is empty."})
+
+    queued_at = _now_iso()
+    upload_jobs.write_job(
+        {
+            "job_id": job_id,
+            "filename": filename,
+            "status": "PENDING",
+            "processing_state": "pending",
+            "percent": 8,
+            "progress": 8,
+            "message": "Upload received and queued for background processing.",
+            "progress_label": "File accepted. Background intake job is queued.",
+            "file_size_bytes": bytes_written,
+            "bytes_processed": bytes_written,
+            "rows_processed": 0,
+            "columns_detected": 0,
+            "result_available": False,
+            "started_at": queued_at,
+            "initiated_by": actor,
+        }
+    )
+    background_tasks.add_task(_process_uploaded_file, job_id, temp_path, filename, content_type, actor)
     return {
-        "job_id": summary.get("job_id"),
+        "job_id": job_id,
         "status": "PENDING",
+        "processing_state": "pending",
+        "stage": "pending",
+        "percent": 8,
+        "progress": 8,
         "filename": filename,
         "message": "Preparing telemetry intake. Upload received and queued for background processing.",
-        "status_url": f"/api/data/upload-status/{summary.get('job_id')}",
-        "file_size_bytes": len(content),
+        "status_url": f"/api/data/upload-status/{job_id}",
+        "result_url": f"/api/data/intake/{job_id}/result",
+        "file_size_bytes": bytes_written,
+        "bytes_processed": bytes_written,
+        "result_available": False,
     }
 
 
@@ -177,14 +266,8 @@ async def upload_status(job_id: str):
         "error": "upload_session_missing",
         "message": "Upload session expired or was not found.",
     }
-    logger.warning(
-        "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
-        job_id,
-    )
-    return JSONResponse(
-        status_code=404,
-        content=payload,
-    )
+    logger.warning("upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False", job_id)
+    return JSONResponse(status_code=404, content=payload)
 
 
 @router.get("/latest-upload")
@@ -213,15 +296,7 @@ async def latest_upload(include_persisted: int | bool = True):
     }
     if history and snapshot.get("last_filename"):
         history[0]["filename"] = snapshot["last_filename"]
-    return {
-        "snapshot": snapshot,
-        "latest_result": result,
-        "latestResult": result,
-        "summary": summary,
-        "history": history,
-        "adaptive_learning": adaptive,
-        **snapshot,
-    }
+    return {"snapshot": snapshot, "latest_result": result, "latestResult": result, "summary": summary, "history": history, "adaptive_learning": adaptive, **snapshot}
 
 
 @router.get("/replay/{job_id}")
@@ -233,18 +308,8 @@ async def data_replay(job_id: str):
 async def intake_result(job_id: str):
     result = upload_jobs.read_upload_result_by_job_id(job_id)
     if not result:
-        return {
-            "job_id": job_id,
-            "result_available": False,
-            "status": "NOT_FOUND",
-            "result": None,
-        }
-    return {
-        "job_id": job_id,
-        "result_available": True,
-        "status": "COMPLETE",
-        "result": result,
-    }
+        return {"job_id": job_id, "result_available": False, "status": "NOT_FOUND", "result": None}
+    return {"job_id": job_id, "result_available": True, "status": "COMPLETE", "result": result}
 
 
 @router.post("/reset")
@@ -259,7 +324,6 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
     file_path = payload.get("file_path")
     if not file_path:
         return upload_jobs.replay_payload(requested_job_id or None)
-
     result = upload_jobs.process_csv_file(Path(file_path))
     replay = result.get("replay_timeline") or {}
     timeline = replay.get("timeline", []) if isinstance(replay, dict) else []
@@ -282,14 +346,7 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
                 replay_mode = "standard"
     except OSError:
         pass
-
-    return {
-        "job_id": requested_job_id or result.get("job_id"),
-        "timeline": timeline,
-        "frame_count": len(timeline),
-        "meta": {**(replay.get("meta", {}) if isinstance(replay, dict) else {}), "replay_mode": replay_mode},
-        "message": "Replay reconstructed from the retained source CSV.",
-    }
+    return {"job_id": requested_job_id or result.get("job_id"), "timeline": timeline, "frame_count": len(timeline), "meta": {**(replay.get("meta", {}) if isinstance(replay, dict) else {}), "replay_mode": replay_mode}, "message": "Replay reconstructed from the retained source CSV."}
 
 
 def queue_metrics() -> dict[str, int]:
@@ -298,12 +355,7 @@ def queue_metrics() -> dict[str, int]:
 
 def normalize_upload_status_payload(payload: dict) -> dict:
     raw_status = str(payload.get("status", "")).upper()
-    status = {
-        "QUEUED": "PENDING",
-        "QUEUE": "PENDING",
-        "FAILED": "FAILED",
-        "FAILURE": "FAILED",
-    }.get(raw_status, raw_status)
+    status = {"QUEUED": "PENDING", "QUEUE": "PENDING", "FAILED": "FAILED", "FAILURE": "FAILED"}.get(raw_status, raw_status)
     normalized = dict(payload)
     normalized["status"] = status
     normalized.setdefault("job_id", payload.get("job_id"))
@@ -311,17 +363,14 @@ def normalize_upload_status_payload(payload: dict) -> dict:
     normalized.setdefault("progress", int(payload.get("percent", payload.get("progress", 0)) or 0))
     if status in {"RUNNING_SII", "PROCESSING", "PENDING", "QUEUED"}:
         normalized.setdefault("message", "Telemetry batch processing in progress.")
+    if status == "FAILED":
+        normalized.setdefault("progress_label", "Telemetry processing failed.")
+        normalized.setdefault("message", normalized.get("error") or "Telemetry processing failed.")
+        normalized.setdefault("result_available", False)
     if status == "COMPLETE":
         normalized.setdefault("progress_label", "Telemetry processing complete.")
         normalized.setdefault("message", "Telemetry processing complete.")
         normalized.setdefault("error", None)
-        normalized.setdefault(
-            "result_summary",
-            {
-                "job_id": normalized.get("job_id"),
-                "filename": normalized.get("filename"),
-                "rows_processed": normalized.get("rows_processed", normalized.get("row_count", 0)),
-                "columns_detected": normalized.get("columns_detected", normalized.get("column_count", 0)),
-            },
-        )
+        normalized.setdefault("result_available", True)
+        normalized.setdefault("result_summary", {"job_id": normalized.get("job_id"), "filename": normalized.get("filename"), "rows_processed": normalized.get("rows_processed", normalized.get("row_count", 0)), "columns_detected": normalized.get("columns_detected", normalized.get("column_count", 0))})
     return normalized
