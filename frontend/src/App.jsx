@@ -42,6 +42,7 @@ function App() {
     setIsDemoMode,
     loadFacilitySystems,
     loadLatestUploadState,
+    allowPersistedLatest,
     setAllowPersistedLatest,
     clearUploadSessionState,
     telemetryTick,
@@ -68,12 +69,14 @@ function App() {
     () => uploadStateView.hasActiveTelemetrySnapshot(guardedLatestUploadSnapshot) || uploadStateView.hasFullUploadResult(guardedLatestUploadResult),
     [guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
-  const effectiveSessionIntent = hasObservableUploadSession && sessionIntent === "neutral" ? "resumed" : sessionIntent;
+  const effectiveSessionIntent = sessionIntent;
   const hasCurrentUploadResult = effectiveSessionIntent === "current" && hasObservableUploadSession;
   const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
-  const hasActiveSession = hasCurrentUploadResult || hasResumedSession || hasObservableUploadSession;
+  const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
   const effectiveLatestUploadResult = hasActiveSession ? guardedLatestUploadResult : null;
-  const effectiveLatestUploadSnapshot = guardedLatestUploadSnapshot;
+  const effectiveLatestUploadSnapshot = hasActiveSession
+    ? guardedLatestUploadSnapshot
+    : uploadStateView.buildEmptyLatestUploadSnapshot();
   const roomContext = useMemo(
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
@@ -240,6 +243,12 @@ function App() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
   }, [effectiveSessionIntent]);
+
+  useEffect(() => {
+    if (!allowPersistedLatest && effectiveSessionIntent !== "neutral") {
+      setSessionIntent("neutral");
+    }
+  }, [allowPersistedLatest, effectiveSessionIntent]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
