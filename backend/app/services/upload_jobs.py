@@ -1355,7 +1355,7 @@ def build_upload_result(
 
     return {
         "filename": filename,
-        "replay_timeline": sii_intelligence.get("replay_timeline", {}),
+        "replay_timeline": replay_timeline,
         "row_count": total_rows,
         "column_count": len(columns),
         "columns": columns,
@@ -1803,6 +1803,35 @@ def truncate_runner_result(runner_result: dict[str, Any]) -> dict[str, Any]:
 def build_persistable_upload_result(job_id: str, result: dict[str, Any]) -> dict[str, Any]:
     processing_trace = result.get("processing_trace", {}) if isinstance(result.get("processing_trace"), dict) else {}
     sii_intelligence = result.get("sii_intelligence", {}) if isinstance(result.get("sii_intelligence"), dict) else {}
+
+    replay_timeline = (
+        result.get("replay_timeline")
+        or sii_intelligence.get("replay_timeline")
+        or {}
+    )
+    replay_frames = replay_timeline.get("timeline") if isinstance(replay_timeline, dict) else []
+
+    if not isinstance(replay_frames, list) or len(replay_frames) == 0:
+        rows = result.get("preview_rows") or []
+        columns = result.get("columns") or []
+        timestamp_column = result.get("detected_timestamp_column")
+        primary_room = (
+            sii_intelligence.get("primary_room")
+            or result.get("room_summary", {}).get("rooms", [{}])[0].get("room")
+            if isinstance(result.get("room_summary", {}).get("rooms"), list) and result.get("room_summary", {}).get("rooms")
+            else "Current room"
+        )
+        replay_timeline = build_minimal_replay_timeline(
+            columns=columns,
+            rows=rows,
+            total_rows=int(result.get("row_count") or len(rows) or 0),
+            timestamp_column=timestamp_column,
+            primary_room=primary_room,
+            row_indexes=None,
+        )
+        sii_intelligence["replay_timeline"] = replay_timeline
+        processing_trace["replay_frame_count"] = replay_timeline.get("meta", {}).get("frame_count", 0)
+
     completed_at = (
         processing_trace.get("completed_at")
         or sii_intelligence.get("last_updated")
