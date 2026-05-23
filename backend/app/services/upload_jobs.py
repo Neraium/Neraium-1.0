@@ -8,7 +8,7 @@ import time
 import uuid
 import hashlib
 import math
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from collections import Counter, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -960,8 +960,51 @@ def build_upload_result(
             timestamp_column=detected_timestamp_column,
             progress_callback=emit_structural_progress,
         )
-        engine_result = engine_future.result()
-        temporal_math = temporal_future.result()
+        pending: dict[Any, str] = {
+            engine_future: "engine",
+            temporal_future: "temporal",
+        }
+        completed: dict[str, Any] = {}
+        scoring_started = time.perf_counter()
+        while pending:
+            done, _ = wait(tuple(pending.keys()), timeout=1.0)
+            for future in list(done):
+                task_name = pending.pop(future)
+                completed[task_name] = future.result()
+                if task_name == "temporal":
+                    timed_status(
+                        status_callback,
+                        "STRUCTURAL_SCORING",
+                        processing_stats,
+                        rows_processed=total_rows,
+                        columns_detected=len(columns),
+                        percent=79,
+                        progress_label="Structural scoring: temporal math complete; finalizing core drift model.",
+                    )
+                else:
+                    timed_status(
+                        status_callback,
+                        "STRUCTURAL_SCORING",
+                        processing_stats,
+                        rows_processed=total_rows,
+                        columns_detected=len(columns),
+                        percent=81,
+                        progress_label="Structural scoring: core drift model complete; finalizing evidence synthesis.",
+                    )
+            if pending:
+                elapsed = time.perf_counter() - scoring_started
+                pulse_percent = min(78, 74 + int(elapsed // 3))
+                timed_status(
+                    status_callback,
+                    "STRUCTURAL_SCORING",
+                    processing_stats,
+                    rows_processed=total_rows,
+                    columns_detected=len(columns),
+                    percent=pulse_percent,
+                    progress_label="Structural scoring: running deep math checks.",
+                )
+        engine_result = completed["engine"]
+        temporal_math = completed["temporal"]
     timed_status(
         status_callback,
         "STRUCTURAL_SCORING",
