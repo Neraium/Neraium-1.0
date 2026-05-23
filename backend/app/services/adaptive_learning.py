@@ -263,11 +263,25 @@ def apply_operator_feedback(run_id: str, category: str, note: str | None, actor:
     site_key = record.get("adaptive_site_key") or "site::default"
     event_memory = read_event_memory(site_key)
     rewritten = []
+    matched = False
     for item in event_memory:
         if item.get("run_id") == run_id:
+            matched = True
             rewritten.append({**item, "feedback_category": normalized, "feedback_note": feedback_entry["note"], "feedback_recorded_at": feedback_entry["recorded_at"]})
         else:
             rewritten.append(item)
+    if not matched:
+        rewritten.insert(
+            0,
+            {
+                "run_id": run_id,
+                "site_key": site_key,
+                "occurred_at": feedback_entry["recorded_at"],
+                "feedback_category": normalized,
+                "feedback_note": feedback_entry["note"],
+                "feedback_recorded_at": feedback_entry["recorded_at"],
+            },
+        )
     upsert_latest_payload(event_memory_key(site_key), rewritten[:MAX_EVENT_MEMORY])
 
     site_memory = read_site_memory(site_key) or build_empty_site_memory(site_key, feedback_entry["recorded_at"])

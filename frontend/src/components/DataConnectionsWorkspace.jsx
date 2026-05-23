@@ -9,7 +9,6 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
-import { normalizeUploadJob } from "../viewModels/uploadContract";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
@@ -114,14 +113,14 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
-  const [batchResults, setBatchResults] = useState([]);
-  const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false);
-  const [copyState, setCopyState] = useState("idle");
+  const [batchResults, setBatchResults] = useState([]); 
+  const [isJsonSchemaOpen, setIsJsonSchemaOpen] = useState(false); 
+  const [copyState, setCopyState] = useState("idle"); 
   const [feedbackState, setFeedbackState] = useState({ status: "idle", category: null, message: "" });
   void uploadResult;
   void feedbackState;
   const [isResetViewActive, setIsResetViewActive] = useState(false);
-  const uploadJobIdRef = useRef(null);
+  const uploadJobIdRef = useRef(null); 
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const uploadInputRef = useRef(null);
@@ -148,6 +147,7 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     if (!latestUploadSnapshot) return;
     const currentJobId = uploadJob?.job_id ?? uploadJobIdRef.current;
+    // Do not let background snapshot polling overwrite an active in-flight upload job.
     if (currentJobId && isUploadProcessing(uploadState)) return;
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
     const snapshotReplayFrameCount =
@@ -212,7 +212,7 @@ export default function DataConnectionsWorkspace({
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
-        const payload = normalizeUploadJob(await readJsonPayload(response));
+        const payload = await readJsonPayload(response);
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
         if (["NOT_FOUND", "MISSING"].includes(String(payload?.status ?? "").toUpperCase())) {
           notFoundCount += 1;
@@ -454,7 +454,7 @@ export default function DataConnectionsWorkspace({
         const startingLoaded = aggregateLoaded;
         const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
         setBatchResults((current) => current.map((entry) => (entry.id === fileId ? { ...entry, status: "uploading", message: "Uploading" } : entry)));
-        const { ok, status, payload: rawPayload } = await uploadTelemetryFileWithProgress({
+        const { ok, status, payload } = await uploadTelemetryFileWithProgress({
           file,
           timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
           onProgress: (progress) => {
@@ -473,20 +473,9 @@ export default function DataConnectionsWorkspace({
           },
         });
         try {
-          const payload = normalizeUploadJob(rawPayload);
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
           const returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
-          if (!returnedJobId) {
-            throw buildUploadRequestError(
-              { status },
-              {
-                ...payload,
-                error_type: "upload_session_missing",
-                message: "Upload completed but no job ID was returned by the server.",
-              },
-              "upload",
-            );
-          }
+          if (!returnedJobId) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
           uploadJobIdRef.current = returnedJobId;
           if (typeof window !== "undefined" && uploadJobIdRef.current) {
             window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
@@ -507,7 +496,7 @@ export default function DataConnectionsWorkspace({
           const classified = classifyUploadError(uploadRequestError, "upload");
           failedCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
-            ? { ...entry, status: "failed", message: classified.message, jobId: uploadJobIdRef.current ?? null }
+            ? { ...entry, status: "failed", message: classified.message, jobId: payload?.job_id ?? null }
             : entry)));
         }
       }
@@ -521,9 +510,9 @@ export default function DataConnectionsWorkspace({
       if (failedCount > 0) {
         if (successCount === 0) {
           setUploadResult(null);
-          if (typeof window !== "undefined") {
-            window.__NERAIUM_UPLOAD_COMPLETE__ = false;
-          }
+    if (typeof window !== "undefined") {
+      window.__NERAIUM_UPLOAD_COMPLETE__ = false;
+    }
         } else {
           setUploadResult(completedPayload);
         }
@@ -590,7 +579,7 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function handleResetDemoClick() {
+  async function handleResetDemoClick() { 
     setIsResetViewActive(true);
     setSelectedFiles([]);
     setUploadState("idle");
@@ -613,10 +602,10 @@ export default function DataConnectionsWorkspace({
     }
     if (uploadInputRef.current) uploadInputRef.current.value = "";
     uploadInFlightRef.current = false;
-    if (onResetDemo) await onResetDemo();
-  }
+    if (onResetDemo) await onResetDemo(); 
+  } 
 
-  const displayUploadError = uploadError;
+  const displayUploadError = uploadError; 
   const effectiveSnapshot = isResetViewActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : latestUploadSnapshot;
@@ -671,7 +660,7 @@ export default function DataConnectionsWorkspace({
     : Number.isFinite(visibleProgressPercent)
       ? Math.max(0, Math.min(100, Number(visibleProgressPercent)))
       : 0;
-  return (
+  return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
         tabs={tabs}
@@ -707,14 +696,89 @@ export default function DataConnectionsWorkspace({
         onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
         onReprocessCurrentBatch={handleReprocessCurrentBatch}
       />
+      <section className="panel span-12" aria-label="Replay debug status">
+        <header className="panel-header">
+          <h3>Debug Status</h3>
+        </header>
+        <div className="panel-body">
+          <ul className="system-body-timeline-list">
+            {statusDebug.map(([label, value]) => (
+              <li key={label}>
+                <span>{label}: </span>
+                <strong>{value}</strong>
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: "0.8rem" }}>
+            <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
+              Upload State Progress: {uploadStatePercent}%
+            </p>
+            <div
+              className="upload-progress-meter"
+              aria-label="Upload state progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={uploadStatePercent}
+              role="progressbar"
+            >
+              <span style={{ width: `${uploadStatePercent}%` }} />
+            </div>
+          </div>
+          <div style={{ marginTop: "0.8rem" }}>
+            <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
+              Job Status Progress: {jobStatusPercent}%
+            </p>
+            <div
+              className="upload-progress-meter"
+              aria-label="Job status progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={jobStatusPercent}
+              role="progressbar"
+            >
+              <span style={{ width: `${jobStatusPercent}%` }} />
+            </div>
+          </div>
+          <div style={{ marginTop: "0.6rem" }}>
+            <div
+              className="upload-progress-meter"
+              aria-label="Debug upload progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={debugProgressValue}
+              role="progressbar"
+            >
+              <span style={{ width: `${debugProgressValue}%` }} />
+            </div>
+          </div>
+        </div>
+      </section>
+      
     </div>
   );
 }
 
 function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false }) {
-  if (failedAttempt) return Math.min(5000, 750 + failureCount * 350);
-  const status = normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? "");
-  if (["generating_replay", "writing_state", "cognition_ready"].includes(status)) return 900;
-  if (["running_sii", "structural_scoring", "baseline_modeling"].includes(status)) return 1200;
-  return 1500;
+  const hintedRetry = Number(payload?.retry_after_ms);
+  if (Number.isFinite(hintedRetry) && hintedRetry >= 1000) {
+    return Math.min(Math.max(hintedRetry, 800), 12000);
+  }
+
+  const percent = Number(payload?.percent);
+  const progress = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
+  let baseDelay = 1200;
+
+  if (failedAttempt) {
+    baseDelay = Math.min(1200 + failureCount * 900, 8000);
+  } else if (progress != null) {
+    if (progress < 20) baseDelay = 900;
+    else if (progress < 70) baseDelay = 1300;
+    else if (progress < 95) baseDelay = 1700;
+    else baseDelay = 2200;
+  } else {
+    baseDelay = 1500;
+  }
+
+  const hiddenMultiplier = typeof document !== "undefined" && document.visibilityState === "hidden" ? 1.35 : 1;
+  return Math.round(baseDelay * hiddenMultiplier);
 }

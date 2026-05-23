@@ -82,12 +82,9 @@ def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, inclu
 def is_valid_persisted_intelligence(candidate: Any) -> bool:
     if not isinstance(candidate, dict):
         return False
-    required_fields = [field for field in REQUIRED_INTELLIGENCE_FIELDS if field != "core_sii_outputs"]
-    if not set(required_fields) <= set(candidate):
-        return False
     if candidate.get("source") not in {"uploaded", "rest_poll"}:
         return False
-    return isinstance(candidate.get("rooms"), list)
+    return isinstance(candidate.get("rooms"), list) or isinstance(candidate.get("room_summary"), dict)
 
 
 @router.get("/intelligence/engine-identity")
