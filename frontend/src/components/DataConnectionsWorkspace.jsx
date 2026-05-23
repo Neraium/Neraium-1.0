@@ -508,7 +508,7 @@ export default function DataConnectionsWorkspace({
           const classified = classifyUploadError(uploadRequestError, "upload");
           failedCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
-            ? { ...entry, status: "failed", message: classified.message, jobId: payload?.job_id ?? null }
+            ? { ...entry, status: "failed", message: classified.message, jobId: uploadJobIdRef.current ?? null }
             : entry)));
         }
       }
