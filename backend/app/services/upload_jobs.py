@@ -78,14 +78,6 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
 
-
-def process_csv_content(content: bytes | str, filename: str = "telemetry.csv", job_id: str | None = None) -> dict[str, Any]:
-    """Compatibility wrapper used by backend tests and older upload callers."""
-    if isinstance(content, str):
-        content = content.encode("utf-8")
-    return process_upload_bytes(filename, content, job_id=job_id)
-
-
 def process_upload_bytes(filename: str, content: bytes, job_id: str | None = None) -> dict[str, Any]:
     job_id = job_id or uuid.uuid4().hex
     _set_status(job_id, "PROCESSING", 10, "Parsing CSV")
@@ -253,6 +245,77 @@ def process_upload_bytes(filename: str, content: bytes, job_id: str | None = Non
         )
     except Exception:
         pass
+    return summary
+
+
+
+def process_csv_content(content: bytes | str, filename: str = "telemetry.csv", job_id: str | None = None) -> dict[str, Any]:
+    """Compatibility wrapper used by tests and older upload callers."""
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    return process_upload_bytes(filename, content, job_id=job_id)
+
+
+def process_csv_file(file_path: str | Path, job_id: str | None = None) -> dict[str, Any]:
+    """Compatibility wrapper for older callers that pass a CSV file path."""
+    path = Path(file_path)
+    return process_upload_bytes(path.name, path.read_bytes(), job_id=job_id)
+
+
+def process_json_payload(content: bytes | str, filename: str = "telemetry.json", job_id: str | None = None) -> dict[str, Any]:
+    """Compatibility JSON upload handler. Stores JSON as a lightweight completed upload result."""
+    job_id = job_id or uuid.uuid4().hex
+    if isinstance(content, bytes):
+        text = content.decode("utf-8-sig", errors="replace")
+    else:
+        text = content
+    try:
+        payload = json.loads(text or "{}")
+    except Exception:
+        payload = {"raw": text}
+
+    now = datetime.now(timezone.utc).isoformat()
+    result = {
+        "job_id": job_id,
+        "filename": filename,
+        "source_type": "json",
+        "row_count": 1,
+        "column_count": len(payload) if isinstance(payload, dict) else 1,
+        "json_payload": payload,
+        "operating_state": "Monitoring",
+        "drift_status": "info",
+        "replay_timeline": {"meta": {"frame_count": 1, "job_id": job_id}, "timeline": []},
+        "replay_ready": False,
+        "replay_frame_count": 0,
+        "last_processed_at": now,
+        "completed_at": now,
+    }
+    summary = {
+        "job_id": job_id,
+        "status_url": f"/api/data/upload-status/{job_id}",
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "percent": 100,
+        "progress": 100,
+        "result_available": True,
+        "first_usable_available": True,
+        "sii_completed": True,
+        "replay_ready": False,
+        "replay_frame_count": 0,
+        "last_processed_at": now,
+        "filename": filename,
+        "row_count": 1,
+        "column_count": result["column_count"],
+        "rows_processed": 1,
+        "columns_detected": result["column_count"],
+    }
+    _write_json(f"upload_result_{job_id}.json", result)
+    _write_json(f"upload_status_{job_id}.json", summary)
+    _write_json("latest_upload_result.json", result)
+    _write_json("latest_upload_summary.json", summary)
+    JOBS[job_id] = summary
+    LATEST_UPLOAD_CACHE["result"] = result
+    LATEST_UPLOAD_CACHE["summary"] = summary
     return summary
 
 
