@@ -78,7 +78,7 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
 
-\n
+
 def process_csv_content(content: bytes | str, filename: str = "telemetry.csv", job_id: str | None = None) -> dict[str, Any]:
     """Compatibility wrapper used by backend tests and older upload callers."""
     if isinstance(content, str):
