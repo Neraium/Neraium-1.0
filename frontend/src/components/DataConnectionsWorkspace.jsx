@@ -620,6 +620,36 @@ export default function DataConnectionsWorkspace({
               <li key={label}><span>{label}</span><strong>{value}</strong></li>
             ))}
           </ul>
+          <div style={{ marginTop: "0.8rem" }}>
+            <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
+              Upload State Progress: {uploadStatePercent}%
+            </p>
+            <div
+              className="upload-progress-meter"
+              aria-label="Upload state progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={uploadStatePercent}
+              role="progressbar"
+            >
+              <span style={{ width: `${uploadStatePercent}%` }} />
+            </div>
+          </div>
+          <div style={{ marginTop: "0.8rem" }}>
+            <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
+              Job Status Progress: {jobStatusPercent}%
+            </p>
+            <div
+              className="upload-progress-meter"
+              aria-label="Job status progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={jobStatusPercent}
+              role="progressbar"
+            >
+              <span style={{ width: `${jobStatusPercent}%` }} />
+            </div>
+          </div>
           <div style={{ marginTop: "0.6rem" }}>
             <div
               className="upload-progress-meter"
