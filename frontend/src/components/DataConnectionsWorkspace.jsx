@@ -563,7 +563,7 @@ export default function DataConnectionsWorkspace({
     ["Job Status", String(uploadJob?.status ?? "none")],
     ["Job Status %", `${jobStatusPercent}%`],
     ["Processing State", String(uploadJob?.processing_state ?? "none")],
-    ["Percent", String(uploadJob?.percent ?? uploadJob?.progress ?? "n/a")],
+    ["Percent", Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? `${Number(uploadJob?.percent ?? uploadJob?.progress)}%` : "n/a"],
     ["Replay Ready", String(effectiveReplayReady)],
     ["Replay Frame Count", String(effectiveReplayFrameCount)],
     ["Snapshot Status", String(effectiveSnapshot?.status ?? "none")],
@@ -620,7 +620,10 @@ export default function DataConnectionsWorkspace({
         <div className="panel-body">
           <ul className="system-body-timeline-list">
             {statusDebug.map(([label, value]) => (
-              <li key={label}><span>{label}</span><strong>{value}</strong></li>
+              <li key={label}>
+                <span>{label}: </span>
+                <strong>{value}</strong>
+              </li>
             ))}
           </ul>
           <div style={{ marginTop: "0.8rem" }}>
