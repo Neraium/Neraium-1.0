@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE
-from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_latest_payload, read_latest_payload, upsert_latest_payload, read_latest_payload
+from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, upsert_latest_payload, read_latest_payload, upsert_latest_payload, read_latest_payload
 
 RUNTIME_DIR = Path("backend/runtime")
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
@@ -66,7 +66,11 @@ def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
 
 
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
-    return JOBS.get(job_id) or _read_json(f"upload_status_{job_id}.json")
+    return (
+        JOBS.get(job_id)
+        or _read_json(f"upload_status_{job_id}.json")
+        or read_upload_job(job_id)
+    )
 
 
 def reset_upload_state() -> None:
@@ -96,6 +100,7 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     }
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
+    upsert_upload_job(payload)
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
 
