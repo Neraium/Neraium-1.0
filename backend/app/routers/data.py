@@ -322,8 +322,43 @@ async def upload_status(job_id: str):
 async def latest_upload(include_persisted: int | bool = True):
     state_backend = upload_jobs.upload_state_backend()
     result = upload_jobs.read_latest_upload_result()
-    summary = latest_completed_job_summary() or {}
+    summary = latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}
     history = upload_jobs.read_upload_history(limit=20)
+
+    # If latest summary/result are stale or empty, recover from any completed
+    # persisted upload status. This keeps latest-upload aligned with
+    # upload-status in multi-task ECS deployments.
+    if not summary and history:
+        for item in history:
+            if isinstance(item, dict) and (
+                item.get("status") == "COMPLETE"
+                or item.get("result_available")
+                or item.get("sii_completed")
+            ):
+                summary = dict(item)
+                break
+
+    if not summary:
+        latest_result_candidate = result if isinstance(result, dict) else {}
+        if latest_result_candidate:
+            summary = upload_jobs.normalize_upload_summary(latest_result_candidate) if hasattr(upload_jobs, "normalize_upload_summary") else {
+                "job_id": latest_result_candidate.get("job_id"),
+                "filename": latest_result_candidate.get("filename"),
+                "status": "COMPLETE",
+                "processing_state": "complete",
+                "percent": 100,
+                "progress": 100,
+                "result_available": True,
+                "sii_completed": True,
+                "replay_ready": latest_result_candidate.get("replay_ready", False),
+                "replay_frame_count": latest_result_candidate.get("replay_frame_count", 0),
+                "latest_replay_frames": latest_result_candidate.get("latest_replay_frames", 0),
+                "row_count": latest_result_candidate.get("row_count", 0),
+                "column_count": latest_result_candidate.get("column_count", 0),
+                "rows_processed": latest_result_candidate.get("rows_processed") or latest_result_candidate.get("row_count", 0),
+                "columns_detected": latest_result_candidate.get("columns_detected") or latest_result_candidate.get("column_count", 0),
+                "last_processed_at": latest_result_candidate.get("last_processed_at") or latest_result_candidate.get("completed_at"),
+            }
 
     # Recovery path for split API/worker containers:
     # if the full result is not visible in this container but a completed
@@ -366,10 +401,10 @@ async def latest_upload(include_persisted: int | bool = True):
         "rows_processed": (result or {}).get("row_count") or summary.get("rows_processed") or summary.get("row_count") or 0,
         "columns_detected": (result or {}).get("column_count") or summary.get("columns_detected") or summary.get("column_count") or 0,
         "state_available": bool(result),
-        "status": summary.get("status", "COMPLETE" if result else "empty"),
-        "processing_state": summary.get("processing_state", "complete" if result else "empty"),
-        "result_available": bool(result),
-        "sii_completed": bool(result),
+        "status": "COMPLETE" if result else summary.get("status", "empty"),
+        "processing_state": "complete" if result else summary.get("processing_state", "empty"),
+        "result_available": bool(result) or bool(summary.get("result_available")),
+        "sii_completed": bool(result) or bool(summary.get("sii_completed")),
         "replay_ready": bool(frames),
         "replay_frame_count": len(frames or []),
         "latest_replay_frames": len(frames or []),
