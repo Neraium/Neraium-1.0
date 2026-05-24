@@ -27,6 +27,18 @@ def _upload_state_bucket() -> str:
     return os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "").strip()
 
 
+def shared_state_configured() -> bool:
+    return bool(_upload_state_bucket())
+
+
+def upload_state_backend() -> str:
+    if shared_state_configured():
+        return "s3"
+    if _runtime_db_latest_enabled():
+        return "runtime_db"
+    return "local"
+
+
 def _upload_state_prefix() -> str:
     prefix = os.getenv("NERAIUM_UPLOAD_STATE_PREFIX", "upload-state/").strip()
     if prefix and not prefix.endswith("/"):

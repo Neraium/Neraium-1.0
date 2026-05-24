@@ -1203,6 +1203,7 @@ def test_upload_status_recovers_after_jobs_cache_clear() -> None:
     assert second.status_code == 200
     assert first.json()["status"] == "COMPLETE"
     assert second.json()["status"] == "COMPLETE"
+    assert "state_backend" in first.json()
 
 
 def test_latest_upload_recovers_after_cache_clear() -> None:
@@ -1231,6 +1232,7 @@ def test_latest_upload_recovers_after_cache_clear() -> None:
     assert payload["source"] == "uploaded"
     assert payload["latest_result"]["job_id"] == "latest-cache-clear-job"
     assert payload["latest_result"]["row_count"] == 12
+    assert "state_backend" in payload
 
 
 def test_replay_payload_recovers_after_cache_clear() -> None:

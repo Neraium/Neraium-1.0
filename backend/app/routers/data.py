@@ -187,12 +187,17 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 @router.get("/upload-status/{job_id}")
 async def upload_status(job_id: str):
+    state_backend = upload_jobs.upload_state_backend()
     status = upload_jobs.read_upload_status(job_id)
     if status:
-        return normalize_upload_status_payload(status)
+        normalized = normalize_upload_status_payload(status)
+        normalized.setdefault("state_backend", state_backend)
+        return normalized
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
     if str(latest_summary.get("job_id") or "") == str(job_id):
-        return normalize_upload_status_payload(latest_summary)
+        normalized = normalize_upload_status_payload(latest_summary)
+        normalized.setdefault("state_backend", state_backend)
+        return normalized
     latest_result = upload_jobs.read_upload_result_by_job_id(job_id) or upload_jobs.read_latest_upload_result()
     if isinstance(latest_result, dict) and (
         latest_result.get("job_id") == job_id or latest_result.get("filename")
@@ -226,12 +231,13 @@ async def upload_status(job_id: str):
             "progress_label": "Telemetry processing complete.",
             "message": "Telemetry processing complete.",
             "error": None,
+            "state_backend": state_backend,
         }
 
     latest_result = upload_jobs.read_upload_result_by_job_id(job_id) or upload_jobs.read_latest_upload_result()
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
 
-    if isinstance(latest_result, dict) and latest_result:
+    if isinstance(latest_result, dict) and latest_result and str(latest_result.get("job_id") or "") == str(job_id):
         replay = (
             latest_result.get("replay_timeline")
             or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
@@ -261,9 +267,14 @@ async def upload_status(job_id: str):
             "progress_label": "Telemetry processing complete.",
             "message": "Telemetry processing complete.",
             "error": None,
+            "state_backend": state_backend,
         }
 
-    if isinstance(latest_summary, dict) and latest_summary.get("status") == "COMPLETE":
+    if (
+        isinstance(latest_summary, dict)
+        and latest_summary.get("status") == "COMPLETE"
+        and str(latest_summary.get("job_id") or "") == str(job_id)
+    ):
         return {
             **latest_summary,
             "job_id": job_id,
@@ -278,6 +289,7 @@ async def upload_status(job_id: str):
             "progress_label": "Telemetry processing complete.",
             "message": "Telemetry processing complete.",
             "error": None,
+            "state_backend": state_backend,
         }
 
     payload = {
@@ -291,6 +303,7 @@ async def upload_status(job_id: str):
         "error_type": "upload_session_missing",
         "error": "upload_session_missing",
         "message": "Upload session expired or was not found.",
+        "state_backend": state_backend,
     }
     logger.warning(
         "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
@@ -304,6 +317,7 @@ async def upload_status(job_id: str):
 
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
+    state_backend = upload_jobs.upload_state_backend()
     result = upload_jobs.read_latest_upload_result()
     summary = latest_completed_job_summary() or {}
     history = upload_jobs.read_upload_history(limit=20)
@@ -344,6 +358,7 @@ async def latest_upload(include_persisted: int | bool = True):
                 adaptive["event_memory"]["recent_feedback_history"] = fallback_recent
     snapshot = {
         **summary,
+        "state_backend": state_backend,
         "source": "uploaded" if result else "none",
         "last_filename": (result or {}).get("filename") or summary.get("filename"),
         "rows_processed": (result or {}).get("row_count") or summary.get("rows_processed") or summary.get("row_count") or 0,
@@ -367,6 +382,7 @@ async def latest_upload(include_persisted: int | bool = True):
         "summary": summary,
         "history": history,
         "adaptive_learning": adaptive,
+        "state_backend": state_backend,
         **snapshot,
     }
 

@@ -214,7 +214,19 @@ export default function DataConnectionsWorkspace({
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
-        if (["NOT_FOUND", "MISSING"].includes(String(payload?.status ?? "").toUpperCase())) {
+        const payloadStatusUpper = String(payload?.status ?? "").toUpperCase();
+        const previouslyComplete = normalizeUploadStatus(uploadState) === "complete" || (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_COMPLETE__ === true);
+        if (previouslyComplete && ["NOT_FOUND", "MISSING"].includes(payloadStatusUpper)) {
+          notFoundCount += 1;
+          // Anti-flap guard: keep terminal COMPLETE sticky across a single-task miss.
+          if (notFoundCount <= 5) {
+            await new Promise((resolve) => {
+              pollTimerRef.current = window.setTimeout(resolve, 250);
+            });
+            continue;
+          }
+        }
+        if (["NOT_FOUND", "MISSING"].includes(payloadStatusUpper)) {
           notFoundCount += 1;
           if (notFoundCount >= 3) {
             const latestPayload = await loadLatestUpload();

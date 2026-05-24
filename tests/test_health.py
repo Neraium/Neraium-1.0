@@ -29,6 +29,15 @@ def test_health_endpoint_returns_ok() -> None:
     assert response.json() == {"status": "ok", "service": "neraium-api"}
 
 
+def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
+    client = TestClient(create_app())
+    response = client.get("/api/ready")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "upload_state_backend" in payload
+    assert "upload_state_shared_configured" in payload
+
+
 def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
     client = TestClient(create_app())
 
