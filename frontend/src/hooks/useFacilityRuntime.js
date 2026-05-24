@@ -14,6 +14,8 @@ import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
 const OPERATIONAL_CADENCE_MS = 30000;
 const LIVE_REFRESH_INTERVAL_MS = 5000;
+const DATA_PROMOTION_STREAK_REQUIRED = 2;
+const EMPTY_DEMOTION_STREAK_REQUIRED = 3;
 
 export default function useFacilityRuntime({
   hasAccess,
@@ -44,9 +46,11 @@ export default function useFacilityRuntime({
   const [domainMode, setDomainModeState] = useState(null);
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
+  const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
   const clearUploadSessionState = useCallback(() => {
     setLatestUploadResult(null);
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
+    latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
   }, []);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
@@ -134,6 +138,27 @@ export default function useFacilityRuntime({
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
       const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted });
+      const nextHasData = Boolean(
+        uploadStateView.hasFullUploadResult(payload.latestResult)
+        || uploadStateView.hasActiveTelemetrySnapshot(payload.snapshot),
+      );
+      const stability = latestStabilityRef.current;
+      if (nextHasData) {
+        stability.dataStreak += 1;
+        stability.emptyStreak = 0;
+      } else {
+        stability.emptyStreak += 1;
+        stability.dataStreak = 0;
+      }
+
+      if (!stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
+        return Boolean(latestUploadResult);
+      }
+      if (stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
+        return Boolean(latestUploadResult);
+      }
+
+      stability.hasData = nextHasData;
       setLatestUploadSnapshot(payload.snapshot);
       setLatestUploadResult(payload.latestResult);
       return Boolean(payload.latestResult);
