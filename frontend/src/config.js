@@ -44,17 +44,34 @@ function isUnsafeMixedContentTarget(apiBaseUrl) {
 }
 
 function apiBaseCandidates() {
-  const candidates = [
-    API_BASE_URL,
-    configuredFallbackApiBaseUrl,
-    appSiblingApiBaseUrl(),
-    isProductionBuild ? PRODUCTION_API_FALLBACK : "",
-  ];
+  const siblingApi = appSiblingApiBaseUrl();
+  const productionFallback = isProductionBuild ? PRODUCTION_API_FALLBACK : "";
+  const configuredPrimary = API_BASE_URL;
+  const configuredFallback = configuredFallbackApiBaseUrl;
+
+  const candidates = isProductionBuild
+    ? [
+      configuredPrimary,
+      configuredFallback,
+      siblingApi,
+      productionFallback,
+      // Keep same-origin as a last resort in production to avoid noisy 404/CORS loops on app hosting.
+      "",
+    ]
+    : [
+      configuredPrimary,
+      configuredFallback,
+      siblingApi,
+      productionFallback,
+    ];
 
   const seen = new Set();
   return candidates.filter((value) => {
     const normalized = (value ?? "").replace(/\/+$/, "");
     if (seen.has(normalized) || isUnsafeMixedContentTarget(normalized)) {
+      return false;
+    }
+    if (isProductionBuild && normalized === "" && (siblingApi || productionFallback)) {
       return false;
     }
     seen.add(normalized);
