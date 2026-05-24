@@ -70,8 +70,9 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
     });
 
     const shouldRetryStatus = (status) => status >= 500 || status === 404 || status === 405 || status === 408 || status === 425 || status === 429;
+    const MAX_SAME_URL_RETRIES = 2;
 
-    const uploadAttempt = (index) => {
+    const uploadAttempt = (index, retryCount = 0) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       formData.append("file", file);
@@ -134,7 +135,12 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
         });
 
         if (index < uploadUrls.length - 1) {
-          uploadAttempt(index + 1);
+          uploadAttempt(index + 1, 0);
+          return;
+        }
+
+        if (retryCount < MAX_SAME_URL_RETRIES) {
+          uploadAttempt(index, retryCount + 1);
           return;
         }
 
@@ -162,7 +168,12 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
         });
 
         if (index < uploadUrls.length - 1) {
-          uploadAttempt(index + 1);
+          uploadAttempt(index + 1, 0);
+          return;
+        }
+
+        if (retryCount < MAX_SAME_URL_RETRIES) {
+          uploadAttempt(index, retryCount + 1);
           return;
         }
 
@@ -179,6 +190,6 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       xhr.send(formData);
     };
 
-    uploadAttempt(0);
+    uploadAttempt(0, 0);
   });
 }
