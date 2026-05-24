@@ -16,6 +16,8 @@ def require_api_access(request: Request, response: Response) -> None:
         "/api/facility/systems",
         "/api/facility/intelligence-status",
         "/api/facility/cognition-state",
+        "/latest-upload",
+        "/systems",
     }:
         request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
         request.state.request_id = request_id

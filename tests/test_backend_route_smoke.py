@@ -8,6 +8,8 @@ def test_backend_route_smoke() -> None:
 
     endpoints = [
         "/health",
+        "/latest-upload?include_persisted=1",
+        "/systems?include_persisted=1",
         "/api/ready",
         "/api/startup-status",
         "/api/routes/debug",

@@ -212,6 +212,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "process_role": settings.process_role,
         }
 
+    # Legacy frontend compatibility aliases. Older bundles may call shorthand
+    # endpoints without the "/api/..." prefix.
+    @app.get("/latest-upload")
+    async def latest_upload_alias(include_persisted: int | bool = True):
+        return await data.latest_upload(include_persisted=include_persisted)
+
+    @app.get("/systems")
+    def systems_alias(include_persisted: bool = True, domain_mode: str | None = None):
+        return facility.read_facility_systems(include_persisted=include_persisted, domain_mode=domain_mode)
+
     @app.get("/api/ready")
     def read_api_ready():
         return STARTUP_STATUS
