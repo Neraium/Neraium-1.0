@@ -24,6 +24,7 @@ export default function useFacilityRuntime({
   formatEndpoint,
   buildProtectedRequestMessage,
 }) {
+  const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
@@ -93,6 +94,9 @@ export default function useFacilityRuntime({
     if (!hasAccess) {
       return false;
     }
+    if (isUploadInProgress()) {
+      return false;
+    }
 
     try {
       const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode });
@@ -134,6 +138,9 @@ export default function useFacilityRuntime({
   const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
     if (!hasAccess) {
       return false;
+    }
+    if (isUploadInProgress()) {
+      return Boolean(latestUploadResult);
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
@@ -209,6 +216,7 @@ export default function useFacilityRuntime({
 
   useEffect(() => {
     if (!hasAccess) return;
+    if (isUploadInProgress()) return;
     loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
   }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
@@ -227,6 +235,7 @@ export default function useFacilityRuntime({
   }, OPERATIONAL_CADENCE_MS, hasAccess);
 
   useStableInterval(() => {
+    if (isUploadInProgress()) return;
     loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);

@@ -430,6 +430,9 @@ export default function DataConnectionsWorkspace({
   async function processUploadBatch(filesToProcess) {
     if (uploadInFlightRef.current) return;
     uploadInFlightRef.current = true;
+    if (typeof window !== "undefined") {
+      window.__NERAIUM_UPLOAD_IN_PROGRESS__ = true;
+    }
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -441,6 +444,9 @@ export default function DataConnectionsWorkspace({
       setUploadError(validationError);
       setUploadState("validation_error");
       uploadInFlightRef.current = false;
+      if (typeof window !== "undefined") {
+        window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
+      }
       return;
     }
     setUploadState("uploading");
@@ -607,6 +613,9 @@ export default function DataConnectionsWorkspace({
       setUploadState(classified.state);
     } finally {
       uploadInFlightRef.current = false;
+      if (typeof window !== "undefined") {
+        window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
+      }
     }
   }
 
