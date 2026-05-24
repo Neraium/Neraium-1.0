@@ -106,7 +106,8 @@ function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
 }
 
 export function buildAccessHeaders() {
-  return {};
+  const token = import.meta.env.VITE_NERAIUM_API_TOKEN?.trim();
+  return token ? { "X-Neraium-Access-Code": token } : {};
 }
 
 export async function apiFetch(path, options = {}) {
