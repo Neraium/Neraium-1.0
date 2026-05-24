@@ -228,6 +228,58 @@ async def upload_status(job_id: str):
             "error": None,
         }
 
+    latest_result = upload_jobs.read_upload_result_by_job_id(job_id) or upload_jobs.read_latest_upload_result()
+    latest_summary = upload_jobs.read_latest_upload_summary() or {}
+
+    if isinstance(latest_result, dict) and latest_result:
+        replay = (
+            latest_result.get("replay_timeline")
+            or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
+            or {}
+        )
+        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        return {
+            "job_id": job_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "percent": 100,
+            "progress": 100,
+            "result_available": True,
+            "first_usable_available": True,
+            "sii_completed": True,
+            "replay_ready": len(timeline or []) > 0 or bool(latest_result.get("replay_ready")),
+            "replay_frame_count": len(timeline or []) or int(latest_result.get("replay_frame_count") or 0),
+            "latest_replay_frames": len(timeline or []) or int(latest_result.get("latest_replay_frames") or 0),
+            "replay_source": "persisted",
+            "last_processed_at": latest_result.get("last_processed_at") or latest_result.get("completed_at"),
+            "filename": latest_result.get("filename"),
+            "row_count": latest_result.get("row_count", 0),
+            "column_count": latest_result.get("column_count", 0),
+            "rows_processed": latest_result.get("rows_processed") or latest_result.get("row_count", 0),
+            "columns_detected": latest_result.get("columns_detected") or latest_result.get("column_count", 0),
+            "progress_label": "Telemetry processing complete.",
+            "message": "Telemetry processing complete.",
+            "error": None,
+        }
+
+    if isinstance(latest_summary, dict) and latest_summary.get("status") == "COMPLETE":
+        return {
+            **latest_summary,
+            "job_id": job_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "percent": 100,
+            "progress": 100,
+            "result_available": True,
+            "first_usable_available": True,
+            "sii_completed": True,
+            "progress_label": "Telemetry processing complete.",
+            "message": "Telemetry processing complete.",
+            "error": None,
+        }
+
     payload = {
         "job_id": job_id,
         "status": "NOT_FOUND",

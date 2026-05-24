@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE
-from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_latest_payload, read_latest_payload
+from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_latest_payload, read_latest_payload, upsert_latest_payload, read_latest_payload
 
 RUNTIME_DIR = Path("backend/runtime")
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
@@ -377,6 +377,7 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
     _write_json("latest_upload_result.json", result)
+    upsert_latest_payload("latest_upload_result", result)
     if _runtime_db_latest_enabled():
         upsert_latest_payload("latest_upload_result", result)
     _write_json("latest_upload_summary.json", summary)
