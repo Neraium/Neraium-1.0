@@ -79,8 +79,41 @@ function timeoutMessage(timeoutMs, path) {
   return `API request timed out after ${timeoutMs}ms while calling ${path}.`;
 }
 
+function normalizeApiPath(path) {
+  const input = String(path ?? "").trim();
+  if (!input) {
+    return "/api/health";
+  }
+  if (/^https?:\/\//i.test(input)) {
+    return input;
+  }
+  if (input.startsWith("/api/") || input === "/api") {
+    return input;
+  }
+  if (input.startsWith("api/")) {
+    return `/${input}`;
+  }
+  if (input.startsWith("/")) {
+    return input;
+  }
+  if (input.startsWith("latest-upload")) {
+    return `/api/data/${input}`;
+  }
+  if (input.startsWith("upload-status/")) {
+    return `/api/data/${input}`;
+  }
+  if (input.startsWith("replay/")) {
+    return `/api/data/${input}`;
+  }
+  if (input.startsWith("systems")) {
+    return `/api/facility/${input}`;
+  }
+  return `/${input}`;
+}
+
 function buildUrl(apiBaseUrl, path) {
-  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+  const normalizedPath = normalizeApiPath(path);
+  return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
 export function buildApiUrl(path) {
