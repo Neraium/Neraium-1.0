@@ -25,6 +25,17 @@ export default function useFacilityRuntime({
   buildProtectedRequestMessage,
 }) {
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
+  const isUploadJobLocked = () => {
+    if (typeof window === "undefined") return false;
+    const memoryLock = String(window.__NERAIUM_UPLOAD_JOB_LOCK__ ?? "").trim();
+    if (memoryLock) return true;
+    const storedLock = String(window.localStorage.getItem("neraium.active_upload_job_lock") ?? "").trim();
+    if (storedLock) {
+      window.__NERAIUM_UPLOAD_JOB_LOCK__ = storedLock;
+      return true;
+    }
+    return false;
+  };
   const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
@@ -94,7 +105,7 @@ export default function useFacilityRuntime({
     if (!hasAccess) {
       return false;
     }
-    if (isUploadInProgress()) {
+    if (isUploadInProgress() || isUploadJobLocked()) {
       return false;
     }
 
@@ -139,7 +150,7 @@ export default function useFacilityRuntime({
     if (!hasAccess) {
       return false;
     }
-    if (isUploadInProgress()) {
+    if (isUploadInProgress() || isUploadJobLocked()) {
       return Boolean(latestUploadResult);
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
@@ -216,7 +227,7 @@ export default function useFacilityRuntime({
 
   useEffect(() => {
     if (!hasAccess) return;
-    if (isUploadInProgress()) return;
+    if (isUploadInProgress() || isUploadJobLocked()) return;
     loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
   }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
@@ -235,7 +246,7 @@ export default function useFacilityRuntime({
   }, OPERATIONAL_CADENCE_MS, hasAccess);
 
   useStableInterval(() => {
-    if (isUploadInProgress()) return;
+    if (isUploadInProgress() || isUploadJobLocked()) return;
     loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);

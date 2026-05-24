@@ -18,6 +18,7 @@ const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const DATA_CONNECTIONS_TAB_STORAGE_KEY = "neraium.data_connections.active_tab";
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
+const ACTIVE_UPLOAD_JOB_LOCK_KEY = "neraium.active_upload_job_lock";
 
 function readStoredDataConnectionsTab() {
   if (typeof window === "undefined") return "upload";
@@ -204,11 +205,15 @@ export default function DataConnectionsWorkspace({
     window.localStorage.setItem(DATA_CONNECTIONS_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
 
-  async function pollUploadStatus(jobId) {
+async function pollUploadStatus(jobId) {
     const pollingJobId = jobId || uploadJobIdRef.current;
     if (!pollingJobId) throw new Error("Upload polling could not start.");
     let completeWithoutReplayCount = 0;
     let notFoundCount = 0;
+    if (typeof window !== "undefined" && pollingJobId) {
+      window.__NERAIUM_UPLOAD_JOB_LOCK__ = String(pollingJobId);
+      window.localStorage.setItem(ACTIVE_UPLOAD_JOB_LOCK_KEY, String(pollingJobId));
+    }
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
@@ -280,6 +285,10 @@ export default function DataConnectionsWorkspace({
           };
           setUploadJob(completedPayload);
           setUploadState("complete");
+          if (typeof window !== "undefined") {
+            window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
+            window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
+          }
           return completedPayload;
         }
 
@@ -322,8 +331,16 @@ export default function DataConnectionsWorkspace({
         }
         setUploadError(classified.finalMessage ?? classified.message);
         setUploadState(classified.retryable ? "error" : classified.state);
+        if (!classified.retryable && typeof window !== "undefined") {
+          window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
+          window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
+        }
         throw error;
       }
+    }
+    if (typeof window !== "undefined") {
+      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
+      window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
     }
     throw new Error("Upload polling timed out.");
   }
@@ -432,6 +449,10 @@ export default function DataConnectionsWorkspace({
     uploadInFlightRef.current = true;
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = true;
+      if (window.__NERAIUM_UPLOAD_JOB_LOCK__ == null) {
+        const stored = window.localStorage.getItem(ACTIVE_UPLOAD_JOB_LOCK_KEY) ?? "";
+        window.__NERAIUM_UPLOAD_JOB_LOCK__ = stored;
+      }
     }
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
@@ -675,6 +696,8 @@ export default function DataConnectionsWorkspace({
     uploadJobIdRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+      window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
+      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     pollFailureCountRef.current = 0;
     if (pollTimerRef.current) {
