@@ -1180,6 +1180,78 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
 
+def test_upload_status_recovers_after_jobs_cache_clear() -> None:
+    client = TestClient(create_app())
+    write_job(
+        {
+            "job_id": "cache-clear-job",
+            "filename": "cache-clear.csv",
+            "status": "COMPLETE",
+            "rows_processed": 10,
+            "columns_detected": 3,
+            "result_available": True,
+            "sii_completed": True,
+            "sii_completion_artifacts": {"runner_used": True},
+        }
+    )
+    upload_jobs.JOBS.clear()
+
+    first = client.get("/api/data/upload-status/cache-clear-job")
+    second = client.get("/api/data/upload-status/cache-clear-job")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["status"] == "COMPLETE"
+    assert second.json()["status"] == "COMPLETE"
+
+
+def test_latest_upload_recovers_after_cache_clear() -> None:
+    client = TestClient(create_app())
+    result = {
+        "job_id": "latest-cache-clear-job",
+        "filename": "persisted.csv",
+        "row_count": 12,
+        "column_count": 4,
+        "replay_timeline": {
+            "meta": {"frame_count": 2},
+            "timeline": [{"timestamp": "2026-05-01T08:00:00Z"}, {"timestamp": "2026-05-01T08:05:00Z"}],
+        },
+    }
+    write_latest_upload_result("latest-cache-clear-job", result)
+    write_latest_upload_summary(
+        "latest-cache-clear-job",
+        {"status": "COMPLETE", "rows_processed": 12, "columns_detected": 4, "replay_ready": True, "replay_frame_count": 2},
+    )
+    upload_jobs.LATEST_UPLOAD_CACHE["result"] = None
+    upload_jobs.LATEST_UPLOAD_CACHE["summary"] = None
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["status"] == "COMPLETE"
+    assert payload["source"] == "uploaded"
+    assert payload["latest_result"]["job_id"] == "latest-cache-clear-job"
+    assert payload["latest_result"]["row_count"] == 12
+
+
+def test_replay_payload_recovers_after_cache_clear() -> None:
+    timeline = [{"timestamp": "2026-05-01T08:00:00Z"}, {"timestamp": "2026-05-01T08:05:00Z"}]
+    write_latest_upload_result(
+        "replay-cache-clear-job",
+        {
+            "job_id": "replay-cache-clear-job",
+            "filename": "replay.csv",
+            "replay_timeline": {"meta": {"frame_count": 2}, "timeline": timeline},
+        },
+    )
+    upload_jobs.LATEST_UPLOAD_CACHE["result"] = None
+
+    payload = upload_jobs.replay_payload("replay-cache-clear-job")
+
+    assert payload["source"] == "persisted"
+    assert payload["frame_count"] == 2
+    assert len(payload["frames"]) == 2
+
+
 def test_processing_helper_rejects_empty_csv() -> None:
     try:
         process_csv_content(filename="empty.csv", content=b"")

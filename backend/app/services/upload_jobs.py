@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE
-from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, upsert_latest_payload, read_latest_payload, upsert_latest_payload, read_latest_payload
+from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job
+from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
 
 RUNTIME_DIR = Path("backend/runtime")
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
@@ -19,6 +20,84 @@ JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
+_S3_CLIENT: Any | None = None
+
+
+def _upload_state_bucket() -> str:
+    return os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "").strip()
+
+
+def _upload_state_prefix() -> str:
+    prefix = os.getenv("NERAIUM_UPLOAD_STATE_PREFIX", "upload-state/").strip()
+    if prefix and not prefix.endswith("/"):
+        prefix = f"{prefix}/"
+    return prefix
+
+
+def _shared_key(name: str) -> str:
+    return str(name).replace(".json", "")
+
+
+def _s3_object_key(name: str) -> str:
+    return f"{_upload_state_prefix()}{_shared_key(name)}.json"
+
+
+def _get_s3_client() -> Any | None:
+    global _S3_CLIENT
+    if _S3_CLIENT is not None:
+        return _S3_CLIENT
+    if not _upload_state_bucket():
+        return None
+    try:
+        import boto3  # type: ignore
+        _S3_CLIENT = boto3.client("s3")
+        return _S3_CLIENT
+    except Exception:
+        return None
+
+
+def _read_shared_state(name: str) -> dict[str, Any] | None:
+    bucket = _upload_state_bucket()
+    if bucket:
+        client = _get_s3_client()
+        if client is not None:
+            try:
+                response = client.get_object(Bucket=bucket, Key=_s3_object_key(name))
+                body = response["Body"].read().decode("utf-8")
+                payload = json.loads(body)
+                if isinstance(payload, dict):
+                    return payload
+            except Exception:
+                pass
+    if _runtime_db_latest_enabled():
+        try:
+            payload = read_latest_payload(_shared_key(name))
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+    return None
+
+
+def _write_shared_state(name: str, payload: dict[str, Any]) -> None:
+    normalized = dict(payload or {})
+    try:
+        upsert_latest_payload(_shared_key(name), normalized)
+    except Exception:
+        pass
+    bucket = _upload_state_bucket()
+    if bucket:
+        client = _get_s3_client()
+        if client is not None:
+            try:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=_s3_object_key(name),
+                    Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
+                    ContentType="application/json",
+                )
+            except Exception:
+                pass
 
 def _runtime_db_latest_enabled() -> bool:
     return os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NERAIUM_DISABLE_RUNTIME_DB_LATEST", "0") != "1"
@@ -41,36 +120,39 @@ def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
 
 
 def warm_latest_upload_cache() -> None:
-    LATEST_UPLOAD_CACHE["summary"] = _read_json("latest_upload_summary.json")
-    LATEST_UPLOAD_CACHE["result"] = _read_json("latest_upload_result.json")
+    LATEST_UPLOAD_CACHE["summary"] = _read_shared_state("latest_upload_summary") or _read_json("latest_upload_summary.json")
+    LATEST_UPLOAD_CACHE["result"] = _read_shared_state("latest_upload_result") or _read_json("latest_upload_result.json")
 
 
 def read_latest_upload_result() -> dict[str, Any] | None:
-    return (
-        LATEST_UPLOAD_CACHE.get("result")
-        or _read_json("latest_upload_result.json")
-        or (read_latest_payload("latest_upload_result") if _runtime_db_latest_enabled() else None)
-    )
+    persisted = _read_shared_state("latest_upload_result")
+    if isinstance(persisted, dict):
+        LATEST_UPLOAD_CACHE["result"] = persisted
+        return persisted
+    return LATEST_UPLOAD_CACHE.get("result") or _read_json("latest_upload_result.json")
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
-    return (
-        LATEST_UPLOAD_CACHE.get("summary")
-        or _read_json("latest_upload_summary.json")
-        or (read_latest_payload("latest_upload_summary") if _runtime_db_latest_enabled() else None)
-    )
+    persisted = _read_shared_state("latest_upload_summary")
+    if isinstance(persisted, dict):
+        LATEST_UPLOAD_CACHE["summary"] = persisted
+        return persisted
+    return LATEST_UPLOAD_CACHE.get("summary") or _read_json("latest_upload_summary.json")
 
 
 def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
+    persisted = _read_shared_state(f"upload_result_{job_id}")
+    if isinstance(persisted, dict):
+        return persisted
     return _read_json(f"upload_result_{job_id}.json")
 
 
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
-    return (
-        JOBS.get(job_id)
-        or _read_json(f"upload_status_{job_id}.json")
-        or read_upload_job(job_id)
-    )
+    persisted = _read_shared_state(f"upload_status_{job_id}")
+    if isinstance(persisted, dict):
+        JOBS[job_id] = persisted
+        return persisted
+    return JOBS.get(job_id) or _read_json(f"upload_status_{job_id}.json") or read_upload_job(job_id)
 
 
 def reset_upload_state() -> None:
@@ -82,6 +164,11 @@ def reset_upload_state() -> None:
             pass
     LATEST_UPLOAD_CACHE["summary"] = None
     LATEST_UPLOAD_CACHE["result"] = None
+    try:
+        delete_latest_payload_prefix("upload_")
+        delete_latest_payload_prefix("latest_upload_")
+    except Exception:
+        pass
 
 
 def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") -> dict[str, Any]:
@@ -101,6 +188,8 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
     upsert_upload_job(payload)
+    _write_shared_state(f"upload_status_{job_id}", payload)
+    _write_shared_state("latest_upload_summary", payload)
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
 
@@ -386,6 +475,10 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     if _runtime_db_latest_enabled():
         upsert_latest_payload("latest_upload_result", result)
     _write_json("latest_upload_summary.json", summary)
+    _write_shared_state(f"upload_result_{job_id}", result)
+    _write_shared_state(f"upload_status_{job_id}", summary)
+    _write_shared_state("latest_upload_result", result)
+    _write_shared_state("latest_upload_summary", summary)
     try:
         from app.services import sii_runner
         sii_runner.STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -679,12 +772,13 @@ def write_latest_upload_result(*args) -> None:
         payload["job_id"] = str(job_id)
         _write_json(f"upload_result_{job_id}.json", payload)
         _write_json("latest_upload_result.json", payload)
-        if _runtime_db_latest_enabled():
-            upsert_latest_payload("latest_upload_result", payload)
+        _write_shared_state(f"upload_result_{job_id}", payload)
+        _write_shared_state("latest_upload_result", payload)
         LATEST_UPLOAD_CACHE["result"] = payload
         return
     result = args[0] if args else {}
     _write_json("latest_upload_result.json", result)
+    _write_shared_state("latest_upload_result", result)
     LATEST_UPLOAD_CACHE["result"] = result
 
 
@@ -698,11 +792,14 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         if "status_url" not in payload:
             payload["status_url"] = f"/api/data/upload-status/{job_id}"
         _write_json("latest_upload_summary.json", payload)
+        _write_shared_state("latest_upload_summary", payload)
+        _write_shared_state(f"upload_status_{job_id}", payload)
         LATEST_UPLOAD_CACHE["summary"] = payload
         return
     if len(args) >= 1 and isinstance(args[0], dict):
         summary = args[0]
         _write_json("latest_upload_summary.json", summary)
+        _write_shared_state("latest_upload_summary", summary)
         LATEST_UPLOAD_CACHE["summary"] = summary
         return
     if len(args) == 2:
@@ -713,10 +810,13 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         if "status_url" not in payload:
             payload["status_url"] = f"/api/data/upload-status/{job_id}"
         _write_json("latest_upload_summary.json", payload)
+        _write_shared_state("latest_upload_summary", payload)
+        _write_shared_state(f"upload_status_{job_id}", payload)
         LATEST_UPLOAD_CACHE["summary"] = payload
         return
     summary = args[0] if args else {}
     _write_json("latest_upload_summary.json", summary)
+    _write_shared_state("latest_upload_summary", summary)
     LATEST_UPLOAD_CACHE["summary"] = summary
 
 
@@ -850,6 +950,7 @@ def write_job(*args) -> None:
         payload["job_id"] = job_id
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
+    _write_shared_state(f"upload_status_{job_id}", payload)
     JOB_DIR.mkdir(parents=True, exist_ok=True)
     (JOB_DIR / f"{job_id}.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
