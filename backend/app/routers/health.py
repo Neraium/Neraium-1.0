@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
 from app.services.runtime_db import queue_metrics
 from app.services.sii_runner import build_runner_status
+from app.services.upload_jobs import shared_state_configured, upload_state_backend
 
 router = APIRouter(tags=["health"])
 
@@ -39,29 +40,10 @@ def read_ready() -> JSONResponse:
         "service": "neraium-api",
         "checks": checks,
         "details": details,
+        "upload_state_backend": upload_state_backend(),
+        "upload_state_shared_configured": shared_state_configured(),
     }
     return JSONResponse(
         status_code=status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content=payload,
     )
-
-@router.get("/auth-debug")
-async def auth_debug(request: Request):
-    import hashlib
-    import os
-
-    configured = os.getenv("NERAIUM_API_TOKEN", "").strip()
-    received = request.headers.get("X-Neraium-Access-Code", "").strip()
-
-    def digest(value: str) -> str:
-        return hashlib.sha256(value.encode()).hexdigest()[:16] if value else ""
-
-    return {
-        "configured_present": bool(configured),
-        "configured_len": len(configured),
-        "configured_sha16": digest(configured),
-        "received_present": bool(received),
-        "received_len": len(received),
-        "received_sha16": digest(received),
-        "match": bool(configured) and configured == received,
-    }
