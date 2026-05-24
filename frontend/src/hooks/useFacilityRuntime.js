@@ -13,7 +13,7 @@ import { normalizeErrorMessage } from "../viewModels/uploadFlow";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
 const OPERATIONAL_CADENCE_MS = 30000;
-const LIVE_REFRESH_INTERVAL_MS = 30000;
+const LIVE_REFRESH_INTERVAL_MS = 120000;
 const DATA_PROMOTION_STREAK_REQUIRED = 2;
 const EMPTY_DEMOTION_STREAK_REQUIRED = 3;
 
@@ -52,6 +52,7 @@ export default function useFacilityRuntime({
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
+  const backgroundRefreshInFlightRef = useRef(false);
   const clearUploadSessionState = useCallback(() => {
     setLatestUploadResult(null);
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
@@ -240,8 +241,15 @@ export default function useFacilityRuntime({
 
   useStableInterval(() => {
     if (isUploadInProgress() || isUploadJobLocked()) return;
-    loadLatestUploadState({ includePersisted: true });
-    loadFacilitySystems();
+    if (backgroundRefreshInFlightRef.current) return;
+
+    backgroundRefreshInFlightRef.current = true;
+    Promise.allSettled([
+      loadLatestUploadState({ includePersisted: true }),
+      loadFacilitySystems(),
+    ]).finally(() => {
+      backgroundRefreshInFlightRef.current = false;
+    });
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
   return {
