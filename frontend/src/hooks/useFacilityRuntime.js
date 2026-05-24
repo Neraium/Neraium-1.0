@@ -51,6 +51,8 @@ export default function useFacilityRuntime({
   const [domainMode, setDomainModeState] = useState(null);
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
+  const healthCheckInFlightRef = useRef(false);
+  const lastHealthyAtRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
   const backgroundRefreshInFlightRef = useRef(false);
   const clearUploadSessionState = useCallback(() => {
@@ -63,13 +65,18 @@ export default function useFacilityRuntime({
     if (!hasAccess) {
       return false;
     }
+    if (healthCheckInFlightRef.current) {
+      return apiStatus.state === "online";
+    }
 
+    healthCheckInFlightRef.current = true;
     const checkTime = new Date();
     const attemptCount = healthCheckAttemptsRef.current + 1;
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
       await fetchApiHealth({ apiFetch, accessCode });
+      lastHealthyAtRef.current = Date.now();
       setApiStatus({
         state: "online",
         label: "Backend Online",
@@ -81,6 +88,17 @@ export default function useFacilityRuntime({
       });
       return true;
     } catch {
+      const recentlyHealthy = Date.now() - lastHealthyAtRef.current < 90000;
+      if (recentlyHealthy) {
+        setApiStatus((current) => ({
+          ...current,
+          state: "online",
+          label: "Backend Online",
+          message: "Backend sync current.",
+        }));
+        return true;
+      }
+
       setApiStatus({
         state: "offline",
         label: "Backend Offline",
@@ -92,8 +110,10 @@ export default function useFacilityRuntime({
       });
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;
+    } finally {
+      healthCheckInFlightRef.current = false;
     }
-  }, [accessCode, formatClockTime, formatEndpoint, hasAccess]);
+  }, [accessCode, apiStatus.state, formatClockTime, formatEndpoint, hasAccess]);
 
   const loadFacilitySystems = useCallback(async () => {
     if (!hasAccess) {
@@ -233,7 +253,7 @@ export default function useFacilityRuntime({
 
   useStableInterval(() => {
     checkApiHealth("interval");
-  }, 20000, hasAccess);
+  }, 60000, hasAccess);
 
   useStableInterval(() => {
     setTelemetryTick((current) => current + 1);
