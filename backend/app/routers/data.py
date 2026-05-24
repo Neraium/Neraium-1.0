@@ -17,6 +17,19 @@ from app.services.runtime_db import record_audit_event
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
 
+def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
+    replay = (
+        (result or {}).get("replay_timeline")
+        or ((result or {}).get("sii_intelligence") or {}).get("replay_timeline")
+        or {}
+    )
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if timeline:
+        return timeline
+    fallback = upload_jobs.replay_payload(job_id)
+    fallback_timeline = fallback.get("timeline", []) if isinstance(fallback, dict) else []
+    return fallback_timeline if isinstance(fallback_timeline, list) else []
+
 
 @router.post("/upload", status_code=202)
 async def upload_data(request: Request, file: UploadFile = File(...)):
@@ -202,12 +215,7 @@ async def upload_status(job_id: str):
     if isinstance(latest_result, dict) and (
         latest_result.get("job_id") == job_id or latest_result.get("filename")
     ):
-        replay = (
-            latest_result.get("replay_timeline")
-            or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
-            or {}
-        )
-        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        timeline = _extract_timeline(latest_result, job_id)
         return {
             "job_id": job_id,
             "status_url": f"/api/data/upload-status/{job_id}",
@@ -238,12 +246,7 @@ async def upload_status(job_id: str):
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
 
     if isinstance(latest_result, dict) and latest_result and str(latest_result.get("job_id") or "") == str(job_id):
-        replay = (
-            latest_result.get("replay_timeline")
-            or (latest_result.get("sii_intelligence") or {}).get("replay_timeline")
-            or {}
-        )
-        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        timeline = _extract_timeline(latest_result, job_id)
         return {
             "job_id": job_id,
             "status_url": f"/api/data/upload-status/{job_id}",
@@ -345,8 +348,7 @@ async def latest_upload(include_persisted: int | bool = True):
                 "result_summary": latest.get("result_summary") or {},
             }
             summary = {**latest, **summary}
-    replay = (result or {}).get("replay_timeline") or {}
-    frames = replay.get("timeline") if isinstance(replay, dict) else []
+    frames = _extract_timeline(result if isinstance(result, dict) else None, summary.get("job_id") if isinstance(summary, dict) else None)
     adaptive = adaptive_learning.build_adaptive_snapshot(result, summary) if isinstance(result, dict) else {}
     if isinstance(adaptive, dict):
         recent_feedback = (((adaptive.get("event_memory") or {}).get("recent_feedback_history")) or [])
