@@ -96,6 +96,17 @@ function timeoutMessage(timeoutMs, path) {
   return `API request timed out after ${timeoutMs}ms while calling ${path}.`;
 }
 
+function isPublicReadonlyPath(path) {
+  const normalized = String(path || "").toLowerCase();
+  return (
+    normalized.startsWith("/api/data/latest-upload")
+    || normalized.startsWith("/api/facility/systems")
+    || normalized.startsWith("/api/health")
+    || normalized.startsWith("/api/domain/mode")
+    || normalized.startsWith("/api/intelligence/engine-identity")
+  );
+}
+
 function normalizeApiPath(path) {
   const input = String(path ?? "").trim();
   if (!input) {
@@ -210,6 +221,9 @@ export async function apiFetch(path, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimer(() => controller.abort(), effectiveTimeoutMs);
     const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget(apiBaseUrl);
+    const normalizedPath = normalizeApiPath(path);
+    const omitCustomAccessHeaders = ["GET", "HEAD"].includes(normalizedMethod) && isPublicReadonlyPath(normalizedPath);
+    const accessHeaders = omitCustomAccessHeaders ? {} : buildAccessHeaders();
 
     try {
       const response = await fetch(buildUrl(apiBaseUrl, path), {
@@ -218,7 +232,7 @@ export async function apiFetch(path, options = {}) {
         credentials: "include",
         cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
         headers: {
-          ...buildAccessHeaders(),
+          ...accessHeaders,
           ...(addNoCacheHeaders
             ? { "Cache-Control": "no-cache", Pragma: "no-cache" }
             : {}),
