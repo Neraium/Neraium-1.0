@@ -47,7 +47,7 @@ def test_upload_and_polling_use_shared_api_helper() -> None:
     assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
     assert 'apiFetch("/api/data/latest-upload?include_persisted=1"' in source
     assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
-    assert "apiFetch(`/api/facility/systems?include_persisted=0${domainQuery}`" in system_api_source
+    assert "apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`" in system_api_source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
