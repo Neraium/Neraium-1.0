@@ -91,7 +91,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             summary["runner_module"] = RUNNER_MODULE
             summary["core_engine"] = CORE_ENGINE
             upload_jobs.write_latest_upload_summary(summary)
-            latest_result = upload_jobs.read_latest_upload_result() or {}
+            latest_result = result or upload_jobs.read_latest_upload_result() or {}
             if latest_result:
                 latest_result["filename"] = filename
                 latest_result["job_id"] = summary.get("job_id")
