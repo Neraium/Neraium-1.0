@@ -90,6 +90,18 @@ function normalizeApiPath(path) {
   if (input.startsWith("/api/") || input === "/api") {
     return input;
   }
+  if (input.startsWith("/latest-upload")) {
+    return `/api/data${input}`;
+  }
+  if (input.startsWith("/upload-status/")) {
+    return `/api/data${input}`;
+  }
+  if (input.startsWith("/replay/")) {
+    return `/api/data${input}`;
+  }
+  if (input.startsWith("/systems")) {
+    return `/api/facility${input}`;
+  }
   if (input.startsWith("api/")) {
     return `/${input}`;
   }

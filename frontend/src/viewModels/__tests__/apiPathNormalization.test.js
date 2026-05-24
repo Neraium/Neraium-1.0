@@ -12,8 +12,18 @@ describe("api path normalization", () => {
     expect(url).toContain("/api/data/latest-upload?include_persisted=1");
   });
 
+  it("normalizes slash-prefixed latest-upload shorthand", () => {
+    const url = buildApiUrl("/latest-upload?include_persisted=1");
+    expect(url).toContain("/api/data/latest-upload?include_persisted=1");
+  });
+
   it("normalizes legacy systems shorthand", () => {
     const url = buildApiUrl("systems?include_persisted=1");
+    expect(url).toContain("/api/facility/systems?include_persisted=1");
+  });
+
+  it("normalizes slash-prefixed systems shorthand", () => {
+    const url = buildApiUrl("/systems?include_persisted=1");
     expect(url).toContain("/api/facility/systems?include_persisted=1");
   });
 });
