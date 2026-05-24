@@ -223,9 +223,7 @@ export async function apiFetch(path, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimer(() => controller.abort(), effectiveTimeoutMs);
     const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget(apiBaseUrl);
-    const normalizedPath = normalizeApiPath(path);
-    const omitCustomAccessHeaders = ["GET", "HEAD"].includes(normalizedMethod) && isPublicReadonlyPath(normalizedPath);
-    const accessHeaders = omitCustomAccessHeaders ? {} : buildAccessHeaders(accessCode);
+    const accessHeaders = buildAccessHeaders(accessCode);
 
     try {
       const response = await fetch(buildUrl(apiBaseUrl, path), {
