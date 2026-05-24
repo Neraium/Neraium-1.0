@@ -474,7 +474,18 @@ export default function DataConnectionsWorkspace({
         });
         try {
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
-          const returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
+          let returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
+          if (!returnedJobId) {
+            const latestPayload = await loadLatestUpload();
+            const recoveredJobId = String(
+              latestPayload?.latest_result?.job_id
+              ?? latestPayload?.history?.[0]?.job_id
+              ?? "",
+            ).trim();
+            if (recoveredJobId) {
+              returnedJobId = recoveredJobId;
+            }
+          }
           if (!returnedJobId) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
           uploadJobIdRef.current = returnedJobId;
           if (typeof window !== "undefined" && uploadJobIdRef.current) {
