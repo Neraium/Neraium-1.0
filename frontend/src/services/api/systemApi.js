@@ -1,6 +1,6 @@
 export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null }) {
   const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
-  const response = await apiFetch(`/api/facility/systems?include_persisted=0${domainQuery}`, { accessCode });
+  const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, { accessCode });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       throw response;
