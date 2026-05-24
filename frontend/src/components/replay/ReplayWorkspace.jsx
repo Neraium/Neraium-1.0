@@ -295,6 +295,13 @@ export default function ReplayWorkspace({
 }
 
 async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
+  // Prefer the global persisted replay endpoint. It is stable across ECS tasks and
+  // avoids hammering job-scoped upload replay when latest upload state flaps.
+  const stableGlobalReplay = await fetchGlobalReplayFallback({ apiFetch, accessCode });
+  if (stableGlobalReplay.timeline.length > 0) {
+    return stableGlobalReplay;
+  }
+
   let targetJobId = jobId;
   if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
