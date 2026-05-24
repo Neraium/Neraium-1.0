@@ -7,18 +7,20 @@ from app.services.auth_store import get_user_by_session, session_cookie_name
 
 def require_api_access(request: Request, response: Response) -> None:
     # Read-only frontend polling endpoints should not require the custom access
-    # header. Requiring X-Neraium-Access-Code on frequent browser GETs creates
-    # CORS preflights and can lock the UI in a retry loop.
-    if request.method == "GET" and request.url.path in {
+    # header. OPTIONS must also pass so browser preflight never gets blocked.
+    readonly_paths = (
         "/api/health",
         "/api/ready",
+        "/api/domain/mode",
+        "/api/intelligence/engine-identity",
         "/api/data/latest-upload",
         "/api/facility/systems",
         "/api/facility/intelligence-status",
         "/api/facility/cognition-state",
         "/latest-upload",
         "/systems",
-    }:
+    )
+    if request.method in {"GET", "HEAD", "OPTIONS"} and any(request.url.path.startswith(path) for path in readonly_paths):
         request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
         request.state.request_id = request_id
         request.state.auth_context = {
