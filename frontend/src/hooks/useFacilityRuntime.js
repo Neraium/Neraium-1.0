@@ -186,7 +186,10 @@ export default function useFacilityRuntime({
       if (!stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
         return Boolean(latestUploadResult);
       }
-      if (stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
+      // In production, ECS/API tasks can briefly disagree about latest-upload state.
+      // Once this browser has seen a real upload result, do not let a later empty
+      // poll demote Snapshot/SII back to no_data unless the user explicitly resets.
+      if (stability.hasData && !nextHasData) {
         return Boolean(latestUploadResult);
       }
 
