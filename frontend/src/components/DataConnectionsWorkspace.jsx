@@ -18,7 +18,6 @@ const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const DATA_CONNECTIONS_TAB_STORAGE_KEY = "neraium.data_connections.active_tab";
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
-const ACTIVE_UPLOAD_JOB_LOCK_KEY = "neraium.active_upload_job_lock";
 
 function readStoredDataConnectionsTab() {
   if (typeof window === "undefined") return "upload";
@@ -212,7 +211,6 @@ async function pollUploadStatus(jobId) {
     let notFoundCount = 0;
     if (typeof window !== "undefined" && pollingJobId) {
       window.__NERAIUM_UPLOAD_JOB_LOCK__ = String(pollingJobId);
-      window.localStorage.setItem(ACTIVE_UPLOAD_JOB_LOCK_KEY, String(pollingJobId));
     }
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
@@ -344,7 +342,8 @@ async function pollUploadStatus(jobId) {
 
   async function handleUpload(event) {
     event.preventDefault();
-    if (uploadInFlightRef.current) return;
+    event.stopPropagation();
+    if (uploadInFlightRef.current || isUploadProcessing(uploadState)) return;
     await processUploadBatch(selectedFiles);
   }
 
@@ -446,10 +445,7 @@ async function pollUploadStatus(jobId) {
     uploadInFlightRef.current = true;
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = true;
-      if (window.__NERAIUM_UPLOAD_JOB_LOCK__ == null) {
-        const stored = window.localStorage.getItem(ACTIVE_UPLOAD_JOB_LOCK_KEY) ?? "";
-        window.__NERAIUM_UPLOAD_JOB_LOCK__ = stored;
-      }
+      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
