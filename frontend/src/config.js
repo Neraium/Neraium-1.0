@@ -196,8 +196,10 @@ function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
   return false;
 }
 
-export function buildAccessHeaders() {
-  const token = import.meta.env.VITE_NERAIUM_API_TOKEN?.trim();
+export function buildAccessHeaders(accessCode = "") {
+  const runtimeToken = String(accessCode ?? "").trim();
+  const envToken = import.meta.env.VITE_NERAIUM_API_TOKEN?.trim();
+  const token = runtimeToken || envToken;
   return token ? { "X-Neraium-Access-Code": token } : {};
 }
 
@@ -223,7 +225,7 @@ export async function apiFetch(path, options = {}) {
     const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget(apiBaseUrl);
     const normalizedPath = normalizeApiPath(path);
     const omitCustomAccessHeaders = ["GET", "HEAD"].includes(normalizedMethod) && isPublicReadonlyPath(normalizedPath);
-    const accessHeaders = omitCustomAccessHeaders ? {} : buildAccessHeaders();
+    const accessHeaders = omitCustomAccessHeaders ? {} : buildAccessHeaders(accessCode);
 
     try {
       const response = await fetch(buildUrl(apiBaseUrl, path), {
