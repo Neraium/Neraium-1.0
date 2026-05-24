@@ -516,6 +516,47 @@ export default function DataConnectionsWorkspace({
           const uploadRequestError = fileError?.name === "UploadRequestError" && fileError?.payload
             ? buildUploadRequestError({ status: fileError.status }, fileError.payload, "upload")
             : fileError;
+          const transientStatus = Number(fileError?.status ?? fileError?.response?.status ?? 0);
+          const transientUploadFailure = ["ApiNetworkError", "ApiTimeoutError", "UploadRequestError"].includes(String(fileError?.name))
+            || [408, 425, 429, 500, 502, 503, 504].includes(transientStatus);
+          if (transientUploadFailure) {
+            const latestPayload = await loadLatestUpload();
+            const recoveredJobId = String(
+              latestPayload?.latest_result?.job_id
+              ?? latestPayload?.history?.[0]?.job_id
+              ?? "",
+            ).trim();
+            const recoveredStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
+            const recoveredFilename = String(
+              latestPayload?.last_filename
+              ?? latestPayload?.snapshot?.last_filename
+              ?? latestPayload?.latest_result?.filename
+              ?? "",
+            ).trim();
+            const sameFileRecovered = recoveredFilename.length > 0 && recoveredFilename === file.name;
+            if (recoveredJobId && (sameFileRecovered || ["active", "complete", "running_sii"].includes(recoveredStatus))) {
+              uploadJobIdRef.current = recoveredJobId;
+              if (typeof window !== "undefined") {
+                window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, recoveredJobId);
+              }
+              setUploadJob((current) => ({
+                ...(current ?? {}),
+                job_id: recoveredJobId,
+                status: "PENDING",
+                processing_state: "processing",
+                progress_label: "Upload accepted. Recovering processing state after transient network error.",
+                message: "Upload accepted. Recovering processing state after transient network error.",
+              }));
+              setUploadState("running_sii");
+              await pollUploadStatus(recoveredJobId);
+              aggregateLoaded += file.size || 0;
+              successCount += 1;
+              setBatchResults((current) => current.map((entry) => (entry.id === fileId
+                ? { ...entry, status: "success", message: "Recovered after transient upload failure", jobId: recoveredJobId }
+                : entry)));
+              continue;
+            }
+          }
           const classified = classifyUploadError(uploadRequestError, "upload");
           failedCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
