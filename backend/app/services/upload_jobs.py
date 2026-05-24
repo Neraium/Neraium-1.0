@@ -20,6 +20,10 @@ LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
 
+def _runtime_db_latest_enabled() -> bool:
+    return os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NERAIUM_DISABLE_RUNTIME_DB_LATEST", "0") != "1"
+
+
 
 def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
     global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
@@ -45,7 +49,7 @@ def read_latest_upload_result() -> dict[str, Any] | None:
     return (
         LATEST_UPLOAD_CACHE.get("result")
         or _read_json("latest_upload_result.json")
-        or read_latest_payload("latest_upload_result")
+        or (read_latest_payload("latest_upload_result") if _runtime_db_latest_enabled() else None)
     )
 
 
@@ -53,7 +57,7 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
     return (
         LATEST_UPLOAD_CACHE.get("summary")
         or _read_json("latest_upload_summary.json")
-        or read_latest_payload("latest_upload_summary")
+        or (read_latest_payload("latest_upload_summary") if _runtime_db_latest_enabled() else None)
     )
 
 
@@ -373,7 +377,8 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
     _write_json("latest_upload_result.json", result)
-    upsert_latest_payload("latest_upload_result", result)
+    if _runtime_db_latest_enabled():
+        upsert_latest_payload("latest_upload_result", result)
     _write_json("latest_upload_summary.json", summary)
     try:
         from app.services import sii_runner
@@ -668,7 +673,8 @@ def write_latest_upload_result(*args) -> None:
         payload["job_id"] = str(job_id)
         _write_json(f"upload_result_{job_id}.json", payload)
         _write_json("latest_upload_result.json", payload)
-        upsert_latest_payload("latest_upload_result", payload)
+        if _runtime_db_latest_enabled():
+            upsert_latest_payload("latest_upload_result", payload)
         LATEST_UPLOAD_CACHE["result"] = payload
         return
     result = args[0] if args else {}
