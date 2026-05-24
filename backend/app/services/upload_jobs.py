@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from app.services.sii_runner import RUNNER_MODULE
+from app.services.sii_runner import RUNNER_MODULE, CORE_ENGINE, run_sii_runner
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job
 from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
 
@@ -353,6 +353,42 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
 
+    # Run the complete backend SII engine against the uploaded telemetry.
+    # This is the actual SII path, not the lightweight upload fallback.
+    runner_rows = [[str(row.get(col, "")) for col in columns] for row in rows]
+    runner_processing_trace = {
+        "sii_pipeline_ran": True,
+        "sii_completed": False,
+        "replay_frame_count": frame_count,
+        "rows_processed": len(rows),
+        "columns_analyzed": len(numeric_columns),
+        "started_at": now,
+    }
+    runner_result = run_sii_runner(
+        columns=columns,
+        rows=runner_rows,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=timestamp_column,
+        primary_room=room_names[0] if room_names else "Uploaded telemetry",
+        driver_attribution={
+            "likely_driver": "uploaded telemetry relationship drift",
+            "driver_category": "relationship_drift",
+            "next_operator_move": "Review the highest contributing relationships before operational consequences emerge.",
+            "what_to_check": numeric_columns[:5],
+        },
+        engine_result={
+            "overall_result": "complete",
+            "signals": numeric_columns,
+            "evidence": [],
+        },
+        processing_trace=runner_processing_trace,
+    )
+    runner_latest_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
+    runner_output_summary = runner_result.get("output_summary", {}) if isinstance(runner_result, dict) else {}
+    runner_evidence = runner_result.get("evidence", []) if isinstance(runner_result, dict) else []
+    runner_used = bool(runner_result.get("runner_used")) if isinstance(runner_result, dict) else False
+    runner_errors = runner_result.get("errors", []) if isinstance(runner_result, dict) else []
+
     result = {
         "job_id": job_id,
         "filename": filename,
@@ -380,7 +416,29 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
             "urgency": overall_urgency,
             "primary_room": room_names[0] if room_names else "Uploaded telemetry",
             "runner_module": RUNNER_MODULE,
-            "neraium_score": neraium_score,
+            "neraium_score": (
+                max(0, min(100, round(100 - float(runner_latest_state.get("instability_score", 0.0)) * 100)))
+                if isinstance(runner_latest_state, dict)
+                else neraium_score
+            ),
+            "sii_runner_latest_state": runner_latest_state,
+            "sii_runner_output_summary": runner_output_summary,
+            "supporting_evidence": runner_evidence,
+            "instability_index": (
+                runner_latest_state.get("instability_index")
+                if isinstance(runner_latest_state, dict)
+                else None
+            ),
+            "projected_time_to_failure": (
+                runner_latest_state.get("projected_time_to_failure")
+                if isinstance(runner_latest_state, dict)
+                else None
+            ),
+            "projected_time_to_failure_hours": (
+                runner_latest_state.get("projected_time_to_failure_hours")
+                if isinstance(runner_latest_state, dict)
+                else None
+            ),
             "room_summary": room_summary,
             "rooms": room_intelligence,
             "telemetry_profile": telemetry_profile,
@@ -413,18 +471,22 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
             "replay_timeline": replay,
         },
         "sii_runner_result": {
-            "runner_used": True,
+            **(runner_result if isinstance(runner_result, dict) else {}),
+            "runner_used": runner_used,
             "runner_module": RUNNER_MODULE,
-            "core_engine": None,
-            "errors": [],
+            "core_engine": CORE_ENGINE,
+            "errors": runner_errors,
         },
         "processing_trace": {
             "sii_pipeline_ran": True,
-            "sii_completed": True,
+            "sii_runner_ran": runner_used,
+            "sii_completed": runner_used and not runner_errors,
+            "sii_runner_errors": runner_errors,
             "replay_frame_count": frame_count,
             "rows_processed": len(rows),
             "columns_analyzed": len(numeric_columns),
             "completed_at": now,
+            "runner_output_summary": runner_output_summary,
         },
         "processing_stats": {},
         "room_summary": room_summary,
@@ -457,26 +519,26 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
         "column_count": len(columns),
         "rows_processed": len(rows),
         "columns_detected": len(columns),
-        "runner_used": True,
-        "runner_module": None,
-        "core_engine": None,
+        "runner_used": runner_used,
+        "runner_module": RUNNER_MODULE,
+        "core_engine": CORE_ENGINE,
         "sii_completed": True,
         "sii_completion_artifacts": {
-            "runner_used": True,
-            "intelligence_present": True,
-            "processing_trace_present": True,
-            "engine_result_present": True,
+            "runner_used": runner_used,
+            "intelligence_present": bool(result.get("sii_intelligence")),
+            "processing_trace_present": bool(result.get("processing_trace")),
+            "engine_result_present": bool(result.get("engine_result")),
         },
         "result_summary": {
             "filename": filename,
             "sii_completed": True,
             "sii_completion_artifacts": {
-                "runner_used": True,
-                "intelligence_present": True,
-                "processing_trace_present": True,
-                "engine_result_present": True,
+                "runner_used": runner_used,
+                "intelligence_present": bool(result.get("sii_intelligence")),
+                "processing_trace_present": bool(result.get("processing_trace")),
+                "engine_result_present": bool(result.get("engine_result")),
             },
-            "runner_errors": [],
+            "runner_errors": runner_errors,
         },
     }
 
