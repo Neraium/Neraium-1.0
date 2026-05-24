@@ -27,14 +27,7 @@ export default function useFacilityRuntime({
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => {
     if (typeof window === "undefined") return false;
-    const memoryLock = String(window.__NERAIUM_UPLOAD_JOB_LOCK__ ?? "").trim();
-    if (memoryLock) return true;
-    const storedLock = String(window.localStorage.getItem("neraium.active_upload_job_lock") ?? "").trim();
-    if (storedLock) {
-      window.__NERAIUM_UPLOAD_JOB_LOCK__ = storedLock;
-      return true;
-    }
-    return false;
+    return Boolean(String(window.__NERAIUM_UPLOAD_JOB_LOCK__ ?? "").trim());
   };
   const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({
