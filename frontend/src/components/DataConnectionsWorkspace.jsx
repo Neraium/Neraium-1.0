@@ -287,8 +287,7 @@ async function pollUploadStatus(jobId) {
           setUploadState("complete");
           if (typeof window !== "undefined") {
             window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
-            window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
-          }
+            }
           return completedPayload;
         }
 
@@ -333,14 +332,12 @@ async function pollUploadStatus(jobId) {
         setUploadState(classified.retryable ? "error" : classified.state);
         if (!classified.retryable && typeof window !== "undefined") {
           window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
-          window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
         }
         throw error;
       }
     }
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
-      window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
     }
     throw new Error("Upload polling timed out.");
   }
@@ -696,7 +693,6 @@ async function pollUploadStatus(jobId) {
     uploadJobIdRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
-      window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_LOCK_KEY);
       window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     pollFailureCountRef.current = 0;
