@@ -13,7 +13,7 @@ import { normalizeErrorMessage } from "../viewModels/uploadFlow";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
 const OPERATIONAL_CADENCE_MS = 30000;
-const LIVE_REFRESH_INTERVAL_MS = 5000;
+const LIVE_REFRESH_INTERVAL_MS = 30000;
 const DATA_PROMOTION_STREAK_REQUIRED = 2;
 const EMPTY_DEMOTION_STREAK_REQUIRED = 3;
 

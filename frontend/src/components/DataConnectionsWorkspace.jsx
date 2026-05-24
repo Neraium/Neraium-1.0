@@ -147,8 +147,9 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     if (!latestUploadSnapshot) return;
     const currentJobId = uploadJob?.job_id ?? uploadJobIdRef.current;
-    // Do not let background snapshot polling overwrite an active in-flight upload job.
-    if (currentJobId && isUploadProcessing(uploadState)) return;
+    // Do not let background snapshot polling overwrite the upload UI while a file is selected,
+    // uploading, validating, running, or recovering.
+    if (selectedFiles?.length > 0 || uploadInFlightRef.current || isUploadProcessing(uploadState)) return;
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
     const snapshotReplayFrameCount =
       Number(
