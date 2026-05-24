@@ -220,6 +220,30 @@ async def latest_upload(include_persisted: int | bool = True):
     result = upload_jobs.read_latest_upload_result()
     summary = latest_completed_job_summary() or {}
     history = upload_jobs.read_upload_history(limit=20)
+
+    # Recovery path for split API/worker containers:
+    # if the full result is not visible in this container but a completed
+    # upload summary/history is visible, return a non-empty latest-upload
+    # snapshot so the frontend stops treating the system as empty.
+    if not result and summary:
+        job_id = summary.get("job_id")
+        by_job = upload_jobs.read_upload_result_by_job_id(str(job_id)) if job_id else None
+        result = by_job or None
+
+    if not result and history:
+        latest = history[0] if isinstance(history[0], dict) else {}
+        if latest.get("status") == "COMPLETE" or latest.get("result_available"):
+            result = {
+                "job_id": latest.get("job_id"),
+                "filename": latest.get("filename"),
+                "row_count": latest.get("row_count") or latest.get("rows_processed") or 0,
+                "column_count": latest.get("column_count") or latest.get("columns_detected") or 0,
+                "replay_timeline": {"timeline": [None] * int(latest.get("replay_frame_count") or latest.get("latest_replay_frames") or 0)},
+                "last_processed_at": latest.get("last_processed_at"),
+                "sii_completion_artifacts": latest.get("sii_completion_artifacts") or {},
+                "result_summary": latest.get("result_summary") or {},
+            }
+            summary = {**latest, **summary}
     replay = (result or {}).get("replay_timeline") or {}
     frames = replay.get("timeline") if isinstance(replay, dict) else []
     adaptive = adaptive_learning.build_adaptive_snapshot(result, summary) if isinstance(result, dict) else {}
