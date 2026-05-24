@@ -26,4 +26,19 @@ describe("api path normalization", () => {
     const url = buildApiUrl("/systems?include_persisted=1");
     expect(url).toContain("/api/facility/systems?include_persisted=1");
   });
+
+  it("normalizes slash-prefixed health shorthand", () => {
+    const url = buildApiUrl("/health");
+    expect(url).toContain("/api/health");
+  });
+
+  it("normalizes slash-prefixed mode shorthand", () => {
+    const url = buildApiUrl("/mode");
+    expect(url).toContain("/api/domain/mode");
+  });
+
+  it("normalizes slash-prefixed engine-identity shorthand", () => {
+    const url = buildApiUrl("/engine-identity");
+    expect(url).toContain("/api/intelligence/engine-identity");
+  });
 });

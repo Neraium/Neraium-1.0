@@ -102,6 +102,15 @@ function normalizeApiPath(path) {
   if (input.startsWith("/systems")) {
     return `/api/facility${input}`;
   }
+  if (input === "/health" || input.startsWith("/health?")) {
+    return `/api${input}`;
+  }
+  if (input === "/mode" || input.startsWith("/mode?")) {
+    return `/api/domain${input}`;
+  }
+  if (input === "/engine-identity" || input.startsWith("/engine-identity?")) {
+    return `/api/intelligence${input}`;
+  }
   if (input.startsWith("api/")) {
     return `/${input}`;
   }
@@ -119,6 +128,15 @@ function normalizeApiPath(path) {
   }
   if (input.startsWith("systems")) {
     return `/api/facility/${input}`;
+  }
+  if (input === "health" || input.startsWith("health?")) {
+    return `/api/${input}`;
+  }
+  if (input === "mode" || input.startsWith("mode?")) {
+    return `/api/domain/${input}`;
+  }
+  if (input === "engine-identity" || input.startsWith("engine-identity?")) {
+    return `/api/intelligence/${input}`;
   }
   return `/${input}`;
 }
