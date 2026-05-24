@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE
-from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed
+from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_latest_payload, read_latest_payload
 
 RUNTIME_DIR = Path("backend/runtime")
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
@@ -42,11 +42,19 @@ def warm_latest_upload_cache() -> None:
 
 
 def read_latest_upload_result() -> dict[str, Any] | None:
-    return LATEST_UPLOAD_CACHE.get("result") or _read_json("latest_upload_result.json")
+    return (
+        LATEST_UPLOAD_CACHE.get("result")
+        or _read_json("latest_upload_result.json")
+        or read_latest_payload("latest_upload_result")
+    )
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
-    return LATEST_UPLOAD_CACHE.get("summary") or _read_json("latest_upload_summary.json")
+    return (
+        LATEST_UPLOAD_CACHE.get("summary")
+        or _read_json("latest_upload_summary.json")
+        or read_latest_payload("latest_upload_summary")
+    )
 
 
 def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
@@ -365,6 +373,7 @@ def process_upload_bytes(filename: str, content: bytes) -> dict[str, Any]:
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
     _write_json("latest_upload_result.json", result)
+    upsert_latest_payload("latest_upload_result", result)
     _write_json("latest_upload_summary.json", summary)
     try:
         from app.services import sii_runner
@@ -659,6 +668,7 @@ def write_latest_upload_result(*args) -> None:
         payload["job_id"] = str(job_id)
         _write_json(f"upload_result_{job_id}.json", payload)
         _write_json("latest_upload_result.json", payload)
+        upsert_latest_payload("latest_upload_result", payload)
         LATEST_UPLOAD_CACHE["result"] = payload
         return
     result = args[0] if args else {}
