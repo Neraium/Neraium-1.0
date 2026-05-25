@@ -10,6 +10,7 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { buildApiCandidateUrls } from "../config";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import ConnectionsHeaderPanel from "./dataConnections/ConnectionsHeaderPanel";
 
@@ -232,6 +233,12 @@ function extractJobIdFromStatusPath(value) {
   return match?.[1] ? decodeURIComponent(match[1]) : "";
 }
 
+function toUploadStreamPath(statusPath, jobId) {
+  const normalized = normalizeUploadStatusPath(statusPath, jobId);
+  if (!normalized) return null;
+  return normalized.replace("/upload-status/", "/upload-stream/");
+}
+
 async function pollUploadStatus(jobId, statusUrl) {
     const requestedJobId = String(jobId || uploadJobIdRef.current || "").trim();
     if (pollInFlightRef.current) {
@@ -244,7 +251,27 @@ async function pollUploadStatus(jobId, statusUrl) {
     const pollingJobId = jobId || uploadJobIdRef.current;
     const defaultPollingPath = `/api/data/upload-status/${pollingJobId}`;
     const pollingPath = normalizeUploadStatusPath(statusUrl ?? uploadStatusPathRef.current, pollingJobId) ?? defaultPollingPath;
+    const streamPath = toUploadStreamPath(statusUrl ?? uploadStatusPathRef.current, pollingJobId);
     if (!pollingJobId || !pollingPath) throw new Error("Upload polling could not start.");
+
+    const streamPayload = await streamUploadStatusOnce({ streamPath, pollingJobId });
+    if (streamPayload) {
+      setUploadJob(streamPayload);
+      const streamStatus = normalizeUploadStatus(streamPayload.status);
+      if (streamStatus === "complete") {
+        setUploadState("complete");
+        if (typeof window !== "undefined") window.__NERAIUM_UPLOAD_COMPLETE__ = true;
+        setUploadProcessingFlag(false);
+      } else if (streamStatus === "failed") {
+        setUploadState("error");
+        setUploadProcessingFlag(false);
+      } else {
+        setUploadState(streamStatus || "running_sii");
+      }
+      if (streamStatus === "complete" || streamStatus === "failed") {
+        return streamPayload;
+      }
+    }
     let completeWithoutReplayCount = 0;
     let notFoundCount = 0;
     for (let attempts = 0; attempts < 240; attempts += 1) {
@@ -489,6 +516,53 @@ async function pollUploadStatus(jobId, statusUrl) {
       pollInFlightRef.current = null;
       pollOwnerJobIdRef.current = null;
     }
+  }
+
+  async function streamUploadStatusOnce({ streamPath, pollingJobId }) {
+    if (!streamPath || typeof window === "undefined" || typeof window.EventSource === "undefined") {
+      return null;
+    }
+    const urls = buildApiCandidateUrls(streamPath);
+    for (const url of urls) {
+      const payload = await new Promise((resolve) => {
+        let resolved = false;
+        const es = new EventSource(url, { withCredentials: true });
+        const timer = window.setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          try { es.close(); } catch {}
+          resolve(null);
+        }, 20000);
+        es.onmessage = (event) => {
+          if (resolved) return;
+          let parsed = null;
+          try {
+            parsed = JSON.parse(event.data || "{}");
+          } catch {
+            parsed = null;
+          }
+          if (!parsed || String(parsed.job_id || "") !== String(pollingJobId || "")) {
+            return;
+          }
+          const s = normalizeUploadStatus(parsed.status);
+          if (["complete", "failed"].includes(s)) {
+            resolved = true;
+            window.clearTimeout(timer);
+            try { es.close(); } catch {}
+            resolve(parsed);
+          }
+        };
+        es.onerror = () => {
+          if (resolved) return;
+          resolved = true;
+          window.clearTimeout(timer);
+          try { es.close(); } catch {}
+          resolve(null);
+        };
+      });
+      if (payload) return payload;
+    }
+    return null;
   }
 
   async function handleUpload(event) {

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import threading
+import asyncio
+import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import uuid
@@ -9,7 +11,7 @@ from datetime import datetime, timezone
 import re
 
 from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.services import adaptive_learning
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services import upload_jobs
@@ -34,6 +36,79 @@ def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[di
     fallback = upload_jobs.replay_payload(job_id)
     fallback_timeline = fallback.get("timeline", []) if isinstance(fallback, dict) else []
     return fallback_timeline if isinstance(fallback_timeline, list) else []
+
+
+def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
+    status = upload_jobs.read_upload_status(job_id)
+    if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
+        upload_jobs.process_next_queued_upload_job()
+        status = upload_jobs.read_upload_status(job_id)
+    if status:
+        normalized = normalize_upload_status_payload(status)
+        normalized.setdefault("state_backend", state_backend)
+        return normalized
+    latest_summary = upload_jobs.read_latest_upload_summary() or {}
+    if str(latest_summary.get("job_id") or "") == str(job_id):
+        normalized = normalize_upload_status_payload(latest_summary)
+        normalized.setdefault("state_backend", state_backend)
+        return normalized
+    latest_result = upload_jobs.read_upload_result_by_job_id(job_id)
+    if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
+        timeline = _extract_timeline(latest_result, job_id)
+        return {
+            "job_id": job_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "percent": 100,
+            "progress": 100,
+            "result_available": True,
+            "first_usable_available": True,
+            "sii_completed": True,
+            "replay_ready": len(timeline or []) > 0,
+            "replay_frame_count": len(timeline or []),
+            "latest_replay_frames": len(timeline or []),
+            "replay_source": "persisted" if timeline else "unknown",
+            "last_processed_at": latest_result.get("last_processed_at") or latest_result.get("completed_at"),
+            "filename": latest_result.get("filename"),
+            "row_count": latest_result.get("row_count", 0),
+            "column_count": latest_result.get("column_count", 0),
+            "rows_processed": latest_result.get("row_count", 0),
+            "columns_detected": latest_result.get("column_count", 0),
+            "progress_label": "Telemetry processing complete.",
+            "message": "Telemetry processing complete.",
+            "error": None,
+            "state_backend": state_backend,
+        }
+    if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
+        return {
+            "job_id": job_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "PENDING",
+            "processing_state": "queued",
+            "percent": 0,
+            "progress": 0,
+            "replay_ready": False,
+            "replay_frame_count": 0,
+            "result_available": False,
+            "first_usable_available": False,
+            "sii_completed": False,
+            "message": "Upload accepted. Waiting for status propagation.",
+            "state_backend": state_backend,
+        }
+    return {
+        "job_id": job_id,
+        "status": "NOT_FOUND",
+        "processing_state": "missing",
+        "percent": 0,
+        "replay_ready": False,
+        "replay_frame_count": 0,
+        "result_available": False,
+        "error_type": "upload_session_missing",
+        "error": "upload_session_missing",
+        "message": "Upload session expired or was not found.",
+        "state_backend": state_backend,
+    }
 
 
 @router.post("/upload", status_code=202)
@@ -207,12 +282,15 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 @router.get("/upload-status/{job_id}")
 async def upload_status(job_id: str):
     state_backend = upload_jobs.upload_state_backend()
-    status = upload_jobs.read_upload_status(job_id)
-    if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
-        upload_jobs.process_next_queued_upload_job()
-        status = upload_jobs.read_upload_status(job_id)
-    if status:
-        normalized = normalize_upload_status_payload(status)
+    normalized = _resolve_upload_status_payload(job_id, state_backend)
+    if str(normalized.get("status", "")).upper() == "NOT_FOUND":
+        logger.warning(
+            "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
+            job_id,
+        )
+        return JSONResponse(status_code=404, content=normalized)
+
+    if str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
         if str(normalized.get("status", "")).upper() == "COMPLETE":
             existing = read_evidence_run(str(job_id))
             if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
@@ -241,133 +319,23 @@ async def upload_status(job_id: str):
                         "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
                     }
                 )
-        normalized.setdefault("state_backend", state_backend)
-        return normalized
-    latest_summary = upload_jobs.read_latest_upload_summary() or {}
-    if str(latest_summary.get("job_id") or "") == str(job_id):
-        normalized = normalize_upload_status_payload(latest_summary)
-        normalized.setdefault("state_backend", state_backend)
-        return normalized
-    latest_result = upload_jobs.read_upload_result_by_job_id(job_id)
-    if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
-        timeline = _extract_timeline(latest_result, job_id)
-        return {
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "COMPLETE",
-            "processing_state": "complete",
-            "percent": 100,
-            "progress": 100,
-            "result_available": True,
-            "first_usable_available": True,
-            "sii_completed": True,
-            "replay_ready": len(timeline or []) > 0,
-            "replay_frame_count": len(timeline or []),
-            "latest_replay_frames": len(timeline or []),
-            "replay_source": "persisted" if timeline else "unknown",
-            "last_processed_at": latest_result.get("last_processed_at") or latest_result.get("completed_at"),
-            "filename": latest_result.get("filename"),
-            "row_count": latest_result.get("row_count", 0),
-            "column_count": latest_result.get("column_count", 0),
-            "rows_processed": latest_result.get("row_count", 0),
-            "columns_detected": latest_result.get("column_count", 0),
-            "progress_label": "Telemetry processing complete.",
-            "message": "Telemetry processing complete.",
-            "error": None,
-            "state_backend": state_backend,
-        }
-    latest_summary = upload_jobs.read_latest_upload_summary() or {}
+    return normalized
 
-    if isinstance(latest_result, dict) and latest_result and str(latest_result.get("job_id") or "") == str(job_id):
-        timeline = _extract_timeline(latest_result, job_id)
-        return {
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "COMPLETE",
-            "processing_state": "complete",
-            "percent": 100,
-            "progress": 100,
-            "result_available": True,
-            "first_usable_available": True,
-            "sii_completed": True,
-            "replay_ready": len(timeline or []) > 0 or bool(latest_result.get("replay_ready")),
-            "replay_frame_count": len(timeline or []) or int(latest_result.get("replay_frame_count") or 0),
-            "latest_replay_frames": len(timeline or []) or int(latest_result.get("latest_replay_frames") or 0),
-            "replay_source": "persisted",
-            "last_processed_at": latest_result.get("last_processed_at") or latest_result.get("completed_at"),
-            "filename": latest_result.get("filename"),
-            "row_count": latest_result.get("row_count", 0),
-            "column_count": latest_result.get("column_count", 0),
-            "rows_processed": latest_result.get("rows_processed") or latest_result.get("row_count", 0),
-            "columns_detected": latest_result.get("columns_detected") or latest_result.get("column_count", 0),
-            "progress_label": "Telemetry processing complete.",
-            "message": "Telemetry processing complete.",
-            "error": None,
-            "state_backend": state_backend,
-        }
 
-    if (
-        isinstance(latest_summary, dict)
-        and latest_summary.get("status") == "COMPLETE"
-        and str(latest_summary.get("job_id") or "") == str(job_id)
-    ):
-        return {
-            **latest_summary,
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "COMPLETE",
-            "processing_state": "complete",
-            "percent": 100,
-            "progress": 100,
-            "result_available": True,
-            "first_usable_available": True,
-            "sii_completed": True,
-            "progress_label": "Telemetry processing complete.",
-            "message": "Telemetry processing complete.",
-            "error": None,
-            "state_backend": state_backend,
-        }
+@router.get("/upload-stream/{job_id}")
+async def upload_stream(job_id: str):
+    state_backend = upload_jobs.upload_state_backend()
 
-    # Treat upload-like job ids as pending propagation instead of hard 404.
-    # This prevents noisy 404 loops while queue state replicates across tasks.
-    if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
-        return {
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "PENDING",
-            "processing_state": "queued",
-            "percent": 0,
-            "progress": 0,
-            "replay_ready": False,
-            "replay_frame_count": 0,
-            "result_available": False,
-            "first_usable_available": False,
-            "sii_completed": False,
-            "message": "Upload accepted. Waiting for status propagation.",
-            "state_backend": state_backend,
-        }
+    async def event_generator():
+        # Stream for up to ~12 minutes with heartbeat-like cadence.
+        for _ in range(180):
+            payload = _resolve_upload_status_payload(job_id, state_backend)
+            yield f"data: {json.dumps(payload)}\n\n"
+            if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
+                break
+            await asyncio.sleep(4)
 
-    payload = {
-        "job_id": job_id,
-        "status": "NOT_FOUND",
-        "processing_state": "missing",
-        "percent": 0,
-        "replay_ready": False,
-        "replay_frame_count": 0,
-        "result_available": False,
-        "error_type": "upload_session_missing",
-        "error": "upload_session_missing",
-        "message": "Upload session expired or was not found.",
-        "state_backend": state_backend,
-    }
-    logger.warning(
-        "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
-        job_id,
-    )
-    return JSONResponse(
-        status_code=404,
-        content=payload,
-    )
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get("/latest-upload")
