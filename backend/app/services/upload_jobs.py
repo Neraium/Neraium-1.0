@@ -21,6 +21,7 @@ LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
 _S3_CLIENT: Any | None = None
+_RESET_BLOCK_PERSISTED = False
 
 
 def _upload_state_bucket() -> str:
@@ -168,6 +169,7 @@ def read_upload_status(job_id: str) -> dict[str, Any] | None:
 
 
 def reset_upload_state() -> None:
+    global _RESET_BLOCK_PERSISTED
     JOBS.clear()
     for path in RUNTIME_DIR.glob("*upload*"):
         try:
@@ -181,6 +183,16 @@ def reset_upload_state() -> None:
         delete_latest_payload_prefix("latest_upload_")
     except Exception:
         pass
+    _RESET_BLOCK_PERSISTED = True
+
+
+def clear_reset_block_persisted() -> None:
+    global _RESET_BLOCK_PERSISTED
+    _RESET_BLOCK_PERSISTED = False
+
+
+def reset_block_persisted_active() -> bool:
+    return bool(_RESET_BLOCK_PERSISTED)
 
 
 def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") -> dict[str, Any]:
@@ -792,6 +804,7 @@ def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_latest_upload_result(*args) -> None:
+    clear_reset_block_persisted()
     if len(args) == 2:
         job_id, result = args
         payload = dict(result or {})
@@ -809,6 +822,7 @@ def write_latest_upload_result(*args) -> None:
 
 
 def write_latest_upload_summary(*args, **kwargs) -> None:
+    clear_reset_block_persisted()
     if len(args) >= 2 and isinstance(args[0], str) and isinstance(args[1], dict):
         job_id = args[0]
         summary = args[1]
@@ -1055,6 +1069,7 @@ def parse_positive_int_env(name: str, default: int) -> int:
 
 
 def write_job(*args) -> None:
+    clear_reset_block_persisted()
     if len(args) == 1 and isinstance(args[0], dict):
         payload = dict(args[0])
         job_id = str(payload.get("job_id") or uuid.uuid4().hex)

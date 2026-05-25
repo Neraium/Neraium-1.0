@@ -356,6 +356,11 @@ async def latest_upload(include_persisted: int | bool = True):
     summary = latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}
     history = upload_jobs.read_upload_history(limit=20)
 
+    if upload_jobs.reset_block_persisted_active():
+        summary = {}
+        result = None
+        history = []
+
     def _has_persisted_status(job_id: str | None) -> bool:
         if not job_id:
             return False
