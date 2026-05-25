@@ -243,7 +243,52 @@ async function pollUploadStatus(jobId, statusUrl) {
           ? await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode })
           : await apiFetch(pollingPath, { accessCode });
         const payload = await readJsonPayload(response);
-        if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
+        if (!response.ok) {
+          const missingStatus = response.status === 404
+            && String(payload?.error_type ?? payload?.error ?? "").toLowerCase() === "upload_session_missing";
+          if (missingStatus) {
+            notFoundCount += 1;
+            const latestPayload = await loadLatestUpload();
+            const recoveredJobId = String(
+              latestPayload?.latest_result?.job_id
+              ?? latestPayload?.history?.[0]?.job_id
+              ?? "",
+            ).trim();
+            const recoveredStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
+            const sameJobRecovered = recoveredJobId && recoveredJobId === String(pollingJobId);
+            if (latestPayload?.latest_result && sameJobRecovered && ["active", "complete", "running_sii"].includes(recoveredStatus)) {
+              const recoveredPayload = {
+                ...payload,
+                ...latestPayload,
+                job_id: recoveredJobId,
+                status: "COMPLETE",
+                replay_ready: true,
+                replay_frame_count:
+                  Number(
+                    latestPayload?.latest_result?.replay_timeline?.timeline?.length
+                    ?? latestPayload?.latest_result?.sii_intelligence?.replay_timeline?.timeline?.length
+                    ?? 0,
+                  ) || 1,
+                progress_label: "Telemetry processing complete.",
+                message: "Telemetry processing complete.",
+              };
+              setUploadJob(recoveredPayload);
+              setUploadState("complete");
+              setUploadProcessingFlag(false);
+              return recoveredPayload;
+            }
+            const missingDelayMs = nextUploadPollDelay({
+              payload: null,
+              failureCount: Math.max(pollFailureCountRef.current, notFoundCount),
+              failedAttempt: true,
+            });
+            await new Promise((resolve) => {
+              pollTimerRef.current = window.setTimeout(resolve, missingDelayMs);
+            });
+            continue;
+          }
+          throw buildUploadRequestError(response, payload, "poll");
+        }
         const payloadStatusUpper = String(payload?.status ?? "").toUpperCase();
         const previouslyComplete = normalizeUploadStatus(uploadState) === "complete" || (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_COMPLETE__ === true);
         if (previouslyComplete && ["NOT_FOUND", "MISSING"].includes(payloadStatusUpper)) {
