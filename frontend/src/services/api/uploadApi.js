@@ -2,20 +2,44 @@ import { buildAccessHeaders, buildApiCandidateUrls } from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
 
-export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
-  const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });
-  if (!response.ok) {
-    throw new Error(`Unexpected response: ${response.status}`);
-  }
+const LATEST_UPLOAD_DEDUPE_TTL_MS = 4000;
+const latestUploadInflight = new Map();
+const latestUploadCache = new Map();
 
-  const payload = await response.json();
-  const latestResult = payload?.latest_result;
-  const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
-  const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
-  return {
-    snapshot: normalizedSnapshot,
-    latestResult: normalizedLatestResult,
-  };
+export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
+  const key = `latest:${includePersisted ? 1 : 0}`;
+  const now = Date.now();
+  const cached = latestUploadCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+  const inFlight = latestUploadInflight.get(key);
+  if (inFlight) return inFlight;
+
+  const request = (async () => {
+    const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });
+    if (!response.ok) {
+      throw new Error(`Unexpected response: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const latestResult = payload?.latest_result;
+    const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
+    const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
+    const value = {
+      snapshot: normalizedSnapshot,
+      latestResult: normalizedLatestResult,
+    };
+    latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
+    return value;
+  })();
+
+  latestUploadInflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    latestUploadInflight.delete(key);
+  }
 }
 
 export async function resetDemoSession({ apiFetch, accessCode }) {

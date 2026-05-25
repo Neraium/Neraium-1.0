@@ -1,4 +1,18 @@
+const FACILITY_SYSTEMS_DEDUPE_TTL_MS = 4000;
+const facilitySystemsInflight = new Map();
+const facilitySystemsCache = new Map();
+
 export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null }) {
+  const key = `systems:${String(domainMode ?? "")}`;
+  const now = Date.now();
+  const cached = facilitySystemsCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+  const inFlight = facilitySystemsInflight.get(key);
+  if (inFlight) return inFlight;
+
+  const request = (async () => {
   const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
   const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, { accessCode });
   if (!response.ok) {
@@ -11,7 +25,16 @@ export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = 
   if (!Array.isArray(payload.systems)) {
     throw new Error("Facility systems payload was incomplete.");
   }
-  return payload;
+    facilitySystemsCache.set(key, { expiresAt: Date.now() + FACILITY_SYSTEMS_DEDUPE_TTL_MS, value: payload });
+    return payload;
+  })();
+
+  facilitySystemsInflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    facilitySystemsInflight.delete(key);
+  }
 }
 
 export async function fetchEngineIdentity({ apiFetch, accessCode }) {
