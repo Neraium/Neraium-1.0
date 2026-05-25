@@ -874,12 +874,19 @@ async function pollUploadStatus(jobId, statusUrl) {
     : isUploadProcessing(uploadState)
       ? Math.max(1, Math.min(99, preferredPercent))
       : null;
-  const latestReplayFrames =
+  const latestReplayFrames = Math.max(
+    Number(uploadJob?.latest_replay_frames ?? 0) || 0,
+    Number(uploadJob?.replay_frame_count ?? 0) || 0,
+    Number(effectiveSnapshot?.latest_replay_frames ?? 0) || 0,
+    Number(effectiveSnapshot?.replay_frame_count ?? 0) || 0,
+    Number(latestUploadResult?.latest_replay_frames ?? 0) || 0,
+    Number(latestUploadResult?.replay_frame_count ?? 0) || 0,
     Number(
       latestUploadResult?.replay_timeline?.timeline?.length
       ?? latestUploadResult?.sii_intelligence?.replay_timeline?.timeline?.length
       ?? 0,
-    ) || 0;
+    ) || 0,
+  );
   const effectiveReplayReady = Boolean(uploadJob?.replay_ready) || Number(uploadJob?.replay_frame_count ?? 0) > 0 || latestReplayFrames > 0;
   const effectiveReplayFrameCount = Math.max(Number(uploadJob?.replay_frame_count ?? 0) || 0, latestReplayFrames);
   const uploadStatePercent = effectiveUploadState === "complete" ? 100 : (Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0);
