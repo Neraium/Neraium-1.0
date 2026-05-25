@@ -356,11 +356,20 @@ async def latest_upload(include_persisted: int | bool = True):
     summary = latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}
     history = upload_jobs.read_upload_history(limit=20)
 
+    def _has_persisted_status(job_id: str | None) -> bool:
+        if not job_id:
+            return False
+        status = upload_jobs.read_upload_status(str(job_id))
+        return isinstance(status, dict) and bool(status.get("job_id"))
+
     # If latest summary/result are stale or empty, recover from any completed
     # persisted upload status. This keeps latest-upload aligned with
     # upload-status in multi-task ECS deployments.
     if not summary and history:
         for item in history:
+            candidate_job_id = str(item.get("job_id") or "") if isinstance(item, dict) else ""
+            if not _has_persisted_status(candidate_job_id):
+                continue
             if isinstance(item, dict) and (
                 item.get("status") == "COMPLETE"
                 or item.get("result_available")
@@ -369,7 +378,7 @@ async def latest_upload(include_persisted: int | bool = True):
                 summary = dict(item)
                 break
 
-    if not summary:
+    if not summary or not _has_persisted_status(str((result or {}).get("job_id") or "")):
         result = None
 
     # Recovery path for split API/worker containers:
@@ -383,6 +392,9 @@ async def latest_upload(include_persisted: int | bool = True):
 
     if not result and history:
         latest = history[0] if isinstance(history[0], dict) else {}
+        latest_job_id = str(latest.get("job_id") or "")
+        if latest_job_id and not _has_persisted_status(latest_job_id):
+            latest = {}
         if latest.get("status") == "COMPLETE" or latest.get("result_available"):
             result = {
                 "job_id": latest.get("job_id"),
