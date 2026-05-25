@@ -210,6 +210,8 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     if not content.strip():
         raise ValueError("CSV file is empty.")
     job_id = str(job_id or uuid.uuid4().hex)
+    queued_job = read_job(job_id) or {}
+    initiated_by = queued_job.get("initiated_by", "anonymous")
     _set_status(job_id, "PROCESSING", 10, "Parsing CSV")
 
     text = content.decode("utf-8-sig", errors="replace")
@@ -470,7 +472,7 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         "column_count": len(columns),
         "rows_processed": len(rows),
         "columns_detected": len(columns),
-        "runner_used": True,
+        "runner_used": bool((runner_result or {}).get("runner_used")),
         "runner_module": RUNNER_MODULE,
         "core_engine": (runner_result or {}).get("core_engine"),
         "sii_completed": True,
@@ -511,11 +513,9 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     JOBS[job_id] = summary
     LATEST_UPLOAD_CACHE["result"] = result
     LATEST_UPLOAD_CACHE["summary"] = summary
+    now = result.get("completed_at") or result.get("last_processed_at") or datetime.now(timezone.utc).isoformat()
     try:
         from app.services import adaptive_learning
-        from app.services.evidence_store import upsert_evidence_run
-
-        now = result.get("completed_at") or result.get("last_processed_at") or datetime.now(timezone.utc).isoformat()
         adaptive_summary = {
             "last_processed_at": now,
             "drift_status": result.get("drift_status"),
@@ -532,6 +532,10 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
             summary=adaptive_summary,
             result=result,
         )
+    except Exception:
+        pass
+    try:
+        from app.services.evidence_store import upsert_evidence_run
         upsert_evidence_run(
             {
                 "run_id": job_id,
@@ -556,9 +560,9 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
                 "primary_drivers": [],
                 "evidence_summary": [],
                 "structural_archetypes": [],
-                "initiated_by": "anonymous",
                 "adaptive_site_key": "site::default",
                 "operator_feedback_history": [],
+                "initiated_by": initiated_by,
             }
         )
     except Exception:
@@ -975,6 +979,8 @@ def process_next_queued_upload_job() -> bool:
         else:
             result = process_csv_file(path, filename=metadata.get("filename") or path.name, job_id=job_id)
         completed = read_upload_status(job_id) or {}
+        if metadata.get("runner_used") is False:
+            completed["runner_used"] = False
         completed["job_id"] = job_id
         completed["status"] = "COMPLETE"
         completed["processing_state"] = "complete"
@@ -1003,6 +1009,36 @@ def process_next_queued_upload_job() -> bool:
                 "message": "Telemetry processing failed.",
             }
         )
+        try:
+            from app.services.evidence_store import upsert_evidence_run
+            now = datetime.now(timezone.utc).isoformat()
+            upsert_evidence_run(
+                {
+                    "run_id": job_id,
+                    "source_name": metadata.get("filename") or "upload.csv",
+                    "source_type": "csv_upload",
+                    "status": "failed",
+                    "created_at": now,
+                    "completed_at": now,
+                    "rows_received": 0,
+                    "rows_accepted": 0,
+                    "rows_rejected": 0,
+                    "sensors_detected": 0,
+                    "room": "Uploaded telemetry",
+                    "operating_state": "error",
+                    "drift_status": "error",
+                    "warnings": [],
+                    "errors": [str(exc)],
+                    "primary_drivers": [],
+                    "evidence_summary": [],
+                    "structural_archetypes": [],
+                    "initiated_by": metadata.get("initiated_by", "anonymous"),
+                    "adaptive_site_key": "site::default",
+                    "operator_feedback_history": [],
+                }
+            )
+        except Exception:
+            pass
         return False
 
 

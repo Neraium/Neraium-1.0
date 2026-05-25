@@ -70,12 +70,22 @@ def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, inclu
     if not include_persisted:
         return None
     intelligence = read_latest_sii_state()
+    result_intel = latest_result.get("sii_intelligence") if isinstance(latest_result, dict) and isinstance(latest_result.get("sii_intelligence"), dict) else {}
+    result_rooms = result_intel.get("rooms") if isinstance(result_intel.get("rooms"), list) else []
+    persisted_rooms = intelligence.get("rooms") if isinstance(intelligence, dict) and isinstance(intelligence.get("rooms"), list) else []
+
     if is_valid_persisted_intelligence(intelligence):
+        if len(result_rooms) > len(persisted_rooms):
+            return result_intel
+        if isinstance(latest_result, dict):
+            result_room_summary = latest_result.get("room_summary") if isinstance(latest_result.get("room_summary"), dict) else {}
+            if not isinstance(intelligence.get("room_summary"), dict):
+                fallback_summary = result_intel.get("room_summary") if isinstance(result_intel.get("room_summary"), dict) else result_room_summary
+                if isinstance(fallback_summary, dict) and fallback_summary:
+                    intelligence = {**intelligence, "room_summary": fallback_summary}
         return intelligence
-    if latest_result:
-        candidate = latest_result.get("sii_intelligence")
-        if is_valid_persisted_intelligence(candidate):
-            return candidate
+    if is_valid_persisted_intelligence(result_intel):
+        return result_intel
     return None
 
 

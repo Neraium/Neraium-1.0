@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse
 from app.services import adaptive_learning
-from app.services.evidence_store import upsert_evidence_run
+from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services import upload_jobs
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
@@ -103,12 +103,13 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "percent": 0,
             "progress": 0,
             "message": "Upload accepted. Processing is queued.",
-            "runner_used": True,
+            "runner_used": False if str(getattr(settings, "process_role", "")).lower() == "api" else True,
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,
             "file_path": temp_path,
             "file_size_bytes": len(content),
             "content_type": content_type,
+            "initiated_by": actor,
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
@@ -210,6 +211,34 @@ async def upload_status(job_id: str):
         status = upload_jobs.read_upload_status(job_id)
     if status:
         normalized = normalize_upload_status_payload(status)
+        if str(normalized.get("status", "")).upper() == "COMPLETE":
+            existing = read_evidence_run(str(job_id))
+            if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
+                now = datetime.now(timezone.utc).isoformat()
+                upload_result = upload_jobs.read_upload_result_by_job_id(job_id) or {}
+                upsert_evidence_run(
+                    {
+                        **existing,
+                        "status": "completed",
+                        "completed_at": now,
+                        "rows_received": upload_result.get("row_count", existing.get("rows_received", 0)),
+                        "rows_accepted": upload_result.get("row_count", existing.get("rows_accepted", 0)),
+                        "sensors_detected": max(0, int(upload_result.get("column_count", existing.get("sensors_detected", 0))) - 1),
+                        "room": (((upload_result.get("sii_intelligence") or {}).get("primary_room")) or existing.get("room")),
+                    }
+                )
+        if str(normalized.get("status", "")).upper() == "FAILED":
+            existing = read_evidence_run(str(job_id))
+            if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
+                now = datetime.now(timezone.utc).isoformat()
+                upsert_evidence_run(
+                    {
+                        **existing,
+                        "status": "failed",
+                        "completed_at": now,
+                        "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
+                    }
+                )
         normalized.setdefault("state_backend", state_backend)
         return normalized
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
@@ -341,26 +370,7 @@ async def latest_upload(include_persisted: int | bool = True):
                 break
 
     if not summary:
-        latest_result_candidate = result if isinstance(result, dict) else {}
-        if latest_result_candidate:
-            summary = upload_jobs.normalize_upload_summary(latest_result_candidate) if hasattr(upload_jobs, "normalize_upload_summary") else {
-                "job_id": latest_result_candidate.get("job_id"),
-                "filename": latest_result_candidate.get("filename"),
-                "status": "COMPLETE",
-                "processing_state": "complete",
-                "percent": 100,
-                "progress": 100,
-                "result_available": True,
-                "sii_completed": True,
-                "replay_ready": latest_result_candidate.get("replay_ready", False),
-                "replay_frame_count": latest_result_candidate.get("replay_frame_count", 0),
-                "latest_replay_frames": latest_result_candidate.get("latest_replay_frames", 0),
-                "row_count": latest_result_candidate.get("row_count", 0),
-                "column_count": latest_result_candidate.get("column_count", 0),
-                "rows_processed": latest_result_candidate.get("rows_processed") or latest_result_candidate.get("row_count", 0),
-                "columns_detected": latest_result_candidate.get("columns_detected") or latest_result_candidate.get("column_count", 0),
-                "last_processed_at": latest_result_candidate.get("last_processed_at") or latest_result_candidate.get("completed_at"),
-            }
+        result = None
 
     # Recovery path for split API/worker containers:
     # if the full result is not visible in this container but a completed
