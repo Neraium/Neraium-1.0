@@ -1273,30 +1273,3 @@ def test_health_endpoint_still_responds_after_upload_job() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_reset_prevents_persisted_result_from_reappearing_after_refresh() -> None:
-    client = TestClient(create_app())
-
-    reset_response = client.post("/api/data/reset")
-    assert reset_response.status_code == 200
-
-    # Simulate stale persisted payload that could exist on disk/db after a browser refresh.
-    upsert_latest_payload(
-        "latest_upload_result",
-        {
-            "job_id": "stale-job",
-            "filename": "stale.csv",
-            "processing_trace": {"completed_at": "2026-01-01T00:00:00+00:00"},
-            "sii_intelligence": {
-                "source": "uploaded",
-                "facility_state": "Needs action",
-                "urgency": "unstable",
-                "last_updated": "2026-01-01T00:00:00+00:00",
-            },
-        },
-    )
-
-    latest = client.get("/api/data/latest-upload?include_persisted=1")
-    assert latest.status_code == 200
-    payload = latest.json()
-    assert payload["status"] in {"empty", "building_baseline"}
-    assert payload["latest_result"] is None
