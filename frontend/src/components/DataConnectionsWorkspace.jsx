@@ -124,6 +124,8 @@ export default function DataConnectionsWorkspace({
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const pollInFlightRef = useRef(null);
+  const pollOwnerJobIdRef = useRef(null);
+  const missingStatusCooldownUntilRef = useRef(0);
   const lastRecoveryProbeAtRef = useRef(0);
   const lastRecoveryPayloadRef = useRef(null);
   const uploadStatusPathRef = useRef(null);
@@ -229,7 +231,11 @@ function extractJobIdFromStatusPath(value) {
 }
 
 async function pollUploadStatus(jobId, statusUrl) {
+    const requestedJobId = String(jobId || uploadJobIdRef.current || "").trim();
     if (pollInFlightRef.current) {
+      if (pollOwnerJobIdRef.current && pollOwnerJobIdRef.current === requestedJobId) {
+        return pollInFlightRef.current;
+      }
       return pollInFlightRef.current;
     }
     const runPoll = async () => {
@@ -241,6 +247,13 @@ async function pollUploadStatus(jobId, statusUrl) {
     let notFoundCount = 0;
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
+        const now = Date.now();
+        if (missingStatusCooldownUntilRef.current > now) {
+          await new Promise((resolve) => {
+            pollTimerRef.current = window.setTimeout(resolve, Math.max(1000, missingStatusCooldownUntilRef.current - now));
+          });
+          continue;
+        }
         const response = pollingPath === defaultPollingPath
           ? await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode })
           : await apiFetch(pollingPath, { accessCode });
@@ -291,6 +304,9 @@ async function pollUploadStatus(jobId, statusUrl) {
               failureCount: Math.max(pollFailureCountRef.current + 1, notFoundCount + 1),
               failedAttempt: true,
             }));
+            if (notFoundCount >= 3) {
+              missingStatusCooldownUntilRef.current = now + missingDelayMs;
+            }
             await new Promise((resolve) => {
               pollTimerRef.current = window.setTimeout(resolve, missingDelayMs);
             });
@@ -415,11 +431,13 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
     throw new Error("Upload polling timed out.");
     };
+    pollOwnerJobIdRef.current = requestedJobId || null;
     pollInFlightRef.current = runPoll();
     try {
       return await pollInFlightRef.current;
     } finally {
       pollInFlightRef.current = null;
+      pollOwnerJobIdRef.current = null;
     }
   }
 
@@ -820,6 +838,7 @@ async function pollUploadStatus(jobId, statusUrl) {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
     }
     pollFailureCountRef.current = 0;
+    missingStatusCooldownUntilRef.current = 0;
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
