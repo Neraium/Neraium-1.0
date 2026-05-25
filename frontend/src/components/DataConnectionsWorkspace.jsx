@@ -497,6 +497,7 @@ async function pollUploadStatus(jobId, statusUrl) {
       for (const [index, file] of filesToProcess.entries()) {
         const startingLoaded = aggregateLoaded;
         const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
+        let returnedJobId = null;
         setBatchResults((current) => current.map((entry) => (entry.id === fileId ? { ...entry, status: "uploading", message: "Uploading" } : entry)));
         const { ok, status, payload } = await uploadTelemetryFileWithProgress({
           file,
@@ -519,7 +520,7 @@ async function pollUploadStatus(jobId, statusUrl) {
         });
         try {
           if (!ok) throw buildUploadRequestError({ status }, payload, "upload");
-          let returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
+          returnedJobId = payload?.job_id ?? payload?.jobId ?? payload?.id;
           if (!returnedJobId) {
             const latestPayload = await loadLatestUpload();
             const recoveredJobId = String(
@@ -588,6 +589,25 @@ async function pollUploadStatus(jobId, statusUrl) {
               successCount += 1;
               setBatchResults((current) => current.map((entry) => (entry.id === fileId
                 ? { ...entry, status: "success", message: "Recovered after transient upload failure", jobId: recoveredJobId }
+                : entry)));
+              continue;
+            }
+            if (returnedJobId) {
+              uploadJobIdRef.current = returnedJobId;
+              uploadStatusPathRef.current = normalizeUploadStatusPath(payload?.status_url ?? latestPayload?.status_url, returnedJobId);
+              setUploadState("running_sii");
+              setUploadJob((current) => ({
+                ...(current ?? {}),
+                job_id: returnedJobId,
+                status: "PENDING",
+                processing_state: "processing",
+                progress_label: "Upload accepted. Status endpoint is temporarily unavailable; continuing in background.",
+                message: "Upload accepted. Status endpoint is temporarily unavailable; continuing in background.",
+              }));
+              aggregateLoaded += file.size || 0;
+              successCount += 1;
+              setBatchResults((current) => current.map((entry) => (entry.id === fileId
+                ? { ...entry, status: "success", message: "Accepted; status temporarily unavailable", jobId: returnedJobId }
                 : entry)));
               continue;
             }
