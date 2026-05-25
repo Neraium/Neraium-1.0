@@ -313,16 +313,65 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
         )
 
 
-def queue_metrics() -> dict[str, int]:
+def queue_metrics() -> dict[str, int]: 
     init_runtime_db()
     with db_connection() as connection:
         rows = connection.execute(
             "SELECT status, COUNT(*) AS count FROM upload_queue GROUP BY status"
         ).fetchall()
     metrics = {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
-    for row in rows:
-        metrics[row["status"]] = row["count"]
-    return metrics
+    for row in rows: 
+        metrics[row["status"]] = row["count"] 
+    return metrics 
+
+
+def queue_operational_metrics() -> dict[str, int | float | None]:
+    init_runtime_db()
+    with db_connection() as connection:
+        oldest_pending = connection.execute(
+            """
+            SELECT created_at
+            FROM upload_queue
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        oldest_processing = connection.execute(
+            """
+            SELECT updated_at
+            FROM upload_queue
+            WHERE status = 'processing'
+            ORDER BY updated_at ASC
+            LIMIT 1
+            """
+        ).fetchone()
+
+    now = datetime.now(timezone.utc)
+    pending_age = None
+    processing_age = None
+    try:
+        if oldest_pending and oldest_pending["created_at"]:
+            created = datetime.fromisoformat(str(oldest_pending["created_at"]).replace("Z", "+00:00"))
+            pending_age = max(0.0, (now - created).total_seconds())
+    except Exception:
+        pending_age = None
+    try:
+        if oldest_processing and oldest_processing["updated_at"]:
+            updated = datetime.fromisoformat(str(oldest_processing["updated_at"]).replace("Z", "+00:00"))
+            processing_age = max(0.0, (now - updated).total_seconds())
+    except Exception:
+        processing_age = None
+
+    counts = queue_metrics()
+    return {
+        "pending": int(counts.get("pending", 0)),
+        "processing": int(counts.get("processing", 0)),
+        "completed": int(counts.get("completed", 0)),
+        "failed": int(counts.get("failed", 0)),
+        "oldest_pending_age_seconds": round(pending_age, 2) if pending_age is not None else None,
+        "oldest_processing_age_seconds": round(processing_age, 2) if processing_age is not None else None,
+    }
 
 
 def clear_upload_runtime_tables() -> None:

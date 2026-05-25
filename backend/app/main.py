@@ -11,7 +11,7 @@ from app.core.config import Settings, get_settings
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
-from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records 
+from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records, queue_operational_metrics 
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
 from app.services.upload_jobs import (
     configure_runtime_dir as configure_upload_jobs_dir,
@@ -239,7 +239,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/ready")
     def read_api_ready():
-        return {**STARTUP_STATUS, **build_runner_status()}
+        queue_ops = {}
+        try:
+            queue_ops = {"queue_operational_metrics": queue_operational_metrics()}
+        except Exception:
+            queue_ops = {"queue_operational_metrics": {}}
+        return {**STARTUP_STATUS, **build_runner_status(), **queue_ops}
 
     @app.get("/api/startup-status")
     def read_startup_status():

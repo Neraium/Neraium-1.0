@@ -27,15 +27,16 @@ export default function useFacilityRuntime({
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
   const [telemetryTick, setTelemetryTick] = useState(0);
-  const [apiStatus, setApiStatus] = useState({
+  const [apiStatus, setApiStatus] = useState({ 
     state: "checking",
     label: "Sync pending",
     detail: "Establishing facility sync.",
     checkedAt: null,
     attemptCount: 0,
-    endpoint: formatEndpoint(API_BASE_URL),
-    message: "",
-  });
+    endpoint: formatEndpoint(API_BASE_URL), 
+    message: "", 
+    queue: null,
+  }); 
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
@@ -65,7 +66,7 @@ export default function useFacilityRuntime({
     if (!hasAccess) { 
       return false; 
     } 
-    if (healthRequestInFlightRef.current) return apiStatus.state === "online";
+    if (healthRequestInFlightRef.current) return apiStateRef.current === "online"; 
     healthRequestInFlightRef.current = true;
 
     const checkTime = new Date();
@@ -73,17 +74,21 @@ export default function useFacilityRuntime({
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
-      await fetchApiHealth({ apiFetch, accessCode });
-      apiStateRef.current = "online";
-      setApiStatus({
-        state: "online",
+      const healthPayload = await fetchApiHealth({ apiFetch, accessCode }); 
+      const queueMetrics = healthPayload?.ready?.queue_operational_metrics
+        ?? healthPayload?.ready?.details?.queue_operational_metrics
+        ?? null;
+      apiStateRef.current = "online"; 
+      setApiStatus({ 
+        state: "online", 
         label: "Backend Online",
         detail: `Last sync ${formatClockTime(checkTime)} CT.`,
         checkedAt: checkTime.toISOString(),
-        attemptCount,
-        endpoint: formatEndpoint(API_BASE_URL),
-        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
-      });
+        attemptCount, 
+        endpoint: formatEndpoint(API_BASE_URL), 
+        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.", 
+        queue: queueMetrics,
+      }); 
       return true;
     } catch { 
       apiStateRef.current = "offline";
@@ -92,10 +97,11 @@ export default function useFacilityRuntime({
         label: "Backend Offline",
         detail: "Backend connection unavailable. System data could not be loaded.",
         checkedAt: checkTime.toISOString(),
-        attemptCount,
-        endpoint: formatEndpoint(API_BASE_URL),
-        message: "Backend connection unavailable. System data could not be loaded.",
-      }); 
+        attemptCount, 
+        endpoint: formatEndpoint(API_BASE_URL), 
+        message: "Backend connection unavailable. System data could not be loaded.", 
+        queue: null,
+      });  
       setBackendError("Backend connection unavailable. System data could not be loaded."); 
       return false; 
     } finally {

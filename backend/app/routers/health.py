@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
-from app.services.runtime_db import queue_metrics
+from app.services.runtime_db import queue_metrics, queue_operational_metrics
 from app.services.sii_runner import build_runner_status
 from app.services.upload_jobs import shared_state_configured, upload_state_backend
 
@@ -25,6 +25,10 @@ def read_ready() -> JSONResponse:
     try:
         metrics = queue_metrics()
         details["queue_metrics"] = metrics
+        try:
+            details["queue_operational_metrics"] = queue_operational_metrics()
+        except Exception:
+            details["queue_operational_metrics"] = {}
     except Exception:
         checks["runtime_db"] = "error"
         checks["queue"] = "error"

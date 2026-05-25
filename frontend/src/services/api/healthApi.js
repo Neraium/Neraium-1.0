@@ -7,5 +7,14 @@ export async function fetchApiHealth({ apiFetch, accessCode }) {
   if (payload.status !== "ok") {
     throw new Error("Health response was not ok.");
   }
-  return payload;
+  let readyPayload = null;
+  try {
+    const readyResponse = await apiFetch("/api/ready", { accessCode });
+    if (readyResponse.ok) {
+      readyPayload = await readyResponse.json();
+    }
+  } catch {
+    readyPayload = null;
+  }
+  return { ...payload, ready: readyPayload };
 }

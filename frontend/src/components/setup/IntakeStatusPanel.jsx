@@ -29,6 +29,11 @@ export default function IntakeStatusPanel({
   const baselineReference = activeFilename
     ? `${activeFilename} (internal baseline)`
     : "Awaiting uploaded telemetry";
+  const queuePending = Number(apiStatus?.queue?.pending ?? 0);
+  const queueOldestPendingSeconds = Number(apiStatus?.queue?.oldest_pending_age_seconds ?? NaN);
+  const queueOldestPending = Number.isFinite(queueOldestPendingSeconds)
+    ? `${Math.max(0, Math.round(queueOldestPendingSeconds))}s`
+    : "n/a";
   return (
     <>
       <Panel title="Status" className="span-7 uploaded-intelligence-panel">
@@ -36,6 +41,8 @@ export default function IntakeStatusPanel({
           metrics={[
             { label: "Session", value: sessionState },
             { label: "Backend", value: apiStatus.label },
+            { label: "Queue Pending", value: queuePending },
+            { label: "Oldest Pending", value: queueOldestPending },
             { label: "Last Analysis", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
             { label: "Baseline", value: baselineMessage },
           ]}

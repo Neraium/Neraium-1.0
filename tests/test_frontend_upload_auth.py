@@ -47,6 +47,7 @@ def test_upload_and_polling_use_shared_api_helper() -> None:
     assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
     assert 'apiFetch("/api/data/latest-upload?include_persisted=1"' in source
     assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
+    assert 'apiFetch("/api/ready"' in read_frontend(HEALTH_API)
     assert "apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`" in system_api_source
     assert "const LATEST_UPLOAD_DEDUPE_TTL_MS = 4000;" in read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
     assert "const FACILITY_SYSTEMS_DEDUPE_TTL_MS = 4000;" in system_api_source
