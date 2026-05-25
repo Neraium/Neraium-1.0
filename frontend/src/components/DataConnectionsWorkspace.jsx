@@ -760,10 +760,13 @@ async function pollUploadStatus(jobId, statusUrl) {
   const selectedFileSize = formatFileSize(selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0));
   const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
   const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
+  const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
+  const latestResultJobId = String(latestUploadResult?.job_id ?? "").trim();
+  const latestResultMatchesCurrentJob = Boolean(currentJobId) && currentJobId === latestResultJobId;
   const backendComplete = String(uploadJob?.processing_state ?? "").toLowerCase() === "complete"
     || Number(uploadJob?.percent ?? uploadJob?.progress ?? 0) >= 100
     || Boolean(uploadJob?.result_available)
-    || Boolean(latestUploadResult);
+    || latestResultMatchesCurrentJob;
   const effectiveUploadState = backendComplete ? "complete" : normalizeUploadStatus(uploadState);
   const statusFallbackPercent = fallbackPercentFromStatus(uploadJob?.status ?? effectiveUploadState);
   const preferredPercent = [uploadTransferPercent, backendPercent, statusFallbackPercent]
