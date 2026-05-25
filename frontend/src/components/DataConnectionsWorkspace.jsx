@@ -215,6 +215,12 @@ function normalizeUploadStatusPath(statusUrl, jobId) {
   return fallbackId ? `/api/data/upload-status/${fallbackId}` : null;
 }
 
+function extractJobIdFromStatusPath(value) {
+  const text = String(value ?? "");
+  const match = text.match(/\/api\/data\/upload-status\/([^/?#\s]+)/i) || text.match(/\/upload-status\/([^/?#\s]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
 async function pollUploadStatus(jobId, statusUrl) {
     if (pollInFlightRef.current) {
       return pollInFlightRef.current;
@@ -556,9 +562,16 @@ async function pollUploadStatus(jobId, statusUrl) {
             || [408, 425, 429, 500, 502, 503, 504].includes(transientStatus);
           if (transientUploadFailure) {
             const latestPayload = await loadLatestUpload();
+            const inferredJobId = String(
+              returnedJobId
+              ?? uploadJobIdRef.current
+              ?? extractJobIdFromStatusPath(fileError?.path)
+              ?? "",
+            ).trim();
             const recoveredJobId = String(
               latestPayload?.latest_result?.job_id
               ?? latestPayload?.history?.[0]?.job_id
+              ?? inferredJobId
               ?? "",
             ).trim();
             const recoveredStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
@@ -592,13 +605,16 @@ async function pollUploadStatus(jobId, statusUrl) {
                 : entry)));
               continue;
             }
-            if (returnedJobId) {
-              uploadJobIdRef.current = returnedJobId;
-              uploadStatusPathRef.current = normalizeUploadStatusPath(payload?.status_url ?? latestPayload?.status_url, returnedJobId);
+            if (inferredJobId) {
+              uploadJobIdRef.current = inferredJobId;
+              uploadStatusPathRef.current = normalizeUploadStatusPath(
+                payload?.status_url ?? latestPayload?.status_url ?? fileError?.path,
+                inferredJobId,
+              );
               setUploadState("running_sii");
               setUploadJob((current) => ({
                 ...(current ?? {}),
-                job_id: returnedJobId,
+                job_id: inferredJobId,
                 status: "PENDING",
                 processing_state: "processing",
                 progress_label: "Upload accepted. Status endpoint is temporarily unavailable; continuing in background.",
@@ -607,7 +623,7 @@ async function pollUploadStatus(jobId, statusUrl) {
               aggregateLoaded += file.size || 0;
               successCount += 1;
               setBatchResults((current) => current.map((entry) => (entry.id === fileId
-                ? { ...entry, status: "success", message: "Accepted; status temporarily unavailable", jobId: returnedJobId }
+                ? { ...entry, status: "success", message: "Accepted; status temporarily unavailable", jobId: inferredJobId }
                 : entry)));
               continue;
             }
