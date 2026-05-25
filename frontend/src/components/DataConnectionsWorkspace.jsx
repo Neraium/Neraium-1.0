@@ -295,7 +295,7 @@ async function pollUploadStatus(jobId, statusUrl) {
           if (response.status >= 500) {
             statusEndpointFailureCountRef.current += 1;
             const now = Date.now();
-            const cooldownMs = Math.min(30000, 6000 + statusEndpointFailureCountRef.current * 4000);
+            const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);
             statusEndpointCooldownUntilRef.current = now + cooldownMs;
             if (now - lastRecoveryProbeAtRef.current >= 10000) {
               const latestPayload = await loadLatestUpload();
@@ -374,7 +374,7 @@ async function pollUploadStatus(jobId, statusUrl) {
               setUploadProcessingFlag(false);
               return recoveredPayload;
             }
-            const missingDelayMs = Math.max(10000, nextUploadPollDelay({
+            const missingDelayMs = Math.max(15000, nextUploadPollDelay({
               payload: null,
               failureCount: Math.max(pollFailureCountRef.current + 1, notFoundCount + 1),
               failedAttempt: true,
@@ -518,40 +518,55 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
   }
 
-  async function streamUploadStatusOnce({ streamPath, pollingJobId }) {
+  async function streamUploadStatusOnce({ streamPath, pollingJobId }) { 
     if (!streamPath || typeof window === "undefined" || typeof window.EventSource === "undefined") {
       return null;
     }
     const urls = buildApiCandidateUrls(streamPath);
     for (const url of urls) {
-      const payload = await new Promise((resolve) => {
-        let resolved = false;
-        const es = new EventSource(url, { withCredentials: true });
-        const timer = window.setTimeout(() => {
-          if (resolved) return;
-          resolved = true;
-          try { es.close(); } catch {}
-          resolve(null);
-        }, 20000);
-        es.onmessage = (event) => {
-          if (resolved) return;
-          let parsed = null;
+      const payload = await new Promise((resolve) => { 
+        let resolved = false; 
+        let lastPayload = null;
+        let lastMessageAt = Date.now();
+        const es = new EventSource(url, { withCredentials: true }); 
+        const timer = window.setTimeout(() => { 
+          if (resolved) return; 
+          resolved = true; 
+          try { es.close(); } catch {} 
+          resolve(lastPayload); 
+        }, 60000); 
+        es.onmessage = (event) => { 
+          if (resolved) return; 
+          let parsed = null; 
           try {
             parsed = JSON.parse(event.data || "{}");
           } catch {
             parsed = null;
           }
-          if (!parsed || String(parsed.job_id || "") !== String(pollingJobId || "")) {
+          if (!parsed || String(parsed.job_id || "") !== String(pollingJobId || "")) { 
+            return; 
+          } 
+          lastPayload = parsed;
+          lastMessageAt = Date.now();
+          setUploadJob(parsed);
+          const s = normalizeUploadStatus(parsed.status); 
+          if (s && !["complete", "failed"].includes(s)) {
+            setUploadState(s);
+          }
+          if (["complete", "failed"].includes(s)) { 
+            resolved = true; 
+            window.clearTimeout(timer); 
+            try { es.close(); } catch {} 
+            resolve(parsed); 
             return;
           }
-          const s = normalizeUploadStatus(parsed.status);
-          if (["complete", "failed"].includes(s)) {
+          if (Date.now() - lastMessageAt > 30000) {
             resolved = true;
             window.clearTimeout(timer);
             try { es.close(); } catch {}
-            resolve(parsed);
-          }
-        };
+            resolve(lastPayload);
+          } 
+        }; 
         es.onerror = () => {
           if (resolved) return;
           resolved = true;
@@ -560,10 +575,10 @@ async function pollUploadStatus(jobId, statusUrl) {
           resolve(null);
         };
       });
-      if (payload) return payload;
-    }
-    return null;
-  }
+      if (payload) return payload; 
+    } 
+    return null; 
+  } 
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -1141,7 +1156,7 @@ async function pollUploadStatus(jobId, statusUrl) {
 function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false }) {
   const hintedRetry = Number(payload?.retry_after_ms);
   if (Number.isFinite(hintedRetry) && hintedRetry >= 1000) {
-    return Math.min(Math.max(hintedRetry, 800), 12000);
+    return Math.min(Math.max(hintedRetry, 1200), 120000);
   }
 
   const percent = Number(payload?.percent);
@@ -1149,7 +1164,7 @@ function nextUploadPollDelay({ payload, failureCount = 0, failedAttempt = false 
   let baseDelay = 1200;
 
   if (failedAttempt) {
-    baseDelay = Math.min(1200 + failureCount * 900, 8000);
+    baseDelay = Math.min(6000 + failureCount * 12000, 120000);
   } else if (progress != null) {
     if (progress < 20) baseDelay = 900;
     else if (progress < 70) baseDelay = 1300;

@@ -4,6 +4,7 @@ import logging
 import threading
 import asyncio
 import json
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import uuid
@@ -23,6 +24,45 @@ from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
+_UPLOAD_STATUS_CACHE: dict[str, tuple[float, dict]] = {}
+_LATEST_UPLOAD_CACHE: tuple[float, dict] | None = None
+
+
+def _cache_get_status(job_id: str) -> dict | None:
+    entry = _UPLOAD_STATUS_CACHE.get(str(job_id))
+    if not entry:
+        return None
+    expires_at, payload = entry
+    if time.monotonic() >= expires_at:
+        _UPLOAD_STATUS_CACHE.pop(str(job_id), None)
+        return None
+    return dict(payload)
+
+
+def _cache_set_status(job_id: str, payload: dict, ttl_seconds: float = 1.5) -> None:
+    _UPLOAD_STATUS_CACHE[str(job_id)] = (time.monotonic() + max(0.2, float(ttl_seconds)), dict(payload or {}))
+
+
+def _cache_get_latest() -> dict | None:
+    global _LATEST_UPLOAD_CACHE
+    if not _LATEST_UPLOAD_CACHE:
+        return None
+    expires_at, payload = _LATEST_UPLOAD_CACHE
+    if time.monotonic() >= expires_at:
+        _LATEST_UPLOAD_CACHE = None
+        return None
+    return dict(payload)
+
+
+def _cache_set_latest(payload: dict, ttl_seconds: float = 2.0) -> None:
+    global _LATEST_UPLOAD_CACHE
+    _LATEST_UPLOAD_CACHE = (time.monotonic() + max(0.2, float(ttl_seconds)), dict(payload or {}))
+
+
+def _clear_endpoint_caches() -> None:
+    global _LATEST_UPLOAD_CACHE
+    _UPLOAD_STATUS_CACHE.clear()
+    _LATEST_UPLOAD_CACHE = None
 
 def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
     replay = (
@@ -281,6 +321,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 @router.get("/upload-status/{job_id}")
 async def upload_status(job_id: str):
+    cached = _cache_get_status(job_id)
+    if isinstance(cached, dict):
+        if str(cached.get("status", "")).upper() == "NOT_FOUND":
+            return JSONResponse(status_code=404, content=cached)
+        return cached
     state_backend = upload_jobs.upload_state_backend()
     normalized = _resolve_upload_status_payload(job_id, state_backend)
     if str(normalized.get("status", "")).upper() == "NOT_FOUND":
@@ -288,6 +333,7 @@ async def upload_status(job_id: str):
             "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
             job_id,
         )
+        _cache_set_status(job_id, normalized, ttl_seconds=1.0)
         return JSONResponse(status_code=404, content=normalized)
 
     if str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
@@ -319,6 +365,8 @@ async def upload_status(job_id: str):
                         "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
                     }
                 )
+    terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}
+    _cache_set_status(job_id, normalized, ttl_seconds=4.0 if terminal else 1.5)
     return normalized
 
 
@@ -340,6 +388,9 @@ async def upload_stream(job_id: str):
 
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
+    cached = _cache_get_latest()
+    if isinstance(cached, dict):
+        return cached
     state_backend = upload_jobs.upload_state_backend()
     result = upload_jobs.read_latest_upload_result()
     summary = latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}
@@ -452,7 +503,7 @@ async def latest_upload(include_persisted: int | bool = True):
     }
     if history and snapshot.get("last_filename"):
         history[0]["filename"] = snapshot["last_filename"]
-    return {
+    response_payload = {
         "snapshot": snapshot,
         "latest_result": result,
         "latestResult": result,
@@ -462,6 +513,9 @@ async def latest_upload(include_persisted: int | bool = True):
         "state_backend": state_backend,
         **snapshot,
     }
+    cache_ttl = 4.0 if bool(result) else 1.5
+    _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
+    return response_payload
 
 
 @router.get("/replay/{job_id}")
@@ -490,6 +544,7 @@ async def intake_result(job_id: str):
 @router.post("/reset")
 async def reset_data():
     upload_jobs.reset_upload_state()
+    _clear_endpoint_caches()
     return {"ok": True, "status": "reset"}
 
 
