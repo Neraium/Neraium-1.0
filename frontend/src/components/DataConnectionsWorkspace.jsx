@@ -251,7 +251,7 @@ async function pollUploadStatus(jobId, statusUrl) {
           if (missingStatus) {
             notFoundCount += 1;
             const now = Date.now();
-            const shouldProbeLatest = notFoundCount >= 3 && (now - lastRecoveryProbeAtRef.current >= 8000);
+            const shouldProbeLatest = notFoundCount >= 3 && (now - lastRecoveryProbeAtRef.current >= 15000);
             let latestPayload = lastRecoveryPayloadRef.current;
             if (shouldProbeLatest) {
               latestPayload = await loadLatestUpload();
@@ -286,11 +286,11 @@ async function pollUploadStatus(jobId, statusUrl) {
               setUploadProcessingFlag(false);
               return recoveredPayload;
             }
-            const missingDelayMs = nextUploadPollDelay({
+            const missingDelayMs = Math.max(10000, nextUploadPollDelay({
               payload: null,
               failureCount: Math.max(pollFailureCountRef.current + 1, notFoundCount + 1),
               failedAttempt: true,
-            });
+            }));
             await new Promise((resolve) => {
               pollTimerRef.current = window.setTimeout(resolve, missingDelayMs);
             });
