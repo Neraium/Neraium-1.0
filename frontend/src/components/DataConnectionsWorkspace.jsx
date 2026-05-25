@@ -123,6 +123,8 @@ export default function DataConnectionsWorkspace({
   const uploadJobIdRef = useRef(null); 
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
+  const pollInFlightRef = useRef(null);
+  const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
   const uploadInFlightRef = useRef(false);
 
@@ -204,14 +206,31 @@ export default function DataConnectionsWorkspace({
     window.localStorage.setItem(DATA_CONNECTIONS_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
 
-async function pollUploadStatus(jobId) {
+function normalizeUploadStatusPath(statusUrl, jobId) {
+  const statusValue = String(statusUrl ?? "").trim();
+  if (statusValue.startsWith("/api/data/upload-status/")) return statusValue;
+  if (statusValue.startsWith("/data/upload-status/")) return `/api${statusValue}`;
+  if (statusValue.startsWith("/upload-status/")) return `/api/data${statusValue}`;
+  const fallbackId = String(jobId ?? "").trim();
+  return fallbackId ? `/api/data/upload-status/${fallbackId}` : null;
+}
+
+async function pollUploadStatus(jobId, statusUrl) {
+    if (pollInFlightRef.current) {
+      return pollInFlightRef.current;
+    }
+    const runPoll = async () => {
     const pollingJobId = jobId || uploadJobIdRef.current;
-    if (!pollingJobId) throw new Error("Upload polling could not start.");
+    const defaultPollingPath = `/api/data/upload-status/${pollingJobId}`;
+    const pollingPath = normalizeUploadStatusPath(statusUrl ?? uploadStatusPathRef.current, pollingJobId) ?? defaultPollingPath;
+    if (!pollingJobId || !pollingPath) throw new Error("Upload polling could not start.");
     let completeWithoutReplayCount = 0;
     let notFoundCount = 0;
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
-        const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
+        const response = pollingPath === defaultPollingPath
+          ? await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode })
+          : await apiFetch(pollingPath, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
         const payloadStatusUpper = String(payload?.status ?? "").toUpperCase();
@@ -220,8 +239,9 @@ async function pollUploadStatus(jobId) {
           notFoundCount += 1;
           // Anti-flap guard: keep terminal COMPLETE sticky across a single-task miss.
           if (notFoundCount <= 5) {
+            const delayMs = nextUploadPollDelay({ payload: null, failureCount: notFoundCount, failedAttempt: true });
             await new Promise((resolve) => {
-              pollTimerRef.current = window.setTimeout(resolve, 250);
+              pollTimerRef.current = window.setTimeout(resolve, delayMs);
             });
             continue;
           }
@@ -255,6 +275,7 @@ async function pollUploadStatus(jobId) {
         }
         pollFailureCountRef.current = 0;
         uploadJobIdRef.current = payload.job_id ?? pollingJobId;
+        uploadStatusPathRef.current = normalizeUploadStatusPath(payload?.status_url, uploadJobIdRef.current) ?? pollingPath;
         if (typeof window !== "undefined" && uploadJobIdRef.current) {
           window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
         }
@@ -324,6 +345,13 @@ async function pollUploadStatus(jobId) {
       }
     }
     throw new Error("Upload polling timed out.");
+    };
+    pollInFlightRef.current = runPoll();
+    try {
+      return await pollInFlightRef.current;
+    } finally {
+      pollInFlightRef.current = null;
+    }
   }
 
   async function handleUpload(event) {
@@ -509,9 +537,10 @@ async function pollUploadStatus(jobId) {
             window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
           }
           const normalizedPayload = { ...payload, job_id: returnedJobId };
+          uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedPayload?.status_url, returnedJobId);
           setUploadJob(normalizedPayload);
           setUploadState(normalizeUploadStatus(normalizedPayload.status));
-          await pollUploadStatus(returnedJobId);
+          await pollUploadStatus(returnedJobId, normalizedPayload?.status_url);
           aggregateLoaded += file.size || 0;
           successCount += 1;
           setBatchResults((current) => current.map((entry) => (entry.id === fileId
@@ -544,6 +573,7 @@ async function pollUploadStatus(jobId) {
               if (typeof window !== "undefined") {
                 window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, recoveredJobId);
               }
+              uploadStatusPathRef.current = normalizeUploadStatusPath(latestPayload?.status_url, recoveredJobId);
               setUploadJob((current) => ({
                 ...(current ?? {}),
                 job_id: recoveredJobId,
@@ -553,7 +583,7 @@ async function pollUploadStatus(jobId) {
                 message: "Upload accepted. Recovering processing state after transient network error.",
               }));
               setUploadState("running_sii");
-              await pollUploadStatus(recoveredJobId);
+              await pollUploadStatus(recoveredJobId, latestPayload?.status_url);
               aggregateLoaded += file.size || 0;
               successCount += 1;
               setBatchResults((current) => current.map((entry) => (entry.id === fileId
@@ -672,6 +702,7 @@ async function pollUploadStatus(jobId) {
     setCopyState("idle");
     setIsJsonSchemaOpen(false);
     uploadJobIdRef.current = null;
+    uploadStatusPathRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
     }

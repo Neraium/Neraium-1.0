@@ -100,6 +100,7 @@ function isPublicReadonlyPath(path) {
   const normalized = String(path || "").toLowerCase();
   return (
     normalized.startsWith("/api/data/latest-upload")
+    || normalized.startsWith("/api/data/upload-status/")
     || normalized.startsWith("/api/facility/systems")
     || normalized.startsWith("/api/health")
     || normalized.startsWith("/api/domain/mode")
