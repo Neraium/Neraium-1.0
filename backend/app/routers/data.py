@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 import uuid
 from datetime import datetime, timezone
+import re
 
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -19,6 +20,7 @@ from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
+UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
 
 def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
     replay = (
@@ -323,6 +325,25 @@ async def upload_status(job_id: str):
             "progress_label": "Telemetry processing complete.",
             "message": "Telemetry processing complete.",
             "error": None,
+            "state_backend": state_backend,
+        }
+
+    # Treat upload-like job ids as pending propagation instead of hard 404.
+    # This prevents noisy 404 loops while queue state replicates across tasks.
+    if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
+        return {
+            "job_id": job_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "PENDING",
+            "processing_state": "queued",
+            "percent": 0,
+            "progress": 0,
+            "replay_ready": False,
+            "replay_frame_count": 0,
+            "result_available": False,
+            "first_usable_available": False,
+            "sii_completed": False,
+            "message": "Upload accepted. Waiting for status propagation.",
             "state_backend": state_backend,
         }
 
