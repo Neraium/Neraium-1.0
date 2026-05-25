@@ -124,6 +124,8 @@ export default function DataConnectionsWorkspace({
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const pollInFlightRef = useRef(null);
+  const lastRecoveryProbeAtRef = useRef(0);
+  const lastRecoveryPayloadRef = useRef(null);
   const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
   const uploadInFlightRef = useRef(false);
@@ -248,7 +250,14 @@ async function pollUploadStatus(jobId, statusUrl) {
             && String(payload?.error_type ?? payload?.error ?? "").toLowerCase() === "upload_session_missing";
           if (missingStatus) {
             notFoundCount += 1;
-            const latestPayload = await loadLatestUpload();
+            const now = Date.now();
+            const shouldProbeLatest = now - lastRecoveryProbeAtRef.current >= 5000;
+            let latestPayload = lastRecoveryPayloadRef.current;
+            if (shouldProbeLatest) {
+              latestPayload = await loadLatestUpload();
+              lastRecoveryProbeAtRef.current = now;
+              lastRecoveryPayloadRef.current = latestPayload;
+            }
             const recoveredJobId = String(
               latestPayload?.latest_result?.job_id
               ?? latestPayload?.history?.[0]?.job_id
@@ -279,7 +288,7 @@ async function pollUploadStatus(jobId, statusUrl) {
             }
             const missingDelayMs = nextUploadPollDelay({
               payload: null,
-              failureCount: Math.max(pollFailureCountRef.current, notFoundCount),
+              failureCount: Math.max(pollFailureCountRef.current + 1, notFoundCount + 1),
               failedAttempt: true,
             });
             await new Promise((resolve) => {
@@ -805,6 +814,8 @@ async function pollUploadStatus(jobId, statusUrl) {
     setIsJsonSchemaOpen(false);
     uploadJobIdRef.current = null;
     uploadStatusPathRef.current = null;
+    lastRecoveryProbeAtRef.current = 0;
+    lastRecoveryPayloadRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
     }
