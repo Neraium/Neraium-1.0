@@ -251,7 +251,7 @@ async function pollUploadStatus(jobId, statusUrl) {
           if (missingStatus) {
             notFoundCount += 1;
             const now = Date.now();
-            const shouldProbeLatest = now - lastRecoveryProbeAtRef.current >= 5000;
+            const shouldProbeLatest = notFoundCount >= 3 && (now - lastRecoveryProbeAtRef.current >= 8000);
             let latestPayload = lastRecoveryPayloadRef.current;
             if (shouldProbeLatest) {
               latestPayload = await loadLatestUpload();

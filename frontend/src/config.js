@@ -68,7 +68,11 @@ function apiBaseCandidates() {
   const seen = new Set();
   return candidates.filter((value) => {
     const normalized = (value ?? "").replace(/\/+$/, "");
+    const onHostedAppDomain = typeof window !== "undefined" && window.location?.hostname === "app.neraium.com";
     if (seen.has(normalized) || isUnsafeMixedContentTarget(normalized)) {
+      return false;
+    }
+    if (normalized === "" && onHostedAppDomain) {
       return false;
     }
     if (isProductionBuild && normalized === "" && (siblingApi || productionFallback)) {
