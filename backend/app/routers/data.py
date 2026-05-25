@@ -362,6 +362,17 @@ async def latest_upload(include_persisted: int | bool = True):
         status = upload_jobs.read_upload_status(str(job_id))
         return isinstance(status, dict) and bool(status.get("job_id"))
 
+    def _is_rich_persisted_result(candidate: dict | None) -> bool:
+        if not isinstance(candidate, dict):
+            return False
+        if int(candidate.get("row_count") or 0) > 0:
+            return True
+        if isinstance(candidate.get("data_quality"), dict):
+            return True
+        if isinstance(candidate.get("room_summary"), dict):
+            return True
+        return False
+
     # If latest summary/result are stale or empty, recover from any completed
     # persisted upload status. This keeps latest-upload aligned with
     # upload-status in multi-task ECS deployments.
@@ -378,7 +389,10 @@ async def latest_upload(include_persisted: int | bool = True):
                 summary = dict(item)
                 break
 
-    if not summary or not _has_persisted_status(str((result or {}).get("job_id") or "")):
+    result_job_id = str((result or {}).get("job_id") or "")
+    if not summary and not _is_rich_persisted_result(result):
+        result = None
+    elif summary and not _has_persisted_status(result_job_id) and not _is_rich_persisted_result(result):
         result = None
 
     # Recovery path for split API/worker containers:
