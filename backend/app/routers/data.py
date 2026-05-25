@@ -373,6 +373,14 @@ async def latest_upload(include_persisted: int | bool = True):
             return True
         return False
 
+    # If latest cache points to an incomplete artifact, refresh from
+    # canonical per-job persisted result when available.
+    result_job_id = str((result or {}).get("job_id") or "")
+    if isinstance(result, dict) and result_job_id and not result.get("filename"):
+        by_job_result = upload_jobs.read_upload_result_by_job_id(result_job_id)
+        if isinstance(by_job_result, dict) and by_job_result.get("filename"):
+            result = by_job_result
+
     # If latest summary/result are stale or empty, recover from any completed
     # persisted upload status. This keeps latest-upload aligned with
     # upload-status in multi-task ECS deployments.
