@@ -500,6 +500,7 @@ async function pollUploadStatus(jobId, statusUrl) {
       let aggregateLoaded = 0;
       let successCount = 0;
       let failedCount = 0;
+      let hasBackgroundProcessing = false;
       for (const [index, file] of filesToProcess.entries()) {
         const startingLoaded = aggregateLoaded;
         const fileId = `${file.name}-${file.size}-${file.lastModified ?? Date.now()}`;
@@ -611,6 +612,7 @@ async function pollUploadStatus(jobId, statusUrl) {
                 payload?.status_url ?? latestPayload?.status_url ?? fileError?.path,
                 inferredJobId,
               );
+              hasBackgroundProcessing = true;
               setUploadState("running_sii");
               setUploadJob((current) => ({
                 ...(current ?? {}),
@@ -650,6 +652,12 @@ async function pollUploadStatus(jobId, statusUrl) {
         ...(latestPayload ?? {}),
       };
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
+      if (hasBackgroundProcessing && failedCount === 0) {
+        setUploadResult(completedPayload);
+        setUploadState("running_sii");
+        setUploadError("Upload accepted. Status endpoint is temporarily unavailable; processing continues in background.");
+        return;
+      }
       if (failedCount > 0) {
         if (successCount === 0) {
           setUploadResult(null);
