@@ -20,6 +20,7 @@ from app.services.upload_jobs import (
     warm_latest_upload_cache,
 )
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
+from app.services.sii_runner import build_runner_status
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/ready")
     def read_api_ready():
-        return STARTUP_STATUS
+        return {**STARTUP_STATUS, **build_runner_status()}
 
     @app.get("/api/startup-status")
     def read_startup_status():

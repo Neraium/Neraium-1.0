@@ -806,11 +806,32 @@
     line-height: 1.18;
   }
 
-  .system-gate__inspect {
-    margin: 0;
-    padding: 5px 10px;
-    font-size: 0.56rem;
-    letter-spacing: 0.13em;
+  .system-gate__inspect { 
+    margin: 0; 
+    padding: 5px 10px; 
+    font-size: 0.56rem; 
+    letter-spacing: 0.13em; 
+  } 
+
+  .system-gate__heartbeat .system-gate__freshness {
+    display: none;
+  }
+
+  .system-gate__center > .panel {
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 12px;
+  }
+
+  .system-gate__center > .panel .panel-header h3 {
+    font-size: 0.84rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .system-gate__center > .panel .panel-body {
+    display: grid;
+    gap: 8px;
   }
 
   .system-gate__heartbeat,

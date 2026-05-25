@@ -121,6 +121,21 @@ export default function SystemBodyWorkspace({
             <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
             {canInspectDetails ? <p className="system-gate__inspect">{hasAdmittedFinding ? "Inspect Details" : "Inspect Analysis"}</p> : null}
           </div>
+          {uploadDetail?.capabilities ? (
+            <section className="panel" aria-label="Core capabilities">
+              <header className="panel-header">
+                <h3>Decision Record</h3>
+              </header>
+              <div className="panel-body">
+                {uploadDetail.capabilities.map((capability) => (
+                  <div key={capability.title} style={{ marginBottom: "0.8rem" }}>
+                    <strong>{capability.title}</strong>
+                    <p className="metadata-text">{capability.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {settingsOpen ? (
             <aside className="system-gate__settings-panel" aria-label="Gate settings panel">
               <ul>
@@ -324,7 +339,42 @@ function buildUploadDetail(result, replayFrame) {
       ?? result?.operational_signal_profile_signals
       ?? sourceMetadata?.operational_signal_profile_signals
     ),
+    capabilities: buildCapabilityCards(result, intelligence),
   };
+}
+
+function buildCapabilityCards(result, intelligence) {
+  const drift = result?.relationship_drift ?? intelligence?.relationship_drift ?? null;
+  const evidence = result?.evidence_packet ?? intelligence?.evidence_packet ?? null;
+  const instability = result?.emerging_instability ?? intelligence?.emerging_instability ?? null;
+  const decision = result?.decision_integrity ?? intelligence?.decision_integrity ?? null;
+  const runnerState = intelligence?.sii_runner_latest_state ?? result?.sii_runner_result?.latest_state ?? null;
+  return [
+    {
+      title: "Relationship Drift",
+      summary: drift
+        ? `Relationship drift detected. State: ${drift.state ?? "unknown"}. Evidence supports changed behavior relative to baseline.`
+        : "No relationship drift detected yet or insufficient relationship evidence.",
+    },
+    {
+      title: "Evidence Explanation",
+      summary: evidence
+        ? "Evidence supports likely contributors and supporting observations for operator review."
+        : "Evidence packet unavailable for this run.",
+    },
+    {
+      title: "Emerging Instability",
+      summary: instability || runnerState
+        ? `Emerging instability observed. Instability score: ${instability?.instability_score ?? runnerState?.instability_score ?? "unavailable"}. Operator review recommended.`
+        : "Instability quantification unavailable.",
+    },
+    {
+      title: "Decision Integrity",
+      summary: decision
+        ? `Decision record preserved for run ${decision.run_id ?? result?.job_id ?? "unknown"} with source ${decision.filename ?? result?.filename ?? "uploaded telemetry"}.`
+        : `Decision record pending. Current run id: ${result?.job_id ?? "unknown"}.`,
+    },
+  ];
 }
 
 function normalizeOperationalLabel(value) {

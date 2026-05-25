@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import uuid
@@ -13,6 +14,8 @@ from app.services.evidence_store import upsert_evidence_run
 from app.services import upload_jobs
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
+from app.services.runtime_db import enqueue_upload_job
+from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -87,34 +90,34 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         or "anonymous"
     )
     try:
-        if lowered.endswith(".json") or "json" in content_type:
-            summary = upload_jobs.process_json_payload(content, filename=filename)
-        else:
-            with NamedTemporaryFile(delete=False, suffix=".csv") as temp:
-                temp.write(content)
-                temp_path = temp.name
-            try:
-                result = upload_jobs.process_csv_file(temp_path, filename=filename)
-            finally:
-                Path(temp_path).unlink(missing_ok=True)
-            summary = upload_jobs.read_latest_upload_summary() or {}
-            summary["job_id"] = result.get("job_id", summary.get("job_id"))
-            summary["filename"] = filename
-            summary["runner_used"] = settings.process_role != "api"
-            summary["runner_module"] = RUNNER_MODULE
-            summary["core_engine"] = CORE_ENGINE
-            upload_jobs.write_latest_upload_summary(summary)
-            latest_result = result or upload_jobs.read_latest_upload_result() or {}
-            if latest_result:
-                latest_result["filename"] = filename
-                latest_result["job_id"] = summary.get("job_id")
-                upload_jobs.write_latest_upload_result(summary.get("job_id"), latest_result)
-                upload_jobs.write_latest_upload_result(latest_result)
+        job_id = uuid.uuid4().hex
+        with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+            temp.write(content)
+            temp_path = temp.name
+        summary = {
+            "job_id": job_id,
+            "filename": filename,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "status": "PENDING",
+            "processing_state": "queued",
+            "percent": 0,
+            "progress": 0,
+            "message": "Upload accepted. Processing is queued.",
+            "runner_used": True,
+            "runner_module": RUNNER_MODULE,
+            "core_engine": CORE_ENGINE,
+            "file_path": temp_path,
+            "file_size_bytes": len(content),
+            "content_type": content_type,
+        }
+        upload_jobs.write_job(summary)
+        enqueue_upload_job(job_id)
+        threading.Thread(target=upload_jobs.process_next_queued_upload_job, daemon=True).start()
         record_audit_event(
             actor=actor,
             action="upload.accepted",
             resource_type="upload_job",
-            resource_id=str(summary.get("job_id") or "unknown"),
+            resource_id=str(job_id or "unknown"),
             request_id=auth_context.get("request_id"),
             detail={"filename": filename, "size_bytes": len(content)},
         )
@@ -125,11 +128,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                     "run_id": run_id,
                     "source_name": filename,
                     "source_type": "csv_upload",
-                    "status": "completed",
-                    "created_at": summary.get("last_processed_at"),
-                    "completed_at": summary.get("last_processed_at"),
-                    "rows_received": summary.get("rows_processed", summary.get("row_count", 0)),
-                    "rows_accepted": summary.get("rows_processed", summary.get("row_count", 0)),
+                    "status": "queued",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "completed_at": None,
+                    "rows_received": 0,
+                    "rows_accepted": 0,
                     "rows_rejected": 0,
                     "sensors_detected": summary.get("columns_detected", summary.get("column_count", 0)),
                     "room": "Uploaded telemetry",
@@ -202,6 +205,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 async def upload_status(job_id: str):
     state_backend = upload_jobs.upload_state_backend()
     status = upload_jobs.read_upload_status(job_id)
+    if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
+        upload_jobs.process_next_queued_upload_job()
+        status = upload_jobs.read_upload_status(job_id)
     if status:
         normalized = normalize_upload_status_payload(status)
         normalized.setdefault("state_backend", state_backend)
@@ -211,10 +217,8 @@ async def upload_status(job_id: str):
         normalized = normalize_upload_status_payload(latest_summary)
         normalized.setdefault("state_backend", state_backend)
         return normalized
-    latest_result = upload_jobs.read_upload_result_by_job_id(job_id) or upload_jobs.read_latest_upload_result()
-    if isinstance(latest_result, dict) and (
-        latest_result.get("job_id") == job_id or latest_result.get("filename")
-    ):
+    latest_result = upload_jobs.read_upload_result_by_job_id(job_id)
+    if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
         timeline = _extract_timeline(latest_result, job_id)
         return {
             "job_id": job_id,
@@ -241,8 +245,6 @@ async def upload_status(job_id: str):
             "error": None,
             "state_backend": state_backend,
         }
-
-    latest_result = upload_jobs.read_upload_result_by_job_id(job_id) or upload_jobs.read_latest_upload_result()
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
 
     if isinstance(latest_result, dict) and latest_result and str(latest_result.get("job_id") or "") == str(job_id):
@@ -493,7 +495,7 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
 
 
 def queue_metrics() -> dict[str, int]:
-    return {"pending": 0, "processing": 0}
+    return runtime_queue_metrics()
 
 
 def normalize_upload_status_payload(payload: dict) -> dict:

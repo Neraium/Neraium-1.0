@@ -51,7 +51,7 @@ export default function IntakeFlowPanel({
               <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
               <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a file to continue."}</p>
             </div>
-            <div className="upload-file-card__actions">
+            <div className="upload-file-card__actions upload-file-card__actions--responsive">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Select CSV</button>
               <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
                 {isUploadProcessing(uploadState) ? "Processing" : "Process Upload"}

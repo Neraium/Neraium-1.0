@@ -11,6 +11,7 @@ from typing import Any
 
 from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
+from app.services.runtime_db import read_latest_payload, upsert_latest_payload
 
 import numpy as np
 
@@ -482,6 +483,12 @@ def build_runner_evidence(
 
 
 def read_latest_sii_state() -> dict[str, Any] | None:
+    try:
+        persisted = read_latest_payload("latest_sii_state")
+        if isinstance(persisted, dict) and is_valid_latest_sii_state(persisted):
+            return persisted
+    except Exception:
+        pass
     if not STATE_PATH.exists():
         return None
     try:
@@ -499,6 +506,10 @@ def write_latest_sii_state(state: dict[str, Any]) -> None:
     for attempt in range(6):
         try:
             temp_path.replace(STATE_PATH)
+            try:
+                upsert_latest_payload("latest_sii_state", state)
+            except Exception:
+                pass
             return
         except OSError as exc:
             last_error = exc

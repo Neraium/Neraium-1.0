@@ -12,21 +12,8 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
   const latestResult = payload?.latest_result;
   const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
   const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
-  const status = String(normalizedSnapshot?.status ?? normalizedSnapshot?.processing_state ?? "").toLowerCase();
-  const shouldDowngradeActive =
-    ["active", "baseline_active"].includes(status)
-    && !normalizedLatestResult
-    && normalizedSnapshot?.sii_completed !== true;
-
   return {
-    snapshot: shouldDowngradeActive
-      ? {
-        ...uploadStateView.buildEmptyLatestUploadSnapshot(),
-        status: "empty",
-        source: "none",
-        message: "No data connected yet.",
-      }
-      : normalizedSnapshot,
+    snapshot: normalizedSnapshot,
     latestResult: normalizedLatestResult,
   };
 }
@@ -50,7 +37,7 @@ function readJsonResponse(xhr) {
   }
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 1000, onProgress } = {}) {
+export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 1000, onProgress, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -71,16 +58,27 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
 
     const shouldRetryStatus = (status) => status >= 500 || status === 404 || status === 405 || status === 408 || status === 425 || status === 429;
     const MAX_SAME_URL_RETRIES = 2;
+    const RESPONSE_GRACE_TIMEOUT_MS = 8000;
+    const scheduleTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
+    const cancelTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
 
     const uploadAttempt = (index, retryCount = 0) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
+      let responseGraceTimer = null;
+      let responseSettled = false;
+      const clearResponseGraceTimer = () => {
+        if (responseGraceTimer) {
+          cancelTimer(responseGraceTimer);
+          responseGraceTimer = null;
+        }
+      };
       formData.append("file", file);
       xhr.open("POST", uploadUrls[index], true);
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;
 
-      Object.entries(buildAccessHeaders()).forEach(([key, value]) => {
+      Object.entries(buildAccessHeaders(accessCode)).forEach(([key, value]) => {
         xhr.setRequestHeader(key, value);
       });
 
@@ -96,9 +94,29 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
           speedBytesPerSecond: loaded / elapsedSeconds,
           message: "Uploading telemetry export.",
         });
+        // If upload bytes completed but the server response never arrives,
+        // fail fast so caller can recover via persisted latest-upload polling.
+        if (!responseSettled && total > 0 && loaded >= total && !responseGraceTimer) {
+          responseGraceTimer = scheduleTimer(() => {
+            if (responseSettled || xhr.readyState === 4) return;
+            try {
+              xhr.abort();
+            } catch {
+              // no-op
+            }
+            const error = new Error("Upload bytes transferred but server did not confirm the job in time.");
+            error.name = "ApiTimeoutError";
+            error.timeoutMs = RESPONSE_GRACE_TIMEOUT_MS;
+            error.error_type = "upload_response_timeout";
+            error.status = xhr.status;
+            reject(error);
+          }, RESPONSE_GRACE_TIMEOUT_MS);
+        }
       };
 
       xhr.onload = () => {
+        responseSettled = true;
+        clearResponseGraceTimer();
         const payload = normalizeUploadJob(readJsonResponse(xhr));
         const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
         if (response.ok) {
@@ -125,6 +143,8 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       };
 
       xhr.onerror = () => {
+        responseSettled = true;
+        clearResponseGraceTimer();
         console.error("Upload network error", {
           url: uploadUrls[index],
           attempt: index + 1,
@@ -157,6 +177,8 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       };
 
       xhr.ontimeout = () => {
+        responseSettled = true;
+        clearResponseGraceTimer();
         console.error("Upload timeout", {
           url: uploadUrls[index],
           attempt: index + 1,
@@ -185,6 +207,10 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
         error.status = xhr.status;
         error.responseText = xhr.responseText;
         reject(error);
+      };
+
+      xhr.onabort = () => {
+        clearResponseGraceTimer();
       };
 
       xhr.send(formData);

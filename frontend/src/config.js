@@ -197,9 +197,8 @@ function shouldRetryOnHttpStatus({ status, apiBaseUrl, path }) {
 }
 
 export function buildAccessHeaders(accessCode = "") {
-  const runtimeToken = String(accessCode ?? "").trim();
-  const envToken = import.meta.env.VITE_NERAIUM_API_TOKEN?.trim();
-  const token = runtimeToken || envToken;
+  const explicit = String(accessCode ?? "").trim();
+  const token = explicit || import.meta.env.VITE_NERAIUM_API_TOKEN?.trim();
   return token ? { "X-Neraium-Access-Code": token } : {};
 }
 

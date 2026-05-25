@@ -147,9 +147,8 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     if (!latestUploadSnapshot) return;
     const currentJobId = uploadJob?.job_id ?? uploadJobIdRef.current;
-    // Do not let background snapshot polling overwrite the upload UI while a file is selected,
-    // uploading, validating, running, or recovering.
-    if (selectedFiles?.length > 0 || uploadInFlightRef.current || isUploadProcessing(uploadState)) return;
+    // Do not let background snapshot polling overwrite an active in-flight upload job.
+    if (currentJobId && isUploadProcessing(uploadState)) return;
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
     const snapshotReplayFrameCount =
       Number(
@@ -210,9 +209,6 @@ async function pollUploadStatus(jobId) {
     if (!pollingJobId) throw new Error("Upload polling could not start.");
     let completeWithoutReplayCount = 0;
     let notFoundCount = 0;
-    if (typeof window !== "undefined" && pollingJobId) {
-      window.__NERAIUM_UPLOAD_JOB_LOCK__ = String(pollingJobId);
-    }
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const response = await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode });
@@ -270,9 +266,7 @@ async function pollUploadStatus(jobId) {
         const replayReady = Boolean(payload?.replay_ready) || Number(payload?.replay_frame_count ?? 0) > 0;
 
         if (nextStatus === "complete" || backendPercent >= 100 || resultAvailable || replayReady) {
-          if (typeof window !== "undefined") {
-            window.__NERAIUM_UPLOAD_COMPLETE__ = true;
-          }
+          if (typeof window !== "undefined") window.__NERAIUM_UPLOAD_COMPLETE__ = true;
           const completedPayload = {
             ...payload,
             status: "COMPLETE",
@@ -284,9 +278,6 @@ async function pollUploadStatus(jobId) {
           };
           setUploadJob(completedPayload);
           setUploadState("complete");
-          if (typeof window !== "undefined") {
-            window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
-            }
           return completedPayload;
         }
 
@@ -329,22 +320,15 @@ async function pollUploadStatus(jobId) {
         }
         setUploadError(classified.finalMessage ?? classified.message);
         setUploadState(classified.retryable ? "error" : classified.state);
-        if (!classified.retryable && typeof window !== "undefined") {
-          window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
-        }
         throw error;
       }
-    }
-    if (typeof window !== "undefined") {
-      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     throw new Error("Upload polling timed out.");
   }
 
   async function handleUpload(event) {
     event.preventDefault();
-    event.stopPropagation();
-    if (uploadInFlightRef.current || isUploadProcessing(uploadState)) return;
+    if (uploadInFlightRef.current) return;
     await processUploadBatch(selectedFiles);
   }
 
@@ -446,7 +430,6 @@ async function pollUploadStatus(jobId) {
     uploadInFlightRef.current = true;
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = true;
-      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
@@ -489,6 +472,7 @@ async function pollUploadStatus(jobId) {
         setBatchResults((current) => current.map((entry) => (entry.id === fileId ? { ...entry, status: "uploading", message: "Uploading" } : entry)));
         const { ok, status, payload } = await uploadTelemetryFileWithProgress({
           file,
+          accessCode,
           timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
           onProgress: (progress) => {
             const loaded = startingLoaded + (progress.loaded ?? 0);
@@ -690,7 +674,6 @@ async function pollUploadStatus(jobId) {
     uploadJobIdRef.current = null;
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
-      window.__NERAIUM_UPLOAD_JOB_LOCK__ = "";
     }
     pollFailureCountRef.current = 0;
     if (pollTimerRef.current) {
@@ -793,7 +776,7 @@ async function pollUploadStatus(jobId) {
         onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
         onReprocessCurrentBatch={handleReprocessCurrentBatch}
       />
-      <section className="panel span-12" aria-label="Replay debug status">
+      <section className="panel span-12 upload-debug-panel" aria-label="Replay debug status">
         <header className="panel-header">
           <h3>Debug Status</h3>
         </header>
