@@ -126,6 +126,8 @@ export default function DataConnectionsWorkspace({
   const pollInFlightRef = useRef(null);
   const pollOwnerJobIdRef = useRef(null);
   const missingStatusCooldownUntilRef = useRef(0);
+  const statusEndpointCooldownUntilRef = useRef(0);
+  const statusEndpointFailureCountRef = useRef(0);
   const lastRecoveryProbeAtRef = useRef(0);
   const lastRecoveryPayloadRef = useRef(null);
   const uploadStatusPathRef = useRef(null);
@@ -248,9 +250,13 @@ async function pollUploadStatus(jobId, statusUrl) {
     for (let attempts = 0; attempts < 240; attempts += 1) {
       try {
         const now = Date.now();
-        if (missingStatusCooldownUntilRef.current > now) {
+        const activeCooldownUntil = Math.max(
+          Number(missingStatusCooldownUntilRef.current || 0),
+          Number(statusEndpointCooldownUntilRef.current || 0),
+        );
+        if (activeCooldownUntil > now) {
           await new Promise((resolve) => {
-            pollTimerRef.current = window.setTimeout(resolve, Math.max(1000, missingStatusCooldownUntilRef.current - now));
+            pollTimerRef.current = window.setTimeout(resolve, Math.max(1000, activeCooldownUntil - now));
           });
           continue;
         }
@@ -259,6 +265,48 @@ async function pollUploadStatus(jobId, statusUrl) {
           : await apiFetch(pollingPath, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) {
+          if (response.status >= 500) {
+            statusEndpointFailureCountRef.current += 1;
+            const now = Date.now();
+            const cooldownMs = Math.min(30000, 6000 + statusEndpointFailureCountRef.current * 4000);
+            statusEndpointCooldownUntilRef.current = now + cooldownMs;
+            if (now - lastRecoveryProbeAtRef.current >= 10000) {
+              const latestPayload = await loadLatestUpload();
+              lastRecoveryProbeAtRef.current = now;
+              lastRecoveryPayloadRef.current = latestPayload;
+              const recoveredJobId = String(
+                latestPayload?.latest_result?.job_id
+                ?? latestPayload?.history?.[0]?.job_id
+                ?? "",
+              ).trim();
+              const recoveredStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
+              if (latestPayload?.latest_result && recoveredJobId === String(pollingJobId) && ["active", "complete", "running_sii"].includes(recoveredStatus)) {
+                const recoveredPayload = {
+                  ...payload,
+                  ...latestPayload,
+                  job_id: recoveredJobId,
+                  status: "COMPLETE",
+                  replay_ready: true,
+                  replay_frame_count:
+                    Number(
+                      latestPayload?.latest_result?.replay_timeline?.timeline?.length
+                      ?? latestPayload?.latest_result?.sii_intelligence?.replay_timeline?.timeline?.length
+                      ?? 0,
+                    ) || 1,
+                  progress_label: "Telemetry processing complete.",
+                  message: "Telemetry processing complete.",
+                };
+                setUploadJob(recoveredPayload);
+                setUploadState("complete");
+                setUploadProcessingFlag(false);
+                return recoveredPayload;
+              }
+            }
+            await new Promise((resolve) => {
+              pollTimerRef.current = window.setTimeout(resolve, cooldownMs);
+            });
+            continue;
+          }
           const missingStatus = response.status === 404
             && String(payload?.error_type ?? payload?.error ?? "").toLowerCase() === "upload_session_missing";
           if (missingStatus) {
@@ -315,6 +363,8 @@ async function pollUploadStatus(jobId, statusUrl) {
           throw buildUploadRequestError(response, payload, "poll");
         }
         const payloadStatusUpper = String(payload?.status ?? "").toUpperCase();
+        statusEndpointFailureCountRef.current = 0;
+        statusEndpointCooldownUntilRef.current = 0;
         const previouslyComplete = normalizeUploadStatus(uploadState) === "complete" || (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_COMPLETE__ === true);
         if (previouslyComplete && ["NOT_FOUND", "MISSING"].includes(payloadStatusUpper)) {
           notFoundCount += 1;
@@ -839,6 +889,8 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
     pollFailureCountRef.current = 0;
     missingStatusCooldownUntilRef.current = 0;
+    statusEndpointCooldownUntilRef.current = 0;
+    statusEndpointFailureCountRef.current = 0;
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
