@@ -127,6 +127,11 @@ export default function DataConnectionsWorkspace({
   const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
   const uploadInFlightRef = useRef(false);
+  const setUploadProcessingFlag = (active) => {
+    if (typeof window !== "undefined") {
+      window.__NERAIUM_UPLOAD_IN_PROGRESS__ = Boolean(active);
+    }
+  };
 
   const loadLatestUpload = useCallback(async () => {
     try {
@@ -294,6 +299,7 @@ async function pollUploadStatus(jobId, statusUrl) {
 
         if (nextStatus === "complete" || backendPercent >= 100 || resultAvailable || replayReady) {
           if (typeof window !== "undefined") window.__NERAIUM_UPLOAD_COMPLETE__ = true;
+          setUploadProcessingFlag(false);
           const completedPayload = {
             ...payload,
             status: "COMPLETE",
@@ -347,6 +353,9 @@ async function pollUploadStatus(jobId, statusUrl) {
         }
         setUploadError(classified.finalMessage ?? classified.message);
         setUploadState(classified.retryable ? "error" : classified.state);
+        if (!classified.retryable) {
+          setUploadProcessingFlag(false);
+        }
         throw error;
       }
     }
@@ -462,9 +471,8 @@ async function pollUploadStatus(jobId, statusUrl) {
   async function processUploadBatch(filesToProcess) {
     if (uploadInFlightRef.current) return;
     uploadInFlightRef.current = true;
-    if (typeof window !== "undefined") {
-      window.__NERAIUM_UPLOAD_IN_PROGRESS__ = true;
-    }
+    setUploadProcessingFlag(true);
+    let keepProcessingLock = false;
     if (pollTimerRef.current) {
       window.clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -653,6 +661,7 @@ async function pollUploadStatus(jobId, statusUrl) {
       };
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
       if (hasBackgroundProcessing && failedCount === 0) {
+        keepProcessingLock = true;
         setUploadResult(completedPayload);
         setUploadState("running_sii");
         setUploadError("Upload accepted. Status endpoint is temporarily unavailable; processing continues in background.");
@@ -680,6 +689,8 @@ async function pollUploadStatus(jobId, statusUrl) {
       if (typeof window !== "undefined") {
         window.__NERAIUM_UPLOAD_COMPLETE__ = true;
       }
+      keepProcessingLock = false;
+      setUploadProcessingFlag(false);
       setIsResetViewActive(false);
       if (typeof onUploadComplete === "function") {
         await onUploadComplete(completedPayload);
@@ -692,10 +703,12 @@ async function pollUploadStatus(jobId, statusUrl) {
       const classified = classifyUploadError(uploadRequestError, "upload");
       setUploadError(classified.message);
       setUploadState(classified.state);
+      keepProcessingLock = false;
+      setUploadProcessingFlag(false);
     } finally {
       uploadInFlightRef.current = false;
-      if (typeof window !== "undefined") {
-        window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
+      if (!keepProcessingLock) {
+        setUploadProcessingFlag(false);
       }
     }
   }
@@ -757,6 +770,7 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
     if (uploadInputRef.current) uploadInputRef.current.value = "";
     uploadInFlightRef.current = false;
+    setUploadProcessingFlag(false);
     if (onResetDemo) await onResetDemo(); 
   } 
 
