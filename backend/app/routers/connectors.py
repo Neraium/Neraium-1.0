@@ -59,7 +59,7 @@ async def upload_csv_connector(
         "csv",
         {
             "filename": filename,
-            "content": content_bytes.decode("utf-8"),
+            "content": content_bytes.decode("utf-8", errors="replace")
             "source_id": source_id,
             "system_id": system_id,
         },

@@ -1,6 +1,6 @@
 import { Panel } from "../workspacePrimitives";
 
-export default function ConnectionsHeaderPanel({
+export default function PnectionsHeaderPanel({
   tabs,
   activeTab,
   onSelectTab,

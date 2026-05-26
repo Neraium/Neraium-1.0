@@ -149,7 +149,77 @@ export default function DataConnectionsWorkspace({
       return null;
     }
   }, [accessCode, apiFetch]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
 
+  let cancelled = false;
+
+  const restoreUploadSession = async () => {
+    const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
+
+    const latestPayload = await loadLatestUpload();
+    if (cancelled) return;
+
+    const latestJobId = String(
+      latestPayload?.latest_result?.job_id
+      ?? latestPayload?.history?.[0]?.job_id
+      ?? latestPayload?.job_id
+      ?? "",
+    ).trim();
+
+    const restoreJobId = storedJobId || latestJobId;
+    const latestStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
+    const latestResult = latestPayload?.latest_result;
+
+    if (!restoreJobId && !latestResult) return;
+
+    uploadJobIdRef.current = restoreJobId || null;
+    uploadStatusPathRef.current = normalizeUploadStatusPath(latestPayload?.status_url, restoreJobId);
+
+    if (restoreJobId) {
+      window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, restoreJobId);
+    }
+
+    if (latestResult || ["complete", "active", "running_sii"].includes(latestStatus)) {
+      const restoredPayload = {
+        ...(latestPayload ?? {}),
+        job_id: restoreJobId || latestJobId || null,
+        status: latestResult || latestStatus === "complete" ? "COMPLETE" : "PENDING",
+        processing_state: latestResult || latestStatus === "complete" ? "complete" : "processing",
+        percent: latestResult || latestStatus === "complete" ? 100 : undefined,
+        progress: latestResult || latestStatus === "complete" ? 100 : undefined,
+        result_available: Boolean(latestResult),
+        progress_label: latestResult
+          ? "Telemetry processing complete."
+          : "Restored upload session. Checking processing status.",
+        message: latestResult
+          ? "Telemetry processing complete."
+          : "Restored upload session. Checking processing status.",
+      };
+
+      setUploadJob(restoredPayload);
+      setUploadResult(latestResult ?? latestPayload ?? null);
+
+      if (latestResult || latestStatus === "complete") {
+        setUploadState("complete");
+        setUploadProcessingFlag(false);
+        if (typeof onUploadComplete === "function") {
+          await onUploadComplete(latestResult ?? latestPayload);
+        }
+        return;
+      }
+
+      setUploadState("running_sii");
+      pollUploadStatus(restoreJobId, latestPayload?.status_url).catch(() => {});
+    }
+  };
+
+  restoreUploadSession();
+
+  return () => {
+    cancelled = true;
+  };
+}, [loadLatestUpload, onUploadComplete]);
   useEffect(() => () => {
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
   }, []);
@@ -292,7 +362,7 @@ async function pollUploadStatus(jobId, statusUrl) {
           : await apiFetch(pollingPath, { accessCode });
         const payload = await readJsonPayload(response);
         if (!response.ok) {
-          if (response.status >= 500) {
+          if (response.status === 404 || response.status >= 500) {
             statusEndpointFailureCountRef.current += 1;
             const now = Date.now();
             const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);

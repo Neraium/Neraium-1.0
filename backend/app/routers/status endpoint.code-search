@@ -1,0 +1,14 @@
+# Query: status endpoint
+# ContextLines: 1
+
+3 results - 1 file
+
+frontend/src/components/DataConnectionsWorkspace.jsx:
+  840                  processing_state: "processing",
+  841:                 progress_label: "Upload accepted. Status endpoint is temporarily unavailable; continuing in background.",
+  842:                 message: "Upload accepted. Status endpoint is temporarily unavailable; continuing in background.",
+  843                }));
+
+  877          setUploadState("running_sii");
+  878:         setUploadError("Upload accepted. Status endpoint is temporarily unavailable; processing continues in background.");
+  879          return;
