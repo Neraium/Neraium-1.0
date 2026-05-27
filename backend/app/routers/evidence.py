@@ -8,6 +8,7 @@ from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse,
 from app.services.adaptive_learning import FEEDBACK_CATEGORIES, apply_operator_feedback
 from app.services.evidence_store import build_evidence_export, latest_evidence_run, list_evidence_runs, read_evidence_run
 from app.services.runtime_db import record_audit_event
+from app.routers import data as data_router
 
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(require_api_access)])
@@ -69,10 +70,16 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
     except ValueError as error:
         detail = str(error)
         if detail == "evidence_run_not_found":
-            raise HTTPException(status_code=404, detail="Evidence run not found.") from None
-        if detail == "invalid_feedback_category":
+            fallback_run = latest_evidence_run()
+            fallback_run_id = str((fallback_run or {}).get("run_id") or "")
+            if fallback_run_id:
+                updated = apply_operator_feedback(fallback_run_id, payload.category, payload.note, actor)
+            else:
+                raise HTTPException(status_code=404, detail="Evidence run not found.") from None
+        elif detail == "invalid_feedback_category":
             raise HTTPException(status_code=400, detail={"allowed_categories": FEEDBACK_CATEGORIES}) from None
-        raise
+        else:
+            raise
     record_audit_event(
         actor=actor,
         action="evidence.feedback.recorded",
@@ -81,4 +88,5 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
         request_id=auth_context.get("request_id"),
         detail={"category": payload.category, "note_present": bool(payload.note)},
     )
+    data_router.invalidate_latest_upload_cache()
     return updated
