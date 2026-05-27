@@ -123,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_runtime_db_dir(settings.runtime_dir)
     configure_upload_jobs_dir(settings.runtime_dir)
     configure_sii_runner_dir(settings.runtime_dir)
+    data.invalidate_latest_upload_cache()
     app = FastAPI(
         title="Neraium API",
         version="0.1.0",
