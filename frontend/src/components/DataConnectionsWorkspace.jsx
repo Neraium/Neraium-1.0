@@ -149,6 +149,7 @@ export default function DataConnectionsWorkspace({
       return null;
     }
   }, [accessCode, apiFetch]);
+// eslint-disable-next-line react-hooks/exhaustive-deps
 useEffect(() => {
   if (typeof window === "undefined") return;
 
@@ -219,6 +220,7 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [loadLatestUpload, onUploadComplete]);
   useEffect(() => () => {
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);

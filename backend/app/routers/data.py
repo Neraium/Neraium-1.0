@@ -20,6 +20,7 @@ from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
+from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -63,6 +64,19 @@ def _clear_endpoint_caches() -> None:
     global _LATEST_UPLOAD_CACHE
     _UPLOAD_STATUS_CACHE.clear()
     _LATEST_UPLOAD_CACHE = None
+
+
+def invalidate_latest_upload_cache() -> None:
+    _clear_endpoint_caches()
+
+
+def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
+    try:
+        configure_runtime_db_dir(runtime_dir)
+        upload_jobs.configure_runtime_dir(runtime_dir)
+        upload_jobs.process_next_queued_upload_job()
+    except Exception:
+        logger.exception("upload_worker_dispatch_failed runtime_dir=%s", runtime_dir)
 
 
 def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
@@ -262,7 +276,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
-        threading.Thread(target=upload_jobs.process_next_queued_upload_job, daemon=True).start()
+        _run_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
         record_audit_event(
             actor=actor,
             action="upload.accepted",
@@ -488,6 +502,26 @@ async def latest_upload(include_persisted: int | bool = True):
         job_id = summary.get("job_id")
         by_job = upload_jobs.read_upload_result_by_job_id(str(job_id)) if job_id else None
         result = by_job or None
+
+    preferred_job_id = str((result or {}).get("job_id") or summary.get("job_id") or "")
+    if preferred_job_id and history:
+        preferred_item = None
+        remaining_history = []
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+            item_job_id = str(item.get("job_id") or "")
+            if item_job_id == preferred_job_id and preferred_item is None:
+                preferred_item = item
+                continue
+            remaining_history.append(item)
+        if preferred_item is None:
+            preferred_item = next((item for item in remaining_history if str(item.get("job_id") or "") == preferred_job_id), None)
+            if preferred_item is not None:
+                remaining_history = [item for item in remaining_history if item is not preferred_item]
+        if preferred_item is not None:
+            history = [preferred_item, *remaining_history]
+
 
     if not result and history:
         latest = history[0] if isinstance(history[0], dict) else {}

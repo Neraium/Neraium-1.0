@@ -962,6 +962,11 @@ def process_next_queued_upload_job() -> bool:
     metadata = read_job(job_id) or {}
     file_path = metadata.get("file_path")
     if not file_path or not Path(str(file_path)).exists():
+        existing_result = read_upload_result_by_job_id(job_id)
+        existing_status = read_upload_status(job_id) or {}
+        if existing_result or str(existing_status.get("status", "")).upper() == "COMPLETE":
+            complete_upload_queue_job(job_id, "completed")
+            return True
         mark_queue_job_failed(job_id, "missing_upload_file")
         write_job(
             {
