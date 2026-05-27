@@ -93,6 +93,327 @@ def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[di
     return fallback_timeline if isinstance(fallback_timeline, list) else []
 
 
+def _normalize_instability_percent(value) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number <= 1.0:
+        number *= 100.0
+    return round(max(0.0, min(100.0, number)), 2)
+
+
+def _to_text(value) -> str:
+    text = str(value or "").strip()
+    return text
+
+
+def _timeline_events_from_frames(frames: list[dict], snapshot: dict, result: dict) -> list[dict]:
+    if frames:
+        first = frames[0] or {}
+        mid = frames[len(frames) // 2] or {}
+        last = frames[-1] or {}
+
+        def _summary(frame: dict) -> str:
+            cognition = frame.get("cognition_state") or {}
+            relationship_changes = frame.get("relationship_changes") or []
+            if isinstance(relationship_changes, list) and relationship_changes:
+                return f"{cognition.get('facility_state', 'State')}: {relationship_changes[0]}"
+            drift_velocity = frame.get("drift_velocity")
+            if drift_velocity is not None:
+                return f"{cognition.get('facility_state', 'State')}: drift velocity {round(float(drift_velocity), 3)}"
+            return str(cognition.get("facility_state") or "Replay frame available.")
+
+        return [
+            {"stage": "onset", "summary": _summary(first)},
+            {"stage": "progression", "summary": _summary(mid)},
+            {"stage": "escalation", "summary": _summary(last)},
+        ]
+
+    first_ts = ((result.get("timestamp_profile") or {}).get("first_timestamp")) if isinstance(result, dict) else None
+    last_ts = ((result.get("timestamp_profile") or {}).get("last_timestamp")) if isinstance(result, dict) else None
+    return [
+        {"stage": "onset", "summary": str(first_ts or snapshot.get("created_at") or "Initial telemetry window captured.")},
+        {"stage": "progression", "summary": "Structural relationships remained under review across processing windows."},
+        {"stage": "escalation", "summary": str(snapshot.get("status") or result.get("operating_state") or "Current escalation trajectory under active evaluation.")},
+    ]
+
+
+def _build_system_interpretation(result: dict | None, summary: dict | None, snapshot: dict | None, frames: list[dict]) -> dict:
+    result = result if isinstance(result, dict) else {}
+    summary = summary if isinstance(summary, dict) else {}
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    intelligence = (result.get("sii_intelligence") or {}) if isinstance(result, dict) else {}
+    replay_frame = frames[-1] if frames else {}
+    cognition_state = replay_frame.get("cognition_state") or {}
+    topology_state = replay_frame.get("topology_state") or {}
+    propagation_state = replay_frame.get("propagation_state") or {}
+    evidence_state = replay_frame.get("evidence_state") or {}
+    relationship_changes = replay_frame.get("relationship_changes") if isinstance(replay_frame.get("relationship_changes"), list) else []
+    dominant_paths = propagation_state.get("dominant_paths") if isinstance(propagation_state.get("dominant_paths"), list) else []
+
+    has_session = bool(result or summary or snapshot.get("last_filename") or frames)
+    raw_facility_state = _to_text(cognition_state.get("facility_state") or intelligence.get("facility_state") or result.get("operating_state") or snapshot.get("status"))
+    raw_confidence = _to_text(evidence_state.get("corroboration_strength") or replay_frame.get("confidence_tier") or cognition_state.get("confidence_tier") or intelligence.get("telemetry_profile_confidence"))
+    raw_instability = replay_frame.get("instability_score")
+    if raw_instability is None:
+        raw_instability = topology_state.get("instability_score")
+    if raw_instability is None:
+        raw_instability = intelligence.get("instability_index")
+    if raw_instability is None:
+        raw_instability = ((result.get("emerging_instability") or {}).get("instability_score")) if isinstance(result.get("emerging_instability"), dict) else None
+    instability_index = _normalize_instability_percent(raw_instability)
+
+    compound_components = [
+        1 if len(dominant_paths) > 1 else 0,
+        1 if len(relationship_changes) > 2 else 0,
+        1 if float(replay_frame.get("drift_velocity") or 0) > 0.35 else 0,
+        1 if "degrad" in _to_text(cognition_state.get("canonical_phase")).lower() else 0,
+    ]
+    compound_systems_score = sum(compound_components)
+    propagation_scope = "none"
+    if len(dominant_paths) >= 3:
+        propagation_scope = "broad"
+    elif len(dominant_paths) >= 1:
+        propagation_scope = "localized"
+
+    fallback_flags: list[str] = []
+    missing_fields: list[str] = []
+    engine_native_fields: list[str] = []
+    fallback_fields: list[str] = []
+
+    if not has_session:
+        fallback_flags.extend(["no_active_session_defaults", "instability_default_zero", "timeline_fallback"])
+        missing_fields.extend(["result", "summary", "replay_timeline"])
+        fallback_fields.extend(
+            [
+                "facility_state_enum",
+                "facility_state_label",
+                "confidence",
+                "instability_index",
+                "primary_driver",
+                "escalation_window",
+                "relationship_divergence",
+                "relationship_events",
+                "evidence_packet",
+                "forensic",
+            ]
+        )
+        return {
+            "facility_state_enum": "no_active_session",
+            "facility_state_label": "No Active Session",
+            "confidence": "Calm",
+            "instability_index": 0.0,
+            "instability_scale": "0-100",
+            "primary_driver": "None",
+            "escalation_window": "Awaiting telemetry session",
+            "state_derivation_reason": "No active upload/live session found.",
+            "relationship_divergence": {
+                "severity": "contained",
+                "confidence": "Calm",
+                "affected_systems": [],
+                "top_relationship_changes": [],
+            },
+            "relationship_events": _timeline_events_from_frames([], snapshot, result),
+            "compound_systems_score": 0,
+            "propagation_scope": "none",
+            "evidence_packet": {
+                "packet_id": "",
+                "filename": "",
+                "row_count": 0,
+                "column_count": 0,
+                "timestamp_start": "",
+                "timestamp_end": "",
+                "replay_frame_count": 0,
+                "processing_trace_summary": "",
+                "archived": False,
+                "confidence_trace_stored": False,
+                "relationship_snapshot_archived": False,
+            },
+            "forensic": {
+                "correlation_matrix_summary": "",
+                "temporal_geometry_summary": "",
+                "confidence_lineage": "",
+                "historical_similarity_matches": [],
+            },
+            "missing_fields": missing_fields,
+            "fallback_flags": fallback_flags,
+            "engine_native_fields": [],
+            "fallback_fields": sorted(set(filter(None, fallback_fields))),
+            "interpretation_quality": {
+                "level": "fallback",
+                "engine_native_count": 0,
+                "fallback_count": 4,
+                "summary": "Fallback interpretation: no active session.",
+            },
+        }
+
+    enum = "stable"
+    label = "Stable"
+    reason = "Relationships are coherent with no material divergence."
+    raw_state_lower = raw_facility_state.lower()
+    if "recovery" in raw_state_lower:
+        enum = "recovery_state"
+        label = "Recovery State"
+        reason = "Recovery signal detected in facility state."
+        engine_native_fields.append("facility_state_enum")
+    elif compound_systems_score >= 3 or instability_index >= 75:
+        enum = "cascade_risk"
+        label = "Cascade Risk"
+        reason = "Multi-path propagation and/or high instability indicate cascade risk."
+    elif compound_systems_score >= 2 or instability_index >= 55:
+        enum = "structural_degradation"
+        label = "Structural Degradation"
+        reason = "Compounding subsystem pressure indicates structural degradation."
+    elif relationship_changes or dominant_paths or instability_index >= 25:
+        enum = "relationship_drift"
+        label = "Relationship Drift"
+        reason = "Relationship divergence detected in replay/topology evidence."
+
+    if not raw_confidence:
+        fallback_flags.append("confidence_fallback_empty")
+        missing_fields.append("confidence")
+        fallback_fields.append("confidence")
+    else:
+        engine_native_fields.append("confidence")
+
+    if raw_instability is None:
+        fallback_flags.append("instability_fallback_zero")
+        missing_fields.append("instability_score")
+        fallback_fields.append("instability_index")
+    else:
+        engine_native_fields.append("instability_index")
+
+    if not raw_facility_state:
+        fallback_flags.append("facility_state_fallback")
+        missing_fields.append("facility_state")
+        fallback_fields.append("facility_state_enum")
+    else:
+        engine_native_fields.append("facility_state_enum")
+
+    timestamp_profile = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
+    timestamp_start = _to_text(replay_frame.get("timestamp_start") or timestamp_profile.get("first_timestamp"))
+    timestamp_end = _to_text(replay_frame.get("timestamp_end") or timestamp_profile.get("last_timestamp"))
+    if not timestamp_start or not timestamp_end:
+        missing_fields.append("timestamp_coverage")
+        fallback_fields.append("evidence_packet.timestamp_coverage")
+    else:
+        engine_native_fields.append("evidence_packet.timestamp_coverage")
+
+    processing_trace = result.get("processing_trace") if isinstance(result.get("processing_trace"), dict) else {}
+    processing_trace_summary_parts = []
+    if processing_trace.get("sii_pipeline_ran") is True:
+        processing_trace_summary_parts.append("SII pipeline ran")
+    if processing_trace.get("sii_completed") is True:
+        processing_trace_summary_parts.append("SII completed")
+    if processing_trace.get("rows_processed") is not None:
+        processing_trace_summary_parts.append(f"rows_processed={processing_trace.get('rows_processed')}")
+    if processing_trace.get("columns_analyzed") is not None:
+        processing_trace_summary_parts.append(f"columns_analyzed={processing_trace.get('columns_analyzed')}")
+    processing_trace_summary = " | ".join(processing_trace_summary_parts)
+    if processing_trace_summary:
+        engine_native_fields.append("evidence_packet.processing_trace_summary")
+    else:
+        fallback_fields.append("evidence_packet.processing_trace_summary")
+
+    evidence_packet_id = _to_text((result.get("evidence_packet") or {}).get("packet_id") if isinstance(result.get("evidence_packet"), dict) else "")
+    if not evidence_packet_id:
+        evidence_packet_id = _to_text((result.get("decision_integrity") or {}).get("run_id") if isinstance(result.get("decision_integrity"), dict) else "")
+    if not evidence_packet_id:
+        evidence_packet_id = _to_text(result.get("job_id") or summary.get("job_id"))
+
+    forensic_confidence_lineage = evidence_state.get("lineage_events") or evidence_state.get("confidence_lineage") or processing_trace.get("confidence_lineage") or ""
+    historical_matches = ((intelligence.get("structural_memory") or {}).get("memory_matches")) if isinstance(intelligence.get("structural_memory"), dict) else []
+    if not isinstance(historical_matches, list):
+        historical_matches = []
+
+    replay_frame_count = len(frames or [])
+
+    relationship_divergence = {
+        "severity": "high" if instability_index >= 75 else "elevated" if instability_index >= 45 else "contained",
+        "confidence": raw_confidence or "unknown",
+        "affected_systems": [
+            _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room"))
+        ] if _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room")) else [],
+        "top_relationship_changes": relationship_changes[:5],
+    }
+
+    if relationship_changes or dominant_paths:
+        engine_native_fields.append("relationship_divergence")
+    else:
+        fallback_fields.append("relationship_divergence")
+
+    if intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure"):
+        engine_native_fields.append("escalation_window")
+    else:
+        fallback_fields.append("escalation_window")
+
+    if replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_driver") or intelligence.get("primary_room") or result.get("primary_room"):
+        engine_native_fields.append("primary_driver")
+    else:
+        fallback_fields.append("primary_driver")
+
+    key_fields = ["facility_state_enum", "instability_index", "confidence", "relationship_divergence"]
+    engine_native_set = set(filter(None, engine_native_fields))
+    fallback_set = set(filter(None, fallback_fields))
+    engine_native_count = sum(1 for field in key_fields if field in engine_native_set)
+    fallback_count = sum(1 for field in key_fields if field in fallback_set)
+    if engine_native_count == len(key_fields):
+        quality_level = "engine_native"
+    elif fallback_count >= 3:
+        quality_level = "fallback"
+    else:
+        quality_level = "partial_engine"
+    quality_summary = (
+        f"{engine_native_count}/{len(key_fields)} key interpretation fields are engine-native; "
+        f"{fallback_count} are fallback-derived."
+    )
+
+    return {
+        "facility_state_enum": enum,
+        "facility_state_label": label,
+        "confidence": raw_confidence or "unknown",
+        "instability_index": instability_index,
+        "instability_scale": "0-100",
+        "primary_driver": _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_driver") or intelligence.get("primary_room") or result.get("primary_room") or "Facility relationship scope"),
+        "escalation_window": _to_text(intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure") or snapshot.get("last_processed_at") or ""),
+        "state_derivation_reason": reason,
+        "relationship_divergence": relationship_divergence,
+        "relationship_events": _timeline_events_from_frames(frames, snapshot, result),
+        "compound_systems_score": compound_systems_score,
+        "propagation_scope": propagation_scope,
+        "evidence_packet": {
+            "packet_id": evidence_packet_id,
+            "filename": _to_text(result.get("filename") or snapshot.get("last_filename") or summary.get("filename")),
+            "row_count": int(result.get("row_count") or result.get("rows_processed") or snapshot.get("rows_processed") or summary.get("row_count") or 0),
+            "column_count": int(result.get("column_count") or result.get("columns_detected") or snapshot.get("columns_detected") or summary.get("column_count") or 0),
+            "timestamp_start": timestamp_start,
+            "timestamp_end": timestamp_end,
+            "replay_frame_count": replay_frame_count,
+            "processing_trace_summary": processing_trace_summary,
+            "archived": bool(evidence_packet_id),
+            "confidence_trace_stored": bool(raw_confidence),
+            "relationship_snapshot_archived": replay_frame_count > 0,
+        },
+        "forensic": {
+            "correlation_matrix_summary": _to_text(replay_frame.get("correlation_matrix") or topology_state.get("correlation_matrix") or ""),
+            "temporal_geometry_summary": _to_text(replay_frame.get("temporal_geometry") or topology_state.get("temporal_geometry") or propagation_state.get("geometry") or ""),
+            "confidence_lineage": forensic_confidence_lineage,
+            "historical_similarity_matches": historical_matches[:5],
+        },
+        "missing_fields": sorted(set(filter(None, missing_fields))),
+        "fallback_flags": sorted(set(filter(None, fallback_flags))),
+        "engine_native_fields": sorted(set(filter(None, engine_native_fields))),
+        "fallback_fields": sorted(set(filter(None, fallback_fields))),
+        "interpretation_quality": {
+            "level": quality_level,
+            "engine_native_count": engine_native_count,
+            "fallback_count": fallback_count,
+            "summary": quality_summary,
+        },
+    }
+
+
 def _process_upload_inline(job_id: str, status: dict) -> dict:
     file_path = status.get("file_path")
     if not file_path or not Path(str(file_path)).exists():
@@ -569,6 +890,7 @@ async def latest_upload(include_persisted: int | bool = True):
     }
     if history and snapshot.get("last_filename"):
         history[0]["filename"] = snapshot["last_filename"]
+    system_interpretation = _build_system_interpretation(result if isinstance(result, dict) else None, summary if isinstance(summary, dict) else None, snapshot, frames if isinstance(frames, list) else [])
     response_payload = {
         "snapshot": snapshot,
         "latest_result": result,
@@ -577,11 +899,30 @@ async def latest_upload(include_persisted: int | bool = True):
         "history": history,
         "adaptive_learning": adaptive,
         "state_backend": state_backend,
+        "system_interpretation": system_interpretation,
         **snapshot,
     }
     cache_ttl = 4.0 if bool(result) else 1.5
     _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
     return response_payload
+
+
+@router.get("/system-interpretation")
+async def system_interpretation_contract(include_persisted: int | bool = True):
+    payload = await latest_upload(include_persisted=include_persisted)
+    interpretation = payload.get("system_interpretation") if isinstance(payload, dict) else None
+    raw_source = str((payload or {}).get("source") or (payload or {}).get("snapshot", {}).get("source") or "").lower()
+    if raw_source in {"uploaded", "latest_upload"}:
+        source = "latest_upload"
+    elif raw_source == "live":
+        source = "live"
+    else:
+        source = "none"
+    return {
+        "system_interpretation": interpretation if isinstance(interpretation, dict) else {},
+        "source": source,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/replay/{job_id}")

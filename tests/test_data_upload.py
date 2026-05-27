@@ -1273,3 +1273,199 @@ def test_health_endpoint_still_responds_after_upload_job() -> None:
     assert response.json()["status"] == "ok"
 
 
+
+
+def _build_interpretation_result_for_state(state: str) -> dict:
+    base = {
+        "job_id": f"interp-{state}",
+        "filename": f"{state}.csv",
+        "row_count": 24,
+        "column_count": 5,
+        "timestamp_profile": {
+            "first_timestamp": "2026-05-01T08:00:00Z",
+            "last_timestamp": "2026-05-01T09:00:00Z",
+        },
+        "processing_trace": {
+            "sii_pipeline_ran": True,
+            "sii_completed": True,
+            "rows_processed": 24,
+            "columns_analyzed": 4,
+        },
+        "sii_intelligence": {
+            "facility_state": "Monitoring",
+            "projected_time_to_failure": "More than 3 weeks at current trajectory",
+            "projected_time_to_failure_hours": 490,
+            "primary_room": "Room A",
+            "primary_driver": "flow_pressure_coupling",
+            "structural_memory": {"memory_matches": [{"name": "baseline_pattern"}]},
+            "replay_timeline": {
+                "timeline": [
+                    {
+                        "cognition_state": {
+                            "facility_state": "Monitoring",
+                            "canonical_phase": "baseline",
+                            "confidence_tier": "BASELINE_EVIDENCE",
+                        },
+                        "topology_state": {"instability_score": 0.03},
+                        "propagation_state": {"dominant_paths": []},
+                        "evidence_state": {"corroboration_strength": "MODERATE"},
+                        "relationship_changes": [],
+                        "timestamp_start": "2026-05-01T08:00:00Z",
+                        "timestamp_end": "2026-05-01T09:00:00Z",
+                    }
+                ]
+            },
+        },
+    }
+
+    frame = base["sii_intelligence"]["replay_timeline"]["timeline"][0]
+
+    if state == "stable":
+        frame["topology_state"]["instability_score"] = 0.12
+    elif state == "relationship_drift":
+        frame["topology_state"]["instability_score"] = 0.34
+        frame["relationship_changes"] = ["Pump load increasing while effective flow declines"]
+        frame["propagation_state"]["dominant_paths"] = ["pump_load -> flow_efficiency"]
+    elif state == "structural_degradation":
+        frame["topology_state"]["instability_score"] = 0.61
+        frame["relationship_changes"] = [
+            "Pump load increasing while effective flow declines",
+            "Heat rejection lagging setpoint response",
+        ]
+        frame["propagation_state"]["dominant_paths"] = [
+            "pump_load -> flow_efficiency",
+            "flow_efficiency -> heat_rejection",
+        ]
+        frame["drift_velocity"] = 0.2
+        frame["cognition_state"]["canonical_phase"] = "transition"
+    elif state == "cascade_risk":
+        frame["topology_state"]["instability_score"] = 0.86
+        frame["relationship_changes"] = [
+            "Pump load increasing while effective flow declines",
+            "Heat rejection lagging setpoint response",
+            "Humidity correction delay widening",
+            "Pressure oscillation amplifying energy draw",
+        ]
+        frame["propagation_state"]["dominant_paths"] = [
+            "pump_load -> flow_efficiency",
+            "flow_efficiency -> heat_rejection",
+            "heat_rejection -> humidity_response",
+        ]
+        frame["drift_velocity"] = 0.52
+        frame["cognition_state"]["canonical_phase"] = "degradation"
+    elif state == "recovery_state":
+        frame["topology_state"]["instability_score"] = 0.22
+        frame["cognition_state"]["facility_state"] = "Recovery in progress"
+        frame["cognition_state"]["canonical_phase"] = "recovery"
+
+    return base
+
+
+def test_latest_upload_always_returns_system_interpretation_for_no_active_session() -> None:
+    client = TestClient(create_app())
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert "system_interpretation" in payload
+    interpretation = payload["system_interpretation"]
+    assert interpretation["facility_state_enum"] == "no_active_session"
+    assert interpretation["facility_state_label"] == "No Active Session"
+    assert interpretation["instability_index"] == 0.0
+    assert interpretation["instability_scale"] == "0-100"
+    assert interpretation["engine_native_fields"] == []
+    assert "facility_state_enum" in interpretation["fallback_fields"]
+    assert interpretation["interpretation_quality"]["level"] == "fallback"
+    assert interpretation["interpretation_quality"]["engine_native_count"] == 0
+    assert interpretation["interpretation_quality"]["fallback_count"] == 4
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_enum", "expected_label"),
+    [
+        ("stable", "stable", "Stable"),
+        ("relationship_drift", "relationship_drift", "Relationship Drift"),
+        ("structural_degradation", "structural_degradation", "Structural Degradation"),
+        ("cascade_risk", "cascade_risk", "Cascade Risk"),
+        ("recovery_state", "recovery_state", "Recovery State"),
+    ],
+)
+def test_latest_upload_system_interpretation_states(state: str, expected_enum: str, expected_label: str) -> None:
+    client = TestClient(create_app())
+    write_latest_upload_result(f"interp-{state}", _build_interpretation_result_for_state(state))
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    interpretation = payload["system_interpretation"]
+    assert interpretation["facility_state_enum"] == expected_enum
+    assert interpretation["facility_state_label"] == expected_label
+    assert interpretation["instability_scale"] == "0-100"
+    assert 0.0 <= float(interpretation["instability_index"]) <= 100.0
+    assert isinstance(interpretation["relationship_events"], list)
+    assert isinstance(interpretation.get("engine_native_fields"), list)
+    assert isinstance(interpretation.get("fallback_fields"), list)
+    assert "facility_state_enum" in interpretation["engine_native_fields"]
+    assert "instability_index" in interpretation["engine_native_fields"]
+    assert set(interpretation["evidence_packet"].keys()) >= {
+        "packet_id",
+        "filename",
+        "row_count",
+        "column_count",
+        "timestamp_start",
+        "timestamp_end",
+        "replay_frame_count",
+        "processing_trace_summary",
+        "archived",
+        "confidence_trace_stored",
+        "relationship_snapshot_archived",
+    }
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_quality"),
+    [
+        ("stable", "partial_engine"),
+        ("relationship_drift", "engine_native"),
+    ],
+)
+def test_latest_upload_system_interpretation_quality_levels(state: str, expected_quality: str) -> None:
+    client = TestClient(create_app())
+    write_latest_upload_result(f"quality-{state}", _build_interpretation_result_for_state(state))
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    interpretation = payload["system_interpretation"]
+    quality = interpretation["interpretation_quality"]
+    assert quality["level"] == expected_quality
+    assert isinstance(quality["engine_native_count"], int)
+    assert isinstance(quality["fallback_count"], int)
+    assert isinstance(quality["summary"], str) and quality["summary"]
+
+
+
+def test_system_interpretation_endpoint_matches_latest_upload_no_session() -> None:
+    client = TestClient(create_app())
+
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    response = client.get("/api/data/system-interpretation?include_persisted=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload.keys()) == {"system_interpretation", "source", "generated_at"}
+    assert payload["system_interpretation"] == latest_payload["system_interpretation"]
+    assert payload["source"] == "none"
+    assert isinstance(payload["generated_at"], str) and payload["generated_at"]
+
+
+def test_system_interpretation_endpoint_matches_latest_upload_active_result() -> None:
+    client = TestClient(create_app())
+    write_latest_upload_result("system-int-match", _build_interpretation_result_for_state("relationship_drift"))
+
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    response = client.get("/api/data/system-interpretation?include_persisted=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload.keys()) == {"system_interpretation", "source", "generated_at"}
+    assert payload["system_interpretation"] == latest_payload["system_interpretation"]
+    assert payload["source"] == "latest_upload"
+    assert isinstance(payload["generated_at"], str) and payload["generated_at"]

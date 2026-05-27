@@ -310,7 +310,97 @@ export default function SystemBodyWorkspace({
   );
 }
 
+function mapBackendSystemInterpretation(contract) {
+  const value = contract && typeof contract === "object" ? contract : null;
+  if (!value) return null;
+
+  const divergence = value.relationship_divergence || {};
+  const evidencePacket = value.evidence_packet || {};
+  const forensic = value.forensic || {};
+
+  const rowCount = Number(evidencePacket.row_count ?? 0);
+  const columnCount = Number(evidencePacket.column_count ?? 0);
+  const replayFrames = Number(evidencePacket.replay_frame_count ?? 0);
+  const timestampCoverage = [evidencePacket.timestamp_start, evidencePacket.timestamp_end].filter(Boolean).join(" to ") || EMPTY_VALUE;
+
+  return {
+    facility_state: String(value.facility_state_label || "No Active Session"),
+    confidence: String(value.confidence || EMPTY_VALUE),
+    instability_index: Number.isFinite(Number(value.instability_index)) ? String(Math.round(Number(value.instability_index))) + "%" : "0%",
+    escalation_window: String(value.escalation_window || EMPTY_VALUE),
+    primary_driver: String(value.primary_driver || "None"),
+    relationship_events: Array.isArray(value.relationship_events) && value.relationship_events.length
+      ? value.relationship_events
+      : [
+          { stage: "onset", summary: "No active telemetry session." },
+          { stage: "progression", summary: "Upload or connect a source to begin interpretation." },
+          { stage: "escalation", summary: "Escalation tracking starts after first valid session." },
+        ],
+    evidence: {
+      packet_id: String(evidencePacket.packet_id || EMPTY_VALUE),
+      filename: String(evidencePacket.filename || EMPTY_VALUE),
+      rows_columns: String(rowCount) + " rows / " + String(columnCount) + " columns",
+      timestamp_coverage: timestampCoverage,
+      replay_frames: String(replayFrames),
+      processing_trace: String(evidencePacket.processing_trace_summary || EMPTY_VALUE),
+      relationship_snapshot_archived: evidencePacket.relationship_snapshot_archived ? "yes" : "no",
+      operator_actions_preserved: evidencePacket.archived ? "yes" : "no",
+      confidence_trace_stored: evidencePacket.confidence_trace_stored ? "yes" : "no",
+    },
+    forecasts: {
+      escalation_window: String(value.escalation_window || EMPTY_VALUE),
+      projected_state: String(value.facility_state_label || "No Active Session"),
+    },
+    supporting_signals: Array.isArray(divergence.affected_systems) ? divergence.affected_systems : [],
+    relationship_summary: {
+      text: Array.isArray(divergence.top_relationship_changes) && divergence.top_relationship_changes.length
+        ? String(divergence.top_relationship_changes[0])
+        : String(value.state_derivation_reason || "System relationships remain coherent with no active divergence."),
+      divergence_severity: String(divergence.severity || "contained"),
+      confidence: String(divergence.confidence || value.confidence || EMPTY_VALUE),
+      affected_systems: Array.isArray(divergence.affected_systems) ? divergence.affected_systems : [],
+    },
+    investigation: {
+      relationship_drift: Array.isArray(divergence.top_relationship_changes) ? divergence.top_relationship_changes.join(" | ") : "No active drift relationships in current frame.",
+      coupling_degradation: String(value.propagation_scope || "none"),
+      instability_propagation: String(value.state_derivation_reason || "Escalation path not established."),
+      evidence_reasoning: String(value.state_derivation_reason || "Evidence reasoning derived from backend interpretation."),
+    },
+    forensic: {
+      correlation_matrices: stringifyForensic(forensic.correlation_matrix_summary),
+      temporal_relationship_geometry: stringifyForensic(forensic.temporal_geometry_summary),
+      evidence_trace: stringifyForensic(evidencePacket.packet_id),
+      confidence_lineage: stringifyForensic(forensic.confidence_lineage),
+      historical_similarity: stringifyForensic(forensic.historical_similarity_matches),
+    },
+    debug: {
+      source_used: "backend_system_interpretation",
+      raw_facility_inputs: String(value.facility_state_enum || EMPTY_VALUE),
+      raw_confidence_inputs: String(value.confidence || EMPTY_VALUE),
+      raw_instability_inputs: String(value.instability_index ?? EMPTY_VALUE),
+      missing_expected_fields: Array.isArray(value.missing_fields) && value.missing_fields.length ? value.missing_fields.join(", ") : "none",
+      fallback_values_used: [
+        Array.isArray(value.fallback_flags) && value.fallback_flags.length ? `flags: ${value.fallback_flags.join(", ")}` : null,
+        Array.isArray(value.fallback_fields) && value.fallback_fields.length ? `fields: ${value.fallback_fields.join(", ")}` : null,
+        Array.isArray(value.engine_native_fields) && value.engine_native_fields.length ? `engine: ${value.engine_native_fields.join(", ")}` : null,
+        value.interpretation_quality && typeof value.interpretation_quality === "object"
+          ? `quality: ${String(value.interpretation_quality.level || "unknown")} (${String(value.interpretation_quality.engine_native_count ?? 0)} native / ${String(value.interpretation_quality.fallback_count ?? 0)} fallback) ${String(value.interpretation_quality.summary || "")}`
+          : null,
+      ].filter(Boolean).join(" | ") || "none",
+    },
+  };
+}
+
 export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame = null, fallback = {} }) {
+  const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation
+    ?? latestUploadResult?.system_interpretation
+    ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
+    ?? null;
+  const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);
+  if (mappedBackendInterpretation) {
+    return mappedBackendInterpretation;
+  }
+
   const resolvedResult = (latestUploadResult?.latest_result && typeof latestUploadResult.latest_result === "object")
     ? latestUploadResult.latest_result
     : ((latestUploadResult?.latestResult && typeof latestUploadResult.latestResult === "object")
