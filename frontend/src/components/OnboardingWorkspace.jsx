@@ -317,7 +317,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       const headerLine = String(text || "").split(/\r?\n/, 1)[0] ?? "";
       detectedColumns = headerLine
         .split(",")
-        .map((column) => column.replace(/^\"|\"$/g, "").trim())
+        .map((column) => column.replace(/^"|"$/g, "").trim())
         .filter(Boolean);
     } catch {
       detectedColumns = [];
