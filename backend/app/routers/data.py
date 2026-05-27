@@ -64,6 +64,7 @@ def _clear_endpoint_caches() -> None:
     _UPLOAD_STATUS_CACHE.clear()
     _LATEST_UPLOAD_CACHE = None
 
+
 def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
     replay = (
         (result or {}).get("replay_timeline")
@@ -78,11 +79,42 @@ def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[di
     return fallback_timeline if isinstance(fallback_timeline, list) else []
 
 
+def _process_upload_inline(job_id: str, status: dict) -> dict:
+    file_path = status.get("file_path")
+    if not file_path or not Path(str(file_path)).exists():
+        return status
+    try:
+        path = Path(str(file_path))
+        filename = status.get("filename") or path.name
+        if path.suffix.lower() == ".json":
+            upload_jobs.process_json_payload(path.read_text(encoding="utf-8"), filename=filename, job_id=job_id)
+        else:
+            upload_jobs.process_csv_file(path, filename=filename, job_id=job_id)
+        return upload_jobs.read_upload_status(job_id) or status
+    except Exception as exc:
+        logger.exception("upload_status_inline_processing_failed job_id=%s", job_id)
+        failed = {
+            **status,
+            "job_id": job_id,
+            "status": "FAILED",
+            "processing_state": "failed",
+            "error_type": "processing_error",
+            "error": str(exc),
+            "message": "Telemetry processing failed.",
+            "progress_label": "Telemetry processing failed.",
+            "result_available": False,
+        }
+        upload_jobs.write_job(failed)
+        return failed
+
+
 def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
     status = upload_jobs.read_upload_status(job_id)
     if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
-        upload_jobs.process_next_queued_upload_job()
-        status = upload_jobs.read_upload_status(job_id)
+        processed = upload_jobs.process_next_queued_upload_job()
+        status = upload_jobs.read_upload_status(job_id) or status
+        if not processed and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
+            status = _process_upload_inline(job_id, status)
     if status:
         normalized = normalize_upload_status_payload(status)
         normalized.setdefault("state_backend", state_backend)
