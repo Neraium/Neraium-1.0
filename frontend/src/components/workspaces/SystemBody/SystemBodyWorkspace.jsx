@@ -261,6 +261,24 @@ function buildFallbackUploadDetail() {
     operationalConfidence: EMPTY_VALUE,
     operationalModality: EMPTY_VALUE,
     operationalSignals: EMPTY_VALUE,
+    capabilities: [
+      {
+        title: "Relationship Drift",
+        summary: "Upload completed, but the full replay packet has not been loaded into the Gate yet.",
+      },
+      {
+        title: "Evidence Explanation",
+        summary: "Open CSV replay to inspect the retained replay frames while the decision packet refreshes.",
+      },
+      {
+        title: "Emerging Instability",
+        summary: "Instability summary is waiting for the persisted replay result.",
+      },
+      {
+        title: "Decision Integrity",
+        summary: "Decision record is available after the latest upload result is restored.",
+      },
+    ],
   };
 }
 
@@ -344,42 +362,112 @@ function buildUploadDetail(result, replayFrame) {
       ?? resolvedResult?.operational_signal_profile_signals
       ?? sourceMetadata?.operational_signal_profile_signals
     ),
-    capabilities: buildCapabilityCards(resolvedResult, intelligence),
+    capabilities: buildCapabilityCards(resolvedResult, intelligence, effectiveReplayFrame),
   };
 }
 
-function buildCapabilityCards(result, intelligence) {
+function buildCapabilityCards(result, intelligence, replayFrame) {
   const drift = result?.relationship_drift ?? intelligence?.relationship_drift ?? null;
   const evidence = result?.evidence_packet ?? intelligence?.evidence_packet ?? null;
   const instability = result?.emerging_instability ?? intelligence?.emerging_instability ?? null;
   const decision = result?.decision_integrity ?? intelligence?.decision_integrity ?? null;
   const runnerState = intelligence?.sii_runner_latest_state ?? result?.sii_runner_result?.latest_state ?? null;
+  const replayState = replayFrame?.cognition_state ?? {};
+  const topology = replayFrame?.topology_state ?? {};
+  const propagation = replayFrame?.propagation_state ?? {};
+  const evidenceState = replayFrame?.evidence_state ?? {};
+  const relationshipChanges = Array.isArray(replayFrame?.relationship_changes) ? replayFrame.relationship_changes : [];
+  const subsystem = cleanValue(
+    replayFrame?.affected_subsystem
+    ?? replayFrame?.affected_area
+    ?? replayState?.primary_room
+    ?? intelligence?.primary_room
+    ?? result?.primary_room
+  );
+  const phase = cleanValue(replayState?.canonical_phase)?.replaceAll("_", " ");
+  const facilityState = cleanValue(replayState?.facility_state ?? intelligence?.facility_state ?? result?.operating_state) || "monitoring";
+  const driftIndex = firstPresent(topology?.drift_index, drift?.drift_index, result?.neraium_score, intelligence?.neraium_score);
+  const velocity = firstPresent(replayFrame?.drift_velocity, topology?.drift_velocity, drift?.velocity);
+  const confidence = cleanValue(evidenceState?.corroboration_strength ?? replayFrame?.confidence_tier ?? replayState?.confidence_tier);
+  const instabilityScore = firstPresent(
+    instability?.instability_score,
+    runnerState?.instability_score,
+    replayFrame?.instability_score,
+    topology?.instability_score,
+    driftIndex,
+  );
+  const dominantPaths = Array.isArray(propagation?.dominant_paths) ? propagation.dominant_paths.filter(Boolean) : [];
+  const sourceName = cleanValue(decision?.filename ?? result?.filename ?? intelligence?.source_metadata?.filename) || "uploaded telemetry";
+  const runId = cleanValue(decision?.run_id ?? result?.job_id ?? intelligence?.job_id ?? replayFrame?.job_id) || "latest upload";
+  const rowWindow = Number.isFinite(Number(replayFrame?.row_start)) && Number.isFinite(Number(replayFrame?.row_end))
+    ? `rows ${replayFrame.row_start} to ${replayFrame.row_end}`
+    : null;
+  const timestampWindow = replayFrame?.timestamp_start && replayFrame?.timestamp_end
+    ? `${replayFrame.timestamp_start} to ${replayFrame.timestamp_end}`
+    : null;
+
   return [
     {
       title: "Relationship Drift",
       summary: drift
-        ? `Relationship drift detected. State: ${drift.state ?? "unknown"}. Evidence supports changed behavior relative to baseline.`
-        : "No relationship drift detected yet or insufficient relationship evidence.",
+        ? `Relationship drift detected in ${subsystem || "the active subsystem"}. State: ${cleanValue(drift.state) || facilityState}. Drift index: ${formatValue(driftIndex)}. Velocity: ${formatValue(velocity)}.`
+        : `Replay shows ${subsystem || "the active subsystem"} in ${facilityState}${phase ? ` during ${phase}` : ""}. Drift index: ${formatValue(driftIndex)}. Velocity: ${formatValue(velocity)}.`,
     },
     {
       title: "Evidence Explanation",
       summary: evidence
-        ? "Evidence supports likely contributors and supporting observations for operator review."
-        : "Evidence packet unavailable for this run.",
+        ? "Evidence packet is available and supports likely contributors plus operator-review observations."
+        : buildEvidenceSummary({ relationshipChanges, dominantPaths, confidence, rowWindow, timestampWindow }),
     },
     {
       title: "Emerging Instability",
-      summary: instability || runnerState
-        ? `Emerging instability observed. Instability score: ${instability?.instability_score ?? runnerState?.instability_score ?? "unavailable"}. Operator review recommended.`
-        : "Instability quantification unavailable.",
+      summary: `Instability score: ${formatValue(instabilityScore)}. ${subsystem ? `Primary subsystem: ${subsystem}. ` : ""}${dominantPaths.length ? `Propagation path: ${dominantPaths.slice(0, 3).join(", ")}.` : "Operator review should focus on the replay frame and affected subsystem."}`,
     },
     {
       title: "Decision Integrity",
       summary: decision
-        ? `Decision record preserved for run ${decision.run_id ?? result?.job_id ?? "unknown"} with source ${decision.filename ?? result?.filename ?? "uploaded telemetry"}.`
-        : `Decision record pending. Current run id: ${result?.job_id ?? "unknown"}.`,
+        ? `Decision record preserved for run ${decision.run_id ?? runId} with source ${decision.filename ?? sourceName}.`
+        : `Decision record attached to run ${runId} from ${sourceName}. Replay frames and evidence state are available for operator review.`,
     },
   ];
+}
+
+function buildEvidenceSummary({ relationshipChanges, dominantPaths, confidence, rowWindow, timestampWindow }) {
+  const parts = [];
+  if (relationshipChanges.length) {
+    parts.push(`Relationship changes: ${relationshipChanges.slice(0, 3).join(", ")}.`);
+  }
+  if (dominantPaths.length) {
+    parts.push(`Dominant propagation: ${dominantPaths.slice(0, 3).join(", ")}.`);
+  }
+  if (confidence) {
+    parts.push(`Evidence confidence: ${confidence}.`);
+  }
+  if (rowWindow) {
+    parts.push(`Replay window: ${rowWindow}.`);
+  } else if (timestampWindow) {
+    parts.push(`Replay window: ${timestampWindow}.`);
+  }
+  return parts.length ? parts.join(" ") : "Replay evidence is present, but relationship evidence is limited for this frame.";
+}
+
+function firstPresent(...values) {
+  return values.find((value) => value !== null && value !== undefined && value !== "") ?? EMPTY_VALUE;
+}
+
+function cleanValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === EMPTY_VALUE) return "";
+  return text;
+}
+
+function formatValue(value) {
+  if (value === null || value === undefined || value === "") return EMPTY_VALUE;
+  const number = Number(value);
+  if (Number.isFinite(number)) {
+    return Math.abs(number) >= 10 ? String(Math.round(number)) : String(Math.round(number * 100) / 100);
+  }
+  return String(value).replaceAll("_", " ");
 }
 
 function normalizeOperationalLabel(value) {
