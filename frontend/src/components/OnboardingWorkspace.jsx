@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { buildApiCandidateUrls } from "../config";
+import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 
 const STORAGE_KEY = "neraium.onboarding.v1";
 
@@ -56,6 +58,36 @@ const MOCK_FIELDS = [
   "equipment_state",
 ];
 
+const UPLOAD_STAGE_LABELS = {
+  validating: "validating",
+  uploading: "uploading",
+  queued: "queued",
+  processing: "processing",
+  complete: "complete",
+  failed: "failed",
+};
+
+function normalizeOnboardingUploadStage(value) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (["uploading"].includes(normalized)) return "uploading";
+  if (["validated", "upload_started"].includes(normalized)) return "validating";
+  if (["pending", "queued", "accepted"].includes(normalized)) return "queued";
+  if (["complete"].includes(normalized)) return "complete";
+  if (["failed", "error", "not_found"].includes(normalized)) return "failed";
+  if (["validating_schema", "parsing", "baseline_modeling", "structural_scoring", "running_sii", "cognition_ready", "generating_replay", "writing_state", "processing"].includes(normalized)) {
+    return "processing";
+  }
+  return "processing";
+}
+
+async function readJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
 function defaultState() {
   return {
     step: 0,
@@ -63,6 +95,11 @@ function defaultState() {
     dataSource: "",
     csvFileName: "",
     detectedColumns: [],
+    uploadJobId: "",
+    uploadStatus: "",
+    uploadMessage: "",
+    uploadError: "",
+    uploadCompleteSticky: false,
     api: {
       baseUrl: "",
       token: "",
@@ -77,7 +114,6 @@ function defaultState() {
   };
 }
 
-// Mocked test helper (isolated so production endpoint checks can replace it).
 function runMockConnectionTest(flow) {
   const sourceReachable = Boolean(
     flow.dataSource
@@ -118,13 +154,18 @@ function loadSavedState() {
   }
 }
 
-export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring }) {
+export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, onUploadComplete, accessCode = "", apiFetch = null }) {
   const [flow, setFlow] = useState(loadSavedState);
   const csvInputRef = useRef(null);
+  const uploadPollAbortRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(flow));
   }, [flow]);
+
+  useEffect(() => () => {
+    uploadPollAbortRef.current = true;
+  }, []);
 
   const mappedCount = useMemo(
     () => Object.values(flow.signalMapping).filter(Boolean).length,
@@ -179,26 +220,111 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
         vpd: current.signalMapping.vpd || "vpd",
       },
       step: 3,
+      uploadStatus: "complete",
+      uploadMessage: "Demo telemetry loaded.",
+      uploadError: "",
+      uploadCompleteSticky: true,
     }));
+  }
+
+  async function onboardingFetch(path, options = {}) {
+    if (typeof apiFetch === "function") {
+      return apiFetch(path, { accessCode, ...options });
+    }
+    const urls = buildApiCandidateUrls(path);
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        return await fetch(url, {
+          credentials: "include",
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            ...(accessCode ? { "X-Neraium-Access-Code": accessCode } : {}),
+          },
+        });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("Network request failed.");
+  }
+
+  async function pollUploadUntilTerminal(jobId) {
+    let attempts = 0;
+    while (attempts < 240 && !uploadPollAbortRef.current) {
+      attempts += 1;
+      const response = await onboardingFetch(`/api/data/upload-status/${encodeURIComponent(jobId)}`);
+      const payload = await readJsonSafely(response);
+      const stage = normalizeOnboardingUploadStage(payload?.status ?? payload?.processing_state);
+
+      if (flow.uploadCompleteSticky && stage === "failed") {
+        return payload;
+      }
+
+      if (!response.ok && stage === "failed") {
+        throw new Error(String(payload?.message || payload?.error || "Upload processing failed."));
+      }
+
+      setFlow((current) => {
+        if (current.uploadCompleteSticky && stage !== "complete") {
+          return current;
+        }
+        return {
+          ...current,
+          uploadStatus: stage,
+          uploadMessage: String(payload?.progress_label || payload?.message || current.uploadMessage || ""),
+          uploadError: stage === "failed" ? String(payload?.error || payload?.message || "Upload failed.") : "",
+          uploadCompleteSticky: current.uploadCompleteSticky || stage === "complete",
+        };
+      });
+
+      if (stage === "complete") return payload;
+      if (stage === "failed") throw new Error(String(payload?.message || payload?.error || "Upload processing failed."));
+
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+    throw new Error("Upload status polling timed out.");
+  }
+
+  async function refreshLatestUploadAndPropagate(fallbackPayload = null) {
+    const latestResponse = await onboardingFetch("/api/data/latest-upload?include_persisted=1");
+    const latestPayload = await readJsonSafely(latestResponse);
+    const finalPayload = latestPayload?.latest_result ?? latestPayload ?? fallbackPayload;
+    if (typeof onUploadComplete === "function") {
+      await onUploadComplete(finalPayload);
+    }
+    return finalPayload;
   }
 
   async function handleCsvFileSelection(event) {
     const file = event.target.files?.[0] ?? null;
     if (!file) return;
+
+    uploadPollAbortRef.current = false;
+    setFlow((current) => ({
+      ...current,
+      csvFileName: file.name,
+      uploadStatus: "validating",
+      uploadMessage: "Validating file and detecting columns...",
+      uploadError: "",
+      uploadCompleteSticky: current.uploadCompleteSticky,
+    }));
+
     let detectedColumns = [];
     try {
       const text = await file.text();
       const headerLine = String(text || "").split(/\r?\n/, 1)[0] ?? "";
       detectedColumns = headerLine
         .split(",")
-        .map((column) => column.replace(/^"|"$/g, "").trim())
+        .map((column) => column.replace(/^\"|\"$/g, "").trim())
         .filter(Boolean);
     } catch {
       detectedColumns = [];
     }
+
     setFlow((current) => ({
       ...current,
-      csvFileName: file.name,
       detectedColumns,
       signalMapping: {
         ...current.signalMapping,
@@ -206,8 +332,61 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
         humidity: current.signalMapping.humidity || (detectedColumns.includes("humidity") ? "humidity" : ""),
         vpd: current.signalMapping.vpd || (detectedColumns.includes("vpd") ? "vpd" : ""),
       },
+      step: 3,
     }));
-    setFlow((current) => ({ ...current, step: 3 }));
+
+    try {
+      const { ok, payload } = await uploadTelemetryFileWithProgress({
+        file,
+        accessCode,
+        onProgress: (progress) => {
+          const stage = normalizeOnboardingUploadStage(progress?.stage);
+          setFlow((current) => ({
+            ...current,
+            uploadStatus: stage,
+            uploadMessage: String(progress?.message || current.uploadMessage || ""),
+            uploadError: "",
+          }));
+        },
+      });
+
+      if (!ok) {
+        throw new Error(String(payload?.message || "Upload request failed."));
+      }
+
+      const jobId = String(payload?.job_id ?? payload?.jobId ?? payload?.id ?? "").trim();
+      if (!jobId) {
+        throw new Error("Upload accepted but no job_id returned.");
+      }
+
+      setFlow((current) => ({
+        ...current,
+        uploadJobId: jobId,
+        uploadStatus: "queued",
+        uploadMessage: String(payload?.message || "Upload accepted. Processing queued."),
+        uploadError: "",
+      }));
+
+      const completionPayload = await pollUploadUntilTerminal(jobId);
+      setFlow((current) => ({
+        ...current,
+        uploadStatus: "complete",
+        uploadMessage: String(completionPayload?.message || "Telemetry processing complete."),
+        uploadError: "",
+        uploadCompleteSticky: true,
+      }));
+      await refreshLatestUploadAndPropagate(completionPayload);
+    } catch (error) {
+      setFlow((current) => {
+        if (current.uploadCompleteSticky) return current;
+        return {
+          ...current,
+          uploadStatus: "failed",
+          uploadError: String(error?.message || "Upload failed."),
+          uploadMessage: "Upload failed.",
+        };
+      });
+    }
   }
 
   function runConnectionTest() {
@@ -330,7 +509,13 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring })
                   Upload and Detect Columns
                 </button>
                 <button type="button" className="secondary-command-button" onClick={handleMockCsvSelect}>Use Demo CSV</button>
-                <span>{flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}</span>
+                <span>
+                  {flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}
+                  {flow.uploadStatus ? ` | ${UPLOAD_STAGE_LABELS[flow.uploadStatus] || flow.uploadStatus}` : ""}
+                  {flow.uploadJobId ? ` | job ${flow.uploadJobId}` : ""}
+                </span>
+                {flow.uploadMessage ? <span>{flow.uploadMessage}</span> : null}
+                {flow.uploadError ? <span>{flow.uploadError}</span> : null}
               </div>
             )}
             {flow.dataSource === "Demo Mode" && (
