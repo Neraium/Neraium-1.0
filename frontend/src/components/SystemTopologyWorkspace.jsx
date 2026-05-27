@@ -125,7 +125,9 @@ export default function SystemTopologyWorkspace({
       onUploadComplete={onUploadComplete} 
       domainMode={domainMode}
       domainDetection={domainDetection}
+      latestUploadSnapshot={liveOps.latestUploadSnapshot ?? null}
       latestUploadResult={liveOps.latestUploadResult}
+      liveSnapshot={liveOps}
       latestReplayFrame={replayFrame}
       gateProcessing={gateProcessing}
     /> 
