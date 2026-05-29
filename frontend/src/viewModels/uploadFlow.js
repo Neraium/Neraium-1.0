@@ -1,3 +1,9 @@
+import {
+  isUploadProcessingStatus,
+  normalizeErrorMessage as normalizeUploadContractErrorMessage,
+  normalizeUploadStatus as normalizeUploadContractStatus,
+} from "./uploadContract";
+
 const INTAKE_STAGES = [
   "Uploading telemetry export",
   "Validating schema",
@@ -56,28 +62,11 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
 }
 
 export function normalizeUploadStatus(status) {
-  const normalized = String(status ?? "").toLowerCase();
-  const aliases = {
-    pending: "queued",
-    queued: "queued",
-    validating_schema: "validating_schema",
-    parsing: "parsing",
-    baseline_modeling: "baseline_modeling",
-    running_sii: "structural_scoring",
-    structural_scoring: "structural_scoring",
-    cognition_ready: "cognition_ready",
-    generating_replay: "generating_replay",
-    generating_evidence: "writing_state",
-    writing_state: "writing_state",
-    complete: "complete",
-    failed: "failed",
-    not_found: "error",
-  };
-  return aliases[normalized] ?? normalized;
+  return normalizeUploadContractStatus(status);
 }
 
 export function isUploadProcessing(status) {
-  return ["uploading", "queued", "validating_schema", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"].includes(normalizeUploadStatus(status));
+  return isUploadProcessingStatus(status);
 }
 
 export async function readJsonPayload(response) {
@@ -89,22 +78,7 @@ export async function readJsonPayload(response) {
 }
 
 export function normalizeErrorMessage(error) {
-  if (!error) {
-    return "Unknown error";
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  if (error.message) {
-    return normalizeErrorMessage(error.message);
-  }
-  if (error.detail) {
-    return normalizeErrorMessage(error.detail);
-  }
-  if (typeof error === "object") {
-    return JSON.stringify(error);
-  }
-  return "Unexpected processing error";
+  return normalizeUploadContractErrorMessage(error);
 }
 
 export function buildUploadRequestError(response, payload, phase) {

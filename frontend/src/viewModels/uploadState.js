@@ -1,4 +1,8 @@
 import { NO_DATA_LABEL, noDataGuidance } from "./uiStateText";
+import {
+  normalizeErrorMessage as normalizeUploadContractErrorMessage,
+  normalizeUploadStatus as normalizeUploadContractStatus,
+} from "./uploadContract";
 
 export function hasFullUploadResult(result) {
   const replayTimeline = result?.replay_timeline?.timeline ?? result?.sii_intelligence?.replay_timeline?.timeline;
@@ -355,30 +359,15 @@ function safeTimestamp(value) {
 }
 
 function normalizeUploadStatus(status) {
-  const value = String(status ?? "").toLowerCase();
-  const aliases = {
-    queued: "pending",
-    pending: "pending",
-    parsing: "parsing",
-    baseline_modeling: "baseline_modeling",
-    running_sii: "running_sii",
-    generating_evidence: "writing_state",
-    writing_state: "writing_state",
-    complete: "complete",
-    completed: "complete",
-    failed: "failed",
-    error: "failed",
-    uploading: "uploading",
-  };
-  return aliases[value] ?? value;
+  return normalizeUploadContractStatus(status);
 }
 
 function isUploadProcessing(status) {
   const normalized = normalizeUploadStatus(status);
-  return ["uploading", "pending", "parsing", "baseline_modeling", "running_sii", "writing_state"].includes(normalized);
+  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "writing_state"].includes(normalized);
 }
 
 function normalizeErrorMessage(message) {
   if (message == null) return "Upload failed.";
-  return String(message);
+  return normalizeUploadContractErrorMessage(message);
 }

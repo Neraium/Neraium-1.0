@@ -95,9 +95,11 @@ def test_upload_polling_preserves_returned_job_id() -> None:
 
 def test_object_errors_render_through_normalized_messages() -> None:
     source = read_upload_surface()
+    contract_source = read_frontend(ROOT / "frontend" / "src" / "viewModels" / "uploadContract.js")
 
     assert "function normalizeErrorMessage(error)" in source
-    assert "return JSON.stringify(error);" in source
+    assert "function normalizeErrorMessage(error)" in contract_source
+    assert "return JSON.stringify(error);" in contract_source
 
 
 def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> None:
@@ -197,3 +199,28 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source
+
+
+def test_upload_normalization_uses_upload_contract_with_compat_exports() -> None:
+    contract_source = read_frontend(ROOT / "frontend" / "src" / "viewModels" / "uploadContract.js")
+    flow_source = read_frontend(UPLOAD_FLOW)
+    state_source = read_frontend(UPLOAD_STATE)
+
+    assert "export function normalizeUploadStatus(status)" in contract_source
+    assert "export function normalizeErrorMessage(error)" in contract_source
+    assert "export function normalizeUploadJob(payload = {})" in contract_source
+    assert "propagation_stage" in contract_source
+    assert "propagation_progress" in contract_source
+    assert "propagation_label" in contract_source
+
+    assert "normalizeUploadStatus as normalizeUploadContractStatus" in flow_source
+    assert "normalizeErrorMessage as normalizeUploadContractErrorMessage" in flow_source
+    assert "export function normalizeUploadStatus(status)" in flow_source
+    assert "return normalizeUploadContractStatus(status);" in flow_source
+    assert "export function normalizeErrorMessage(error)" in flow_source
+    assert "return normalizeUploadContractErrorMessage(error);" in flow_source
+
+    assert "normalizeUploadStatus as normalizeUploadContractStatus" in state_source
+    assert "normalizeErrorMessage as normalizeUploadContractErrorMessage" in state_source
+    assert "function normalizeUploadStatus(status)" in state_source
+    assert "return normalizeUploadContractStatus(status);" in state_source
