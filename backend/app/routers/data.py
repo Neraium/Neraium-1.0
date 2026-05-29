@@ -22,7 +22,7 @@ from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
-from app.services.runtime_db import read_upload_queue_job
+from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 
 router = APIRouter(prefix="/data", tags=["data"])
@@ -74,15 +74,61 @@ def invalidate_latest_upload_cache() -> None:
 
 
 def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
+    worker_job_id: str | None = None
     try:
+        logger.info("worker_thread_started runtime_dir=%s", runtime_dir)
         configure_runtime_db_dir(runtime_dir)
+        worker_job_id = peek_next_upload_job_for_worker()
+        if worker_job_id:
+            now = datetime.now(timezone.utc).isoformat()
+            try:
+                touch_upload_queue_job(worker_job_id, "processing")
+            except Exception:
+                logger.exception("worker_first_heartbeat_touch_failed job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
+            current = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
+            staged = {
+                **current,
+                "job_id": worker_job_id,
+                "worker_state": "running",
+                "worker_last_seen_at": now,
+            }
+            if not staged.get("propagation_stage"):
+                staged["propagation_stage"] = "queued"
+            if staged.get("processing_state") in {None, "", "queued", "pending"}:
+                staged["processing_state"] = "queued"
+            if not staged.get("propagation_label"):
+                staged["propagation_label"] = "Queued."
+            if not staged.get("progress_label"):
+                staged["progress_label"] = staged.get("propagation_label")
+            upload_jobs.write_job(staged)
+            logger.info("worker_first_heartbeat_written job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
+
         upload_jobs.configure_runtime_dir(runtime_dir)
-        upload_jobs.process_next_queued_upload_job()
-    except Exception:
-        logger.exception("upload_worker_dispatch_failed runtime_dir=%s", runtime_dir)
+        logger.info("worker_process_next_started job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
+        processed = upload_jobs.process_next_queued_upload_job()
+        logger.info("worker_process_next_finished job_id=%s runtime_dir=%s processed=%s", worker_job_id, runtime_dir, processed)
+    except Exception as exc:
+        logger.exception("worker_process_next_failed runtime_dir=%s", runtime_dir)
+        if worker_job_id:
+            now = datetime.now(timezone.utc).isoformat()
+            failed = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
+            failed.update({
+                "job_id": worker_job_id,
+                "status": "FAILED",
+                "processing_state": "failed",
+                "error_type": "worker_start_failed",
+                "error": str(exc),
+                "message": "Telemetry processing failed.",
+                "progress_label": "Telemetry processing failed.",
+                "worker_state": "stalled",
+                "worker_last_seen_at": now,
+                "result_available": False,
+            })
+            upload_jobs.write_job(failed)
 
 
 def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
+    logger.info("worker_dispatch_requested runtime_dir=%s", runtime_dir)
     try:
         worker = threading.Thread(
             target=_run_upload_worker_for_runtime,

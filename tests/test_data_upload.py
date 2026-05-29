@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.core.config import Settings
 from app.main import create_app
+from app.routers import data as data_router
 from app.services.runtime_db import upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
@@ -1842,3 +1843,82 @@ def test_relationship_baseline_reports_sampling_metadata() -> None:
     assert "sampled_for_baseline" in result
     if result.get("top_relationship_changes"):
         assert "sampled_for_baseline" in result["top_relationship_changes"][0]
+
+
+def test_worker_transitions_starting_to_running_on_thread_start(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    create_app(settings)
+
+    job_id = "worker-running-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    monkeypatch.setattr("app.services.upload_jobs.process_next_queued_upload_job", lambda: False)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    payload = upload_jobs.read_upload_status(job_id) or {}
+    assert payload.get("worker_state") == "running"
+    assert payload.get("worker_last_seen_at")
+
+
+def test_worker_exception_before_processing_marks_failed_not_starting(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    create_app(settings)
+
+    job_id = "worker-fail-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    def boom():
+        raise RuntimeError("worker exploded")
+
+    monkeypatch.setattr("app.services.upload_jobs.process_next_queued_upload_job", boom)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    payload = upload_jobs.read_upload_status(job_id) or {}
+    assert payload.get("status") == "FAILED"
+    assert payload.get("error_type") == "worker_start_failed"
+    assert "worker exploded" in str(payload.get("error") or "")
+    assert payload.get("worker_state") == "stalled"
+
+
+def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+
+    job_id = "worker-visible-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    monkeypatch.setattr("app.services.upload_jobs.process_next_queued_upload_job", lambda: False)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    response = client.get(f"/api/data/upload-status/{job_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("worker_state") == "running"
+    assert payload.get("worker_last_seen_at")

@@ -268,6 +268,21 @@ def claim_next_upload_job() -> str | None:
         return job_id
 
 
+
+def peek_next_upload_job_for_worker() -> str | None:
+    init_runtime_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT job_id
+            FROM upload_queue
+            WHERE status IN ('pending', 'processing')
+            ORDER BY CASE status WHEN 'processing' THEN 0 ELSE 1 END, created_at ASC
+            LIMIT 1
+            """
+        ).fetchone()
+    return None if row is None else str(row["job_id"])
+
 def mark_queue_job_failed(job_id: str, reason: str) -> None:
     init_runtime_db()
     with db_connection() as connection:
