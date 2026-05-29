@@ -272,7 +272,6 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
 
 @router.post("/upload", status_code=202)
 async def upload_data(request: Request, file: UploadFile = File(...)):
-    content = await file.read()
     settings = request.app.state.settings
     filename = file.filename or "upload.csv"
     lowered = filename.lower()
@@ -285,7 +284,39 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "message": "Only .csv and .json telemetry files are supported.",
             },
         )
-    if lowered.endswith(".csv") and not content.strip():
+
+    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
+    file_size_bytes = 0
+    csv_has_non_whitespace = False
+    with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+        temp_path = temp.name
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            file_size_bytes += len(chunk)
+            if file_size_bytes > max_size_bytes:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "status": "FAILED",
+                        "error_type": "upload_too_large",
+                        "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
+                    },
+                )
+            if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
+                csv_has_non_whitespace = True
+            temp.write(chunk)
+
+    if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
+        try:
+            Path(temp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
         return JSONResponse(
             status_code=400,
             content={
@@ -294,18 +325,12 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "message": "CSV file is empty.",
             },
         )
-    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
-    if len(content) > max_size_bytes:
-        return JSONResponse(
-            status_code=413,
-            content={
-                "status": "FAILED",
-                "error_type": "upload_too_large",
-                "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
-            },
-        )
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
+        try:
+            Path(temp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
         return JSONResponse(
             status_code=503,
             headers={"retry-after": "30"},
@@ -327,9 +352,6 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     )
     try:
         job_id = uuid.uuid4().hex
-        with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
-            temp.write(content)
-            temp_path = temp.name
         summary = {
             "job_id": job_id,
             "filename": filename,
@@ -346,7 +368,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,
             "file_path": temp_path,
-            "file_size_bytes": len(content),
+            "file_size_bytes": file_size_bytes,
             "content_type": content_type,
             "initiated_by": actor,
         }
@@ -359,7 +381,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             resource_type="upload_job",
             resource_id=str(job_id or "unknown"),
             request_id=auth_context.get("request_id"),
-            detail={"filename": filename, "size_bytes": len(content)},
+            detail={"filename": filename, "size_bytes": file_size_bytes},
         )
         run_id = summary.get("job_id")
         if run_id:
@@ -391,6 +413,10 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             if record:
                 upsert_evidence_run(record)
     except Exception as exc:
+        try:
+            Path(temp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
         failed_job_id = uuid.uuid4().hex
         failed_at = datetime.now(timezone.utc).isoformat()
         upload_jobs.write_job(
@@ -437,7 +463,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "filename": filename,
         "message": "Preparing telemetry intake. Upload received and queued for background processing.",
         "status_url": f"/api/data/upload-status/{summary.get('job_id')}",
-        "file_size_bytes": len(content),
+        "file_size_bytes": file_size_bytes,
         "propagation_stage": "accepted",
         "propagation_progress": 5,
         "propagation_label": "Upload received.",

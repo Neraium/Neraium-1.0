@@ -39,13 +39,30 @@ def _pearson_corr(left: list[float], right: list[float]) -> float | None:
     return sum(a * b for a, b in zip(centered_left, centered_right)) / denom
 
 
-def build_relationship_baseline(rows: list[dict[str, Any]], numeric_columns: list[str]) -> dict[str, Any]:
+def build_relationship_baseline(
+    rows: list[dict[str, Any]],
+    numeric_columns: list[str],
+    *,
+    total_row_count: int | None = None,
+    baseline_window_limit: int = 12000,
+    recent_window_limit: int = 6000,
+) -> dict[str, Any]:
     if len(rows) < 12 or len(numeric_columns) < 2:
-        return {"top_relationship_changes": [], "baseline_relationships": []}
+        return {"top_relationship_changes": [], "baseline_relationships": [], "sampled_for_baseline": False}
 
     baseline_count = max(6, int(len(rows) * 0.7))
     baseline_rows = rows[:baseline_count]
     recent_rows = rows[baseline_count:]
+
+    sampled_for_baseline = False
+    if len(baseline_rows) > baseline_window_limit:
+        baseline_rows = baseline_rows[:baseline_window_limit]
+        sampled_for_baseline = True
+    if len(recent_rows) > recent_window_limit:
+        recent_rows = recent_rows[-recent_window_limit:]
+        sampled_for_baseline = True
+    if total_row_count is not None and total_row_count > len(rows):
+        sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
 
     for idx, left_col in enumerate(numeric_columns):
@@ -91,6 +108,7 @@ def build_relationship_baseline(rows: list[dict[str, Any]], numeric_columns: lis
                     "coupling_strength": round(baseline_strength, 6),
                     "baseline_sample_size": len(left_base),
                     "recent_sample_size": len(left_recent),
+                    "sampled_for_baseline": sampled_for_baseline,
                     "evidence_refs": [
                         {"column": left_col, "role": "left_variable"},
                         {"column": right_col, "role": "right_variable"},
@@ -106,6 +124,7 @@ def build_relationship_baseline(rows: list[dict[str, Any]], numeric_columns: lis
     return {
         "top_relationship_changes": candidates[:5],
         "baseline_relationships": candidates,
+        "sampled_for_baseline": sampled_for_baseline,
     }
 
 

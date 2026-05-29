@@ -8,6 +8,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
@@ -23,6 +24,9 @@ JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
 _S3_CLIENT: Any | None = None
 _RESET_BLOCK_PERSISTED = False
+MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "20000"))
+CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "25000"))
+CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "10000"))
 
 
 def _upload_state_bucket() -> str:
@@ -190,6 +194,9 @@ def reset_upload_state() -> None:
 def clear_reset_block_persisted() -> None:
     global _RESET_BLOCK_PERSISTED
     _RESET_BLOCK_PERSISTED = False
+MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "20000"))
+CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "25000"))
+CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "10000"))
 
 
 def reset_block_persisted_active() -> bool:
@@ -237,23 +244,46 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
     write_job(payload)
 
 
-def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = None) -> dict[str, Any]:
-    if not content.strip():
-        raise ValueError("CSV file is empty.")
-    job_id = str(job_id or uuid.uuid4().hex)
-    queued_job = read_job(job_id) or {}
-    initiated_by = queued_job.get("initiated_by", "anonymous")
-    _set_status(job_id, "PROCESSING", 10, "Parsing CSV")
-
-    text = content.decode("utf-8-sig", errors="replace")
-    reader = csv.DictReader(io.StringIO(text))
-    columns = list(reader.fieldnames or [])
-    rows = list(reader)
-
-    if not columns or not rows:
+def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | None = None) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = list(reader.fieldnames or [])
+        if not columns:
+            raise ValueError("CSV must include a header and at least one data row.")
+        timestamp_column = _detect_timestamp_column(columns)
+        sample_rows: list[dict[str, Any]] = []
+        row_count = 0
+        first_timestamp = None
+        last_timestamp = None
+        memory_estimate_bytes = 0
+        for row in reader:
+            row_count += 1
+            if timestamp_column:
+                ts_value = row.get(timestamp_column)
+                if first_timestamp is None:
+                    first_timestamp = ts_value
+                last_timestamp = ts_value
+            if len(sample_rows) < max_analysis_rows:
+                sample_rows.append(row)
+                memory_estimate_bytes += sum(len(str(v or "")) for v in row.values())
+            if job_id and row_count % CSV_PROGRESS_UPDATE_EVERY == 0:
+                _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label=f"Parsing telemetry ({row_count:,} rows)...")
+    if row_count == 0:
         raise ValueError("CSV must include a header and at least one data row.")
+    return {
+        "columns": columns,
+        "timestamp_column": timestamp_column,
+        "sample_rows": sample_rows,
+        "row_count": row_count,
+        "first_timestamp": first_timestamp,
+        "last_timestamp": last_timestamp,
+        "chunk_count": max(1, (row_count + CSV_CHUNK_SIZE_ROWS - 1) // CSV_CHUNK_SIZE_ROWS),
+        "memory_estimate_bytes": int(memory_estimate_bytes),
+    }
 
-    timestamp_column = _detect_timestamp_column(columns)
+
+def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list[dict[str, Any]], row_count_total: int, timestamp_column: str | None, first_timestamp: Any, last_timestamp: Any, chunk_count: int, memory_estimate_bytes: int) -> dict[str, Any]:
+    initiated_by = (read_job(job_id) or {}).get("initiated_by", "anonymous")
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     numeric_profiles = []
     for col in numeric_columns[:50]:
@@ -261,14 +291,8 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         clean = [value for value in values if value is not None]
         if not clean:
             continue
-        numeric_profiles.append(
-            {
-                "column": col,
-                "minimum": round(min(clean), 4),
-                "maximum": round(max(clean), 4),
-                "average": round(sum(clean) / len(clean), 4),
-            }
-        )
+        numeric_profiles.append({"column": col, "minimum": round(min(clean), 4), "maximum": round(max(clean), 4), "average": round(sum(clean) / len(clean), 4)})
+
     room_column = next((col for col in columns if col.lower().strip() == "room"), None)
     room_counts: dict[str, int] = {}
     room_rows: dict[str, list[dict[str, Any]]] = {}
@@ -278,13 +302,11 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
             room_counts[room_name] = room_counts.get(room_name, 0) + 1
             room_rows.setdefault(room_name, []).append(row)
     if not room_counts:
-        room_counts = {"Uploaded telemetry": len(rows)}
+        room_counts = {"Uploaded telemetry": row_count_total}
         room_rows = {"Uploaded telemetry": rows}
     room_names = sorted(room_counts.keys())
-    room_summary = {
-        "room_count": len(room_names),
-        "rooms": [{"room": name, "row_count": room_counts[name]} for name in room_names],
-    }
+    room_summary = {"room_count": len(room_names), "rooms": [{"room": name, "row_count": room_counts[name]} for name in room_names]}
+
     room_intelligence = []
     room_urgency_rank = {"nominal": 0, "review": 1, "unstable": 2}
     max_room_urgency = "nominal"
@@ -315,57 +337,35 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
             if per_signal_drifts:
                 room_drift = sum(per_signal_drifts) / len(per_signal_drifts)
         if sparse:
-            urgency = "review"
-            driver_category = "sensor_network"
-            attribution_confidence = "low"
-            signal_strength = "low"
-            room_state = "Insufficient telemetry"
+            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Insufficient telemetry"
             relationship_evidence = [f"{name}: Room-level relationship evidence is limited due to sparse telemetry."]
             structural_explanation = [f"{name}: Structural explanation is limited due to sparse telemetry."]
         elif room_drift > 0.25:
-            urgency = "unstable"
-            driver_category = "process_timing"
-            attribution_confidence = "high"
-            signal_strength = "high"
-            room_state = "Drift observed"
+            urgency = "unstable"; driver_category = "process_timing"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Drift observed"
             relationship_evidence = [f"{name}: Temperature and humidity relationships are diverging from baseline."]
             structural_explanation = [f"{name}: Multi-signal drift indicates structural coupling instability."]
         else:
-            urgency = "nominal"
-            driver_category = "stable_monitoring"
-            attribution_confidence = "medium"
-            signal_strength = "low"
-            room_state = "Monitoring active telemetry feed"
+            urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Monitoring active telemetry feed"
             relationship_evidence = [f"{name}: Relationship evidence remains within expected room behavior."]
             structural_explanation = [f"{name}: Structural explanation indicates stable room behavior."]
         if room_urgency_rank[urgency] > room_urgency_rank[max_room_urgency]:
             max_room_urgency = urgency
         max_room_drift = max(max_room_drift, room_drift)
-        room_intelligence.append(
-            {
-                "room": name,
-                "room_state": room_state,
-                "urgency": urgency,
-                "driver_category": driver_category,
-                "attribution_confidence": attribution_confidence,
-                "next_operator_move": "Collect more room telemetry before clearing this system" if sparse else "Continue monitoring",
-                "confidence_components": {
-                    "data_sufficiency": "low" if sparse else "high",
-                    "signal_strength": signal_strength,
-                    "relationship_support": "low" if sparse else "high",
-                    "persistence": "low" if sparse else "high",
-                },
-                "relationship_evidence": relationship_evidence,
-                "structural_explanation": structural_explanation,
-                "confidence_basis": f"{name}: Confidence components: data sufficiency, signal strength, relationship support, persistence.",
-                "why_flagged": (
-                    f"{name} flagged because room-level telemetry is currently sparse."
-                    if sparse
-                    else f"{name} remains within normal uploaded telemetry behavior."
-                ),
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        room_intelligence.append({
+            "room": name,
+            "room_state": room_state,
+            "urgency": urgency,
+            "driver_category": driver_category,
+            "attribution_confidence": attribution_confidence,
+            "next_operator_move": "Collect more room telemetry before clearing this system" if sparse else "Continue monitoring",
+            "confidence_components": {"data_sufficiency": "low" if sparse else "high", "signal_strength": signal_strength, "relationship_support": "low" if sparse else "high", "persistence": "low" if sparse else "high"},
+            "relationship_evidence": relationship_evidence,
+            "structural_explanation": structural_explanation,
+            "confidence_basis": f"{name}: Confidence components: data sufficiency, signal strength, relationship support, persistence.",
+            "why_flagged": f"{name} flagged because room-level telemetry is currently sparse." if sparse else f"{name} remains within normal uploaded telemetry behavior.",
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        })
+
     telemetry_profile, telemetry_profile_confidence, telemetry_profile_signals = classify_telemetry_profile(columns)
     operational_profile, operational_profile_confidence, operational_profile_signals, operational_modality = classify_operational_profile(columns)
     score_penalty = 20 if max_room_urgency == "review" else 45 if max_room_urgency == "unstable" else 5
@@ -376,14 +376,9 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         overall_urgency = "review"
 
     _set_propagation_stage(job_id, stage="building_relationship_baselines", progress=40, label="Building relationship baselines.")
-    relationship_model = _build_relationship_baseline(rows, numeric_columns)
-
+    relationship_model = _build_relationship_baseline(rows, numeric_columns, total_row_count=row_count_total)
     _set_propagation_stage(job_id, stage="scoring_relationship_drift", progress=60, label="Scoring relationship drift.")
-    if len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3:
-        replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
-    else:
-        replay = _build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
-
+    replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model) if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3) else _build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
     if not replay.get("timeline"):
         replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
@@ -391,41 +386,22 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
-    processing_trace = {
-        "sii_pipeline_ran": True,
-        "sii_completed": True,
-        "replay_frame_count": frame_count,
-        "rows_processed": len(rows),
-        "columns_analyzed": len(numeric_columns),
-        "completed_at": now,
-    }
+    processing_trace = {"sii_pipeline_ran": True, "sii_completed": True, "replay_frame_count": frame_count, "rows_processed": row_count_total, "columns_analyzed": len(numeric_columns), "completed_at": now}
     _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
-    runner_result = run_sii_runner(
-        columns=columns,
-        rows=matrix_rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=timestamp_column,
-        primary_room=room_names[0] if room_names else "Uploaded telemetry",
-        driver_attribution={},
-        engine_result={"evidence": []},
-        processing_trace=processing_trace,
-    )
+    runner_result = run_sii_runner(columns=columns, rows=matrix_rows, numeric_profiles=numeric_profiles, timestamp_column=timestamp_column, primary_room=room_names[0] if room_names else "Uploaded telemetry", driver_attribution={}, engine_result={"evidence": []}, processing_trace=processing_trace)
     latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
 
     result = {
         "job_id": job_id,
         "filename": filename,
-        "row_count": len(rows),
+        "row_count": row_count_total,
         "column_count": len(columns),
         "columns": columns,
         "preview_rows": rows[:10],
         "detected_timestamp_column": timestamp_column,
         "numeric_profiles": numeric_profiles,
-        "timestamp_profile": {
-            "first_timestamp": rows[0].get(timestamp_column) if timestamp_column else None,
-            "last_timestamp": rows[-1].get(timestamp_column) if timestamp_column else None,
-        },
-        "data_quality": {"readiness": "ready", "row_count": len(rows), "numeric_column_count": len(numeric_columns)},
+        "timestamp_profile": {"first_timestamp": first_timestamp, "last_timestamp": last_timestamp},
+        "data_quality": {"readiness": "ready", "row_count": row_count_total, "numeric_column_count": len(numeric_columns)},
         "baseline_analysis": relationship_model,
         "cultivation_mapping": {},
         "operator_report": {},
@@ -433,47 +409,10 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         "driver_attribution": {},
         "operating_state": "Monitoring",
         "drift_status": "info",
-        "sii_intelligence": {
-            "source": "uploaded",
-            "facility_state": "Monitoring",
-            "urgency": overall_urgency,
-            "primary_room": room_names[0] if room_names else "Uploaded telemetry",
-            "runner_module": RUNNER_MODULE,
-            "neraium_score": neraium_score,
-            "room_summary": room_summary,
-            "rooms": room_intelligence,
-            "telemetry_profile": telemetry_profile,
-            "telemetry_profile_confidence": telemetry_profile_confidence,
-            "telemetry_profile_signals": telemetry_profile_signals,
-            "operational_signal_profile": operational_profile,
-            "operational_signal_profile_confidence": operational_profile_confidence,
-            "operational_signal_profile_signals": operational_profile_signals,
-            "operational_signal_modality": operational_modality,
-            "system_identity": {
-                "claim_made": telemetry_profile_confidence in {"medium", "high"},
-                "telemetry_profile": telemetry_profile,
-                "operational_profile": operational_profile,
-                "operational_modality": operational_modality,
-            },
-            "structural_memory": {"memory_matches": [{"name": "uploaded_baseline_pattern"}], "retrieval_status": "matched"},
-            "active_archetypes": ["uploaded_baseline_pattern"],
-            "causality_graph": {"dominant_pathways": ["thermal_to_humidity"], "edges": [{"from": "temperature", "to": "humidity"}]},
-            "counterfactuals": {"uncertainty_ranges": {"instability_acceleration_window_days": "3-7 days"}},
-            "facility_cognition": {"global_structural_pressure_score": 0.42},
-            "operator_explanation_v2": {
-                "summary": "Structural pressure is propagating through uploaded telemetry relationships.",
-                "active_archetypes": ["uploaded_baseline_pattern"],
-            },
-            "structural_explanation": [
-                "Structural pressure is propagating through uploaded telemetry relationships.",
-                "Uploaded telemetry indicates relationship changes across key signals.",
-            ],
-            "last_updated": now,
-            "replay_timeline": replay,
-        },
+        "sii_intelligence": {"source": "uploaded", "facility_state": "Monitoring", "urgency": overall_urgency, "primary_room": room_names[0] if room_names else "Uploaded telemetry", "runner_module": RUNNER_MODULE, "neraium_score": neraium_score, "room_summary": room_summary, "rooms": room_intelligence, "telemetry_profile": telemetry_profile, "telemetry_profile_confidence": telemetry_profile_confidence, "telemetry_profile_signals": telemetry_profile_signals, "operational_signal_profile": operational_profile, "operational_signal_profile_confidence": operational_profile_confidence, "operational_signal_profile_signals": operational_profile_signals, "operational_signal_modality": operational_modality, "system_identity": {"claim_made": telemetry_profile_confidence in {"medium", "high"}, "telemetry_profile": telemetry_profile, "operational_profile": operational_profile, "operational_modality": operational_modality}, "structural_memory": {"memory_matches": [{"name": "uploaded_baseline_pattern"}], "retrieval_status": "matched"}, "active_archetypes": ["uploaded_baseline_pattern"], "causality_graph": {"dominant_pathways": ["thermal_to_humidity"], "edges": [{"from": "temperature", "to": "humidity"}]}, "counterfactuals": {"uncertainty_ranges": {"instability_acceleration_window_days": "3-7 days"}}, "facility_cognition": {"global_structural_pressure_score": 0.42}, "operator_explanation_v2": {"summary": "Structural pressure is propagating through uploaded telemetry relationships.", "active_archetypes": ["uploaded_baseline_pattern"]}, "structural_explanation": ["Structural pressure is propagating through uploaded telemetry relationships.", "Uploaded telemetry indicates relationship changes across key signals."], "last_updated": now, "replay_timeline": replay},
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
-        "processing_stats": {},
+        "processing_stats": {"used_streaming": True, "sampled_rows": len(rows), "chunk_count": chunk_count, "memory_estimate_bytes": memory_estimate_bytes},
         "room_summary": room_summary,
         "ingestion_metadata": {"source_type": "csv_upload"},
         "source_type": "csv",
@@ -489,48 +428,7 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         result["sii_intelligence"]["projected_time_to_failure"] = latest_runner_state.get("projected_time_to_failure")
         result["sii_intelligence"]["projected_time_to_failure_hours"] = latest_runner_state.get("projected_time_to_failure_hours")
 
-    summary = {
-        "job_id": job_id,
-        "status_url": f"/api/data/upload-status/{job_id}",
-        "status": "COMPLETE",
-        "processing_state": "complete",
-        "percent": 100,
-        "progress": 100,
-        "result_available": True,
-        "first_usable_available": True,
-        "sii_completed": True,
-        "replay_ready": frame_count > 0,
-        "replay_frame_count": frame_count,
-        "latest_replay_frames": frame_count,
-        "replay_source": "persisted",
-        "last_processed_at": now,
-        "filename": filename,
-        "row_count": len(rows),
-        "column_count": len(columns),
-        "rows_processed": len(rows),
-        "columns_detected": len(columns),
-        "runner_used": bool((runner_result or {}).get("runner_used")),
-        "runner_module": RUNNER_MODULE,
-        "core_engine": (runner_result or {}).get("core_engine"),
-        "sii_completed": True,
-        "sii_completion_artifacts": {
-            "runner_used": True,
-            "intelligence_present": True,
-            "processing_trace_present": True,
-            "engine_result_present": True,
-        },
-        "result_summary": {
-            "filename": filename,
-            "sii_completed": True,
-            "sii_completion_artifacts": {
-                "runner_used": True,
-                "intelligence_present": True,
-                "processing_trace_present": True,
-                "engine_result_present": True,
-            },
-            "runner_errors": [],
-        },
-    }
+    summary = {"job_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
 
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
@@ -541,8 +439,8 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     _write_json("latest_upload_summary.json", summary)
     _write_shared_state(f"upload_result_{job_id}", result)
     _write_shared_state(f"upload_status_{job_id}", summary)
-    _write_shared_state("latest_upload_result", result) 
-    _write_shared_state("latest_upload_summary", summary) 
+    _write_shared_state("latest_upload_result", result)
+    _write_shared_state("latest_upload_summary", summary)
     latest_sii = read_latest_sii_state()
     if isinstance(latest_sii, dict):
         _write_shared_state("latest_sii_state", latest_sii)
@@ -550,61 +448,34 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     JOBS[job_id] = summary
     LATEST_UPLOAD_CACHE["result"] = result
     LATEST_UPLOAD_CACHE["summary"] = summary
-    now = result.get("completed_at") or result.get("last_processed_at") or datetime.now(timezone.utc).isoformat()
     try:
         from app.services import adaptive_learning
-        adaptive_summary = {
-            "last_processed_at": now,
-            "drift_status": result.get("drift_status"),
-            "operating_state": result.get("operating_state"),
-            "primary_room": (result.get("sii_intelligence") or {}).get("primary_room"),
-            "neraium_score": (result.get("sii_intelligence") or {}).get("neraium_score"),
-            "warnings": [],
-        }
+        adaptive_summary = {"last_processed_at": now, "drift_status": result.get("drift_status"), "operating_state": result.get("operating_state"), "primary_room": (result.get("sii_intelligence") or {}).get("primary_room"), "neraium_score": (result.get("sii_intelligence") or {}).get("neraium_score"), "warnings": []}
         site_memory = adaptive_learning.update_site_memory_from_result(result, now)
-        adaptive_learning.append_event_memory(
-            site_key=site_memory.get("site_key", "site::default"),
-            run_id=job_id,
-            completed_at=now,
-            summary=adaptive_summary,
-            result=result,
-        )
+        adaptive_learning.append_event_memory(site_key=site_memory.get("site_key", "site::default"), run_id=job_id, completed_at=now, summary=adaptive_summary, result=result)
     except Exception:
         pass
     try:
         from app.services.evidence_store import upsert_evidence_run
-        upsert_evidence_run(
-            {
-                "run_id": job_id,
-                "source_name": filename,
-                "source_type": "csv_upload",
-                "source_url": None,
-                "status": "completed",
-                "created_at": now,
-                "completed_at": now,
-                "rows_received": len(rows),
-                "rows_accepted": len(rows),
-                "rows_rejected": 0,
-                "sensors_detected": max(0, len(columns) - 1),
-                "room": ((result.get("sii_intelligence") or {}).get("primary_room") or "Uploaded telemetry"),
-                "operating_state": result.get("operating_state"),
-                "neraium_score": ((result.get("sii_intelligence") or {}).get("neraium_score")),
-                "drift_status": result.get("drift_status"),
-                "scenario": None,
-                "tick": None,
-                "warnings": [],
-                "errors": [],
-                "primary_drivers": [],
-                "evidence_summary": [],
-                "structural_archetypes": [],
-                "adaptive_site_key": "site::default",
-                "operator_feedback_history": [],
-                "initiated_by": initiated_by,
-            }
-        )
+        upsert_evidence_run({"run_id": job_id, "source_name": filename, "source_type": "csv_upload", "source_url": None, "status": "completed", "created_at": now, "completed_at": now, "rows_received": row_count_total, "rows_accepted": row_count_total, "rows_rejected": 0, "sensors_detected": max(0, len(columns) - 1), "room": ((result.get("sii_intelligence") or {}).get("primary_room") or "Uploaded telemetry"), "operating_state": result.get("operating_state"), "neraium_score": ((result.get("sii_intelligence") or {}).get("neraium_score")), "drift_status": result.get("drift_status"), "scenario": None, "tick": None, "warnings": [], "errors": [], "primary_drivers": [], "evidence_summary": [], "structural_archetypes": [], "adaptive_site_key": "site::default", "operator_feedback_history": [], "initiated_by": initiated_by})
     except Exception:
         pass
     return summary
+
+
+def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = None) -> dict[str, Any]:
+    if not content.strip():
+        raise ValueError("CSV file is empty.")
+    with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+        temp.write(content)
+        temp_path = Path(temp.name)
+    try:
+        return process_csv_file(temp_path, filename=filename, job_id=job_id)
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def replay_payload(job_id: str | None = None) -> dict[str, Any]:
@@ -1178,9 +1049,27 @@ def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kw
 
 
 def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
-    p = Path(path)
+    p = Path(kwargs.pop("file_path", path))
     filename = kwargs.pop("filename", None) or p.name
-    return process_csv_content(p.read_bytes(), filename=filename, **kwargs)
+    job_id = kwargs.pop("job_id", None)
+    if not p.exists():
+        raise FileNotFoundError(str(p))
+    if job_id:
+        _set_propagation_stage(str(job_id), stage="parsing_telemetry", progress=20, label="Parsing telemetry.")
+    snapshot = _stream_csv_snapshot(p, max_analysis_rows=MAX_ANALYSIS_ROWS, job_id=str(job_id) if job_id else None)
+    summary = _build_csv_result(
+        str(job_id or uuid.uuid4().hex),
+        filename,
+        snapshot["columns"],
+        snapshot["sample_rows"],
+        int(snapshot["row_count"]),
+        snapshot["timestamp_column"],
+        snapshot["first_timestamp"],
+        snapshot["last_timestamp"],
+        int(snapshot["chunk_count"]),
+        int(snapshot["memory_estimate_bytes"]),
+    )
+    return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
 
 
 def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:

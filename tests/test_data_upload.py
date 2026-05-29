@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import asyncio
 import pytest
 import time
+from pathlib import Path
 
 from app.core.config import Settings
 from app.main import create_app
@@ -1824,3 +1825,20 @@ def test_upload_status_marks_stalled_when_queued_without_heartbeat() -> None:
     payload = status.json()
     assert payload["worker_state"] in {"stalled", "starting"}
     assert payload.get("queued_seconds") is None or payload["queued_seconds"] >= 0
+
+
+def test_upload_endpoint_streams_file_chunks_instead_of_full_read() -> None:
+    source = Path("backend/app/routers/data.py").read_text(encoding="utf-8")
+    assert "await file.read()" not in source
+    assert "await file.read(1024 * 1024)" in source
+
+
+def test_relationship_baseline_reports_sampling_metadata() -> None:
+    rows = []
+    for index in range(60):
+        rows.append({"a": float(index), "b": float(index), "c": float(index)})
+    from app.services.relationship_baselines import build_relationship_baseline
+    result = build_relationship_baseline(rows, ["a", "b", "c"], total_row_count=120)
+    assert "sampled_for_baseline" in result
+    if result.get("top_relationship_changes"):
+        assert "sampled_for_baseline" in result["top_relationship_changes"][0]
