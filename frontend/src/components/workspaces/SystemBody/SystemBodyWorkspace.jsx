@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
@@ -60,10 +60,6 @@ export default function SystemBodyWorkspace({
   void accessCode;
   void onUploadComplete;
 
-  const [investigationOpen, setInvestigationOpen] = useState(false);
-  const [forensicOpen, setForensicOpen] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   const interpretation = useMemo(
@@ -101,11 +97,10 @@ export default function SystemBodyWorkspace({
     ],
   );
 
-  function openWorkspace(workspaceId) {
+  function openInvestigationWorkspace() {
     if (typeof onWorkspaceNavigate === "function") {
-      onWorkspaceNavigate(workspaceId);
+      onWorkspaceNavigate("historical-replay");
     }
-    setSettingsOpen(false);
   }
 
   return (
@@ -114,33 +109,7 @@ export default function SystemBodyWorkspace({
         <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
           <span className="system-gate__heartbeat-dot" />
           <strong>{heartbeat.label}</strong>
-          {dataFreshness ? (
-            <span className={`system-gate__freshness system-gate__freshness--${dataFreshness.tone}`}>{dataFreshness.label}</span>
-          ) : null}
-          {siiVerification ? (
-            <span className={`system-gate__freshness ${siiVerification.verified ? "system-gate__freshness--live" : "system-gate__freshness--aging"}`}>
-              {siiVerification.verified ? "SII Verified" : "SII Pending"}
-            </span>
-          ) : null}
         </div>
-
-        {gateProcessing?.active ? (
-          <div className="system-gate__upload-progress-wrap" aria-label="Processing status">
-            <div className="system-gate__upload-progress">
-              <span style={{ width: `${Math.max(1, Math.min(99, Number(gateProcessing.percent) || 1))}%` }} />
-            </div>
-            <span className="system-gate__upload-progress-label">{String(gateProcessing.label || "Processing").slice(0, 64)}</span>
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          className="system-gate__settings"
-          aria-label="Open view settings"
-          onClick={() => setSettingsOpen((v) => !v)}
-        >
-          MENU
-        </button>
 
         <div className="system-gate__center" style={{ cursor: "default" }}>
           <SystemOrbPanel
@@ -154,61 +123,14 @@ export default function SystemBodyWorkspace({
             compactPreview
           />
           <p className="system-gate__state">{interpretation.facility_state}</p>
-          <p className="system-gate__timestamp">{lastUpdate || connectionStatus || EMPTY_VALUE}</p>
         </div>
 
-        {settingsOpen ? (
-          <aside className="system-gate__settings-panel" aria-label="View settings panel">
-            <ul>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("data-connections")}>
-                  Data connections
-                </button>
-              </li>
-              <li><span className="system-gate__settings-message">Data profile: {domainModeLabel(domainMode, domainDetection)}</span></li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => openWorkspace("historical-replay")}>
-                  Open replay workspace
-                </button>
-              </li>
-            </ul>
-          </aside>
-        ) : null}
-
-        <section className="panel" aria-label="System state header">
-          <header className="panel-header"><h3>System State</h3></header>
+        <section className="panel" aria-label="System body home summary">
           <div className="panel-body">
             <ul className="onboarding-summary">
-              <li><span>Facility State</span><strong>{interpretation.facility_state}</strong></li>
+              <li><span>Current State</span><strong>{interpretation.facility_state}</strong></li>
+              <li><span>Main Concern</span><strong>{interpretation.relationship_summary.text}</strong></li>
               <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
-              <li><span>Instability Index</span><strong>{interpretation.instability_index}</strong></li>
-              <li><span>Escalation Window</span><strong>{interpretation.escalation_window}</strong></li>
-              <li><span>Primary Driver</span><strong>{interpretation.primary_driver}</strong></li>
-            </ul>
-          </div>
-        </section>
-
-        <section className="panel" aria-label="Relationship summary">
-          <header className="panel-header"><h3>Relationship Summary</h3></header>
-          <div className="panel-body">
-            <p>{interpretation.relationship_summary.text}</p>
-            <ul className="onboarding-summary">
-              <li><span>Divergence Severity</span><strong>{interpretation.relationship_summary.divergence_severity}</strong></li>
-              <li><span>Confidence</span><strong>{interpretation.relationship_summary.confidence}</strong></li>
-              <li><span>Affected Systems</span><strong>{interpretation.relationship_summary.affected_systems.join(", ") || EMPTY_VALUE}</strong></li>
-            </ul>
-          </div>
-        </section>
-
-        <section className="panel" aria-label="Progressive timeline">
-          <header className="panel-header"><h3>Timeline</h3></header>
-          <div className="panel-body">
-            <ul className="system-body-timeline-list">
-              {interpretation.relationship_events.map((event) => (
-                <li key={`${event.stage}-${event.summary}`}>
-                  <span>{event.stage}:</span> <strong>{event.summary}</strong>
-                </li>
-              ))}
             </ul>
           </div>
         </section>
@@ -217,94 +139,12 @@ export default function SystemBodyWorkspace({
           <button
             type="button"
             className="command-button"
-            onClick={() => setInvestigationOpen((v) => !v)}
-            aria-expanded={investigationOpen}
-            aria-controls="investigation-view"
+            onClick={openInvestigationWorkspace}
           >
-            {investigationOpen ? "Hide Investigation" : "Investigate"}
+            Investigate
           </button>
         </div>
 
-        {investigationOpen ? (
-          <section id="investigation-view" className="panel" aria-label="Investigation view">
-            <header className="panel-header"><h3>Investigation</h3></header>
-            <div className="panel-body">
-              <ul className="onboarding-summary">
-                <li><span>Subsystem Relationship Drift</span><strong>{interpretation.investigation.relationship_drift}</strong></li>
-                <li><span>Coupling Degradation</span><strong>{interpretation.investigation.coupling_degradation}</strong></li>
-                <li><span>Instability Propagation</span><strong>{interpretation.investigation.instability_propagation}</strong></li>
-                <li><span>Supporting Signals</span><strong>{interpretation.supporting_signals.join(", ") || EMPTY_VALUE}</strong></li>
-                <li><span>Evidence Reasoning</span><strong>{interpretation.investigation.evidence_reasoning}</strong></li>
-              </ul>
-
-              <div style={{ marginTop: "0.8rem" }}>
-                <button
-                  type="button"
-                  className="secondary-command-button"
-                  onClick={() => setForensicOpen((v) => !v)}
-                  aria-expanded={forensicOpen}
-                  aria-controls="forensic-view"
-                >
-                  {forensicOpen ? "Hide Forensic Mode" : "Forensic Mode"}
-                </button>
-              </div>
-
-              {forensicOpen ? (
-                <section id="forensic-view" style={{ marginTop: "0.8rem" }}>
-                  <ul className="onboarding-summary">
-                    <li><span>Correlation Matrices</span><strong>{interpretation.forensic.correlation_matrices}</strong></li>
-                    <li><span>Temporal Relationship Geometry</span><strong>{interpretation.forensic.temporal_relationship_geometry}</strong></li>
-                    <li><span>Evidence Trace</span><strong>{interpretation.forensic.evidence_trace}</strong></li>
-                    <li><span>Confidence Lineage</span><strong>{interpretation.forensic.confidence_lineage}</strong></li>
-                    <li><span>Historical Similarity</span><strong>{interpretation.forensic.historical_similarity}</strong></li>
-                  </ul>
-
-                  <div style={{ marginTop: "0.8rem" }}>
-                    <button
-                      type="button"
-                      className="secondary-command-button"
-                      onClick={() => setDebugOpen((v) => !v)}
-                      aria-expanded={debugOpen}
-                      aria-controls="forensic-debug-view"
-                    >
-                      {debugOpen ? "Hide Developer Debug" : "Developer Debug"}
-                    </button>
-                  </div>
-
-                  {debugOpen ? (
-                    <section id="forensic-debug-view" style={{ marginTop: "0.8rem" }} aria-label="Forensic debug fields">
-                      <ul className="onboarding-summary">
-                        <li><span>Source Used</span><strong>{interpretation.debug.source_used}</strong></li>
-                        <li><span>Raw Facility Inputs</span><strong>{interpretation.debug.raw_facility_inputs}</strong></li>
-                        <li><span>Raw Confidence Inputs</span><strong>{interpretation.debug.raw_confidence_inputs}</strong></li>
-                        <li><span>Raw Instability Inputs</span><strong>{interpretation.debug.raw_instability_inputs}</strong></li>
-                        <li><span>Missing Expected Fields</span><strong>{interpretation.debug.missing_expected_fields}</strong></li>
-                        <li><span>Fallback Values Used</span><strong>{interpretation.debug.fallback_values_used}</strong></li>
-                      </ul>
-                    </section>
-                  ) : null}
-                </section>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="panel" aria-label="Evidence panel">
-          <header className="panel-header"><h3>Evidence</h3></header>
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Evidence Packet ID</span><strong>{interpretation.evidence.packet_id}</strong></li>
-              <li><span>Filename</span><strong>{interpretation.evidence.filename}</strong></li>
-              <li><span>Rows / Columns</span><strong>{interpretation.evidence.rows_columns}</strong></li>
-              <li><span>Timestamp Coverage</span><strong>{interpretation.evidence.timestamp_coverage}</strong></li>
-              <li><span>Replay Frames</span><strong>{interpretation.evidence.replay_frames}</strong></li>
-              <li><span>Processing Trace</span><strong>{interpretation.evidence.processing_trace}</strong></li>
-              <li><span>Relationship Snapshot Archived</span><strong>{interpretation.evidence.relationship_snapshot_archived}</strong></li>
-              <li><span>Operator Actions Preserved</span><strong>{interpretation.evidence.operator_actions_preserved}</strong></li>
-              <li><span>Confidence Trace Stored</span><strong>{interpretation.evidence.confidence_trace_stored}</strong></li>
-            </ul>
-          </div>
-        </section>
       </section>
     </PageContainer>
   );
@@ -353,9 +193,7 @@ function mapBackendSystemInterpretation(contract) {
     },
     supporting_signals: Array.isArray(divergence.affected_systems) ? divergence.affected_systems : [],
     relationship_summary: {
-      text: Array.isArray(divergence.top_relationship_changes) && divergence.top_relationship_changes.length
-        ? String(divergence.top_relationship_changes[0])
-        : String(value.state_derivation_reason || "System relationships remain coherent with no active divergence."),
+      text: relationshipSummaryText(divergence, value),
       divergence_severity: String(divergence.severity || "contained"),
       confidence: String(divergence.confidence || value.confidence || EMPTY_VALUE),
       affected_systems: Array.isArray(divergence.affected_systems) ? divergence.affected_systems : [],
@@ -748,6 +586,18 @@ function buildProcessingTrace(resolvedResult, latestUploadSnapshot) {
   return status || EMPTY_VALUE;
 }
 
+function relationshipSummaryText(divergence, value) {
+  const changes = Array.isArray(divergence?.top_relationship_changes) ? divergence.top_relationship_changes : [];
+  if (changes.length > 0) {
+    const first = changes[0];
+    if (first && typeof first === "object") {
+      return String(first.summary || first.relationship || value?.state_derivation_reason || "Relationship drift detected.");
+    }
+    return String(first);
+  }
+  return String(value?.state_derivation_reason || "System relationships remain coherent with no active divergence.");
+}
+
 function stringifyForensic(value) {
   if (value === null || value === undefined || value === "") return EMPTY_VALUE;
   if (typeof value === "string") return value;
@@ -805,18 +655,6 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
     return { label: "Connection degraded", tone: "degraded" };
   }
   return { label: "Neraium online", tone: "online" };
-}
-
-function domainModeLabel(domainMode, domainDetection) {
-  const source = String(domainDetection?.source ?? "").toLowerCase();
-  const confidence = Number(domainDetection?.confidence ?? 0);
-  if (source === "unclassified" || source === "default") return "Unclassified";
-  if (source !== "upload_shape") return "Auto-detected";
-  if (confidence > 0 && confidence < 0.65) return "Uncertain";
-  const normalized = String(domainMode ?? "").trim().toLowerCase();
-  if (normalized === "cultivation") return "Cultivation";
-  if (normalized === "aquatic") return "Aquatic";
-  return "Uncertain";
 }
 
 void EXECUTIVE_STATES;
