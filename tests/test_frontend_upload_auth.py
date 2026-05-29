@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
 WORKSPACES_CONFIG = ROOT / "frontend" / "src" / "config" / "workspaces.js"
 DATA_CONNECTIONS_WORKSPACE = ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx"
+SYSTEM_BODY_WORKSPACE = ROOT / "frontend" / "src" / "components" / "workspaces" / "SystemBody" / "SystemBodyWorkspace.jsx"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
 UPLOAD_FLOW = ROOT / "frontend" / "src" / "viewModels" / "uploadFlow.js"
 UPLOAD_STATE = ROOT / "frontend" / "src" / "viewModels" / "uploadState.js"
@@ -152,6 +153,40 @@ def test_frontend_uses_backend_latest_upload_without_local_cache_override() -> N
     assert "const [latestUploadResult, setLatestUploadResult] = useState(null);" in source
     assert "const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {" in source
     assert "window.localStorage" not in source
+
+
+def test_system_body_uses_backend_system_interpretation_when_present() -> None:
+    source = read_frontend(SYSTEM_BODY_WORKSPACE)
+
+    assert "const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation" in source
+    assert "const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);" in source
+    assert "if (mappedBackendInterpretation) {" in source
+    assert "return mappedBackendInterpretation;" in source
+
+
+def test_system_body_fallback_is_neutral_without_semantic_derivation() -> None:
+    source = read_frontend(SYSTEM_BODY_WORKSPACE)
+
+    assert '"No Active Session"' in source
+    assert '"Awaiting Interpretation"' in source
+    assert '"Processing Upload"' in source
+    assert '"Interpretation Unavailable"' in source
+
+    assert "compoundSignals" not in source
+    assert "normalizeSeverity(" not in source
+    assert "formatIndex(" not in source
+    assert "relationshipChanges.length > 0" not in source
+    assert "dominantPaths.length > 0" not in source
+
+
+def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
+    source = read_frontend(SYSTEM_BODY_WORKSPACE)
+
+    assert "facility_state: String(value.facility_state_label" in source
+    assert "confidence: String(value.confidence" in source
+    assert "instability_index: Number.isFinite(Number(value.instability_index))" in source
+    assert "escalation_window: String(value.escalation_window" in source
+    assert "coupling_degradation: String(value.propagation_scope" in source
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:

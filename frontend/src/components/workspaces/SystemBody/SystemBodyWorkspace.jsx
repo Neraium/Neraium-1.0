@@ -270,6 +270,7 @@ function mapBackendSystemInterpretation(contract) {
 }
 
 export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame = null, fallback = {} }) {
+  void latestReplayFrame;
   const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation
     ?? latestUploadResult?.system_interpretation
     ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
@@ -279,351 +280,74 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     return mappedBackendInterpretation;
   }
 
-  const resolvedResult = (latestUploadResult?.latest_result && typeof latestUploadResult.latest_result === "object")
-    ? latestUploadResult.latest_result
-    : ((latestUploadResult?.latestResult && typeof latestUploadResult.latestResult === "object")
-      ? latestUploadResult.latestResult
-      : latestUploadResult);
-
-  const intelligence = resolvedResult?.sii_intelligence ?? {};
-  const replayTimeline = intelligence?.replay_timeline?.timeline ?? resolvedResult?.replay_timeline?.timeline ?? [];
-  const frame = latestReplayFrame && typeof latestReplayFrame === "object"
-    ? latestReplayFrame
-    : (Array.isArray(replayTimeline) && replayTimeline.length ? replayTimeline[replayTimeline.length - 1] : null);
-
-  const replayState = frame?.cognition_state ?? {};
-  const topology = frame?.topology_state ?? {};
-  const propagation = frame?.propagation_state ?? {};
-  const evidenceState = frame?.evidence_state ?? {};
-  const relationshipChanges = Array.isArray(frame?.relationship_changes) ? frame.relationship_changes.filter(Boolean) : [];
-  const dominantPaths = Array.isArray(propagation?.dominant_paths) ? propagation.dominant_paths.filter(Boolean) : [];
-
-  const source_used = resolvedResult ? "upload" : (liveSnapshot ? "live" : "none");
-  const rawFacilityInputs = [
-    replayState?.facility_state,
-    intelligence?.facility_state,
-    resolvedResult?.operating_state,
-    fallback?.stateLabel,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== "");
-  const rawConfidenceInputs = [
-    evidenceState?.corroboration_strength,
-    frame?.confidence_tier,
-    replayState?.confidence_tier,
-    intelligence?.telemetry_profile_confidence,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== "");
-  const rawInstabilityInputs = [
-    frame?.instability_score,
-    topology?.instability_score,
-    intelligence?.instability_index,
-    resolvedResult?.emerging_instability?.instability_score,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== "");
-
-  const hasData = Boolean(
-    resolvedResult
-    || latestUploadSnapshot?.last_filename
-    || latestUploadSnapshot?.latest_result
-    || liveSnapshot?.latestUploadResult
-    || liveSnapshot?.relationshipRows?.length,
-  );
-
-  if (!hasData || fallback?.isEmptyStructuralState) {
-    return {
-      facility_state: "No Active Session",
-      confidence: "Calm",
-      instability_index: "0%",
-      escalation_window: "Awaiting telemetry session",
-      primary_driver: "None",
-      relationship_events: [
-        { stage: "onset", summary: "No active telemetry session." },
-        { stage: "progression", summary: "Upload or connect a source to begin interpretation." },
-        { stage: "escalation", summary: "Escalation tracking starts after first valid session." },
-      ],
-      evidence: {
-        packet_id: EMPTY_VALUE,
-        filename: EMPTY_VALUE,
-        rows_columns: EMPTY_VALUE,
-        timestamp_coverage: EMPTY_VALUE,
-        replay_frames: EMPTY_VALUE,
-        processing_trace: EMPTY_VALUE,
-        relationship_snapshot_archived: "no",
-        operator_actions_preserved: "no",
-        confidence_trace_stored: "no",
-      },
-      forecasts: { escalation_window: "Awaiting telemetry session", projected_state: "No Active Session" },
-      supporting_signals: [],
-      relationship_summary: {
-        text: "No active telemetry session is loaded.",
-        divergence_severity: "contained",
-        confidence: "Calm",
-        affected_systems: ["None"],
-      },
-      investigation: {
-        relationship_drift: "No active drift path.",
-        coupling_degradation: "No active coupling degradation.",
-        instability_propagation: "No propagation state available.",
-        evidence_reasoning: "Evidence reasoning will appear after first processed session.",
-      },
-      forensic: {
-        correlation_matrices: EMPTY_VALUE,
-        temporal_relationship_geometry: EMPTY_VALUE,
-        evidence_trace: EMPTY_VALUE,
-        confidence_lineage: EMPTY_VALUE,
-        historical_similarity: EMPTY_VALUE,
-      },
-      debug: {
-        source_used: "none",
-        raw_facility_inputs: EMPTY_VALUE,
-        raw_confidence_inputs: EMPTY_VALUE,
-        raw_instability_inputs: EMPTY_VALUE,
-        missing_expected_fields: "latestUploadSnapshot, latestUploadResult, liveSnapshot",
-        fallback_values_used: "No Active Session defaults",
-      },
-    };
-  }
-
-  const instabilityRaw = firstPresent(
-    frame?.instability_score,
-    topology?.instability_score,
-    intelligence?.instability_index,
-    resolvedResult?.emerging_instability?.instability_score,
-    0,
-  );
-  const instability_index = formatIndex(instabilityRaw);
-  const instabilityNumeric = Number(String(instability_index).replace("%", ""));
-
-  const compoundSignals = countTruthy([
-    dominantPaths.length > 1,
-    relationshipChanges.length > 2,
-    Number(frame?.drift_velocity ?? 0) > 0.35,
-    String(replayState?.canonical_phase ?? "").toLowerCase().includes("degrad"),
-  ]);
-
-  let facility_state = "Stable";
-  const normalizedRawState = String(
-    replayState?.facility_state
-    ?? intelligence?.facility_state
-    ?? resolvedResult?.operating_state
-    ?? fallback?.stateLabel
+  const uploadStatus = String(
+    latestUploadSnapshot?.status
+    ?? latestUploadSnapshot?.processing_state
+    ?? latestUploadResult?.processing_state
     ?? "",
   ).toLowerCase();
+  const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "generating_replay", "cognition_ready", "writing_state"];
+  const hasUploadInFlight = processingLike.some((token) => uploadStatus.includes(token));
 
-  if (normalizedRawState.includes("recovery")) {
-    facility_state = "Recovery State";
-  } else if (compoundSignals >= 3 || instabilityNumeric >= 75) {
-    facility_state = "Cascade Risk";
-  } else if (compoundSignals >= 2 || instabilityNumeric >= 55) {
-    facility_state = "Structural Degradation";
-  } else if (relationshipChanges.length > 0 || dominantPaths.length > 0 || instabilityNumeric >= 25) {
-    facility_state = "Relationship Drift";
-  } else if (String(latestUploadSnapshot?.status ?? "").toLowerCase().includes("process") || fallback?.isLoading) {
-    facility_state = "Transitional";
-  }
-
-  const confidence = String(
-    evidenceState?.corroboration_strength
-    ?? frame?.confidence_tier
-    ?? replayState?.confidence_tier
-    ?? intelligence?.telemetry_profile_confidence
-    ?? EMPTY_VALUE,
-  ).replaceAll("_", " ");
-
-  const escalation_window = String(
-    intelligence?.projected_time_to_failure
-    ?? intelligence?.projected_time_to_failure_hours
-    ?? resolvedResult?.projected_time_to_failure
-    ?? latestUploadSnapshot?.last_processed_at
-    ?? fallback?.lastUpdate
-    ?? EMPTY_VALUE,
-  );
-
-  const primary_driver = cleanText(
-    frame?.affected_subsystem
-    ?? frame?.affected_area
-    ?? fallback?.focusLabel
-    ?? intelligence?.primary_room
-    ?? resolvedResult?.primary_room
-  ) || "Facility relationship scope";
-
-  const relationship_summary_text = relationshipChanges.length
-    ? relationshipChanges[0]
-    : dominantPaths.length
-      ? `Relationship divergence is propagating through ${dominantPaths.slice(0, 2).join(" and ")}.`
-      : (cleanText(fallback?.primaryMessage) || "System relationships remain coherent with no active divergence.");
-
-  const relationship_events = buildTimelineEvents({ replayTimeline, frame, relationshipChanges, dominantPaths, latestUploadSnapshot, resolvedResult });
-
-  const rowCount = firstPresent(resolvedResult?.row_count, resolvedResult?.rows_processed, latestUploadSnapshot?.rows_processed, 0);
-  const columnCount = firstPresent(resolvedResult?.column_count, resolvedResult?.columns_detected, latestUploadSnapshot?.columns_detected, 0);
-  const timestampCoverage = buildTimestampCoverage(resolvedResult, frame);
-  const replayFrames = firstPresent(
-    frame?.total_frames,
-    latestUploadSnapshot?.replay_frame_count,
-    Array.isArray(replayTimeline) ? replayTimeline.length : 0,
-    0,
-  );
-  const processingTrace = buildProcessingTrace(resolvedResult, latestUploadSnapshot);
-
-  const packetId = String(
-    resolvedResult?.evidence_packet?.packet_id
-    ?? resolvedResult?.decision_integrity?.run_id
-    ?? resolvedResult?.job_id
-    ?? latestUploadSnapshot?.history?.[0]?.job_id
-    ?? EMPTY_VALUE,
-  );
-
-  const supporting_signals = [
-    ...(Array.isArray(intelligence?.operational_signal_profile_signals) ? intelligence.operational_signal_profile_signals : []),
-    ...(Array.isArray(intelligence?.telemetry_profile_signals) ? intelligence.telemetry_profile_signals : []),
-  ].filter(Boolean).slice(0, 8);
-
-  const missingExpectedFields = [
-    !resolvedResult?.filename && !latestUploadSnapshot?.last_filename ? "filename" : null,
-    !resolvedResult?.row_count && !resolvedResult?.rows_processed && !latestUploadSnapshot?.rows_processed ? "row_count" : null,
-    !resolvedResult?.column_count && !resolvedResult?.columns_detected && !latestUploadSnapshot?.columns_detected ? "column_count" : null,
-    !frame && !(Array.isArray(replayTimeline) && replayTimeline.length) ? "replay_timeline" : null,
-    !rawConfidenceInputs.length ? "confidence_inputs" : null,
-    !rawInstabilityInputs.length ? "instability_inputs" : null,
-  ].filter(Boolean);
-
-  const fallbackValuesUsed = [
-    facility_state === "Stable" && !rawFacilityInputs.length ? "facility_state_default_stable" : null,
-    confidence === EMPTY_VALUE ? "confidence_empty_value" : null,
-    instability_index === "0%" && !rawInstabilityInputs.length ? "instability_default_zero" : null,
-    relationship_events[2]?.summary?.includes("Current escalation trajectory") ? "timeline_metadata_fallback" : null,
-  ].filter(Boolean);
+  const fallbackState = hasUploadInFlight
+    ? "Processing Upload"
+    : (fallback?.isEmptyStructuralState ? "No Active Session" : "Awaiting Interpretation");
 
   return {
-    facility_state,
-    confidence: confidence || EMPTY_VALUE,
-    instability_index,
-    escalation_window,
-    primary_driver,
-    relationship_events,
+    facility_state: fallbackState,
+    confidence: "Interpretation Unavailable",
+    instability_index: "Interpretation Unavailable",
+    escalation_window: "Interpretation Unavailable",
+    primary_driver: "Interpretation Unavailable",
+    relationship_events: [
+      { stage: "onset", summary: fallbackState },
+      { stage: "progression", summary: "Awaiting backend system interpretation." },
+      { stage: "escalation", summary: "Interpretation Unavailable" },
+    ],
     evidence: {
-      packet_id: packetId,
-      filename: String(resolvedResult?.filename ?? latestUploadSnapshot?.last_filename ?? EMPTY_VALUE),
-      rows_columns: `${rowCount} rows / ${columnCount} columns`,
-      timestamp_coverage: timestampCoverage,
-      replay_frames: String(replayFrames),
-      processing_trace: processingTrace,
-      relationship_snapshot_archived: replayFrames > 0 ? "yes" : "partial",
-      operator_actions_preserved: resolvedResult?.decision_integrity ? "yes" : "unknown",
-      confidence_trace_stored: confidence && confidence !== EMPTY_VALUE ? "yes" : "partial",
+      packet_id: EMPTY_VALUE,
+      filename: EMPTY_VALUE,
+      rows_columns: EMPTY_VALUE,
+      timestamp_coverage: EMPTY_VALUE,
+      replay_frames: EMPTY_VALUE,
+      processing_trace: EMPTY_VALUE,
+      relationship_snapshot_archived: "unknown",
+      operator_actions_preserved: "unknown",
+      confidence_trace_stored: "unknown",
     },
     forecasts: {
-      escalation_window,
-      projected_state: facility_state,
+      escalation_window: "Interpretation Unavailable",
+      projected_state: fallbackState,
     },
-    supporting_signals,
+    supporting_signals: [],
     relationship_summary: {
-      text: relationship_summary_text,
-      divergence_severity: normalizeSeverity(instability_index),
-      confidence: confidence || EMPTY_VALUE,
-      affected_systems: [primary_driver],
+      text: hasUploadInFlight ? "Awaiting backend system interpretation." : "Interpretation Unavailable",
+      divergence_severity: "Interpretation Unavailable",
+      confidence: "Interpretation Unavailable",
+      affected_systems: [],
     },
     investigation: {
-      relationship_drift: relationshipChanges.slice(0, 3).join(" | ") || "No active drift relationships in current frame.",
-      coupling_degradation: dominantPaths.join(" | ") || "No active multi-path degradation detected.",
-      instability_propagation: relationship_events[2]?.summary || "Escalation path not established.",
-      evidence_reasoning: cleanText(fallback?.primaryMessage) || "Evidence reasoning derived from replay topology and corroboration state.",
+      relationship_drift: "Interpretation Unavailable",
+      coupling_degradation: "Interpretation Unavailable",
+      instability_propagation: "Interpretation Unavailable",
+      evidence_reasoning: "Interpretation Unavailable",
     },
     forensic: {
-      correlation_matrices: stringifyForensic(
-        frame?.correlation_matrix
-        ?? topology?.correlation_matrix
-        ?? resolvedResult?.processing_trace?.correlation_matrix,
-      ),
-      temporal_relationship_geometry: stringifyForensic(
-        frame?.temporal_geometry
-        ?? topology?.temporal_geometry
-        ?? propagation?.geometry,
-      ),
-      evidence_trace: stringifyForensic(
-        resolvedResult?.processing_trace
-        ?? resolvedResult?.decision_integrity
-        ?? resolvedResult?.evidence_packet,
-      ),
-      confidence_lineage: stringifyForensic(
-        evidenceState?.lineage_events
-        ?? evidenceState?.confidence_lineage
-        ?? resolvedResult?.processing_trace?.confidence_lineage,
-      ),
-      historical_similarity: stringifyForensic(
-        intelligence?.structural_memory?.memory_matches
-        ?? intelligence?.structural_memory?.retrieval_status
-        ?? resolvedResult?.processing_trace?.historical_similarity,
-      ),
+      correlation_matrices: EMPTY_VALUE,
+      temporal_relationship_geometry: EMPTY_VALUE,
+      evidence_trace: EMPTY_VALUE,
+      confidence_lineage: EMPTY_VALUE,
+      historical_similarity: EMPTY_VALUE,
     },
     debug: {
-      source_used,
-      raw_facility_inputs: rawFacilityInputs.length ? rawFacilityInputs.join(" | ") : EMPTY_VALUE,
-      raw_confidence_inputs: rawConfidenceInputs.length ? rawConfidenceInputs.join(" | ") : EMPTY_VALUE,
-      raw_instability_inputs: rawInstabilityInputs.length ? rawInstabilityInputs.join(" | ") : EMPTY_VALUE,
-      missing_expected_fields: missingExpectedFields.length ? missingExpectedFields.join(", ") : "none",
-      fallback_values_used: fallbackValuesUsed.length ? fallbackValuesUsed.join(", ") : "none",
+      source_used: "minimal_fallback",
+      raw_facility_inputs: EMPTY_VALUE,
+      raw_confidence_inputs: EMPTY_VALUE,
+      raw_instability_inputs: EMPTY_VALUE,
+      missing_expected_fields: "system_interpretation",
+      fallback_values_used: "minimal_neutral_fallback",
     },
   };
-}
-
-function buildTimelineEvents({ replayTimeline, frame, relationshipChanges, dominantPaths, latestUploadSnapshot, resolvedResult }) {
-  if (Array.isArray(replayTimeline) && replayTimeline.length > 0) {
-    const first = replayTimeline[0] ?? {};
-    const mid = replayTimeline[Math.floor(replayTimeline.length / 2)] ?? {};
-    const last = replayTimeline[replayTimeline.length - 1] ?? {};
-    return [
-      { stage: "onset", summary: summarizeReplayFrame(first) },
-      { stage: "progression", summary: summarizeReplayFrame(mid) },
-      { stage: "escalation", summary: summarizeReplayFrame(last) },
-    ];
-  }
-
-  return [
-    {
-      stage: "onset",
-      summary: String(resolvedResult?.timestamp_profile?.first_timestamp ?? latestUploadSnapshot?.created_at ?? "Initial telemetry window captured."),
-    },
-    {
-      stage: "progression",
-      summary: relationshipChanges[0] || dominantPaths[0] || "Structural relationships remained under review across processing windows.",
-    },
-    {
-      stage: "escalation",
-      summary: String(latestUploadSnapshot?.status ?? resolvedResult?.operating_state ?? frame?.cognition_state?.facility_state ?? "Current escalation trajectory under active evaluation."),
-    },
-  ];
-}
-
-function summarizeReplayFrame(frame) {
-  const state = String(frame?.cognition_state?.facility_state ?? frame?.facility_state ?? "").trim();
-  const change = Array.isArray(frame?.relationship_changes) && frame.relationship_changes.length ? frame.relationship_changes[0] : "";
-  const velocity = Number(frame?.drift_velocity);
-  if (change) return `${state || "State"}: ${change}`;
-  if (Number.isFinite(velocity)) return `${state || "State"}: drift velocity ${Math.round(velocity * 100) / 100}`;
-  return state || "Replay frame available.";
-}
-
-function buildTimestampCoverage(resolvedResult, frame) {
-  if (frame?.timestamp_start && frame?.timestamp_end) {
-    return `${frame.timestamp_start} to ${frame.timestamp_end}`;
-  }
-  const first = resolvedResult?.timestamp_profile?.first_timestamp;
-  const last = resolvedResult?.timestamp_profile?.last_timestamp;
-  if (first && last) return `${first} to ${last}`;
-  return EMPTY_VALUE;
-}
-
-function buildProcessingTrace(resolvedResult, latestUploadSnapshot) {
-  const trace = resolvedResult?.processing_trace;
-  if (trace && typeof trace === "object") {
-    return [
-      trace.sii_pipeline_ran ? "SII pipeline ran" : null,
-      trace.sii_completed ? "SII completed" : null,
-      Number.isFinite(Number(trace.rows_processed)) ? `${trace.rows_processed} rows processed` : null,
-      Number.isFinite(Number(trace.columns_analyzed)) ? `${trace.columns_analyzed} columns analyzed` : null,
-    ].filter(Boolean).join(" | ") || "Processing trace recorded";
-  }
-  const status = String(latestUploadSnapshot?.status ?? "").trim();
-  return status || EMPTY_VALUE;
 }
 
 function relationshipSummaryText(divergence, value) {
@@ -647,34 +371,6 @@ function stringifyForensic(value) {
     return entries.join(" | ") || EMPTY_VALUE;
   }
   return String(value);
-}
-
-function normalizeSeverity(instabilityIndex) {
-  const numeric = Number(String(instabilityIndex).replace("%", ""));
-  if (!Number.isFinite(numeric)) return EMPTY_VALUE;
-  if (numeric >= 75) return "high";
-  if (numeric >= 45) return "elevated";
-  return "contained";
-}
-
-function formatIndex(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "0%";
-  const normalized = Math.max(0, Math.min(100, number <= 1 ? number * 100 : number));
-  return `${Math.round(normalized)}%`;
-}
-
-function cleanText(value) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  return text && text !== EMPTY_VALUE ? text : "";
-}
-
-function firstPresent(...values) {
-  return values.find((value) => value !== null && value !== undefined && value !== "") ?? EMPTY_VALUE;
-}
-
-function countTruthy(values) {
-  return values.reduce((sum, value) => sum + (value ? 1 : 0), 0);
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
