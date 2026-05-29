@@ -35,6 +35,9 @@ export default function IntakeFlowPanel({
   const hasSelectedFiles = selectedFiles?.length > 0;
   const hasUploadError = uploadState === "error" || uploadState === "failed";
   const hasValidationError = uploadState === "validation_error";
+  const primaryProgressText = String(uploadJob?.progress_label || latestMessage || "").trim();
+  const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || "").trim();
+  const showSecondaryProgressText = secondaryProgressText && secondaryProgressText !== primaryProgressText;
 
   return (
     <>
@@ -91,8 +94,8 @@ export default function IntakeFlowPanel({
             </div>
           ) : null}
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
-            <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{uploadJob?.progress_label || latestMessage}</span>
-            <span>{propagationLabel || uploadStateMessage(uploadState)}</span>
+            <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span>
+            {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
             {visibleProgressPercent !== null && (
               <>
                 <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
