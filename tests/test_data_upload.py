@@ -1050,6 +1050,224 @@ def test_processing_helper_classifies_operational_network_profile() -> None:
     assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
 
 
+def test_relationship_baseline_stable_does_not_emit_top_changes() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,{50 + index},{100 + (2 * index)},{20 + (index % 3)}"
+        for index in range(30)
+    )
+    result = process_csv_content(
+        filename="stable-relationships.csv",
+        content=f"timestamp,temperature,humidity,noise\n{rows}".encode(),
+    )
+    write_latest_upload_result("stable-relationships", result)
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+    assert top_changes == []
+
+
+def test_relationship_baseline_drift_emits_evidence_backed_top_changes() -> None:
+    client = TestClient(create_app())
+    baseline_rows = [
+        f"2026-05-01T08:{index:02d}:00Z,{50 + index},{100 + (2 * index)},{200 + index}"
+        for index in range(21)
+    ]
+    recent_rows = [
+        f"2026-05-01T08:{21 + index:02d}:00Z,{71 + index},{142 - (2 * index)},{221 + index}"
+        for index in range(9)
+    ]
+    rows = "\n".join(baseline_rows + recent_rows)
+    result = process_csv_content(
+        filename="drift-relationships.csv",
+        content=f"timestamp,temperature,humidity,airflow\n{rows}".encode(),
+    )
+    write_latest_upload_result("drift-relationships", result)
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+
+    assert isinstance(top_changes, list) and top_changes
+    first = top_changes[0]
+    assert "summary" in first and "temperature" in first["summary"] and "humidity" in first["summary"]
+    assert isinstance(first.get("evidence_refs"), list)
+    columns = {ref.get("column") for ref in first["evidence_refs"] if isinstance(ref, dict)}
+    assert {"temperature", "humidity"}.issubset(columns)
+
+
+def test_relationship_baseline_ignores_weak_or_no_coupling() -> None:
+    client = TestClient(create_app())
+    values = [
+        (0, 7, 11),
+        (1, 3, 13),
+        (2, 9, 5),
+        (3, 2, 17),
+        (4, 8, 19),
+        (5, 1, 23),
+        (6, 6, 29),
+        (7, 4, 31),
+        (8, 10, 37),
+        (9, 5, 41),
+        (10, 11, 43),
+        (11, 0, 47),
+        (12, 12, 53),
+        (13, 14, 59),
+        (14, 13, 61),
+        (15, 15, 67),
+        (16, 16, 71),
+        (17, 18, 73),
+        (18, 17, 79),
+        (19, 19, 83),
+    ]
+    rows = "\n".join(
+        f"2026-05-01T08:{idx:02d}:00Z,{a},{b},{c}"
+        for idx, (a, b, c) in enumerate(values)
+    )
+    result = process_csv_content(
+        filename="weak-relationships.csv",
+        content=f"timestamp,signal_a,signal_b,signal_c\n{rows}".encode(),
+    )
+    write_latest_upload_result("weak-relationships", result)
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+    assert top_changes == []
+
+
+def test_relationship_drift_small_samples_yield_low_confidence() -> None:
+    client = TestClient(create_app())
+    payload = {
+        "job_id": "rel-small-low-confidence",
+        "filename": "rel-small.csv",
+        "row_count": 12,
+        "column_count": 3,
+        "baseline_analysis": {
+            "top_relationship_changes": [
+                {
+                    "relationship": "signal_a <-> signal_b",
+                    "baseline_correlation": 0.72,
+                    "recent_correlation": 0.42,
+                    "correlation_delta": 0.30,
+                    "coupling_strength": 0.72,
+                    "baseline_sample_size": 3,
+                    "recent_sample_size": 3,
+                    "evidence_refs": [],
+                    "summary": "Small sample relationship shift",
+                }
+            ]
+        },
+        "sii_intelligence": {
+            "facility_state": "Monitoring",
+            "replay_timeline": {
+                "timeline": [
+                    {
+                        "cognition_state": {"facility_state": "Monitoring", "canonical_phase": "baseline", "confidence_tier": "BASELINE_EVIDENCE"},
+                        "topology_state": {"instability_score": 0.05},
+                        "propagation_state": {"dominant_paths": []},
+                        "evidence_state": {"corroboration_strength": "MODERATE"},
+                        "relationship_changes": [],
+                        "timestamp_start": "2026-05-01T08:00:00Z",
+                        "timestamp_end": "2026-05-01T08:30:00Z",
+                    }
+                ]
+            },
+        },
+    }
+    write_latest_upload_result("rel-small-low-confidence", payload)
+    response = client.get("/api/data/latest-upload?include_persisted=1").json()
+    divergence = response["system_interpretation"]["relationship_divergence"]
+    assert divergence["confidence"] == "low"
+    assert float(divergence["confidence_score"]) < 45.0
+
+
+def test_relationship_drift_strong_baseline_high_delta_yields_high_confidence() -> None:
+    client = TestClient(create_app())
+    baseline_rows = [
+        f"2026-05-01T08:{index:02d}:00Z,{50 + index},{100 + (2 * index)},{200 + index}"
+        for index in range(28)
+    ]
+    recent_rows = [
+        f"2026-05-01T08:{28 + index:02d}:00Z,{78 + index},{155 - (3 * index)},{228 + index}"
+        for index in range(12)
+    ]
+    rows = "\n".join(baseline_rows + recent_rows)
+    result = process_csv_content(
+        filename="rel-strong-high-confidence.csv",
+        content=f"timestamp,temperature,humidity,airflow\n{rows}".encode(),
+    )
+    write_latest_upload_result("rel-strong-high-confidence", result)
+
+    response = client.get("/api/data/latest-upload?include_persisted=1").json()
+    divergence = response["system_interpretation"]["relationship_divergence"]
+    assert divergence["top_relationship_changes"]
+    assert divergence["confidence"] == "high"
+    assert float(divergence["confidence_score"]) >= 75.0
+    assert float(divergence["relationship_drift_score"]) >= 65.0
+
+
+def test_relationship_drift_multiple_changes_aggregate_scores_and_instability() -> None:
+    client = TestClient(create_app())
+    payload = {
+        "job_id": "rel-aggregate",
+        "filename": "rel-aggregate.csv",
+        "row_count": 30,
+        "column_count": 5,
+        "baseline_analysis": {
+            "top_relationship_changes": [
+                {
+                    "relationship": "a <-> b",
+                    "baseline_correlation": 0.91,
+                    "recent_correlation": 0.01,
+                    "correlation_delta": 0.90,
+                    "coupling_strength": 0.91,
+                    "baseline_sample_size": 24,
+                    "recent_sample_size": 12,
+                    "evidence_refs": [{"column": "a"}, {"column": "b"}],
+                    "summary": "a/b drift",
+                },
+                {
+                    "relationship": "c <-> d",
+                    "baseline_correlation": 0.78,
+                    "recent_correlation": 0.28,
+                    "correlation_delta": 0.50,
+                    "coupling_strength": 0.78,
+                    "baseline_sample_size": 24,
+                    "recent_sample_size": 12,
+                    "evidence_refs": [{"column": "c"}, {"column": "d"}],
+                    "summary": "c/d drift",
+                },
+            ]
+        },
+        "sii_intelligence": {
+            "facility_state": "Monitoring",
+            "replay_timeline": {
+                "timeline": [
+                    {
+                        "cognition_state": {"facility_state": "Monitoring", "canonical_phase": "baseline", "confidence_tier": "BASELINE_EVIDENCE"},
+                        "topology_state": {"instability_score": 0.1},
+                        "propagation_state": {"dominant_paths": []},
+                        "evidence_state": {"corroboration_strength": "MODERATE"},
+                        "relationship_changes": [],
+                        "timestamp_start": "2026-05-01T08:00:00Z",
+                        "timestamp_end": "2026-05-01T09:00:00Z",
+                    }
+                ]
+            },
+        },
+    }
+    write_latest_upload_result("rel-aggregate", payload)
+    response = client.get("/api/data/latest-upload?include_persisted=1").json()
+    interpretation = response["system_interpretation"]
+    divergence = interpretation["relationship_divergence"]
+
+    changes = divergence["top_relationship_changes"]
+    assert len(changes) == 2
+    expected_aggregate = round((float(changes[0]["relationship_drift_score"]) + float(changes[1]["relationship_drift_score"])) / 2.0, 4)
+    assert float(divergence["relationship_drift_score"]) == expected_aggregate
+    assert float(interpretation["instability_index"]) == expected_aggregate
+    assert "relationship_divergence.relationship_drift_score" in interpretation["engine_native_fields"]
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)

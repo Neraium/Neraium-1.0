@@ -118,7 +118,10 @@ def _timeline_events_from_frames(frames: list[dict], snapshot: dict, result: dic
             cognition = frame.get("cognition_state") or {}
             relationship_changes = frame.get("relationship_changes") or []
             if isinstance(relationship_changes, list) and relationship_changes:
-                return f"{cognition.get('facility_state', 'State')}: {relationship_changes[0]}"
+                first_change = relationship_changes[0]
+                if isinstance(first_change, dict):
+                    first_change = first_change.get("summary") or first_change.get("relationship") or ""
+                return f"{cognition.get('facility_state', 'State')}: {first_change}"
             drift_velocity = frame.get("drift_velocity")
             if drift_velocity is not None:
                 return f"{cognition.get('facility_state', 'State')}: drift velocity {round(float(drift_velocity), 3)}"
@@ -138,6 +141,107 @@ def _timeline_events_from_frames(frames: list[dict], snapshot: dict, result: dic
         {"stage": "escalation", "summary": str(snapshot.get("status") or result.get("operating_state") or "Current escalation trajectory under active evaluation.")},
     ]
 
+
+def _normalize_relationship_change_entries(replay_frame: dict[str, Any]) -> list[dict[str, Any]]:
+    changes = replay_frame.get("relationship_changes") if isinstance(replay_frame.get("relationship_changes"), list) else []
+    refs = replay_frame.get("relationship_change_evidence_refs") if isinstance(replay_frame.get("relationship_change_evidence_refs"), list) else []
+    normalized: list[dict[str, Any]] = []
+    for index, raw in enumerate(changes[:5]):
+        if isinstance(raw, dict):
+            entry = dict(raw)
+            entry.setdefault("summary", _to_text(entry.get("summary") or entry.get("relationship")))
+            entry.setdefault("evidence_refs", entry.get("evidence_refs") if isinstance(entry.get("evidence_refs"), list) else [])
+            normalized.append(entry)
+            continue
+        evidence_refs: list[dict[str, Any]] = []
+        if index < len(refs) and isinstance(refs[index], dict):
+            maybe_refs = refs[index].get("evidence_refs")
+            if isinstance(maybe_refs, list):
+                evidence_refs = maybe_refs
+        normalized.append({"summary": _to_text(raw), "evidence_refs": evidence_refs})
+    return normalized
+
+
+
+def _clamp_score(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    return max(low, min(high, float(value)))
+
+
+def _severity_from_score(score: float) -> str:
+    if score >= 85:
+        return "critical"
+    if score >= 65:
+        return "high"
+    if score >= 35:
+        return "elevated"
+    return "contained"
+
+
+def _confidence_label(score: float) -> str:
+    if score >= 75:
+        return "high"
+    if score >= 45:
+        return "moderate"
+    return "low"
+
+
+def _score_relationship_change(entry: dict[str, Any]) -> tuple[float, float, dict[str, Any]]:
+    baseline_n = int(entry.get("baseline_sample_size") or 0)
+    recent_n = int(entry.get("recent_sample_size") or 0)
+    coupling = abs(float(entry.get("coupling_strength") or 0.0))
+    delta = abs(float(entry.get("correlation_delta") or 0.0))
+    refs = entry.get("evidence_refs") if isinstance(entry.get("evidence_refs"), list) else []
+    refs_with_columns = [ref for ref in refs if isinstance(ref, dict) and _to_text(ref.get("column"))]
+    evidence_completeness = min(1.0, len(refs_with_columns) / 2.0)
+
+    baseline_factor = min(1.0, baseline_n / 24.0)
+    recent_factor = min(1.0, recent_n / 12.0)
+    coupling_factor = min(1.0, coupling)
+    delta_factor = min(1.0, delta)
+
+    confidence_score = _clamp_score(
+        (baseline_factor * 30.0)
+        + (recent_factor * 20.0)
+        + (coupling_factor * 20.0)
+        + (delta_factor * 20.0)
+        + (evidence_completeness * 10.0)
+    )
+    drift_score = _clamp_score((delta_factor * 70.0) + (coupling_factor * 30.0))
+
+    scored = dict(entry)
+    scored["relationship_drift_score"] = round(drift_score, 4)
+    scored["severity"] = _severity_from_score(drift_score)
+    scored["confidence_score"] = round(confidence_score, 4)
+    scored["confidence"] = _confidence_label(confidence_score)
+    return drift_score, confidence_score, scored
+
+
+def _build_relationship_divergence_metrics(result: dict[str, Any], replay_frame: dict[str, Any]) -> dict[str, Any]:
+    baseline_analysis = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
+    baseline_changes = baseline_analysis.get("top_relationship_changes") if isinstance(baseline_analysis.get("top_relationship_changes"), list) else []
+    raw_changes = baseline_changes if baseline_changes else _normalize_relationship_change_entries(replay_frame)
+
+    scored_changes: list[dict[str, Any]] = []
+    drift_scores: list[float] = []
+    confidence_scores: list[float] = []
+    for raw in raw_changes[:5]:
+        if not isinstance(raw, dict):
+            raw = {"summary": _to_text(raw), "evidence_refs": []}
+        drift_score, confidence_score, scored = _score_relationship_change(raw)
+        scored_changes.append(scored)
+        drift_scores.append(drift_score)
+        confidence_scores.append(confidence_score)
+
+    aggregate_drift_score = round(sum(drift_scores) / len(drift_scores), 4) if drift_scores else 0.0
+    aggregate_confidence_score = round(sum(confidence_scores) / len(confidence_scores), 4) if confidence_scores else 0.0
+    return {
+        "entries": scored_changes,
+        "aggregate_drift_score": aggregate_drift_score,
+        "aggregate_confidence_score": aggregate_confidence_score,
+        "severity": _severity_from_score(aggregate_drift_score),
+        "confidence": _confidence_label(aggregate_confidence_score),
+        "from_baseline_analysis": bool(baseline_changes),
+    }
 
 def _build_system_interpretation(result: dict | None, summary: dict | None, snapshot: dict | None, frames: list[dict]) -> dict:
     result = result if isinstance(result, dict) else {}
@@ -163,6 +267,11 @@ def _build_system_interpretation(result: dict | None, summary: dict | None, snap
     if raw_instability is None:
         raw_instability = ((result.get("emerging_instability") or {}).get("instability_score")) if isinstance(result.get("emerging_instability"), dict) else None
     instability_index = _normalize_instability_percent(raw_instability)
+    relationship_metrics = _build_relationship_divergence_metrics(result, replay_frame)
+    relationship_change_entries = relationship_metrics["entries"]
+    relationship_drift_score = relationship_metrics["aggregate_drift_score"]
+    if relationship_change_entries:
+        instability_index = round(max(instability_index, relationship_drift_score), 4)
 
     compound_components = [
         1 if len(dominant_paths) > 1 else 0,
@@ -330,16 +439,26 @@ def _build_system_interpretation(result: dict | None, summary: dict | None, snap
     replay_frame_count = len(frames or [])
 
     relationship_divergence = {
-        "severity": "high" if instability_index >= 75 else "elevated" if instability_index >= 45 else "contained",
-        "confidence": raw_confidence or "unknown",
+        "severity": relationship_metrics["severity"],
+        "confidence": relationship_metrics["confidence"],
+        "confidence_score": relationship_metrics["aggregate_confidence_score"],
+        "relationship_drift_score": relationship_drift_score,
         "affected_systems": [
             _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room"))
         ] if _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room")) else [],
-        "top_relationship_changes": relationship_changes[:5],
+        "top_relationship_changes": relationship_change_entries,
     }
 
-    if relationship_changes or dominant_paths:
+    if relationship_changes or dominant_paths or relationship_change_entries:
         engine_native_fields.append("relationship_divergence")
+        if relationship_metrics.get("from_baseline_analysis"):
+            engine_native_fields.extend([
+                "relationship_divergence.severity",
+                "relationship_divergence.confidence",
+                "relationship_divergence.relationship_drift_score",
+                "relationship_divergence.confidence_score",
+                "instability_index",
+            ])
     else:
         fallback_fields.append("relationship_divergence")
 
@@ -372,7 +491,7 @@ def _build_system_interpretation(result: dict | None, summary: dict | None, snap
     return {
         "facility_state_enum": enum,
         "facility_state_label": label,
-        "confidence": raw_confidence or "unknown",
+        "confidence": relationship_metrics["confidence"] if relationship_change_entries else (raw_confidence or "unknown"),
         "instability_index": instability_index,
         "instability_scale": "0-100",
         "primary_driver": _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_driver") or intelligence.get("primary_room") or result.get("primary_room") or "Facility relationship scope"),
