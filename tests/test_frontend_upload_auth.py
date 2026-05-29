@@ -184,9 +184,9 @@ def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
 
     assert "facility_state: String(value.facility_state_label" in source
     assert "confidence: String(value.confidence" in source
-    assert "instability_index: Number.isFinite(Number(value.instability_index))" in source
-    assert "escalation_window: String(value.escalation_window" in source
-    assert "coupling_degradation: String(value.propagation_scope" in source
+    assert "primary_driver: String(value.primary_driver" in source
+    assert "text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
+    assert "divergence_severity: String(divergence.severity" in source
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
