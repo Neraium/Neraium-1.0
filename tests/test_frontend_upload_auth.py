@@ -99,6 +99,17 @@ def test_object_errors_render_through_normalized_messages() -> None:
     assert "return JSON.stringify(error);" in source
 
 
+def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> None:
+    source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
+    panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
+
+    assert "uploadJob?.propagation_progress" in source
+    assert "propagationPercent" in source
+    assert "[uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent]" in source
+    assert "propagationLabel" in source
+    assert "propagationLabel || uploadJob?.progress_label || latestMessage" in panel
+
+
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
 

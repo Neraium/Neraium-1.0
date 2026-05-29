@@ -1070,6 +1070,15 @@ async function pollUploadStatus(jobId, statusUrl) {
   const selectedFileSize = formatFileSize(selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0));
   const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
   const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
+  const propagationPercent = Number.isFinite(uploadJob?.propagation_progress)
+    ? Math.min(100, Math.max(0, Number(uploadJob?.propagation_progress)))
+    : backendPercent;
+  const propagationLabel = String(
+    uploadJob?.propagation_label
+    ?? uploadJob?.progress_label
+    ?? uploadJob?.message
+    ?? "",
+  ).trim();
   const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
   const latestResultJobId = String(latestUploadResult?.job_id ?? "").trim();
   const latestResultMatchesCurrentJob = Boolean(currentJobId) && currentJobId === latestResultJobId;
@@ -1079,7 +1088,7 @@ async function pollUploadStatus(jobId, statusUrl) {
     || latestResultMatchesCurrentJob;
   const effectiveUploadState = backendComplete ? "complete" : normalizeUploadStatus(uploadState);
   const statusFallbackPercent = fallbackPercentFromStatus(uploadJob?.status ?? effectiveUploadState);
-  const preferredPercent = [uploadTransferPercent, backendPercent, statusFallbackPercent]
+  const preferredPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent]
     .filter((value) => Number.isFinite(value))
     .reduce((maxValue, value) => Math.max(maxValue, value), 0);
   const visibleProgressPercent = backendPercent >= 100 || effectiveUploadState === "complete"
@@ -1151,6 +1160,7 @@ async function pollUploadStatus(jobId, statusUrl) {
         uploadJob={uploadJob}
         latestMessage={latestMessage}
         visibleProgressPercent={visibleProgressPercent}
+        propagationLabel={propagationLabel}
         uploadTransfer={uploadTransfer}
         formatFileSize={formatFileSize}
         formatTransferSpeed={formatTransferSpeed}

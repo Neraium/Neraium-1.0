@@ -16,6 +16,7 @@ export default function IntakeFlowPanel({
   uploadJob,
   latestMessage,
   visibleProgressPercent,
+  propagationLabel,
   uploadTransfer,
   formatFileSize,
   formatTransferSpeed,
@@ -93,9 +94,12 @@ export default function IntakeFlowPanel({
             <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{uploadJob?.progress_label || latestMessage}</span>
             <span>{uploadJob?.job_id ? `Job ${uploadJob.job_id}` : uploadStateMessage(uploadState)}</span>
             {visibleProgressPercent !== null && (
-              <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
-                <span style={{ width: `${visibleProgressPercent}%` }} />
-              </div>
+              <>
+                <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                  <span style={{ width: `${visibleProgressPercent}%` }} />
+                </div>
+                <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
+              </>
             )}
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
             {batchResults.length > 0 && (

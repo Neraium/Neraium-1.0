@@ -359,6 +359,9 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     assert payload["job_id"] == job_id
     assert payload["status"] == "COMPLETE"
     assert payload["progress_label"] == "Telemetry processing complete."
+    assert payload["propagation_stage"] == "complete"
+    assert payload["propagation_progress"] == 100
+    assert payload["propagation_label"]
     assert payload["rows_processed"] == 8
     assert payload["columns_detected"] == 4
     assert payload["runner_used"] is True
@@ -387,7 +390,41 @@ def test_upload_status_can_return_queued_state() -> None:
     status = client.get(f"/api/data/upload-status/{job['job_id']}")
 
     assert status.status_code == 200
-    assert status.json()["status"] == "PENDING"
+    payload = status.json()
+    assert payload["status"] == "PENDING"
+    assert payload["propagation_stage"] in {"queued", "accepted"}
+    assert isinstance(payload.get("propagation_progress"), int)
+    assert payload.get("propagation_label")
+
+
+def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{75 + index * 0.1:.1f},{58 + index * 0.2:.1f}"
+        for index in range(18)
+    )
+    upload = post_csv(client, "propagation-progress.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    status_url = upload.json()["status_url"]
+
+    first = client.get(status_url)
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert first_payload["propagation_stage"] in {
+        "accepted",
+        "queued",
+        "parsing_telemetry",
+        "building_relationship_baselines",
+        "scoring_relationship_drift",
+        "building_propagation_model",
+        "generating_system_interpretation",
+        "complete",
+    }
+
+    terminal = wait_for_terminal_upload_status(client, status_url)
+    assert terminal["status"] == "COMPLETE"
+    assert terminal["propagation_stage"] == "complete"
+    assert terminal["propagation_progress"] == 100
+    assert terminal["propagation_label"] == "Telemetry processing complete."
 
 
 def test_upload_status_can_return_failed_state() -> None:

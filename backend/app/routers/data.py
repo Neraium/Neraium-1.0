@@ -617,6 +617,9 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "progress_label": "Telemetry processing complete.",
             "message": "Telemetry processing complete.",
             "error": None,
+            "propagation_stage": "complete",
+            "propagation_progress": 100,
+            "propagation_label": "Telemetry processing complete.",
             "state_backend": state_backend,
         }
     if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
@@ -633,6 +636,9 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "first_usable_available": False,
             "sii_completed": False,
             "message": "Upload accepted. Waiting for status propagation.",
+            "propagation_stage": "queued",
+            "propagation_progress": 12,
+            "propagation_label": "Upload queued.",
             "state_backend": state_backend,
         }
     return {
@@ -719,6 +725,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "percent": 0,
             "progress": 0,
             "message": "Upload accepted. Processing is queued.",
+            "propagation_stage": "queued",
+            "propagation_progress": 12,
+            "propagation_label": "Upload queued.",
             "runner_used": False if str(getattr(settings, "process_role", "")).lower() == "api" else True,
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,
@@ -815,6 +824,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "message": "Preparing telemetry intake. Upload received and queued for background processing.",
         "status_url": f"/api/data/upload-status/{summary.get('job_id')}",
         "file_size_bytes": len(content),
+        "propagation_stage": "accepted",
+        "propagation_progress": 5,
+        "propagation_label": "Upload received.",
     }
 
 
@@ -1130,6 +1142,63 @@ def queue_metrics() -> dict[str, int]:
     return runtime_queue_metrics()
 
 
+_PROPAGATION_STAGE_DEFAULTS = {
+    "accepted": (5, "Upload received."),
+    "queued": (12, "Upload queued."),
+    "parsing_telemetry": (25, "Parsing telemetry payload."),
+    "building_relationship_baselines": (45, "Building relationship baselines."),
+    "scoring_relationship_drift": (58, "Scoring relationship drift."),
+    "building_propagation_model": (72, "Building propagation model."),
+    "generating_system_interpretation": (88, "Generating system interpretation."),
+    "complete": (100, "Telemetry processing complete."),
+}
+
+
+def _infer_propagation_stage(payload: dict, normalized_status: str) -> str:
+    explicit = str(payload.get("propagation_stage") or "").strip().lower()
+    if explicit:
+        return explicit
+    processing_state = str(payload.get("processing_state") or "").strip().lower()
+    if processing_state in _PROPAGATION_STAGE_DEFAULTS:
+        return processing_state
+    message = f"{payload.get('progress_label') or ''} {payload.get('message') or ''}".lower()
+    if normalized_status == "COMPLETE":
+        return "complete"
+    if "baseline" in message:
+        return "building_relationship_baselines"
+    if "drift" in message or "scoring" in message or "running sii" in message:
+        return "scoring_relationship_drift"
+    if "propagation" in message or "replay" in message:
+        return "building_propagation_model"
+    if "interpretation" in message or "cognition" in message or "writing" in message:
+        return "generating_system_interpretation"
+    if "parsing" in message:
+        return "parsing_telemetry"
+    if normalized_status in {"PENDING", "QUEUED"}:
+        return "queued"
+    if normalized_status in {"PROCESSING", "RUNNING_SII"}:
+        return "parsing_telemetry"
+    return "queued"
+
+
+def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
+    stage = _infer_propagation_stage(raw_payload, normalized_status)
+    default_progress, default_label = _PROPAGATION_STAGE_DEFAULTS.get(stage, (0, "Processing telemetry."))
+    backend_progress = normalized.get("percent", normalized.get("progress", default_progress))
+    try:
+        backend_progress = int(max(0, min(100, float(backend_progress))))
+    except (TypeError, ValueError):
+        backend_progress = default_progress
+    if normalized_status == "COMPLETE":
+        backend_progress = 100
+        stage = "complete"
+        default_label = _PROPAGATION_STAGE_DEFAULTS["complete"][1]
+    normalized["propagation_stage"] = str(raw_payload.get("propagation_stage") or stage)
+    normalized["propagation_progress"] = int(raw_payload.get("propagation_progress") or backend_progress)
+    normalized["propagation_label"] = str(raw_payload.get("propagation_label") or normalized.get("progress_label") or normalized.get("message") or default_label)
+    return normalized
+
+
 def normalize_upload_status_payload(payload: dict) -> dict:
     raw_status = str(payload.get("status", "")).upper()
     status = {
@@ -1155,7 +1224,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["error_type"] = "sii_completion_missing"
             normalized["error"] = "sii_completion_missing"
             normalized["message"] = "SII completion artifacts are missing."
-            return normalized
+            return _with_propagation_fields(normalized, payload, "FAILED")
         normalized.setdefault("progress_label", "Telemetry processing complete.")
         normalized.setdefault("message", "Telemetry processing complete.")
         normalized.setdefault("error", None)
@@ -1169,7 +1238,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
                 "runner_errors": [],
             },
         )
-    return normalized
+    return _with_propagation_fields(normalized, payload, normalized.get("status", status))
 
 
 def snapshot_time(summary: dict) -> str:
