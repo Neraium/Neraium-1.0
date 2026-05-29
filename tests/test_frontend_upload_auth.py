@@ -235,3 +235,12 @@ def test_frontend_displays_queued_worker_visibility_messages() -> None:
     assert "Still queued • waiting for worker" in source
     assert "Possible stall • no worker update yet" in source
     assert "queuedWorkerDetail" in panel
+
+
+def test_queued_worker_starting_message_path_is_present() -> None:
+    source = read_frontend(ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx")
+    panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
+
+    assert "workerState === \"starting\"" in source
+    assert "Worker starting..." in source
+    assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" in panel

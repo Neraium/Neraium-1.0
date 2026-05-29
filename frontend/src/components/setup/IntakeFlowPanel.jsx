@@ -97,13 +97,13 @@ export default function IntakeFlowPanel({
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
             <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span>
             {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
+            {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
             {visibleProgressPercent !== null && (
               <>
                 <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
                   <span style={{ width: `${visibleProgressPercent}%` }} />
                 </div>
                 <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
-                {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
               </>
             )}
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
