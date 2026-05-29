@@ -313,6 +313,67 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
         )
 
 
+
+
+def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        if status:
+            connection.execute(
+                """
+                UPDATE upload_queue
+                SET status = ?, updated_at = ?
+                WHERE job_id = ?
+                """,
+                (status, now_iso(), job_id),
+            )
+        else:
+            connection.execute(
+                """
+                UPDATE upload_queue
+                SET updated_at = ?
+                WHERE job_id = ?
+                """,
+                (now_iso(), job_id),
+            )
+
+
+def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
+    init_runtime_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT job_id, status, attempts, last_error, created_at, updated_at, locked_at
+            FROM upload_queue
+            WHERE job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        position = None
+        if str(row["status"] or "").lower() == "pending":
+            pos_row = connection.execute(
+                """
+                SELECT COUNT(*) AS ahead
+                FROM upload_queue
+                WHERE status = 'pending'
+                  AND created_at < ?
+                """,
+                (row["created_at"],),
+            ).fetchone()
+            position = int((pos_row["ahead"] if pos_row else 0) or 0) + 1
+    return {
+        "job_id": row["job_id"],
+        "status": row["status"],
+        "attempts": row["attempts"],
+        "last_error": row["last_error"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "locked_at": row["locked_at"],
+        "queue_position": position,
+    }
+
 def queue_metrics() -> dict[str, int]: 
     init_runtime_db()
     with db_connection() as connection:

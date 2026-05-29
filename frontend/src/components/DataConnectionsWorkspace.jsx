@@ -1131,6 +1131,24 @@ async function pollUploadStatus(jobId, statusUrl) {
     ["Latest Replay Frames", String(latestReplayFrames)],
     ["Replay Source", String(uploadJob?.replay_source ?? latestUploadResult?.replay_timeline?.meta?.replay_source ?? latestUploadResult?.sii_intelligence?.replay_timeline?.meta?.replay_source ?? "unknown")],
   ];
+  const workerState = String(uploadJob?.worker_state || "").toLowerCase();
+  const workerLastSeenAt = String(uploadJob?.worker_last_seen_at || "").trim();
+  const nowMs = Date.now();
+  const lastSeenMs = workerLastSeenAt ? Date.parse(workerLastSeenAt) : NaN;
+  const lastSeenAgeSeconds = Number.isFinite(lastSeenMs) ? Math.max(0, Math.round((nowMs - lastSeenMs) / 1000)) : null;
+  const isQueuedState = ["queued", "pending"].includes(String(uploadJob?.processing_state ?? effectiveUploadState).toLowerCase());
+  const queuedWorkerDetail = !isQueuedState
+    ? ""
+    : workerState === "starting"
+      ? "Worker starting..."
+      : workerState === "running"
+        ? (Number.isFinite(lastSeenAgeSeconds)
+          ? `Worker active • last update ${lastSeenAgeSeconds}s ago`
+          : "Worker active")
+        : workerState === "stalled"
+          ? "Possible stall • no worker update yet"
+          : "Still queued • waiting for worker";
+
   const debugProgressValue = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
     ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
     : Number.isFinite(visibleProgressPercent)
@@ -1161,6 +1179,7 @@ async function pollUploadStatus(jobId, statusUrl) {
         latestMessage={latestMessage}
         visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
+        queuedWorkerDetail={queuedWorkerDetail}
         uploadTransfer={uploadTransfer}
         formatFileSize={formatFileSize}
         formatTransferSpeed={formatTransferSpeed}

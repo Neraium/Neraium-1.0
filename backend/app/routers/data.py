@@ -22,6 +22,7 @@ from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
+from app.services.runtime_db import read_upload_queue_job
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 
 router = APIRouter(prefix="/data", tags=["data"])
@@ -137,6 +138,57 @@ def _process_upload_inline(job_id: str, status: dict) -> dict:
         return failed
 
 
+
+
+def _parse_iso_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _with_worker_visibility(payload: dict, job_id: str) -> dict:
+    enriched = dict(payload or {})
+    now = datetime.now(timezone.utc)
+    enriched["status_checked_at"] = now.isoformat()
+
+    queue_entry = read_upload_queue_job(str(job_id))
+    queue_position = queue_entry.get("queue_position") if isinstance(queue_entry, dict) else None
+    enriched["queue_position"] = int(queue_position) if isinstance(queue_position, int) else None
+
+    created_at = _parse_iso_ts((queue_entry or {}).get("created_at") if isinstance(queue_entry, dict) else None)
+    queued_seconds = max(0, int((now - created_at).total_seconds())) if created_at else None
+    enriched["queued_seconds"] = queued_seconds
+
+    last_seen = _parse_iso_ts((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None)
+    worker_last_seen_at = last_seen.isoformat() if last_seen else None
+    enriched["worker_last_seen_at"] = worker_last_seen_at
+
+    state = "unknown"
+    status_text = str(enriched.get("status") or "").upper()
+    processing_state = str(enriched.get("processing_state") or "").lower()
+    queue_status = str((queue_entry or {}).get("status") or "").lower() if isinstance(queue_entry, dict) else ""
+
+    if status_text == "PENDING" and processing_state == "queued":
+        state = "starting"
+    if queue_status == "processing" or status_text in {"PROCESSING", "RUNNING_SII"} or processing_state in {"parsing_telemetry", "building_relationship_baselines", "scoring_relationship_drift", "building_propagation_model", "generating_system_interpretation", "complete"}:
+        state = "running"
+
+    if state == "starting" and queued_seconds is not None and queued_seconds > 15:
+        stale = True
+        if last_seen and (now - last_seen).total_seconds() <= 15:
+            stale = False
+        state = "stalled" if stale else "starting"
+
+    if not isinstance(queue_entry, dict):
+        state = "unknown" if status_text not in {"PENDING", "PROCESSING", "RUNNING_SII"} else "starting"
+
+    enriched["worker_state"] = state
+    return enriched
+
+
 def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
     status = upload_jobs.read_upload_status(job_id)
     if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
@@ -147,16 +199,16 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
     if status:
         normalized = normalize_upload_status_payload(status)
         normalized.setdefault("state_backend", state_backend)
-        return normalized
+        return _with_worker_visibility(normalized, job_id)
     latest_summary = upload_jobs.read_latest_upload_summary() or {}
     if str(latest_summary.get("job_id") or "") == str(job_id):
         normalized = normalize_upload_status_payload(latest_summary)
         normalized.setdefault("state_backend", state_backend)
-        return normalized
+        return _with_worker_visibility(normalized, job_id)
     latest_result = upload_jobs.read_upload_result_by_job_id(job_id)
     if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
         timeline = _extract_timeline(latest_result, job_id)
-        return {
+        return _with_worker_visibility({
             "job_id": job_id,
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "COMPLETE",
@@ -183,9 +235,9 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "propagation_progress": 100,
             "propagation_label": "Complete.",
             "state_backend": state_backend,
-        }
+        }, job_id)
     if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
-        return {
+        return _with_worker_visibility({
             "job_id": job_id,
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "PENDING",
@@ -202,8 +254,8 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "propagation_progress": 10,
             "propagation_label": "Queued.",
             "state_backend": state_backend,
-        }
-    return {
+        }, job_id)
+    return _with_worker_visibility({
         "job_id": job_id,
         "status": "NOT_FOUND",
         "processing_state": "missing",
@@ -215,7 +267,7 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
         "error": "upload_session_missing",
         "message": "Upload session expired or was not found.",
         "state_backend": state_backend,
-    }
+    }, job_id)
 
 
 @router.post("/upload", status_code=202)
@@ -389,6 +441,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "propagation_stage": "accepted",
         "propagation_progress": 5,
         "propagation_label": "Upload received.",
+        "worker_state": "starting",
+        "worker_last_seen_at": datetime.now(timezone.utc).isoformat(),
+        "queue_position": None,
+        "queued_seconds": 0,
+        "status_checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

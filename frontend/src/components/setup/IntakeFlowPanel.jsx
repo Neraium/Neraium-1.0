@@ -17,6 +17,7 @@ export default function IntakeFlowPanel({
   latestMessage,
   visibleProgressPercent,
   propagationLabel,
+  queuedWorkerDetail = "",
   uploadTransfer,
   formatFileSize,
   formatTransferSpeed,
@@ -102,6 +103,7 @@ export default function IntakeFlowPanel({
                   <span style={{ width: `${visibleProgressPercent}%` }} />
                 </div>
                 <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
+                {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
               </>
             )}
             {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}

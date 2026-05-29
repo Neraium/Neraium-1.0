@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
-from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job
+from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
 from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
 from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
 
@@ -1033,6 +1033,10 @@ def process_next_queued_upload_job() -> bool:
                 "propagation_label": "Parsing telemetry.",
             }
         )
+        try:
+            touch_upload_queue_job(job_id, "processing")
+        except Exception:
+            pass
         if path.suffix.lower() == ".json":
             result = process_json_payload(path.read_text(encoding="utf-8"), filename=metadata.get("filename") or path.name, job_id=job_id)
         else:

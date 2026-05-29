@@ -58,6 +58,11 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["propagation_stage"] == "accepted"
     assert payload["propagation_progress"] == 5
     assert payload["propagation_label"] == "Upload received."
+    assert payload["worker_state"] == "starting"
+    assert payload["worker_last_seen_at"]
+    assert payload["queue_position"] is None
+    assert payload["queued_seconds"] == 0
+    assert payload["status_checked_at"]
     assert payload["file_size_bytes"] > 0
 
 
@@ -398,6 +403,11 @@ def test_upload_status_can_return_queued_state() -> None:
     assert payload["propagation_stage"] in {"queued", "accepted"}
     assert payload["propagation_progress"] in {5, 10}
     assert payload.get("propagation_label") in {"Upload received.", "Queued."}
+    assert payload["worker_state"] in {"starting", "running", "stalled", "unknown"}
+    assert "worker_last_seen_at" in payload
+    assert "queue_position" in payload
+    assert "queued_seconds" in payload
+    assert payload["status_checked_at"]
 
 
 def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
@@ -1781,3 +1791,36 @@ def test_system_interpretation_endpoint_matches_latest_upload_active_result() ->
     assert payload["system_interpretation"] == latest_payload["system_interpretation"]
     assert payload["source"] == "latest_upload"
     assert isinstance(payload["generated_at"], str) and payload["generated_at"]
+
+
+def test_upload_status_marks_stalled_when_queued_without_heartbeat() -> None:
+    client = TestClient(create_app())
+    write_job({
+        "job_id": "stalled-job",
+        "filename": "stalled.csv",
+        "status": "queued",
+        "processing_state": "queued",
+        "progress_label": "Telemetry batch received. Processing is queued.",
+        "rows_processed": 0,
+        "columns_detected": 0,
+        "started_at": "2026-05-08T00:00:00+00:00",
+        "completed_at": None,
+        "error": None,
+    })
+
+    from app.services.runtime_db import db_connection
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE upload_queue
+            SET created_at = '2026-05-08T00:00:00+00:00', updated_at = '2026-05-08T00:00:00+00:00', status = 'pending'
+            WHERE job_id = ?
+            """,
+            ("stalled-job",),
+        )
+
+    status = client.get("/api/data/upload-status/stalled-job")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["worker_state"] in {"stalled", "starting"}
+    assert payload.get("queued_seconds") is None or payload["queued_seconds"] >= 0

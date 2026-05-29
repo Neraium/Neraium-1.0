@@ -224,3 +224,14 @@ def test_upload_normalization_uses_upload_contract_with_compat_exports() -> None
     assert "normalizeErrorMessage as normalizeUploadContractErrorMessage" in state_source
     assert "function normalizeUploadStatus(status)" in state_source
     assert "return normalizeUploadContractStatus(status);" in state_source
+
+
+def test_frontend_displays_queued_worker_visibility_messages() -> None:
+    source = read_frontend(ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx")
+    panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
+
+    assert "Worker starting..." in source
+    assert "Worker active • last update" in source
+    assert "Still queued • waiting for worker" in source
+    assert "Possible stall • no worker update yet" in source
+    assert "queuedWorkerDetail" in panel
