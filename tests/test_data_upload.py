@@ -150,6 +150,54 @@ def test_create_upload_job_enforces_streaming_size_limit() -> None:
         asyncio.run(create_upload_job(FakeUploadFile(), max_size_bytes=16))
 
 
+def test_upload_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
+    client = TestClient(create_app())
+
+    def slow_worker(_runtime_dir):
+        time.sleep(0.6)
+
+    monkeypatch.setattr("app.routers.data._run_upload_worker_for_runtime", slow_worker)
+
+    started = time.perf_counter()
+    response = post_csv(
+        client,
+        "quick-confirmation.csv",
+        "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58\n",
+    )
+    elapsed = time.perf_counter() - started
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["job_id"]
+    assert payload["status"] == "PENDING"
+    assert elapsed < 0.35
+
+
+def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
+    client = TestClient(create_app())
+
+    def slow_worker(_runtime_dir):
+        time.sleep(0.8)
+
+    monkeypatch.setattr("app.routers.data._run_upload_worker_for_runtime", slow_worker)
+
+    rows = "\n".join(
+        f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 7) * 0.1:.1f},{58 + (index % 9) * 0.2:.1f}"
+        for index in range(10_000)
+    )
+    csv_content = f"timestamp,room,temperature,humidity\n{rows}"
+
+    started = time.perf_counter()
+    response = post_csv(client, "large-quick-confirmation.csv", csv_content)
+    elapsed = time.perf_counter() - started
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["job_id"]
+    assert payload["status"] == "PENDING"
+    assert elapsed < 0.6
+
+
 def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
     settings = Settings(
         app_env="production",

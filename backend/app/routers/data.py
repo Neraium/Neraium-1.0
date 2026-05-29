@@ -79,6 +79,19 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
         logger.exception("upload_worker_dispatch_failed runtime_dir=%s", runtime_dir)
 
 
+def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
+    try:
+        worker = threading.Thread(
+            target=_run_upload_worker_for_runtime,
+            args=(runtime_dir,),
+            daemon=True,
+            name="upload-worker-dispatch",
+        )
+        worker.start()
+    except Exception:
+        logger.exception("upload_worker_thread_start_failed runtime_dir=%s", runtime_dir)
+
+
 def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
     replay = (
         (result or {}).get("replay_timeline")
@@ -716,7 +729,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
-        _run_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+        _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
         record_audit_event(
             actor=actor,
             action="upload.accepted",
