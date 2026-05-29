@@ -55,6 +55,9 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["filename"] == "sensor-export.csv"
     assert payload["message"] == "Preparing telemetry intake. Upload received and queued for background processing."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
+    assert payload["propagation_stage"] == "accepted"
+    assert payload["propagation_progress"] == 5
+    assert payload["propagation_label"] == "Upload received."
     assert payload["file_size_bytes"] > 0
 
 
@@ -393,8 +396,8 @@ def test_upload_status_can_return_queued_state() -> None:
     payload = status.json()
     assert payload["status"] == "PENDING"
     assert payload["propagation_stage"] in {"queued", "accepted"}
-    assert isinstance(payload.get("propagation_progress"), int)
-    assert payload.get("propagation_label")
+    assert payload["propagation_progress"] in {5, 10}
+    assert payload.get("propagation_label") in {"Upload received.", "Queued."}
 
 
 def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
@@ -424,7 +427,7 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
     assert terminal["status"] == "COMPLETE"
     assert terminal["propagation_stage"] == "complete"
     assert terminal["propagation_progress"] == 100
-    assert terminal["propagation_label"] == "Telemetry processing complete."
+    assert terminal["propagation_label"] == "Complete."
 
 
 def test_upload_status_can_return_failed_state() -> None:
@@ -446,6 +449,9 @@ def test_upload_status_can_return_failed_state() -> None:
     assert status.status_code == 200
     assert status.json()["status"] == "FAILED"
     assert status.json()["error"] == "Example failure"
+    assert "propagation_stage" in status.json()
+    assert "propagation_progress" in status.json()
+    assert "propagation_label" in status.json()
 
 
 def test_latest_upload_endpoint_returns_completed_summary() -> None:
@@ -1480,6 +1486,9 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     payload = response.json()
     assert payload["status"] == "RUNNING_SII"
     assert payload["rows_processed"] == 300_000
+    assert payload["propagation_stage"] == "parsing_telemetry"
+    assert payload["propagation_progress"] == 20
+    assert payload["propagation_label"] == "Parsing telemetry."
     assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 
 _PROPAGATION_STAGE_DEFAULTS = {
     "accepted": (5, "Upload received."),
-    "queued": (12, "Upload queued."),
-    "parsing_telemetry": (25, "Parsing telemetry payload."),
-    "building_relationship_baselines": (45, "Building relationship baselines."),
-    "scoring_relationship_drift": (58, "Scoring relationship drift."),
-    "building_propagation_model": (72, "Building propagation model."),
-    "generating_system_interpretation": (88, "Generating system interpretation."),
-    "complete": (100, "Telemetry processing complete."),
+    "queued": (10, "Queued."),
+    "parsing_telemetry": (20, "Parsing telemetry."),
+    "building_relationship_baselines": (40, "Building relationship baselines."),
+    "scoring_relationship_drift": (60, "Scoring relationship drift."),
+    "building_propagation_model": (80, "Building propagation model."),
+    "generating_system_interpretation": (90, "Generating interpretation."),
+    "complete": (100, "Complete."),
 }
 
 
@@ -53,8 +53,12 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
         stage = "complete"
         default_label = _PROPAGATION_STAGE_DEFAULTS["complete"][1]
     normalized["propagation_stage"] = str(raw_payload.get("propagation_stage") or stage)
-    normalized["propagation_progress"] = int(raw_payload.get("propagation_progress") or backend_progress)
-    normalized["propagation_label"] = str(raw_payload.get("propagation_label") or normalized.get("progress_label") or normalized.get("message") or default_label)
+    explicit_progress = raw_payload.get("propagation_progress")
+    if explicit_progress is None:
+        normalized["propagation_progress"] = int(max(default_progress, backend_progress))
+    else:
+        normalized["propagation_progress"] = int(max(0, min(100, float(explicit_progress))))
+    normalized["propagation_label"] = str(raw_payload.get("propagation_label") or default_label)
     return normalized
 
 

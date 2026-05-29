@@ -181,7 +181,7 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "error": None,
             "propagation_stage": "complete",
             "propagation_progress": 100,
-            "propagation_label": "Telemetry processing complete.",
+            "propagation_label": "Complete.",
             "state_backend": state_backend,
         }
     if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
@@ -199,8 +199,8 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "sii_completed": False,
             "message": "Upload accepted. Waiting for status propagation.",
             "propagation_stage": "queued",
-            "propagation_progress": 12,
-            "propagation_label": "Upload queued.",
+            "propagation_progress": 10,
+            "propagation_label": "Queued.",
             "state_backend": state_backend,
         }
     return {
@@ -288,8 +288,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "progress": 0,
             "message": "Upload accepted. Processing is queued.",
             "propagation_stage": "queued",
-            "propagation_progress": 12,
-            "propagation_label": "Upload queued.",
+            "propagation_progress": 10,
+            "propagation_label": "Queued.",
             "runner_used": False if str(getattr(settings, "process_role", "")).lower() == "api" else True,
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,

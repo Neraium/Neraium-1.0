@@ -375,10 +375,10 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
 
-    _set_propagation_stage(job_id, stage="building_relationship_baselines", progress=45, label="Building relationship baselines.")
+    _set_propagation_stage(job_id, stage="building_relationship_baselines", progress=40, label="Building relationship baselines.")
     relationship_model = _build_relationship_baseline(rows, numeric_columns)
 
-    _set_propagation_stage(job_id, stage="scoring_relationship_drift", progress=58, label="Scoring relationship drift.")
+    _set_propagation_stage(job_id, stage="scoring_relationship_drift", progress=60, label="Scoring relationship drift.")
     if len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3:
         replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
     else:
@@ -387,7 +387,7 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
     if not replay.get("timeline"):
         replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
-    _set_propagation_stage(job_id, stage="building_propagation_model", progress=72, label="Building propagation model.")
+    _set_propagation_stage(job_id, stage="building_propagation_model", progress=80, label="Building propagation model.")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
@@ -399,7 +399,7 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
         "columns_analyzed": len(numeric_columns),
         "completed_at": now,
     }
-    _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=88, label="Generating system interpretation.")
+    _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
     runner_result = run_sii_runner(
         columns=columns,
         rows=matrix_rows,
@@ -1024,13 +1024,13 @@ def process_next_queued_upload_job() -> bool:
                 "job_id": job_id,
                 "status": "PROCESSING",
                 "processing_state": "parsing_telemetry",
-                "percent": 25,
-                "progress": 25,
-                "message": "Parsing telemetry payload.",
-                "progress_label": "Parsing telemetry payload.",
+                "percent": 20,
+                "progress": 20,
+                "message": "Parsing telemetry.",
+                "progress_label": "Parsing telemetry.",
                 "propagation_stage": "parsing_telemetry",
-                "propagation_progress": 25,
-                "propagation_label": "Parsing telemetry payload.",
+                "propagation_progress": 20,
+                "propagation_label": "Parsing telemetry.",
             }
         )
         if path.suffix.lower() == ".json":
@@ -1049,7 +1049,7 @@ def process_next_queued_upload_job() -> bool:
         completed["message"] = "Telemetry processing complete."
         completed["propagation_stage"] = "complete"
         completed["propagation_progress"] = 100
-        completed["propagation_label"] = "Telemetry processing complete."
+        completed["propagation_label"] = "Complete."
         write_job(completed)
         complete_upload_queue_job(job_id, "completed")
         try:
@@ -1159,8 +1159,8 @@ async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv
         "percent": 0,
         "progress": 0,
         "propagation_stage": "queued",
-        "propagation_progress": 12,
-        "propagation_label": "Upload queued.",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
     }
     write_job(job_id, payload)
     return payload

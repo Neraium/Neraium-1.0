@@ -1066,7 +1066,7 @@ async function pollUploadStatus(jobId, statusUrl) {
   const effectiveSnapshot = isResetViewActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : latestUploadSnapshot;
-  const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.message || uploadJob?.progress_label || effectiveSnapshot?.message || uploadStateMessage(uploadState));
+  const latestMessage = normalizeErrorMessage(displayUploadError || uploadJob?.error || uploadJob?.propagation_label || uploadJob?.progress_label || uploadJob?.message || effectiveSnapshot?.message || uploadStateMessage(uploadState));
   const selectedFileSize = formatFileSize(selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0));
   const uploadTransferPercent = Number.isFinite(uploadTransfer?.percent) ? Math.min(100, Math.max(0, uploadTransfer.percent)) : null;
   const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
