@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
@@ -60,6 +60,8 @@ export default function SystemBodyWorkspace({
   void accessCode;
   void onUploadComplete;
 
+  const [menuOpen, setMenuOpen] = useState(false);
+
 
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   const interpretation = useMemo(
@@ -97,10 +99,15 @@ export default function SystemBodyWorkspace({
     ],
   );
 
-  function openInvestigationWorkspace() {
+  function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
-      onWorkspaceNavigate("historical-replay");
+      onWorkspaceNavigate(workspaceId);
     }
+    setMenuOpen(false);
+  }
+
+  function openInvestigationWorkspace() {
+    navigateWorkspace("historical-replay");
   }
 
   return (
@@ -110,6 +117,39 @@ export default function SystemBodyWorkspace({
           <span className="system-gate__heartbeat-dot" />
           <strong>{heartbeat.label}</strong>
         </div>
+
+        <button
+          type="button"
+          className="system-gate__settings"
+          aria-label="Open data menu"
+          aria-expanded={menuOpen}
+          aria-controls="system-body-menu"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          Menu
+        </button>
+
+        {menuOpen ? (
+          <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
+            <ul>
+              <li>
+                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                  Upload CSV / Connect Data
+                </button>
+              </li>
+              <li>
+                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                  Connect API
+                </button>
+              </li>
+              <li>
+                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
+                  Replay / Investigate
+                </button>
+              </li>
+            </ul>
+          </aside>
+        ) : null}
 
         <div className="system-gate__center" style={{ cursor: "default" }}>
           <SystemOrbPanel
