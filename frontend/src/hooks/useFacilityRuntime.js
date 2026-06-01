@@ -27,16 +27,16 @@ export default function useFacilityRuntime({
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
   const [telemetryTick, setTelemetryTick] = useState(0);
-  const [apiStatus, setApiStatus] = useState({ 
+  const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Sync pending",
     detail: "Establishing facility sync.",
     checkedAt: null,
     attemptCount: 0,
-    endpoint: formatEndpoint(API_BASE_URL), 
-    message: "", 
+    endpoint: formatEndpoint(API_BASE_URL),
+    message: "",
     queue: null,
-  }); 
+  });
   const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
   const [systemsState, setSystemsState] = useState("loading");
   const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
@@ -55,6 +55,7 @@ export default function useFacilityRuntime({
   const healthRequestInFlightRef = useRef(false);
   const systemsRequestInFlightRef = useRef(false);
   const latestUploadRequestInFlightRef = useRef(false);
+
   const clearUploadSessionState = useCallback(() => {
     setLatestUploadResult(null);
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
@@ -62,11 +63,9 @@ export default function useFacilityRuntime({
     latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
   }, []);
 
-  const checkApiHealth = useCallback(async (trigger = "scheduled") => { 
-    if (!hasAccess) { 
-      return false; 
-    } 
-    if (healthRequestInFlightRef.current) return apiStateRef.current === "online"; 
+  const checkApiHealth = useCallback(async (trigger = "scheduled") => {
+    if (!hasAccess) return false;
+    if (healthRequestInFlightRef.current) return apiStateRef.current === "online";
     healthRequestInFlightRef.current = true;
 
     const checkTime = new Date();
@@ -74,51 +73,49 @@ export default function useFacilityRuntime({
     healthCheckAttemptsRef.current = attemptCount;
 
     try {
-      const healthPayload = await fetchApiHealth({ apiFetch, accessCode }); 
+      const healthPayload = await fetchApiHealth({ apiFetch, accessCode });
       const queueMetrics = healthPayload?.ready?.queue_operational_metrics
         ?? healthPayload?.ready?.details?.queue_operational_metrics
         ?? null;
-      apiStateRef.current = "online"; 
-      setApiStatus({ 
-        state: "online", 
+      apiStateRef.current = "online";
+      setApiStatus({
+        state: "online",
         label: "Backend Online",
         detail: `Last sync ${formatClockTime(checkTime)} CT.`,
         checkedAt: checkTime.toISOString(),
-        attemptCount, 
-        endpoint: formatEndpoint(API_BASE_URL), 
-        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.", 
+        attemptCount,
+        endpoint: formatEndpoint(API_BASE_URL),
+        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
         queue: queueMetrics,
-      }); 
+      });
       return true;
-    } catch { 
+    } catch {
       apiStateRef.current = "offline";
-      setApiStatus({ 
+      setApiStatus({
         state: "offline",
         label: "Backend Offline",
         detail: "Backend connection unavailable. System data could not be loaded.",
         checkedAt: checkTime.toISOString(),
-        attemptCount, 
-        endpoint: formatEndpoint(API_BASE_URL), 
-        message: "Backend connection unavailable. System data could not be loaded.", 
+        attemptCount,
+        endpoint: formatEndpoint(API_BASE_URL),
+        message: "Backend connection unavailable. System data could not be loaded.",
         queue: null,
-      });  
-      setBackendError("Backend connection unavailable. System data could not be loaded."); 
-      return false; 
+      });
+      setBackendError("Backend connection unavailable. System data could not be loaded.");
+      return false;
     } finally {
       healthRequestInFlightRef.current = false;
     }
-  }, [accessCode, formatClockTime, formatEndpoint, hasAccess]); 
+  }, [accessCode, formatClockTime, formatEndpoint, hasAccess]);
 
-  const loadFacilitySystems = useCallback(async () => { 
-    if (!hasAccess) { 
-      return false; 
-    } 
+  const loadFacilitySystems = useCallback(async () => {
+    if (!hasAccess) return false;
     if (systemsRequestInFlightRef.current) return false;
     systemsRequestInFlightRef.current = true;
-    if (isUploadInProgress() || isUploadJobLocked()) { 
+    if (isUploadInProgress() || isUploadJobLocked()) {
       systemsRequestInFlightRef.current = false;
-      return false; 
-    } 
+      return false;
+    }
 
     try {
       const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode });
@@ -144,31 +141,25 @@ export default function useFacilityRuntime({
       setSystems(FALLBACK_SYSTEMS);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
-      setBackendError((current) => { 
-        if (normalizedMessage === "Session expired. Refresh workspace.") {
-          return normalizedMessage;
-        }
-        if (apiStateRef.current === "offline") {
-          return "Backend connection unavailable. System data could not be loaded.";
-        }
+      setBackendError((current) => {
+        if (normalizedMessage === "Session expired. Refresh workspace.") return normalizedMessage;
+        if (apiStateRef.current === "offline") return "Backend connection unavailable. System data could not be loaded.";
         return current || API_CONFIG_WARNING;
-      }); 
-      return false; 
+      });
+      return false;
     } finally {
       systemsRequestInFlightRef.current = false;
     }
-  }, [accessCode, buildProtectedRequestMessage, domainMode, hasAccess]); 
+  }, [accessCode, buildProtectedRequestMessage, domainMode, hasAccess]);
 
-  const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => { 
-    if (!hasAccess) { 
-      return false; 
-    } 
+  const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
+    if (!hasAccess) return false;
     if (latestUploadRequestInFlightRef.current) return Boolean(latestUploadResultRef.current);
     latestUploadRequestInFlightRef.current = true;
-    if (isUploadInProgress() || isUploadJobLocked()) { 
+    if (isUploadInProgress() || isUploadJobLocked()) {
       latestUploadRequestInFlightRef.current = false;
-      return Boolean(latestUploadResultRef.current); 
-    } 
+      return Boolean(latestUploadResultRef.current);
+    }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
       const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted });
@@ -185,10 +176,11 @@ export default function useFacilityRuntime({
         stability.dataStreak = 0;
       }
 
-      if (!stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
+      const applyAntiFlapGate = !shouldIncludePersisted;
+      if (applyAntiFlapGate && !stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
         return Boolean(latestUploadResultRef.current);
       }
-      if (stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
+      if (applyAntiFlapGate && stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
         return Boolean(latestUploadResultRef.current);
       }
 
@@ -196,18 +188,17 @@ export default function useFacilityRuntime({
       setLatestUploadSnapshot(payload.snapshot);
       setLatestUploadResult(payload.latestResult);
       latestUploadResultRef.current = payload.latestResult;
-      return Boolean(payload.latestResult);
+      return Boolean(payload.latestResult || uploadStateView.hasActiveTelemetrySnapshot(payload.snapshot));
     } catch {
-      if (!shouldIncludePersisted) { 
-        clearUploadSessionState(); 
-        return false; 
-      } 
-      // Preserve the most recent known upload session on transient failures for live monitoring mode. 
-      return Boolean(latestUploadResultRef.current); 
+      if (!shouldIncludePersisted) {
+        clearUploadSessionState();
+        return false;
+      }
+      return Boolean(latestUploadResultRef.current);
     } finally {
       latestUploadRequestInFlightRef.current = false;
     }
-  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess]); 
+  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess]);
 
   useEffect(() => {
     latestUploadResultRef.current = latestUploadResult;
