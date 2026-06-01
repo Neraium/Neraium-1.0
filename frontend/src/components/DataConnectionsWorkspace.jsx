@@ -234,7 +234,28 @@ useEffect(() => {
     if (!latestUploadSnapshot) return;
     const currentJobId = uploadJob?.job_id ?? uploadJobIdRef.current;
     // Do not let background snapshot polling overwrite an active in-flight upload job.
-    if (currentJobId && isUploadProcessing(uploadState)) return;
+    if (pollInFlightRef.current) {
+      console.info("upload_status_poll_tick", {
+        job_id: String(currentJobId ?? ""),
+        attempt: null,
+        request_path: null,
+        stream_path: null,
+        failure_count: pollFailureCountRef.current,
+        note: "latest_upload_hydration_skipped_inflight_poll",
+      });
+      return;
+    }
+    if (currentJobId && isUploadProcessing(uploadState)) {
+      console.info("upload_status_poll_tick", {
+        job_id: String(currentJobId ?? ""),
+        attempt: null,
+        request_path: null,
+        stream_path: null,
+        failure_count: pollFailureCountRef.current,
+        note: "latest_upload_hydration_skipped_processing_state",
+      });
+      return;
+    }
     const snapshotStatus = normalizeUploadStatus(latestUploadSnapshot.status);
     const snapshotReplayFrameCount =
       Number(
@@ -267,6 +288,15 @@ useEffect(() => {
 
     if (!hasPersistedSession) return;
 
+    console.info("upload_status_poll_tick", {
+      job_id: String(currentJobId ?? ""),
+      attempt: null,
+      request_path: null,
+      stream_path: null,
+      failure_count: pollFailureCountRef.current,
+      note: "latest_upload_hydration_applied",
+      restored_state: restoredUploadState || "idle",
+    });
     setUploadState(restoredUploadState || "idle");
     setUploadJob((current) => ({
       ...(current ?? {}),
@@ -313,6 +343,12 @@ function toUploadStreamPath(statusPath, jobId) {
 
 async function pollUploadStatus(jobId, statusUrl) {
     const requestedJobId = String(jobId || uploadJobIdRef.current || "").trim();
+    console.info("upload_status_poll_started", {
+      requested_job_id: requestedJobId || null,
+      status_url: statusUrl ?? null,
+      current_ref_job_id: uploadJobIdRef.current ?? null,
+      in_flight: Boolean(pollInFlightRef.current),
+    });
     if (pollInFlightRef.current) {
       if (pollOwnerJobIdRef.current && pollOwnerJobIdRef.current === requestedJobId) {
         return pollInFlightRef.current;
@@ -341,6 +377,11 @@ async function pollUploadStatus(jobId, statusUrl) {
         setUploadState(streamStatus || "running_sii");
       }
       if (streamStatus === "complete" || streamStatus === "failed") {
+        console.info("upload_status_poll_stopped", {
+          job_id: String(pollingJobId),
+          reason: "stream_terminal",
+          terminal_status: streamStatus,
+        });
         return streamPayload;
       }
     }
@@ -359,10 +400,31 @@ async function pollUploadStatus(jobId, statusUrl) {
           });
           continue;
         }
-        const response = pollingPath === defaultPollingPath
-          ? await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode })
-          : await apiFetch(pollingPath, { accessCode });
+        const requestPath = pollingPath === defaultPollingPath ? `/api/data/upload-status/${pollingJobId}` : pollingPath;
+        console.info("upload_status_poll_tick", {
+          job_id: String(pollingJobId),
+          attempt: attempts + 1,
+          request_path: requestPath,
+          stream_path: streamPath,
+          failure_count: pollFailureCountRef.current,
+        });
+        console.info("upload_status_request", {
+          job_id: String(pollingJobId),
+          path: requestPath,
+          attempt: attempts + 1,
+          has_access_code: Boolean(accessCode),
+        });
+        const response = await apiFetch(requestPath, { accessCode });
         const payload = await readJsonPayload(response);
+        console.info("upload_status_response", {
+          job_id: String(pollingJobId),
+          path: requestPath,
+          attempt: attempts + 1,
+          status: response.status,
+          ok: response.ok,
+          payload_status: String(payload?.status ?? ""),
+          error_type: payload?.error_type ?? null,
+        });
         if (!response.ok) {
           if (response.status === 404 || response.status >= 500) {
             statusEndpointFailureCountRef.current += 1;
@@ -530,6 +592,11 @@ async function pollUploadStatus(jobId, statusUrl) {
           };
           setUploadJob(completedPayload);
           setUploadState("complete");
+          console.info("upload_status_poll_stopped", {
+            job_id: String(pollingJobId),
+            reason: "rest_terminal_complete",
+            terminal_status: "complete",
+          });
           return completedPayload;
         }
 
@@ -549,6 +616,11 @@ async function pollUploadStatus(jobId, statusUrl) {
             };
             setUploadJob(completedPayload);
             setUploadState("complete");
+            console.info("upload_status_poll_stopped", {
+              job_id: String(pollingJobId),
+              reason: "rest_complete_replay_pending",
+              terminal_status: "complete",
+            });
             return completedPayload;
           }
           setUploadState("generating_replay");
@@ -559,6 +631,14 @@ async function pollUploadStatus(jobId, statusUrl) {
           pollTimerRef.current = window.setTimeout(resolve, delayMs);
         });
       } catch (error) {
+        console.error("upload_status_error", {
+          job_id: String(pollingJobId ?? ""),
+          path: pollingPath,
+          message: String(error?.message ?? error ?? ""),
+          name: String(error?.name ?? "Error"),
+          status: Number(error?.status ?? error?.response?.status ?? 0) || null,
+          error_type: error?.errorType ?? error?.error_type ?? null,
+        });
         const classified = classifyUploadError(error, "poll");
         if (classified.retryable && pollFailureCountRef.current < 30) {
           pollFailureCountRef.current += 1;
@@ -578,6 +658,11 @@ async function pollUploadStatus(jobId, statusUrl) {
         throw error;
       }
     }
+    console.warn("upload_status_poll_stopped", {
+      job_id: String(pollingJobId),
+      reason: "timeout",
+      attempts: 240,
+    });
     throw new Error("Upload polling timed out.");
     };
     pollOwnerJobIdRef.current = requestedJobId || null;
@@ -585,6 +670,10 @@ async function pollUploadStatus(jobId, statusUrl) {
     try {
       return await pollInFlightRef.current;
     } finally {
+      console.info("upload_status_poll_stopped", {
+        requested_job_id: requestedJobId || null,
+        reason: "finalize",
+      });
       pollInFlightRef.current = null;
       pollOwnerJobIdRef.current = null;
     }
@@ -596,6 +685,14 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
     const urls = buildApiCandidateUrls(streamPath);
     for (const url of urls) {
+      console.info("upload_status_stream_request", {
+        job_id: String(pollingJobId ?? ""),
+        streamPath,
+        status: null,
+        propagation_stage: null,
+        propagation_progress: null,
+        worker_state: null,
+      });
       const payload = await new Promise((resolve) => { 
         let resolved = false; 
         let lastPayload = null;
@@ -620,12 +717,29 @@ async function pollUploadStatus(jobId, statusUrl) {
           } 
           lastPayload = parsed;
           lastMessageAt = Date.now();
+          const status = String(parsed?.status ?? "");
+          console.info("upload_status_stream_tick", {
+            job_id: String(parsed?.job_id ?? pollingJobId ?? ""),
+            streamPath,
+            status,
+            propagation_stage: parsed?.propagation_stage ?? null,
+            propagation_progress: parsed?.propagation_progress ?? null,
+            worker_state: parsed?.worker_state ?? null,
+          });
           setUploadJob(parsed);
           const s = normalizeUploadStatus(parsed.status); 
           if (s && !["complete", "failed"].includes(s)) {
             setUploadState(s);
           }
           if (["complete", "failed"].includes(s)) { 
+            console.info("upload_status_stream_terminal", {
+              job_id: String(parsed?.job_id ?? pollingJobId ?? ""),
+              streamPath,
+              status,
+              propagation_stage: parsed?.propagation_stage ?? null,
+              propagation_progress: parsed?.propagation_progress ?? null,
+              worker_state: parsed?.worker_state ?? null,
+            });
             resolved = true; 
             window.clearTimeout(timer); 
             try { es.close(); } catch {} 
@@ -641,6 +755,14 @@ async function pollUploadStatus(jobId, statusUrl) {
         }; 
         es.onerror = () => {
           if (resolved) return;
+          console.error("upload_status_stream_error", {
+            job_id: String(pollingJobId ?? ""),
+            streamPath,
+            status: String(lastPayload?.status ?? ""),
+            propagation_stage: lastPayload?.propagation_stage ?? null,
+            propagation_progress: lastPayload?.propagation_progress ?? null,
+            worker_state: lastPayload?.worker_state ?? null,
+          });
           resolved = true;
           window.clearTimeout(timer);
           try { es.close(); } catch {}
@@ -693,8 +815,18 @@ async function pollUploadStatus(jobId, statusUrl) {
       if (!response.ok) throw buildUploadRequestError(response, payload, "upload");
 
       uploadJobIdRef.current = payload?.job_id ?? latestJobId;
+      console.info("upload_accepted_job_id", {
+        job_id: String(uploadJobIdRef.current),
+        source: "reprocess_response",
+        status_url: payload?.status_url ?? null,
+      });
       setUploadJob(payload);
       setUploadState(normalizeUploadStatus(payload?.status ?? "pending"));
+      console.info("upload_status_poll_started", {
+        requested_job_id: String(uploadJobIdRef.current),
+        source: "reprocess",
+        status_url: payload?.status_url ?? null,
+      });
       await pollUploadStatus(uploadJobIdRef.current);
 
       const latestPayload = await loadLatestUpload();
@@ -831,6 +963,11 @@ async function pollUploadStatus(jobId, statusUrl) {
             }
           }
           if (!returnedJobId) throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");
+          console.info("upload_accepted_job_id", {
+            job_id: String(returnedJobId),
+            source: payload?.job_id ? "upload_response" : "latest_upload_recovery",
+            status_url: payload?.status_url ?? null,
+          });
           uploadJobIdRef.current = returnedJobId;
           if (typeof window !== "undefined" && uploadJobIdRef.current) {
             window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, String(uploadJobIdRef.current));
@@ -839,6 +976,11 @@ async function pollUploadStatus(jobId, statusUrl) {
           uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedPayload?.status_url, returnedJobId);
           setUploadJob(normalizedPayload);
           setUploadState(normalizeUploadStatus(normalizedPayload.status));
+          console.info("upload_status_poll_started", {
+            requested_job_id: String(returnedJobId),
+            source: "process_upload_batch",
+            status_url: normalizedPayload?.status_url ?? null,
+          });
           await pollUploadStatus(returnedJobId, normalizedPayload?.status_url);
           aggregateLoaded += file.size || 0;
           successCount += 1;

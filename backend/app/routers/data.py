@@ -523,53 +523,64 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 @router.get("/upload-status/{job_id}")
 async def upload_status(job_id: str):
-    cached = _cache_get_status(job_id)
-    if isinstance(cached, dict):
-        if str(cached.get("status", "")).upper() == "NOT_FOUND":
-            return JSONResponse(status_code=404, content=cached)
-        return cached
     state_backend = upload_jobs.upload_state_backend()
-    normalized = _resolve_upload_status_payload(job_id, state_backend)
-    if str(normalized.get("status", "")).upper() == "NOT_FOUND":
-        logger.warning(
-            "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
-            job_id,
-        )
-        _cache_set_status(job_id, normalized, ttl_seconds=1.0)
-        return JSONResponse(status_code=404, content=normalized)
+    logger.warning("upload_status_request job_id=%s state_backend=%s", job_id, state_backend)
+    try:
+        cached = _cache_get_status(job_id)
+        if isinstance(cached, dict):
+            status_text = str(cached.get("status", "")).upper()
+            status_code = 404 if status_text == "NOT_FOUND" else 200
+            logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, status_code, status_text, True)
+            if status_text == "NOT_FOUND":
+                return JSONResponse(status_code=404, content=cached)
+            return cached
 
-    if str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
-        if str(normalized.get("status", "")).upper() == "COMPLETE":
-            existing = read_evidence_run(str(job_id))
-            if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
-                now = datetime.now(timezone.utc).isoformat()
-                upload_result = upload_jobs.read_upload_result_by_job_id(job_id) or {}
-                upsert_evidence_run(
-                    {
-                        **existing,
-                        "status": "completed",
-                        "completed_at": now,
-                        "rows_received": upload_result.get("row_count", existing.get("rows_received", 0)),
-                        "rows_accepted": upload_result.get("row_count", existing.get("rows_accepted", 0)),
-                        "sensors_detected": max(0, int(upload_result.get("column_count", existing.get("sensors_detected", 0))) - 1),
-                        "room": (((upload_result.get("sii_intelligence") or {}).get("primary_room")) or existing.get("room")),
-                    }
-                )
-        if str(normalized.get("status", "")).upper() == "FAILED":
-            existing = read_evidence_run(str(job_id))
-            if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
-                now = datetime.now(timezone.utc).isoformat()
-                upsert_evidence_run(
-                    {
-                        **existing,
-                        "status": "failed",
-                        "completed_at": now,
-                        "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
-                    }
-                )
-    terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}
-    _cache_set_status(job_id, normalized, ttl_seconds=4.0 if terminal else 1.5)
-    return normalized
+        normalized = _resolve_upload_status_payload(job_id, state_backend)
+        if str(normalized.get("status", "")).upper() == "NOT_FOUND":
+            logger.warning(
+                "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
+                job_id,
+            )
+            _cache_set_status(job_id, normalized, ttl_seconds=1.0)
+            logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 404, "NOT_FOUND", False)
+            return JSONResponse(status_code=404, content=normalized)
+
+        if str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
+            if str(normalized.get("status", "")).upper() == "COMPLETE":
+                existing = read_evidence_run(str(job_id))
+                if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
+                    now = datetime.now(timezone.utc).isoformat()
+                    upload_result = upload_jobs.read_upload_result_by_job_id(job_id) or {}
+                    upsert_evidence_run(
+                        {
+                            **existing,
+                            "status": "completed",
+                            "completed_at": now,
+                            "rows_received": upload_result.get("row_count", existing.get("rows_received", 0)),
+                            "rows_accepted": upload_result.get("row_count", existing.get("rows_accepted", 0)),
+                            "sensors_detected": max(0, int(upload_result.get("column_count", existing.get("sensors_detected", 0))) - 1),
+                            "room": (((upload_result.get("sii_intelligence") or {}).get("primary_room")) or existing.get("room")),
+                        }
+                    )
+            if str(normalized.get("status", "")).upper() == "FAILED":
+                existing = read_evidence_run(str(job_id))
+                if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
+                    now = datetime.now(timezone.utc).isoformat()
+                    upsert_evidence_run(
+                        {
+                            **existing,
+                            "status": "failed",
+                            "completed_at": now,
+                            "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
+                        }
+                    )
+        terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}
+        _cache_set_status(job_id, normalized, ttl_seconds=4.0 if terminal else 1.5)
+        logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 200, str(normalized.get("status", "")).upper(), False)
+        return normalized
+    except Exception:
+        logger.exception("upload_status_error job_id=%s state_backend=%s", job_id, state_backend)
+        raise
 
 
 @router.get("/upload-stream/{job_id}")
