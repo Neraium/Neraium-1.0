@@ -50,7 +50,7 @@ def get_settings() -> Settings:
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
         cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
         process_role=process_role,
-        start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"all", "worker"}),
+        start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"all", "monolith", "worker"}),
         start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), False),
         default_telemetry_url=parse_default_telemetry_url(os.getenv("NERAIUM_DEFAULT_TELEMETRY_URL"), app_env),
         cors_origin_regex=parse_cors_origin_regex(os.getenv("CORS_ORIGIN_REGEX")),
@@ -64,7 +64,7 @@ def parse_process_role(raw_value: str | None) -> str:
     if raw_value is None or raw_value.strip() == "":
         return DEFAULT_PROCESS_ROLE
     normalized = raw_value.strip().lower()
-    if normalized in {"api", "worker", "all"}:
+    if normalized in {"api", "worker", "all", "monolith"}:
         return normalized
     return DEFAULT_PROCESS_ROLE
 

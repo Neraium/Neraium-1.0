@@ -4,6 +4,7 @@ from app.core.config import (
     get_settings,
     parse_cors_origin_regex,
     parse_cors_origins,
+    parse_process_role,
 )
 
 
@@ -83,3 +84,9 @@ def test_default_cors_origins_include_local_and_production_frontends() -> None:
 def test_parse_cors_origin_regex_uses_default_when_not_set() -> None:
     assert parse_cors_origin_regex(None) == DEFAULT_CORS_ORIGIN_REGEX
     assert parse_cors_origin_regex("") == DEFAULT_CORS_ORIGIN_REGEX
+
+
+def test_parse_process_role_accepts_monolith_alias() -> None:
+    assert parse_process_role("monolith") == "monolith"
+    assert parse_process_role("worker") == "worker"
+    assert parse_process_role("invalid") == "all"
