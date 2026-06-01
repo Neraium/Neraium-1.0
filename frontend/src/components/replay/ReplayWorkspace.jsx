@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropagationMap from "../PropagationMap";
 import StructuralMemoryPanel from "../StructuralMemoryPanel";
 import EvidenceLineagePanel from "../EvidenceLineagePanel";
@@ -26,7 +26,7 @@ export default function ReplayWorkspace({
 }) {
   const [timeline, setTimeline] = useState([]);
   const [comparisonTimeline, setComparisonTimeline] = useState([]);
-  const [frameIndex, setFrameIndex] = useState(0);
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [replayCompression, setReplayCompression] = useState(1);
   const [executionMode, setExecutionMode] = useState(mode || "live");
@@ -36,6 +36,7 @@ export default function ReplayWorkspace({
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
+  const replaySessionKeyRef = useRef(null);
   const shouldRequestReplay = Boolean(
     sessionJobId
     || hasActiveSession
@@ -66,8 +67,10 @@ export default function ReplayWorkspace({
       setTimeline([]);
       setComparisonTimeline([]);
       setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
-      setFrameIndex(0);
+      setCurrentFrameIndex(0);
+      setIsPlaying(false);
       setError("");
+      replaySessionKeyRef.current = null;
       return () => {};
     }
     let cancelled = false;
@@ -84,21 +87,32 @@ export default function ReplayWorkspace({
         };
         const fallbackTimeline = embeddedReplay.timeline;
         const fallbackMeta = embeddedReplay.meta;
-        const effectiveTimeline = nextTimeline.length > 0 ? nextTimeline : fallbackTimeline;
+        const effectiveTimeline = sortReplayTimeline(nextTimeline.length > 0 ? nextTimeline : fallbackTimeline);
         const effectiveMeta = nextTimeline.length > 0
           ? nextMeta
           : { ...fallbackMeta, replay_source: "latest_upload_result_fallback", replay_job_id: scoped.jobId };
+        const replaySessionKey = String(scoped.jobId ?? sessionJobId ?? "global");
+        const sessionChanged = replaySessionKeyRef.current !== replaySessionKey;
+
         setTimeline(effectiveTimeline);
         setComparisonTimeline([]);
         setMeta(effectiveMeta);
-        setFrameIndex(Math.max(0, effectiveTimeline.length - 1));
         setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
+
+        if (sessionChanged) {
+          replaySessionKeyRef.current = replaySessionKey;
+          setCurrentFrameIndex(0);
+          setIsPlaying(false);
+        } else {
+          setCurrentFrameIndex((current) => Math.min(current, Math.max(0, effectiveTimeline.length - 1)));
+        }
       } catch (loadError) {
         if (cancelled) return;
         setTimeline([]);
         setComparisonTimeline([]);
         setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
-        setFrameIndex(0);
+        setCurrentFrameIndex(0);
+        setIsPlaying(false);
         setError(buildReplayNotice(loadError, normalizeErrorMessage));
       }
     }
@@ -109,11 +123,21 @@ export default function ReplayWorkspace({
   useEffect(() => {
     if (!isPlaying) return undefined;
     if (timeline.length < 2) return undefined;
-    const frameCount = timeline.length;
+    const lastFrameIndex = timeline.length - 1;
     const intervalMs = Math.max(100, Math.round(900 / playbackSpeed));
-    const timer = window.setInterval(() => setFrameIndex((current) => (current + 1 >= frameCount ? 0 : current + 1)), intervalMs);
+    const timer = window.setInterval(() => {
+      setCurrentFrameIndex((current) => Math.min(current + 1, lastFrameIndex));
+    }, intervalMs);
     return () => window.clearInterval(timer);
   }, [isPlaying, playbackSpeed, timeline.length]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (timeline.length === 0) return;
+    if (currentFrameIndex >= timeline.length - 1) {
+      setIsPlaying(false);
+    }
+  }, [currentFrameIndex, isPlaying, timeline.length]);
 
   useEffect(() => {
     if (!shouldRequestReplay) {
@@ -125,8 +149,8 @@ export default function ReplayWorkspace({
         setRangePreviewCount(0);
         return;
       }
-      const start = timeline[Math.max(0, frameIndex - 4)]?.timestamp;
-      const end = timeline[Math.min(timeline.length - 1, frameIndex + 4)]?.timestamp;
+      const start = timeline[Math.max(0, currentFrameIndex - 4)]?.timestamp;
+      const end = timeline[Math.min(timeline.length - 1, currentFrameIndex + 4)]?.timestamp;
       if (!start || !end) return;
       const localFrames = timeline.filter((frame) => {
         const frameTimestamp = String(frame?.timestamp ?? "");
@@ -135,28 +159,28 @@ export default function ReplayWorkspace({
       setRangePreviewCount(localFrames.length);
     }
     loadRangePreview();
-  }, [frameIndex, timeline, shouldRequestReplay]);
+  }, [currentFrameIndex, timeline, shouldRequestReplay]);
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "-";
   const hasDiagnosticsEvidence = Boolean(hasRealSiiOutput || hasCurrentUploadResult || hasActiveSession || hasResumedSession || hasReplaySnapshots);
   const hasTopologyEvidence = Boolean(hasReplaySnapshots && timeline[0]?.topology_state);
   const operativeTimeline = timeline;
-  const activeFrame = operativeTimeline[Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
-  const comparisonFrame = comparisonTimeline[frameIndex] ?? null;
+  const activeFrame = operativeTimeline[Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
+  const comparisonFrame = comparisonTimeline[currentFrameIndex] ?? null;
   const shownFrame = comparisonMode ? (comparisonFrame ?? activeFrame) : activeFrame;
-  const currentPercent = hasReplaySnapshots ? Math.round(((Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1)) + 1) / Math.max(operativeTimeline.length, 1)) * 100) : 0;
+  const currentPercent = hasReplaySnapshots ? Math.round(((Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1)) + 1) / Math.max(operativeTimeline.length, 1)) * 100) : 0;
   const currentTimeLabel = shownFrame?.timestamp_end ?? shownFrame?.timestamp ?? dash;
 
   useEffect(() => {
     if (typeof onReplayFrameChange === "function") {
       onReplayFrameChange(hasReplaySnapshots ? shownFrame : null, {
-        frameIndex: Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1)),
+        frameIndex: Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1)),
         totalFrames: operativeTimeline.length,
         isPlaying,
       });
     }
-  }, [frameIndex, hasReplaySnapshots, isPlaying, onReplayFrameChange, operativeTimeline.length, shownFrame]);
+  }, [currentFrameIndex, hasReplaySnapshots, isPlaying, onReplayFrameChange, operativeTimeline.length, shownFrame]);
 
   useEffect(() => {
     if (!hasReplaySnapshots && replayMode) {
@@ -188,7 +212,7 @@ export default function ReplayWorkspace({
       : dash;
     return [
       { label: "Structural Movement Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-      { label: "Current Window", value: hasReplaySnapshots ? `${Math.min(frameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+      { label: "Current Window", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
       { label: "Baseline Separation", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
       { label: "Drift Velocity", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
       { label: "Drift Acceleration", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
@@ -199,7 +223,7 @@ export default function ReplayWorkspace({
       { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
       { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
     ];
-  }, [frameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]); 
+  }, [currentFrameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]); 
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -209,14 +233,14 @@ export default function ReplayWorkspace({
           <div className="structural-replay-controls">
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause Replay" : "Play Replay"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)} disabled={!hasReplaySnapshots}>{comparisonMode ? "Primary View" : "Comparison Mode"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous Frame</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next Frame</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous Frame</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next Frame</button>
             <label className="metadata-text" htmlFor="replay-speed">Speed</label>
             <select id="replay-speed" value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
             <label className="metadata-text" htmlFor="replay-compression">Compression</label>
             <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
-            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
             <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
           </div>
         ) : (
@@ -225,20 +249,20 @@ export default function ReplayWorkspace({
               <option value="live">Replay</option>
               <option value="live_causal">Live Replay (No Lookahead)</option>
             </select>
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
             <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
-            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
+            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
         )}
         {hasReplaySnapshots ? (
           <div className={`historian-replay-status ${replayMode ? "historian-replay-status--active" : ""}`}>
             <span className="historian-replay-status__badge">{replayMode ? "Replay Mode Active" : "Replay Preview"}</span>
             <span>{executionMode === "live_causal" ? "No-lookahead mode" : "Standard replay mode"}</span>
-            <span>Frame {Math.min(frameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
+            <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
             <span>{currentPercent}% through dataset</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
           </div>
@@ -248,7 +272,7 @@ export default function ReplayWorkspace({
         ) : null}
         {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload historian telemetry to generate a full SII replay.</p> : null}
         <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
-        <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(frameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
+        <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
         <Panel title="State-Space Progression" className="span-12 replay-phase-panel">
@@ -373,6 +397,43 @@ async function fetchGlobalReplayFallback({ apiFetch, accessCode }) {
     meta: { ...meta, replay_source: "global_timeline_fallback" },
     message: typeof payload?.message === "string" ? payload.message : "",
   };
+}
+
+function sortReplayTimeline(frames) {
+  if (!Array.isArray(frames) || frames.length === 0) return [];
+  return frames
+    .map((frame, originalIndex) => ({ frame, originalIndex }))
+    .sort((a, b) => {
+      const aFrameNumber = readFrameNumber(a.frame);
+      const bFrameNumber = readFrameNumber(b.frame);
+      if (aFrameNumber !== null && bFrameNumber !== null && aFrameNumber !== bFrameNumber) {
+        return aFrameNumber - bFrameNumber;
+      }
+      const aTimestamp = readFrameTimestamp(a.frame);
+      const bTimestamp = readFrameTimestamp(b.frame);
+      if (aTimestamp !== null && bTimestamp !== null && aTimestamp !== bTimestamp) {
+        return aTimestamp < bTimestamp ? -1 : 1;
+      }
+      return a.originalIndex - b.originalIndex;
+    })
+    .map((entry) => entry.frame);
+}
+
+function readFrameNumber(frame) {
+  const candidates = [frame?.frame_number, frame?.frame_index, frame?.index];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function readFrameTimestamp(frame) {
+  const candidate = frame?.timestamp_start ?? frame?.timestamp ?? null;
+  if (candidate == null) return null;
+  const timeValue = new Date(candidate).getTime();
+  if (Number.isNaN(timeValue)) return null;
+  return timeValue;
 }
 
 const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];
