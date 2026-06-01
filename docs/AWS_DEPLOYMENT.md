@@ -80,11 +80,34 @@ Amplify setup notes:
 5. Publish the `frontend/dist` directory.
 6. Set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL.
 
-Required frontend environment variable:
+Required frontend environment variable (direct backend routing pattern):
 
 ```text
 VITE_API_BASE_URL=https://<ecs-backend-url>
 ```
+
+Important routing note:
+
+- `app.neraium.com/api/*` must reach the backend origin, not Amplify/S3 static hosting.
+- If `curl -i https://app.neraium.com/api/health` returns `301` with `server: AmazonS3`, API traffic is misrouted.
+
+Two valid production patterns:
+
+1. Direct backend URL from frontend build
+- Set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify environment variables.
+- Frontend calls backend directly for all `/api/*` requests.
+
+2. CloudFront path behavior for same-domain API
+- Keep frontend on static origin (Amplify/S3).
+- Add CloudFront behavior for `/api/*` with backend origin (ALB/ECS service).
+- Forward query strings, required headers, and cookies for authenticated requests.
+- Ensure all methods are allowed for API behavior (GET/HEAD/OPTIONS/POST at minimum).
+
+Required API routes to backend origin:
+
+- `/api/data/upload`
+- `/api/data/upload-status/*`
+- `/api/data/upload-stream/*`
 
 The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_URL` is not set.
 
@@ -93,11 +116,21 @@ The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_U
 1. Push the latest GitHub `main` branch.
 2. Build and push the backend Docker image to Amazon ECR.
 3. Deploy the backend through Amazon ECS Express Mode / ECS Fargate.
-4. Confirm `https://<ecs-backend-url>/api/health` works.
-5. Deploy the frontend through AWS Amplify Hosting.
-6. Set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify.
+4. Confirm backend endpoints respond directly:
+   - `https://<ecs-backend-url>/api/health`
+   - `https://<ecs-backend-url>/api/ready`
+5. Choose API routing pattern:
+   - Pattern A: set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify build env.
+   - Pattern B: configure CloudFront `/api/*` behavior to backend origin.
+6. Deploy frontend through AWS Amplify Hosting.
 7. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
-8. Test the CSV upload flow from the live frontend.
+8. Verify production domain routing:
+   - `curl -i https://app.neraium.com/api/health` should NOT return `server: AmazonS3` redirect behavior.
+9. Verify upload pipeline routes on production domain:
+   - `POST /api/data/upload`
+   - `GET /api/data/upload-status/<job_id>`
+   - `GET /api/data/upload-stream/<job_id>`
+10. Test full CSV upload flow from live frontend.
 
 ## Local Validation Commands
 
