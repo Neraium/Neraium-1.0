@@ -73,6 +73,21 @@ function App() {
     [gateUploadCompleteSeen, completedUploadOverride, guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
   const effectiveSessionIntent = sessionIntent;
+  useEffect(() => {
+    if (
+      resetGuardActive
+      || !allowPersistedLatest
+      || sessionIntent !== "neutral"
+      || !hasObservableUploadSession
+    ) {
+      return;
+    }
+    setSessionIntent("resumed");
+    setGateStateOverride("Monitoring");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
+    }
+  }, [allowPersistedLatest, hasObservableUploadSession, resetGuardActive, sessionIntent]);
   const hasCurrentUploadResult =
     (effectiveSessionIntent === "current" || gateUploadCompleteSeen || Boolean(completedUploadOverride))
     && hasObservableUploadSession;
@@ -180,12 +195,14 @@ function App() {
       distributed_cognition_governance: governance,
       sourceIntelligence: intelligence,
       latestUploadResult: completedUploadOverride ?? effectiveLatestUploadResult,
+      latestUploadSnapshot: effectiveLatestUploadSnapshot,
+      currentSession,
       systems,
       systemsState,
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, completedUploadOverride, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, completedUploadOverride, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
   const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
@@ -385,9 +402,10 @@ function App() {
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
     <SystemTopologyWorkspace
-      liveOps={historianReplayState.frame
-        ? { ...liveOps, ...historianReplayState.frame }
-        : liveOps}
+      liveOps={{
+        ...liveOps,
+        replayOverlay: historianReplayState.frame ?? null,
+      }}
       replayFrame={historianReplayState.frame}
       selectedTarget={null}
       onSelectTarget={() => {}}
