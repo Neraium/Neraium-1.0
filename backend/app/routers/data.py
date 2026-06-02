@@ -13,7 +13,6 @@ import re
 
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
-from app.services import adaptive_learning
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services import upload_jobs
 from app.services.upload_status_contract import normalize_upload_status_payload
@@ -38,6 +37,10 @@ def _cache_get_status(job_id: str) -> dict | None:
         return None
     expires_at, payload = entry
     if time.monotonic() >= expires_at:
+        _UPLOAD_STATUS_CACHE.pop(str(job_id), None)
+        return None
+    status_text = str((payload or {}).get("status") or "").upper()
+    if status_text not in {"COMPLETE", "FAILED", "NOT_FOUND"}:
         _UPLOAD_STATUS_CACHE.pop(str(job_id), None)
         return None
     return dict(payload)
@@ -82,7 +85,7 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
         if worker_job_id:
             now = datetime.now(timezone.utc).isoformat()
             try:
-                touch_upload_queue_job(worker_job_id, "processing")
+                touch_upload_queue_job(worker_job_id, "queued")
             except Exception:
                 logger.exception("worker_first_heartbeat_touch_failed job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
             current = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
@@ -208,9 +211,14 @@ def _with_worker_visibility(payload: dict, job_id: str) -> dict:
     queued_seconds = max(0, int((now - created_at).total_seconds())) if created_at else None
     enriched["queued_seconds"] = queued_seconds
 
-    last_seen = _parse_iso_ts((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None)
+    payload_last_seen = _parse_iso_ts(enriched.get("worker_last_seen_at"))
+    last_seen = _parse_iso_ts((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None) or payload_last_seen
     worker_last_seen_at = last_seen.isoformat() if last_seen else None
     enriched["worker_last_seen_at"] = worker_last_seen_at
+
+    if str(enriched.get("worker_state") or "").lower() == "running" and worker_last_seen_at:
+        enriched["worker_state"] = "running"
+        return enriched
 
     state = "unknown"
     status_text = str(enriched.get("status") or "").upper()
@@ -575,7 +583,8 @@ async def upload_status(job_id: str):
                         }
                     )
         terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}
-        _cache_set_status(job_id, normalized, ttl_seconds=4.0 if terminal else 1.5)
+        if terminal:
+            _cache_set_status(job_id, normalized, ttl_seconds=4.0)
         logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 200, str(normalized.get("status", "")).upper(), False)
         return normalized
     except Exception:
@@ -708,15 +717,7 @@ async def latest_upload(include_persisted: int | bool = True):
             }
             summary = {**latest, **summary}
     frames = _extract_timeline(result if isinstance(result, dict) else None, summary.get("job_id") if isinstance(summary, dict) else None)
-    adaptive = adaptive_learning.build_adaptive_snapshot(result, summary) if isinstance(result, dict) else {}
-    if isinstance(adaptive, dict):
-        recent_feedback = (((adaptive.get("event_memory") or {}).get("recent_feedback_history")) or [])
-        if not recent_feedback:
-            fallback_site = adaptive_learning.build_adaptive_snapshot({"room_summary": {"rooms": []}}, {"last_processed_at": snapshot_time(summary)} if isinstance(summary, dict) else {})
-            fallback_recent = (((fallback_site.get("event_memory") or {}).get("recent_feedback_history")) or [])
-            if fallback_recent:
-                adaptive["event_memory"] = adaptive.get("event_memory", {})
-                adaptive["event_memory"]["recent_feedback_history"] = fallback_recent
+    adaptive = {}
     snapshot = {
         **summary,
         "state_backend": state_backend,

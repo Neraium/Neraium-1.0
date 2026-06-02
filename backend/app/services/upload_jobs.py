@@ -449,13 +449,6 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
     LATEST_UPLOAD_CACHE["result"] = result
     LATEST_UPLOAD_CACHE["summary"] = summary
     try:
-        from app.services import adaptive_learning
-        adaptive_summary = {"last_processed_at": now, "drift_status": result.get("drift_status"), "operating_state": result.get("operating_state"), "primary_room": (result.get("sii_intelligence") or {}).get("primary_room"), "neraium_score": (result.get("sii_intelligence") or {}).get("neraium_score"), "warnings": []}
-        site_memory = adaptive_learning.update_site_memory_from_result(result, now)
-        adaptive_learning.append_event_memory(site_key=site_memory.get("site_key", "site::default"), run_id=job_id, completed_at=now, summary=adaptive_summary, result=result)
-    except Exception:
-        pass
-    try:
         from app.services.evidence_store import upsert_evidence_run
         upsert_evidence_run({"run_id": job_id, "source_name": filename, "source_type": "csv_upload", "source_url": None, "status": "completed", "created_at": now, "completed_at": now, "rows_received": row_count_total, "rows_accepted": row_count_total, "rows_rejected": 0, "sensors_detected": max(0, len(columns) - 1), "room": ((result.get("sii_intelligence") or {}).get("primary_room") or "Uploaded telemetry"), "operating_state": result.get("operating_state"), "neraium_score": ((result.get("sii_intelligence") or {}).get("neraium_score")), "drift_status": result.get("drift_status"), "scenario": None, "tick": None, "warnings": [], "errors": [], "primary_drivers": [], "evidence_summary": [], "structural_archetypes": [], "adaptive_site_key": "site::default", "operator_feedback_history": [], "initiated_by": initiated_by})
     except Exception:
@@ -1004,6 +997,10 @@ def write_job(*args) -> None:
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
     _write_shared_state(f"upload_status_{job_id}", payload)
+    try:
+        upsert_upload_job(payload)
+    except Exception:
+        pass
     JOB_DIR.mkdir(parents=True, exist_ok=True)
     (JOB_DIR / f"{job_id}.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 

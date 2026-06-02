@@ -5,9 +5,8 @@ from fastapi.responses import PlainTextResponse
 
 from app.core.security import require_api_access
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
-from app.services.adaptive_learning import FEEDBACK_CATEGORIES, apply_operator_feedback
-from app.services.evidence_store import build_evidence_export, latest_evidence_run, list_evidence_runs, read_evidence_run
-from app.services.runtime_db import record_audit_event
+from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
+from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
 
 
@@ -66,14 +65,14 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:
-        updated = apply_operator_feedback(run_id, payload.category, payload.note, actor)
+        updated = record_operator_feedback(run_id, payload.category, payload.note, actor, now_iso())
     except ValueError as error:
         detail = str(error)
         if detail == "evidence_run_not_found":
             fallback_run = latest_evidence_run()
             fallback_run_id = str((fallback_run or {}).get("run_id") or "")
             if fallback_run_id:
-                updated = apply_operator_feedback(fallback_run_id, payload.category, payload.note, actor)
+                updated = record_operator_feedback(fallback_run_id, payload.category, payload.note, actor, now_iso())
             else:
                 raise HTTPException(status_code=404, detail="Evidence run not found.") from None
         elif detail == "invalid_feedback_category":

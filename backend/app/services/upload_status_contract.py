@@ -25,7 +25,7 @@ def _infer_propagation_stage(payload: dict, normalized_status: str) -> str:
         return "complete"
     if "baseline" in message:
         return "building_relationship_baselines"
-    if "drift" in message or "scoring" in message or "running sii" in message:
+    if "drift" in message or "scoring" in message:
         return "scoring_relationship_drift"
     if "propagation" in message or "replay" in message:
         return "building_propagation_model"

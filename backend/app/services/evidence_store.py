@@ -12,6 +12,14 @@ from app.services.runtime_db import list_evidence_runs_db, read_evidence_run_db,
 RUNTIME_DIR = get_settings().runtime_dir
 EVIDENCE_DIR = RUNTIME_DIR / "evidence"
 EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
+FEEDBACK_CATEGORIES = [
+    "confirmed_issue",
+    "useful_warning",
+    "expected_behavior",
+    "false_positive",
+    "maintenance_event",
+    "ignore",
+]
 
 
 def ensure_evidence_dir() -> None:
@@ -64,6 +72,28 @@ def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
     updated = [record, *filtered]
     atomic_write_json_list(path, updated[:500])
     return record
+
+
+def record_operator_feedback(run_id: str, category: str, note: str | None, actor: str, recorded_at: str) -> dict[str, Any]:
+    if category not in FEEDBACK_CATEGORIES:
+        raise ValueError("invalid_feedback_category")
+    record = read_evidence_run(run_id)
+    if record is None:
+        raise ValueError("evidence_run_not_found")
+
+    feedback_entry = {
+        "category": category,
+        "note": (note or "").strip() or None,
+        "actor": actor,
+        "recorded_at": recorded_at,
+    }
+    history = [item for item in record.get("operator_feedback_history", []) if isinstance(item, dict)]
+    updated_record = {
+        **record,
+        "latest_feedback_category": category,
+        "operator_feedback_history": [feedback_entry, *history][:20],
+    }
+    return upsert_evidence_run(updated_record)
 
 
 def build_evidence_export(record: dict[str, Any]) -> str:

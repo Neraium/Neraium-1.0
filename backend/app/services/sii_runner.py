@@ -55,6 +55,8 @@ class BackendSiiRunner:
         self._history: list[np.ndarray] = []
         self._instability_history: deque[float] = deque(maxlen=20)
         self._velocity_history: deque[float] = deque(maxlen=20)
+        self._distance_history: deque[float] = deque(maxlen=20)
+        self._distance_velocity_history: deque[float] = deque(maxlen=20)
         self._regime_history: deque[str] = deque(maxlen=20)
 
     def ingest(
@@ -73,23 +75,124 @@ class BackendSiiRunner:
         recent_mean = np.nan_to_num(np.nanmean(recent_vectors, axis=0), nan=0.0)
         safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
         normalized_delta = np.abs(recent_mean - baseline_mean) / safe_baseline
-        structural_drift = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 1.5))
+        fallback_structural_drift = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 1.5))
 
         if len(self._history) >= 2:
-            last_step = np.abs(self._history[-1] - self._history[-2]) / safe_baseline
-            transition_pressure = float(np.clip(np.nan_to_num(np.nanmean(last_step), nan=0.0), 0.0, 1.5))
+            last_step = np.abs(np.nan_to_num(self._history[-1], nan=0.0) - np.nan_to_num(self._history[-2], nan=0.0)) / safe_baseline
+            fallback_transition_pressure = float(np.clip(np.nan_to_num(np.nanmean(last_step), nan=0.0), 0.0, 1.5))
         else:
-            transition_pressure = 0.0
+            fallback_transition_pressure = 0.0
 
         variability = float(np.nan_to_num(np.nanstd(recent_vectors), nan=0.0)) if recent_vectors.size else 0.0
-        variability_pressure = float(np.clip(variability / max(float(np.nanmean(safe_baseline)), 1.0), 0.0, 1.0))
-        instability_score = float(
-            np.clip(structural_drift * 0.55 + transition_pressure * 0.3 + variability_pressure * 0.15, 0.0, 1.0)
+        fallback_variability_pressure = float(np.clip(variability / max(float(np.nanmean(safe_baseline)), 1.0), 0.0, 1.0))
+        fallback_score = float(
+            np.clip(
+                fallback_structural_drift * 0.55
+                + fallback_transition_pressure * 0.3
+                + fallback_variability_pressure * 0.15,
+                0.0,
+                1.0,
+            )
         )
+
+        covariance_valid = False
+        structural_drift = fallback_structural_drift
+        transition_pressure = fallback_transition_pressure
+        structural_drift_score = float(np.clip(fallback_structural_drift, 0.0, 1.0))
+        mahalanobis_distance = fallback_score
+        drift_velocity = 0.0
+        drift_acceleration = 0.0
+        covariance_shift = 0.0
+        trajectory_curvature = 0.0
+        persistence_condition = False
+        accumulation_condition = False
+        accumulation = 0.0
+        dynamic_threshold = 0.0
+
+        current_vector = np.nan_to_num(vector, nan=0.0)
+        baseline_matrix = np.nan_to_num(np.asarray(baseline_vectors, dtype=float), nan=0.0)
+        recent_matrix = np.nan_to_num(np.asarray(recent_vectors, dtype=float), nan=0.0)
+        previous_distance = self._distance_history[-1] if self._distance_history else 0.0
+        previous_velocity = self._distance_velocity_history[-1] if self._distance_velocity_history else 0.0
+
+        try:
+            baseline_covariance = np.atleast_2d(np.cov(baseline_matrix, rowvar=False))
+            baseline_covariance = np.nan_to_num(baseline_covariance, nan=0.0)
+            expected_shape = (current_vector.shape[0], current_vector.shape[0])
+            if baseline_covariance.shape != expected_shape:
+                baseline_covariance = np.eye(current_vector.shape[0], dtype=float)
+            baseline_covariance = baseline_covariance + (np.eye(baseline_covariance.shape[0], dtype=float) * 1e-6)
+            covariance_inverse = np.linalg.pinv(baseline_covariance)
+            centered_vector = np.nan_to_num(current_vector - baseline_mean, nan=0.0)
+            mahalanobis_sq = float(centered_vector.T @ covariance_inverse @ centered_vector)
+            mahalanobis_distance = float(np.sqrt(max(mahalanobis_sq, 0.0)))
+            covariance_valid = bool(np.isfinite(mahalanobis_distance))
+            if not covariance_valid:
+                mahalanobis_distance = fallback_score
+        except Exception:
+            covariance_valid = False
+            mahalanobis_distance = fallback_score
+
+        if covariance_valid:
+            structural_drift_score = float(np.clip(mahalanobis_distance / max(mahalanobis_distance + 1.0, 1.0), 0.0, 1.0))
+            drift_velocity = float(mahalanobis_distance - previous_distance)
+            drift_acceleration = float(drift_velocity - previous_velocity)
+            recent_covariance = np.atleast_2d(np.cov(recent_matrix, rowvar=False))
+            recent_covariance = np.nan_to_num(recent_covariance, nan=0.0)
+            if recent_covariance.shape == baseline_covariance.shape:
+                baseline_norm = float(np.linalg.norm(baseline_covariance, ord="fro"))
+                covariance_shift = float(
+                    np.linalg.norm(recent_covariance - baseline_covariance, ord="fro") / max(baseline_norm, 1e-6)
+                )
+            else:
+                covariance_shift = 0.0
+            trajectory_curvature = float(np.clip(abs(drift_acceleration) / max(abs(drift_velocity), 1e-6), 0.0, 1.0))
+
+            distance_history = list(self._distance_history) + [mahalanobis_distance]
+            dynamic_threshold = float(np.mean(distance_history) + np.std(distance_history)) if distance_history else 0.0
+            distance_window = distance_history[-min(self.recent_window, len(distance_history)) :]
+            if len(distance_window) >= 3:
+                persistence_condition = bool(sum(value > dynamic_threshold for value in distance_window) >= 3)
+            accumulation = float(np.sum(distance_window)) if distance_window else 0.0
+            accumulation_condition = bool(len(distance_window) >= 3 and accumulation >= dynamic_threshold * 3.0)
+
+            technical_score = float(
+                np.clip(
+                    structural_drift_score * 0.45
+                    + min(abs(drift_velocity), 1.0) * 0.20
+                    + min(abs(drift_acceleration), 1.0) * 0.15
+                    + min(covariance_shift, 1.0) * 0.15
+                    + min(trajectory_curvature, 1.0) * 0.05,
+                    0.0,
+                    1.0,
+                )
+            )
+            if not (persistence_condition and accumulation_condition):
+                technical_score = min(technical_score, 0.49)
+            instability_score = float(max(fallback_score * 0.35, technical_score))
+            structural_drift = structural_drift_score
+            transition_pressure = float(np.clip(abs(drift_velocity) + abs(drift_acceleration), 0.0, 1.0))
+        else:
+            instability_score = fallback_score
+
         instability_components = {
             "drift": round(float(np.clip(structural_drift, 0.0, 1.0)), 6),
             "relationship_degradation": round(float(np.clip(transition_pressure, 0.0, 1.0)), 6),
-            "entropy_growth": round(float(np.clip(variability_pressure, 0.0, 1.0)), 6),
+            "entropy_growth": round(float(np.clip(fallback_variability_pressure, 0.0, 1.0)), 6),
+            "fallback_score": round(float(np.clip(fallback_score, 0.0, 1.0)), 6),
+            "structural_drift_score": round(float(np.clip(structural_drift_score, 0.0, 1.0)), 6),
+            "mahalanobis_distance": round(float(max(mahalanobis_distance, 0.0)), 6),
+            "drift_velocity": round(float(drift_velocity), 6),
+            "drift_acceleration": round(float(drift_acceleration), 6),
+            "covariance_shift": round(float(max(covariance_shift, 0.0)), 6),
+            "trajectory_curvature": round(float(np.clip(trajectory_curvature, 0.0, 1.0)), 6),
+            "persistence_condition": persistence_condition,
+            "accumulation_condition": accumulation_condition,
+            "accumulation": round(float(max(accumulation, 0.0)), 6),
+            "dynamic_threshold": round(float(max(dynamic_threshold, 0.0)), 6),
+            "fallback_normalized_drift": round(float(np.clip(fallback_structural_drift, 0.0, 1.0)), 6),
+            "fallback_transition_pressure": round(float(np.clip(fallback_transition_pressure, 0.0, 1.0)), 6),
+            "fallback_variability_pressure": round(float(np.clip(fallback_variability_pressure, 0.0, 1.0)), 6),
         }
         velocity = instability_score - (self._instability_history[-1] if self._instability_history else instability_score)
 
@@ -98,6 +201,8 @@ class BackendSiiRunner:
 
         self._instability_history.append(instability_score)
         self._velocity_history.append(float(velocity))
+        self._distance_history.append(float(max(mahalanobis_distance, 0.0)))
+        self._distance_velocity_history.append(float(drift_velocity))
         self._regime_history.append(regime)
 
         return {
@@ -444,11 +549,33 @@ def build_runtime_state(
 
 def build_instability_index(latest_state: dict[str, Any]) -> dict[str, Any]:
     components = latest_state.get("instability_components", {}) if isinstance(latest_state, dict) else {}
-    drift = float(components.get("drift", latest_state.get("structural_drift", 0.0)))
-    relationship = float(components.get("relationship_degradation", latest_state.get("transition_pressure", 0.0)))
-    entropy = float(components.get("entropy_growth", 0.0))
+    drift = float(
+        components.get(
+            "structural_drift_score",
+            components.get("drift", latest_state.get("structural_drift", 0.0)),
+        )
+    )
+    relationship = float(
+        latest_state.get(
+            "transition_pressure",
+            components.get("relationship_degradation", 0.0),
+        )
+    )
+    if "transition_pressure" not in latest_state:
+        relationship = float(components.get("relationship_degradation", 0.0))
+    entropy = float(components.get("covariance_shift", components.get("entropy_growth", 0.0)))
     causal = float(latest_state.get("confidence", 0.0))
-    topology = float(np.clip((drift * 0.6) + (relationship * 0.4), 0.0, 1.0))
+    if "covariance_shift" in components or "trajectory_curvature" in components:
+        topology = float(
+            np.clip(
+                (float(components.get("covariance_shift", 0.0)) * 0.7)
+                + (float(components.get("trajectory_curvature", 0.0)) * 0.3),
+                0.0,
+                1.0,
+            )
+        )
+    else:
+        topology = float(np.clip((drift * 0.6) + (relationship * 0.4), 0.0, 1.0))
     score = float(np.clip((drift * 0.35) + (relationship * 0.25) + (entropy * 0.15) + (causal * 0.15) + (topology * 0.10), 0.0, 1.0))
     return {
         "score": round(score, 6),

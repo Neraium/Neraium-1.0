@@ -19,9 +19,6 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
     profile = domain_profile(selected_mode)
     latest_result = read_latest_upload_result()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
-    adaptive_learning = {}
-    if include_persisted and isinstance(latest_result, dict) and isinstance(latest_result.get("adaptive_learning"), dict):
-        adaptive_learning = latest_result.get("adaptive_learning", {})
     return {
         "systems": profile["systems"],
         "driver_categories": profile["driver_categories"],
@@ -30,7 +27,7 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
         "domain_confidence": detection["confidence"],
         "domain_evidence": detection["evidence"],
         "intelligence": intelligence,
-        "adaptive_learning": adaptive_learning,
+        "adaptive_learning": {},
         "integration_stubs": profile["integration_stubs"],
         "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
