@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any
+from app.services.baseline_analysis import build_baseline_analysis
+from app.services.cultivation_mapping import map_cultivation_columns
+from app.services.data_quality import build_data_quality, profile_numeric_columns, profile_timestamps
+from app.services.driver_attribution import build_driver_attribution
+from app.services.operator_report import build_operator_report
+from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
 from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
@@ -282,16 +288,156 @@ def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | No
     }
 
 
+def _signal_level_from_drift(item: dict[str, Any]) -> str:
+    flag = str(item.get("drift_flag") or "").lower()
+    percent_change = abs(float(item.get("percent_change") or 0.0))
+    if flag == "review" and percent_change >= 30:
+        return "elevated"
+    if flag == "review":
+        return "review"
+    if flag == "watch":
+        return "watch"
+    return "info"
+
+
+def _relationship_columns(item: dict[str, Any]) -> list[str]:
+    refs = item.get("evidence_refs") if isinstance(item.get("evidence_refs"), list) else []
+    columns = [
+        str(ref.get("column"))
+        for ref in refs
+        if isinstance(ref, dict) and ref.get("column")
+    ]
+    if len(columns) >= 2:
+        return columns[:2]
+    relationship = str(item.get("relationship") or "")
+    if "<->" in relationship:
+        return [part.strip() for part in relationship.split("<->", 1)]
+    return []
+
+
+def _category_for_column(column: str, cultivation_mapping: dict[str, Any]) -> str:
+    categories = cultivation_mapping.get("categories", {}) if isinstance(cultivation_mapping, dict) else {}
+    for category, mapped_columns in categories.items():
+        if category == "unknown" or not isinstance(mapped_columns, list):
+            continue
+        if column in mapped_columns:
+            return category
+    return "unknown"
+
+
+def _build_upload_engine_result(
+    *,
+    baseline_analysis: dict[str, Any],
+    relationship_model: dict[str, Any],
+    cultivation_mapping: dict[str, Any],
+    overall_urgency: str,
+) -> dict[str, Any]:
+    column_drift = baseline_analysis.get("column_drift", []) if isinstance(baseline_analysis.get("column_drift"), list) else []
+    significant_drift = [
+        item for item in column_drift
+        if isinstance(item, dict) and item.get("drift_flag") in {"watch", "review"}
+    ]
+    relationship_changes = relationship_model.get("top_relationship_changes", []) if isinstance(relationship_model.get("top_relationship_changes"), list) else []
+
+    evidence: list[dict[str, Any]] = []
+    categories: dict[str, dict[str, list[str]]] = {}
+    persistent_columns: set[str] = {
+        str(item.get("column"))
+        for item in significant_drift
+        if str(item.get("drift_flag")) == "review" and item.get("column")
+    }
+
+    for item in significant_drift:
+        column = str(item.get("column") or "")
+        category = _category_for_column(column, cultivation_mapping)
+        bucket = categories.setdefault(category, {"signals": [], "evidence": []})
+        if column and column not in bucket["signals"]:
+            bucket["signals"].append(column)
+
+    for item in relationship_changes:
+        if not isinstance(item, dict):
+            continue
+        columns = _relationship_columns(item)
+        if len(columns) < 2:
+            continue
+        evidence.append(
+            {
+                "type": "relationship_change",
+                "columns": columns,
+                "change": float(item.get("correlation_delta") or 0.0),
+                "summary": item.get("summary"),
+                "coupling_strength": item.get("coupling_strength"),
+                "baseline_sample_size": item.get("baseline_sample_size"),
+                "recent_sample_size": item.get("recent_sample_size"),
+                "evidence_refs": item.get("evidence_refs"),
+            }
+        )
+        for column in columns:
+            category = _category_for_column(column, cultivation_mapping)
+            bucket = categories.setdefault(category, {"signals": [], "evidence": []})
+            if column not in bucket["signals"]:
+                bucket["signals"].append(column)
+            if item.get("summary"):
+                bucket["evidence"].append(str(item.get("summary")))
+            persistent_columns.add(column)
+
+    corroboration_level = "limited"
+    meaningful_categories = sum(
+        1
+        for details in categories.values()
+        if details["signals"] or details["evidence"]
+    )
+    if relationship_changes and meaningful_categories >= 2:
+        corroboration_level = "strong"
+    elif relationship_changes or significant_drift:
+        corroboration_level = "moderate"
+
+    signals = [
+        {
+            "column": str(item.get("column")),
+            "level": _signal_level_from_drift(item),
+            "direction": item.get("direction"),
+            "percent_change": item.get("percent_change"),
+        }
+        for item in significant_drift
+        if item.get("column")
+    ]
+    overall_result = "complete"
+    if any(signal["level"] == "elevated" for signal in signals) or overall_urgency == "unstable":
+        overall_result = "elevated"
+    elif signals or relationship_changes or overall_urgency == "review":
+        overall_result = "needs_review"
+
+    return {
+        "overall_result": overall_result,
+        "signals": signals,
+        "evidence": evidence,
+        "system_evidence": {
+            "corroboration_level": corroboration_level,
+            "categories_showing_meaningful_change": meaningful_categories,
+            "categories": categories,
+        },
+        "persistence_assessment": {
+            "persistent_columns": sorted(persistent_columns),
+        },
+    }
+
+
 def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list[dict[str, Any]], row_count_total: int, timestamp_column: str | None, first_timestamp: Any, last_timestamp: Any, chunk_count: int, memory_estimate_bytes: int) -> dict[str, Any]:
     initiated_by = (read_job(job_id) or {}).get("initiated_by", "anonymous")
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
+    matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
     numeric_profiles = []
-    for col in numeric_columns[:50]:
-        values = [_to_float(row.get(col)) for row in rows]
-        clean = [value for value in values if value is not None]
-        if not clean:
+    for profile in profile_numeric_columns(columns, matrix_rows_for_profiles):
+        if profile.get("column") not in numeric_columns[:50]:
             continue
-        numeric_profiles.append({"column": col, "minimum": round(min(clean), 4), "maximum": round(max(clean), 4), "average": round(sum(clean) / len(clean), 4)})
+        numeric_profiles.append(
+            {
+                **profile,
+                "minimum": profile.get("min"),
+                "maximum": profile.get("max"),
+            }
+        )
 
     room_column = next((col for col in columns if col.lower().strip() == "room"), None)
     room_counts: dict[str, int] = {}
@@ -368,9 +514,6 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
 
     telemetry_profile, telemetry_profile_confidence, telemetry_profile_signals = classify_telemetry_profile(columns)
     operational_profile, operational_profile_confidence, operational_profile_signals, operational_modality = classify_operational_profile(columns)
-    score_penalty = 20 if max_room_urgency == "review" else 45 if max_room_urgency == "unstable" else 5
-    score_penalty += int(min(25, round(max_room_drift * 40)))
-    neraium_score = max(0, min(100, 92 - score_penalty))
     overall_urgency = "unstable" if max_room_urgency == "unstable" else ("review" if max_room_urgency == "review" else "nominal")
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
@@ -385,10 +528,92 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
     _set_propagation_stage(job_id, stage="building_propagation_model", progress=80, label="Building propagation model.")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
-    matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
+    matrix_rows = matrix_rows_for_profiles
+    timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
+    baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
+    relationship_baseline = relationship_model if isinstance(relationship_model, dict) else {}
+    baseline_analysis = {
+        **baseline_analysis,
+        "top_relationship_changes": relationship_baseline.get("top_relationship_changes", []),
+        "baseline_relationships": relationship_baseline.get("baseline_relationships", []),
+        "sampled_for_baseline": bool(relationship_baseline.get("sampled_for_baseline")),
+    }
+    cultivation_mapping = map_cultivation_columns(columns)
+    data_quality = build_data_quality(
+        row_count_total,
+        len(columns),
+        len(numeric_columns),
+        bool(timestamp_column),
+        list(
+            dict.fromkeys(
+                [
+                    *timestamp_profile.get("warnings", []),
+                    *baseline_analysis.get("warnings", []),
+                    *cultivation_mapping.get("warnings", []),
+                ]
+            )
+        ),
+    )
+    room_assessments = {item["room"]: dict(item) for item in room_intelligence if item.get("room")}
+    primary_room_assessment = next((item for item in room_intelligence if item.get("room") == (room_names[0] if room_names else "")), room_intelligence[0] if room_intelligence else {})
+    engine_result = _build_upload_engine_result(
+        baseline_analysis=baseline_analysis,
+        relationship_model=relationship_baseline,
+        cultivation_mapping=cultivation_mapping,
+        overall_urgency=overall_urgency,
+    )
+    driver_attribution = build_driver_attribution(
+        {
+            "room": primary_room_assessment.get("room") or (room_names[0] if room_names else "Uploaded telemetry"),
+            "state": primary_room_assessment.get("room_state") or "Monitoring active telemetry feed",
+            "severity": "action" if overall_urgency == "unstable" else ("review" if overall_urgency == "review" else "info"),
+        },
+        {
+            "timestamp_profile": timestamp_profile,
+            "data_quality": data_quality,
+            "numeric_profiles": numeric_profiles,
+            "cultivation_mapping": cultivation_mapping,
+        },
+        {
+            "baseline_analysis": baseline_analysis,
+            "cultivation_mapping": cultivation_mapping,
+        },
+        engine_result,
+    )
+    operator_report = build_operator_report(
+        data_quality,
+        timestamp_profile,
+        numeric_profiles,
+        baseline_analysis,
+        cultivation_mapping,
+    )
+    sii_intelligence = build_upload_intelligence(
+        filename=filename,
+        row_count=row_count_total,
+        data_quality=data_quality,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        operator_report=operator_report,
+        timestamp_profile=timestamp_profile,
+        room_summary=room_summary,
+        room_assessments=room_assessments,
+        source_metadata={
+            "telemetry_profile": telemetry_profile,
+            "telemetry_profile_confidence": telemetry_profile_confidence,
+            "telemetry_profile_signals": telemetry_profile_signals,
+            "telemetry_modality": "continuous",
+            "operational_signal_profile": operational_profile,
+            "operational_signal_profile_confidence": operational_profile_confidence,
+            "operational_signal_profile_signals": operational_profile_signals,
+            "operational_signal_modality": operational_modality,
+        },
+    )
+    sii_intelligence["runner_module"] = RUNNER_MODULE
+    sii_intelligence["replay_timeline"] = replay
     processing_trace = {"sii_pipeline_ran": True, "sii_completed": True, "replay_frame_count": frame_count, "rows_processed": row_count_total, "columns_analyzed": len(numeric_columns), "completed_at": now}
     _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
-    runner_result = run_sii_runner(columns=columns, rows=matrix_rows, numeric_profiles=numeric_profiles, timestamp_column=timestamp_column, primary_room=room_names[0] if room_names else "Uploaded telemetry", driver_attribution={}, engine_result={"evidence": []}, processing_trace=processing_trace)
+    runner_result = run_sii_runner(columns=columns, rows=matrix_rows, numeric_profiles=numeric_profiles, timestamp_column=timestamp_column, primary_room=(driver_attribution.get("room") or room_names[0] if room_names else "Uploaded telemetry"), driver_attribution=driver_attribution, engine_result=engine_result, processing_trace=processing_trace)
     latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
 
     result = {
@@ -400,16 +625,16 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         "preview_rows": rows[:10],
         "detected_timestamp_column": timestamp_column,
         "numeric_profiles": numeric_profiles,
-        "timestamp_profile": {"first_timestamp": first_timestamp, "last_timestamp": last_timestamp},
-        "data_quality": {"readiness": "ready", "row_count": row_count_total, "numeric_column_count": len(numeric_columns)},
-        "baseline_analysis": relationship_model,
-        "cultivation_mapping": {},
-        "operator_report": {},
-        "engine_result": {"overall_result": "complete", "signals": [], "evidence": []},
-        "driver_attribution": {},
+        "timestamp_profile": timestamp_profile,
+        "data_quality": data_quality,
+        "baseline_analysis": baseline_analysis,
+        "cultivation_mapping": cultivation_mapping,
+        "operator_report": operator_report,
+        "engine_result": engine_result,
+        "driver_attribution": driver_attribution,
         "operating_state": "Monitoring",
         "drift_status": "info",
-        "sii_intelligence": {"source": "uploaded", "facility_state": "Monitoring", "urgency": overall_urgency, "primary_room": room_names[0] if room_names else "Uploaded telemetry", "runner_module": RUNNER_MODULE, "neraium_score": neraium_score, "room_summary": room_summary, "rooms": room_intelligence, "telemetry_profile": telemetry_profile, "telemetry_profile_confidence": telemetry_profile_confidence, "telemetry_profile_signals": telemetry_profile_signals, "operational_signal_profile": operational_profile, "operational_signal_profile_confidence": operational_profile_confidence, "operational_signal_profile_signals": operational_profile_signals, "operational_signal_modality": operational_modality, "system_identity": {"claim_made": telemetry_profile_confidence in {"medium", "high"}, "telemetry_profile": telemetry_profile, "operational_profile": operational_profile, "operational_modality": operational_modality}, "structural_memory": {"memory_matches": [{"name": "uploaded_baseline_pattern"}], "retrieval_status": "matched"}, "active_archetypes": ["uploaded_baseline_pattern"], "causality_graph": {"dominant_pathways": ["thermal_to_humidity"], "edges": [{"from": "temperature", "to": "humidity"}]}, "counterfactuals": {"uncertainty_ranges": {"instability_acceleration_window_days": "3-7 days"}}, "facility_cognition": {"global_structural_pressure_score": 0.42}, "operator_explanation_v2": {"summary": "Structural pressure is propagating through uploaded telemetry relationships.", "active_archetypes": ["uploaded_baseline_pattern"]}, "structural_explanation": ["Structural pressure is propagating through uploaded telemetry relationships.", "Uploaded telemetry indicates relationship changes across key signals."], "last_updated": now, "replay_timeline": replay},
+        "sii_intelligence": sii_intelligence,
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
         "processing_stats": {"used_streaming": True, "sampled_rows": len(rows), "chunk_count": chunk_count, "memory_estimate_bytes": memory_estimate_bytes},
