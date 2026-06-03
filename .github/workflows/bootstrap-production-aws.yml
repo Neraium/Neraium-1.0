@@ -8,8 +8,11 @@ permissions:
 
 env:
   AWS_REGION: us-east-2
-  UPLOAD_STATE_BUCKET: ${{ vars.NERAIUM_UPLOAD_STATE_BUCKET }}
+  API_LOG_GROUP: /ecs/neraium-prod-api
+  WORKER_LOG_GROUP: /ecs/neraium-prod-worker
+  UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
   APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
+  TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
 
 jobs:
   bootstrap-production-aws:
@@ -31,8 +34,9 @@ jobs:
           set -euo pipefail
           test -n "$UPLOAD_STATE_BUCKET"
           test -n "$APP_TASK_ROLE_NAME"
+          test -n "$TASK_EXECUTION_ROLE_NAME"
 
-      - name: Ensure production bucket and task role
+      - name: Ensure production bucket, roles, and log groups
         run: |
           set -euo pipefail
           ./scripts/bootstrap-production-aws.sh

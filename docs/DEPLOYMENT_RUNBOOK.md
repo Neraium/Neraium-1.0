@@ -66,9 +66,11 @@ gh run watch --repo Neraium/Neraium-1.0
 Required repository variables before running either workflow:
 
 ```text
-NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
+secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 ```
+
+The active production path is GitHub Actions plus AWS CLI. Terraform is deprecated and should not be used to register or update ECS task definitions.
 
 ## Recommended Deployment Order
 

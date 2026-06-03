@@ -1,6 +1,6 @@
 # AWS Deployment Preparation
 
-This document captures the current AWS deployment path for Neraium-1.0. Production AWS bootstrap is handled by a checked-in AWS CLI script and GitHub Actions workflows, not Terraform.
+This document captures the active AWS deployment path for Neraium-1.0. Production bootstrap and ECS deployment are handled by a checked-in AWS CLI script plus GitHub Actions. Terraform is inactive and not the production source of truth.
 
 ## Targets
 
@@ -24,7 +24,7 @@ Backend deployment notes:
 1. Build the backend Docker image from the repository root:
 
 ```powershell
-docker build -t neraium-backend:local .\backend
+docker build -t neraium-backend:local .\\backend
 ```
 
 2. Create an Amazon ECR repository for the backend image.
@@ -58,6 +58,13 @@ Production split-role backend behavior does require a shared upload-state bucket
 ```text
 NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_PROCESS_ROLE=api|worker
+```
+
+The ECS deployment workflow now registers both task definitions directly with AWS CLI and pins:
+
+```text
+command=["python","-m","app.entrypoint"]
+awslogs group=/ecs/neraium-prod-api or /ecs/neraium-prod-worker
 ```
 
 Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000` is injected by the deployment workflow, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
@@ -119,42 +126,43 @@ The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_U
 ## Deployment Order
 
 1. Push the latest GitHub `main` branch.
-2. Build and push the backend Docker image to Amazon ECR.
-3. Deploy the backend through Amazon ECS Express Mode / ECS Fargate.
-4. Confirm backend endpoints respond directly:
+2. Run the shared AWS bootstrap workflow or script when bucket, IAM, or log-group drift is possible.
+3. Build and push the backend Docker image to Amazon ECR.
+4. Deploy the backend through the GitHub Actions ECS workflow.
+5. Confirm backend endpoints respond directly:
    - `https://<ecs-backend-url>/api/health`
    - `https://<ecs-backend-url>/api/ready`
-5. Choose API routing pattern:
+6. Choose API routing pattern:
    - Pattern A: set `VITE_API_BASE_URL=https://<ecs-backend-url>` in Amplify build env.
    - Pattern B: configure CloudFront `/api/*` behavior to backend origin.
-6. Deploy frontend through AWS Amplify Hosting.
-7. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
-8. Verify production domain routing:
+7. Deploy frontend through AWS Amplify Hosting.
+8. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
+9. Verify production domain routing:
    - `curl -i https://app.neraium.com/api/health` should NOT return `server: AmazonS3` redirect behavior.
-9. Verify upload pipeline routes on production domain:
+10. Verify upload pipeline routes on production domain:
    - `POST /api/data/upload`
    - `GET /api/data/upload-status/<job_id>`
    - `GET /api/data/upload-stream/<job_id>`
-10. Test full CSV upload flow from live frontend.
+11. Test full CSV upload flow from live frontend.
 
 ## Local Validation Commands
 
 Backend tests:
 
 ```powershell
-.\scripts\test-backend.ps1
+.\\scripts\\test-backend.ps1
 ```
 
 Frontend production build:
 
 ```powershell
-.\scripts\build-frontend.ps1
+.\\scripts\\build-frontend.ps1
 ```
 
 Docker image build check:
 
 ```powershell
-docker build -t neraium-backend:local .\backend
+docker build -t neraium-backend:local .\\backend
 ```
 
 Run the backend container locally on the production container port:
@@ -171,22 +179,25 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health
 
 ## Deployment Boundaries
 
-This preparation intentionally does not add user accounts, database persistence, or changes to API response shapes. AWS bootstrap and ECS deployment automation now live in checked-in scripts and GitHub workflows instead of Terraform templates.
+This preparation intentionally does not add user accounts, database persistence, or changes to API response shapes. AWS bootstrap and ECS deployment automation now live in checked-in scripts and GitHub workflows. Terraform remains deprecated and should not be used for active production ECS changes.
 
 ## Production Bootstrap
 
-Bootstrap the shared S3 bucket and ECS task role with:
+Bootstrap the shared S3 bucket, CloudWatch log groups, and ECS task roles with:
 
 ```bash
 AWS_REGION=us-east-2 \
 UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
 APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
+TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
+API_LOG_GROUP=/ecs/neraium-prod-api \
+WORKER_LOG_GROUP=/ecs/neraium-prod-worker \
 ./scripts/bootstrap-production-aws.sh
 ```
 
-Repository variables required by GitHub Actions:
+GitHub Actions configuration required by the active deploy path:
 
 ```text
-NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
+secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 ```

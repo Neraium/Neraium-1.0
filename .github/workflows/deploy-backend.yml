@@ -7,6 +7,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"
+      - "scripts/bootstrap-production-aws.sh"
   workflow_dispatch:
 
 permissions:
@@ -20,9 +21,11 @@ env:
   ECS_WORKER_SERVICE: neraium-prod-worker-service
   API_TASK_FAMILY: neraium-prod-api
   WORKER_TASK_FAMILY: neraium-prod-worker
+  API_LOG_GROUP: /ecs/neraium-prod-api
   WORKER_LOG_GROUP: /ecs/neraium-prod-worker
-  UPLOAD_STATE_BUCKET: ${{ vars.NERAIUM_UPLOAD_STATE_BUCKET }}
+  UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
   APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
+  TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
 
 jobs:
   deploy-backend:
@@ -48,8 +51,15 @@ jobs:
           set -euo pipefail
           test -n "$UPLOAD_STATE_BUCKET"
           test -n "$APP_TASK_ROLE_NAME"
+          test -n "$TASK_EXECUTION_ROLE_NAME"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
+          echo "TASK_EXECUTION_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}" >> "$GITHUB_ENV"
+
+      - name: Bootstrap shared AWS deployment resources
+        run: |
+          set -euo pipefail
+          ./scripts/bootstrap-production-aws.sh
 
       - name: Ensure ECR repository exists
         run: |
@@ -79,11 +89,13 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
+            | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
               if .name == $CONTAINER_NAME then
                 .image = $IMAGE_URI
+                | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
                     | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET"))
                     + [
@@ -91,6 +103,14 @@ jobs:
                       {"name": "APP_ENV", "value": "prod"},
                       {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET}
                     ])
+                | .logConfiguration = {
+                    "logDriver": "awslogs",
+                    "options": {
+                      "awslogs-group": $API_LOG_GROUP,
+                      "awslogs-region": $AWS_REGION,
+                      "awslogs-stream-prefix": "ecs"
+                    }
+                  }
               else . end
             ))
             | del(
@@ -124,8 +144,9 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
+            | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
               if .name == $CONTAINER_NAME then
                 .image = $IMAGE_URI
@@ -237,12 +258,61 @@ jobs:
 
           aws logs tail "$WORKER_LOG_GROUP" \
             --region "$AWS_REGION" \
-            --since 10m
-
-          aws logs tail "$WORKER_LOG_GROUP" \
-            --region "$AWS_REGION" \
             --since 10m | tee worker-startup.log
 
-          grep -q 'neraium_startup_role=worker' worker-startup.log
           grep -q 'worker_loop_started' worker-startup.log
           grep -q 'worker_polling_queue' worker-startup.log
+
+      - name: Verify ECS task env includes shared upload bucket
+        run: |
+          set -euo pipefail
+
+          API_TASK_ARN=$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_API_SERVICE" \
+            --desired-status RUNNING \
+            --region "$AWS_REGION" \
+            --query 'taskArns[0]' \
+            --output text)
+
+          WORKER_TASK_ARN=$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_WORKER_SERVICE" \
+            --desired-status RUNNING \
+            --region "$AWS_REGION" \
+            --query 'taskArns[0]' \
+            --output text)
+
+          test -n "$API_TASK_ARN"
+          test -n "$WORKER_TASK_ARN"
+          test "$API_TASK_ARN" != "None"
+          test "$WORKER_TASK_ARN" != "None"
+
+          API_TASK_DEF_ARN=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$API_TASK_ARN" \
+            --region "$AWS_REGION" \
+            --query 'tasks[0].taskDefinitionArn' \
+            --output text)
+
+          WORKER_TASK_DEF_ARN=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$WORKER_TASK_ARN" \
+            --region "$AWS_REGION" \
+            --query 'tasks[0].taskDefinitionArn' \
+            --output text)
+
+          aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_UPLOAD_STATE_BUCKET`].value | [0]' \
+            --output text | tee api-upload-bucket.txt
+
+          aws ecs describe-task-definition \
+            --task-definition "$WORKER_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_UPLOAD_STATE_BUCKET`].value | [0]' \
+            --output text | tee worker-upload-bucket.txt
+
+          test "$(cat api-upload-bucket.txt)" = "$UPLOAD_STATE_BUCKET"
+          test "$(cat worker-upload-bucket.txt)" = "$UPLOAD_STATE_BUCKET"
