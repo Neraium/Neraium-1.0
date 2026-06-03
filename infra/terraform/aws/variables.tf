@@ -76,6 +76,12 @@ variable "max_upload_size_bytes" {
   default     = 262144000
 }
 
+variable "upload_state_bucket" {
+  type        = string
+  description = "Shared S3 bucket used by split-role API/worker tasks for upload state and queue coordination."
+  default     = ""
+}
+
 variable "worker_cpu" {
   type        = number
   description = "Fargate worker task CPU units."

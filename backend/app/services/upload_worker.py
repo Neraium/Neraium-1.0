@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 
+from app.services.runtime_db import upload_queue_backend
 from app.services.upload_jobs import process_next_queued_upload_job
 
 
@@ -37,7 +38,7 @@ def stop_upload_worker() -> None:
 
 def _worker_loop(poll_interval_seconds: float) -> None:
     while not _stop_event.is_set():
-        logger.info("upload_worker_polling_queue")
+        logger.info("upload_worker_polling_queue queue_backend=%s", upload_queue_backend())
         try:
             processed = process_next_queued_upload_job()
             logger.info("upload_worker_poll_result processed=%s", processed)

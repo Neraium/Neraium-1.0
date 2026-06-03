@@ -7,6 +7,7 @@ import json
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any
 import uuid
 from datetime import datetime, timezone
 import re
@@ -404,6 +405,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         or request.headers.get("X-Forwarded-Email")
         or "anonymous"
     )
+    summary: dict[str, Any] = {}
     try:
         job_id = uuid.uuid4().hex
         summary = {
@@ -471,18 +473,25 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             Path(temp_path).unlink(missing_ok=True)
         except Exception:
             pass
-        failed_job_id = uuid.uuid4().hex
+        failed_job_id = str(summary.get("job_id") or uuid.uuid4().hex)
         failed_at = datetime.now(timezone.utc).isoformat()
+        error_message = str(exc) or exc.__class__.__name__
+        error_type = "shared_upload_queue_not_configured" if "shared_upload_queue_not_configured" in error_message else "upload_enqueue_failed"
         upload_jobs.write_job(
             {
+                **summary,
                 "job_id": failed_job_id,
                 "filename": filename,
                 "status": "FAILED",
                 "processing_state": "failed",
-                "error": str(exc),
-                "message": "Telemetry processing failed.",
+                "error_type": error_type,
+                "error": error_message,
+                "message": "Telemetry processing failed." if error_type != "shared_upload_queue_not_configured" else "Shared upload queue is not configured for split-role production.",
                 "progress_label": "Telemetry processing failed.",
                 "result_available": False,
+                "propagation_stage": "failed",
+                "propagation_progress": 0,
+                "propagation_label": "Failed.",
             }
         )
         upsert_evidence_run(
@@ -501,7 +510,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "operating_state": "error",
                 "drift_status": "error",
                 "warnings": [],
-                "errors": [str(exc)],
+                "errors": [error_message],
                 "primary_drivers": [],
                 "evidence_summary": [],
                 "structural_archetypes": [],
@@ -510,7 +519,18 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "operator_feedback_history": [],
             }
         )
-        summary = {"job_id": failed_job_id}
+        return JSONResponse(
+            status_code=503 if error_type == "shared_upload_queue_not_configured" else 500,
+            content={
+                "job_id": failed_job_id,
+                "status": "FAILED",
+                "filename": filename,
+                "message": "Shared upload queue is not configured for split-role production." if error_type == "shared_upload_queue_not_configured" else "Telemetry processing failed.",
+                "error_type": error_type,
+                "error": error_message,
+                "status_url": f"/api/data/upload-status/{failed_job_id}",
+            },
+        )
     return {
         "job_id": summary.get("job_id"),
         "status": "PENDING",

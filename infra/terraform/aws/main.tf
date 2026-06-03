@@ -236,6 +236,37 @@ resource "aws_iam_role" "task_execution" {
   assume_role_policy = data.aws_iam_policy_document.task_assume.json
 }
 
+resource "aws_iam_role" "task_app" {
+  name               = "${local.name_prefix}-task-app-role"
+  assume_role_policy = data.aws_iam_policy_document.task_assume.json
+}
+
+resource "aws_iam_role_policy" "task_app_upload_state" {
+  count = var.upload_state_bucket == "" ? 0 : 1
+
+  name = "${local.name_prefix}-task-app-upload-state"
+  role = aws_iam_role.task_app.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = ["arn:aws:s3:::${var.upload_state_bucket}"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = ["arn:aws:s3:::${var.upload_state_bucket}/*"]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "task_execution_default" {
   role       = aws_iam_role.task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
@@ -261,6 +292,7 @@ resource "aws_ecs_task_definition" "backend" {
   cpu                      = tostring(var.backend_cpu)
   memory                   = tostring(var.backend_memory)
   execution_role_arn       = aws_iam_role.task_execution.arn
+  task_role_arn            = aws_iam_role.task_app.arn
 
   container_definitions = jsonencode([
     {
@@ -271,13 +303,15 @@ resource "aws_ecs_task_definition" "backend" {
         containerPort = var.backend_container_port
         protocol      = "tcp"
       }]
-      environment = [
+      environment = concat([
         { name = "APP_ENV", value = var.environment },
         { name = "BACKEND_HOST", value = "0.0.0.0" },
         { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
         { name = "NERAIUM_PROCESS_ROLE", value = "api" },
         { name = "NERAIUM_MAX_UPLOAD_SIZE_BYTES", value = tostring(var.max_upload_size_bytes) },
-      ]
+      ], var.upload_state_bucket == "" ? [] : [
+        { name = "NERAIUM_UPLOAD_STATE_BUCKET", value = var.upload_state_bucket }
+      ])
       secrets = [
         { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }
       ]
@@ -300,6 +334,7 @@ resource "aws_ecs_task_definition" "worker" {
   cpu                      = tostring(var.worker_cpu)
   memory                   = tostring(var.worker_memory)
   execution_role_arn       = aws_iam_role.task_execution.arn
+  task_role_arn            = aws_iam_role.task_app.arn
 
   container_definitions = jsonencode([
     {
@@ -307,13 +342,15 @@ resource "aws_ecs_task_definition" "worker" {
       image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
       essential = true
       command   = ["python", "-m", "app.entrypoint"]
-      environment = [
+      environment = concat([
         { name = "APP_ENV", value = var.environment },
         { name = "BACKEND_HOST", value = "0.0.0.0" },
         { name = "BACKEND_PORT", value = tostring(var.backend_container_port) },
         { name = "NERAIUM_PROCESS_ROLE", value = "worker" },
         { name = "NERAIUM_MAX_UPLOAD_SIZE_BYTES", value = tostring(var.max_upload_size_bytes) },
-      ]
+      ], var.upload_state_bucket == "" ? [] : [
+        { name = "NERAIUM_UPLOAD_STATE_BUCKET", value = var.upload_state_bucket }
+      ])
       secrets = [
         { name = "NERAIUM_API_TOKEN", valueFrom = var.api_token_secret_arn }
       ]

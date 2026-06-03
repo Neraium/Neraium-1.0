@@ -1,5 +1,5 @@
 from app.main import create_app
-from app.services.runtime_db import clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db
+from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
 from app.services.upload_jobs import process_next_queued_upload_job, read_job, write_job
 from fastapi.testclient import TestClient
 
@@ -67,3 +67,57 @@ def test_startup_recovers_stale_processing_jobs() -> None:
     assert row is not None
     assert row["status"] == "failed"
     assert row["last_error"] == "stale_processing_job_recovered"
+
+
+class _FakeS3Body:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+
+class _FakeS3Client:
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, str], bytes] = {}
+
+    def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None) -> None:
+        self.objects[(Bucket, Key)] = Body
+
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, _FakeS3Body]:
+        payload = self.objects[(Bucket, Key)]
+        return {"Body": _FakeS3Body(payload)}
+
+    def list_objects_v2(self, *, Bucket: str, Prefix: str, ContinuationToken: str | None = None) -> dict[str, object]:
+        contents = [
+            {"Key": key}
+            for bucket, key in sorted(self.objects)
+            if bucket == Bucket and key.startswith(Prefix)
+        ]
+        return {"Contents": contents, "IsTruncated": False}
+
+
+def test_shared_upload_queue_backend_allows_api_enqueue_and_worker_claim(monkeypatch) -> None:
+    fake_s3 = _FakeS3Client()
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
+    monkeypatch.setattr("app.services.runtime_db._get_s3_client", lambda: fake_s3)
+
+    enqueue_upload_job("shared-queue-job")
+
+    queued = read_upload_queue_job("shared-queue-job")
+    assert queued is not None
+    assert queued["status"] == "pending"
+    assert queued["queue_position"] == 1
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "worker")
+    claimed_job_id = claim_next_upload_job()
+
+    assert claimed_job_id == "shared-queue-job"
+
+    claimed = read_upload_queue_job("shared-queue-job")
+    assert claimed is not None
+    assert claimed["status"] == "processing"
+    assert claimed["attempts"] == 1
+    assert queue_metrics() == {"pending": 0, "processing": 1, "completed": 0, "failed": 0}
