@@ -37,8 +37,10 @@ def stop_upload_worker() -> None:
 
 def _worker_loop(poll_interval_seconds: float) -> None:
     while not _stop_event.is_set():
+        logger.info("upload_worker_polling_queue")
         try:
-            process_next_queued_upload_job()
+            processed = process_next_queued_upload_job()
+            logger.info("upload_worker_poll_result processed=%s", processed)
         except Exception:
             logger.exception("upload_worker_iteration_failed")
         _stop_event.wait(poll_interval_seconds)
