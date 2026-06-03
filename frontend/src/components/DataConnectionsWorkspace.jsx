@@ -1248,18 +1248,24 @@ async function pollUploadStatus(jobId, statusUrl) {
   );
   const effectiveReplayReady = Boolean(uploadJob?.replay_ready) || Number(uploadJob?.replay_frame_count ?? 0) > 0 || latestReplayFrames > 0;
   const effectiveReplayFrameCount = Math.max(Number(uploadJob?.replay_frame_count ?? 0) || 0, latestReplayFrames);
-  const uploadStatePercent = effectiveUploadState === "complete" ? 100 : (Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : 0);
-  const jobStatusPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
-    ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
-    : uploadStatePercent;
+  const estimatedStageProgress = effectiveUploadState === "complete"
+    ? 100
+    : (Number.isFinite(statusFallbackPercent) ? Number(statusFallbackPercent) : null);
+  const hasExplicitPropagationProgress = uploadJob?.propagation_progress !== undefined
+    && uploadJob?.propagation_progress !== null
+    && uploadJob?.propagation_progress !== "";
+  const explicitPropagationPercent = hasExplicitPropagationProgress && Number.isFinite(uploadJob?.propagation_progress)
+    ? Math.max(0, Math.min(100, Number(uploadJob?.propagation_progress)))
+    : null;
   const statusDebug = [
     ["Job ID", uploadJob?.job_id ?? effectiveSnapshot?.history?.[0]?.job_id ?? "none"],
     ["Upload State", effectiveUploadState],
-    ["Upload State %", `${uploadStatePercent}%`],
     ["Job Status", String(uploadJob?.status ?? "none")],
-    ["Job Status %", `${jobStatusPercent}%`],
     ["Processing State", String(uploadJob?.processing_state ?? "none")],
-    ["Percent", Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? `${Number(uploadJob?.percent ?? uploadJob?.progress)}%` : "n/a"],
+    ["Backend Percent", backendPercent !== null ? `${backendPercent}%` : "n/a"],
+    ["Propagation Stage", String(uploadJob?.propagation_stage ?? "none")],
+    ...(explicitPropagationPercent !== null ? [["Propagation Progress", `${explicitPropagationPercent}%`]] : []),
+    ...(estimatedStageProgress !== null ? [["Estimated Stage Progress", `${estimatedStageProgress}% (derived from upload state)`]] : []),
     ["Replay Ready", String(effectiveReplayReady)],
     ["Replay Frame Count", String(effectiveReplayFrameCount)],
     ["Snapshot Status", String(effectiveSnapshot?.status ?? "none")],
@@ -1286,11 +1292,9 @@ async function pollUploadStatus(jobId, statusUrl) {
           ? "Possible stall • no worker update yet"
           : "Still queued • waiting for worker";
 
-  const debugProgressValue = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress)
-    ? Math.max(0, Math.min(100, Number(uploadJob?.percent ?? uploadJob?.progress)))
-    : Number.isFinite(visibleProgressPercent)
-      ? Math.max(0, Math.min(100, Number(visibleProgressPercent)))
-      : 0;
+  const debugProgressValue = backendPercent !== null
+    ? backendPercent
+    : 0;
   return ( 
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
       <ConnectionsHeaderPanel
@@ -1344,38 +1348,11 @@ async function pollUploadStatus(jobId, statusUrl) {
           </ul>
           <div style={{ marginTop: "0.8rem" }}>
             <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
-              Upload State Progress: {uploadStatePercent}%
+              Backend Percent: {backendPercent !== null ? `${backendPercent}%` : "n/a"}
             </p>
             <div
               className="upload-progress-meter"
-              aria-label="Upload state progress"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={uploadStatePercent}
-              role="progressbar"
-            >
-              <span style={{ width: `${uploadStatePercent}%` }} />
-            </div>
-          </div>
-          <div style={{ marginTop: "0.8rem" }}>
-            <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
-              Job Status Progress: {jobStatusPercent}%
-            </p>
-            <div
-              className="upload-progress-meter"
-              aria-label="Job status progress"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={jobStatusPercent}
-              role="progressbar"
-            >
-              <span style={{ width: `${jobStatusPercent}%` }} />
-            </div>
-          </div>
-          <div style={{ marginTop: "0.6rem" }}>
-            <div
-              className="upload-progress-meter"
-              aria-label="Debug upload progress"
+              aria-label="Backend upload progress"
               aria-valuemin="0"
               aria-valuemax="100"
               aria-valuenow={debugProgressValue}
@@ -1384,6 +1361,28 @@ async function pollUploadStatus(jobId, statusUrl) {
               <span style={{ width: `${debugProgressValue}%` }} />
             </div>
           </div>
+          {explicitPropagationPercent !== null ? (
+            <div style={{ marginTop: "0.8rem" }}>
+              <p className="metadata-text" style={{ marginBottom: "0.35rem" }}>
+                Propagation Progress: {explicitPropagationPercent}%
+              </p>
+              <div
+                className="upload-progress-meter"
+                aria-label="Backend propagation progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={explicitPropagationPercent}
+                role="progressbar"
+              >
+                <span style={{ width: `${explicitPropagationPercent}%` }} />
+              </div>
+            </div>
+          ) : null}
+          {estimatedStageProgress !== null ? (
+            <p className="metadata-text" style={{ marginTop: "0.8rem" }}>
+              Estimated Stage Progress: {estimatedStageProgress}% (derived from upload state)
+            </p>
+          ) : null}
         </div>
       </section>
       
