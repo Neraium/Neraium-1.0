@@ -10,7 +10,7 @@ from app.routers import data as data_router
 from app.services.runtime_db import upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
-from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, write_job, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
 def post_csv(client: TestClient, filename: str, content: str):
@@ -98,6 +98,23 @@ def test_positive_int_env_parser_falls_back_for_invalid_values(monkeypatch) -> N
     monkeypatch.setenv("NERAIUM_TEST_ROWS", "not-a-number")
 
     assert parse_positive_int_env("NERAIUM_TEST_ROWS", 123) == 123
+
+
+def test_write_job_persists_queued_upload_as_latest_visible_summary() -> None:
+    write_job(
+        {
+            "job_id": "queued-visible-job",
+            "filename": "queued.csv",
+            "status": "PENDING",
+            "processing_state": "queued",
+        }
+    )
+
+    payload = read_latest_upload_summary()
+
+    assert payload is not None
+    assert payload["job_id"] == "queued-visible-job"
+    assert payload["filename"] == "queued.csv"
 
 
 def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:

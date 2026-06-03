@@ -1222,6 +1222,39 @@ def write_job(*args) -> None:
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
     _write_shared_state(f"upload_status_{job_id}", payload)
+    status_text = str(payload.get("status") or "").upper()
+    processing_state = str(payload.get("processing_state") or "").lower()
+    visible_states = {
+        "queued",
+        "parsing_telemetry",
+        "building_relationship_baselines",
+        "scoring_relationship_drift",
+        "building_propagation_model",
+        "generating_system_interpretation",
+        "complete",
+        "failed",
+    }
+
+    if (
+        status_text in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE", "FAILED"}
+        or processing_state in visible_states
+    ):
+        latest_summary = dict(payload)
+        latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
+        latest_summary.setdefault("percent", latest_summary.get("progress", 0))
+        latest_summary.setdefault("progress", latest_summary.get("percent", 0))
+        latest_summary.setdefault("result_available", status_text == "COMPLETE")
+        latest_summary.setdefault("sii_completed", status_text == "COMPLETE")
+        latest_summary.setdefault("replay_ready", False)
+        latest_summary.setdefault("replay_frame_count", 0)
+        latest_summary.setdefault("latest_replay_frames", latest_summary.get("replay_frame_count", 0))
+        latest_summary.setdefault("propagation_stage", processing_state or "queued")
+        latest_summary.setdefault("propagation_progress", latest_summary.get("progress", 0))
+        latest_summary.setdefault("propagation_label", latest_summary.get("message") or "Queued.")
+
+        _write_json("latest_upload_summary.json", latest_summary)
+        _write_shared_state("latest_upload_summary", latest_summary)
+        LATEST_UPLOAD_CACHE["summary"] = latest_summary
     try:
         upsert_upload_job(payload)
     except Exception:
