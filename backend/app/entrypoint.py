@@ -9,7 +9,12 @@ import uvicorn
 from app.core.config import Settings, get_settings
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
-from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir, process_next_queued_upload_job
+from app.services.upload_jobs import (
+    configure_runtime_dir as configure_upload_jobs_dir,
+    process_next_queued_upload_job,
+    shared_state_configured,
+    upload_state_backend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +53,30 @@ def run_api(settings: Settings) -> None:
 
 
 def run_worker(settings: Settings, poll_interval_seconds: float = 1.0) -> None:
-    logger.info("neraium_startup_role=worker")
+    logger.info(
+        "neraium_startup_role=worker process_role=%s runtime_dir=%s upload_state_backend=%s upload_state_shared_configured=%s",
+        settings.process_role,
+        settings.runtime_dir,
+        upload_state_backend(),
+        shared_state_configured(),
+    )
     _configure_runtime_services(settings)
     init_runtime_db()
+    logger.info(
+        "worker_runtime_initialized process_role=%s runtime_dir=%s runtime_db_initialized=%s upload_state_backend=%s",
+        settings.process_role,
+        settings.runtime_dir,
+        True,
+        upload_state_backend(),
+    )
     logger.info("worker_loop_started poll_interval_seconds=%s", poll_interval_seconds)
     while True:
-        logger.info("worker_polling_queue")
+        logger.info("worker_polling_queue process_role=%s runtime_dir=%s", settings.process_role, settings.runtime_dir)
         try:
-            process_next_queued_upload_job()
+            processed = process_next_queued_upload_job()
+            logger.info("worker_poll_result processed=%s runtime_dir=%s", processed, settings.runtime_dir)
         except Exception:
-            logger.exception("upload_worker_iteration_failed")
+            logger.exception("upload_worker_iteration_failed runtime_dir=%s", settings.runtime_dir)
         time.sleep(poll_interval_seconds)
 
 
