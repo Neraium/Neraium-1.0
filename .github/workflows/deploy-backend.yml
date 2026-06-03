@@ -20,6 +20,7 @@ env:
   ECS_WORKER_SERVICE: neraium-prod-worker-service
   API_TASK_FAMILY: neraium-prod-api
   WORKER_TASK_FAMILY: neraium-prod-worker
+  WORKER_LOG_GROUP: /ecs/neraium-prod-worker
 
 jobs:
   deploy-backend:
@@ -103,9 +104,26 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" '
             .containerDefinitions = (.containerDefinitions | map(
-              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+              if .name == $CONTAINER_NAME then
+                .image = $IMAGE_URI
+                | .command = ["python", "-m", "app.entrypoint"]
+                | .environment = ((.environment // [])
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV"))
+                    + [
+                      {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
+                      {"name": "APP_ENV", "value": "prod"}
+                    ])
+                | .logConfiguration = {
+                    "logDriver": "awslogs",
+                    "options": {
+                      "awslogs-group": $WORKER_LOG_GROUP,
+                      "awslogs-region": $AWS_REGION,
+                      "awslogs-stream-prefix": "ecs"
+                    }
+                  }
+              else . end
             ))
             | del(
                 .taskDefinitionArn,
@@ -144,6 +162,15 @@ jobs:
             --force-new-deployment \
             --region "$AWS_REGION"
 
+      - name: Wait for ECS services to stabilize
+        run: |
+          set -euo pipefail
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
+            --region "$AWS_REGION"
+
       - name: Show ECS service rollout status
         run: |
           set -euo pipefail
@@ -153,3 +180,47 @@ jobs:
             --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
             --region "$AWS_REGION" \
             --query 'services[*].{name:serviceName,status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}'
+
+      - name: Verify worker task startup logging
+        run: |
+          set -euo pipefail
+
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_WORKER_SERVICE" \
+            --desired-status RUNNING \
+            --region "$AWS_REGION" \
+            --query 'taskArns[0]' \
+            --output text)
+
+          test -n "$TASK_ARN"
+          test "$TASK_ARN" != "None"
+
+          aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$TASK_ARN" \
+            --region "$AWS_REGION" \
+            --query 'tasks[0].containers[*].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason,logStream:logStreamName,image:image}' \
+            --output table
+
+          LOG_STREAM=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "$TASK_ARN" \
+            --region "$AWS_REGION" \
+            --query 'tasks[0].containers[?name==`worker`].logStreamName | [0]' \
+            --output text)
+
+          test -n "$LOG_STREAM"
+          test "$LOG_STREAM" != "None"
+
+          aws logs tail "$WORKER_LOG_GROUP" \
+            --region "$AWS_REGION" \
+            --since 10m
+
+          aws logs tail "$WORKER_LOG_GROUP" \
+            --region "$AWS_REGION" \
+            --since 10m | tee worker-startup.log
+
+          grep -q 'neraium_startup_role=worker' worker-startup.log
+          grep -q 'worker_loop_started' worker-startup.log
+          grep -q 'worker_polling_queue' worker-startup.log
