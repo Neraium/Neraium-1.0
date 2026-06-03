@@ -121,6 +121,17 @@ export function classifyUploadError(error, phase) {
       }),
     };
   }
+  if (error?.name === "ApiTimeoutError" || error?.name === "ApiNetworkError") {
+    return {
+      state: phase === "poll" ? "running_sii" : "error",
+      retryable: phase === "poll",
+      status: error?.name === "ApiTimeoutError" ? Number(error?.status ?? 408) || 408 : null,
+      errorType: error?.name === "ApiTimeoutError" ? "timeout" : "network",
+      message: phase === "poll"
+        ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
+        : "Secure telemetry ingestion unavailable.",
+    };
+  }
   if (error instanceof TypeError) {
     return {
       state: phase === "poll" ? "running_sii" : "error",

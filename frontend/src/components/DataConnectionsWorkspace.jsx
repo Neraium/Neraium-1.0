@@ -323,6 +323,7 @@ useEffect(() => {
 function normalizeUploadStatusPath(statusUrl, jobId) {
   const statusValue = String(statusUrl ?? "").trim();
   if (statusValue.startsWith("/api/data/upload-status/")) return statusValue;
+  if (statusValue.startsWith("/api/upload-status/")) return statusValue.replace("/api/upload-status/", "/api/data/upload-status/");
   if (statusValue.startsWith("/data/upload-status/")) return `/api${statusValue}`;
   if (statusValue.startsWith("/upload-status/")) return `/api/data${statusValue}`;
   const fallbackId = String(jobId ?? "").trim();
@@ -331,7 +332,7 @@ function normalizeUploadStatusPath(statusUrl, jobId) {
 
 function extractJobIdFromStatusPath(value) {
   const text = String(value ?? "");
-  const match = text.match(/\/api\/data\/upload-status\/([^/?#\s]+)/i) || text.match(/\/upload-status\/([^/?#\s]+)/i);
+  const match = text.match(/\/api\/data\/upload-status\/([^/?#\s]+)/i) || text.match(/\/api\/upload-status\/([^/?#\s]+)/i) || text.match(/\/upload-status\/([^/?#\s]+)/i);
   return match?.[1] ? decodeURIComponent(match[1]) : "";
 }
 
@@ -387,7 +388,7 @@ async function pollUploadStatus(jobId, statusUrl) {
     }
     let completeWithoutReplayCount = 0;
     let notFoundCount = 0;
-    for (let attempts = 0; attempts < 240; attempts += 1) {
+    for (let attempts = 0; ; attempts += 1) {
       try {
         const now = Date.now();
         const activeCooldownUntil = Math.max(
@@ -658,12 +659,6 @@ async function pollUploadStatus(jobId, statusUrl) {
         throw error;
       }
     }
-    console.warn("upload_status_poll_stopped", {
-      job_id: String(pollingJobId),
-      reason: "timeout",
-      attempts: 240,
-    });
-    throw new Error("Upload polling timed out.");
     };
     pollOwnerJobIdRef.current = requestedJobId || null;
     pollInFlightRef.current = runPoll();

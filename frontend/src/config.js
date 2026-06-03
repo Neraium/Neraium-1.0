@@ -112,6 +112,12 @@ function normalizeApiPath(path) {
   if (/^https?:\/\//i.test(input)) {
     return input;
   }
+  if (input.startsWith("/api/upload-status/")) {
+    return input.replace("/api/upload-status/", "/api/data/upload-status/");
+  }
+  if (input.startsWith("/api/upload-stream/")) {
+    return input.replace("/api/upload-stream/", "/api/data/upload-stream/");
+  }
   if (input.startsWith("/api/") || input === "/api") {
     return input;
   }
@@ -135,6 +141,12 @@ function normalizeApiPath(path) {
   }
   if (input === "/engine-identity" || input.startsWith("/engine-identity?")) {
     return `/api/intelligence${input}`;
+  }
+  if (input.startsWith("api/upload-status/")) {
+    return `/api/data/upload-status/${input.slice("api/upload-status/".length)}`;
+  }
+  if (input.startsWith("api/upload-stream/")) {
+    return `/api/data/upload-stream/${input.slice("api/upload-stream/".length)}`;
   }
   if (input.startsWith("api/")) {
     return `/${input}`;

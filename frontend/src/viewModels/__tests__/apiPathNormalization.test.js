@@ -17,6 +17,16 @@ describe("api path normalization", () => {
     expect(url).toContain("/api/data/latest-upload?include_persisted=1");
   });
 
+  it("rewrites legacy api upload-status route to the canonical data route", () => {
+    const url = buildApiUrl("/api/upload-status/job-123");
+    expect(url).toContain("/api/data/upload-status/job-123");
+  });
+
+  it("rewrites legacy api upload-stream route to the canonical data route", () => {
+    const url = buildApiUrl("/api/upload-stream/job-123");
+    expect(url).toContain("/api/data/upload-stream/job-123");
+  });
+
   it("normalizes legacy systems shorthand", () => {
     const url = buildApiUrl("systems?include_persisted=1");
     expect(url).toContain("/api/facility/systems?include_persisted=1");
