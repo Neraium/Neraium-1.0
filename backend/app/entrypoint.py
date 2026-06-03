@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import uvicorn
@@ -11,6 +12,19 @@ from app.services.sii_runner import configure_runtime_dir as configure_sii_runne
 from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir, process_next_queued_upload_job
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    level_name = str(os.getenv("LOG_LEVEL", "INFO") or "INFO").strip().upper()
+    level = getattr(logging, level_name, logging.INFO)
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        root_logger.setLevel(level)
+        return
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
 
 def _normalize_startup_role(role: str) -> str:
@@ -48,6 +62,7 @@ def run_worker(settings: Settings, poll_interval_seconds: float = 1.0) -> None:
 
 
 def main() -> None:
+    _configure_logging()
     settings = get_settings()
     role = _normalize_startup_role(settings.process_role)
     if role == "worker":
