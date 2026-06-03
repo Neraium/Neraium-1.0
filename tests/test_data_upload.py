@@ -7,7 +7,7 @@ from pathlib import Path
 from app.core.config import Settings
 from app.main import create_app
 from app.routers import data as data_router
-from app.services.runtime_db import upsert_latest_payload
+from app.services.runtime_db import read_upload_queue_job, upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job, write_latest_upload_result, write_latest_upload_summary
@@ -1886,6 +1886,29 @@ def test_worker_transitions_starting_to_running_on_thread_start(monkeypatch, tmp
     assert payload.get("worker_last_seen_at")
 
 
+def test_worker_heartbeat_does_not_make_pending_queue_job_unclaimable(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    create_app(settings)
+
+    job_id = "worker-claimable-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    monkeypatch.setattr("app.services.upload_jobs.process_next_queued_upload_job", lambda: False)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    queue_entry = read_upload_queue_job(job_id) or {}
+    assert queue_entry.get("status") == "pending"
+
+
 def test_worker_exception_before_processing_marks_failed_not_starting(monkeypatch, tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
     create_app(settings)
@@ -1913,6 +1936,41 @@ def test_worker_exception_before_processing_marks_failed_not_starting(monkeypatc
     assert payload.get("error_type") == "worker_start_failed"
     assert "worker exploded" in str(payload.get("error") or "")
     assert payload.get("worker_state") == "stalled"
+
+
+def test_worker_processing_exception_marks_job_failed_instead_of_leaving_pending(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    create_app(settings)
+
+    upload_path = tmp_path / "broken.csv"
+    upload_path.write_text("timestamp,temperature\n2026-05-01T08:00:00Z,75\n", encoding="utf-8")
+    job_id = "worker-processing-fail-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "broken.csv",
+        "file_path": str(upload_path),
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("structural scoring exploded")
+
+    monkeypatch.setattr("app.services.upload_jobs.process_csv_file", boom)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    payload = upload_jobs.read_upload_status(job_id) or {}
+    queue_entry = read_upload_queue_job(job_id) or {}
+    assert payload.get("status") == "FAILED"
+    assert payload.get("processing_state") == "failed"
+    assert payload.get("error_type") == "processing_error"
+    assert "structural scoring exploded" in str(payload.get("error") or "")
+    assert "structural scoring exploded" in str(payload.get("message") or "")
+    assert queue_entry.get("status") == "failed"
 
 
 def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch, tmp_path) -> None:

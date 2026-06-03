@@ -26,6 +26,15 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _normalize_upload_queue_status(status: str | None) -> str | None:
+    normalized = str(status or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized == "queued":
+        return "pending"
+    return normalized
+
+
 def ensure_runtime_dir() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -246,8 +255,8 @@ def claim_next_upload_job() -> str | None:
         row = connection.execute(
             """
             SELECT job_id FROM upload_queue
-            WHERE status = 'pending'
-            ORDER BY created_at ASC
+            WHERE status IN ('pending', 'queued')
+            ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at ASC
             LIMIT 1
             """
         ).fetchone()
@@ -317,6 +326,7 @@ def clear_stale_processing_queue_jobs() -> int:
 
 def complete_upload_queue_job(job_id: str, status: str, last_error: str | None = None) -> None:
     init_runtime_db()
+    normalized_status = _normalize_upload_queue_status(status) or "completed"
     with db_connection() as connection:
         connection.execute(
             """
@@ -324,7 +334,7 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
             SET status = ?, last_error = ?, updated_at = ?, locked_at = NULL
             WHERE job_id = ?
             """,
-            (status, last_error, now_iso(), job_id),
+            (normalized_status, last_error, now_iso(), job_id),
         )
 
 
@@ -332,15 +342,16 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
 
 def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
     init_runtime_db()
+    normalized_status = _normalize_upload_queue_status(status)
     with db_connection() as connection:
-        if status:
+        if normalized_status:
             connection.execute(
                 """
                 UPDATE upload_queue
                 SET status = ?, updated_at = ?
                 WHERE job_id = ?
                 """,
-                (status, now_iso(), job_id),
+                (normalized_status, now_iso(), job_id),
             )
         else:
             connection.execute(
@@ -366,13 +377,15 @@ def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
         ).fetchone()
         if row is None:
             return None
+        raw_status = str(row["status"] or "").lower()
+        normalized_status = _normalize_upload_queue_status(raw_status) or raw_status
         position = None
-        if str(row["status"] or "").lower() == "pending":
+        if normalized_status == "pending":
             pos_row = connection.execute(
                 """
                 SELECT COUNT(*) AS ahead
                 FROM upload_queue
-                WHERE status = 'pending'
+                WHERE status IN ('pending', 'queued')
                   AND created_at < ?
                 """,
                 (row["created_at"],),
@@ -380,7 +393,7 @@ def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
             position = int((pos_row["ahead"] if pos_row else 0) or 0) + 1
     return {
         "job_id": row["job_id"],
-        "status": row["status"],
+        "status": normalized_status,
         "attempts": row["attempts"],
         "last_error": row["last_error"],
         "created_at": row["created_at"],

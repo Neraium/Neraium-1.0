@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import math
 import os
 import time
@@ -33,6 +34,7 @@ _RESET_BLOCK_PERSISTED = False
 MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "20000"))
 CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "25000"))
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "10000"))
+logger = logging.getLogger(__name__)
 
 
 def _upload_state_bucket() -> str:
@@ -1151,17 +1153,28 @@ def process_next_queued_upload_job() -> bool:
             pass
         return bool(result)
     except Exception as exc:
-        mark_queue_job_failed(job_id, str(exc))
-        complete_upload_queue_job(job_id, "failed", str(exc))
+        logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, metadata.get("filename"))
+        current = read_upload_status(job_id) or {}
+        error_message = str(exc) or exc.__class__.__name__
+        mark_queue_job_failed(job_id, error_message)
+        complete_upload_queue_job(job_id, "failed", error_message)
         write_job(
             {
                 **metadata,
+                **current,
                 "job_id": job_id,
                 "status": "FAILED",
                 "processing_state": "failed",
                 "error_type": "processing_error",
-                "error": str(exc),
-                "message": "Telemetry processing failed.",
+                "error": error_message,
+                "message": f"Telemetry processing failed: {error_message}",
+                "progress_label": "Telemetry processing failed.",
+                "result_available": False,
+                "first_usable_available": False,
+                "replay_ready": False,
+                "replay_frame_count": 0,
+                "propagation_stage": "failed",
+                "propagation_label": "Failed.",
             }
         )
         try:

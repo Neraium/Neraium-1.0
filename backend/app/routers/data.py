@@ -85,7 +85,7 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
         if worker_job_id:
             now = datetime.now(timezone.utc).isoformat()
             try:
-                touch_upload_queue_job(worker_job_id, "queued")
+                touch_upload_queue_job(worker_job_id)
             except Exception:
                 logger.exception("worker_first_heartbeat_touch_failed job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
             current = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
