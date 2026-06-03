@@ -39,6 +39,25 @@ def _pearson_corr(left: list[float], right: list[float]) -> float | None:
     return sum(a * b for a, b in zip(centered_left, centered_right)) / denom
 
 
+def _select_numeric_columns_for_relationships(
+    numeric_columns: list[str],
+    *,
+    max_relationship_columns: int,
+) -> tuple[list[str], bool]:
+    """
+    Keep pairwise relationship work bounded for large uploads.
+
+    Pairwise correlation scales as O(n^2 * rows). Large telemetry exports can
+    include dozens or hundreds of numeric fields, which can hold the worker in
+    the first relationship stage long enough to look stuck. Preserve the first
+    columns in source order because upstream detection already orders them by
+    file/schema appearance, and report when truncation occurred.
+    """
+    if max_relationship_columns <= 0 or len(numeric_columns) <= max_relationship_columns:
+        return numeric_columns, False
+    return numeric_columns[:max_relationship_columns], True
+
+
 def build_relationship_baseline(
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
@@ -46,9 +65,21 @@ def build_relationship_baseline(
     total_row_count: int | None = None,
     baseline_window_limit: int = 12000,
     recent_window_limit: int = 6000,
+    max_relationship_columns: int = 32,
 ) -> dict[str, Any]:
-    if len(rows) < 12 or len(numeric_columns) < 2:
-        return {"top_relationship_changes": [], "baseline_relationships": [], "sampled_for_baseline": False}
+    selected_numeric_columns, column_limited = _select_numeric_columns_for_relationships(
+        numeric_columns,
+        max_relationship_columns=max_relationship_columns,
+    )
+    if len(rows) < 12 or len(selected_numeric_columns) < 2:
+        return {
+            "top_relationship_changes": [],
+            "baseline_relationships": [],
+            "sampled_for_baseline": False,
+            "relationship_columns_analyzed": len(selected_numeric_columns),
+            "relationship_columns_available": len(numeric_columns),
+            "relationship_columns_limited": column_limited,
+        }
 
     baseline_count = max(6, int(len(rows) * 0.7))
     baseline_rows = rows[:baseline_count]
@@ -63,10 +94,12 @@ def build_relationship_baseline(
         sampled_for_baseline = True
     if total_row_count is not None and total_row_count > len(rows):
         sampled_for_baseline = True
+    if column_limited:
+        sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
 
-    for idx, left_col in enumerate(numeric_columns):
-        for right_col in numeric_columns[idx + 1 :]:
+    for idx, left_col in enumerate(selected_numeric_columns):
+        for right_col in selected_numeric_columns[idx + 1 :]:
             left_base: list[float] = []
             right_base: list[float] = []
             left_recent: list[float] = []
@@ -125,6 +158,9 @@ def build_relationship_baseline(
         "top_relationship_changes": candidates[:5],
         "baseline_relationships": candidates,
         "sampled_for_baseline": sampled_for_baseline,
+        "relationship_columns_analyzed": len(selected_numeric_columns),
+        "relationship_columns_available": len(numeric_columns),
+        "relationship_columns_limited": column_limited,
     }
 
 
