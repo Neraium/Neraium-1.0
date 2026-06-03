@@ -61,7 +61,8 @@ Use this as the final go or no-go checklist for investor demos, pilot deployment
 
 - [ ] `gh workflow list --repo Neraium/Neraium-1.0` reviewed.
 - [ ] Backend deployment workflow confirmed.
-- [ ] Terraform workflow confirmed or explicitly documented as unavailable.
+- [ ] Shared AWS bootstrap workflow confirmed.
+- [ ] `NERAIUM_UPLOAD_STATE_BUCKET` and `NERAIUM_APP_TASK_ROLE_NAME` repository variables confirmed.
 - [ ] Rollback path documented.
 - [ ] Post-deploy smoke order completed.
 

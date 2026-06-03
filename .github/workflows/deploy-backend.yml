@@ -21,6 +21,8 @@ env:
   API_TASK_FAMILY: neraium-prod-api
   WORKER_TASK_FAMILY: neraium-prod-worker
   WORKER_LOG_GROUP: /ecs/neraium-prod-worker
+  UPLOAD_STATE_BUCKET: ${{ vars.NERAIUM_UPLOAD_STATE_BUCKET }}
+  APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
 
 jobs:
   deploy-backend:
@@ -40,6 +42,14 @@ jobs:
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve production AWS settings
+        run: |
+          set -euo pipefail
+          test -n "$UPLOAD_STATE_BUCKET"
+          test -n "$APP_TASK_ROLE_NAME"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
 
       - name: Ensure ECR repository exists
         run: |
@@ -69,9 +79,19 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" '
-            .containerDefinitions = (.containerDefinitions | map(
-              if .name == $CONTAINER_NAME then .image = $IMAGE_URI else . end
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
+            .taskRoleArn = $APP_TASK_ROLE_ARN
+            | .containerDefinitions = (.containerDefinitions | map(
+              if .name == $CONTAINER_NAME then
+                .image = $IMAGE_URI
+                | .environment = ((.environment // [])
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET"))
+                    + [
+                      {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
+                      {"name": "APP_ENV", "value": "prod"},
+                      {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET}
+                    ])
+              else . end
             ))
             | del(
                 .taskDefinitionArn,
@@ -104,16 +124,18 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" '
-            .containerDefinitions = (.containerDefinitions | map(
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" '
+            .taskRoleArn = $APP_TASK_ROLE_ARN
+            | .containerDefinitions = (.containerDefinitions | map(
               if .name == $CONTAINER_NAME then
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
-                      {"name": "APP_ENV", "value": "prod"}
+                      {"name": "APP_ENV", "value": "prod"},
+                      {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET}
                     ])
                 | .logConfiguration = {
                     "logDriver": "awslogs",

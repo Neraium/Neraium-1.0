@@ -56,22 +56,18 @@ Watch the active run:
 gh run watch --repo Neraium/Neraium-1.0
 ```
 
-If the Terraform workflow does not appear in `gh workflow list`, treat Terraform deployment as not configured in GitHub Actions and use the documented infrastructure process for this repository before changing infrastructure.
-
-This repository currently includes `.github/workflows/infra-apply.yml` with the workflow name `Apply Infrastructure (Terraform)`.
-
-Run Terraform plan only:
+Bootstrap or repair the shared AWS production resources with:
 
 ```bash
-gh workflow run "Apply Infrastructure (Terraform)" --repo Neraium/Neraium-1.0 --ref main -f action=plan
+gh workflow run "Bootstrap Production AWS" --repo Neraium/Neraium-1.0 --ref main
 gh run watch --repo Neraium/Neraium-1.0
 ```
 
-Run Terraform apply only after plan review and approval:
+Required repository variables before running either workflow:
 
-```bash
-gh workflow run "Apply Infrastructure (Terraform)" --repo Neraium/Neraium-1.0 --ref main -f action=apply
-gh run watch --repo Neraium/Neraium-1.0
+```text
+NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
+NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 ```
 
 ## Recommended Deployment Order

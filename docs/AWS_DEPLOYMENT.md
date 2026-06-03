@@ -1,6 +1,6 @@
 # AWS Deployment Preparation
 
-This document captures the current deployment preparation for Neraium-1.0. It does not deploy resources automatically and does not add infrastructure-as-code yet.
+This document captures the current AWS deployment path for Neraium-1.0. Production AWS bootstrap is handled by a checked-in AWS CLI script and GitHub Actions workflows, not Terraform.
 
 ## Targets
 
@@ -16,7 +16,7 @@ This document captures the current deployment preparation for Neraium-1.0. It do
 The backend remains a FastAPI Docker container. `backend/Dockerfile` runs:
 
 ```text
-python -m uvicorn app.main:app --host ${BACKEND_HOST:-0.0.0.0} --port ${BACKEND_PORT:-80}
+python -m app.entrypoint
 ```
 
 Backend deployment notes:
@@ -53,11 +53,16 @@ NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000
 NERAIUM_MAX_PENDING_UPLOAD_JOBS=50
 ```
 
-Current backend behavior does not require a database, storage bucket, auth provider, AWS credentials in the app container, AI/LLM configuration, or shared access-code configuration. Add user identity and server-side sessions before broader customer access.
+Production split-role backend behavior does require a shared upload-state bucket and task-role access for API/worker queue coordination. Set these on both ECS task definitions:
 
-Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, Terraform passes `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000`, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
+```text
+NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
+NERAIUM_PROCESS_ROLE=api|worker
+```
 
-For production ECS, mount `NERAIUM_RUNTIME_DIR` to durable shared storage such as EFS if upload job status and latest SII state must survive task replacement or multiple replicas. A single ephemeral container filesystem is acceptable only for local development and throwaway demos.
+Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000` is injected by the deployment workflow, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
+
+For split-role production ECS, do not rely on `NERAIUM_RUNTIME_DIR` for cross-task queue state. The queue and latest-upload state are shared through `NERAIUM_UPLOAD_STATE_BUCKET`.
 
 ## Frontend: AWS Amplify Hosting
 
@@ -166,4 +171,22 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health
 
 ## Deployment Boundaries
 
-This preparation intentionally does not add user accounts, database persistence, object storage, deployment automation, AWS infrastructure templates, or changes to API response shapes.
+This preparation intentionally does not add user accounts, database persistence, or changes to API response shapes. AWS bootstrap and ECS deployment automation now live in checked-in scripts and GitHub workflows instead of Terraform templates.
+
+## Production Bootstrap
+
+Bootstrap the shared S3 bucket and ECS task role with:
+
+```bash
+AWS_REGION=us-east-2 \
+UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
+APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
+./scripts/bootstrap-production-aws.sh
+```
+
+Repository variables required by GitHub Actions:
+
+```text
+NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
+NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
+```
