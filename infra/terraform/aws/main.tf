@@ -306,6 +306,7 @@ resource "aws_ecs_task_definition" "worker" {
       name      = "worker"
       image     = "${aws_ecr_repository.backend.repository_url}:${var.backend_image_tag}"
       essential = true
+      command   = ["python", "-m", "app.entrypoint"]
       environment = [
         { name = "APP_ENV", value = var.environment },
         { name = "BACKEND_HOST", value = "0.0.0.0" },
