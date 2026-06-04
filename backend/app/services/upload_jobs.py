@@ -31,9 +31,9 @@ JOBS: dict[str, dict[str, Any]] = {}
 LATEST_UPLOAD_CACHE: dict[str, Any] = {"summary": None, "result": None}
 _S3_CLIENT: Any | None = None
 _RESET_BLOCK_PERSISTED = False
-MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "20000"))
-CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "25000"))
-CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "10000"))
+MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "10000"))
+CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
+CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
 
 
@@ -202,9 +202,9 @@ def reset_upload_state() -> None:
 def clear_reset_block_persisted() -> None:
     global _RESET_BLOCK_PERSISTED
     _RESET_BLOCK_PERSISTED = False
-MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "20000"))
-CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "25000"))
-CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "10000"))
+MAMAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "10000"))
+CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
+CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 
 
 def reset_block_persisted_active() -> bool:
@@ -232,7 +232,141 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     _write_shared_state("latest_upload_summary", payload)
     LATEST_UPLOAD_CACHE["summary"] = payload
     return payload
+def _complete_with_partial_result(
+    *,
+    job_id: str,
+    filename: str,
+    error: Exception,
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    snapshot = snapshot or {}
 
+    columns = list(snapshot.get("columns") or [])
+    rows = list(snapshot.get("sample_rows") or [])
+    row_count = int(snapshot.get("row_count") or 0)
+    chunk_count = snapshot.get("chunk_count")
+    memory_estimate_bytes = snapshot.get("memory_estimate_bytes")
+    error_message = str(error) or error.__class__.__name__
+
+    result = {
+        "job_id": job_id,
+        "filename": filename,
+        "row_count": row_count,
+        "column_count": len(columns),
+        "columns": columns,
+        "preview_rows": rows[:10],
+        "detected_timestamp_column": snapshot.get("timestamp_column"),
+        "numeric_profiles": [],
+        "timestamp_profile": {
+            "warnings": ["Full timestamp profiling was skipped because processing completed partially."]
+        },
+        "data_quality": {
+            "status": "partial",
+            "warnings": [
+                "Upload completed, but full intelligence processing could not finish.",
+                error_message,
+            ],
+        },
+        "baseline_analysis": {
+            "warnings": ["Full baseline analysis was skipped because processing completed partially."]
+        },
+        "cultivation_mapping": {"warnings": []},
+        "operator_report": {},
+        "engine_result": {
+            "overall_result": "partial",
+            "signals": [],
+            "evidence": [],
+        },
+        "driver_attribution": {},
+        "operating_state": "Partial upload processed",
+        "drift_status": "partial",
+        "sii_intelligence": {
+            "sii_completed": False,
+            "partial_result": True,
+            "warning": "Upload completed with partial processing.",
+        },
+        "sii_runner_result": {
+            "runner_used": False,
+            "error": error_message,
+        },
+        "processing_trace": {
+            "sii_pipeline_ran": False,
+            "sii_completed": False,
+            "completed_with_partial_result": True,
+            "error": error_message,
+            "rows_processed": row_count,
+            "columns_analyzed": len(columns),
+            "completed_at": now,
+        },
+        "processing_stats": {
+            "used_streaming": True,
+            "sampled_rows": len(rows),
+            "chunk_count": chunk_count,
+            "memory_estimate_bytes": memory_estimate_bytes,
+        },
+        "room_summary": {
+            "room_count": 1,
+            "rooms": [{"room": "Uploaded telemetry", "row_count": row_count}],
+        },
+        "ingestion_metadata": {"source_type": "csv_upload"},
+        "source_type": "csv",
+        "replay_timeline": {"meta": {"frame_count": 0}, "timeline": []},
+        "replay_ready": False,
+        "replay_frame_count": 0,
+        "last_processed_at": now,
+        "completed_at": now,
+    }
+
+    summary = {
+        "job_id": job_id,
+        "status_url": f"/api/data/upload-status/{job_id}",
+        "status": "COMPLETE",
+        "processing_state": "partial_complete",
+        "percent": 100,
+        "progress": 100,
+        "result_available": True,
+        "first_usable_available": True,
+        "sii_completed": False,
+        "replay_ready": False,
+        "replay_frame_count": 0,
+        "latest_replay_frames": 0,
+        "replay_source": "partial",
+        "last_processed_at": now,
+        "filename": filename,
+        "row_count": row_count,
+        "column_count": len(columns),
+        "rows_processed": row_count,
+        "columns_detected": len(columns),
+        "chunk_count": chunk_count,
+        "warning": "Upload completed with partial processing.",
+        "error": error_message,
+        "message": "Upload completed, but full intelligence processing could not finish.",
+        "propagation_stage": "partial_complete",
+        "propagation_progress": 100,
+        "propagation_label": "Partial upload complete.",
+    }
+
+    _write_json(f"upload_result_{job_id}.json", result)
+    _write_json(f"upload_status_{job_id}.json", summary)
+    _write_json("latest_upload_result.json", result)
+    _write_json("latest_upload_summary.json", summary)
+
+    _write_shared_state(f"upload_result_{job_id}", result)
+    _write_shared_state(f"upload_status_{job_id}", summary)
+    _write_shared_state("latest_upload_result", result)
+    _write_shared_state("latest_upload_summary", summary)
+
+    JOBS[job_id] = summary
+    LATEST_UPLOAD_CACHE["result"] = result
+    LATEST_UPLOAD_CACHE["summary"] = summary
+
+    try:
+        upsert_upload_job(summary)
+    except Exception:
+        pass
+
+    return summary
 
 def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
     current = read_job(job_id) or read_upload_status(job_id) or {"job_id": job_id}
@@ -1136,17 +1270,29 @@ def process_next_queued_upload_job() -> bool:
         if metadata.get("runner_used") is False:
             completed["runner_used"] = False
         completed["job_id"] = job_id
-        completed["status"] = "COMPLETE"
-        completed["processing_state"] = "complete"
-        completed["result_available"] = True
-        completed["percent"] = 100
-        completed["progress"] = 100
-        completed["message"] = "Telemetry processing complete."
-        completed["propagation_stage"] = "complete"
-        completed["propagation_progress"] = 100
-        completed["propagation_label"] = "Complete."
-        write_job(completed)
-        complete_upload_queue_job(job_id, "completed")
+completed["status"] = "COMPLETE"
+
+if completed.get("processing_state") == "partial_complete":
+    completed["result_available"] = True
+    completed["first_usable_available"] = True
+    completed["sii_completed"] = False
+    completed["replay_ready"] = False
+    completed["replay_frame_count"] = 0
+    completed["percent"] = 100
+    completed["progress"] = 100
+    completed.setdefault("message", "Upload completed, but full intelligence processing could not finish.")
+    completed["propagation_stage"] = "partial_complete"
+    completed["propagation_progress"] = 100
+    completed["propagation_label"] = "Partial upload complete."
+else:
+    completed["processing_state"] = "complete"
+    completed["result_available"] = True
+    completed["percent"] = 100
+    completed["progress"] = 100
+    completed["message"] = "Telemetry processing complete."
+    completed["propagation_stage"] = "complete"
+    completed["propagation_progress"] = 100
+    completed["propagation_label"] = "Complete."
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -1238,14 +1384,16 @@ def write_job(*args) -> None:
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
     visible_states = {
-        "queued",
-        "parsing_telemetry",
-        "building_relationship_baselines",
-        "scoring_relationship_drift",
-        "building_propagation_model",
-        "generating_system_interpretation",
-        "complete",
-        "failed",
+    "queued",
+    "parsing_telemetry",
+    "building_relationship_baselines",
+    "scoring_relationship_drift",
+    "building_propagation_model",
+    "generating_system_interpretation",
+    "partial_complete",
+    "complete",
+    "failed",
+}
     }
 
     if (
@@ -1319,26 +1467,51 @@ def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kw
 def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     p = Path(kwargs.pop("file_path", path))
     filename = kwargs.pop("filename", None) or p.name
-    job_id = kwargs.pop("job_id", None)
+    job_id = str(kwargs.pop("job_id", None) or uuid.uuid4().hex)
+
     if not p.exists():
         raise FileNotFoundError(str(p))
-    if job_id:
-        _set_propagation_stage(str(job_id), stage="parsing_telemetry", progress=20, label="Parsing telemetry.")
-    snapshot = _stream_csv_snapshot(p, max_analysis_rows=MAX_ANALYSIS_ROWS, job_id=str(job_id) if job_id else None)
-    summary = _build_csv_result(
-        str(job_id or uuid.uuid4().hex),
-        filename,
-        snapshot["columns"],
-        snapshot["sample_rows"],
-        int(snapshot["row_count"]),
-        snapshot["timestamp_column"],
-        snapshot["first_timestamp"],
-        snapshot["last_timestamp"],
-        int(snapshot["chunk_count"]),
-        int(snapshot["memory_estimate_bytes"]),
-    )
-    return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
 
+    snapshot: dict[str, Any] | None = None
+
+    if job_id:
+        _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label="Parsing telemetry.")
+
+    try:
+        snapshot = _stream_csv_snapshot(
+            p,
+            max_analysis_rows=MAX_ANALYSIS_ROWS,
+            job_id=job_id,
+        )
+
+        summary = _build_csv_result(
+            job_id,
+            filename,
+            snapshot["columns"],
+            snapshot["sample_rows"],
+            int(snapshot["row_count"]),
+            snapshot["timestamp_column"],
+            snapshot["first_timestamp"],
+            snapshot["last_timestamp"],
+            int(snapshot["chunk_count"]),
+            int(snapshot["memory_estimate_bytes"]),
+        )
+
+        return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+
+    except Exception as exc:
+        logger.exception("CSV upload processing failed job_id=%s filename=%s", job_id, filename)
+
+        if snapshot:
+            summary = _complete_with_partial_result(
+                job_id=job_id,
+                filename=filename,
+                error=exc,
+                snapshot=snapshot,
+            )
+            return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+
+        raise
 
 def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
     if isinstance(payload, bytes):
