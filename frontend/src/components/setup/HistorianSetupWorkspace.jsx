@@ -32,7 +32,7 @@ export default function HistorianSetupWorkspace({ tagMapRows }) {
                 <span>Source Type</span>
                 <input
                   aria-label="Source type"
-                  placeholder="Historian, API, BMS/BAS"
+                  placeholder="Stream, API, broker, or connector"
                   value={connection.sourceType}
                   onChange={(event) => setConnection((current) => ({ ...current, sourceType: event.target.value }))}
                 />

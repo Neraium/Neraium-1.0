@@ -202,9 +202,6 @@ def reset_upload_state() -> None:
 def clear_reset_block_persisted() -> None:
     global _RESET_BLOCK_PERSISTED
     _RESET_BLOCK_PERSISTED = False
-MAMAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "10000"))
-CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
-CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 
 
 def reset_block_persisted_active() -> bool:
@@ -575,17 +572,17 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             }
         )
 
-    room_column = next((col for col in columns if col.lower().strip() == "room"), None)
+    room_column = next((col for col in columns if col.lower().strip() in {"room", "zone", "location", "area", "group", "system", "asset"}), None)
     room_counts: dict[str, int] = {}
     room_rows: dict[str, list[dict[str, Any]]] = {}
     if room_column:
         for row in rows:
-            room_name = str(row.get(room_column) or "").strip() or "Uploaded telemetry"
+            room_name = str(row.get(room_column) or "").strip() or "State Group A"
             room_counts[room_name] = room_counts.get(room_name, 0) + 1
             room_rows.setdefault(room_name, []).append(row)
     if not room_counts:
-        room_counts = {"Uploaded telemetry": row_count_total}
-        room_rows = {"Uploaded telemetry": rows}
+        room_counts = {"State Group A": row_count_total}
+        room_rows = {"State Group A": rows}
     room_names = sorted(room_counts.keys())
     room_summary = {"room_count": len(room_names), "rooms": [{"room": name, "row_count": room_counts[name]} for name in room_names]}
 
@@ -597,15 +594,11 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         count = room_counts[name]
         sparse = count < 4
         sample_rows = room_rows.get(name, [])
-        temp_key = next((col for col in columns if "temp" in col.lower()), None)
-        humidity_key = next((col for col in columns if "humid" in col.lower() or "rh_" in col.lower()), None)
-        airflow_key = next((col for col in columns if "airflow" in col.lower() or "flow" in col.lower()), None)
         room_drift = 0.0
-        if sample_rows and (temp_key or humidity_key or airflow_key):
+        tracked_columns = numeric_columns[: min(4, len(numeric_columns))]
+        if sample_rows and tracked_columns:
             per_signal_drifts: list[float] = []
-            for key in (temp_key, humidity_key, airflow_key):
-                if not key:
-                    continue
+            for key in tracked_columns:
                 series = [_to_float(row.get(key)) for row in sample_rows]
                 clean = [value for value in series if value is not None]
                 if len(clean) < 2:
@@ -619,17 +612,22 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             if per_signal_drifts:
                 room_drift = sum(per_signal_drifts) / len(per_signal_drifts)
         if sparse:
-            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Insufficient telemetry"
-            relationship_evidence = [f"{name}: Room-level relationship evidence is limited due to sparse telemetry."]
-            structural_explanation = [f"{name}: Structural explanation is limited due to sparse telemetry."]
+            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Sparse telemetry"
+            relationship_evidence = [f"{name}: Relationship evidence is limited because the telemetry window is too sparse."]
+            structural_explanation = [f"{name}: The system needs more telemetry before its structural state can be interpreted confidently."]
         elif room_drift > 0.25:
-            urgency = "unstable"; driver_category = "process_timing"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Drift observed"
-            relationship_evidence = [f"{name}: Temperature and humidity relationships are diverging from baseline."]
-            structural_explanation = [f"{name}: Multi-signal drift indicates structural coupling instability."]
+            urgency = "unstable"; driver_category = "structural_drift"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Persistent structural drift observed"
+            relationship_pair = tracked_columns[:2]
+            relationship_evidence = [
+                f"{name}: Coupling between {relationship_pair[0]} and {relationship_pair[1]} has shifted away from baseline."
+                if len(relationship_pair) >= 2
+                else f"{name}: Multiple variables are drifting away from the baseline regime."
+            ]
+            structural_explanation = [f"{name}: Persistent multi-variable drift indicates a deformation in the system's baseline relational structure."]
         else:
-            urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Monitoring active telemetry feed"
-            relationship_evidence = [f"{name}: Relationship evidence remains within expected room behavior."]
-            structural_explanation = [f"{name}: Structural explanation indicates stable room behavior."]
+            urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Baseline-aligned"
+            relationship_evidence = [f"{name}: Variable relationships remain inside the baseline regime."]
+            structural_explanation = [f"{name}: Structural observations remain aligned with the learned baseline."]
         if room_urgency_rank[urgency] > room_urgency_rank[max_room_urgency]:
             max_room_urgency = urgency
         max_room_drift = max(max_room_drift, room_drift)
@@ -639,12 +637,12 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             "urgency": urgency,
             "driver_category": driver_category,
             "attribution_confidence": attribution_confidence,
-            "next_operator_move": "Collect more room telemetry before clearing this system" if sparse else "Continue monitoring",
+            "next_operator_move": "Collect more telemetry before interpreting this segment" if sparse else "Continue monitoring",
             "confidence_components": {"data_sufficiency": "low" if sparse else "high", "signal_strength": signal_strength, "relationship_support": "low" if sparse else "high", "persistence": "low" if sparse else "high"},
             "relationship_evidence": relationship_evidence,
             "structural_explanation": structural_explanation,
             "confidence_basis": f"{name}: Confidence components: data sufficiency, signal strength, relationship support, persistence.",
-            "why_flagged": f"{name} flagged because room-level telemetry is currently sparse." if sparse else f"{name} remains within normal uploaded telemetry behavior.",
+            "why_flagged": f"{name} is flagged because telemetry coverage is currently sparse." if sparse else f"{name} remains inside the learned baseline regime.",
             "last_updated": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -700,8 +698,8 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
     )
     driver_attribution = build_driver_attribution(
         {
-            "room": primary_room_assessment.get("room") or (room_names[0] if room_names else "Uploaded telemetry"),
-            "state": primary_room_assessment.get("room_state") or "Monitoring active telemetry feed",
+            "room": primary_room_assessment.get("room") or (room_names[0] if room_names else "State Group A"),
+            "state": primary_room_assessment.get("room_state") or "Baseline-aligned",
             "severity": "action" if overall_urgency == "unstable" else ("review" if overall_urgency == "review" else "info"),
         },
         {
@@ -768,8 +766,8 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         "operator_report": operator_report,
         "engine_result": engine_result,
         "driver_attribution": driver_attribution,
-        "operating_state": "Monitoring",
-        "drift_status": "info",
+        "operating_state": "Baseline-aligned" if overall_urgency == "nominal" else ("Structural drift observed" if overall_urgency == "review" else "Persistent structural drift observed"),
+        "drift_status": "info" if overall_urgency == "nominal" else ("review" if overall_urgency == "review" else "unstable"),
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
@@ -1394,7 +1392,6 @@ def write_job(*args) -> None:
     "complete",
     "failed",
 }
-    }
 
     if (
         status_text in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE", "FAILED"}

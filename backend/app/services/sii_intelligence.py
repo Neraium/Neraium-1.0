@@ -38,70 +38,70 @@ def build_sample_intelligence() -> dict[str, Any]:
     last_updated = now_iso()
     rooms = [
         {
-            "room": "Flower Room 2",
-            "room_state": "Drift observed",
+            "room": "State Group A",
+            "room_state": "Structural drift observed",
             "urgency": "review",
-            "intervention_window": "8 hours",
-            "primary_driver": "Humidity recovery is lagging behind recent room behavior.",
+            "intervention_window": "Monitor next analysis window",
+            "primary_driver": "A persistent weakening in the relationship between airflow_rate and return_pressure has emerged.",
             "supporting_evidence": [
-                "Humidity recovery remained slower than recent room behavior.",
-                "Temperature and humidity recovery are less synchronized than baseline.",
-                "Pattern persisted across recent monitoring windows.",
+                "Correlation between airflow_rate and return_pressure fell materially below baseline.",
+                "The state trajectory continues drifting in the same direction across recent windows.",
+                "The shift has persisted long enough to exceed expected background fluctuation.",
             ],
             "relationship_evidence": [
-                "Temperature recovery is decoupling from humidity stabilization.",
-                "Environmental coupling is becoming less consistent.",
+                "Coupling between airflow_rate and return_pressure is weaker than baseline.",
+                "Secondary variables are no longer returning to their usual covariance structure.",
             ],
             "structural_explanation": [
-                "Temperature recovery is decoupling from humidity stabilization.",
-                "Environmental coupling is less consistent than the room's recent baseline.",
-                "Room recovery behavior is compressing the intervention horizon.",
+                "The current covariance structure is departing from the learned baseline regime.",
+                "A small set of variables is contributing most of the observed structural drift.",
+                "Recovery behavior after recent perturbations is less consistent than baseline.",
             ],
-            "confidence_basis": "Persistent multi-signal drift compared to recent baseline.",
-            "recommended_operator_review": "Review humidity recovery behavior",
+            "confidence_basis": "Persistent multi-variable drift compared to the baseline regime.",
+            "recommended_operator_review": "Inspect the affected variable relationships",
             "what_to_check": [
-                "Review dehumidification response",
-                "Check room moisture load",
-                "Compare recent recovery time to normal room behavior",
+                "Review the affected variables in context",
+                "Check whether the shift reflects an operational change, sensor issue, or emerging fault",
+                "Compare the current recovery shape to baseline",
             ],
-            "why_flagged": "Humidity recovery has remained slower than recent room behavior across recent monitoring windows.",
-            "baseline_comparison": "Recovery behavior is shorter than this room's recent operating baseline.",
+            "why_flagged": "The system has shifted away from its baseline relational structure and has not returned.",
+            "baseline_comparison": "The active covariance pattern differs from the baseline regime.",
             "observed_persistence": "Observed across 3 monitoring windows",
-            "projected_time_to_failure": "Approximately 8 hours at current trajectory",
-            "projected_time_to_failure_hours": 8,
+            "projected_time_to_failure": "Not inferred in agnostic mode",
+            "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
             "confidence": 86,
         },
         {
-            "room": "Veg Room 1",
-            "room_state": "Stable",
+            "room": "State Group B",
+            "room_state": "Baseline-aligned",
             "urgency": "nominal",
-            "intervention_window": "5 weeks",
-            "primary_driver": "Environmental coupling remains consistent compared to recent baseline.",
+            "intervention_window": "Baseline-aligned window",
+            "primary_driver": "The current state remains close to the learned baseline regime.",
             "supporting_evidence": [
-                "Temperature response remains inside recent room behavior.",
-                "Humidity recovery remains visible and controlled.",
+                "The leading variables remain inside their normal baseline envelope.",
+                "Relationship strengths remain close to baseline values.",
             ],
             "relationship_evidence": [
-                "Environmental coupling remains stable.",
+                "The covariance structure remains stable.",
             ],
             "structural_explanation": [
-                "Room temperature response remains within expected behavior.",
-                "Environmental coupling remains stable.",
-                "Cycle settling remains the current operating state.",
+                "The system is occupying its expected baseline region in state space.",
+                "No persistent structural deformation is visible.",
+                "Recent perturbations appear to recover normally.",
             ],
             "confidence_basis": "Stable relationship behavior across recent monitoring windows.",
             "recommended_operator_review": "Continue monitoring",
             "what_to_check": [
-                "Continue routine room walk",
-                "Watch recovery timing after the next transition",
-                "Review changes only if the window shortens",
+                "Continue monitoring",
+                "Watch the next perturbation and recovery cycle",
+                "Review only if persistence or drift velocity increases",
             ],
-            "why_flagged": "Room behavior remains visible and controllable across recent monitoring windows.",
-            "baseline_comparison": "Room behavior is inside recent operating baseline.",
+            "why_flagged": "Current behavior remains inside the baseline regime.",
+            "baseline_comparison": "Current behavior is inside the learned baseline regime.",
             "observed_persistence": "Stable across recent monitoring windows",
-            "projected_time_to_failure": "More than 5 weeks at current trajectory",
-            "projected_time_to_failure_hours": 840,
+            "projected_time_to_failure": "Not inferred in agnostic mode",
+            "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
             "confidence": 74,
         },
@@ -141,7 +141,7 @@ def build_sample_intelligence() -> dict[str, Any]:
     candidate = {
         "source": "sii_engine",
         "mode": "sample",
-        "facility_state": "Drift observed",
+        "facility_state": "Structural drift observed",
         "room_state": rooms[0]["room_state"],
         "urgency": "review",
         "intervention_window": rooms[0]["intervention_window"],
@@ -195,14 +195,14 @@ def build_upload_intelligence(
         attribution=driver_attribution,
     )
     score = score_from_upload(data_quality, engine_result, driver_attribution)
-    primary_driver = driver_attribution.get("likely_driver") or "Available telemetry suggests a room behavior change."
+    primary_driver = driver_attribution.get("likely_driver") or "Available telemetry suggests a persistent structural change."
     supporting_evidence = driver_attribution.get("supporting_evidence") or operator_report.get("key_observations", [])
     relationship_evidence = relationship_evidence_from_engine(engine_result)
     structural_explanation = structural_explanation_from_attribution(driver_attribution, relationship_evidence)
-    why_flagged = supporting_evidence[0] if supporting_evidence else "Telemetry changed compared to recent baseline."
+    why_flagged = supporting_evidence[0] if supporting_evidence else "Telemetry changed compared to the baseline regime."
     what_to_check = checks_from_attribution(driver_attribution, operator_report)
     intervention_window = window_from_urgency(urgency)
-    room = driver_attribution.get("room") or "Current room"
+    room = driver_attribution.get("room") or "State Group A"
     room_state = driver_attribution.get("state") or state_from_urgency(urgency)
     projected_time_to_failure_hours = project_time_to_failure_hours(
         urgency=urgency,
@@ -233,7 +233,7 @@ def build_upload_intelligence(
         supporting_evidence=supporting_evidence,
         relationship_evidence=relationship_evidence,
         structural_explanation=structural_explanation,
-        confidence_basis=driver_attribution.get("confidence_basis") or "Evidence is being compared across uploaded room signals.",
+        confidence_basis=driver_attribution.get("confidence_basis") or "Evidence is being compared across uploaded variable relationships.",
         recommended_operator_review=driver_attribution.get("next_operator_move") or (what_to_check[0] if what_to_check else "Continue monitoring"),
         what_to_check=what_to_check,
         why_flagged=why_flagged,
@@ -376,7 +376,7 @@ def build_upload_room_records(
     ]
     room_names = [item["room"] for item in room_details]
     if not room_names:
-        fallback = fallback_room or "Current room"
+        fallback = fallback_room or "State Group A"
         room_names = [fallback]
         room_details = [{"room": fallback, "row_count": 0}]
 
@@ -632,22 +632,13 @@ def relationship_evidence_from_engine(engine_result: dict[str, Any]) -> list[str
             columns = item.get("columns", [])
             if len(columns) >= 2:
                 evidence.append(relationship_evidence_sentence(columns[0], columns[1]))
-    return evidence[:4] or ["Environmental coupling evidence is limited in the current telemetry."]
+    return evidence[:4] or ["Relationship evidence is limited in the current telemetry."]
 
 
 def relationship_evidence_sentence(first_column: str, second_column: str) -> str:
     first = display_column(first_column)
     second = display_column(second_column)
-    normalized = f"{first} {second}".lower()
-    if "intervention window" in normalized:
-        return "Intervention windows are shortening as environmental recovery slows."
-    if "humidity" in normalized and ("airflow" in normalized or "air movement" in normalized):
-        return "Airflow response consistency weakened during active climate periods."
-    if "humidity" in normalized:
-        return "Humidity recovery is becoming less stable after environmental transitions."
-    if "airflow" in normalized or "air movement" in normalized:
-        return "Air movement behavior is diverging from this room's recent operating pattern."
-    return "Environmental coupling is less consistent than the room's recent baseline."
+    return f"Coupling between {first} and {second} has shifted away from its baseline relationship."
 
 
 def display_column(column: str) -> str:
@@ -661,75 +652,47 @@ def display_column(column: str) -> str:
 
 
 def structural_explanation_from_attribution(attribution: dict[str, Any], relationship_evidence: list[str]) -> list[str]:
-    category = attribution.get("driver_category")
-    if category == "humidity_control":
+    if relationship_evidence:
         return [
-            "Humidity recovery appears slower than recent room behavior.",
-            "Temperature recovery is decoupling from humidity stabilization.",
-            "Environmental coupling is less consistent than the room's recent baseline.",
+            relationship_evidence[0],
+            "The active covariance structure is diverging from the learned baseline regime.",
+            "The drift appears structural rather than random scatter.",
         ]
-    if category == "hvac_instability":
-        return [
-            "Room temperature recovery appears less consistent than baseline.",
-            "Temperature and humidity recovery are not moving together as expected.",
-            "Environmental coupling is less consistent than the room's recent baseline.",
-        ]
-    if category == "airflow_restriction":
-        return [
-            "Airflow response consistency weakened during active climate periods.",
-            "Room exchange behavior may be affecting environmental recovery.",
-            "Air movement behavior is diverging from this room's recent operating pattern.",
-        ]
-    return relationship_evidence[:3] or ["Room recovery behavior is being compared against recent operating baseline."]
+    return [
+        "The active covariance structure is diverging from the learned baseline regime.",
+        "A subset of variables is carrying most of the observed drift.",
+        "Persistence and recovery behavior are being compared against the baseline window.",
+    ]
 
 
 def checks_from_attribution(attribution: dict[str, Any], operator_report: dict[str, Any]) -> list[str]:
-    category = attribution.get("driver_category")
-    checks = {
-        "humidity_control": [
-            "Review dehumidification response",
-            "Check room moisture load",
-            "Compare recent recovery time to normal room behavior",
-        ],
-        "hvac_instability": [
-            "Review temperature recovery",
-            "Check cooling response stability",
-            "Compare hot spots against recent room behavior",
-        ],
-        "airflow_restriction": [
-            "Inspect airflow path",
-            "Check fan response consistency",
-            "Review room exchange behavior",
-        ],
-        "irrigation_timing": [
-            "Review irrigation timing",
-            "Check runoff or substrate response if available",
-            "Compare recovery behavior after feed events",
-        ],
-        "sensor_network": [
-            "Confirm room telemetry coverage",
-            "Review missing or stale readings",
-            "Compare connected signals against expected room sources",
-        ],
-    }.get(category)
-    if checks:
-        return checks
+    category = str(attribution.get("driver_category") or "").lower()
+    if category == "sensor_network":
+        return [
+            "Confirm telemetry continuity for the affected variables",
+            "Review missing, stale, or noisy readings",
+            "Check whether the structural shift is data-quality related",
+        ]
     report_checks = operator_report.get("recommended_operator_checks", [])
-    return report_checks[:3] or ["Continue monitoring", "Review telemetry coverage", "Compare room behavior to recent baseline"]
+    return report_checks[:3] or [
+        "Inspect the affected variable relationships in context",
+        "Check whether the shift reflects an operational change, sensor issue, or emerging fault",
+        "Compare the current recovery path to baseline",
+    ]
 
 
 def baseline_comparison_from_analysis(baseline_analysis: dict[str, Any]) -> str:
     drift = baseline_analysis.get("column_drift", [])
     review_columns = [item.get("column") for item in drift if item.get("drift_flag") == "review"]
     if review_columns:
-        return f"{review_columns[0]} moved away from recent baseline."
-    return "Current telemetry remains within available baseline comparison."
+        return f"{review_columns[0]} moved away from the baseline regime."
+    return "Current telemetry remains inside the available baseline comparison."
 
 
 def observed_persistence_from_engine(engine_result: dict[str, Any]) -> str:
     persistent = engine_result.get("persistence_assessment", {}).get("persistent_columns", [])
     if persistent:
-        return f"Observed across persistent readings for {persistent[0]}"
+        return f"Observed as persistent drift involving {persistent[0]}"
     return "Persistence evidence is limited in the current telemetry."
 
 
@@ -744,15 +707,15 @@ def confidence_number(attribution: dict[str, Any]) -> int:
 
 def window_from_urgency(urgency: str) -> str:
     return {
-        "unstable": "8 hours",
-        "review": "2 days",
-        "nominal": "3 weeks",
+        "unstable": "Immediate review window",
+        "review": "Monitor next analysis window",
+        "nominal": "Baseline-aligned window",
     }.get(urgency, "Monitoring")
 
 
 def state_from_urgency(urgency: str) -> str:
     return {
-        "unstable": "Needs action",
-        "review": "Drift observed",
-        "nominal": "Stable",
+        "unstable": "Persistent structural drift observed",
+        "review": "Structural drift observed",
+        "nominal": "Baseline-aligned",
     }.get(urgency, "Monitoring")

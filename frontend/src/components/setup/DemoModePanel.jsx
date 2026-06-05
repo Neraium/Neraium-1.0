@@ -5,8 +5,8 @@ export const STEP_DURATION_MS = 5000;
 
 export const DEMO_STEPS = [
   {
-    title: "Historian Intake",
-    message: "Read-only telemetry intake from historian, BMS, SCADA, or CSV export.",
+    title: "Telemetry Intake",
+    message: "Read-only telemetry intake from a stream, API, broker, or CSV export.",
     workspace: "data-connections",
     tab: "overview",
   },

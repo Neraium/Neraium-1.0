@@ -81,25 +81,25 @@ export function buildEmptyIntelligenceStatus() {
   };
 }
 
-export function deriveRoomContext(result) {
+export function deriveSegmentContext(result) {
   if (!result || !Array.isArray(result.columns)) {
     const summaryRooms = extractRoomSummaryNames(result);
     if (summaryRooms.length > 0) {
       return {
         primary: summaryRooms[0],
-        secondary: summaryRooms[1] ?? `${summaryRooms.length} uploaded rooms`,
-        cycle: "Mixed uploaded rooms",
-        irrigation: "Irrigation context pending",
+        secondary: summaryRooms[1] ?? `${summaryRooms.length} observed segments`,
+        cycle: "Mixed observed segments",
+        irrigation: "Additional variable context pending",
         uploadedRooms: summaryRooms,
         roomCount: summaryRooms.length,
       };
     }
-      return {
-        primary: NO_DATA_LABEL,
-        secondary: noDataGuidance(),
-        cycle: "Cycle metadata unavailable",
-        irrigation: "Irrigation context unavailable",
-        uploadedRooms: [],
+    return {
+      primary: NO_DATA_LABEL,
+      secondary: noDataGuidance(),
+      cycle: "Temporal metadata unavailable",
+      irrigation: "Additional variable context unavailable",
+      uploadedRooms: [],
       roomCount: 0,
     };
   }
@@ -118,14 +118,16 @@ export function deriveRoomContext(result) {
   const uploadedRooms = summaryRooms.length > 0 ? summaryRooms : uniqueValues(roomValues);
 
   return {
-    primary: uploadedRooms[0] ?? "Room context not present in upload",
-    secondary: uploadedRooms[1] ?? (uploadedRooms.length > 1 ? `${uploadedRooms.length} uploaded rooms` : "Awaiting additional room telemetry"),
-    cycle: cycleValues[0] ?? "Cycle metadata unavailable",
-    irrigation: irrigationMapped > 0 ? "Irrigation channels mapped" : "Awaiting irrigation telemetry",
+    primary: uploadedRooms[0] ?? "Segment context not present in upload",
+    secondary: uploadedRooms[1] ?? (uploadedRooms.length > 1 ? `${uploadedRooms.length} observed segments` : "Awaiting additional segment telemetry"),
+    cycle: cycleValues[0] ?? "Temporal metadata unavailable",
+    irrigation: irrigationMapped > 0 ? "Additional variable groups mapped" : "Awaiting additional variable context",
     uploadedRooms,
     roomCount: uploadedRooms.length,
   };
 }
+
+export const deriveRoomContext = deriveSegmentContext;
 
 export function deriveTimeCoverage(result) {
   if (!result?.timestamp_profile) {
@@ -145,7 +147,7 @@ export function deriveTimeCoverage(result) {
     }
     return {
       hasCoverage: false,
-      summary: "Awaiting room timestamps",
+      summary: "Awaiting telemetry timestamps",
     };
   }
 
@@ -214,7 +216,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
         : latestStatus === "active"
           ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
           : latestStatus === "baseline_active"
-            ? "Live baseline is active. The next telemetry comparison will activate Facility Command."
+            ? "Live baseline is active. The next telemetry comparison will activate the structural state view."
             : "No Active Session. Awaiting uploaded telemetry.",
       state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
       tone: uploadError ? "elevated" : (latestStatus === "active" || latestStatus === "baseline_active" ? "nominal" : "info"),
@@ -249,7 +251,7 @@ export function buildUploadHistoryRows(history = []) {
     processedAt: entry.last_processed_at ?? "Pending",
     score: entry.neraium_score ?? "n/a",
     state: entry.operating_state ?? "Pending",
-    room: entry.primary_room ?? "Unknown room",
+    room: entry.primary_room ?? "Unknown segment",
     drift: entry.drift_status ?? "n/a",
     status: index === 0 ? "Active" : "Superseded",
     scoreDelta: entry.diff?.neraium_score_delta ?? null,
@@ -275,7 +277,7 @@ export function buildUploadDiffSummary(history = []) {
     lines: [
       `Score delta: ${deltaLabel}`,
       `State: ${current.operating_state ?? "Unknown"}`,
-      `Primary room: ${current.primary_room ?? "Unknown"}`,
+      `Primary segment: ${current.primary_room ?? "Unknown"}`,
     ],
   };
 }

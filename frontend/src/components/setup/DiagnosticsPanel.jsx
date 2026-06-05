@@ -194,12 +194,12 @@ export default function DiagnosticsPanel({
   return (
     <Panel title="Diagnostics" className="span-12">
       {!showAnalysis ? (
-        <EmptyState title="No active diagnostics session" body="Upload telemetry or resume a previous session to activate Infrastructure Diagnostics." compact />
+        <EmptyState title="No active diagnostics session" body="Upload telemetry or resume a previous session to activate structural diagnostics." compact />
       ) : (
         <>
           <MetricGrid metrics={metrics} compact />
           {replayError ? <p className="narrative-text">{replayError}</p> : null}
-          <Panel title="Topology Session Context" className="span-12">
+          <Panel title="Structural Session Context" className="span-12">
             <MetricGrid
               metrics={[
                 { label: "Topology", value: topology.topology },
@@ -210,7 +210,7 @@ export default function DiagnosticsPanel({
               compact
             />
           </Panel>
-          <Panel title="System Identity" className="span-12">
+          <Panel title="Telemetry Identity" className="span-12">
             <MetricGrid
               metrics={[
                 { label: "Profile", value: systemIdentity?.profile ?? DASH },
@@ -229,7 +229,7 @@ export default function DiagnosticsPanel({
                 rows={systemIdentity.signals.map((signal) => [signal])}
               />
             ) : (
-              <p className="narrative-text">Profile confidence is low, so Neraium is not making a system-type claim.</p>
+              <p className="narrative-text">Profile confidence is low, so the instrument is not making a telemetry-profile claim.</p>
             )}
             {Array.isArray(systemIdentity?.operational_signals) && systemIdentity.operational_signals.length > 0 ? (
               <DataTable
@@ -238,11 +238,11 @@ export default function DiagnosticsPanel({
               />
             ) : null}
           </Panel>
-          <Panel title="Per-Room Confidence Breakdown" className="span-12">
+          <Panel title="Per-Segment Confidence Breakdown" className="span-12">
             {roomConfidenceRows.length > 0 ? (
               <DataTable
                 columns={[
-                  "Room",
+                  "Segment",
                   "Urgency",
                   "Driver Category",
                   "Attribution",
@@ -255,8 +255,8 @@ export default function DiagnosticsPanel({
               />
             ) : (
               <EmptyState
-                title="No per-room confidence data"
-                body="Upload telemetry with room-level intelligence output to view confidence components."
+                title="No per-segment confidence data"
+                body="Upload telemetry with segment-level intelligence output to view confidence components."
                 compact
               />
             )}
@@ -280,7 +280,7 @@ export default function DiagnosticsPanel({
         <Panel title="Upload History" className="span-12">
           {uploadHistoryRows.length > 0 ? (
             <DataTable
-              columns={["Result", "Status", "Score", "State", "Room", "Delta"]}
+              columns={["Result", "Status", "Score", "State", "Segment", "Delta"]}
               rows={uploadHistoryRows.map((row) => [row.filename, row.status, row.score, row.state, row.room, row.scoreDelta])}
             />
           ) : (

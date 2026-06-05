@@ -144,7 +144,7 @@ export function MiniSeries({ values, tone }) {
 
 export function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No room trend review available" body="Upload telemetry to generate room drift review." compact />;
+    return <EmptyState title="No segment trend review available" body="Upload telemetry to generate segment drift review." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -188,7 +188,7 @@ export function DriftMonitor({ rows, detailed = false }) {
 
 export function DriftFeed({ rows }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No room trend feed" body="No completed upload yet." compact />;
+    return <EmptyState title="No segment trend feed" body="No completed upload yet." compact />;
   }
 
   return (
@@ -198,7 +198,7 @@ export function DriftFeed({ rows }) {
         detail: `${row.direction} movement with ${row.percent_change === null ? row.absolute_change : `${row.percent_change}%`} change.`,
         tone: row.drift_flag,
       }))}
-      emptyText="Awaiting room trend output."
+      emptyText="Awaiting segment trend output."
     />
   );
 }
@@ -210,7 +210,7 @@ export function RelationshipMonitor({
   relationshipConsistencyLabel,
 }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No consistency shifts" body="Awaiting paired room telemetry." compact />;
+    return <EmptyState title="No consistency shifts" body="Awaiting paired variable telemetry." compact />;
   }
 
   return (
@@ -247,12 +247,12 @@ export function SystemsMatrix({ systems, systemsState, roomContext, rows, system
     system.name,
     system.scope,
     systemRoomContext(system.name, roomContext),
-    systemsState === "ready" ? "Live facility sync" : "Backend connection unavailable",
+    systemsState === "ready" ? "Live telemetry sync" : "Backend connection unavailable",
   ]);
 
   return (
     <DataTable
-      columns={["System", "Operational review scope", "Room or zone context", "Source state"]}
+      columns={["System", "Operational review scope", "Segment context", "Source state"]}
       rows={tableRows}
     />
   );
@@ -340,7 +340,7 @@ export function WhyPanel({
     <div className={`why-panel ${compact ? "why-panel--compact" : ""}`}>
       <div className="why-panel__summary">
         <div>
-          <span className="section-token">Selected room</span>
+          <span className="section-token">Selected segment</span>
           <h3>{item.label ?? item.shortTitle ?? item.title}</h3>
           <p>{item.decisionLabel ?? formatRoomDecisionState(item.tone)}. {item.window}</p>
         </div>
@@ -447,7 +447,7 @@ export function WhyPanel({
       {!compact && (
         <div className="why-panel__baseline">
           <span className="section-token">Baseline</span>
-          <p>{item.baselineContext ?? item.change ?? "Current room state remains inside the expected operating band."}</p>
+          <p>{item.baselineContext ?? item.change ?? "Current telemetry state remains inside the expected operating band."}</p>
         </div>
       )}
       {actionStatus && !onOperatorAction && (
@@ -492,18 +492,18 @@ export function OperatorActionControls({ actionStatus, targetId, onOperatorActio
 export function ProgressionStrip({ tone, compact = false, detailed = false }) {
   const stages = detailed
     ? [
-        "Stable environmental recovery",
-        "Early airflow inconsistency",
-        "Slower humidity stabilization",
+        "Baseline-aligned recovery",
+        "Early relationship shift",
+        "Persistent drift formation",
         "Compressed intervention horizon",
       ]
-    : ["Stable recovery", "Airflow watch", "Humidity recovery", "Window tightening"];
+    : ["Stable recovery", "Shift watch", "Drift persistence", "Window tightening"];
   const activeIndex = tone === "unstable" ? 3 : tone === "elevated" ? 2 : tone === "review" ? 1 : 0;
 
   return (
     <div
       className={`progression-strip ${compact ? "progression-strip--compact" : ""} ${detailed ? "progression-strip--detailed" : ""}`}
-      aria-label="Room movement progression"
+      aria-label="Structural movement progression"
     >
       {stages.map((stage, index) => (
         <div
@@ -522,7 +522,7 @@ export function FleetSummary({ summary }) {
   return (
     <div className="fleet-summary">
       <div className={`fleet-summary__hero fleet-summary__hero--${summary.tone}`}>
-        <span className="section-token">Facility score</span>
+        <span className="section-token">Structural score</span>
         <strong>{summary.score}</strong>
         <p>{summary.summary}</p>
       </div>

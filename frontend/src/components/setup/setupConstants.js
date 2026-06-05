@@ -1,26 +1,26 @@
-﻿export const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
+export const JSON_UPLOAD_SCHEMA_EXAMPLE = `{
   "source_id": "pilot-json-001",
   "source_type": "uploaded_dataset",
-  "facility_id": "pilot-facility-001",
-  "room_id": "room-1",
-  "scenario": "airflow_drift",
+  "deployment_id": "pilot-deployment-001",
+  "segment_id": "segment-1",
+  "scenario": "relationship_shift",
   "tick": 10,
   "timestamp": "2026-05-01T08:00:00Z",
   "readings": [
     {
       "timestamp": "2026-05-01T08:00:00Z",
-      "sensor_id": "temp-001",
-      "sensor_name": "temperature",
+      "sensor_id": "metric-001",
+      "sensor_name": "variable_a",
       "value": 75.2,
-      "unit": "F",
+      "unit": "arb",
       "quality": "good"
     }
   ]
 }`;
 
 export const TAG_MAP_ROWS = [
-  ["hvac_runtime", "HVAC Runtime", "Cultivation Rooms", "HVAC Unit 1", "minutes", "1 min", "Good"],
-  ["temp_air", "Air Temperature", "Cultivation Rooms", "Room Sensor", "deg F", "1 min", "Good"],
-  ["rh_percent", "Relative Humidity", "Cultivation Rooms", "Room Sensor", "%RH", "1 min", "Good"],
-  ["dehu_runtime", "Dehumidifier Runtime", "Cultivation Rooms", "Dehu Unit 1", "minutes", "1 min", "Good"],
+  ["control_runtime", "Control Runtime", "Segment Group A", "Controller 1", "minutes", "1 min", "Good"],
+  ["variable_a", "Variable A", "Segment Group A", "Sensor A", "arb", "1 min", "Good"],
+  ["variable_b", "Variable B", "Segment Group A", "Sensor B", "arb", "1 min", "Good"],
+  ["response_metric", "Response Metric", "Segment Group A", "Sensor C", "arb", "1 min", "Good"],
 ];

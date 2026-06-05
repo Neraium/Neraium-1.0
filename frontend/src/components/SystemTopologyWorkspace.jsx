@@ -206,7 +206,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
   const affectedSubsystem = governance?.affected_subsystem
     ?? intervention?.label
     ?? primaryWindow?.label
-    ?? "Facility relationship scope";
+      ?? "Primary relationship scope";
   const evidenceSummary = governance?.why_summary
     ?? finding?.detail
     ?? "Doctrine-admitted structural relationship evidence satisfied persistence and corroboration requirements.";
@@ -374,7 +374,7 @@ function buildOrbData(liveOps, primaryItem, coherence, layer) {
 function compactOperationalItems(items) {
   return items.filter((item) => {
     const value = String(item?.value ?? "").trim().toLowerCase();
-    return value && value !== "none" && value !== "n/a" && value !== "na" && value !== "awaiting facility cognition";
+    return value && value !== "none" && value !== "n/a" && value !== "na" && value !== "awaiting structural interpretation";
   });
 }
 

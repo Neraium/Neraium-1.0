@@ -6,7 +6,7 @@ export default function ConnectionModeCards() {
       <MetricGrid
         metrics={[
           { label: "CSV Export Pilot", value: "Pilot Ready - Read-only ingest only" },
-          { label: "Read-only Historian API", value: "Available - No control path" },
+          { label: "Read-only Telemetry API", value: "Available - No control path" },
           { label: "Scheduled Pull", value: "Available - Pull-only ingestion window" },
           { label: "Live Stream / MQTT", value: "Future - Read-only subscription model" },
         ]}

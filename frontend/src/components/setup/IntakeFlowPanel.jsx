@@ -42,7 +42,7 @@ export default function IntakeFlowPanel({
 
   return (
     <>
-      <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
+      <Panel title="Upload Telemetry" className="span-7 workspace-hero-panel upload-ops-panel">
         <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
           <div className="intake-flow__header">
             <div>
@@ -52,14 +52,14 @@ export default function IntakeFlowPanel({
           <input ref={uploadInputRef} accept=".csv,.json,text/csv,application/json" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
-              <span className="upload-file-card__label">Telemetry source</span>
+              <span className="upload-file-card__label">Telemetry batch</span>
               <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a file to continue."}</p>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a multivariate telemetry file to begin structural analysis."}</p>
             </div>
             <div className="upload-file-card__actions upload-file-card__actions--responsive">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Select CSV</button>
               <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
-                {isUploadProcessing(uploadState) ? "Processing" : "Process Upload"}
+                {isUploadProcessing(uploadState) ? "Processing" : "Analyze Upload"}
               </button>
               <button
                 className="secondary-command-button"
@@ -73,7 +73,7 @@ export default function IntakeFlowPanel({
           </div>
           {hasValidationError || hasUploadError ? (
             <div className="upload-partial-alert" role="alert" aria-live="assertive">
-              <strong>{hasValidationError ? "Upload Validation Error" : "Upload Processing Error"}</strong>
+              <strong>{hasValidationError ? "Upload Validation Error" : "Upload Analysis Error"}</strong>
               <span>{latestMessage}</span>
               <div className="intake-flow__controls">
                 <button
@@ -100,7 +100,7 @@ export default function IntakeFlowPanel({
             {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
             {visibleProgressPercent !== null && (
               <>
-                <div className="upload-progress-meter" aria-label="Telemetry intake progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
                   <span style={{ width: `${visibleProgressPercent}%` }} />
                 </div>
                 <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>

@@ -6,7 +6,7 @@ export const OPERATIONAL_VOCABULARY = {
     noActiveAnalysis: "No Active Structural Analysis",
     noActiveTrajectory: "No Active Structural Trajectory",
     noActiveProgression: "No Active Progression Sequence",
-    awaitingHistorianStream: "Awaiting historian stream",
+    awaitingHistorianStream: "Awaiting telemetry stream",
   },
   monitoring: {
     monitoringActive: "Monitoring",

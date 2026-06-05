@@ -5,57 +5,58 @@ import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 const STORAGE_KEY = "neraium.onboarding.v1";
 
 const SYSTEM_TYPES = [
-  "Cannabis Grow",
-  "Data Center Cooling",
-  "HVAC / Facilities",
-  "Water / Utility",
-  "Custom Infrastructure",
+  "General Telemetry",
+  "Process Telemetry",
+  "Built Environment",
+  "Mobile / Fleet",
+  "Custom Stream",
 ];
 
 const DATA_SOURCES = [
   "CSV Upload",
   "API",
-  "Historian",
-  "BMS / BAS",
+  "Read-only Stream",
+  "Control Platform",
   "MQTT",
   "Modbus Gateway",
   "Demo Mode",
 ];
 
 const SIGNAL_ROLES = [
-  "temperature",
-  "humidity",
-  "vpd",
-  "pressure",
-  "airflow",
-  "vibration",
-  "energy_load",
-  "equipment_state",
-  "cooling_response",
-  "dehumidifier_response",
-  "custom",
+  "state_variable_a",
+  "state_variable_b",
+  "state_variable_c",
+  "control_signal",
+  "setpoint",
+  "response_metric",
+  "load_metric",
+  "event_marker",
+  "context_variable",
+  "recovery_indicator",
+  "custom_variable",
 ];
 
 const STEPS = [
-  "System Type",
+  "Telemetry Profile",
   "Data Source",
   "Connection Details",
-  "Signal Mapping",
+  "Variable Mapping",
   "Connection Test",
   "Baseline Setup",
-  "Go Online",
+  "Begin Monitoring",
 ];
 
 const MOCK_FIELDS = [
   "timestamp",
-  "room",
-  "temperature",
-  "humidity",
-  "vpd",
-  "pressure",
-  "airflow",
-  "fan_speed",
-  "equipment_state",
+  "segment",
+  "variable_a",
+  "variable_b",
+  "variable_c",
+  "control_signal",
+  "setpoint",
+  "load_metric",
+  "response_metric",
+  "event_marker",
 ];
 
 const UPLOAD_STAGE_LABELS = {
@@ -215,9 +216,9 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       detectedColumns,
       signalMapping: {
         ...current.signalMapping,
-        temperature: current.signalMapping.temperature || "temperature",
-        humidity: current.signalMapping.humidity || "humidity",
-        vpd: current.signalMapping.vpd || "vpd",
+        state_variable_a: current.signalMapping.state_variable_a || "variable_a",
+        state_variable_b: current.signalMapping.state_variable_b || "variable_b",
+        state_variable_c: current.signalMapping.state_variable_c || "variable_c",
       },
       step: 3,
       uploadStatus: "complete",
@@ -328,9 +329,9 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       detectedColumns,
       signalMapping: {
         ...current.signalMapping,
-        temperature: current.signalMapping.temperature || (detectedColumns.includes("temperature") ? "temperature" : ""),
-        humidity: current.signalMapping.humidity || (detectedColumns.includes("humidity") ? "humidity" : ""),
-        vpd: current.signalMapping.vpd || (detectedColumns.includes("vpd") ? "vpd" : ""),
+        state_variable_a: current.signalMapping.state_variable_a || (detectedColumns.includes("variable_a") ? "variable_a" : ""),
+        state_variable_b: current.signalMapping.state_variable_b || (detectedColumns.includes("variable_b") ? "variable_b" : ""),
+        state_variable_c: current.signalMapping.state_variable_c || (detectedColumns.includes("variable_c") ? "variable_c" : ""),
       },
       step: 3,
     }));
@@ -425,8 +426,8 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       <header className="onboarding-header">
         <div>
           <p className="section-token">Neraium Setup</p>
-          <h1>Set Up System</h1>
-          <p>Guided onboarding from first configuration to live monitoring.</p>
+          <h1>Set Up Telemetry Intake</h1>
+          <p>Guided onboarding from first connection to structural monitoring.</p>
         </div>
         <div className="onboarding-actions">
           <button type="button" className="secondary-command-button" onClick={onBackToGate}>Back to Gate</button>
@@ -446,7 +447,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       <div className="onboarding-card">
         {flow.step === 0 && (
           <div className="onboarding-section">
-            <h2>System Type</h2>
+            <h2>Telemetry Profile</h2>
             <div className="onboarding-choice-grid">
               {SYSTEM_TYPES.map((option) => (
                 <button
@@ -488,8 +489,8 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                 <input value={flow.api.baseUrl} onChange={(event) => setApiField("baseUrl", event.target.value)} placeholder="API base URL" />
                 <input value={flow.api.token} onChange={(event) => setApiField("token", event.target.value)} placeholder="API key / token" />
                 <input value={flow.api.pollingInterval} onChange={(event) => setApiField("pollingInterval", event.target.value)} placeholder="Polling interval (seconds)" />
-                <input value={flow.api.siteName} onChange={(event) => setApiField("siteName", event.target.value)} placeholder="Site name" />
-                <input value={flow.api.systemName} onChange={(event) => setApiField("systemName", event.target.value)} placeholder="System name" />
+                <input value={flow.api.siteName} onChange={(event) => setApiField("siteName", event.target.value)} placeholder="Deployment label" />
+                <input value={flow.api.systemName} onChange={(event) => setApiField("systemName", event.target.value)} placeholder="Telemetry stream label" />
               </div>
             )}
             {flow.dataSource === "CSV Upload" && (
@@ -506,7 +507,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   className="command-button"
                   onClick={() => csvInputRef.current?.click()}
                 >
-                  Upload and Detect Columns
+                  Upload and Detect Variables
                 </button>
                 <button type="button" className="secondary-command-button" onClick={handleMockCsvSelect}>Use Demo CSV</button>
                 <span>
@@ -520,7 +521,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             )}
             {flow.dataSource === "Demo Mode" && (
               <div className="onboarding-inline">
-                <span>Demo telemetry package will be used for setup and baseline.</span>
+                <span>Demo telemetry package will be used for setup and baseline learning.</span>
               </div>
             )}
             {!["API", "CSV Upload", "Demo Mode"].includes(flow.dataSource) && (
@@ -533,7 +534,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 3 && (
           <div className="onboarding-section">
-            <h2>Signal Mapping</h2>
+            <h2>Variable Mapping</h2>
             <div className="onboarding-form-grid">
               {SIGNAL_ROLES.map((role) => (
                 <label key={role} className="onboarding-map-row">
@@ -567,7 +568,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                 <li className={flow.connectionTest.sourceReachable ? "ok" : "warn"}>Data source reachable</li>
                 <li className={flow.connectionTest.telemetryReceived ? "ok" : "warn"}>Telemetry received</li>
                 <li className={flow.connectionTest.timestampDetected ? "ok" : "warn"}>Timestamp detected</li>
-                <li className={flow.connectionTest.requiredSignalsMapped ? "ok" : "warn"}>Required signals mapped</li>
+                <li className={flow.connectionTest.requiredSignalsMapped ? "ok" : "warn"}>Required variables mapped</li>
                 <li className={flow.connectionTest.sampleRateAcceptable ? "ok" : "warn"}>Sample rate acceptable</li>
               </ul>
             )}
@@ -598,11 +599,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 6 && (
           <div className="onboarding-section">
-            <h2>Go Online</h2>
+            <h2>Begin Monitoring</h2>
             <ul className="onboarding-summary">
-              <li><span>System</span><strong>{flow.api.systemName || flow.systemType || "Unspecified system"}</strong></li>
+              <li><span>Profile</span><strong>{flow.api.systemName || flow.systemType || "Unspecified telemetry profile"}</strong></li>
               <li><span>Data source</span><strong>{flow.dataSource || "Not selected"}</strong></li>
-              <li><span>Mapped signals</span><strong>{mappedCount}</strong></li>
+              <li><span>Mapped variables</span><strong>{mappedCount}</strong></li>
               <li><span>Baseline</span><strong>{flow.baselineMode}</strong></li>
             </ul>
             <button type="button" className="command-button onboarding-start" onClick={startMonitoring}>Start Monitoring</button>

@@ -3,19 +3,19 @@ export const WORKSPACES = [
     id: "system-body",
     label: "Structural State",
     eyebrow: "Operator View",
-    description: "Primary infrastructure condition, detected data type, escalation direction, and operational focus.",
+    description: "Current structural state, baseline alignment, and the highest-signal relational shift in the telemetry.",
   },
   {
     id: "data-connections",
-    label: "Telemetry Setup",
+    label: "Telemetry Intake",
     eyebrow: "Intake",
-    description: "Configure read-only telemetry intake and upload facility telemetry.",
+    description: "Connect or upload multivariate telemetry with no domain-specific configuration.",
   },
   {
     id: "historical-replay",
-    label: "Infrastructure Diagnostics",
+    label: "Structural Replay",
     eyebrow: "Technical",
-    description: "Advanced replay internals, evidence lineage, topology, and diagnostic overlays.",
+    description: "Replay baseline drift, relationship changes, persistence, and evidence lineage over time.",
   },
   {
     id: "governance-admin",
@@ -27,44 +27,44 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "Circulation",
-    scope: "Hydraulic flow continuity, pump behavior, and pressure response.",
+    name: "Relationship Cluster A",
+    scope: "Variables that currently move together as one structural pattern.",
   },
   {
-    name: "Filtration",
-    scope: "Filter pressure, flow resistance, and cycle stability.",
+    name: "Relationship Cluster B",
+    scope: "A second correlation cluster visible in the uploaded telemetry.",
   },
   {
-    name: "Thermal control",
-    scope: "Pool/spa thermal stability and heater response windows.",
+    name: "Recovery Pattern",
+    scope: "How the system returns toward baseline after perturbations.",
   },
   {
-    name: "Water chemistry",
-    scope: "ORP/pH/feed coupling and chemistry behavior over time.",
+    name: "Covariance Shift",
+    scope: "Where the current covariance structure differs from baseline.",
   },
   {
-    name: "Hydraulic routing",
-    scope: "Valve path changes and distribution consistency.",
+    name: "Trajectory Drift",
+    scope: "Direction, velocity, and acceleration of state-space drift.",
   },
   {
-    name: "Operational context",
-    scope: "Occupancy, ambient heat, and overnight stabilization context.",
+    name: "Persistence Window",
+    scope: "How long the current structural change has remained active.",
   },
 ];
 
 export const INTAKE_STAGES = [
   "Batch receipt",
-  "Header and schema detection",
-  "Timestamp and room context review",
-  "SII engine processing",
-  "Evidence and state write",
+  "Variable and timestamp detection",
+  "Baseline window profiling",
+  "Structural drift analysis",
+  "Observation and state write",
   "Complete",
 ];
 
 export const REPORT_TEMPLATES = [
-  "Room Climate Trend Summary",
-  "System Coupling Review",
-  "Grower Action Report",
+  "Structural Drift Summary",
+  "Relationship Shift Review",
+  "Observation Feedback Record",
 ];
 
 export const DEFAULT_WORKSPACE_ID = "system-body";

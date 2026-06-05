@@ -227,7 +227,7 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Infrastructure Diagnostics" className="span-12 workspace-hero-panel" subtitle="Replay, topology, and evidence diagnostics for deep analysis.">
+      <Panel title="Structural Replay" className="span-12 workspace-hero-panel" subtitle="Replay, topology, and evidence diagnostics for structural analysis.">
         <MetricGrid metrics={metrics} />
         {expertMode ? (
           <div className="structural-replay-controls">
@@ -268,9 +268,9 @@ export default function ReplayWorkspace({
           </div>
         ) : null}
         {!hasDiagnosticsEvidence ? (
-          <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a historian stream is connected.</p>
+          <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a live stream is connected.</p>
         ) : null}
-        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload historian telemetry to generate a full SII replay.</p> : null}
+        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload telemetry to generate a full structural replay.</p> : null}
         <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
@@ -282,12 +282,12 @@ export default function ReplayWorkspace({
         </Panel>
       ) : null}
       <Panel title="Topology Graph" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Diagnostics" : "Why Neraium Flagged This"} className="span-6">
+      <Panel title={expertMode ? "Evidence Diagnostics" : "Why This Was Flagged"} className="span-6">
         {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
           <ul className="system-body-timeline-list">
             <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
             <li><span className="metadata-text">System stability</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
-            <li><span className="metadata-text">Cross-system support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
+            <li><span className="metadata-text">Cross-variable support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
           </ul>
         )}
       </Panel>
@@ -302,7 +302,7 @@ export default function ReplayWorkspace({
         <>
           <Panel title="Historical Pattern Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
           <Panel title="Evidence Lineage" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
-          <Panel title="Operational Time Intelligence" className="span-6">
+          <Panel title="Temporal Intelligence" className="span-6">
             <ul className="system-body-timeline-list">
               <li><span className="metadata-text">State-space phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
               <li><span className="metadata-text">Propagation acceleration</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash}</strong></li>

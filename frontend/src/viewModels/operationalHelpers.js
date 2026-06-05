@@ -7,15 +7,15 @@ export function buildFleetSummary(interventionItems, score, tone) {
     score,
     tone,
     summary: unstable > 0
-      ? `${unstable} room${unstable === 1 ? "" : "s"} need immediate attention right now.`
+      ? `${unstable} structural segment${unstable === 1 ? "" : "s"} show persistent drift that warrants immediate review.`
       : elevated > 0
-        ? `${elevated} room${elevated === 1 ? "" : "s"} are shortening the current intervention horizon.`
-        : "The facility remains inside a comfortable intervention horizon.",
+        ? `${elevated} structural segment${elevated === 1 ? "" : "s"} are deviating from baseline and should be watched closely.`
+        : "The observed telemetry remains close to its learned baseline regime.",
     metrics: [
       { label: "Immediate", value: unstable || 0, tone: unstable > 0 ? "unstable" : "nominal" },
-      { label: "Scheduled", value: elevated || 0, tone: elevated > 0 ? "elevated" : "nominal" },
+      { label: "Watch", value: elevated || 0, tone: elevated > 0 ? "elevated" : "nominal" },
       { label: "Review", value: review || 0, tone: review > 0 ? "review" : "nominal" },
-      { label: "Rooms", value: interventionItems.length, tone: "info" },
+      { label: "Segments", value: interventionItems.length, tone: "info" },
     ],
   };
 }
@@ -23,61 +23,46 @@ export function buildFleetSummary(interventionItems, score, tone) {
 export function buildStructuralExplanation(item) {
   if (item?.likelyDriver) {
     return [
-      `${item.likelyDriver} is being treated as the likely driver to check first.`,
-      item.confidenceBasis ?? "Supporting evidence is being compared across room signals.",
-      "Infrastructure does not fail suddenly. It moves.",
+      `${item.likelyDriver} is the strongest available structural explanation at this time.`,
+      item.confidenceBasis ?? "Supporting evidence is being compared across variable relationships.",
+      "The instrument is describing deformation, not assigning root cause.",
     ];
   }
   if (item?.tone === "unstable") {
     return [
-      "Temperature recovery is decoupling from humidity stabilization.",
-      "Environmental coupling is less consistent than the room's recent baseline.",
-      "Room recovery behavior is compressing the intervention horizon.",
+      "The active covariance structure has shifted materially away from baseline.",
+      "A subset of variables is carrying persistent, directional drift.",
+      "Recovery behavior appears less stable than the learned baseline regime.",
     ];
   }
   if (item?.tone === "elevated") {
     return [
-      "Airflow response consistency weakened during active climate periods.",
-      "Humidity recovery is becoming less stable after environmental transitions.",
-      "Room recovery behavior is compressing the intervention horizon.",
+      "Variable coupling is weakening compared to baseline.",
+      "The current state trajectory is moving away from its normal operating envelope.",
+      "Persistence should be watched through the next analysis window.",
     ];
   }
   if (item?.tone === "review") {
     return [
-      "Drift is visible, but the room remains controllable.",
-      "Transition stability should be watched through the next operating window.",
-      "Environmental coupling remains mostly consistent.",
+      "Drift is visible, but the system remains inside a reviewable range.",
+      "The baseline relationship structure is still partially intact.",
+      "Additional persistence would strengthen the observation.",
     ];
   }
   return [
-    "Room temperature response remains within expected behavior.",
-    "Environmental coupling remains stable.",
-    "Cycle settling remains the current operating state.",
+    "The system remains inside its learned baseline regime.",
+    "Variable relationships are stable relative to recent history.",
+    "No persistent structural deformation is visible.",
   ];
 }
 
 export function buildGuidanceForItem(item) {
-  if (item?.guidance) {
-    return item.guidance;
-  }
-  if (item?.driverAttribution) {
-    return buildGuidanceFromAttribution(item.driverAttribution, item.tone);
-  }
-  if (item?.likelyDriver) {
-    return buildGuidanceFromLikelyDriver(item.likelyDriver);
-  }
-  if (item?.label?.toLowerCase().includes("irrigation") || item?.status?.toLowerCase().includes("irrigation")) {
-    return buildGuidanceFromCategory("irrigation_balance");
-  }
-  if (item?.tone === "unstable") {
-    return buildGuidanceFromCategory("humidity_recovery");
-  }
-  if (item?.tone === "elevated") {
-    return buildGuidanceFromCategory("airflow_response");
-  }
-  if (item?.tone === "review") {
-    return buildGuidanceFromCategory("environmental_coupling");
-  }
+  if (item?.guidance) return item.guidance;
+  if (item?.driverAttribution) return buildGuidanceFromAttribution(item.driverAttribution, item.tone);
+  if (item?.likelyDriver) return buildGuidanceFromLikelyDriver(item.likelyDriver);
+  if (item?.tone === "unstable") return buildGuidanceFromCategory("persistent_drift");
+  if (item?.tone === "elevated") return buildGuidanceFromCategory("relationship_shift");
+  if (item?.tone === "review") return buildGuidanceFromCategory("baseline_divergence");
   return buildGuidanceFromCategory("stable_monitoring");
 }
 
@@ -89,7 +74,7 @@ export function buildConfidenceBasis(item, findings) {
   if (drivers.length === 1) {
     return `Based on ${drivers[0].toLowerCase()}.`;
   }
-  return "Based on current room climate trend, sync recency, and baseline behavior.";
+  return "Based on baseline separation, drift persistence, and relationship change strength.";
 }
 
 export function processingTraceLines(trace) {
@@ -118,78 +103,48 @@ export function runnerTraceLines(result) {
   ];
 }
 
-export function formatFacilityPlainState(tone, primaryRoom) {
-  if (tone === "unstable") {
-    return `${primaryRoom?.label ?? "One room"} needs action`;
-  }
-  if (tone === "elevated" || tone === "review") {
-    return `${primaryRoom?.label ?? "One room"} has drift observed`;
-  }
-  return "Facility is stable";
+export function formatPlainState(tone, primarySegment) {
+  const label = primarySegment?.label ?? "One segment";
+  if (tone === "unstable") return `${label} shows persistent structural drift`;
+  if (tone === "elevated" || tone === "review") return `${label} is diverging from baseline`;
+  return "Baseline-aligned";
 }
 
 export function formatScoreReadiness(score) {
-  if (score >= 86) {
-    return "Operating readiness is strong.";
-  }
-  if (score >= 72) {
-    return "Operating readiness is good, with one room to watch.";
-  }
-  if (score >= 58) {
-    return "Operating readiness is tightening.";
-  }
-  return "Operating readiness needs attention.";
+  if (score >= 86) return "Structural stability is strong.";
+  if (score >= 72) return "Structural stability is good, with one segment to watch.";
+  if (score >= 58) return "Structural stability is tightening.";
+  return "Structural stability needs review.";
 }
 
-export function formatRoomDecisionState(tone, index = 0) {
-  if (tone === "unstable") {
-    return "Decision window";
-  }
-  if (tone === "elevated" || tone === "review") {
-    return decisionLabelFromTone(tone, index);
-  }
-  return "Fine";
+export function formatSegmentDecisionState(tone, index = 0) {
+  if (tone === "unstable") return "Immediate review window";
+  if (tone === "elevated" || tone === "review") return decisionLabelFromTone(tone, index);
+  return "Baseline-aligned";
 }
+
+export const formatFacilityPlainState = formatPlainState;
+export const formatRoomDecisionState = formatSegmentDecisionState;
 
 export function formatConfidenceLabel(score) {
-  if ((score ?? 0) >= 82) {
-    return "High";
-  }
-  if ((score ?? 0) >= 68) {
-    return "Medium";
-  }
+  if ((score ?? 0) >= 82) return "High";
+  if ((score ?? 0) >= 68) return "Medium";
   return "Developing";
 }
 
 export function formatOperatorActionLabel(action) {
-  if (action === "acknowledge") {
-    return "Acknowledged";
-  }
-  if (action === "review") {
-    return "Under review";
-  }
-  if (action === "taken") {
-    return "Action taken";
-  }
-  if (action === "log") {
-    return "Intervention logged";
-  }
+  if (action === "acknowledge") return "Acknowledged";
+  if (action === "review") return "Under review";
+  if (action === "taken") return "Action taken";
+  if (action === "log") return "Interpretation logged";
   return "Status updated";
 }
 
 export function formatOperationalLabel(tone) {
-  if (tone === "nominal") {
-    return "Nominal";
-  }
-  if (tone === "review") {
-    return "Review";
-  }
-  if (tone === "elevated") {
-    return "Elevated";
-  }
-  if (tone === "unstable") {
-    return "Unstable";
-  }
+  if (tone === "nominal") return "Nominal";
+  if (tone === "review") return "Review";
+  if (tone === "elevated") return "Elevated";
+  if (tone === "unstable") return "Unstable";
   return "Monitoring";
 }
 
@@ -199,33 +154,21 @@ export function formatConnectorStatus(status) {
 }
 
 export function connectorStatusTone(status) {
-  if (status === "ready") {
-    return "nominal";
-  }
-  if (status === "degraded") {
-    return "review";
-  }
-  if (status === "offline") {
-    return "elevated";
-  }
+  if (status === "ready") return "nominal";
+  if (status === "degraded") return "review";
+  if (status === "offline") return "elevated";
   return "muted";
 }
 
 function buildGuidanceFromAttribution(attribution, fallbackTone) {
   if (!attribution) {
-    return buildGuidanceFromCategory(fallbackTone === "unstable" ? "humidity_recovery" : "environmental_coupling");
+    return buildGuidanceFromCategory(fallbackTone === "unstable" ? "persistent_drift" : "baseline_divergence");
   }
-  const category = attribution.driver_category === "humidity_control"
-    ? "humidity_recovery"
-    : attribution.driver_category === "hvac_instability"
-      ? "thermal_consistency"
-      : attribution.driver_category === "airflow_restriction"
-        ? "airflow_response"
-        : attribution.driver_category === "irrigation_timing"
-          ? "irrigation_balance"
-          : attribution.driver_category === "sensor_network"
-            ? "telemetry_continuity"
-            : "environmental_coupling";
+  const category = attribution.driver_category === "sensor_network"
+    ? "telemetry_continuity"
+    : attribution.driver_category === "structural_drift"
+      ? "persistent_drift"
+      : "relationship_shift";
   const guidance = buildGuidanceFromCategory(category);
   return {
     ...guidance,
@@ -241,160 +184,111 @@ function buildGuidanceFromAttribution(attribution, fallbackTone) {
 
 function buildGuidanceFromLikelyDriver(likelyDriver) {
   const normalized = likelyDriver.toLowerCase();
-  if (normalized.includes("humid") || normalized.includes("moisture")) {
-    return buildGuidanceFromCategory("humidity_recovery");
+  if (normalized.includes("telemetry") || normalized.includes("sensor")) {
+    return buildGuidanceFromCategory("telemetry_continuity");
   }
-  if (normalized.includes("airflow") || normalized.includes("pressure")) {
-    return buildGuidanceFromCategory("airflow_response");
+  if (normalized.includes("coupling") || normalized.includes("relationship")) {
+    return buildGuidanceFromCategory("relationship_shift");
   }
-  if (normalized.includes("temperature") || normalized.includes("hvac") || normalized.includes("thermal")) {
-    return buildGuidanceFromCategory("thermal_consistency");
+  if (normalized.includes("persistent") || normalized.includes("drift")) {
+    return buildGuidanceFromCategory("persistent_drift");
   }
-  if (normalized.includes("irrigation") || normalized.includes("feed")) {
-    return buildGuidanceFromCategory("irrigation_balance");
-  }
-  return buildGuidanceFromCategory("environmental_coupling");
+  return buildGuidanceFromCategory("baseline_divergence");
 }
 
 function buildGuidanceFromCategory(category) {
   const guidance = {
-    humidity_recovery: {
-      nextMove: "Review humidity recovery behavior",
-      primaryDriver: "Humidity recovery is lagging behind recent room behavior.",
-      whyFlagged: "Humidity recovery has remained slower than recent room behavior across recent monitoring windows.",
+    persistent_drift: {
+      nextMove: "Inspect the affected variable relationships",
+      primaryDriver: "Persistent structural drift is visible across the active telemetry window.",
+      whyFlagged: "The system has shifted away from its learned baseline regime and has not returned.",
       whatToCheck: [
-        "Review dehumidification response",
-        "Check room moisture load",
-        "Compare recent recovery time to normal room behavior",
+        "Inspect the affected variables in context",
+        "Check whether the shift reflects an operational change, sensor issue, or emerging fault",
+        "Compare the current recovery path to baseline",
       ],
     },
-    airflow_response: {
-      nextMove: "Inspect airflow response",
-      primaryDriver: "Airflow response appears to be recovering slower than recent baseline.",
-      whyFlagged: "Room recovery suggests airflow response is not matching recent environmental behavior.",
+    relationship_shift: {
+      nextMove: "Review the coupling change",
+      primaryDriver: "A relationship between key variables has shifted away from baseline.",
+      whyFlagged: "Variable coupling is weaker than it was during the learned baseline regime.",
       whatToCheck: [
-        "Inspect airflow path",
-        "Check fan response consistency",
-        "Review room exchange behavior",
+        "Compare before/after relationship strength",
+        "Review the time window where the shift began",
+        "Check whether the shift persists across subsequent windows",
       ],
     },
-    thermal_consistency: {
-      nextMove: "Review thermal consistency",
-      primaryDriver: "Temperature recovery is no longer matching humidity stabilization.",
-      whyFlagged: "Temperature and humidity are no longer recovering together the way this room normally does.",
+    baseline_divergence: {
+      nextMove: "Watch the next analysis window",
+      primaryDriver: "The current state is drifting away from the baseline envelope.",
+      whyFlagged: "The active state trajectory is no longer centered inside the baseline regime.",
       whatToCheck: [
-        "Review temperature recovery",
-        "Check cooling response stability",
-        "Compare hot spots against recent room behavior",
-      ],
-    },
-    irrigation_balance: {
-      nextMove: "Check irrigation balance",
-      primaryDriver: "Irrigation balance is changing during the recovery window.",
-      whyFlagged: "Recovery behavior after feed events is shifting compared to recent room baseline.",
-      whatToCheck: [
-        "Review irrigation timing",
-        "Check runoff or substrate response if available",
-        "Compare recovery behavior after feed events",
-      ],
-    },
-    environmental_coupling: {
-      nextMove: "Review environmental coupling",
-      primaryDriver: "Environmental coupling is becoming less consistent.",
-      whyFlagged: "Temperature and humidity recovery appear less consistent across recent monitoring windows.",
-      whatToCheck: [
-        "Compare temperature and humidity recovery together",
-        "Review room transition behavior",
-        "Check whether recovery timing is moving earlier than normal",
-      ],
-    },
-    room_pressure: {
-      nextMove: "Inspect room pressure stability",
-      primaryDriver: "Room pressure stability appears to be affecting recovery behavior.",
-      whyFlagged: "Room behavior is moving earlier than its recent operating baseline.",
-      whatToCheck: [
-        "Inspect room pressure stability",
-        "Review door and room sealing behavior",
-        "Compare room exchange behavior to recent baseline",
+        "Review baseline separation",
+        "Watch drift velocity and persistence",
+        "Confirm whether recovery remains normal after perturbations",
       ],
     },
     telemetry_continuity: {
       nextMove: "Review telemetry continuity",
-      primaryDriver: "Telemetry coverage is limiting confidence in the current room explanation.",
-      whyFlagged: "Connected signals suggest more room coverage is needed before confidence tightens.",
+      primaryDriver: "Telemetry coverage is limiting structural confidence in the current observation.",
+      whyFlagged: "The observed shift may be data-quality related because the telemetry window is sparse or inconsistent.",
       whatToCheck: [
-        "Confirm room telemetry coverage",
-        "Review missing or stale readings",
-        "Compare connected signals against expected room sources",
+        "Confirm telemetry continuity for the affected variables",
+        "Review missing, stale, or noisy readings",
+        "Check whether the structural shift survives after filtering suspect data",
       ],
     },
     stable_monitoring: {
       nextMove: "Continue monitoring",
-      primaryDriver: "Environmental coupling remains consistent compared to recent baseline.",
-      whyFlagged: "Room behavior remains visible and controllable across recent monitoring windows.",
+      primaryDriver: "The current covariance structure remains close to baseline.",
+      whyFlagged: "No persistent structural deformation is visible in the current telemetry window.",
       whatToCheck: [
-        "Continue routine room walk",
-        "Watch recovery timing after the next transition",
-        "Review changes only if the window shortens",
+        "Continue monitoring",
+        "Watch the next perturbation and recovery cycle",
+        "Review only if persistence or drift velocity increases",
       ],
     },
   };
-  return guidance[category] ?? guidance.environmental_coupling;
+  return guidance[category] ?? guidance.baseline_divergence;
 }
 
 function isGenericOperatorMove(move) {
   const normalized = move.toLowerCase();
-  return normalized.includes("stabilize environment")
-    || normalized.includes("needs review")
-    || normalized.includes("check room")
-    || normalized.includes("fix environment")
-    || normalized.includes("optimize conditions")
-    || normalized.includes("adjust before next cycle");
+  return normalized.includes("needs review")
+    || normalized.includes("check segment")
+    || normalized.includes("stabilize")
+    || normalized.includes("optimize")
+    || normalized.includes("monitor");
 }
 
 function decisionLabelFromTone(tone, index = 0) {
-  if (tone === "unstable") {
-    return "Decision window";
-  }
-  if (tone === "elevated") {
-    return index % 2 === 0 ? "Airflow response" : "Coupling review";
-  }
-  if (tone === "review") {
-    return index % 2 === 0 ? "Drift observed" : "Transition watch";
-  }
-  return "Stable";
+  if (tone === "unstable") return "Immediate review window";
+  if (tone === "elevated") return index % 2 === 0 ? "Relationship shift" : "Persistence watch";
+  if (tone === "review") return index % 2 === 0 ? "Baseline divergence" : "Transition watch";
+  return "Baseline-aligned";
 }
 
 function humanizeDriverCategory(value) {
-  if (!value) {
-    return "Environmental Coupling Shift";
-  }
+  if (!value) return "Structural Relationship Shift";
   return value
     .split("_")
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
     .join(" ");
 }
 
-function translateEvidenceLine(value, fallbackCategory = "environmental_coupling") {
-  if (!value) {
-    return buildGuidanceFromCategory(fallbackCategory).whyFlagged;
-  }
-  if (!isTechnicalEvidenceText(value)) {
-    return value;
-  }
+function translateEvidenceLine(value, fallbackCategory = "baseline_divergence") {
+  if (!value) return buildGuidanceFromCategory(fallbackCategory).whyFlagged;
+  if (!isTechnicalEvidenceText(value)) return value;
 
   const guidance = buildGuidanceFromCategory(fallbackCategory);
-  if (value.includes("humidity recovery")) {
-    return guidance.whyFlagged;
-  }
   if (value.includes("telemetry") || value.includes("coverage")) {
-    return "Telemetry coverage is limiting structural confidence in the current explanation.";
+    return "Telemetry coverage is limiting structural confidence in the current observation.";
   }
-  if (value.includes("temperature") || value.includes("cooling")) {
-    return "Temperature recovery is no longer tracking the room's normal stabilization pattern.";
+  if (value.includes("coupling") || value.includes("correlation")) {
+    return "A variable-to-variable relationship has shifted away from baseline.";
   }
-  if (value.includes("airflow")) {
-    return "Airflow response is lagging against the room's recent operating pattern.";
+  if (value.includes("drift") || value.includes("baseline")) {
+    return guidance.whyFlagged;
   }
   return guidance.whyFlagged;
 }
@@ -406,5 +300,6 @@ function isTechnicalEvidenceText(value) {
     || normalized.includes("signal")
     || normalized.includes("drift")
     || normalized.includes("telemetry")
-    || normalized.includes("confidence_basis");
+    || normalized.includes("confidence_basis")
+    || normalized.includes("baseline");
 }

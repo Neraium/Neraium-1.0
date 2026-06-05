@@ -125,20 +125,20 @@ export default function SystemBodyWorkspace({
             systemState={systemState}
             uiState={uiState}
             coherence={coherence}
-            stateLabel={interpretation.facility_state}
+            stateLabel={interpretation.structuralState}
             lastUpdate={lastUpdate}
-            focusLabel={interpretation.primary_driver}
+            focusLabel={interpretation.primaryDriver}
             orbData={orbData}
             compactPreview
           />
-          <p className="system-gate__state">{interpretation.facility_state}</p>
+          <p className="system-gate__state">{interpretation.structuralState}</p>
         </div>
 
         <section className="panel" aria-label="System body home summary">
           <div className="panel-body">
             <ul className="onboarding-summary">
-              <li><span>Current State</span><strong>{interpretation.facility_state}</strong></li>
-              <li><span>Main Concern</span><strong>{interpretation.relationship_summary.text}</strong></li>
+              <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
+              <li><span>Main Concern</span><strong>{interpretation.relationshipSummary.text}</strong></li>
               <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
             </ul>
           </div>
@@ -168,10 +168,10 @@ function mapBackendSystemInterpretation(contract) {
   const fallbackSummary = divergence.summary || value.state_derivation_reason || EMPTY_VALUE;
 
   return {
-    facility_state: String(value.facility_state_label || "No Active Session"),
+    structuralState: String(value.facility_state_label || "No Active Session"),
     confidence: String(value.confidence || EMPTY_VALUE),
-    primary_driver: String(value.primary_driver || "None"),
-    relationship_summary: {
+    primaryDriver: String(value.primary_driver || "None"),
+    relationshipSummary: {
       text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE),
       divergence_severity: String(divergence.severity || backendSummary.divergence_severity || EMPTY_VALUE),
       confidence: String(divergence.confidence || backendSummary.confidence || value.confidence || EMPTY_VALUE),
@@ -207,11 +207,11 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     : (fallback?.isEmptyStructuralState ? "No Active Session" : "Awaiting Interpretation");
 
   return {
-    facility_state: fallbackState,
+    structuralState: fallbackState,
     confidence: "Interpretation Unavailable",
-    primary_driver: "Interpretation Unavailable",
-    relationship_summary: {
-      text: hasUploadInFlight ? "Awaiting backend system interpretation." : "Interpretation Unavailable",
+    primaryDriver: "Interpretation Unavailable",
+    relationshipSummary: {
+      text: hasUploadInFlight ? "Awaiting backend structural interpretation." : "Interpretation Unavailable",
       divergence_severity: EMPTY_VALUE,
       confidence: "Interpretation Unavailable",
       affected_systems: [],
