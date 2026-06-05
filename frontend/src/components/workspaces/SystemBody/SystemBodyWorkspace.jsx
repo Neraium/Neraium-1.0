@@ -67,6 +67,14 @@ export default function SystemBodyWorkspace({
       governedDetail,
     ],
   );
+  const stabilitySnapshot = useMemo(
+    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
+    [latestReplayFrame, latestUploadResult],
+  );
+  const dataConditions = useMemo(
+    () => collectDataConditions(latestUploadResult),
+    [latestUploadResult],
+  );
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -116,6 +124,11 @@ export default function SystemBodyWorkspace({
                   Replay / Investigate
                 </button>
               </li>
+              <li>
+                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
+                  Observation Center
+                </button>
+              </li>
             </ul>
           </aside>
         ) : null}
@@ -144,6 +157,25 @@ export default function SystemBodyWorkspace({
           </div>
         </section>
 
+        <section className="panel" aria-label="Structural stability snapshot">
+          <div className="panel-body">
+            <ul className="onboarding-summary">
+              <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
+              <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
+              <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
+              <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
+            </ul>
+            {dataConditions.length > 0 ? (
+              <div style={{ marginTop: "0.8rem" }}>
+                <p className="section-token">Data Conditions</p>
+                <ul className="compact-list">
+                  {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
         <div style={{ marginTop: "0.8rem" }}>
           <button
             type="button"
@@ -157,6 +189,41 @@ export default function SystemBodyWorkspace({
       </section>
     </PageContainer>
   );
+}
+
+function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
+  const sii = latestUploadResult?.sii_intelligence ?? {};
+  const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
+  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
+  const driftMagnitude = frame?.baseline_distance
+    ?? frame?.topology_state?.drift_index
+    ?? sii?.instability_index
+    ?? "-";
+  const startedAt = frame?.timestamp_start
+    ?? latestUploadResult?.timestamp_profile?.first_timestamp
+    ?? null;
+  return {
+    regime: sii?.baseline_regime ?? sii?.regime_label ?? "State Group A",
+    driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : String(driftMagnitude ?? "-"),
+    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
+    deformationAge: ageLabel(startedAt),
+  };
+}
+
+function collectDataConditions(latestUploadResult) {
+  const result = latestUploadResult ?? {};
+  const dataQualityWarnings = Array.isArray(result?.data_quality?.warnings) ? result.data_quality.warnings : [];
+  const timestampWarnings = Array.isArray(result?.timestamp_profile?.warnings) ? result.timestamp_profile.warnings : [];
+  return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
+}
+
+function ageLabel(value) {
+  if (!value) return "-";
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "-";
+  const hours = Math.round(ms / 3600000);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 function mapBackendSystemInterpretation(contract) {

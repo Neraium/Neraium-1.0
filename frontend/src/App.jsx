@@ -13,6 +13,7 @@ import { normalizeUploadStatus, uploadStateMessage } from "./viewModels/uploadFl
 
 const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
+const ObservationCenterWorkspace = lazy(() => import("./components/ObservationCenterWorkspace"));
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
@@ -398,6 +399,20 @@ function App() {
       </div> 
     ); 
   } 
+
+  if (activeWorkspace === "observation-center") {
+    return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+        <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Observation Center" className="span-12"><p className="narrative-text">Preparing observation history...</p></Panel></div>}>
+          <ObservationCenterWorkspace
+            apiFetch={apiFetch}
+            accessCode={accessCode}
+            onBackToGate={() => setActiveWorkspace("system-body")}
+          />
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>

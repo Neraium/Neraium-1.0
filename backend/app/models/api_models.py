@@ -124,6 +124,14 @@ class EvidenceRunResponse(BaseModel):
     structural_archetypes: list[str] = Field(default_factory=list)
     latest_feedback_category: str | None = None
     operator_feedback_history: list[dict[str, Any]] = Field(default_factory=list)
+    observation_type: str | None = None
+    observation_status: str | None = None
+    variables: list[str] = Field(default_factory=list)
+    drift_metrics: dict[str, Any] = Field(default_factory=dict)
+    data_conditions: list[str] = Field(default_factory=list)
+    regime_label: str | None = None
+    structural_state: str | None = None
+    deformation_started_at: str | None = None
 
 
 class OperatorFeedbackRequest(BaseModel):

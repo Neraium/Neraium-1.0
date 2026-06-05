@@ -1,11 +1,11 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
-from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
+from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
 
@@ -39,7 +39,7 @@ def get_latest_evidence() -> dict[str, Any]:
 
 
 @router.get("/evidence/export/{run_id}", response_model=None)
-def export_evidence_run(request: Request, run_id: str):
+def export_evidence_run(request: Request, run_id: str, format: str = Query(default="markdown")):
     record = read_evidence_run(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
@@ -52,6 +52,19 @@ def export_evidence_run(request: Request, run_id: str):
         request_id=auth_context.get("request_id"),
         detail={"source_name": record.get("source_name")},
     )
+    normalized_format = str(format or "markdown").strip().lower()
+    if normalized_format == "json":
+        return JSONResponse(
+            content=build_evidence_export_payload(record),
+            headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.json"'},
+        )
+    if normalized_format == "csv":
+        body = build_evidence_export_csv(record)
+        return Response(
+            content=body,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.csv"'},
+        )
     body = build_evidence_export(record)
     return PlainTextResponse(
         content=body,

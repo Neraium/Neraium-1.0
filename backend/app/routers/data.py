@@ -16,6 +16,7 @@ from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services import upload_jobs
+from app.services.upload_jobs import build_evidence_record_from_result
 from app.services.upload_status_contract import normalize_upload_status_payload
 from app.services.system_interpretation import build_system_interpretation as _build_system_interpretation
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
@@ -462,6 +463,14 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                     "initiated_by": actor,
                     "adaptive_site_key": "site::default",
                     "operator_feedback_history": [],
+                    "observation_type": "baseline_shift",
+                    "observation_status": "queued",
+                    "variables": [],
+                    "drift_metrics": {},
+                    "data_conditions": [],
+                    "regime_label": "State Group A",
+                    "structural_state": "Monitoring",
+                    "deformation_started_at": None,
                 }
             )
             if record:
@@ -516,6 +525,14 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "initiated_by": actor,
                 "adaptive_site_key": "site::default",
                 "operator_feedback_history": [],
+                "observation_type": "data_condition",
+                "observation_status": "failed",
+                "variables": [],
+                "drift_metrics": {},
+                "data_conditions": [error_message],
+                "regime_label": None,
+                "structural_state": "Error",
+                "deformation_started_at": None,
             }
         )
         return JSONResponse(
@@ -578,17 +595,17 @@ async def upload_status(job_id: str):
                 if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
                     now = datetime.now(timezone.utc).isoformat()
                     upload_result = upload_jobs.read_upload_result_by_job_id(job_id) or {}
-                    upsert_evidence_run(
-                        {
-                            **existing,
-                            "status": "completed",
-                            "completed_at": now,
-                            "rows_received": upload_result.get("row_count", existing.get("rows_received", 0)),
-                            "rows_accepted": upload_result.get("row_count", existing.get("rows_accepted", 0)),
-                            "sensors_detected": max(0, int(upload_result.get("column_count", existing.get("sensors_detected", 0))) - 1),
-                            "room": (((upload_result.get("sii_intelligence") or {}).get("primary_room")) or existing.get("room")),
-                        }
+                    enriched = build_evidence_record_from_result(
+                        run_id=str(job_id),
+                        filename=str(upload_result.get("filename") or existing.get("source_name") or "upload.csv"),
+                        source_type=str(existing.get("source_type") or "csv_upload"),
+                        result=upload_result,
+                        created_at=str(existing.get("created_at") or now),
+                        completed_at=now,
+                        status="completed",
+                        initiated_by=str(existing.get("initiated_by") or "anonymous"),
                     )
+                    upsert_evidence_run({**existing, **enriched, "status": "completed", "completed_at": now})
             if str(normalized.get("status", "")).upper() == "FAILED":
                 existing = read_evidence_run(str(job_id))
                 if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
@@ -599,6 +616,7 @@ async def upload_status(job_id: str):
                             "status": "failed",
                             "completed_at": now,
                             "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
+                            "observation_status": "failed",
                         }
                     )
         terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}

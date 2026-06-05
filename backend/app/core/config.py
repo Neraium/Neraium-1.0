@@ -39,6 +39,14 @@ class Settings:
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
     max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
+    notification_webhook_url: str = ""
+    notification_email_recipients: list[str] = field(default_factory=list)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_sender: str = ""
+    smtp_use_tls: bool = True
 
 
 def get_settings() -> Settings:
@@ -57,6 +65,14 @@ def get_settings() -> Settings:
         runtime_dir=parse_runtime_dir(os.getenv("NERAIUM_RUNTIME_DIR")),
         max_upload_size_bytes=parse_positive_int(os.getenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES"), DEFAULT_MAX_UPLOAD_SIZE_BYTES),
         max_pending_upload_jobs=parse_positive_int(os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"), DEFAULT_MAX_PENDING_UPLOAD_JOBS),
+        notification_webhook_url=os.getenv("NERAIUM_NOTIFICATION_WEBHOOK_URL", "").strip(),
+        notification_email_recipients=parse_csv_list(os.getenv("NERAIUM_NOTIFICATION_EMAIL_RECIPIENTS")),
+        smtp_host=os.getenv("NERAIUM_SMTP_HOST", "").strip(),
+        smtp_port=parse_positive_int(os.getenv("NERAIUM_SMTP_PORT"), 587),
+        smtp_username=os.getenv("NERAIUM_SMTP_USERNAME", "").strip(),
+        smtp_password=os.getenv("NERAIUM_SMTP_PASSWORD", "").strip(),
+        smtp_sender=os.getenv("NERAIUM_SMTP_SENDER", "").strip(),
+        smtp_use_tls=parse_bool(os.getenv("NERAIUM_SMTP_USE_TLS"), True),
     )
 
 
@@ -114,3 +130,9 @@ def parse_positive_int(raw_value: str | None, default: int) -> int:
         return default
     value = int(raw_value)
     return value if value > 0 else default
+
+
+def parse_csv_list(raw_value: str | None) -> list[str]:
+    if raw_value is None or raw_value.strip() == "":
+        return []
+    return [item.strip() for item in raw_value.split(",") if item.strip()]

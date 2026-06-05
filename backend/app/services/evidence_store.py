@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import csv
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,10 @@ EVIDENCE_DIR = RUNTIME_DIR / "evidence"
 EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
 FEEDBACK_CATEGORIES = [
     "confirmed_issue",
+    "known_operational_change",
+    "sensor_or_data_problem",
+    "environmental_cause",
+    "nothing_meaningful",
     "useful_warning",
     "expected_behavior",
     "false_positive",
@@ -125,11 +130,29 @@ def build_evidence_export(record: dict[str, Any]) -> str:
         f"- Initiated By: {record.get('initiated_by')}",
         f"- Adaptive Site Key: {record.get('adaptive_site_key')}",
         f"- Latest Feedback Category: {record.get('latest_feedback_category')}",
+        f"- Observation Type: {record.get('observation_type')}",
+        f"- Observation Status: {record.get('observation_status')}",
+        f"- Structural State: {record.get('structural_state')}",
+        f"- Regime Label: {record.get('regime_label')}",
+        f"- Deformation Started At: {record.get('deformation_started_at')}",
         f"- Input Hash: {record.get('input_hash')}",
         f"- Result Hash: {record.get('result_hash')}",
         "",
-        "## Primary Drivers",
+        "## Variables",
     ]
+    lines.extend([f"- {item}" for item in (record.get("variables") or [])] or ["- None recorded"])
+    lines.extend(["", "## Drift Metrics"])
+    drift_metrics = record.get("drift_metrics") or {}
+    if isinstance(drift_metrics, dict) and drift_metrics:
+        lines.extend([f"- {key}: {value}" for key, value in drift_metrics.items()])
+    else:
+        lines.append("- None recorded")
+    lines.extend(["", "## Data Conditions"])
+    lines.extend([f"- {item}" for item in (record.get("data_conditions") or [])] or ["- None recorded"])
+    lines.extend([
+        "",
+        "## Primary Drivers",
+    ])
     lines.extend([f"- {item}" for item in drivers] or ["- None recorded"])
     lines.extend(["", "## Interpretive Archetypes"])
     lines.extend([f"- {item}" for item in archetypes] or ["- None recorded"])
@@ -145,6 +168,42 @@ def build_evidence_export(record: dict[str, Any]) -> str:
     lines.extend(["", "## Errors"])
     lines.extend([f"- {item}" for item in errors] or ["- None"])
     return "\n".join(lines)
+
+
+def build_evidence_export_payload(record: dict[str, Any]) -> dict[str, Any]:
+    return dict(record)
+
+
+def build_evidence_export_csv(record: dict[str, Any]) -> str:
+    flat = {
+        "run_id": record.get("run_id"),
+        "source_type": record.get("source_type"),
+        "source_name": record.get("source_name"),
+        "status": record.get("status"),
+        "created_at": record.get("created_at"),
+        "completed_at": record.get("completed_at"),
+        "observation_type": record.get("observation_type"),
+        "observation_status": record.get("observation_status"),
+        "structural_state": record.get("structural_state"),
+        "regime_label": record.get("regime_label"),
+        "deformation_started_at": record.get("deformation_started_at"),
+        "rows_received": record.get("rows_received"),
+        "rows_accepted": record.get("rows_accepted"),
+        "rows_rejected": record.get("rows_rejected"),
+        "sensors_detected": record.get("sensors_detected"),
+        "operating_state": record.get("operating_state"),
+        "neraium_score": record.get("neraium_score"),
+        "drift_status": record.get("drift_status"),
+        "variables": "|".join(str(item) for item in (record.get("variables") or [])),
+        "primary_drivers": "|".join(str(item) for item in (record.get("primary_drivers") or [])),
+        "evidence_summary": "|".join(str(item) for item in (record.get("evidence_summary") or [])),
+        "data_conditions": "|".join(str(item) for item in (record.get("data_conditions") or [])),
+        "latest_feedback_category": record.get("latest_feedback_category"),
+        "drift_metrics_json": json.dumps(record.get("drift_metrics") or {}, sort_keys=True),
+    }
+    columns = list(flat.keys())
+    values = [csv_escape(flat[column]) for column in columns]
+    return ",".join(columns) + "\n" + ",".join(values) + "\n"
 
 
 def digest_text(value: str) -> str:
@@ -168,3 +227,10 @@ def format_feedback_history_item(item: dict[str, Any]) -> str:
     note = item.get("note")
     note_suffix = f" - {note}" if note else ""
     return f"{recorded_at}: {category} ({actor}){note_suffix}"
+
+
+def csv_escape(value: Any) -> str:
+    text = "" if value is None else str(value)
+    if any(token in text for token in [",", "\"", "\n"]):
+        return "\"" + text.replace("\"", "\"\"") + "\""
+    return text

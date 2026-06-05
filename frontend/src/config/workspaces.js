@@ -18,6 +18,12 @@ export const WORKSPACES = [
     description: "Replay baseline drift, relationship changes, persistence, and evidence lineage over time.",
   },
   {
+    id: "observation-center",
+    label: "Observation Center",
+    eyebrow: "Evidence",
+    description: "Search structural observations, record operator findings, explore variable coupling, and export evidence records.",
+  },
+  {
     id: "governance-admin",
     label: "Governance Admin",
     eyebrow: "Admin",

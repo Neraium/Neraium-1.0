@@ -110,6 +110,9 @@ function defaultState() {
     },
     signalMapping: {},
     baselineMode: "live-learning-window",
+    baselineTrainingMode: "auto-detect-stable-window",
+    baselineWindowStart: "",
+    baselineWindowEnd: "",
     connectionTest: null,
     monitoringStarted: false,
   };
@@ -578,6 +581,37 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         {flow.step === 5 && (
           <div className="onboarding-section">
             <h2>Baseline Setup</h2>
+            <div className="onboarding-form-grid" style={{ marginBottom: 16 }}>
+              <label className="onboarding-map-row">
+                <span>Training mode</span>
+                <select
+                  value={flow.baselineTrainingMode}
+                  onChange={(event) => updateFlow({ baselineTrainingMode: event.target.value })}
+                >
+                  <option value="auto-detect-stable-window">Auto-detect stable window</option>
+                  <option value="operator-marked-window">Operator-marked stable window</option>
+                </select>
+              </label>
+              <label className="onboarding-map-row">
+                <span>Stable window start</span>
+                <input
+                  type="datetime-local"
+                  value={flow.baselineWindowStart}
+                  onChange={(event) => updateFlow({ baselineWindowStart: event.target.value })}
+                />
+              </label>
+              <label className="onboarding-map-row">
+                <span>Stable window end</span>
+                <input
+                  type="datetime-local"
+                  value={flow.baselineWindowEnd}
+                  onChange={(event) => updateFlow({ baselineWindowEnd: event.target.value })}
+                />
+              </label>
+            </div>
+            <p className="narrative-text">
+              Connect to data source, verify telemetry, choose a stable training period or accept auto-detection, and let the baseline regime finish learning before observations go live.
+            </p>
             <div className="onboarding-choice-grid">
               {[
                 { id: "historical-upload", label: "Upload Historical Baseline" },
@@ -605,6 +639,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
               <li><span>Data source</span><strong>{flow.dataSource || "Not selected"}</strong></li>
               <li><span>Mapped variables</span><strong>{mappedCount}</strong></li>
               <li><span>Baseline</span><strong>{flow.baselineMode}</strong></li>
+              <li><span>Training mode</span><strong>{flow.baselineTrainingMode}</strong></li>
             </ul>
             <button type="button" className="command-button onboarding-start" onClick={startMonitoring}>Start Monitoring</button>
             {flow.monitoringStarted && (

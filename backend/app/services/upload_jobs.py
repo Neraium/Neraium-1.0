@@ -17,6 +17,7 @@ from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, profile_numeric_columns, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
+from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
@@ -433,6 +434,161 @@ def _signal_level_from_drift(item: dict[str, Any]) -> str:
     return "info"
 
 
+def _observation_type_from_result(result: dict[str, Any]) -> str:
+    relationship_drift = ((result.get("baseline_analysis") or {}).get("relationship_drift")) or []
+    column_drift = ((result.get("baseline_analysis") or {}).get("column_drift")) or []
+    data_quality = result.get("data_quality") or {}
+    if any(isinstance(item, dict) and str(item.get("drift_flag") or "").lower() in {"watch", "review"} for item in relationship_drift):
+        return "coupling_change"
+    if any(isinstance(item, dict) and str(item.get("drift_flag") or "").lower() in {"watch", "review"} for item in column_drift):
+        return "trajectory_drift"
+    warnings = (data_quality.get("warnings") or []) if isinstance(data_quality, dict) else []
+    if warnings:
+        return "data_condition"
+    return "baseline_shift"
+
+
+def _observation_variables_from_result(result: dict[str, Any]) -> list[str]:
+    baseline = result.get("baseline_analysis") or {}
+    variables: list[str] = []
+    relationship_drift = baseline.get("relationship_drift") if isinstance(baseline, dict) else []
+    for item in relationship_drift or []:
+        if not isinstance(item, dict):
+            continue
+        columns = item.get("columns")
+        if isinstance(columns, list):
+            variables.extend(str(column) for column in columns if column)
+        refs = item.get("evidence_refs")
+        if isinstance(refs, list):
+            variables.extend(str(ref.get("column")) for ref in refs if isinstance(ref, dict) and ref.get("column"))
+    for item in (baseline.get("column_drift") or []):
+        if isinstance(item, dict) and item.get("column"):
+            variables.append(str(item.get("column")))
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for value in variables:
+        if value and value not in seen:
+            seen.add(value)
+            normalized.append(value)
+    return normalized[:16]
+
+
+def _data_conditions_from_result(result: dict[str, Any]) -> list[str]:
+    conditions: list[str] = []
+    data_quality = result.get("data_quality") or {}
+    if isinstance(data_quality, dict):
+        for item in (data_quality.get("warnings") or [])[:6]:
+            if item:
+                conditions.append(str(item))
+    timestamp_profile = result.get("timestamp_profile") or {}
+    if isinstance(timestamp_profile, dict):
+        for item in (timestamp_profile.get("warnings") or [])[:4]:
+            if item:
+                conditions.append(str(item))
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in conditions:
+        if item not in seen:
+            seen.add(item)
+            deduped.append(item)
+    return deduped[:8]
+
+
+def _deformation_started_at(result: dict[str, Any]) -> str | None:
+    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if isinstance(timeline, list):
+        for frame in timeline:
+            if not isinstance(frame, dict):
+                continue
+            drift_index = frame.get("baseline_distance") or ((frame.get("topology_state") or {}).get("drift_index"))
+            try:
+                if drift_index is not None and float(drift_index) > 0:
+                    return str(frame.get("timestamp_start") or frame.get("timestamp") or frame.get("timestamp_end") or "") or None
+            except Exception:
+                continue
+    profile = result.get("timestamp_profile") or {}
+    if isinstance(profile, dict):
+        return profile.get("first_timestamp")
+    return None
+
+
+def build_evidence_record_from_result(
+    *,
+    run_id: str,
+    filename: str,
+    source_type: str,
+    result: dict[str, Any],
+    created_at: str,
+    completed_at: str,
+    status: str,
+    initiated_by: str,
+    rows_received: int | None = None,
+    rows_accepted: int | None = None,
+    rows_rejected: int | None = None,
+) -> dict[str, Any]:
+    sii = result.get("sii_intelligence") or {}
+    replay = result.get("replay_timeline") or (sii.get("replay_timeline")) or {}
+    replay_timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    latest_frame = replay_timeline[-1] if isinstance(replay_timeline, list) and replay_timeline else {}
+    relationship_drift = ((result.get("baseline_analysis") or {}).get("relationship_drift")) or []
+    primary_relationship = relationship_drift[0] if isinstance(relationship_drift, list) and relationship_drift else {}
+    variables = _observation_variables_from_result(result)
+    data_conditions = _data_conditions_from_result(result)
+    observation_type = _observation_type_from_result(result)
+    structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
+    drift_metrics = {
+        "neraium_score": (sii.get("neraium_score")),
+        "baseline_distance": latest_frame.get("baseline_distance") if isinstance(latest_frame, dict) else None,
+        "drift_index": ((latest_frame.get("topology_state") or {}).get("drift_index")) if isinstance(latest_frame, dict) else None,
+        "drift_velocity": latest_frame.get("drift_velocity") if isinstance(latest_frame, dict) else None,
+        "drift_acceleration": latest_frame.get("drift_acceleration") if isinstance(latest_frame, dict) else None,
+        "coupling_delta": primary_relationship.get("correlation_delta") if isinstance(primary_relationship, dict) else None,
+        "relationship_change_count": len(relationship_drift) if isinstance(relationship_drift, list) else 0,
+        "observed_persistence": sii.get("observed_persistence"),
+        "active_observations": 1 if str(status).lower() == "completed" and observation_type != "data_condition" else 0,
+        "replay_frame_count": len(replay_timeline) if isinstance(replay_timeline, list) else 0,
+    }
+    primary_drivers = [str(sii.get("primary_driver"))] if sii.get("primary_driver") else []
+    supporting_evidence = [str(item) for item in (sii.get("supporting_evidence") or [])[:6]]
+    archetypes = [str(item) for item in (sii.get("structural_archetypes") or [])[:4]]
+    return {
+        "run_id": run_id,
+        "source_name": filename,
+        "source_type": source_type,
+        "source_url": None,
+        "status": status,
+        "created_at": created_at,
+        "completed_at": completed_at,
+        "rows_received": rows_received if rows_received is not None else int(result.get("row_count") or 0),
+        "rows_accepted": rows_accepted if rows_accepted is not None else int(result.get("row_count") or 0),
+        "rows_rejected": rows_rejected if rows_rejected is not None else 0,
+        "sensors_detected": max(0, int(result.get("column_count") or 0) - 1),
+        "room": ((sii.get("primary_room")) or "Uploaded telemetry"),
+        "operating_state": result.get("operating_state"),
+        "neraium_score": sii.get("neraium_score"),
+        "drift_status": result.get("drift_status"),
+        "scenario": None,
+        "tick": None,
+        "warnings": [],
+        "errors": [],
+        "primary_drivers": primary_drivers,
+        "evidence_summary": supporting_evidence,
+        "structural_archetypes": archetypes,
+        "adaptive_site_key": "site::default",
+        "operator_feedback_history": [],
+        "initiated_by": initiated_by,
+        "observation_type": observation_type,
+        "observation_status": "open" if str(status).lower() == "completed" else str(status).lower(),
+        "variables": variables,
+        "drift_metrics": drift_metrics,
+        "data_conditions": data_conditions,
+        "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
+        "structural_state": structural_state,
+        "deformation_started_at": _deformation_started_at(result),
+    }
+
+
 def _relationship_columns(item: dict[str, Any]) -> list[str]:
     refs = item.get("evidence_refs") if isinstance(item.get("evidence_refs"), list) else []
     columns = [
@@ -809,7 +965,23 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
     LATEST_UPLOAD_CACHE["summary"] = summary
     try:
         from app.services.evidence_store import upsert_evidence_run
-        upsert_evidence_run({"run_id": job_id, "source_name": filename, "source_type": "csv_upload", "source_url": None, "status": "completed", "created_at": now, "completed_at": now, "rows_received": row_count_total, "rows_accepted": row_count_total, "rows_rejected": 0, "sensors_detected": max(0, len(columns) - 1), "room": ((result.get("sii_intelligence") or {}).get("primary_room") or "Uploaded telemetry"), "operating_state": result.get("operating_state"), "neraium_score": ((result.get("sii_intelligence") or {}).get("neraium_score")), "drift_status": result.get("drift_status"), "scenario": None, "tick": None, "warnings": [], "errors": [], "primary_drivers": [], "evidence_summary": [], "structural_archetypes": [], "adaptive_site_key": "site::default", "operator_feedback_history": [], "initiated_by": initiated_by})
+        record = upsert_evidence_run(
+            build_evidence_record_from_result(
+                run_id=job_id,
+                filename=filename,
+                source_type="csv_upload",
+                result=result,
+                created_at=now,
+                completed_at=now,
+                status="completed",
+                initiated_by=initiated_by,
+                rows_received=row_count_total,
+                rows_accepted=row_count_total,
+                rows_rejected=0,
+            )
+        )
+        if isinstance(record, dict):
+            dispatch_observation_notification(record)
     except Exception:
         pass
     return summary
@@ -1268,29 +1440,29 @@ def process_next_queued_upload_job() -> bool:
         if metadata.get("runner_used") is False:
             completed["runner_used"] = False
         completed["job_id"] = job_id
-completed["status"] = "COMPLETE"
+        completed["status"] = "COMPLETE"
 
-if completed.get("processing_state") == "partial_complete":
-    completed["result_available"] = True
-    completed["first_usable_available"] = True
-    completed["sii_completed"] = False
-    completed["replay_ready"] = False
-    completed["replay_frame_count"] = 0
-    completed["percent"] = 100
-    completed["progress"] = 100
-    completed.setdefault("message", "Upload completed, but full intelligence processing could not finish.")
-    completed["propagation_stage"] = "partial_complete"
-    completed["propagation_progress"] = 100
-    completed["propagation_label"] = "Partial upload complete."
-else:
-    completed["processing_state"] = "complete"
-    completed["result_available"] = True
-    completed["percent"] = 100
-    completed["progress"] = 100
-    completed["message"] = "Telemetry processing complete."
-    completed["propagation_stage"] = "complete"
-    completed["propagation_progress"] = 100
-    completed["propagation_label"] = "Complete."
+        if completed.get("processing_state") == "partial_complete":
+            completed["result_available"] = True
+            completed["first_usable_available"] = True
+            completed["sii_completed"] = False
+            completed["replay_ready"] = False
+            completed["replay_frame_count"] = 0
+            completed["percent"] = 100
+            completed["progress"] = 100
+            completed.setdefault("message", "Upload completed, but full intelligence processing could not finish.")
+            completed["propagation_stage"] = "partial_complete"
+            completed["propagation_progress"] = 100
+            completed["propagation_label"] = "Partial upload complete."
+        else:
+            completed["processing_state"] = "complete"
+            completed["result_available"] = True
+            completed["percent"] = 100
+            completed["progress"] = 100
+            completed["message"] = "Telemetry processing complete."
+            completed["propagation_stage"] = "complete"
+            completed["propagation_progress"] = 100
+            completed["propagation_label"] = "Complete."
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -1347,6 +1519,14 @@ else:
                     "initiated_by": metadata.get("initiated_by", "anonymous"),
                     "adaptive_site_key": "site::default",
                     "operator_feedback_history": [],
+                    "observation_type": "data_condition",
+                    "observation_status": "failed",
+                    "variables": [],
+                    "drift_metrics": {},
+                    "data_conditions": [str(exc)],
+                    "regime_label": None,
+                    "structural_state": "Error",
+                    "deformation_started_at": None,
                 }
             )
         except Exception:
