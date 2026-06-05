@@ -341,51 +341,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         )
 
     max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
-    file_size_bytes = 0
-    csv_has_non_whitespace = False
-    with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
-        temp_path = temp.name
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            file_size_bytes += len(chunk)
-            if file_size_bytes > max_size_bytes:
-                try:
-                    Path(temp_path).unlink(missing_ok=True)
-                except OSError:
-                    pass
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "status": "FAILED",
-                        "error_type": "upload_too_large",
-                        "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
-                    },
-                )
-            if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
-                csv_has_non_whitespace = True
-            temp.write(chunk)
-
-    if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
-        try:
-            Path(temp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "FAILED",
-                "processing_state": "failed",
-                "message": "CSV file is empty.",
-            },
-        )
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
-        try:
-            Path(temp_path).unlink(missing_ok=True)
-        except OSError:
-            pass
         return JSONResponse(
             status_code=503,
             headers={"retry-after": "30"},
@@ -395,7 +352,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "message": "Upload queue is saturated. Retry shortly.",
             },
         )
-    
+
     content_type = (file.content_type or "").lower()
     auth_context = getattr(request.state, "auth_context", {})
     actor = (
@@ -405,8 +362,49 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         or request.headers.get("X-Forwarded-Email")
         or "anonymous"
     )
+    file_size_bytes = 0
+    csv_has_non_whitespace = False
+    temp_path = ""
     summary: dict[str, Any] = {}
     try:
+        with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+            temp_path = temp.name
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                file_size_bytes += len(chunk)
+                if file_size_bytes > max_size_bytes:
+                    try:
+                        Path(temp_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "status": "FAILED",
+                            "error_type": "upload_too_large",
+                            "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
+                        },
+                    )
+                if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
+                    csv_has_non_whitespace = True
+                temp.write(chunk)
+
+        if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "FAILED",
+                    "processing_state": "failed",
+                    "message": "CSV file is empty.",
+                },
+            )
+
         job_id = uuid.uuid4().hex
         summary = {
             "job_id": job_id,
@@ -445,7 +443,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 {
                     "run_id": run_id,
                     "source_name": filename,
-                    "source_type": "csv_upload",
+                    "source_type": "json_upload" if lowered.endswith(".json") else "csv_upload",
                     "status": "queued",
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "completed_at": None,
@@ -470,7 +468,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 upsert_evidence_run(record)
     except Exception as exc:
         try:
-            Path(temp_path).unlink(missing_ok=True)
+            if temp_path:
+                Path(temp_path).unlink(missing_ok=True)
         except Exception:
             pass
         failed_job_id = str(summary.get("job_id") or uuid.uuid4().hex)
@@ -498,7 +497,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             {
                 "run_id": failed_job_id,
                 "source_name": filename,
-                "source_type": "csv_upload",
+                "source_type": "json_upload" if lowered.endswith(".json") else "csv_upload",
                 "status": "failed",
                 "created_at": failed_at,
                 "completed_at": failed_at,
