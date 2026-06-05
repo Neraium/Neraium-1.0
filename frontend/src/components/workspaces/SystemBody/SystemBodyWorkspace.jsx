@@ -31,6 +31,7 @@ export default function SystemBodyWorkspace({
   void siiVerification;
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   const interpretation = useMemo(
@@ -43,7 +44,7 @@ export default function SystemBodyWorkspace({
         stateLabel,
         primaryMessage,
         focusLabel,
-        statusLight,
+        statusLight: resolvedStatusLight,
         subtitle,
         lastUpdate,
         isLoading,
@@ -59,7 +60,7 @@ export default function SystemBodyWorkspace({
       stateLabel,
       primaryMessage,
       focusLabel,
-      statusLight,
+      resolvedStatusLight,
       subtitle,
       lastUpdate,
       isLoading,
@@ -83,13 +84,9 @@ export default function SystemBodyWorkspace({
     setMenuOpen(false);
   }
 
-  function openInvestigationWorkspace() {
-    navigateWorkspace("historical-replay");
-  }
-
   return (
     <PageContainer className="system-body system-body--gate">
-      <section className={`system-gate system-gate--${statusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="System interpretation view">
+      <section className={`system-gate system-gate--${resolvedStatusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="System interpretation view">
         <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
           <span className="system-gate__heartbeat-dot" />
           <strong>{heartbeat.label}</strong>
@@ -98,12 +95,12 @@ export default function SystemBodyWorkspace({
         <button
           type="button"
           className="system-gate__settings"
-          aria-label="Open data menu"
+          aria-label="Open workspace menu"
           aria-expanded={menuOpen}
           aria-controls="system-body-menu"
           onClick={() => setMenuOpen((v) => !v)}
         >
-          Menu
+          Views
         </button>
 
         {menuOpen ? (
@@ -121,12 +118,17 @@ export default function SystemBodyWorkspace({
               </li>
               <li>
                 <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
-                  Replay / Investigate
+                  Structural Replay
                 </button>
               </li>
               <li>
                 <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
-                  Observation Center
+                  Observation Review
+                </button>
+              </li>
+              <li>
+                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
+                  Help / Changelog
                 </button>
               </li>
             </ul>
@@ -147,17 +149,17 @@ export default function SystemBodyWorkspace({
           <p className="system-gate__state">{interpretation.structuralState}</p>
         </div>
 
-        <section className="panel" aria-label="System body home summary">
+        <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
           <div className="panel-body">
             <ul className="onboarding-summary">
               <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
-              <li><span>Main Concern</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-              <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
+              <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+              <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
             </ul>
           </div>
         </section>
 
-        <section className="panel" aria-label="Structural stability snapshot">
+        <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
           <div className="panel-body">
             <ul className="onboarding-summary">
               <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
@@ -176,13 +178,23 @@ export default function SystemBodyWorkspace({
           </div>
         </section>
 
+        <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
+          <div className="panel-body">
+            <ul className="onboarding-summary">
+              <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
+              <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
+              <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+            </ul>
+          </div>
+        </section>
+
         <div style={{ marginTop: "0.8rem" }}>
           <button
             type="button"
             className="command-button"
-            onClick={openInvestigationWorkspace}
+            onClick={() => navigateWorkspace("observation-center")}
           >
-            Investigate
+            Review Observations
           </button>
         </div>
 

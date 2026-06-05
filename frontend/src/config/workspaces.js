@@ -24,6 +24,12 @@ export const WORKSPACES = [
     description: "Search structural observations, record operator findings, explore variable coupling, and export evidence records.",
   },
   {
+    id: "help-changelog",
+    label: "Help / Changelog",
+    eyebrow: "Trust",
+    description: "Read the instrument boundary, version notes, and operator-facing operating rules.",
+  },
+  {
     id: "governance-admin",
     label: "Governance Admin",
     eyebrow: "Admin",

@@ -30,8 +30,8 @@ export const ESCALATION_LAYERS = [
   "Emerging Drift",
   "Persistent Drift",
   "Structural Instability",
-  "Escalation Candidate",
-  "Critical Escalation",
+  "Sustained Structural Shift",
+  "Fragmented Structural Shift",
 ];
 
 export const LIFECYCLE_RAIL_NEUTRAL = ESCALATION_LAYERS.map((label) => ({

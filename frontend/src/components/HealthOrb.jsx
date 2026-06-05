@@ -10,32 +10,32 @@ function paletteFor(state) {
   if (state === "neutral") {
     return {
       className: "health-orb--iris-neutral",
-      accent: "#9ca3af",
-      accentSoft: "rgba(156, 163, 175, 0.18)",
-      core: "#e5e7eb",
+      accent: "#8899aa",
+      accentSoft: "rgba(136, 153, 170, 0.18)",
+      core: "#d9e1e9",
     };
   }
   if (state === "alert") {
     return {
       className: "health-orb--iris-alert",
-      accent: "#f87171",
-      accentSoft: "rgba(248, 113, 113, 0.28)",
-      core: "#ffe5e5",
+      accent: "#b86e3a",
+      accentSoft: "rgba(184, 110, 58, 0.28)",
+      core: "#f5ddcc",
     };
   }
   if (state === "watch") {
     return {
       className: "health-orb--iris-watch",
-      accent: "#f4c95d",
-      accentSoft: "rgba(244, 201, 93, 0.24)",
-      core: "#fff4d2",
+      accent: "#c5923c",
+      accentSoft: "rgba(197, 146, 60, 0.24)",
+      core: "#f3e3c6",
     };
   }
   return {
     className: "health-orb--iris-stable",
-    accent: "#67d3a7",
-    accentSoft: "rgba(103, 211, 167, 0.22)",
-    core: "#e3fff4",
+    accent: "#1b4a4f",
+    accentSoft: "rgba(27, 74, 79, 0.24)",
+    core: "#d6e5e4",
   };
 }
 

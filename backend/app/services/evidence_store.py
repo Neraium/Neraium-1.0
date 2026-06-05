@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
-from app.services.runtime_db import list_evidence_runs_db, read_evidence_run_db, upsert_evidence_run_db
+from app.services.runtime_db import list_evidence_runs_db, upsert_evidence_run_db
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -37,28 +37,14 @@ def evidence_runs_path() -> Path:
 
 
 def list_evidence_runs(limit: int = 50) -> list[dict[str, Any]]:
-    db_items = list_evidence_runs_db(limit=limit)
-    if db_items:
-        return db_items
-    path = evidence_runs_path()
-    if not path.exists():
-        return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    if not isinstance(payload, list):
-        return []
-    items = [item for item in payload if isinstance(item, dict)]
-    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-    return items[:limit]
+    items = _load_raw_evidence_runs(limit=max(limit, 500))
+    return _annotate_and_sort_evidence_runs(items)[:limit]
 
 
 def read_evidence_run(run_id: str) -> dict[str, Any] | None:
-    db_item = read_evidence_run_db(run_id)
-    if db_item is not None:
-        return db_item
-    for item in list_evidence_runs(limit=500):
+    raw_items = _load_raw_evidence_runs(limit=500)
+    annotated_items = _annotate_and_sort_evidence_runs(raw_items)
+    for item in annotated_items:
         if item.get("run_id") == run_id:
             return item
     return None
@@ -70,13 +56,15 @@ def latest_evidence_run() -> dict[str, Any] | None:
 
 
 def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
-    upsert_evidence_run_db(record)
+    raw_items = _load_raw_evidence_runs(limit=500)
+    prior_items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
+    persisted = _annotate_evidence_record(record, prior_items)
+    upsert_evidence_run_db(persisted)
     path = evidence_runs_path()
-    items = list_evidence_runs(limit=500)
-    filtered = [item for item in items if item.get("run_id") != record.get("run_id")]
-    updated = [record, *filtered]
+    items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
+    updated = [persisted, *items]
     atomic_write_json_list(path, updated[:500])
-    return record
+    return persisted
 
 
 def record_operator_feedback(run_id: str, category: str, note: str | None, actor: str, recorded_at: str) -> dict[str, Any]:
@@ -130,6 +118,7 @@ def build_evidence_export(record: dict[str, Any]) -> str:
         f"- Initiated By: {record.get('initiated_by')}",
         f"- Adaptive Site Key: {record.get('adaptive_site_key')}",
         f"- Latest Feedback Category: {record.get('latest_feedback_category')}",
+        f"- Historical Fact: {record.get('historical_fact')}",
         f"- Observation Type: {record.get('observation_type')}",
         f"- Observation Status: {record.get('observation_status')}",
         f"- Structural State: {record.get('structural_state')}",
@@ -183,6 +172,7 @@ def build_evidence_export_csv(record: dict[str, Any]) -> str:
         "created_at": record.get("created_at"),
         "completed_at": record.get("completed_at"),
         "observation_type": record.get("observation_type"),
+        "historical_fact": record.get("historical_fact"),
         "observation_status": record.get("observation_status"),
         "structural_state": record.get("structural_state"),
         "regime_label": record.get("regime_label"),
@@ -234,3 +224,89 @@ def csv_escape(value: Any) -> str:
     if any(token in text for token in [",", "\"", "\n"]):
         return "\"" + text.replace("\"", "\"\"") + "\""
     return text
+
+
+def _load_raw_evidence_runs(limit: int = 500) -> list[dict[str, Any]]:
+    db_items = list_evidence_runs_db(limit=limit)
+    if db_items:
+        return [item for item in db_items if isinstance(item, dict)]
+    path = evidence_runs_path()
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = sorted(items, key=_evidence_sort_key)
+    annotated: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = []
+    for item in ordered:
+        annotated.append(_annotate_evidence_record(item, history))
+        history.append(item)
+    annotated.sort(key=_evidence_sort_key, reverse=True)
+    return annotated
+
+
+def _annotate_evidence_record(record: dict[str, Any], prior_records: list[dict[str, Any]]) -> dict[str, Any]:
+    historical_fact = build_historical_fact(record, prior_records)
+    if historical_fact:
+        return {**record, "historical_fact": historical_fact}
+    return {**record, "historical_fact": record.get("historical_fact") or None}
+
+
+def _evidence_sort_key(item: dict[str, Any]) -> tuple[str, str]:
+    return (str(item.get("created_at") or ""), str(item.get("run_id") or ""))
+
+
+def build_historical_fact(record: dict[str, Any], prior_records: list[dict[str, Any]]) -> str | None:
+    current_type = str(record.get("observation_type") or "").strip()
+    current_variables = [str(variable).strip() for variable in (record.get("variables") or []) if str(variable).strip()]
+    if not current_type or len(current_variables) < 1:
+        return None
+
+    current_variable_set = set(current_variables)
+    matches: list[dict[str, Any]] = []
+    for prior in prior_records:
+        if str(prior.get("run_id") or "") == str(record.get("run_id") or ""):
+            continue
+        if str(prior.get("observation_type") or "").strip() != current_type:
+            continue
+        prior_variables = {str(variable).strip() for variable in (prior.get("variables") or []) if str(variable).strip()}
+        if not prior_variables or current_variable_set.isdisjoint(prior_variables):
+            continue
+        if not prior.get("latest_feedback_category"):
+            continue
+        matches.append(prior)
+
+    if not matches:
+        return None
+
+    category_counts: dict[str, int] = {}
+    for item in matches:
+        category = str(item.get("latest_feedback_category") or "").strip()
+        if not category:
+            continue
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+    if not category_counts:
+        return None
+
+    dominant_category, dominant_count = sorted(category_counts.items(), key=lambda entry: (-entry[1], entry[0]))[0]
+    category_label = _feedback_category_label(dominant_category)
+    variable_names = ", ".join(current_variables[:2])
+    variable_phrase = variable_names if variable_names else "these variables"
+    match_count = len(matches)
+    return (
+        f"Similar {current_type.replace('_', ' ')} observations involving {variable_phrase} "
+        f"were later marked {category_label} in {dominant_count} of {match_count} previous investigations."
+    )
+
+
+def _feedback_category_label(category: str) -> str:
+    return str(category).replace("_", " ").strip() or "unclassified"

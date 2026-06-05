@@ -91,14 +91,14 @@
 }
 
 .platform-main {
- display: grid;
- grid-template-rows: auto minmax(0, 1fr);
- min-height: 100dvh;
- min-width: 0;
- overflow: hidden;
- background:
- radial-gradient(ellipse at top center, rgba(34, 56, 64, 0.18), transparent 44%),
- linear-gradient(180deg, rgba(7, 10, 13, 0.95), rgba(6, 9, 11, 0.96));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+  background:
+ radial-gradient(ellipse at top center, rgba(59, 122, 140, 0.16), transparent 42%),
+ linear-gradient(180deg, rgba(11, 25, 41, 0.98), rgba(8, 18, 30, 0.99));
 }
 
 .platform-workspace {

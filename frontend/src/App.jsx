@@ -14,6 +14,7 @@ import { normalizeUploadStatus, uploadStateMessage } from "./viewModels/uploadFl
 const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
 const ObservationCenterWorkspace = lazy(() => import("./components/ObservationCenterWorkspace"));
+const HelpChangelogWorkspace = lazy(() => import("./components/HelpChangelogWorkspace"));
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
@@ -408,6 +409,20 @@ function App() {
             apiFetch={apiFetch}
             accessCode={accessCode}
             onBackToGate={() => setActiveWorkspace("system-body")}
+            onWorkspaceNavigate={setActiveWorkspace}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (activeWorkspace === "help-changelog") {
+    return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+        <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Help" className="span-12"><p className="narrative-text">Preparing help and changelog workspace...</p></Panel></div>}>
+          <HelpChangelogWorkspace
+            onBackToGate={() => setActiveWorkspace("system-body")}
+            onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
       </div>

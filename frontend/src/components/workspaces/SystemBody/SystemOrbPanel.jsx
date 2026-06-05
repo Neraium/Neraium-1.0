@@ -4,8 +4,8 @@ import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 const STATE_COPY = {
   stable: { code: "L1-L2", attention: "Stable / Monitoring" },
   watching: { code: "L3", attention: "Emerging Drift" },
-  drift: { code: "L4-L5", attention: "Persistent Drift / Structural Instability" },
-  propagation_active: { code: "L6-L7", attention: "Escalation Candidate / Critical Escalation" },
+  drift: { code: "L4-L5", attention: "Persistent Drift / Structural Shift" },
+  propagation_active: { code: "L6-L7", attention: "Sustained Structural Shift" },
   recovery: { code: "RECOVERY", attention: "Stability Recovery" },
   unknown: { code: EMPTY_VALUE, attention: EMPTY_VALUE },
   neutral: { code: EMPTY_VALUE, attention: EMPTY_VALUE },

@@ -197,12 +197,12 @@ export default function ReplayWorkspace({
   const metrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
       return [
-        { label: "Structural Movement Timeline", value: dash },
-        { label: "Current Window", value: dash },
+        { label: "Structure Timeline", value: dash },
+        { label: "Current Frame", value: dash },
         { label: "Baseline Separation", value: dash },
         { label: "Drift Velocity", value: dash },
         { label: "Drift Acceleration", value: dash },
-        { label: "Structural Read", value: dash },
+        { label: "Structural State", value: dash },
         { label: "Primary Contributors", value: dash },
         { label: "Evidence confidence", value: dash },
       ];
@@ -211,12 +211,12 @@ export default function ReplayWorkspace({
       ? shownFrame.primary_contributors.slice(0, 2).join(" | ")
       : dash;
     return [
-      { label: "Structural Movement Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-      { label: "Current Window", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+      { label: "Structure Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
+      { label: "Current Frame", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
       { label: "Baseline Separation", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
       { label: "Drift Velocity", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
       { label: "Drift Acceleration", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
-      { label: "Structural Read", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
+      { label: "Structural State", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
       { label: "Primary Contributors", value: contributors },
       { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : dash },
       { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash },
@@ -227,7 +227,7 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Structural Replay" className="span-12 workspace-hero-panel" subtitle="Replay, topology, and evidence diagnostics for structural analysis.">
+      <Panel title="Structural Replay" className="span-12 workspace-hero-panel" subtitle="Structural replay, topology, and evidence lineage for observation analysis.">
         <MetricGrid metrics={metrics} />
         {expertMode ? (
           <div className="structural-replay-controls">
@@ -241,7 +241,7 @@ export default function ReplayWorkspace({
             <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Observation Mode" : "Enter Observation Mode"}</button>
           </div>
         ) : (
           <div className="structural-replay-controls">
@@ -254,13 +254,13 @@ export default function ReplayWorkspace({
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Replay Mode" : "Enter Replay Mode"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Observation Mode" : "Enter Observation Mode"}</button>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
         )}
         {hasReplaySnapshots ? (
           <div className={`historian-replay-status ${replayMode ? "historian-replay-status--active" : ""}`}>
-            <span className="historian-replay-status__badge">{replayMode ? "Replay Mode Active" : "Replay Preview"}</span>
+            <span className="historian-replay-status__badge">{replayMode ? "Observation Mode Active" : "Structural Preview"}</span>
             <span>{executionMode === "live_causal" ? "No-lookahead mode" : "Standard replay mode"}</span>
             <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
             <span>{currentPercent}% through dataset</span>
@@ -268,43 +268,43 @@ export default function ReplayWorkspace({
           </div>
         ) : null}
         {!hasDiagnosticsEvidence ? (
-          <p className="narrative-text">Diagnostics are unavailable until telemetry is uploaded or a live stream is connected.</p>
+          <p className="narrative-text">Structural replay is unavailable until telemetry is uploaded or a live stream is connected.</p>
         ) : null}
         {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload telemetry to generate a full structural replay.</p> : null}
         <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
-        <Panel title="State-Space Progression" className="span-12 replay-phase-panel">
+        <Panel title="Structural Progression" className="span-12 replay-phase-panel">
           <div className="canonical-flow">
             {canonicalFlow.map((phase) => <div key={phase} className={`canonical-flow__step ${hasReplaySnapshots && shownFrame?.cognition_state?.canonical_phase === phase ? "is-active" : ""}`}><span>{phase.replaceAll("_", " ")}</span></div>)}
           </div>
         </Panel>
       ) : null}
-      <Panel title="Topology Graph" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Diagnostics" : "Why This Was Flagged"} className="span-6">
+      <Panel title="Structural Topology" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
+      <Panel title={expertMode ? "Evidence Lineage" : "Observation Summary"} className="span-6">
         {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
           <ul className="system-body-timeline-list">
             <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
-            <li><span className="metadata-text">System stability</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
+            <li><span className="metadata-text">Structural state</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
             <li><span className="metadata-text">Cross-variable support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
           </ul>
         )}
       </Panel>
       <Panel title="Recovery Convergence" className="span-6">
         <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Convergence Signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
-          <li><span className="metadata-text">Fragmentation Indicator</span><strong>{hasReplaySnapshots ? (shownFrame?.topology_state?.fragmentation_indicator ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Convergence signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Fragmentation signal</span><strong>{hasReplaySnapshots ? (shownFrame?.topology_state?.fragmentation_indicator ?? dash) : dash}</strong></li>
           <li><span className="metadata-text">Analysis state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
         </ul>
       </Panel>
       {expertMode ? (
         <>
-          <Panel title="Historical Pattern Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
+          <Panel title="Historical Structure Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
           <Panel title="Evidence Lineage" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
-          <Panel title="Temporal Intelligence" className="span-6">
+          <Panel title="Temporal Structure" className="span-6">
             <ul className="system-body-timeline-list">
-              <li><span className="metadata-text">State-space phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
+              <li><span className="metadata-text">State phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
               <li><span className="metadata-text">Propagation acceleration</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash}</strong></li>
               <li><span className="metadata-text">Structural compression</span><strong>{hasReplaySnapshots ? (shownFrame?.subsystem_pressure?.compression_intensity ?? dash) : dash}</strong></li>
               <li><span className="metadata-text">Continuation window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash}</strong></li>

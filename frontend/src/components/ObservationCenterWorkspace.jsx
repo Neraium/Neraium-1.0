@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
+import HealthOrb from "./HealthOrb";
 
 const FEEDBACK_OPTIONS = [
   { id: "confirmed_issue", label: "Confirmed developing issue" },
@@ -11,6 +12,7 @@ const FEEDBACK_OPTIONS = [
 
 const NOTIFICATION_STORAGE_KEY = "neraium.observation_notifications.v1";
 const VARIABLE_ALIAS_STORAGE_KEY = "neraium.variable_aliases.v1";
+const PENDING_OBSERVATION_STORAGE_KEY = "neraium.pending_observation.v1";
 
 function loadJsonStorage(key, fallback) {
   if (typeof window === "undefined") return fallback;
@@ -66,6 +68,51 @@ function displayVariable(name, aliases) {
   return alias ? `${alias} (${name})` : name;
 }
 
+function driftToneFor(run) {
+  const drift = Number(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index ?? 0);
+  if (!Number.isFinite(drift) || drift < 0.24) return "stable";
+  if (drift < 0.72) return "watch";
+  return "alert";
+}
+
+function summarizeObservation(run, aliases) {
+  if (!run) return "No observation selected.";
+  const variables = (run?.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases));
+  const type = String(run?.observation_type ?? "");
+  const duration = formatDurationFrom(run?.deformation_started_at);
+  if (type === "coupling_change" && variables.length >= 2) {
+    return `The relationship between ${variables[0]} and ${variables[1]} has shifted away from baseline${duration !== "-" ? ` for ${duration}` : ""}.`;
+  }
+  if (type === "recovery_elongation") {
+    return `Recovery back to baseline is taking longer${duration !== "-" ? ` and has stayed elongated for ${duration}` : ""}.`;
+  }
+  if (type === "trajectory_drift") {
+    return `The system trajectory is continuing to move away from its usual state pattern${duration !== "-" ? ` for ${duration}` : ""}.`;
+  }
+  if (type === "covariance_shift") {
+    return `The overall relationship structure has shifted away from the baseline regime${duration !== "-" ? ` for ${duration}` : ""}.`;
+  }
+  return (run?.evidence_summary ?? [])[0] ?? "A persistent structural change has been recorded.";
+}
+
+function readPendingObservationRunId() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(PENDING_OBSERVATION_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingObservationRunId() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PENDING_OBSERVATION_STORAGE_KEY);
+  } catch {
+    // ignore local storage failures
+  }
+}
+
 function lineChartPoints(values, width = 420, height = 120) {
   if (!values.length) return "";
   const numeric = values.map((item) => Number(item.value)).filter(Number.isFinite);
@@ -79,10 +126,29 @@ function lineChartPoints(values, width = 420, height = 120) {
   }).join(" ");
 }
 
+function relationshipSketch(run) {
+  const strength = Math.max(2.2, Math.min(8, Number(run?.drift_metrics?.coupling_delta ?? run?.drift_metrics?.baseline_distance ?? 0.4) * 2.2));
+  const tone = driftToneFor(run);
+  const edgeStroke = tone === "alert"
+    ? "rgba(184, 110, 58, 0.9)"
+    : tone === "watch"
+      ? "rgba(197, 146, 60, 0.84)"
+      : "rgba(59, 122, 140, 0.82)";
+  const edgeDash = tone === "stable" ? undefined : tone === "watch" ? "5 7" : "3 5";
+  return (
+    <svg viewBox="0 0 176 52" className="observation-history-card__sketch" aria-hidden="true">
+      <line x1="34" y1="26" x2="142" y2="26" stroke={edgeStroke} strokeWidth={strength} strokeLinecap="round" strokeDasharray={edgeDash} opacity="0.9" />
+      <circle cx="34" cy="26" r="10" fill="rgba(11, 25, 41, 0.96)" stroke="rgba(59, 122, 140, 0.68)" />
+      <circle cx="142" cy="26" r="10" fill="rgba(11, 25, 41, 0.96)" stroke="rgba(168, 138, 75, 0.72)" />
+    </svg>
+  );
+}
+
 export default function ObservationCenterWorkspace({
   apiFetch,
   accessCode,
   onBackToGate = null,
+  onWorkspaceNavigate = null,
 }) {
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState("");
@@ -133,12 +199,20 @@ export default function ObservationCenterWorkspace({
         if (cancelled) return;
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
         const newestRun = nextRuns[0]?.run_id ?? "";
+        const pendingRunId = readPendingObservationRunId();
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
           maybeNotifyForObservation(nextRuns[0], notificationPrefs, aliases);
         }
         latestSeenRunId.current = newestRun;
         setRuns(nextRuns);
-        setSelectedRunId((current) => current || newestRun || "");
+        setSelectedRunId((current) => {
+          const preferred = current || pendingRunId || newestRun || "";
+          if (pendingRunId && nextRuns.some((run) => run.run_id === pendingRunId)) {
+            clearPendingObservationRunId();
+            return pendingRunId;
+          }
+          return preferred;
+        });
       } catch (loadError) {
         if (cancelled) return;
         setError(String(loadError?.message ?? loadError));
@@ -208,6 +282,9 @@ export default function ObservationCenterWorkspace({
   );
 
   const latestRun = runs[0] ?? null;
+  const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
+  const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
+  const gateOrbState = driftToneFor(latestRun);
   const activeObservationCount = useMemo(
     () => runs.filter((run) => normalizeObservationStatus(run) === "open").length,
     [runs],
@@ -268,7 +345,7 @@ export default function ObservationCenterWorkspace({
       }
       setRuns((current) => current.map((run) => (run.run_id === payload.run_id ? payload : run)));
       setFeedbackNote("");
-      setFeedbackState({ status: "saved", message: "Feedback recorded." });
+      setFeedbackState({ status: "saved", message: "Recorded to system memory." });
     } catch (submitError) {
       setFeedbackState({ status: "error", message: String(submitError?.message ?? submitError) });
     }
@@ -288,22 +365,22 @@ export default function ObservationCenterWorkspace({
   }
 
   const backControl = (
-    <button
-      type="button"
-      className="system-gate__settings-action"
-      onClick={() => onBackToGate?.()}
-      style={{
-        position: "sticky",
-        top: "max(10px, env(safe-area-inset-top, 0px))",
-        left: 0,
-        zIndex: 40,
-        width: "fit-content",
-        marginBottom: "10px",
-        paddingInline: "12px",
-      }}
-    >
-      Back to Gate
-    </button>
+    <div className="observation-center__back-control">
+      <button
+        type="button"
+        className="system-gate__settings-action"
+        onClick={() => onBackToGate?.()}
+      >
+        Back to Gate
+      </button>
+      <button
+        type="button"
+        className="system-gate__settings-action"
+        onClick={() => onWorkspaceNavigate?.("help-changelog")}
+      >
+        Help / Changelog
+      </button>
+    </div>
   );
 
   if (loading) {
@@ -328,23 +405,38 @@ export default function ObservationCenterWorkspace({
   const distinctTypes = [...new Set(runs.map((run) => run?.observation_type).filter(Boolean))];
 
   return (
-    <section className="workspace-surface">
+    <section className="workspace-surface observation-center">
       {backControl}
-      <Panel title="Observation Center" subtitle="History, structural snapshot, feedback, export, and quiet-instrument diagnostics.">
-        <MetricGrid
-          metrics={[
-            { label: "Current regime", value: latestRun?.regime_label ?? "State Group A" },
-            { label: "Structural drift", value: numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) },
-            { label: "Active observations", value: activeObservationCount },
-            { label: "Deformation age", value: formatDurationFrom(latestRun?.deformation_started_at) },
-            { label: "Silence health", value: silenceHealth.state },
-            { label: "Observation rate / week", value: silenceHealth.weeklyRate },
-          ]}
-        />
-      </Panel>
+      <div className="observation-center__hero">
+        <section className="observation-center__snapshot" aria-label="Current structural snapshot">
+          <div className="observation-center__snapshot-orb">
+            <HealthOrb systemState={gateOrbState} intensity={Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18))} />
+          </div>
+          <div className="observation-center__snapshot-copy">
+            <p className="section-token">Stability Snapshot</p>
+            <strong>{latestRun?.regime_label ?? "State Group A"}</strong>
+            <span>Drift index {numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index)}</span>
+            <span>{activeObservationCount} active observations</span>
+          </div>
+        </section>
+        <section className="observation-center__summary" aria-label="Current instrument summary">
+          <p className="section-token">Instrument State</p>
+          <h1>Observation Center</h1>
+          <p>The instrument stays quiet until the system's shape changes. Review structural observations, record what you found, and leave the evidence intact.</p>
+          <MetricGrid
+            metrics={[
+              { label: "Current regime", value: latestRun?.regime_label ?? "State Group A" },
+              { label: "Structural drift", value: numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) },
+              { label: "Deformation age", value: formatDurationFrom(latestRun?.deformation_started_at) },
+              { label: "Silence health", value: silenceHealth.state },
+            ]}
+            compact
+          />
+        </section>
+      </div>
 
-      <div className="workspace-grid workspace-grid--console">
-        <Panel title="Observation History" className="span-7">
+      <div className="workspace-grid workspace-grid--console observation-center__grid">
+        <Panel title="Observation Timeline" className="span-7 observation-center__panel observation-center__panel--timeline">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search variable, source, date, or observation text" />
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
@@ -366,7 +458,7 @@ export default function ObservationCenterWorkspace({
                 <button
                   key={run.run_id}
                   type="button"
-                  className={`intervention-card intervention-card--${selectedRun?.run_id === run.run_id ? "selected" : "review"}`}
+                  className={`intervention-card intervention-card--${selectedRun?.run_id === run.run_id ? "selected" : "review"} observation-history-card`}
                   onClick={() => setSelectedRunId(run.run_id)}
                   style={{ textAlign: "left", width: "100%" }}
                 >
@@ -375,12 +467,14 @@ export default function ObservationCenterWorkspace({
                       <span>{run.source_name || run.source_type}</span>
                       <strong>{observationTypeLabel(run.observation_type)}</strong>
                     </div>
-                    <span>{normalizeObservationStatus(run)}</span>
+                    <span className={`observation-history-card__status observation-history-card__status--${normalizeObservationStatus(run)}`}>{normalizeObservationStatus(run)}</span>
                   </div>
-                  <p>{(run.evidence_summary ?? [])[0] ?? run.structural_state ?? "Structural observation recorded."}</p>
+                  {relationshipSketch(run)}
+                  <p>{summarizeObservation(run, aliases)}</p>
                   <div className="intervention-card__footer">
                     <span>{run.created_at}</span>
                     <span>{(run.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases)).join(" | ") || "No variables listed"}</span>
+                    <span className="observation-history-card__review">Review</span>
                   </div>
                 </button>
               ))}
@@ -388,11 +482,16 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Observation Detail" className="span-5">
+        <Panel title="Observation Review" className="span-5 observation-center__panel observation-center__panel--detail">
           {!selectedRun ? (
             <EmptyState title="No observation selected" body="Select an observation from the history to inspect and annotate it." compact />
           ) : (
             <>
+              <div className="observation-detail-callout">
+                <span className="section-token">Observation</span>
+                <strong>{selectedRunSummary}</strong>
+                {selectedRunHistoricalFact ? <p>{selectedRunHistoricalFact}</p> : null}
+              </div>
               <MetricGrid
                 metrics={[
                   { label: "Status", value: normalizeObservationStatus(selectedRun) },
@@ -404,6 +503,34 @@ export default function ObservationCenterWorkspace({
                 ]}
                 compact
               />
+              <div className="observation-pair-visual" aria-label="Relationship deformation sketch">
+                <svg viewBox="0 0 320 120" role="img" aria-label="Structural relationship sketch">
+                  <defs>
+                    <linearGradient id="observationEdge" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="rgba(105, 183, 198, 0.78)" />
+                      <stop offset="100%" stopColor="rgba(211, 170, 103, 0.88)" />
+                    </linearGradient>
+                  </defs>
+                  <line
+                    x1="88"
+                    y1="60"
+                    x2="232"
+                    y2="60"
+                    stroke="url(#observationEdge)"
+                    strokeWidth={Math.max(3, Math.min(10, Number(selectedRun?.drift_metrics?.coupling_delta ?? selectedRun?.drift_metrics?.baseline_distance ?? 4) * 2.8))}
+                    strokeLinecap="round"
+                    opacity="0.74"
+                  />
+                  <circle cx="88" cy="60" r="20" fill="rgba(13, 23, 29, 0.96)" stroke="rgba(105, 183, 198, 0.72)" />
+                  <circle cx="232" cy="60" r="20" fill="rgba(15, 18, 21, 0.96)" stroke="rgba(211, 170, 103, 0.78)" />
+                  <text x="88" y="94" textAnchor="middle" fill="rgba(224, 236, 234, 0.92)" fontSize="10">
+                    {displayVariable((selectedRun.variables ?? [])[0] ?? "Variable A", aliases)}
+                  </text>
+                  <text x="232" y="94" textAnchor="middle" fill="rgba(224, 236, 234, 0.92)" fontSize="10">
+                    {displayVariable((selectedRun.variables ?? [])[1] ?? "Variable B", aliases)}
+                  </text>
+                </svg>
+              </div>
               <div className="compact-list-block">
                 <p className="section-token">Variables</p>
                 <ul className="compact-list">
@@ -438,15 +565,15 @@ export default function ObservationCenterWorkspace({
                 </select>
                 <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional note about what the operator found." rows={4} />
                 <div className="intake-flow__controls">
-                  <button type="button" className="command-button" onClick={submitFeedback}>Record Feedback</button>
-                  {feedbackState.message ? <span>{feedbackState.message}</span> : null}
+                  <button type="button" className="command-button" onClick={submitFeedback}>Record to Memory</button>
+                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : null}
                 </div>
               </div>
             </>
           )}
         </Panel>
 
-        <Panel title="Relationship Explorer" className="span-7">
+        <Panel title="Variable Explorer" className="span-7 observation-center__panel observation-center__panel--explorer">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
             <select value={selectedVariables[0]} onChange={(event) => setSelectedVariables([event.target.value, selectedVariables[1]])}>
               <option value="">Select variable A</option>
@@ -461,8 +588,8 @@ export default function ObservationCenterWorkspace({
             <EmptyState title="No relationship history" body="Select two variables that have appeared together in recorded observations." compact />
           ) : (
             <>
-              <svg viewBox="0 0 420 120" style={{ width: "100%", height: 140, background: "rgba(255,255,255,0.02)", borderRadius: 12 }}>
-                <polyline fill="none" stroke="currentColor" strokeWidth="3" points={relationshipPoints} />
+              <svg viewBox="0 0 420 120" className="observation-explorer__chart">
+                <polyline fill="none" stroke="rgba(59, 122, 140, 0.92)" strokeWidth="3" points={relationshipPoints} />
               </svg>
               <ul className="compact-list">
                 {relationshipSeries.slice(-6).reverse().map((item) => (
@@ -473,7 +600,7 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Instrument Quiet and Notifications" className="span-5">
+        <Panel title="Instrument Quiet and Notifications" className="span-5 observation-center__panel">
           <MetricGrid
             metrics={[
               { label: "Observations / 24h", value: silenceHealth.lastDay },
@@ -508,9 +635,13 @@ export default function ObservationCenterWorkspace({
               <input type="time" value={notificationPrefs.quietEnd} onChange={(event) => setNotificationPrefs((current) => ({ ...current, quietEnd: event.target.value }))} />
             </label>
           </div>
+          <div className="observation-trust-note">
+            <strong>Default silence is preserved.</strong>
+            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored observations remain open without reminders or escalation.</p>
+          </div>
         </Panel>
 
-        <Panel title="Variable Aliases" className="span-5">
+        <Panel title="Variable Aliases" className="span-5 observation-center__panel">
           <div className="setup-grid">
             <label>
               <span>Variable</span>
@@ -533,7 +664,7 @@ export default function ObservationCenterWorkspace({
           </ul>
         </Panel>
 
-        <Panel title="Multi-Source Snapshot" className="span-7">
+        <Panel title="Multi-Source Snapshot" className="span-7 observation-center__panel">
           <div className="telemetry-grid telemetry-grid--compact">
             {sourceSnapshots.map((run) => (
               <div className="telemetry-card" key={run.run_id}>
@@ -563,7 +694,16 @@ function maybeNotifyForObservation(run, prefs, aliases) {
   const body = variables
     ? `${observationTypeLabel(run?.observation_type)} involving ${variables}`
     : `${observationTypeLabel(run?.observation_type)} recorded`;
-  new Notification("Neraium observation", { body });
+  const notification = new Notification("Neraium observation", { body });
+  notification.onclick = () => {
+    try {
+      window.localStorage.setItem(PENDING_OBSERVATION_STORAGE_KEY, String(run?.run_id ?? ""));
+      window.focus?.();
+    } catch {
+      // ignore local storage failures
+    }
+    notification.close();
+  };
 }
 
 function insideQuietHours(start, end) {

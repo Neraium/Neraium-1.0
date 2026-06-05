@@ -140,17 +140,17 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
     >
       <div className="replay-cognition-field__header">
         <div>
-          <p className="section-token">Replay status</p>
+          <p className="section-token">Structural replay</p>
           <h3>{status}</h3>
           <span>{phase} / {pathLabel}</span>
         </div>
         <div className="replay-cognition-field__state">
           <strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong>
-          <span>{inactive ? "-" : "baseline divergence"}</span>
+          <span>{inactive ? "-" : "baseline separation"}</span>
         </div>
       </div>
 
-      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="Topology evolution, drift trajectory, and relationship propagation">
+      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="Structural drift, coupling change, and recovery trajectory">
         <defs>
           <radialGradient id="replayFieldGlow" cx="50%" cy="48%" r="58%">
             <stop offset="0%" stopColor="rgba(138, 184, 196, 0.28)" />
@@ -160,7 +160,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
           <linearGradient id="replayTraceGradient" x1="0%" x2="100%" y1="0%" y2="0%">
             <stop offset="0%" stopColor="rgba(108, 186, 156, 0.18)" />
             <stop offset="48%" stopColor="rgba(138, 184, 196, 0.92)" />
-            <stop offset="100%" stopColor="rgba(212, 107, 95, 0.88)" />
+            <stop offset="100%" stopColor="rgba(211, 170, 103, 0.88)" />
           </linearGradient>
           <filter id="replaySoftGlow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="6" result="blur" />
@@ -211,9 +211,9 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
       </svg>
 
       <div className="replay-cognition-field__footer">
-        <div><span>Topology</span><strong>{inactive ? "-" : display(frame?.topology_state?.fragmentation_indicator, "-")}</strong></div>
-        <div><span>Propagation</span><strong>{inactive ? "-" : display(frame?.propagation_state?.propagation_acceleration, "-")}</strong></div>
-        <div><span>Recovery</span><strong>{inactive ? "-" : display(frame?.propagation_state?.recovery_convergence, "-")}</strong></div>
+        <div><span>Structural state</span><strong>{inactive ? "-" : display(frame?.topology_state?.fragmentation_indicator, "-")}</strong></div>
+        <div><span>Coupling pressure</span><strong>{inactive ? "-" : display(frame?.propagation_state?.propagation_acceleration, "-")}</strong></div>
+        <div><span>Return path</span><strong>{inactive ? "-" : display(frame?.propagation_state?.recovery_convergence, "-")}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>
         <div><span>Timestamp</span><strong>{frame?.timestamp ? formatClockTime(frame.timestamp) : "-"}</strong></div>
       </div>

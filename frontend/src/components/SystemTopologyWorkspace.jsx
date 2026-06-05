@@ -146,7 +146,7 @@ function deriveUploadSignal(latestUploadResult) {
     return { systemState: null, label: "", statusLight: null };
   }
   if (operatingState.includes("needs action") || urgency === "unstable" || operatingState.includes("unstable")) {
-    return { systemState: "alert", label: "Needs action", statusLight: "red" };
+    return { systemState: "alert", label: "Structural shift", statusLight: "amber" };
   }
   if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) {
     return { systemState: "watching", label: "Needs review", statusLight: "gray" };
@@ -287,20 +287,20 @@ function gateOutcome(governance) {
 
 function governedStateFromAdmitted(admittedState) {
   if (admittedState === "WATCH") return "Watch";
-  if (admittedState === "ALERT") return "Alert";
+  if (admittedState === "ALERT") return "Structural shift";
   return "Stable";
 }
 
 function statusLightFromAdmitted(admittedState, hasPass) {
   if (!hasPass) return "gray";
   if (admittedState === "WATCH") return "yellow";
-  if (admittedState === "ALERT") return "red";
+  if (admittedState === "ALERT") return "amber";
   return "gray";
 }
 
 function orbStateFromStatusLight(statusLight) {
   if (statusLight === "yellow") return "watching";
-  if (statusLight === "red") return "propagation_active";
+  if (statusLight === "amber" || statusLight === "red") return "propagation_active";
   return "unknown";
 }
 
@@ -339,8 +339,8 @@ function buildStateDescription(layer) {
   if (layer === 3) return "Divergence Observed with emerging persistence across recent windows.";
   if (layer === 4) return "Persistent Drift is corroborated across multiple evidence windows.";
   if (layer === 5) return "Structural Instability is exceeding baseline containment assumptions.";
-  if (layer === 6) return "Propagation and recovery degradation indicate Escalation Candidate status.";
-  return "Critical Escalation conditions indicate fragmented structural relationships and high propagation pressure.";
+  if (layer === 6) return "Propagation and recovery degradation indicate a sustained structural shift.";
+  return "Fragmented structural relationships and high propagation pressure remain active.";
 }
 
 function deriveEscalationLayer({ awaitingSii, uiState, liveOps }) {

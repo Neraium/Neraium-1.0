@@ -32,7 +32,7 @@ export function formatStructuralRead(state) {
   if (!s) return "-";
   if (s.includes("stable")) return "Stable";
   if (s.includes("watch") || s.includes("review")) return "Needs Review";
-  if (s.includes("alert") || s.includes("critical") || s.includes("unstable")) return "Alert";
+  if (s.includes("alert") || s.includes("critical") || s.includes("unstable")) return "Structural shift";
   if (s.includes("recover")) return "Recovery";
   if (s.includes("pending")) return "Baseline Pending";
   return String(state);
@@ -51,7 +51,7 @@ export function mapStructuralSeverity(distance, velocity) {
   if (d < 0.36 && Math.abs(v) < 0.03) return "Minor deviation emerging";
   if (d < 0.7 || v >= 0.03) return "Structural drift increasing";
   if (d < 1.1) return "Persistent instability detected";
-  return "Escalation accelerating";
+  return "Structural shift accelerating";
 }
 
 export function mapStructuralInterpretation(distance, velocity, acceleration) {

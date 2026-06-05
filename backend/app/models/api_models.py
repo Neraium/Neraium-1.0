@@ -123,6 +123,7 @@ class EvidenceRunResponse(BaseModel):
     adaptive_site_key: str | None = None
     structural_archetypes: list[str] = Field(default_factory=list)
     latest_feedback_category: str | None = None
+    historical_fact: str | None = None
     operator_feedback_history: list[dict[str, Any]] = Field(default_factory=list)
     observation_type: str | None = None
     observation_status: str | None = None
