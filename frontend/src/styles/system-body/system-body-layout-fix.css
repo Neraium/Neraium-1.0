@@ -1,0 +1,29 @@
+.system-gate {
+  padding-top: 56px;
+}
+
+.system-gate__heartbeat {
+  top: 18px;
+  left: 18px;
+  max-width: min(280px, calc(100% - 120px));
+  white-space: nowrap;
+}
+
+.system-gate__settings {
+  top: 18px;
+  right: 18px;
+}
+
+.system-gate__settings-panel {
+  top: 62px;
+  right: 18px;
+}
+
+.system-gate__plate--summary,
+.system-gate__plate--snapshot {
+  top: 86px;
+}
+
+.system-gate__center {
+  inset: 84px 0 40px;
+}
