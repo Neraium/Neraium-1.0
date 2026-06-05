@@ -7,6 +7,7 @@ from pathlib import Path
 from app.core.config import Settings
 from app.main import create_app
 from app.routers import data as data_router
+from app.services import evidence_store
 from app.services.runtime_db import read_upload_queue_job, upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
@@ -614,6 +615,98 @@ def test_evidence_export_endpoint_returns_report() -> None:
     assert response.status_code == 200
     assert "# Neraium Evidence Report" in response.text
     assert "Run ID:" in response.text
+
+
+def test_historical_fact_flows_through_api_and_exports() -> None:
+    client = TestClient(create_app())
+    seed_record = {
+        "run_id": "seed-run",
+        "source_name": "seed.csv",
+        "source_type": "csv_upload",
+        "status": "completed",
+        "created_at": "2026-05-01T08:00:00Z",
+        "completed_at": "2026-05-01T08:01:00Z",
+        "rows_received": 8,
+        "rows_accepted": 8,
+        "rows_rejected": 0,
+        "sensors_detected": 2,
+        "room": "Uploaded telemetry",
+        "operating_state": "Monitoring",
+        "neraium_score": 42,
+        "drift_status": "watch",
+        "warnings": [],
+        "errors": [],
+        "primary_drivers": ["temperature", "humidity"],
+        "evidence_summary": ["Initial structural drift observed."],
+        "structural_archetypes": ["coupling_change"],
+        "initiated_by": "operator@example.com",
+        "adaptive_site_key": "site::default",
+        "operator_feedback_history": [],
+        "observation_type": "coupling_change",
+        "observation_status": "resolved",
+        "variables": ["temperature", "humidity"],
+        "drift_metrics": {"baseline_distance": 0.82},
+        "data_conditions": [],
+        "regime_label": "State Group A",
+        "structural_state": "Monitoring",
+        "deformation_started_at": "2026-05-01T08:00:00Z",
+    }
+    evidence_store.upsert_evidence_run(seed_record)
+    evidence_store.record_operator_feedback(
+        "seed-run",
+        "known_operational_change",
+        "Scheduled maintenance window",
+        "operator@example.com",
+        "2026-05-01T09:00:00Z",
+    )
+
+    followup_record = {
+        "run_id": "followup-run",
+        "source_name": "followup.csv",
+        "source_type": "csv_upload",
+        "status": "completed",
+        "created_at": "2026-05-02T08:00:00Z",
+        "completed_at": "2026-05-02T08:01:00Z",
+        "rows_received": 8,
+        "rows_accepted": 8,
+        "rows_rejected": 0,
+        "sensors_detected": 2,
+        "room": "Uploaded telemetry",
+        "operating_state": "Monitoring",
+        "neraium_score": 51,
+        "drift_status": "watch",
+        "warnings": [],
+        "errors": [],
+        "primary_drivers": ["temperature", "humidity"],
+        "evidence_summary": ["Follow-up structural drift observed."],
+        "structural_archetypes": ["coupling_change"],
+        "initiated_by": "operator@example.com",
+        "adaptive_site_key": "site::default",
+        "operator_feedback_history": [],
+        "observation_type": "coupling_change",
+        "observation_status": "open",
+        "variables": ["temperature", "humidity"],
+        "drift_metrics": {"baseline_distance": 0.91},
+        "data_conditions": [],
+        "regime_label": "State Group A",
+        "structural_state": "Monitoring",
+        "deformation_started_at": "2026-05-02T08:00:00Z",
+    }
+    evidence_store.upsert_evidence_run(followup_record)
+
+    detail = client.get("/api/evidence/runs/followup-run")
+    export_json = client.get("/api/evidence/export/followup-run?format=json")
+    export_csv = client.get("/api/evidence/export/followup-run?format=csv")
+    export_markdown = client.get("/api/evidence/export/followup-run?format=markdown")
+
+    assert detail.status_code == 200
+    detail_payload = detail.json()
+    assert detail_payload["historical_fact"] == export_json.json()["historical_fact"]
+    assert "known operational change" in detail_payload["historical_fact"].lower()
+    assert "temperature" in detail_payload["historical_fact"].lower()
+    assert export_json.json()["historical_fact"] == detail_payload["historical_fact"]
+    assert "historical_fact" in export_csv.text
+    assert detail_payload["historical_fact"] in export_markdown.text
 
 
 def test_observability_summary_reports_queue_and_audit_counts() -> None:
