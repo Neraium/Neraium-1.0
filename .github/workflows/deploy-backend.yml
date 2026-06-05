@@ -25,6 +25,7 @@ env:
   WORKER_LOG_GROUP: /ecs/neraium-prod-worker
   UPLOAD_STATE_BUCKET: neraium-prod-upload-state
   APP_TASK_ROLE_NAME: neraium-prod-task-app-role
+  API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-task-exec-role
 
 jobs:
@@ -51,6 +52,7 @@ jobs:
           set -euo pipefail
           test -n "$UPLOAD_STATE_BUCKET"
           test -n "$APP_TASK_ROLE_NAME"
+          test -n "$API_TOKEN_SECRET_ARN"
           test -n "$TASK_EXECUTION_ROLE_NAME"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
@@ -60,6 +62,67 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/bootstrap-production-aws.sh
+
+      - name: Validate ECS deployment baseline
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-clusters \
+            --clusters "$ECS_CLUSTER" \
+            --region "$AWS_REGION" \
+            --query 'clusters[0].status' \
+            --output text | tee ecs-cluster-status.txt
+
+          test "$(cat ecs-cluster-status.txt)" = "ACTIVE"
+
+          aws ecs describe-task-definition \
+            --task-definition "$API_TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].name' \
+            --output text | tee api-container-name.txt
+
+          aws ecs describe-task-definition \
+            --task-definition "$WORKER_TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].name' \
+            --output text | tee worker-container-name.txt
+
+          test -n "$(cat api-container-name.txt)"
+          test -n "$(cat worker-container-name.txt)"
+          test "$(cat api-container-name.txt)" != "None"
+          test "$(cat worker-container-name.txt)" != "None"
+
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
+            --region "$AWS_REGION" > current-services.json
+
+          jq -e '.failures | length == 0' current-services.json >/dev/null || {
+            echo "Missing ECS services detected in $ECS_CLUSTER:" >&2
+            jq -r '.failures[] | "  - \(.arn): \(.reason)"' current-services.json >&2
+            exit 1
+          }
+
+          jq -e --arg api "$ECS_API_SERVICE" --arg worker "$ECS_WORKER_SERVICE" '
+            [ .services[] | select(.status == "ACTIVE") | .serviceName ]
+            | index($api)
+            | . != null
+          ' current-services.json >/dev/null || {
+            echo "API service $ECS_API_SERVICE is not ACTIVE in cluster $ECS_CLUSTER" >&2
+            exit 1
+          }
+
+          jq -e --arg api "$ECS_API_SERVICE" --arg worker "$ECS_WORKER_SERVICE" '
+            [ .services[] | select(.status == "ACTIVE") | .serviceName ]
+            | index($worker)
+            | . != null
+          ' current-services.json >/dev/null || {
+            echo "Worker service $ECS_WORKER_SERVICE is not ACTIVE in cluster $ECS_CLUSTER" >&2
+            exit 1
+          }
+
+          echo "Validated cluster, services, and task families:"
+          jq -r '.services[] | "  - \(.serviceName): \(.status) taskDef=\(.taskDefinition)"' current-services.json
 
       - name: Ensure ECR repository exists
         run: |

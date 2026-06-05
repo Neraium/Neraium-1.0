@@ -62,6 +62,8 @@ NERAIUM_PROCESS_ROLE=api|worker
 
 The ECS deployment workflow now registers both task definitions directly with AWS CLI and pins:
 
+It expects the production ECS cluster, API service, worker service, and both task-definition families to already exist. The workflow now validates those resources before image build and fails fast if any are missing or inactive.
+
 ```text
 command=["python","-m","app.entrypoint"]
 awslogs group=/ecs/neraium-prod-api or /ecs/neraium-prod-worker
@@ -189,6 +191,7 @@ Bootstrap the shared S3 bucket, CloudWatch log groups, and ECS task roles with:
 AWS_REGION=us-east-2 \
 UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
 APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
+API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name> \
 TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
 API_LOG_GROUP=/ecs/neraium-prod-api \
 WORKER_LOG_GROUP=/ecs/neraium-prod-worker \
@@ -200,4 +203,5 @@ GitHub Actions configuration required by the active deploy path:
 ```text
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
+NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
 ```

@@ -5,6 +5,7 @@ AWS_REGION="${AWS_REGION:-us-east-2}"
 UPLOAD_STATE_BUCKET="${UPLOAD_STATE_BUCKET:?UPLOAD_STATE_BUCKET is required}"
 APP_TASK_ROLE_NAME="${APP_TASK_ROLE_NAME:-neraium-prod-task-app-role}"
 TASK_EXECUTION_ROLE_NAME="${TASK_EXECUTION_ROLE_NAME:-neraium-prod-ecs-task-execution-role}"
+API_TOKEN_SECRET_ARN="${API_TOKEN_SECRET_ARN:?API_TOKEN_SECRET_ARN is required}"
 API_LOG_GROUP="${API_LOG_GROUP:-/ecs/neraium-prod-api}"
 WORKER_LOG_GROUP="${WORKER_LOG_GROUP:-/ecs/neraium-prod-worker}"
 
@@ -14,8 +15,9 @@ TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_N
 TRUST_POLICY_FILE="$(mktemp)"
 INLINE_POLICY_FILE="$(mktemp)"
 EXECUTION_INLINE_POLICY_FILE="$(mktemp)"
+EXECUTION_SECRETS_POLICY_FILE="$(mktemp)"
 cleanup() {
-  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE"
+  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE" "$EXECUTION_SECRETS_POLICY_FILE"
 }
 trap cleanup EXIT
 
@@ -64,6 +66,23 @@ cat > "$EXECUTION_INLINE_POLICY_FILE" <<JSON
       "Resource": [
         "arn:aws:logs:${AWS_REGION}:${ACCOUNT_ID}:log-group:${API_LOG_GROUP}:*",
         "arn:aws:logs:${AWS_REGION}:${ACCOUNT_ID}:log-group:${WORKER_LOG_GROUP}:*"
+      ]
+    }
+  ]
+}
+JSON
+
+cat > "$EXECUTION_SECRETS_POLICY_FILE" <<JSON
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "${API_TOKEN_SECRET_ARN}"
       ]
     }
   ]
@@ -126,10 +145,16 @@ aws iam put-role-policy \
   --policy-name neraium-cloudwatch-logs-access \
   --policy-document "file://${EXECUTION_INLINE_POLICY_FILE}"
 
+aws iam put-role-policy \
+  --role-name "$TASK_EXECUTION_ROLE_NAME" \
+  --policy-name neraium-secretsmanager-access \
+  --policy-document "file://${EXECUTION_SECRETS_POLICY_FILE}"
+
 echo "UPLOAD_STATE_BUCKET=${UPLOAD_STATE_BUCKET}"
 echo "APP_TASK_ROLE_NAME=${APP_TASK_ROLE_NAME}"
 echo "APP_TASK_ROLE_ARN=${APP_TASK_ROLE_ARN}"
 echo "TASK_EXECUTION_ROLE_NAME=${TASK_EXECUTION_ROLE_NAME}"
 echo "TASK_EXECUTION_ROLE_ARN=${TASK_EXECUTION_ROLE_ARN}"
+echo "API_TOKEN_SECRET_ARN=${API_TOKEN_SECRET_ARN}"
 echo "API_LOG_GROUP=${API_LOG_GROUP}"
 echo "WORKER_LOG_GROUP=${WORKER_LOG_GROUP}"
