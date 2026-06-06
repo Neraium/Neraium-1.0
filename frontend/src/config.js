@@ -49,12 +49,17 @@ function apiBaseCandidates() {
   const configuredPrimary = API_BASE_URL;
   const configuredFallback = configuredFallbackApiBaseUrl;
 
+  // In production, an unconfigured primary is same-origin. For app.neraium.com
+  // that means large POSTs first hit the static app host at /api/*, fail/abort,
+  // then retry against the real API. Mobile browsers are especially bad at
+  // recovering from that failed first upload attempt, so prefer real API origins
+  // and leave same-origin only as the final fallback.
   const candidates = isProductionBuild
     ? [
-      configuredPrimary,
-      configuredFallback,
-      siblingApi,
-      productionFallback,
+      configuredPrimary || null,
+      configuredFallback || null,
+      siblingApi || null,
+      productionFallback || null,
       "",
     ]
     : [
@@ -66,6 +71,7 @@ function apiBaseCandidates() {
 
   const seen = new Set();
   return candidates.filter((value) => {
+    if (value === null || value === undefined) return false;
     const normalized = (value ?? "").replace(/\/+$/, "");
     if (seen.has(normalized) || isUnsafeMixedContentTarget(normalized)) {
       return false;
