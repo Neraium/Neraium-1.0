@@ -61,6 +61,14 @@ function readJsonResponse(xhr) {
   }
 }
 
+function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
+  const size = Number(fileSizeBytes) || 0;
+  const base = Number(baseTimeoutMs) || 0;
+  const mobileMinimumMs = 90 * 1000;
+  const largeFileMinimumMs = size >= 25 * 1024 * 1024 ? 3 * 60 * 1000 : mobileMinimumMs;
+  return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 10 * 60 * 1000);
+}
+
 export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 1000, onProgress, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -82,7 +90,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
 
     const shouldRetryStatus = (status) => status >= 500 || status === 404 || status === 405 || status === 408 || status === 425 || status === 429;
     const MAX_SAME_URL_RETRIES = 2;
-    const RESPONSE_GRACE_TIMEOUT_MS = 8000;
+    const RESPONSE_GRACE_TIMEOUT_MS = getUploadResponseTimeoutMs(file.size, timeoutMs);
     const scheduleTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
     const cancelTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
 
@@ -110,16 +118,18 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
         const loaded = event.loaded ?? 0;
         const total = event.lengthComputable ? event.total : file.size;
         const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
+        const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null;
         onProgress?.({
-          stage: "uploading",
+          stage: percent === 100 ? "upload_transferred" : "uploading",
           loaded,
           total,
-          percent: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null,
+          percent,
           speedBytesPerSecond: loaded / elapsedSeconds,
-          message: "Uploading telemetry export.",
+          message: percent === 100 ? "Upload transferred. Waiting for server confirmation." : "Uploading telemetry export.",
         });
-        // If upload bytes completed but the server response never arrives,
-        // fail fast so caller can recover via persisted latest-upload polling.
+        // Mobile browsers can finish sending bytes well before the API has
+        // written the temp file, created the queue job, and returned 202.
+        // Keep the XHR open for large CSVs instead of aborting after 8s.
         if (!responseSettled && total > 0 && loaded >= total && !responseGraceTimer) {
           responseGraceTimer = scheduleTimer(() => {
             if (responseSettled || xhr.readyState === 4) return;
@@ -128,7 +138,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
             } catch {
               // no-op
             }
-            const error = new Error("Upload bytes transferred but server did not confirm the job in time.");
+            const error = new Error("Upload transferred, but the server did not confirm the job before the response timeout.");
             error.name = "ApiTimeoutError";
             error.timeoutMs = RESPONSE_GRACE_TIMEOUT_MS;
             error.error_type = "upload_response_timeout";
@@ -159,7 +169,9 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
           uploadAttempt(index + 1);
           return;
         }
-        const error = new Error(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? `Unexpected response: ${xhr.status}`);
+        const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
+        const errorType = payload?.error_type ? ` (${payload.error_type})` : "";
+        const error = new Error(detail ? `${detail}${errorType}` : `Unexpected response: ${xhr.status}`);
         error.name = "UploadRequestError";
         error.status = xhr.status;
         error.payload = payload;
