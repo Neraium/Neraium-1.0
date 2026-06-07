@@ -7,7 +7,7 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 300000);
 const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
-const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
+const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? PRODUCTION_API_FALLBACK : "http://127.0.0.1:8010");
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 
@@ -49,17 +49,16 @@ function apiBaseCandidates() {
   const configuredPrimary = API_BASE_URL;
   const configuredFallback = configuredFallbackApiBaseUrl;
 
-  // In production, an unconfigured primary is same-origin. For app.neraium.com
-  // that means large POSTs first hit the static app host at /api/*, fail/abort,
-  // then retry against the real API. Mobile browsers are especially bad at
-  // recovering from that failed first upload attempt, so prefer real API origins
-  // and leave same-origin only as the final fallback.
+  // In production, never try same-origin first when the app is hosted on
+  // app.neraium.com. Large mobile uploads can be consumed by the static app host
+  // before the retry reaches the real API, leaving the backend queue untouched.
+  // Prefer explicit API origins and keep same-origin only as the final fallback.
   const candidates = isProductionBuild
     ? [
       configuredPrimary || null,
-      configuredFallback || null,
-      siblingApi || null,
       productionFallback || null,
+      siblingApi || null,
+      configuredFallback || null,
       "",
     ]
     : [
