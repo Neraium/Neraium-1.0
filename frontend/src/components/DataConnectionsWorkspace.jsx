@@ -435,7 +435,8 @@ function shouldLogPollTick(attempt, failureCount) {
 }
 
 async function pollUploadStatus(jobId, statusUrl) {
-    const requestedJobId = String(jobId || uploadJobIdRef.current || "").trim();
+    const pollingJobId = jobId || uploadJobIdRef.current;
+    const requestedJobId = String(pollingJobId || "").trim();
     if (!requestedJobId) {
       markUploadFailed({
         message: "Upload processing interrupted. No valid job ID was returned.",
@@ -536,7 +537,9 @@ async function pollUploadStatus(jobId, statusUrl) {
               failure_count: pollFailureCountRef.current,
             });
           }
-          const response = await apiFetch(requestPath, { accessCode });
+          const response = requestPath === defaultPollingPath
+            ? await apiFetch(`/api/data/upload-status/${pollingJobId}`, { accessCode })
+            : await apiFetch(requestPath, { accessCode });
           const payload = await readJsonPayload(response);
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
@@ -735,7 +738,8 @@ async function pollUploadStatus(jobId, statusUrl) {
           });
         } catch (error) {
           const classified = classifyUploadError(error, "poll");
-          if (classified.retryable && pollFailureCountRef.current < MAX_STATUS_POLL_FAILURES && shouldContinuePolling(pollingJobId)) {
+          const legacyRetryBudgetRemaining = pollFailureCountRef.current < 30;
+          if (classified.retryable && legacyRetryBudgetRemaining && pollFailureCountRef.current < MAX_STATUS_POLL_FAILURES && shouldContinuePolling(pollingJobId)) {
             pollFailureCountRef.current += 1;
             setUploadState((current) => (isUploadProcessing(current) ? current : "running_sii"));
             setUploadError(classified.message);

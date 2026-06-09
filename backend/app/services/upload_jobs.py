@@ -768,11 +768,11 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             if per_signal_drifts:
                 room_drift = sum(per_signal_drifts) / len(per_signal_drifts)
         if sparse:
-            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Sparse telemetry"
-            relationship_evidence = [f"{name}: Relationship evidence is limited because the telemetry window is too sparse."]
+            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Insufficient telemetry"
+            relationship_evidence = [f"{name}: Relationship evidence is limited due to sparse telemetry."]
             structural_explanation = [f"{name}: The system needs more telemetry before its structural state can be interpreted confidently."]
         elif room_drift > 0.25:
-            urgency = "unstable"; driver_category = "structural_drift"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Persistent structural drift observed"
+            urgency = "unstable"; driver_category = "process_timing"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Persistent structural drift observed"
             relationship_pair = tracked_columns[:2]
             relationship_evidence = [
                 f"{name}: Coupling between {relationship_pair[0]} and {relationship_pair[1]} has shifted away from baseline."
@@ -780,6 +780,15 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
                 else f"{name}: Multiple variables are drifting away from the baseline regime."
             ]
             structural_explanation = [f"{name}: Persistent multi-variable drift indicates a deformation in the system's baseline relational structure."]
+        elif room_drift > 0.12:
+            urgency = "review"; driver_category = "process_timing"; attribution_confidence = "medium"; signal_strength = "medium"; room_state = "Structural drift observed"
+            relationship_pair = tracked_columns[:2]
+            relationship_evidence = [
+                f"{name}: Coupling between {relationship_pair[0]} and {relationship_pair[1]} is moving away from baseline."
+                if len(relationship_pair) >= 2
+                else f"{name}: Multiple variables are beginning to move away from the baseline regime."
+            ]
+            structural_explanation = [f"{name}: Early multi-variable drift suggests the system is leaving its baseline relational structure."]
         else:
             urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Baseline-aligned"
             relationship_evidence = [f"{name}: Variable relationships remain inside the baseline regime."]
@@ -838,7 +847,6 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             dict.fromkeys(
                 [
                     *timestamp_profile.get("warnings", []),
-                    *baseline_analysis.get("warnings", []),
                     *cultivation_mapping.get("warnings", []),
                 ]
             )

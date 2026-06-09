@@ -253,8 +253,10 @@ function mapBackendSystemInterpretation(contract) {
   const fallbackSummary = divergence.summary || value.state_derivation_reason || EMPTY_VALUE;
 
   return {
+    facility_state: String(value.facility_state_label || "No Active Session"),
     structuralState: String(value.facility_state_label || "No Active Session"),
     confidence: String(value.confidence || EMPTY_VALUE),
+    primary_driver: String(value.primary_driver || "None"),
     primaryDriver: String(value.primary_driver || "None"),
     relationshipSummary: {
       text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE),

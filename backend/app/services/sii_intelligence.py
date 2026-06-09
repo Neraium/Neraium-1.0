@@ -365,6 +365,13 @@ def build_upload_room_records(
     confidence: int,
     room_assessments: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    def _prefix_room_lines(room_name: str, lines: list[str]) -> list[str]:
+        prefixed: list[str] = []
+        for line in lines[:3]:
+            text = str(line)
+            prefixed.append(text if text.startswith(f"{room_name}:") else f"{room_name}: {text}")
+        return prefixed
+
     summary_rooms = room_summary.get("rooms", []) if isinstance(room_summary, dict) else []
     room_details = [
         {
@@ -394,22 +401,22 @@ def build_upload_room_records(
         room_supporting_evidence = (
             supporting_evidence
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("supporting_evidence") or supporting_evidence)[:3]]
+            else _prefix_room_lines(room_name, list(assessment.get("supporting_evidence") or supporting_evidence))
         )
         room_relationship_evidence = (
             relationship_evidence
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("relationship_evidence") or relationship_evidence)[:3]]
+            else _prefix_room_lines(room_name, list(assessment.get("relationship_evidence") or relationship_evidence))
         )
         room_structural_explanation = (
             structural_explanation
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("structural_explanation") or structural_explanation)[:3]]
+            else _prefix_room_lines(room_name, list(assessment.get("structural_explanation") or structural_explanation))
         )
         room_checks = (
             what_to_check
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("what_to_check") or what_to_check)[:3]]
+            else _prefix_room_lines(room_name, list(assessment.get("what_to_check") or what_to_check))
         )
         room_urgency = str(assessment.get("urgency") or urgency)
         room_state_value = str(assessment.get("room_state") or (room_state if index == 0 else state_from_urgency(room_urgency)))
