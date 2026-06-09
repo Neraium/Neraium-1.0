@@ -77,7 +77,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
     }
 
     const startedAt = Date.now();
-    const uploadUrls = buildApiCandidateUrls("/api/data/upload");
+    const uploadUrls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: false });
 
     onProgress?.({
       stage: "upload_started",

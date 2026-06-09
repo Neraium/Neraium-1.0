@@ -242,6 +242,31 @@ function App() {
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest]);
 
   const handleResetDemo = useCallback(async () => {
+    const [uploadResetResponse, connectionResetResponse] = await Promise.all([
+      apiFetch("/api/data/reset", {
+        method: "POST",
+        accessCode,
+      }),
+      apiFetch("/api/data-connections/reset-all", {
+        method: "POST",
+        accessCode,
+      }),
+    ]);
+
+    const [uploadResetPayload, connectionResetPayload] = await Promise.all([
+      uploadResetResponse.json().catch(() => ({})),
+      connectionResetResponse.json().catch(() => ({})),
+    ]);
+
+    if (!uploadResetResponse.ok || !connectionResetResponse.ok) {
+      const detail = uploadResetPayload?.message
+        || uploadResetPayload?.detail
+        || connectionResetPayload?.message
+        || connectionResetPayload?.detail
+        || "Reset Everything failed.";
+      throw new Error(String(detail));
+    }
+
     setResetGuardActive(true);
     setSessionIntent("neutral");
     setIsDemoMode(false);
@@ -255,16 +280,6 @@ function App() {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
     }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
-    await Promise.allSettled([
-      apiFetch("/api/data/reset", {
-        method: "POST",
-        accessCode,
-      }),
-      apiFetch("/api/data-connections/reset-all", {
-        method: "POST",
-        accessCode,
-      }),
-    ]);
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
   }, [accessCode, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);

@@ -7,7 +7,7 @@ export const WORKSPACES = [
   },
   {
     id: "data-connections",
-    label: "Telemetry Intake",
+    label: "Telemetry Setup",
     eyebrow: "Intake",
     description: "Connect or upload multivariate telemetry with no domain-specific configuration.",
   },
