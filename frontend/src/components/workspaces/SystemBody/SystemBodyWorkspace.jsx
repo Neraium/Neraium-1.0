@@ -135,67 +135,73 @@ export default function SystemBodyWorkspace({
           </aside>
         ) : null}
 
-        <div className="system-gate__center" style={{ cursor: "default" }}>
-          <SystemOrbPanel
-            systemState={systemState}
-            uiState={uiState}
-            coherence={coherence}
-            stateLabel={interpretation.structuralState}
-            lastUpdate={lastUpdate}
-            focusLabel={interpretation.primaryDriver}
-            orbData={orbData}
-            compactPreview
-          />
-          <p className="system-gate__state">{interpretation.structuralState}</p>
-        </div>
-
-        <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
-              <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-              <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
-            </ul>
-          </div>
-        </section>
-
-        <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
-              <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
-              <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
-              <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
-            </ul>
-            {dataConditions.length > 0 ? (
-              <div style={{ marginTop: "0.8rem" }}>
-                <p className="section-token">Data Conditions</p>
-                <ul className="compact-list">
-                  {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+        <div className="system-gate__layout">
+          <div className="system-gate__column system-gate__column--left">
+            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
+                  <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+                  <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
                 </ul>
               </div>
-            ) : null}
+            </section>
           </div>
-        </section>
 
-        <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
-              <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
-              <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
-            </ul>
+          <div className="system-gate__center" style={{ cursor: "default" }}>
+            <SystemOrbPanel
+              systemState={systemState}
+              uiState={uiState}
+              coherence={coherence}
+              stateLabel={interpretation.structuralState}
+              lastUpdate={lastUpdate}
+              focusLabel={interpretation.primaryDriver}
+              orbData={orbData}
+              compactPreview
+            />
+            <p className="system-gate__state">{interpretation.structuralState}</p>
           </div>
-        </section>
 
-        <div style={{ marginTop: "0.8rem" }}>
-          <button
-            type="button"
-            className="command-button"
-            onClick={() => navigateWorkspace("observation-center")}
-          >
-            Review Observations
-          </button>
+          <div className="system-gate__column system-gate__column--right">
+            <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
+                  <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
+                  <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
+                  <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
+                </ul>
+                {dataConditions.length > 0 ? (
+                  <div style={{ marginTop: "0.8rem" }}>
+                    <p className="section-token">Data Conditions</p>
+                    <ul className="compact-list">
+                      {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
+                  <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
+                  <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+                </ul>
+              </div>
+            </section>
+
+            <div className="system-gate__actions">
+              <button
+                type="button"
+                className="command-button"
+                onClick={() => navigateWorkspace("observation-center")}
+              >
+                Review Observations
+              </button>
+            </div>
+          </div>
         </div>
 
       </section>
