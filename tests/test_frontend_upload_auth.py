@@ -93,6 +93,14 @@ def test_upload_polling_preserves_returned_job_id() -> None:
     assert 'throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");' in source
 
 
+def test_upload_polling_requires_a_valid_job_id_before_starting() -> None:
+    source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
+
+    assert 'message: "Upload processing interrupted. No valid job ID was returned."' in source
+    assert 'errorType: "upload_session_missing"' in source
+    assert 'if (!requestedJobId) {' in source
+
+
 def test_object_errors_render_through_normalized_messages() -> None:
     source = read_upload_surface()
     contract_source = read_frontend(ROOT / "frontend" / "src" / "viewModels" / "uploadContract.js")

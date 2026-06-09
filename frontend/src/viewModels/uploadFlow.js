@@ -169,6 +169,22 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     }
     return "Upload state unavailable.";
   }
+  if (errorType === "shared_upload_queue_not_configured") {
+    return "Upload processing is unavailable because the shared upload queue is not configured.";
+  }
+  if (errorType === "upload_queue_saturated") {
+    return "Upload queue is saturated. Retry shortly.";
+  }
+  if (errorType === "upload_enqueue_failed") {
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "Upload processing is unavailable right now.";
+  }
+  if (errorType === "upload_too_large" || status === 413) {
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "Upload exceeds the maximum allowed file size.";
+  }
   if (errorType === "job_not_found" || status === 404) {
     return "Upload processing interrupted.";
   }
@@ -176,7 +192,11 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return detail ? `SII processing failure: ${normalizeErrorMessage(detail)}` : "SII processing failure.";
   }
   if (status === 408 || status === 425 || status === 429 || status >= 500) {
-    return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";
+    return phase === "poll"
+      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
+      : (typeof detail === "string" && detail.trim()
+        ? normalizeErrorMessage(detail)
+        : "Secure telemetry ingestion unavailable.");
   }
   if (phase === "poll") {
     return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";

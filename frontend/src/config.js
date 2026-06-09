@@ -43,23 +43,35 @@ function isUnsafeMixedContentTarget(apiBaseUrl) {
   }
 }
 
-function apiBaseCandidates() {
+function shouldIncludeSameOriginFallback(path, method = "GET") {
+  const normalizedPath = normalizeApiPath(path);
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  if (!isProductionBuild) {
+    return true;
+  }
+  if (["GET", "HEAD"].includes(normalizedMethod)) {
+    return true;
+  }
+  return !normalizedPath.startsWith("/api/");
+}
+
+function apiBaseCandidates(path = "/api/health", method = "GET", allowSameOriginFallback = null) {
   const siblingApi = appSiblingApiBaseUrl();
   const productionFallback = isProductionBuild ? PRODUCTION_API_FALLBACK : "";
   const configuredPrimary = API_BASE_URL;
   const configuredFallback = configuredFallbackApiBaseUrl;
+  const includeSameOriginFallback = allowSameOriginFallback ?? shouldIncludeSameOriginFallback(path, method);
 
-  // In production, never try same-origin first when the app is hosted on
-  // app.neraium.com. Large mobile uploads can be consumed by the static app host
-  // before the retry reaches the real API, leaving the backend queue untouched.
-  // Prefer explicit API origins and keep same-origin only as the final fallback.
+  // In production, never let mutating API requests fall through to the
+  // static app origin. Upload/reset endpoints must target a real API host so
+  // route mismatches surface once instead of generating same-origin 404 noise.
   const candidates = isProductionBuild
     ? [
       configuredPrimary || null,
       productionFallback || null,
       siblingApi || null,
       configuredFallback || null,
-      "",
+      includeSameOriginFallback ? "" : null,
     ]
     : [
       configuredPrimary,
@@ -192,8 +204,9 @@ export function buildApiUrl(path) {
   return buildUrl(API_BASE_URL, path);
 }
 
-export function buildApiCandidateUrls(path) {
-  return apiBaseCandidates().map((apiBaseUrl) => buildUrl(apiBaseUrl, path));
+export function buildApiCandidateUrls(path, options = {}) {
+  const { method = "GET", allowSameOriginFallback = null } = options;
+  return apiBaseCandidates(path, method, allowSameOriginFallback).map((apiBaseUrl) => buildUrl(apiBaseUrl, path));
 }
 
 function shouldRetryAgainstFallback(error) {
@@ -229,7 +242,7 @@ export async function apiFetch(path, options = {}) {
       : WRITE_API_TIMEOUT_MS;
   const setTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
   const clearTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
-  const candidates = apiBaseCandidates();
+  const candidates = apiBaseCandidates(path, normalizedMethod);
   let lastError = null;
 
   for (const apiBaseUrl of candidates) {

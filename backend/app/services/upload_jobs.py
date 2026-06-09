@@ -1204,7 +1204,8 @@ def read_upload_cache_stats() -> dict[str, int]:
 
 # --- Compatibility layer for existing Neraium imports ---
 
-def reset_latest_upload_state() -> None:
+def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
+    del purge_job_records
     reset_upload_state()
 
 

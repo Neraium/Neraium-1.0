@@ -367,6 +367,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     csv_has_non_whitespace = False
     temp_path = ""
     summary: dict[str, Any] = {}
+    logger.info("upload_request_received filename=%s content_type=%s actor=%s", filename, content_type, actor)
     try:
         with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
             temp_path = temp.name
@@ -380,6 +381,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                         Path(temp_path).unlink(missing_ok=True)
                     except OSError:
                         pass
+                    logger.warning("upload_request_rejected_too_large filename=%s size_bytes=%s max_size_bytes=%s", filename, file_size_bytes, max_size_bytes)
                     return JSONResponse(
                         status_code=413,
                         content={
@@ -397,6 +399,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 Path(temp_path).unlink(missing_ok=True)
             except OSError:
                 pass
+            logger.warning("upload_request_rejected_empty_csv filename=%s", filename)
             return JSONResponse(
                 status_code=400,
                 content={
@@ -429,6 +432,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
+        logger.info("upload_request_accepted job_id=%s filename=%s size_bytes=%s process_role=%s", job_id, filename, file_size_bytes, getattr(settings, "process_role", "unknown"))
         _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
         record_audit_event(
             actor=actor,
