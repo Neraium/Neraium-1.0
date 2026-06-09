@@ -1204,8 +1204,15 @@ def read_upload_cache_stats() -> dict[str, int]:
 
 # --- Compatibility layer for existing Neraium imports ---
 
-def reset_latest_upload_state() -> None:
+def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
     reset_upload_state()
+    if purge_job_records:
+        try:
+            from app.services.runtime_db import clear_upload_runtime_tables
+
+            clear_upload_runtime_tables()
+        except Exception:
+            logger.exception("reset_latest_upload_state_runtime_table_clear_failed")
 
 
 def summarize_result(result: dict[str, Any]) -> dict[str, Any]:

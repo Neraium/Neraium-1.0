@@ -1,6 +1,6 @@
 from app.main import create_app
 from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
-from app.services.upload_jobs import process_next_queued_upload_job, read_job, write_job
+from app.services.upload_jobs import process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
 from fastapi.testclient import TestClient
 
 
@@ -95,6 +95,24 @@ class _FakeS3Client:
             if bucket == Bucket and key.startswith(Prefix)
         ]
         return {"Contents": contents, "IsTruncated": False}
+
+
+def test_reset_latest_upload_state_accepts_purge_job_records() -> None:
+    init_runtime_db()
+    write_job(
+        {
+            "job_id": "reset-job",
+            "filename": "reset.csv",
+            "status": "PENDING",
+            "processing_state": "queued",
+        }
+    )
+    enqueue_upload_job("reset-job")
+
+    reset_latest_upload_state(purge_job_records=True)
+
+    assert read_job("reset-job") is None
+    assert read_upload_queue_job("reset-job") is None
 
 
 def test_shared_upload_queue_backend_allows_api_enqueue_and_worker_claim(monkeypatch) -> None:
