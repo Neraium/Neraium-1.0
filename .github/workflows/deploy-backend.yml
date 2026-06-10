@@ -23,9 +23,9 @@ env:
   WORKER_TASK_FAMILY: neraium-prod-worker
   API_LOG_GROUP: /ecs/neraium-prod-api
   WORKER_LOG_GROUP: /ecs/neraium-prod-worker
-  UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
-  APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
-  TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
+  UPLOAD_STATE_BUCKET: neraium-prod-upload-state
+  APP_TASK_ROLE_NAME: neraium-prod-task-app-role
+  TASK_EXECUTION_ROLE_NAME: neraium-prod-task-exec-role
 
 jobs:
   deploy-backend:
