@@ -262,6 +262,9 @@ body {
 
 .command-button,
 .secondary-command-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 0 14px;
   border-radius: 8px;
@@ -306,6 +309,32 @@ body {
 .secondary-command-button:disabled {
   cursor: progress;
   opacity: 0.72;
+}
+
+.intake-flow__controls,
+.upload-file-card__actions,
+.connector-json-hint__actions,
+.onboarding-actions,
+.operator-action-controls,
+.cultivation-report-actions,
+.cultivation-report-actions--center,
+.observation-center__back-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.intake-flow__controls > *,
+.upload-file-card__actions > *,
+.connector-json-hint__actions > *,
+.onboarding-actions > *,
+.operator-action-controls > *,
+.cultivation-report-actions > *,
+.cultivation-report-actions--center > *,
+.observation-center__back-control > * {
+  min-width: 0;
 }
 
 .observation-history-card {

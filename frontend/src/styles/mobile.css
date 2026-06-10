@@ -350,30 +350,56 @@
   }
 
   .upload-file-card__actions--responsive {
-    position: sticky;
-    bottom: max(8px, env(safe-area-inset-bottom, 0px));
-    z-index: 22;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
-    padding: 8px;
-    border: 1px solid rgba(138, 184, 196, 0.18);
-    border-radius: 12px;
-    background: rgba(6, 10, 14, 0.92);
-    backdrop-filter: blur(10px);
-  }
-
-  .upload-file-card__actions--responsive .secondary-command-button {
-    grid-column: 1 / -1;
+    padding: 0;
   }
 
   .upload-file-card__actions--responsive .command-button,
   .upload-file-card__actions--responsive .secondary-command-button {
+    flex: 1 1 min(100%, 148px);
     min-height: 44px;
   }
 
   .intake-flow__status {
-    scroll-margin-bottom: 96px;
+    scroll-margin-bottom: 24px;
+  }
+
+  .intake-flow__controls,
+  .upload-file-card__actions,
+  .connector-json-hint__actions,
+  .onboarding-actions,
+  .operator-action-controls,
+  .cultivation-report-actions,
+  .cultivation-report-actions--center,
+  .observation-center__back-control,
+  .mobile-demo-controls,
+  .mobile-demo-controls__scenarios {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .intake-flow__controls .command-button,
+  .intake-flow__controls .secondary-command-button,
+  .upload-file-card__actions .command-button,
+  .upload-file-card__actions .secondary-command-button,
+  .connector-json-hint__actions .command-button,
+  .connector-json-hint__actions .secondary-command-button,
+  .onboarding-actions .command-button,
+  .onboarding-actions .secondary-command-button,
+  .operator-action-controls .operator-action-button,
+  .cultivation-report-actions .command-button,
+  .cultivation-report-actions .secondary-command-button,
+  .cultivation-report-actions--center .command-button,
+  .cultivation-report-actions--center .secondary-command-button,
+  .observation-center__back-control .system-gate__settings-action,
+  .mobile-demo-controls__scenarios .secondary-command-button {
+    flex: 1 1 min(100%, 180px);
+    width: auto;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
   }
 
   .system-status-rail__item {

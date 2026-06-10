@@ -117,6 +117,10 @@
 }
 
 .btn {
+ display: inline-flex;
+ align-items: center;
+ justify-content: center;
+ min-width: 0;
  border: 1px solid rgba(141, 188, 202, 0.26);
  background: linear-gradient(180deg, rgba(18, 28, 34, 0.9), rgba(9, 14, 19, 0.95));
  color: var(--text-primary);
