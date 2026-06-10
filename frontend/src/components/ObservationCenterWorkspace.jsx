@@ -68,6 +68,12 @@ function displayVariable(name, aliases) {
   return alias ? `${alias} (${name})` : name;
 }
 
+function displayPatternLabel(label, fallback = "Baseline pattern") {
+  const text = String(label ?? "").trim();
+  if (!text || text === "State Group A") return fallback;
+  return text;
+}
+
 function driftToneFor(run) {
   const drift = Number(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index ?? 0);
   if (!Number.isFinite(drift) || drift < 0.24) return "stable";
@@ -90,7 +96,7 @@ function summarizeObservation(run, aliases) {
     return `The system trajectory is continuing to move away from its usual state pattern${duration !== "-" ? ` for ${duration}` : ""}.`;
   }
   if (type === "covariance_shift") {
-    return `The overall relationship structure has shifted away from the baseline regime${duration !== "-" ? ` for ${duration}` : ""}.`;
+    return `The overall relationship structure has shifted away from the baseline pattern${duration !== "-" ? ` for ${duration}` : ""}.`;
   }
   return (run?.evidence_summary ?? [])[0] ?? "A persistent structural change has been recorded.";
 }
@@ -404,7 +410,7 @@ export default function ObservationCenterWorkspace({
 
   const relationshipPoints = lineChartPoints(relationshipSeries);
   const distinctTypes = [...new Set(runs.map((run) => run?.observation_type).filter(Boolean))];
-  const currentRegimeLabel = hasRecordedObservations ? latestRun?.regime_label ?? "State Group A" : "No observations recorded";
+  const currentPatternLabel = hasRecordedObservations ? displayPatternLabel(latestRun?.regime_label) : "No observations recorded";
   const timelineEmptyTitle = runs.length === 0 ? "No observations recorded" : "No observations";
   const timelineEmptyBody = runs.length === 0
     ? "No structural observations have been recorded yet. Upload telemetry or run a replay to generate observation history."
@@ -423,7 +429,7 @@ export default function ObservationCenterWorkspace({
           </div>
           <div className="observation-center__snapshot-copy">
             <p className="section-token">Stability Snapshot</p>
-            <strong>{currentRegimeLabel}</strong>
+            <strong>{currentPatternLabel}</strong>
             <span>Drift index {numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index)}</span>
             <span>{activeObservationCount} active observations</span>
           </div>
@@ -433,18 +439,19 @@ export default function ObservationCenterWorkspace({
           <h1>Observation Center</h1>
           <p>
             {hasRecordedObservations
-              ? "The instrument stays quiet until the system's shape changes. Review structural observations, record what you found, and leave the evidence intact."
+              ? "The instrument stays quiet until system behavior changes. Review structural observations, record what you found, and keep the original evidence available."
               : "The instrument is quiet because no reviewable structural changes have been recorded."}
           </p>
           <MetricGrid
             metrics={[
-              { label: "Current regime", value: currentRegimeLabel },
+              { label: "Current behavior pattern", value: currentPatternLabel },
               { label: "Structural drift", value: numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) },
-              { label: "Deformation age", value: formatDurationFrom(latestRun?.deformation_started_at) },
-              { label: "Silence health", value: silenceHealth.state },
+              { label: "Pattern age", value: formatDurationFrom(latestRun?.deformation_started_at) },
+              { label: "Instrument status", value: silenceHealth.state },
             ]}
             compact
           />
+          <p className="narrative-text">Pattern age means how long the current structural behavior has been present in the available telemetry.</p>
         </section>
       </div>
 
@@ -510,7 +517,7 @@ export default function ObservationCenterWorkspace({
                   { label: "Status", value: normalizeObservationStatus(selectedRun) },
                   { label: "Type", value: observationTypeLabel(selectedRun.observation_type) },
                   { label: "State", value: selectedRun.structural_state ?? selectedRun.operating_state },
-                  { label: "Regime", value: selectedRun.regime_label ?? "State Group A" },
+                  { label: "Behavior pattern", value: displayPatternLabel(selectedRun.regime_label) },
                   { label: "Drift magnitude", value: numberOrDash(selectedRun?.drift_metrics?.baseline_distance ?? selectedRun?.drift_metrics?.drift_index) },
                   { label: "Time since start", value: formatDurationFrom(selectedRun.deformation_started_at) },
                 ]}
@@ -688,7 +695,7 @@ export default function ObservationCenterWorkspace({
                 <strong>{run.structural_state ?? run.operating_state ?? "Monitoring"}</strong>
                 <p>{observationTypeLabel(run.observation_type)}</p>
                 <div className="telemetry-card__footer">
-                  <span>{run.regime_label ?? "State Group A"}</span>
+                  <span>{displayPatternLabel(run.regime_label)}</span>
                   <span>{numberOrDash(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index)}</span>
                 </div>
               </div>

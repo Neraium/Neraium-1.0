@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe("ObservationCenterWorkspace", () => {
 
-  it("explains the zero-observation state without showing a fallback regime", async () => {
+  it("explains the zero-observation state without showing an abstract fallback pattern", async () => {
     installLocalStorageMock();
     const apiFetch = vi.fn(async (path) => {
       if (String(path) === "/api/evidence/runs") {
@@ -68,7 +68,12 @@ describe("ObservationCenterWorkspace", () => {
     });
 
     expect(screen.getByText(/the instrument is quiet because no reviewable structural changes have been recorded/i)).toBeTruthy();
-    expect(screen.getByText(/Current regime:No observations recorded/i)).toBeTruthy();
+    expect(screen.getByText(/Current behavior pattern:No observations recorded/i)).toBeTruthy();
+    expect(screen.getByText(/Pattern age means how long the current structural behavior has been present in the available telemetry/i)).toBeTruthy();
+    expect(screen.getByText(/Instrument status:Silent/i)).toBeTruthy();
+    expect(screen.queryByText(/Current regime/i)).toBeNull();
+    expect(screen.queryByText(/Deformation age/i)).toBeNull();
+    expect(screen.queryByText(/Silence health/i)).toBeNull();
     expect(screen.queryByText(/State Group A/i)).toBeNull();
   });
   it("renders backend historical fact text from the evidence API", async () => {
@@ -105,5 +110,13 @@ describe("ObservationCenterWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByText(/similar coupling change observations involving temperature and humidity/i)).toBeTruthy();
     });
+
+    expect(screen.getAllByText(/Baseline pattern/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Current behavior pattern:Baseline pattern/i)).toBeTruthy();
+    expect(screen.getByText("Behavior pattern:Baseline pattern")).toBeTruthy();
+    expect(screen.getByText(/The instrument stays quiet until system behavior changes/i)).toBeTruthy();
+    expect(screen.getByText(/keep the original evidence available/i)).toBeTruthy();
+    expect(screen.queryByText(/State Group A/i)).toBeNull();
+    expect(screen.queryByText(/evidence intact/i)).toBeNull();
   });
 });
