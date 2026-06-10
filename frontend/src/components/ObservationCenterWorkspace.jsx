@@ -282,6 +282,7 @@ export default function ObservationCenterWorkspace({
   );
 
   const latestRun = runs[0] ?? null;
+  const hasRecordedObservations = runs.length > 0;
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
   const gateOrbState = driftToneFor(latestRun);
@@ -403,6 +404,14 @@ export default function ObservationCenterWorkspace({
 
   const relationshipPoints = lineChartPoints(relationshipSeries);
   const distinctTypes = [...new Set(runs.map((run) => run?.observation_type).filter(Boolean))];
+  const currentRegimeLabel = hasRecordedObservations ? latestRun?.regime_label ?? "State Group A" : "No observations recorded";
+  const timelineEmptyTitle = runs.length === 0 ? "No observations recorded" : "No observations";
+  const timelineEmptyBody = runs.length === 0
+    ? "No structural observations have been recorded yet. Upload telemetry or run a replay to generate observation history."
+    : "No observations match the current search and filters.";
+  const relationshipEmptyBody = runs.length === 0
+    ? "Relationship history will appear after telemetry or replay data produces reviewable structural observations."
+    : "Select two variables that have appeared together in recorded observations.";
 
   return (
     <section className="workspace-surface observation-center">
@@ -414,7 +423,7 @@ export default function ObservationCenterWorkspace({
           </div>
           <div className="observation-center__snapshot-copy">
             <p className="section-token">Stability Snapshot</p>
-            <strong>{latestRun?.regime_label ?? "State Group A"}</strong>
+            <strong>{currentRegimeLabel}</strong>
             <span>Drift index {numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index)}</span>
             <span>{activeObservationCount} active observations</span>
           </div>
@@ -422,10 +431,14 @@ export default function ObservationCenterWorkspace({
         <section className="observation-center__summary" aria-label="Current instrument summary">
           <p className="section-token">Instrument State</p>
           <h1>Observation Center</h1>
-          <p>The instrument stays quiet until the system's shape changes. Review structural observations, record what you found, and leave the evidence intact.</p>
+          <p>
+            {hasRecordedObservations
+              ? "The instrument stays quiet until the system's shape changes. Review structural observations, record what you found, and leave the evidence intact."
+              : "The instrument is quiet because no reviewable structural changes have been recorded."}
+          </p>
           <MetricGrid
             metrics={[
-              { label: "Current regime", value: latestRun?.regime_label ?? "State Group A" },
+              { label: "Current regime", value: currentRegimeLabel },
               { label: "Structural drift", value: numberOrDash(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) },
               { label: "Deformation age", value: formatDurationFrom(latestRun?.deformation_started_at) },
               { label: "Silence health", value: silenceHealth.state },
@@ -451,7 +464,7 @@ export default function ObservationCenterWorkspace({
             </select>
           </div>
           {filteredRuns.length === 0 ? (
-            <EmptyState title="No observations" body="No observations match the current search and filters." compact />
+            <EmptyState title={timelineEmptyTitle} body={timelineEmptyBody} compact />
           ) : (
             <div className="feed-list">
               {filteredRuns.map((run) => (
@@ -585,7 +598,7 @@ export default function ObservationCenterWorkspace({
             </select>
           </div>
           {relationshipSeries.length === 0 ? (
-            <EmptyState title="No relationship history" body="Select two variables that have appeared together in recorded observations." compact />
+            <EmptyState title="No relationship history" body={relationshipEmptyBody} compact />
           ) : (
             <>
               <svg viewBox="0 0 420 120" className="observation-explorer__chart">

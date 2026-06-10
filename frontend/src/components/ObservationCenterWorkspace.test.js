@@ -51,6 +51,26 @@ afterEach(() => {
 });
 
 describe("ObservationCenterWorkspace", () => {
+
+  it("explains the zero-observation state without showing a fallback regime", async () => {
+    installLocalStorageMock();
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path) === "/api/evidence/runs") {
+        return createResponse({ runs: [] });
+      }
+      return createResponse({}, 404);
+    });
+
+    renderWorkspace(apiFetch);
+
+    await waitFor(() => {
+      expect(screen.getByText(/no structural observations have been recorded yet/i)).toBeTruthy();
+    });
+
+    expect(screen.getByText(/the instrument is quiet because no reviewable structural changes have been recorded/i)).toBeTruthy();
+    expect(screen.getByText(/Current regime:No observations recorded/i)).toBeTruthy();
+    expect(screen.queryByText(/State Group A/i)).toBeNull();
+  });
   it("renders backend historical fact text from the evidence API", async () => {
     installLocalStorageMock();
     const apiFetch = vi.fn(async (path) => {
