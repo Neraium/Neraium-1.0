@@ -108,12 +108,7 @@ export default function SystemBodyWorkspace({
             <ul>
               <li>
                 <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                  Upload CSV / Connect Data
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                  Connect API
+                  Upload Data
                 </button>
               </li>
               <li>
@@ -128,7 +123,7 @@ export default function SystemBodyWorkspace({
               </li>
               <li>
                 <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
-                  Help / Changelog
+                  Help
                 </button>
               </li>
             </ul>
