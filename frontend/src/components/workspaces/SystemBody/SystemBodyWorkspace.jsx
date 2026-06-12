@@ -49,6 +49,8 @@ export default function SystemBodyWorkspace({
         isLoading,
         isEmptyStructuralState,
         governedDetail,
+        connectionTone,
+        connectionStatus,
       },
     }),
     [
@@ -65,17 +67,11 @@ export default function SystemBodyWorkspace({
       isLoading,
       isEmptyStructuralState,
       governedDetail,
+      connectionTone,
+      connectionStatus,
     ],
   );
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
-  const stabilitySnapshot = useMemo(
-    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
-    [latestReplayFrame, latestUploadResult],
-  );
-  const dataConditions = useMemo(
-    () => collectDataConditions(latestUploadResult),
-    [latestUploadResult],
-  );
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -106,38 +102,22 @@ export default function SystemBodyWorkspace({
         {menuOpen ? (
           <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
             <ul>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                  Upload Data
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
-                  Structural Replay
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
-                  Observation Review
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
-                  Help
-                </button>
-              </li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Structural Replay</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Observation Review</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>Help</button></li>
             </ul>
           </aside>
         ) : null}
 
-        <div className="system-gate__layout">
+        <div className="system-gate__layout system-gate__layout--pilot-summary">
           <div className="system-gate__column system-gate__column--left">
             <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
               <div className="panel-body">
                 <ul className="onboarding-summary">
-                  <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
-                  <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-                  <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
+                  <li><span>Current Status</span><strong>{interpretation.structuralState}</strong></li>
+                  <li><span>Meaning</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+                  <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
                 </ul>
               </div>
             </section>
@@ -158,102 +138,30 @@ export default function SystemBodyWorkspace({
           </div>
 
           <div className="system-gate__column system-gate__column--right">
-            <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
+            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Recommended next step">
               <div className="panel-body">
                 <ul className="onboarding-summary">
-                  <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
-                  <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
-                  <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
-                  <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
-                </ul>
-                {dataConditions.length > 0 ? (
-                  <div style={{ marginTop: "0.8rem" }}>
-                    <p className="section-token">Data Conditions</p>
-                    <ul className="compact-list">
-                      {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
-            <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
-                  <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
-                  <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+                  <li><span>Next Step</span><strong>{interpretation.nextStep}</strong></li>
                 </ul>
               </div>
             </section>
-
             <div className="system-gate__actions">
-              <button
-                type="button"
-                className="command-button"
-                onClick={() => navigateWorkspace("observation-center")}
-              >
-                Review Observations
+              <button type="button" className="command-button" onClick={() => navigateWorkspace(interpretation.hasTelemetry ? "observation-center" : "data-connections")}>
+                {interpretation.hasTelemetry ? "Review Observations" : "Upload Telemetry"}
               </button>
             </div>
           </div>
         </div>
-
       </section>
     </PageContainer>
   );
 }
 
-function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
-  const sii = latestUploadResult?.sii_intelligence ?? {};
-  const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
-  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
-  if (!hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot: null, latestReplayFrame: frame })) {
-    return {
-      regime: "Pending telemetry",
-      driftMagnitude: "-",
-      activeObservations: "0",
-      deformationAge: "-",
-    };
-  }
-  const driftMagnitude = frame?.baseline_distance
-    ?? frame?.topology_state?.drift_index
-    ?? sii?.instability_index
-    ?? "-";
-  const startedAt = frame?.timestamp_start
-    ?? latestUploadResult?.timestamp_profile?.first_timestamp
-    ?? latestUploadResult?.first_timestamp
-    ?? null;
-  const age = startedAt ? daysBetween(startedAt, Date.now()) : null;
-  return {
-    regime: labelOrFallback(
-      frame?.regime_label
-        ?? frame?.state_label
-        ?? sii?.regime_label
-        ?? latestUploadResult?.operating_state,
-      "Pending telemetry",
-    ),
-    driftMagnitude: formatNumber(driftMagnitude),
-    activeObservations: labelOrFallback(
-      sii?.active_observations
-        ?? frame?.active_observations
-        ?? latestUploadResult?.active_observations,
-      "0",
-    ),
-    deformationAge: age !== null ? `${age}d` : "-",
-  };
-}
-
-function buildSystemInterpretation({
-  latestUploadSnapshot,
-  latestUploadResult,
-  liveSnapshot,
-  latestReplayFrame,
-  fallback,
-}) {
+function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame, fallback }) {
   const sii = latestUploadResult?.sii_intelligence ?? {};
   const latestFrame = latestReplayFrame ?? null;
   const hasTelemetry = hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestReplayFrame: latestFrame });
+  const connectionDegraded = isConnectionDegraded(fallback.connectionTone, fallback.connectionStatus);
 
   if (!hasTelemetry) {
     return {
@@ -261,7 +169,19 @@ function buildSystemInterpretation({
       primaryDriver: "Awaiting telemetry",
       relationshipSummary: { text: "Upload telemetry to begin monitoring." },
       confidence: "Pending",
+      nextStep: "Upload telemetry.",
       hasTelemetry: false,
+    };
+  }
+
+  if (connectionDegraded) {
+    return {
+      structuralState: "Telemetry interrupted",
+      primaryDriver: "Connection degraded",
+      relationshipSummary: { text: "Connection is degraded. Latest interpretation may be stale." },
+      confidence: "Pending",
+      nextStep: "Check connection, then refresh telemetry.",
+      hasTelemetry: true,
     };
   }
 
@@ -302,6 +222,7 @@ function buildSystemInterpretation({
     primaryDriver: driver,
     relationshipSummary: relationship,
     confidence,
+    nextStep: hasDriftState ? "Review observations." : "Continue monitoring.",
     hasTelemetry: true,
   };
 }
@@ -320,18 +241,13 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
   ];
   const selected = candidates.find((item) => typeof item === "string" && item.trim());
   const text = selected ? selected.trim() : "Interpretation Unavailable";
-  if (hasDriftState && describesStable(text)) {
-    return { text: "Drift detected" };
-  }
+  if (hasDriftState && describesStable(text)) return { text: "Drift detected." };
   return { text };
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
   if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };
-  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""}`.toLowerCase();
-  if (text.includes("degrad") || text.includes("offline") || text.includes("error")) {
-    return { tone: "offline", label: "Connection degraded" };
-  }
+  if (isConnectionDegraded(connectionTone, connectionStatus)) return { tone: "offline", label: "Connection degraded" };
   if (lastUpdate) return { tone: "online", label: "Telemetry active" };
   return { tone: "pending", label: "Awaiting telemetry" };
 }
@@ -350,18 +266,15 @@ function normalizeStructuralLabel(value, fallback = EMPTY_VALUE) {
   return text;
 }
 
+function isConnectionDegraded(connectionTone, connectionStatus) {
+  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""}`.toLowerCase();
+  return text.includes("degrad") || text.includes("offline") || text.includes("error") || text.includes("fail");
+}
+
 function labelOrFallback(value, fallback = EMPTY_VALUE) {
   if (value === null || value === undefined) return fallback;
   const text = String(value).trim();
   return text ? text : fallback;
-}
-
-function formatNumber(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return labelOrFallback(value, "-");
-  if (Math.abs(number) >= 100) return number.toFixed(0);
-  if (Math.abs(number) >= 10) return number.toFixed(1);
-  return number.toFixed(2);
 }
 
 function formatConfidence(value, { hasDriftState = false } = {}) {
@@ -380,20 +293,4 @@ function describesDrift(value) {
 function describesStable(value) {
   const text = String(value ?? "").trim().toLowerCase();
   return text === "stable" || text === "normal" || text === "monitoring" || text === "within range";
-}
-
-function daysBetween(start, endMs) {
-  const startMs = new Date(start).getTime();
-  if (!Number.isFinite(startMs)) return null;
-  const diff = Math.max(0, endMs - startMs);
-  return Math.max(0, Math.round(diff / 86_400_000));
-}
-
-function collectDataConditions(latestUploadResult) {
-  const candidates = latestUploadResult?.data_conditions
-    ?? latestUploadResult?.quality_flags
-    ?? latestUploadResult?.sii_intelligence?.data_conditions
-    ?? [];
-  if (!Array.isArray(candidates)) return [];
-  return candidates.map((item) => String(item ?? "").trim()).filter(Boolean);
 }
