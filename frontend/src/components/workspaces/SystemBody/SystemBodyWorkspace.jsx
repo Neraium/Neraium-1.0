@@ -33,7 +33,6 @@ export default function SystemBodyWorkspace({
   const [menuOpen, setMenuOpen] = useState(false);
   const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
-  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate);
   const interpretation = useMemo(
     () => buildSystemInterpretation({
       latestUploadSnapshot,
@@ -68,6 +67,7 @@ export default function SystemBodyWorkspace({
       governedDetail,
     ],
   );
+  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
   const stabilitySnapshot = useMemo(
     () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
     [latestReplayFrame, latestUploadResult],
@@ -149,7 +149,7 @@ export default function SystemBodyWorkspace({
               uiState={uiState}
               coherence={coherence}
               stateLabel={interpretation.structuralState}
-              lastUpdate={lastUpdate}
+              lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
               focusLabel={interpretation.primaryDriver}
               orbData={orbData}
               compactPreview
@@ -208,6 +208,14 @@ function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
   const sii = latestUploadResult?.sii_intelligence ?? {};
   const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
   const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
+  if (!hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot: null, latestReplayFrame: frame })) {
+    return {
+      regime: "Pending telemetry",
+      driftMagnitude: "-",
+      activeObservations: "0",
+      deformationAge: "-",
+    };
+  }
   const driftMagnitude = frame?.baseline_distance
     ?? frame?.topology_state?.drift_index
     ?? sii?.instability_index
@@ -245,7 +253,19 @@ function buildSystemInterpretation({
 }) {
   const sii = latestUploadResult?.sii_intelligence ?? {};
   const latestFrame = latestReplayFrame ?? null;
-  const structuralState = labelOrFallback(
+  const hasTelemetry = hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestReplayFrame: latestFrame });
+
+  if (!hasTelemetry) {
+    return {
+      structuralState: "No Active Session",
+      primaryDriver: "Awaiting telemetry",
+      relationshipSummary: { text: "Upload telemetry to begin monitoring." },
+      confidence: "Pending",
+      hasTelemetry: false,
+    };
+  }
+
+  const rawStructuralState = labelOrFallback(
     latestFrame?.state_label
       ?? latestFrame?.cognition_state?.facility_state
       ?? latestFrame?.cognition_state?.canonical_phase
@@ -254,8 +274,9 @@ function buildSystemInterpretation({
       ?? latestUploadResult?.operating_state
       ?? latestUploadSnapshot?.status
       ?? fallback.stateLabel,
-    fallback.isEmptyStructuralState ? "No Active Session" : "Monitoring",
+    "Monitoring",
   );
+  const structuralState = normalizeStructuralLabel(rawStructuralState, "Monitoring");
   const driver = labelOrFallback(
     latestFrame?.primary_driver
       ?? latestFrame?.topology_state?.primary_driver
@@ -263,7 +284,7 @@ function buildSystemInterpretation({
       ?? sii?.dominant_driver
       ?? latestUploadResult?.primary_driver
       ?? fallback.focusLabel,
-    fallback.isEmptyStructuralState ? "Awaiting telemetry" : "Structural relationship",
+    "Structural relationship",
   );
   const hasDriftState = describesDrift(structuralState) || describesDrift(driver);
   const relationship = buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback, hasDriftState });
@@ -281,6 +302,7 @@ function buildSystemInterpretation({
     primaryDriver: driver,
     relationshipSummary: relationship,
     confidence,
+    hasTelemetry: true,
   };
 }
 
@@ -304,13 +326,28 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
   return { text };
 }
 
-function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
+function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
+  if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""}`.toLowerCase();
   if (text.includes("degrad") || text.includes("offline") || text.includes("error")) {
     return { tone: "offline", label: "Connection degraded" };
   }
   if (lastUpdate) return { tone: "online", label: "Telemetry active" };
   return { tone: "pending", label: "Awaiting telemetry" };
+}
+
+function hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestReplayFrame }) {
+  if (latestReplayFrame && Object.keys(latestReplayFrame).length > 0) return true;
+  if (latestUploadResult && Object.keys(latestUploadResult).length > 0) return true;
+  const status = String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").trim().toLowerCase();
+  if (!status || ["empty", "idle", "none", "reset", "no_active_session"].includes(status)) return false;
+  return Boolean(latestUploadSnapshot?.last_filename || latestUploadSnapshot?.job_id || latestUploadSnapshot?.latest_result || latestUploadSnapshot?.sii_completed);
+}
+
+function normalizeStructuralLabel(value, fallback = EMPTY_VALUE) {
+  const text = String(value ?? "").trim();
+  if (!text || ["empty", "idle", "none", "null", "undefined"].includes(text.toLowerCase())) return fallback;
+  return text;
 }
 
 function labelOrFallback(value, fallback = EMPTY_VALUE) {
@@ -330,6 +367,7 @@ function formatNumber(value) {
 function formatConfidence(value, { hasDriftState = false } = {}) {
   const number = Number(value);
   if (!Number.isFinite(number) || (hasDriftState && number <= 0)) return "Pending";
+  if (number <= 0) return "Pending";
   if (number <= 1) return `${Math.round(number * 100)}%`;
   return `${Math.round(number)}%`;
 }
