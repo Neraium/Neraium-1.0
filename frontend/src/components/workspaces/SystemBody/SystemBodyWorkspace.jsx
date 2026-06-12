@@ -265,13 +265,15 @@ function buildSystemInterpretation({
       ?? fallback.focusLabel,
     fallback.isEmptyStructuralState ? "Awaiting telemetry" : "Structural relationship",
   );
-  const relationship = buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback });
+  const hasDriftState = describesDrift(structuralState) || describesDrift(driver);
+  const relationship = buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback, hasDriftState });
   const confidence = formatConfidence(
     latestFrame?.confidence
       ?? latestFrame?.evidence_state?.confidence
       ?? sii?.confidence
       ?? latestUploadResult?.confidence
       ?? null,
+    { hasDriftState },
   );
 
   return {
@@ -282,7 +284,7 @@ function buildSystemInterpretation({
   };
 }
 
-function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback }) {
+function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback, hasDriftState = false }) {
   const candidates = [
     latestReplayFrame?.why_summary,
     latestReplayFrame?.relationship_summary,
@@ -295,9 +297,11 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
     fallback.subtitle,
   ];
   const selected = candidates.find((item) => typeof item === "string" && item.trim());
-  return {
-    text: selected ? selected.trim() : "Interpretation Unavailable",
-  };
+  const text = selected ? selected.trim() : "Interpretation Unavailable";
+  if (hasDriftState && describesStable(text)) {
+    return { text: "Drift detected" };
+  }
+  return { text };
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
@@ -323,11 +327,21 @@ function formatNumber(value) {
   return number.toFixed(2);
 }
 
-function formatConfidence(value) {
+function formatConfidence(value, { hasDriftState = false } = {}) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return "Interpretation Unavailable";
+  if (!Number.isFinite(number) || (hasDriftState && number <= 0)) return "Pending";
   if (number <= 1) return `${Math.round(number * 100)}%`;
   return `${Math.round(number)}%`;
+}
+
+function describesDrift(value) {
+  const text = String(value ?? "").toLowerCase();
+  return text.includes("drift") || text.includes("degrad") || text.includes("unstable") || text.includes("watch") || text.includes("alert");
+}
+
+function describesStable(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "stable" || text === "normal" || text === "monitoring" || text === "within range";
 }
 
 function daysBetween(start, endMs) {
