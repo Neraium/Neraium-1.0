@@ -17,8 +17,6 @@ export default function IntakeFlowPanel({
   propagationLabel,
   queuedWorkerDetail = "",
   uploadTransfer,
-  formatFileSize,
-  formatTransferSpeed,
   uploadStateMessage,
   batchResults = [],
   onRetryFailedUploads,
@@ -36,6 +34,7 @@ export default function IntakeFlowPanel({
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : latestUploadSnapshot?.last_filename ?? "No file selected";
+  const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
 
   return (
     <Panel title="Upload Telemetry" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -76,21 +75,17 @@ export default function IntakeFlowPanel({
             </div>
           </div>
         ) : null}
-        {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || uploadTransfer || batchResults.length > 0 ? (
+        {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || batchResults.length > 0 ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
             {primaryProgressText ? <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span> : null}
             {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
             {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
-            {visibleProgressPercent !== null && (
-              <>
-                <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
-                  <span style={{ width: `${visibleProgressPercent}%` }} />
-                </div>
-                <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
-              </>
-            )}
-            {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
-            {batchResults.length > 0 && (
+            {visibleProgressPercent !== null ? (
+              <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                <span style={{ width: `${visibleProgressPercent}%` }} />
+              </div>
+            ) : null}
+            {shouldShowBatchSummary ? (
               <div className="intake-flow__batch-results">
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
                 {failedCount > 0 && (
@@ -110,7 +105,7 @@ export default function IntakeFlowPanel({
                   </button>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
         ) : null}
       </form>
