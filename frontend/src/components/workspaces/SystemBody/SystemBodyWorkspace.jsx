@@ -100,7 +100,7 @@ export default function SystemBodyWorkspace({
           aria-controls="system-body-menu"
           onClick={() => setMenuOpen((v) => !v)}
         >
-          Views
+          Menu
         </button>
 
         {menuOpen ? (
@@ -219,109 +219,134 @@ function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
     ?? "-";
   const startedAt = frame?.timestamp_start
     ?? latestUploadResult?.timestamp_profile?.first_timestamp
+    ?? latestUploadResult?.first_timestamp
     ?? null;
+  const age = startedAt ? daysBetween(startedAt, Date.now()) : null;
   return {
-    regime: sii?.baseline_regime ?? sii?.regime_label ?? "State Group A",
-    driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : String(driftMagnitude ?? "-"),
-    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
-    deformationAge: ageLabel(startedAt),
+    regime: labelOrFallback(
+      frame?.regime_label
+        ?? frame?.state_label
+        ?? sii?.regime_label
+        ?? latestUploadResult?.operating_state,
+      "Pending telemetry",
+    ),
+    driftMagnitude: formatNumber(driftMagnitude),
+    activeObservations: labelOrFallback(
+      sii?.active_observations
+        ?? frame?.active_observations
+        ?? latestUploadResult?.active_observations,
+      "0",
+    ),
+    deformationAge: age !== null ? `${age}d` : "-",
   };
 }
 
-function collectDataConditions(latestUploadResult) {
-  const result = latestUploadResult ?? {};
-  const dataQualityWarnings = Array.isArray(result?.data_quality?.warnings) ? result.data_quality.warnings : [];
-  const timestampWarnings = Array.isArray(result?.timestamp_profile?.warnings) ? result.timestamp_profile.warnings : [];
-  return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
-}
-
-function ageLabel(value) {
-  if (!value) return "-";
-  const ms = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "-";
-  const hours = Math.round(ms / 3600000);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
-
-function mapBackendSystemInterpretation(contract) {
-  const value = contract && typeof contract === "object" ? contract : null;
-  if (!value) return null;
-
-  const divergence = value.relationship_divergence || {};
-  const backendSummary = value.relationship_summary || {};
-  const fallbackSummary = divergence.summary || value.state_derivation_reason || EMPTY_VALUE;
+function buildSystemInterpretation({
+  latestUploadSnapshot,
+  latestUploadResult,
+  liveSnapshot,
+  latestReplayFrame,
+  fallback,
+}) {
+  const sii = latestUploadResult?.sii_intelligence ?? {};
+  const latestFrame = latestReplayFrame ?? null;
+  const structuralState = labelOrFallback(
+    latestFrame?.state_label
+      ?? latestFrame?.cognition_state?.facility_state
+      ?? latestFrame?.cognition_state?.canonical_phase
+      ?? sii?.facility_state
+      ?? sii?.state_label
+      ?? latestUploadResult?.operating_state
+      ?? latestUploadSnapshot?.status
+      ?? fallback.stateLabel,
+    fallback.isEmptyStructuralState ? "No Active Session" : "Monitoring",
+  );
+  const driver = labelOrFallback(
+    latestFrame?.primary_driver
+      ?? latestFrame?.topology_state?.primary_driver
+      ?? sii?.primary_driver
+      ?? sii?.dominant_driver
+      ?? latestUploadResult?.primary_driver
+      ?? fallback.focusLabel,
+    fallback.isEmptyStructuralState ? "Awaiting telemetry" : "Structural relationship",
+  );
+  const relationship = buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback });
+  const confidence = formatConfidence(
+    latestFrame?.confidence
+      ?? latestFrame?.evidence_state?.confidence
+      ?? sii?.confidence
+      ?? latestUploadResult?.confidence
+      ?? null,
+  );
 
   return {
-    facility_state: String(value.facility_state_label || "No Active Session"),
-    structuralState: String(value.facility_state_label || "No Active Session"),
-    confidence: String(value.confidence || EMPTY_VALUE),
-    primary_driver: String(value.primary_driver || "None"),
-    primaryDriver: String(value.primary_driver || "None"),
-    relationshipSummary: {
-      text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE),
-      divergence_severity: String(divergence.severity || backendSummary.divergence_severity || EMPTY_VALUE),
-      confidence: String(divergence.confidence || backendSummary.confidence || value.confidence || EMPTY_VALUE),
-      affected_systems: Array.isArray(divergence.affected_systems)
-        ? divergence.affected_systems
-        : (Array.isArray(backendSummary.affected_systems) ? backendSummary.affected_systems : []),
-    },
+    structuralState,
+    primaryDriver: driver,
+    relationshipSummary: relationship,
+    confidence,
   };
 }
 
-export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame = null, fallback = {} }) {
-  void latestReplayFrame;
-  const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation
-    ?? latestUploadResult?.system_interpretation
-    ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
-    ?? null;
-  const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);
-  if (mappedBackendInterpretation) {
-    return mappedBackendInterpretation;
-  }
-
-  const uploadStatus = String(
-    latestUploadSnapshot?.status
-    ?? latestUploadSnapshot?.processing_state
-    ?? latestUploadResult?.processing_state
-    ?? "",
-  ).toLowerCase();
-  const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "generating_replay", "cognition_ready", "writing_state"];
-  const hasUploadInFlight = processingLike.some((token) => uploadStatus.includes(token));
-
-  const fallbackState = hasUploadInFlight
-    ? "Processing Upload"
-    : (fallback?.isEmptyStructuralState ? "No Active Session" : "Awaiting Interpretation");
-
+function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback }) {
+  const candidates = [
+    latestReplayFrame?.why_summary,
+    latestReplayFrame?.relationship_summary,
+    latestReplayFrame?.topology_state?.relationship_summary,
+    latestReplayFrame?.evidence_state?.summary,
+    sii?.why_summary,
+    sii?.relationship_summary,
+    latestUploadResult?.relationship_summary,
+    fallback.primaryMessage,
+    fallback.subtitle,
+  ];
+  const selected = candidates.find((item) => typeof item === "string" && item.trim());
   return {
-    structuralState: fallbackState,
-    confidence: "Interpretation Unavailable",
-    primaryDriver: "Interpretation Unavailable",
-    relationshipSummary: {
-      text: hasUploadInFlight ? "Awaiting backend structural interpretation." : "Interpretation Unavailable",
-      divergence_severity: EMPTY_VALUE,
-      confidence: "Interpretation Unavailable",
-      affected_systems: [],
-    },
+    text: selected ? selected.trim() : "Interpretation Unavailable",
   };
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate) {
-  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
-  if (text.includes("offline") || text.includes("disconnected")) {
-    return { label: "Offline", tone: "offline" };
+  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""}`.toLowerCase();
+  if (text.includes("degrad") || text.includes("offline") || text.includes("error")) {
+    return { tone: "offline", label: "Connection degraded" };
   }
-  if (text.includes("awaiting") || text.includes("pending")) {
-    return { label: "Awaiting telemetry", tone: "syncing" };
-  }
-  if (text.includes("replay")) {
-    return { label: "Replay running", tone: "syncing" };
-  }
-  if (text.includes("sync")) {
-    return { label: "Data stream active", tone: "syncing" };
-  }
-  if (text.includes("degraded") || text.includes("limited") || text.includes("elevated")) {
-    return { label: "Connection degraded", tone: "degraded" };
-  }
-  return { label: "Neraium online", tone: "online" };
+  if (lastUpdate) return { tone: "online", label: "Telemetry active" };
+  return { tone: "pending", label: "Awaiting telemetry" };
+}
+
+function labelOrFallback(value, fallback = EMPTY_VALUE) {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text ? text : fallback;
+}
+
+function formatNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return labelOrFallback(value, "-");
+  if (Math.abs(number) >= 100) return number.toFixed(0);
+  if (Math.abs(number) >= 10) return number.toFixed(1);
+  return number.toFixed(2);
+}
+
+function formatConfidence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "Interpretation Unavailable";
+  if (number <= 1) return `${Math.round(number * 100)}%`;
+  return `${Math.round(number)}%`;
+}
+
+function daysBetween(start, endMs) {
+  const startMs = new Date(start).getTime();
+  if (!Number.isFinite(startMs)) return null;
+  const diff = Math.max(0, endMs - startMs);
+  return Math.max(0, Math.round(diff / 86_400_000));
+}
+
+function collectDataConditions(latestUploadResult) {
+  const candidates = latestUploadResult?.data_conditions
+    ?? latestUploadResult?.quality_flags
+    ?? latestUploadResult?.sii_intelligence?.data_conditions
+    ?? [];
+  if (!Array.isArray(candidates)) return [];
+  return candidates.map((item) => String(item ?? "").trim()).filter(Boolean);
 }
