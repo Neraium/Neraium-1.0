@@ -39,27 +39,24 @@ export default function IntakeFlowPanel({
   const primaryProgressText = String(uploadJob?.progress_label || latestMessage || "").trim();
   const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || "").trim();
   const showSecondaryProgressText = secondaryProgressText && secondaryProgressText !== primaryProgressText;
+  const selectedFileLabel = selectedFiles?.length
+    ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
+    : latestUploadSnapshot?.last_filename ?? "No file selected";
 
   return (
     <>
       <Panel title="Upload Telemetry" className="span-7 workspace-hero-panel upload-ops-panel">
         <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
-          <div className="intake-flow__header">
-            <div>
-              <h3>Upload</h3>
-            </div>
-          </div>
           <input ref={uploadInputRef} accept=".csv,.json,text/csv,application/json" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
           <div className="upload-file-card">
             <div className="upload-file-card__main">
-              <span className="upload-file-card__label">Telemetry batch</span>
-              <strong>{selectedFiles?.length ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`) : latestUploadSnapshot?.last_filename ?? "No file selected"}</strong>
-              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a multivariate telemetry file to begin structural analysis."}</p>
+              <strong>{selectedFileLabel}</strong>
+              <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a CSV telemetry file to begin."}</p>
             </div>
             <div className="upload-file-card__actions upload-file-card__actions--responsive">
               <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Select CSV</button>
               <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
-                {isUploadProcessing(uploadState) ? "Processing" : "Analyze Upload"}
+                {isUploadProcessing(uploadState) ? "Processing" : "Analyze"}
               </button>
               <button
                 className="secondary-command-button"
@@ -67,7 +64,7 @@ export default function IntakeFlowPanel({
                 disabled={isUploadProcessing(uploadState)}
                 onClick={() => setIsJsonSchemaOpen((current) => !current)}
               >
-                {isJsonSchemaOpen ? "Close Advanced" : "Advanced"}
+                {isJsonSchemaOpen ? "Close" : "Advanced"}
               </button>
             </div>
           </div>
@@ -94,41 +91,43 @@ export default function IntakeFlowPanel({
               </div>
             </div>
           ) : null}
-          <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
-            <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span>
-            {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
-            {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
-            {visibleProgressPercent !== null && (
-              <>
-                <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
-                  <span style={{ width: `${visibleProgressPercent}%` }} />
-                </div>
-                <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
-              </>
-            )}
-            {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
-            {batchResults.length > 0 && (
-              <div className="intake-flow__batch-results">
-                <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
-                {failedCount > 0 && (
-                  <div className="upload-partial-alert" role="status" aria-live="polite">
-                    <strong>Partial Success</strong>
-                    <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
+          {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || uploadTransfer || batchResults.length > 0 ? (
+            <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
+              {primaryProgressText ? <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span> : null}
+              {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
+              {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
+              {visibleProgressPercent !== null && (
+                <>
+                  <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+                    <span style={{ width: `${visibleProgressPercent}%` }} />
                   </div>
-                )}
-                {failedCount > 0 && (
-                  <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads}>
-                    Retry Failed Files
-                  </button>
-                )}
-                {siiContractFailed && (
-                  <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch}>
-                    Reprocess Job
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+                  <span className="metadata-text">{propagationLabel || uploadJob?.progress_label || latestMessage}</span>
+                </>
+              )}
+              {uploadTransfer && <span>{`${formatFileSize(uploadTransfer.loaded)} of ${formatFileSize(uploadTransfer.total)} at ${formatTransferSpeed(uploadTransfer.speedBytesPerSecond)}.`}</span>}
+              {batchResults.length > 0 && (
+                <div className="intake-flow__batch-results">
+                  <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
+                  {failedCount > 0 && (
+                    <div className="upload-partial-alert" role="status" aria-live="polite">
+                      <strong>Partial Success</strong>
+                      <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
+                    </div>
+                  )}
+                  {failedCount > 0 && (
+                    <button className="secondary-command-button" type="button" onClick={onRetryFailedUploads}>
+                      Retry Failed Files
+                    </button>
+                  )}
+                  {siiContractFailed && (
+                    <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch}>
+                      Reprocess Job
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
         </form>
         {isJsonSchemaOpen ? (
           <div className="connector-json-hint">
