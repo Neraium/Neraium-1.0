@@ -21,6 +21,7 @@ export default function IntakeFlowPanel({
   batchResults = [],
   onRetryFailedUploads,
   onReprocessCurrentBatch,
+  onResetWorkspace,
 }) {
   const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
   const successCount = batchResults.filter((entry) => entry.status === "success").length;
@@ -37,7 +38,7 @@ export default function IntakeFlowPanel({
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
 
   return (
-    <Panel title="Upload Telemetry" className="span-7 workspace-hero-panel upload-ops-panel">
+    <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
         <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
         <div className="upload-file-card">
@@ -46,15 +47,15 @@ export default function IntakeFlowPanel({
             <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a CSV telemetry file to begin."}</p>
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
-            <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Select CSV</button>
+            <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
             <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
-              {isUploadProcessing(uploadState) ? "Processing" : "Analyze"}
+              {isUploadProcessing(uploadState) ? "Processing" : "Upload Data"}
             </button>
           </div>
         </div>
         {hasValidationError || hasUploadError ? (
           <div className="upload-partial-alert" role="alert" aria-live="assertive">
-            <strong>{hasValidationError ? "Upload Validation Error" : "Upload Analysis Error"}</strong>
+            <strong>{hasValidationError ? "File not ready" : "Upload failed"}</strong>
             <span>{latestMessage}</span>
             <div className="intake-flow__controls">
               <button
@@ -81,7 +82,7 @@ export default function IntakeFlowPanel({
             {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
             {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
             {visibleProgressPercent !== null ? (
-              <div className="upload-progress-meter" aria-label="Telemetry analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
+              <div className="upload-progress-meter" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
                 <span style={{ width: `${visibleProgressPercent}%` }} />
               </div>
             ) : null}
@@ -90,8 +91,8 @@ export default function IntakeFlowPanel({
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
                 {failedCount > 0 && (
                   <div className="upload-partial-alert" role="status" aria-live="polite">
-                    <strong>Partial Success</strong>
-                    <span>{`${successCount} succeeded, ${failedCount} failed. Retry failed files to complete the session.`}</span>
+                    <strong>Some files failed</strong>
+                    <span>{`${successCount} succeeded, ${failedCount} failed. Retry the failed files.`}</span>
                   </div>
                 )}
                 {failedCount > 0 && (
@@ -108,6 +109,10 @@ export default function IntakeFlowPanel({
             ) : null}
           </div>
         ) : null}
+        <details className="upload-secondary-actions">
+          <summary>Workspace options</summary>
+          <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Clear Upload Workspace</button>
+        </details>
       </form>
     </Panel>
   );

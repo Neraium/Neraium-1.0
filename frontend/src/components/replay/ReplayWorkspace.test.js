@@ -81,6 +81,17 @@ describe("ReplayWorkspace playback stability", () => {
     expectFrame("4/4");
   });
 
+  it("keeps technical replay diagnostics out of the default view", async () => {
+    renderReplayWorkspace(baseProps());
+
+    await waitFor(() => expectFrame("1\/4"));
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting Evidence")).toBeTruthy();
+    expect(screen.getByText("Review next")).toBeTruthy();
+    expect(screen.queryByText("Raw change direction")).toBeNull();
+    expect(screen.queryByText("Structural Progression")).toBeNull();
+  });
+
   it("manual next and previous move exactly one frame", async () => {
     renderReplayWorkspace(baseProps());
 

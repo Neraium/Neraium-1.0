@@ -632,8 +632,28 @@
 }
 
 .system-gate__plate--summary {
-  top: 66px;
-  left: 14px;
+  top: 72px;
+  left: 18px;
+}
+
+.system-gate__plate--operator {
+  width: min(360px, calc(100% - 36px));
+}
+
+.system-gate__boundary-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(136, 153, 170, 0.12);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.system-gate__primary-action {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  z-index: 3;
+  transform: translateX(-50%);
 }
 
 .system-gate__plate--snapshot {

@@ -354,13 +354,13 @@
 
 .replay-discovery {
  display: grid;
- gap: var(--space-16);
+ gap: 22px;
 }
 
 .replay-discovery__header {
  display: grid;
  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
- gap: var(--space-16);
+ gap: 22px;
  align-items: start;
 }
 
@@ -376,14 +376,14 @@
 .replay-discovery__insight-grid {
  display: grid;
  grid-template-columns: repeat(3, minmax(0, 1fr));
- gap: var(--space-12);
+ gap: 16px;
 }
 
 .replay-discovery-card,
 .replay-discovery__insight {
  border: 1px solid rgba(141, 188, 202, 0.18);
  border-radius: var(--radius-md, 12px);
- padding: var(--space-14);
+ padding: 18px;
  background:
   radial-gradient(circle at 18% 0%, rgba(var(--mode-accent-rgb), 0.16), rgba(10, 16, 21, 0.2) 42%),
   linear-gradient(180deg, rgba(15, 25, 32, 0.9), rgba(7, 12, 17, 0.96));

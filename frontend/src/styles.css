@@ -424,13 +424,13 @@ body {
 
 .observation-center {
   display: grid;
-  gap: 20px;
+  gap: 26px;
 }
 
 .observation-center__hero {
   display: grid;
   grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 18px;
+  gap: 24px;
 }
 
 .observation-center__snapshot,
@@ -507,6 +507,35 @@ body {
 
 .observation-center__grid {
   align-items: start;
+  row-gap: 24px;
+}
+
+.observation-center__advanced {
+  border-top: 1px solid rgba(136, 153, 170, 0.12);
+  padding-top: 16px;
+}
+
+.observation-center__advanced > summary,
+.upload-secondary-actions > summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.observation-center__advanced-grid {
+  margin-top: 18px;
+}
+
+.upload-secondary-actions {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(136, 153, 170, 0.12);
+}
+
+.upload-secondary-actions .secondary-command-button {
+  margin-top: 12px;
 }
 
 .observation-center__panel {

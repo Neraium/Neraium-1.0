@@ -97,7 +97,7 @@ export default function ReplayWorkspace({
         setTimeline(effectiveTimeline);
         setComparisonTimeline([]);
         setMeta(effectiveMeta);
-        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
+        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay is available for this session."));
 
         if (sessionChanged) {
           replaySessionKeyRef.current = replaySessionKey;
@@ -169,7 +169,6 @@ export default function ReplayWorkspace({
   const activeFrame = operativeTimeline[Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
   const comparisonFrame = comparisonTimeline[currentFrameIndex] ?? null;
   const shownFrame = comparisonMode ? (comparisonFrame ?? activeFrame) : activeFrame;
-  const currentPercent = hasReplaySnapshots ? Math.round(((Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1)) + 1) / Math.max(operativeTimeline.length, 1)) * 100) : 0;
   const currentTimeLabel = shownFrame?.timestamp_end ?? shownFrame?.timestamp ?? dash;
 
   useEffect(() => {
@@ -195,11 +194,9 @@ export default function ReplayWorkspace({
   }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
   const replayStatusMetrics = useMemo(() => ([
-    { label: "Replay frames", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-    { label: "Current moment", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
     { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
     { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
-  ]), [currentFrameIndex, hasReplaySnapshots, meta.frame_count, operativeTimeline.length, shownFrame]);
+  ]), [hasReplaySnapshots, shownFrame]);
 
   const expertMetrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
@@ -241,12 +238,12 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Why It Changed" className="span-12 workspace-hero-panel replay-discovery" subtitle="Before, change detected, after, and the evidence to review next.">
+      <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="See what changed, why it matters, and what to review next.">
         <div className="replay-discovery__header">
           <div>
-            <p className="section-token">Finding explanation</p>
+            <p className="section-token">Change review</p>
             <h3>{hasReplaySnapshots ? discovery.headline : "No replay available yet"}</h3>
-            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload telemetry to generate replay and review supporting evidence."}</p>
+            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay."}</p>
           </div>
           <MetricGrid metrics={replayStatusMetrics} compact />
         </div>
@@ -287,7 +284,7 @@ export default function ReplayWorkspace({
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>{expertMode ? "Previous Frame" : "Previous"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>{expertMode ? "Next Frame" : "Next"}</button>
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Start Over</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
             {expertMode ? (
               <>
@@ -296,25 +293,20 @@ export default function ReplayWorkspace({
                 <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
               </>
             ) : null}
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Review in System Status"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Open in System Status"}</button>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
         </div>
 
         {hasReplaySnapshots ? (
           <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
-            <span className="historian-replay-status__badge">{replayMode ? "System Status Review Active" : "Replay available"}</span>
-            <span>{executionMode === "live_causal" ? "No-lookahead replay" : "Standard evidence replay"}</span>
-            <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
-            <span>{currentPercent}% through dataset</span>
+            <span className="historian-replay-status__badge">{replayMode ? "System Status review active" : "Replay ready"}</span>
+            <span>{"Frame " + Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length)) + "/" + Math.max(1, operativeTimeline.length)}</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
           </div>
-        ) : null}
-        {!hasDiagnosticsEvidence ? (
-          <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p>
-        ) : null}
-        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p> : null}
-        <p className="metadata-text">Current moment: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
+        ) : (
+          <p className="narrative-text">No replay yet. Upload data to create one.</p>
+        )}
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
@@ -325,23 +317,19 @@ export default function ReplayWorkspace({
           <MetricGrid metrics={expertMetrics} compact />
         </Panel>
       ) : null}
-      <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Details" : "Supporting Evidence"} className="span-6">
-        {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
-          <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
-            <li><span className="metadata-text">What changed</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
-            <li><span className="metadata-text">Relationship support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
-          </ul>
-        )}
-      </Panel>
-      <Panel title="Why It Matters" className="span-6">
-        <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
-          <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
-          <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
-        </ul>
-      </Panel>
+      {expertMode ? (
+        <>
+          <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
+          <Panel title="Evidence Details" className="span-6"><EvidenceInteractionPanel frame={shownFrame} /></Panel>
+          <Panel title="Why It Matters" className="span-6">
+            <ul className="system-body-timeline-list">
+              <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
+              <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
+              <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
+            </ul>
+          </Panel>
+        </>
+      ) : null}
       {expertMode ? (
         <>
           <Panel title="Historical Structure Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
@@ -520,7 +508,6 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
         : replayMomentDetail(current),
     },
     evidence: [
-      "Telemetry replay available: " + String(frameCount || 0) + " frame" + (frameCount === 1 ? "" : "s"),
       "Confidence: " + confidence,
       "Change strength: " + changeStrength,
       relationshipSupport,
@@ -631,10 +618,10 @@ function buildReplayNotice(error, normalizeErrorMessage) {
   const message = String(normalizeErrorMessage(error?.message ?? error) ?? "");
   const lower = message.toLowerCase();
   if (lower.includes("404") || lower.includes("unexpected response")) {
-    return "No replay snapshots are available for this session.";
+    return "No replay is available for this session.";
   }
   if (lower.includes("network") || lower.includes("failed to fetch")) {
-    return "Replay data will appear after telemetry processing completes.";
+    return "Replay will appear when processing completes.";
   }
-  return "No replay snapshots are available for this session.";
+  return "No replay is available for this session.";
 }

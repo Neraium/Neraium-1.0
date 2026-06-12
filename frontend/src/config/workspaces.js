@@ -3,19 +3,19 @@ export const WORKSPACES = [
     id: "system-body",
     label: "System Status",
     eyebrow: "Operator View",
-    description: "Current system behavior, evidence confidence, and the next operator review step.",
+    description: "What changed, why it matters, and what to review next.",
   },
   {
     id: "data-connections",
     label: "Upload Data",
     eyebrow: "Intake",
-    description: "Connect or upload multivariate telemetry with no domain-specific configuration.",
+    description: "Upload telemetry and track processing.",
   },
   {
     id: "historical-replay",
-    label: "Why It Changed",
+    label: "Evidence Replay",
     eyebrow: "Evidence",
-    description: "Replay the before, change, and after moments behind a finding.",
+    description: "Review what changed, why it matters, and the supporting evidence.",
   },
   {
     id: "observation-center",

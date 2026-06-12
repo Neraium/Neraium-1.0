@@ -72,14 +72,6 @@ export default function SystemBodyWorkspace({
     ],
   );
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
-  const stabilitySnapshot = useMemo(
-    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
-    [latestReplayFrame, latestUploadResult],
-  );
-  const dataConditions = useMemo(
-    () => collectDataConditions(latestUploadResult),
-    [latestUploadResult],
-  );
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -111,8 +103,7 @@ export default function SystemBodyWorkspace({
           <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
             <ul>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Connect Data Source</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Why It Changed</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Evidence Replay</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Findings</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>Help</button></li>
             </ul>
@@ -133,106 +124,30 @@ export default function SystemBodyWorkspace({
           <p className="system-gate__state">{interpretation.structuralState}</p>
         </div>
 
-        <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
+        <section className="panel system-gate__plate system-gate__plate--summary system-gate__plate--operator" aria-label="System status summary">
           <div className="panel-body">
             <ul className="onboarding-summary">
-              <li><span>Current Status</span><strong>{interpretation.structuralState}</strong></li>
-              <li><span>Meaning</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+              <li><span>What changed</span><strong>{interpretation.structuralState}</strong></li>
+              <li><span>Why it matters</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+              <li><span>Review next</span><strong>{interpretation.nextStep}</strong></li>
               <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
             </ul>
+            <p className="system-gate__boundary-note">Read-only monitoring. No controls.</p>
           </div>
         </section>
 
-        <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="System behavior snapshot">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Current Meaning</span><strong>{stabilitySnapshot.regime}</strong></li>
-              <li><span>Change Strength</span><strong>{stabilitySnapshot.changeStrength}</strong></li>
-              <li><span>Open Reviews</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
-              <li><span>Replay Window</span><strong>{stabilitySnapshot.replayWindow}</strong></li>
-            </ul>
-            {dataConditions.length > 0 ? (
-              <div style={{ marginTop: "0.8rem" }}>
-                <p className="section-token">Data Conditions</p>
-                <ul className="compact-list">
-                  {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
-              <li><span>Review Method</span><strong>System behavior change only. No actuation or instructions.</strong></li>
-              <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
-            </ul>
-          </div>
-        </section>
-
-        <div style={{ marginTop: "0.8rem" }}>
+        <div className="system-gate__primary-action">
           <button
             type="button"
             className="command-button"
             onClick={() => navigateWorkspace(interpretation.hasTelemetry ? "observation-center" : "data-connections")}
           >
-            {interpretation.hasTelemetry ? "Review Supporting Evidence" : "Upload Telemetry"}
+            {interpretation.hasTelemetry ? "Review Evidence" : "Upload Data"}
           </button>
         </div>
       </section>
     </PageContainer>
   );
-}
-
-function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
-  const sii = latestUploadResult?.sii_intelligence ?? {};
-  const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
-  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
-  const driftMagnitude = frame?.baseline_distance
-    ?? frame?.topology_state?.drift_index
-    ?? sii?.instability_index
-    ?? "-";
-  const startedAt = frame?.timestamp_start
-    ?? latestUploadResult?.timestamp_profile?.first_timestamp
-    ?? null;
-  return {
-    regime: displayRegimeLabel(sii?.baseline_regime ?? sii?.regime_label),
-    changeStrength: classifyChangeStrength(driftMagnitude),
-    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
-    replayWindow: ageLabel(startedAt),
-  };
-}
-
-function classifyChangeStrength(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return String(value ?? "-");
-  if (numeric < 0.24) return "Low";
-  if (numeric < 0.72) return "Moderate";
-  return "High";
-}
-
-function collectDataConditions(latestUploadResult) {
-  const result = latestUploadResult ?? {};
-  const dataQualityWarnings = Array.isArray(result?.data_quality?.warnings) ? result.data_quality.warnings : [];
-  const timestampWarnings = Array.isArray(result?.timestamp_profile?.warnings) ? result.timestamp_profile.warnings : [];
-  return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
-}
-
-function ageLabel(value) {
-  if (!value) return "-";
-  const ms = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "-";
-  const hours = Math.round(ms / 3600000);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
-
-function displayRegimeLabel(value) {
-  const text = String(value ?? "").trim();
-  if (!text || /^state group [a-z]$/i.test(text)) return "Usual pattern";
-  return text;
 }
 
 function mapBackendSystemInterpretation(contract) {
@@ -244,11 +159,11 @@ function mapBackendSystemInterpretation(contract) {
   const fallbackSummary = divergence.summary || value.state_derivation_reason || EMPTY_VALUE;
 
   return {
-    structuralState: String(value.facility_state_label || "No Active Session"),
+    structuralState: normalizeStructuralLabel(value.facility_state_label, "No data yet"),
     confidence: String(value.confidence || EMPTY_VALUE),
     primaryDriver: String(value.primary_driver || "None"),
     relationshipSummary: {
-      text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE),
+      text: simplifyOperatorSummary(backendSummary.text || fallbackSummary || EMPTY_VALUE),
       divergence_severity: String(divergence.severity || backendSummary.divergence_severity || EMPTY_VALUE),
       confidence: String(divergence.confidence || backendSummary.confidence || value.confidence || EMPTY_VALUE),
       affected_systems: Array.isArray(divergence.affected_systems)
@@ -275,11 +190,11 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
 
   if (!hasTelemetry) {
     return {
-      structuralState: "No Active Session",
-      primaryDriver: "Awaiting telemetry",
-      relationshipSummary: { text: "Upload telemetry to begin monitoring." },
+      structuralState: "No data yet",
+      primaryDriver: "No data yet",
+      relationshipSummary: { text: "Upload data to begin." },
       confidence: "Pending",
-      nextStep: "Upload telemetry.",
+      nextStep: "Upload data.",
       hasTelemetry: false,
     };
   }
@@ -306,16 +221,16 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
 
   if (hasUploadInFlight) {
     return {
-      structuralState: "Processing Upload",
+      structuralState: "Processing data",
       confidence: "Interpretation Unavailable",
       primaryDriver: "Interpretation Unavailable",
       relationshipSummary: {
-        text: "Awaiting system behavior interpretation.",
+        text: "Review will appear when processing completes.",
         divergence_severity: EMPTY_VALUE,
         confidence: "Interpretation Unavailable",
         affected_systems: [],
       },
-      nextStep: "Continue monitoring.",
+      nextStep: "Wait for processing to finish.",
       hasTelemetry: true,
     };
   }
@@ -376,7 +291,7 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
     fallback.subtitle,
   ];
   const selected = candidates.find((item) => typeof item === "string" && item.trim());
-  const text = selected ? selected.trim() : "Interpretation Unavailable";
+  const text = selected ? simplifyOperatorSummary(selected.trim()) : "Interpretation unavailable";
   if (hasDriftState && describesStable(text)) return { text: "Change detected." };
   return { text };
 }
@@ -401,8 +316,29 @@ function hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestRe
 
 function normalizeStructuralLabel(value, fallback = EMPTY_VALUE) {
   const text = String(value ?? "").trim();
-  if (!text || ["empty", "idle", "none", "null", "undefined"].includes(text.toLowerCase())) return fallback;
-  return text;
+  const normalized = text.toLowerCase().replaceAll("_", " ");
+  if (!text || ["empty", "idle", "none", "null", "undefined"].includes(normalized)) return fallback;
+  if (normalized === "no active session" || normalized.includes("baseline pending")) return "No data yet";
+  if (normalized.includes("stable") || normalized.includes("nominal")) return "Monitoring";
+  if (normalized.includes("drift") || normalized.includes("degrad") || normalized.includes("topology") || normalized.includes("fragment")) return "Change Detected";
+  if (normalized.includes("recover")) return "Recovery tracking";
+  return simplifyOperatorSummary(text);
+}
+
+function simplifyOperatorSummary(value) {
+  const replacements = [
+    ["structural drift", "system behavior change"],
+    ["topology", "relationship pattern"],
+    ["regime", "operating pattern"],
+    ["baseline separation", "change from the usual pattern"],
+    ["deformation", "change"],
+    ["drift velocity", "change direction"],
+    ["drift acceleration", "change momentum"],
+  ];
+  return replacements.reduce(
+    (text, [term, replacement]) => text.replaceAll(new RegExp(term, "gi"), replacement),
+    String(value ?? ""),
+  );
 }
 
 function isConnectionDegraded(connectionTone, connectionStatus) {

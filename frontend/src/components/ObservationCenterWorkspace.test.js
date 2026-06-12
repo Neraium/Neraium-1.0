@@ -64,13 +64,11 @@ describe("ObservationCenterWorkspace", () => {
     renderWorkspace(apiFetch);
 
     await waitFor(() => {
-      expect(screen.getByText(/no findings have been recorded yet/i)).toBeTruthy();
+      expect(screen.getByText(/no findings yet/i)).toBeTruthy();
     });
 
-    expect(screen.getByText(/Neraium is quiet because no reviewable changes have been recorded/i)).toBeTruthy();
-    expect(screen.getByText(/Finding:No findings recorded/i)).toBeTruthy();
-    expect(screen.getByText(/Findings appear when a persistent behavior change is supported by telemetry/i)).toBeTruthy();
-    expect(screen.getByText(/Potential impact:Monitoring/i)).toBeTruthy();
+    expect(screen.getByText(/No supported changes are ready for review/i)).toBeTruthy();
+    expect(screen.getByText(/Why it matters:Monitoring/i)).toBeTruthy();
     expect(screen.queryByText(/Current regime/i)).toBeNull();
     expect(screen.queryByText(/Deformation age/i)).toBeNull();
     expect(screen.queryByText(/Silence health/i)).toBeNull();
@@ -112,10 +110,9 @@ describe("ObservationCenterWorkspace", () => {
     });
 
     expect(screen.getAllByText(/Usual pattern/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Finding:Relationship Pattern Shift/i)).toBeTruthy();
-    expect(screen.getAllByText(/Potential impact:Possible infrastructure risk/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Neraium stays quiet until system behavior changes/i)).toBeTruthy();
-    expect(screen.getByText(/what evidence supports it/i)).toBeTruthy();
+    expect(screen.getAllByText(/Relationship Pattern Shift/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Why it matters:Possible infrastructure risk/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Review supported changes, their impact, and the evidence behind them/i)).toBeTruthy();
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/evidence intact/i)).toBeNull();
   });
