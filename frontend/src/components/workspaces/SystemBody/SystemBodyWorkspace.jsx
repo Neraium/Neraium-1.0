@@ -72,6 +72,14 @@ export default function SystemBodyWorkspace({
     ],
   );
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
+  const stabilitySnapshot = useMemo(
+    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
+    [latestReplayFrame, latestUploadResult],
+  );
+  const dataConditions = useMemo(
+    () => collectDataConditions(latestUploadResult),
+    [latestUploadResult],
+  );
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -96,72 +104,174 @@ export default function SystemBodyWorkspace({
           aria-controls="system-body-menu"
           onClick={() => setMenuOpen((v) => !v)}
         >
-          Menu
+          Views
         </button>
 
         {menuOpen ? (
           <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
             <ul>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Structural Replay</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Connect Data Source</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Evidence Replay</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Observation Review</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>Help</button></li>
             </ul>
           </aside>
         ) : null}
 
-        <div className="system-gate__layout system-gate__layout--pilot-summary">
-          <div className="system-gate__column system-gate__column--left">
-            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Current Status</span><strong>{interpretation.structuralState}</strong></li>
-                  <li><span>Meaning</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-                  <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
+        <div className="system-gate__center" style={{ cursor: "default" }}>
+          <SystemOrbPanel
+            systemState={systemState}
+            uiState={uiState}
+            coherence={coherence}
+            stateLabel={interpretation.structuralState}
+            lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
+            focusLabel={interpretation.primaryDriver}
+            orbData={orbData}
+            compactPreview
+          />
+          <p className="system-gate__state">{interpretation.structuralState}</p>
+        </div>
+
+        <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
+          <div className="panel-body">
+            <ul className="onboarding-summary">
+              <li><span>Current Status</span><strong>{interpretation.structuralState}</strong></li>
+              <li><span>Meaning</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+              <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="System behavior snapshot">
+          <div className="panel-body">
+            <ul className="onboarding-summary">
+              <li><span>Current Pattern</span><strong>{stabilitySnapshot.regime}</strong></li>
+              <li><span>Change Strength</span><strong>{stabilitySnapshot.changeStrength}</strong></li>
+              <li><span>Open Reviews</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
+              <li><span>Replay Window</span><strong>{stabilitySnapshot.replayWindow}</strong></li>
+            </ul>
+            {dataConditions.length > 0 ? (
+              <div style={{ marginTop: "0.8rem" }}>
+                <p className="section-token">Data Conditions</p>
+                <ul className="compact-list">
+                  {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
                 </ul>
               </div>
-            </section>
+            ) : null}
           </div>
+        </section>
 
-          <div className="system-gate__center" style={{ cursor: "default" }}>
-            <SystemOrbPanel
-              systemState={systemState}
-              uiState={uiState}
-              coherence={coherence}
-              stateLabel={interpretation.structuralState}
-              lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
-              focusLabel={interpretation.primaryDriver}
-              orbData={orbData}
-              compactPreview
-            />
-            <p className="system-gate__state">{interpretation.structuralState}</p>
+        <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
+          <div className="panel-body">
+            <ul className="onboarding-summary">
+              <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
+              <li><span>Review Method</span><strong>System behavior change only. No actuation or instructions.</strong></li>
+              <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+            </ul>
           </div>
+        </section>
 
-          <div className="system-gate__column system-gate__column--right">
-            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Recommended next step">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Next Step</span><strong>{interpretation.nextStep}</strong></li>
-                </ul>
-              </div>
-            </section>
-            <div className="system-gate__actions">
-              <button type="button" className="command-button" onClick={() => navigateWorkspace(interpretation.hasTelemetry ? "observation-center" : "data-connections")}>
-                {interpretation.hasTelemetry ? "Review Observations" : "Upload Telemetry"}
-              </button>
-            </div>
-          </div>
+        <div style={{ marginTop: "0.8rem" }}>
+          <button
+            type="button"
+            className="command-button"
+            onClick={() => navigateWorkspace(interpretation.hasTelemetry ? "observation-center" : "data-connections")}
+          >
+            {interpretation.hasTelemetry ? "Review Supporting Evidence" : "Upload Telemetry"}
+          </button>
         </div>
       </section>
     </PageContainer>
   );
 }
 
-function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame, fallback }) {
+function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
   const sii = latestUploadResult?.sii_intelligence ?? {};
+  const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
+  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
+  const driftMagnitude = frame?.baseline_distance
+    ?? frame?.topology_state?.drift_index
+    ?? sii?.instability_index
+    ?? "-";
+  const startedAt = frame?.timestamp_start
+    ?? latestUploadResult?.timestamp_profile?.first_timestamp
+    ?? null;
+  return {
+    regime: displayRegimeLabel(sii?.baseline_regime ?? sii?.regime_label),
+    changeStrength: classifyChangeStrength(driftMagnitude),
+    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
+    replayWindow: ageLabel(startedAt),
+  };
+}
+
+function classifyChangeStrength(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value ?? "-");
+  if (numeric < 0.24) return "Low";
+  if (numeric < 0.72) return "Moderate";
+  return "High";
+}
+
+function collectDataConditions(latestUploadResult) {
+  const result = latestUploadResult ?? {};
+  const dataQualityWarnings = Array.isArray(result?.data_quality?.warnings) ? result.data_quality.warnings : [];
+  const timestampWarnings = Array.isArray(result?.timestamp_profile?.warnings) ? result.timestamp_profile.warnings : [];
+  return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
+}
+
+function ageLabel(value) {
+  if (!value) return "-";
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "-";
+  const hours = Math.round(ms / 3600000);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+function displayRegimeLabel(value) {
+  const text = String(value ?? "").trim();
+  if (!text || /^state group [a-z]$/i.test(text)) return "Baseline pattern";
+  return text;
+}
+
+function mapBackendSystemInterpretation(contract) {
+  const value = contract && typeof contract === "object" ? contract : null;
+  if (!value) return null;
+
+  const divergence = value.relationship_divergence || {};
+  const backendSummary = value.relationship_summary || {};
+  const fallbackSummary = divergence.summary || value.state_derivation_reason || EMPTY_VALUE;
+
+  return {
+    structuralState: String(value.facility_state_label || "No Active Session"),
+    confidence: String(value.confidence || EMPTY_VALUE),
+    primaryDriver: String(value.primary_driver || "None"),
+    relationshipSummary: {
+      text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE),
+      divergence_severity: String(divergence.severity || backendSummary.divergence_severity || EMPTY_VALUE),
+      confidence: String(divergence.confidence || backendSummary.confidence || value.confidence || EMPTY_VALUE),
+      affected_systems: Array.isArray(divergence.affected_systems)
+        ? divergence.affected_systems
+        : (Array.isArray(backendSummary.affected_systems) ? backendSummary.affected_systems : []),
+    },
+    hasTelemetry: true,
+    nextStep: "Review observations.",
+  };
+}
+
+export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, liveSnapshot, latestReplayFrame = null, fallback = {} }) {
   const latestFrame = latestReplayFrame ?? null;
   const hasTelemetry = hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestReplayFrame: latestFrame });
   const connectionDegraded = isConnectionDegraded(fallback.connectionTone, fallback.connectionStatus);
+  const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation
+    ?? latestUploadResult?.system_interpretation
+    ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
+    ?? null;
+  const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);
+  if (mappedBackendInterpretation) {
+    return mappedBackendInterpretation;
+  }
 
   if (!hasTelemetry) {
     return {
@@ -185,6 +295,32 @@ function buildSystemInterpretation({ latestUploadSnapshot, latestUploadResult, l
     };
   }
 
+  const uploadStatus = String(
+    latestUploadSnapshot?.status
+    ?? latestUploadSnapshot?.processing_state
+    ?? latestUploadResult?.processing_state
+    ?? "",
+  ).toLowerCase();
+  const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "generating_replay", "cognition_ready", "writing_state"];
+  const hasUploadInFlight = processingLike.some((token) => uploadStatus.includes(token));
+
+  if (hasUploadInFlight) {
+    return {
+      structuralState: "Processing Upload",
+      confidence: "Interpretation Unavailable",
+      primaryDriver: "Interpretation Unavailable",
+      relationshipSummary: {
+        text: "Awaiting system behavior interpretation.",
+        divergence_severity: EMPTY_VALUE,
+        confidence: "Interpretation Unavailable",
+        affected_systems: [],
+      },
+      nextStep: "Continue monitoring.",
+      hasTelemetry: true,
+    };
+  }
+
+  const sii = latestUploadResult?.sii_intelligence ?? {};
   const rawStructuralState = labelOrFallback(
     latestFrame?.state_label
       ?? latestFrame?.cognition_state?.facility_state
@@ -248,6 +384,9 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
   if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };
   if (isConnectionDegraded(connectionTone, connectionStatus)) return { tone: "offline", label: "Connection degraded" };
+  const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
+  if (text.includes("replay")) return { label: "Replay running", tone: "syncing" };
+  if (text.includes("sync")) return { label: "Data stream active", tone: "syncing" };
   if (lastUpdate) return { tone: "online", label: "Telemetry active" };
   return { tone: "pending", label: "Awaiting telemetry" };
 }
@@ -268,7 +407,7 @@ function normalizeStructuralLabel(value, fallback = EMPTY_VALUE) {
 
 function isConnectionDegraded(connectionTone, connectionStatus) {
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""}`.toLowerCase();
-  return text.includes("degrad") || text.includes("offline") || text.includes("error") || text.includes("fail");
+  return text.includes("degrad") || text.includes("offline") || text.includes("error") || text.includes("fail") || text.includes("disconnected");
 }
 
 function labelOrFallback(value, fallback = EMPTY_VALUE) {

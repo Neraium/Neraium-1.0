@@ -194,7 +194,14 @@ export default function ReplayWorkspace({
     }
   }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
-  const metrics = useMemo(() => {
+  const replayStatusMetrics = useMemo(() => ([
+    { label: "Replay frames", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
+    { label: "Current moment", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
+    { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
+    { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
+  ]), [currentFrameIndex, hasReplaySnapshots, meta.frame_count, operativeTimeline.length, shownFrame]);
+
+  const expertMetrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
       return [
         { label: "Structure Timeline", value: dash },
@@ -223,78 +230,115 @@ export default function ReplayWorkspace({
       { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
       { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
     ];
-  }, [currentFrameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]); 
+  }, [currentFrameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]);
+
+  const discovery = useMemo(() => buildReplayDiscovery({
+    timeline: operativeTimeline,
+    frame: shownFrame,
+    frameIndex: currentFrameIndex,
+    formatClockTime,
+  }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Structural Replay" className="span-12 workspace-hero-panel" subtitle="Structural replay, topology, and evidence lineage for observation analysis.">
-        <MetricGrid metrics={metrics} />
-        {expertMode ? (
-          <div className="structural-replay-controls">
-            <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause Replay" : "Play Replay"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)} disabled={!hasReplaySnapshots}>{comparisonMode ? "Primary View" : "Comparison Mode"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous Frame</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next Frame</button>
-            <label className="metadata-text" htmlFor="replay-speed">Speed</label>
-            <select id="replay-speed" value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
-            <label className="metadata-text" htmlFor="replay-compression">Compression</label>
-            <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
-            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Observation Mode" : "Enter Observation Mode"}</button>
+      <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="Why the system behavior changed, what supports it, and what to review next.">
+        <div className="replay-discovery__header">
+          <div>
+            <p className="section-token">Change detected</p>
+            <h3>{hasReplaySnapshots ? discovery.headline : "No replay available yet"}</h3>
+            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload telemetry to generate replay and review supporting evidence."}</p>
           </div>
-        ) : (
+          <MetricGrid metrics={replayStatusMetrics} compact />
+        </div>
+
+        <div className="replay-discovery__sequence" aria-label="Evidence replay discovery sequence">
+          <DiscoveryCard label="Before" item={discovery.before} active={hasReplaySnapshots && currentFrameIndex === 0} />
+          <DiscoveryCard label="Change Detected" item={discovery.current} active={hasReplaySnapshots} emphasized />
+          <DiscoveryCard label="After" item={discovery.after} active={hasReplaySnapshots && currentFrameIndex === operativeTimeline.length - 1} />
+        </div>
+
+        <div className="replay-discovery__insight-grid">
+          <section className="replay-discovery__insight" aria-label="What changed">
+            <span className="section-token">What changed</span>
+            <strong>{hasReplaySnapshots ? discovery.whatChanged.title : "Awaiting telemetry"}</strong>
+            <p>{hasReplaySnapshots ? discovery.whatChanged.detail : "No replay available yet."}</p>
+          </section>
+          <section className="replay-discovery__insight" aria-label="Supporting evidence">
+            <span className="section-token">Supporting evidence</span>
+            <ul className="compact-list">
+              {hasReplaySnapshots
+                ? discovery.evidence.map((item) => <li key={item}>{item}</li>)
+                : <li>Upload telemetry to generate replay.</li>}
+            </ul>
+          </section>
+          <section className="replay-discovery__insight" aria-label="Next operator review">
+            <span className="section-token">Review next</span>
+            <strong>{hasReplaySnapshots ? discovery.reviewNext.title : "Telemetry replay unavailable"}</strong>
+            <p>{hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet."}</p>
+          </section>
+        </div>
+
+        <div className="replay-discovery__controls" aria-label="Timeline replay controls">
           <div className="structural-replay-controls">
             <select value={executionMode} onChange={(event) => setExecutionMode(String(event.target.value))}>
-              <option value="live">Replay</option>
-              <option value="live_causal">Live Replay (No Lookahead)</option>
+              <option value="live">Evidence replay</option>
+              <option value="live_causal">Evidence replay, no lookahead</option>
             </select>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>Previous</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>Next</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>{expertMode ? "Previous Frame" : "Previous"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>{expertMode ? "Next Frame" : "Next"}</button>
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Observation Mode" : "Enter Observation Mode"}</button>
+            {expertMode ? (
+              <>
+                <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)} disabled={!hasReplaySnapshots}>{comparisonMode ? "Primary View" : "Comparison Mode"}</button>
+                <label className="metadata-text" htmlFor="replay-compression">Compression</label>
+                <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
+              </>
+            ) : null}
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Review in System Status"}</button>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
-        )}
+        </div>
+
         {hasReplaySnapshots ? (
-          <div className={`historian-replay-status ${replayMode ? "historian-replay-status--active" : ""}`}>
-            <span className="historian-replay-status__badge">{replayMode ? "Observation Mode Active" : "Structural Preview"}</span>
-            <span>{executionMode === "live_causal" ? "No-lookahead mode" : "Standard replay mode"}</span>
+          <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
+            <span className="historian-replay-status__badge">{replayMode ? "System Status Review Active" : "Telemetry replay available"}</span>
+            <span>{executionMode === "live_causal" ? "No-lookahead replay" : "Standard evidence replay"}</span>
             <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
             <span>{currentPercent}% through dataset</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
           </div>
         ) : null}
         {!hasDiagnosticsEvidence ? (
-          <p className="narrative-text">Structural replay is unavailable until telemetry is uploaded or a live stream is connected.</p>
+          <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p>
         ) : null}
-        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay loaded. Upload telemetry to generate a full structural replay.</p> : null}
-        <p className="metadata-text">Diagnostic timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
+        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p> : null}
+        <p className="metadata-text">Replay timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
         <Panel title="Structural Progression" className="span-12 replay-phase-panel">
           <div className="canonical-flow">
-            {canonicalFlow.map((phase) => <div key={phase} className={`canonical-flow__step ${hasReplaySnapshots && shownFrame?.cognition_state?.canonical_phase === phase ? "is-active" : ""}`}><span>{phase.replaceAll("_", " ")}</span></div>)}
+            {canonicalFlow.map((phase) => <div key={phase} className={["canonical-flow__step", hasReplaySnapshots && shownFrame?.cognition_state?.canonical_phase === phase ? "is-active" : ""].filter(Boolean).join(" ")}><span>{phase.replaceAll("_", " ")}</span></div>)}
           </div>
+          <MetricGrid metrics={expertMetrics} compact />
         </Panel>
       ) : null}
-      <Panel title="Structural Topology" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Lineage" : "Observation Summary"} className="span-6">
+      <Panel title="Relationship Pattern" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
+      <Panel title={expertMode ? "Evidence Details" : "Observation Summary"} className="span-6">
         {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
           <ul className="system-body-timeline-list">
             <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
-            <li><span className="metadata-text">Structural state</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
+            <li><span className="metadata-text">System behavior</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
             <li><span className="metadata-text">Cross-variable support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
           </ul>
         )}
       </Panel>
-      <Panel title="Recovery Convergence" className="span-6">
+      <Panel title="Stability Path" className="span-6">
         <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Convergence signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
-          <li><span className="metadata-text">Fragmentation signal</span><strong>{hasReplaySnapshots ? (shownFrame?.topology_state?.fragmentation_indicator ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Recovery signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
           <li><span className="metadata-text">Analysis state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
         </ul>
       </Panel>
@@ -317,6 +361,18 @@ export default function ReplayWorkspace({
     </div>
   );
 }
+
+function DiscoveryCard({ label, item, active = false, emphasized = false }) {
+  return (
+    <section className={["replay-discovery-card", active ? "is-active" : "", emphasized ? "is-emphasized" : ""].filter(Boolean).join(" ")}>
+      <span>{label}</span>
+      <strong>{item.title}</strong>
+      <p>{item.detail}</p>
+      <em>{item.time}</em>
+    </section>
+  );
+}
+
 
 async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   // Prefer the global persisted replay endpoint. It is stable across ECS tasks and
@@ -436,16 +492,114 @@ function readFrameTimestamp(frame) {
   return timeValue;
 }
 
+function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) {
+  const frames = Array.isArray(timeline) ? timeline : [];
+  const first = frames[0] ?? null;
+  const last = frames[frames.length - 1] ?? null;
+  const current = frame ?? first ?? null;
+  const frameCount = frames.length;
+  const dominantPaths = Array.isArray(current?.propagation_state?.dominant_paths) ? current.propagation_state.dominant_paths : [];
+  const contributors = Array.isArray(current?.primary_contributors) ? current.primary_contributors.filter(Boolean).slice(0, 3) : [];
+  const confidence = formatConfidenceLabel(current?.cognition_state?.confidence_tier);
+  const changeStrength = formatChangeStrength(current);
+  const relationshipSupport = dominantPaths.length > 0 ? String(dominantPaths.length) + " relationship pathway" + (dominantPaths.length === 1 ? "" : "s") + " changed together" : "Relationship support not recorded in this frame";
+  const contributorText = contributors.length ? contributors.join(" | ") : "No primary variables listed";
+
+  return {
+    headline: replayStateHeadline(current),
+    summary: frameCount > 0
+      ? "Telemetry replay available across " + String(frameCount) + " frame" + (frameCount === 1 ? "" : "s") + ". Current moment " + String(Math.min(frameIndex + 1, frameCount)) + " shows " + changeStrength.toLowerCase() + " change strength."
+      : "No replay available yet.",
+    before: buildDiscoveryMoment(first, "Baseline reference", "Starting behavior pattern", formatClockTime),
+    current: buildDiscoveryMoment(current, "System behavior changed", replayMomentDetail(current), formatClockTime),
+    after: buildDiscoveryMoment(last, "Latest replay state", "Most recent observed behavior pattern", formatClockTime),
+    whatChanged: {
+      title: replayStateHeadline(current),
+      detail: contributors.length
+        ? "Relationship pattern shifted around " + contributorText + "."
+        : replayMomentDetail(current),
+    },
+    evidence: [
+      "Telemetry replay available: " + String(frameCount || 0) + " frame" + (frameCount === 1 ? "" : "s"),
+      "Evidence confidence: " + confidence,
+      "Change strength: " + changeStrength,
+      relationshipSupport,
+    ],
+    reviewNext: {
+      title: contributors.length ? "Review supporting evidence" : "Review replay timeline",
+      detail: contributors.length
+        ? "Check " + contributorText + " against the source telemetry and operator notes."
+        : "Use the timeline controls to inspect when the change first appeared.",
+    },
+  };
+}
+
+function buildDiscoveryMoment(frame, title, fallbackDetail, formatClockTime) {
+  if (!frame) {
+    return { title: "No replay available yet", detail: "Upload telemetry to generate replay.", time: "-" };
+  }
+  return {
+    title,
+    detail: fallbackDetail || replayMomentDetail(frame),
+    time: formatClockTime(frame.timestamp_end ?? frame.timestamp ?? frame.timestamp_start ?? "-"),
+  };
+}
+
+function replayStateHeadline(frame) {
+  const state = strengthenReplayState(frame?.topology_state?.stability_state ?? frame?.cognition_state?.facility_state);
+  if (!frame) return "No replay available yet";
+  if (state === "Stable") return "System behavior stable";
+  if (state === "-") return "Change detected";
+  return state;
+}
+
+function replayMomentDetail(frame) {
+  if (!frame) return "No replay available yet.";
+  const paths = Array.isArray(frame?.propagation_state?.dominant_paths) ? frame.propagation_state.dominant_paths.length : 0;
+  if (paths > 0) return "Relationship pattern shifted with cross-variable support.";
+  const strength = readChangeStrength(frame);
+  if (Number.isFinite(strength) && strength > 0) return "System behavior changed relative to the reference pattern.";
+  return "System behavior remains close to the reference pattern.";
+}
+
+function readChangeStrength(frame) {
+  const candidates = [
+    frame?.baseline_distance,
+    frame?.topology_state?.drift_index,
+    frame?.subsystem_pressure?.volatility_index,
+  ];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isFinite(value)) return value;
+  }
+  return NaN;
+}
+
+function formatChangeStrength(frame) {
+  const value = readChangeStrength(frame);
+  if (!Number.isFinite(value)) return "Pending";
+  if (value < 0.24) return "Low";
+  if (value < 0.72) return "Moderate";
+  return "High";
+}
+
+function formatRelationshipContinuity(frame) {
+  const value = Number(frame?.topology_state?.fragmentation_indicator);
+  if (!Number.isFinite(value)) return "Pending";
+  if (value < 0.24) return "Connected";
+  if (value < 0.72) return "Changing";
+  return "Fragmented";
+}
 const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];
 
 function strengthenReplayState(value) {
   const normalized = String(value ?? "").toLowerCase();
   if (!normalized.trim()) return "-";
   if (normalized.includes("needs review") || normalized.includes("review")) return "Propagation Watch Active";
-  if (normalized.includes("drift")) return "Structural Drift Emerging";
-  if (normalized.includes("instab") || normalized.includes("separat")) return "Relational Instability Observed";
-  if (normalized.includes("deterior") || normalized.includes("fragment")) return "Topology Divergence Active";
-  if (normalized.includes("recover") || normalized.includes("convergen")) return "Recovery Convergence Tracking";
+  if (normalized.includes("drift")) return "System behavior changed";
+  if (normalized.includes("instab") || normalized.includes("separat")) return "Relationship pattern shifted";
+  if (normalized.includes("deterior") || normalized.includes("fragment")) return "Relationship pattern fragmented";
+  if (normalized.includes("recover") || normalized.includes("convergen")) return "Recovery pattern tracking";
   if (normalized.includes("stable") || normalized.includes("nominal")) return "Stable";
   return sentenceCase(String(value).replaceAll("_", " "));
 }

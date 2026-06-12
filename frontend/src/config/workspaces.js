@@ -1,33 +1,33 @@
 export const WORKSPACES = [
   {
     id: "system-body",
-    label: "Structural State",
+    label: "System Status",
     eyebrow: "Operator View",
-    description: "Current structural state, baseline alignment, and the highest-signal relational shift in the telemetry.",
+    description: "Current system behavior, evidence confidence, and the next operator review step.",
   },
   {
     id: "data-connections",
-    label: "Telemetry Setup",
+    label: "Upload Data",
     eyebrow: "Intake",
     description: "Connect or upload multivariate telemetry with no domain-specific configuration.",
   },
   {
     id: "historical-replay",
-    label: "Structural Replay",
-    eyebrow: "Technical",
-    description: "Replay baseline drift, relationship changes, persistence, and evidence lineage over time.",
+    label: "Evidence Replay",
+    eyebrow: "Evidence",
+    description: "Replay what changed, why it matters, and which telemetry evidence supports the discovery.",
   },
   {
     id: "observation-center",
-    label: "Observation Center",
+    label: "Observation Review",
     eyebrow: "Evidence",
-    description: "Search structural observations, record operator findings, explore variable coupling, and export evidence records.",
+    description: "Review system observations, record operator findings, inspect supporting evidence, and export records.",
   },
   {
     id: "help-changelog",
-    label: "Help / Changelog",
+    label: "Help",
     eyebrow: "Trust",
-    description: "Read the instrument boundary, version notes, and operator-facing operating rules.",
+    description: "Read the instrument boundary, version notes, and operator-facing review rules.",
   },
   {
     id: "governance-admin",
@@ -55,8 +55,8 @@ export const FALLBACK_SYSTEMS = [
     scope: "Where the current covariance structure differs from baseline.",
   },
   {
-    name: "Trajectory Drift",
-    scope: "Direction, velocity, and acceleration of state-space drift.",
+    name: "Change Direction",
+    scope: "Direction and strength of the observed behavior change.",
   },
   {
     name: "Persistence Window",
@@ -68,13 +68,13 @@ export const INTAKE_STAGES = [
   "Batch receipt",
   "Variable and timestamp detection",
   "Baseline window profiling",
-  "Structural drift analysis",
+  "System behavior review",
   "Observation and state write",
   "Complete",
 ];
 
 export const REPORT_TEMPLATES = [
-  "Structural Drift Summary",
+  "System Change Summary",
   "Relationship Shift Review",
   "Observation Feedback Record",
 ];

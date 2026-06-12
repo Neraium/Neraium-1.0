@@ -32,7 +32,7 @@ export default function EvidenceLineagePanel({ frame, lineage = null }) {
   const lineageEvents = lineage?.lineages ?? frame?.evidence_state?.lineage_events ?? [];
   const first = lineageEvents[0] ?? null;
   if (!first) {
-    return <p className="narrative-text">Evidence lineage is initializing.</p>;
+    return <p className="narrative-text">Evidence details are initializing.</p>;
   }
   const confidence = first.confidence_factors ?? {};
   const sources = first.evidence_sources ?? {};

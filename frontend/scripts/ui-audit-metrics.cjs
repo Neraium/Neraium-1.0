@@ -8,14 +8,14 @@ const outFile = path.join(outRoot, "metrics.json");
 
 const workspaces = [
   "Cultivation Mission Control",
-  "Structural Replay",
-  "Evidence Lineage",
+  "Evidence Replay",
+  "Evidence Details",
   "Propagation Map",
   "Data Connections",
   "Operator Workflow",
   "Cultivation Evidence",
   "Current Cognition State",
-  "Drift Timeline",
+  "Change Timeline",
   "Multi-Site Cognition",
   "Structural Ontology",
   "Ecosystem Layer",

@@ -26,19 +26,19 @@ export default function HelpChangelogWorkspace({
     <section className="workspace-surface help-changelog">
       <div className="observation-center__back-control">
         <button type="button" className="system-gate__settings-action" onClick={() => onBackToGate?.()}>
-          Back to Gate
+          Back to System Status
         </button>
         <button type="button" className="system-gate__settings-action" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-          Open Observation Center
+          Open Observation Review
         </button>
       </div>
 
       <div className="observation-center__hero">
         <section className="observation-center__summary help-changelog__hero" aria-label="Help and changelog summary">
           <p className="section-token">Trust Boundary</p>
-          <h1>Help / Changelog</h1>
+          <h1>Help</h1>
           <p>
-            Neraium observes structural change, records evidence, and stays read-only. This page holds the operating boundary and the version history so observation review can stay quiet.
+            Neraium observes system behavior change, records evidence, and stays read-only. This page holds the operating boundary and the version history so observation review can stay quiet.
           </p>
           <MetricGrid
             metrics={[
@@ -56,7 +56,7 @@ export default function HelpChangelogWorkspace({
         <Panel title="What the instrument does" className="span-7 observation-center__panel">
           <ul className="compact-list">
             <li>Ingests multivariate telemetry without requiring domain semantics.</li>
-            <li>Learns a baseline structural regime and watches for persistent deformation.</li>
+            <li>Learns a reference behavior pattern and watches for persistent change.</li>
             <li>Surfaces observations as relational facts, not instructions.</li>
             <li>Records operator feedback as evidence for future investigations.</li>
           </ul>

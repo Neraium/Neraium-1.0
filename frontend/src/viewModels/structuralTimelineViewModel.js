@@ -40,8 +40,8 @@ export function formatStructuralRead(state) {
 
 export function formatTrajectorySignal(signal, hasUploadedTelemetry) {
   if (!hasUploadedTelemetry) return "-";
-  if (!signal) return "Structural drift detected in uploaded telemetry";
-  return "Structural drift detected in uploaded telemetry";
+  if (!signal) return "System behavior changed in uploaded telemetry";
+  return "System behavior changed in uploaded telemetry";
 }
 
 export function mapStructuralSeverity(distance, velocity) {
@@ -49,7 +49,7 @@ export function mapStructuralSeverity(distance, velocity) {
   const v = Number(velocity) || 0;
   if (d < 0.16 && Math.abs(v) < 0.015) return "Stable baseline";
   if (d < 0.36 && Math.abs(v) < 0.03) return "Minor deviation emerging";
-  if (d < 0.7 || v >= 0.03) return "Structural drift increasing";
+  if (d < 0.7 || v >= 0.03) return "System behavior change increasing";
   if (d < 1.1) return "Persistent instability detected";
   return "Structural shift accelerating";
 }

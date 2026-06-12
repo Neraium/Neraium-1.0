@@ -9,7 +9,7 @@ const INTAKE_STAGES = [
   "Detecting variables",
   "Parsing state matrix",
   "Building baseline regime",
-  "Computing structural drift",
+  "Reviewing system behavior change",
   "Generating replay frames",
   "Preparing observations",
   "Ready",
@@ -46,7 +46,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
       `${result.row_count ?? result.rows_processed ?? 0} rows parsed from the state matrix.`,
       "Baseline regime profiled from the uploaded telemetry.",
-      "Structural drift scoring complete.",
+      "System behavior review complete.",
       "Replay/evidence generation complete or available in the evidence workspace.",
       "Observation layer prepared from the latest uploaded state.",
       "Structural state refreshed from the latest uploaded telemetry.",
@@ -224,7 +224,7 @@ export function uploadStateMessage(uploadState) {
     return "Building baseline regime";
   }
   if (normalized === "structural_scoring") {
-    return "Computing structural drift";
+    return "Reviewing system behavior change";
   }
   if (normalized === "cognition_ready") {
     return "Cognition ready";
@@ -275,7 +275,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
     jobStatus === "validating_schema" ? job.progress_label : "Waiting for variable and schema detection.",
     jobStatus === "parsing" ? job.progress_label : "Parser will stream the state matrix without loading the full export into memory.",
     jobStatus === "baseline_modeling" ? job.progress_label : "The instrument is profiling a baseline regime from the uploaded telemetry.",
-    jobStatus === "structural_scoring" ? job.progress_label : "Structural drift scoring starts after baseline modeling.",
+    jobStatus === "structural_scoring" ? job.progress_label : "System behavior review starts after reference modeling.",
     jobStatus === "generating_replay" ? job.progress_label : "Replay frames are deferred until first cognition state is ready.",
     ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Observations become usable before all downstream artifacts finish.",
     "Completion will refresh the structural state view.",

@@ -136,21 +136,21 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         "--replay-divergence": model.divergence.toFixed(3),
         "--replay-recovery": model.recovery.toFixed(3),
       }}
-      aria-label="Animated structural replay cognition field"
+      aria-label="Animated evidence replay field"
     >
       <div className="replay-cognition-field__header">
         <div>
-          <p className="section-token">Structural replay</p>
+          <p className="section-token">Evidence replay</p>
           <h3>{status}</h3>
           <span>{phase} / {pathLabel}</span>
         </div>
         <div className="replay-cognition-field__state">
           <strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong>
-          <span>{inactive ? "-" : "baseline separation"}</span>
+          <span>{inactive ? "-" : "change strength"}</span>
         </div>
       </div>
 
-      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="Structural drift, coupling change, and recovery trajectory">
+      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="System behavior change, relationship pattern, and recovery trajectory">
         <defs>
           <radialGradient id="replayFieldGlow" cx="50%" cy="48%" r="58%">
             <stop offset="0%" stopColor="rgba(138, 184, 196, 0.28)" />

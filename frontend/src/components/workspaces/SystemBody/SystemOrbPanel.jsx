@@ -3,8 +3,8 @@ import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
 const STATE_COPY = {
   stable: { code: "L1-L2", attention: "Stable / Monitoring" },
-  watching: { code: "L3", attention: "Emerging Drift" },
-  drift: { code: "L4-L5", attention: "Persistent Drift / Structural Shift" },
+  watching: { code: "L3", attention: "Change Watch" },
+  drift: { code: "L4-L5", attention: "System Behavior Changed" },
   propagation_active: { code: "L6-L7", attention: "Sustained Structural Shift" },
   recovery: { code: "RECOVERY", attention: "Stability Recovery" },
   unknown: { code: EMPTY_VALUE, attention: EMPTY_VALUE },
@@ -44,7 +44,7 @@ export default function SystemOrbPanel({
   return (
     <aside
       className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ${indicatorClass} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
-      aria-label={compactPreview ? "The Gate admitted condition indicator" : "Structural topology intelligence field"}
+      aria-label={compactPreview ? "The Gate admitted condition indicator" : "System behavior intelligence field"}
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (
@@ -64,7 +64,7 @@ export default function SystemOrbPanel({
       </div>
       {!compactPreview ? (
         <div className="system-body-orb-panel__meta">
-          <span className="section-label">Topology Health</span>
+          <span className="section-label">System Signal</span>
           <strong>{copy.code}</strong>
           <em>{resolvedLabel}</em>
         </div>
@@ -73,15 +73,15 @@ export default function SystemOrbPanel({
         <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
           <span />
           <strong>{lastUpdate || EMPTY_VALUE}</strong>
-          <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Instability density ${instabilityDisplay}`}</em>
+          <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Change signal ${instabilityDisplay}`}</em>
         </div>
       ) : null}
       {!compactPreview && orbData ? (
         <div className="system-body-orb-panel__telemetry">
           <div><span className="section-label">Containment Boundary</span><strong>{orbData.containment ?? EMPTY_VALUE}</strong></div>
-          <div><span className="section-label">Propagation Direction</span><strong>{orbData.propagationDirection ?? EMPTY_VALUE}</strong></div>
-          <div><span className="section-label">Relationship Fragmentation</span><strong>{orbData.fragmentation ?? EMPTY_VALUE}</strong></div>
-          <div><span className="section-label">Evidence Confidence</span><strong>{orbData.evidenceConfidence ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Change Direction</span><strong>{orbData.propagationDirection ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Relationship Continuity</span><strong>{orbData.fragmentation ?? EMPTY_VALUE}</strong></div>
+          <div><span className="section-label">Confidence</span><strong>{orbData.evidenceConfidence ?? EMPTY_VALUE}</strong></div>
         </div>
       ) : null}
     </aside>
