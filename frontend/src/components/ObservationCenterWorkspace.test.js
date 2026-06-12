@@ -12,7 +12,7 @@ vi.mock("./workspacePrimitives", () => ({
   Panel: ({ title, children }) => h("section", { "data-testid": title }, h("h2", null, title), children),
 }));
 
-vi.mock("./HealthOrb", () => ({ default: () => h("div", { "data-testid": "health-orb" }) }));
+vi.mock("./SystemStateMark", () => ({ default: () => h("div", { "data-testid": "system-state-mark" }) }));
 
 function createResponse(payload, status = 200) {
   return {

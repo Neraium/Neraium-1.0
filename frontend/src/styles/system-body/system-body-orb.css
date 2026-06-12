@@ -25,7 +25,7 @@
   filter: drop-shadow(0 22px 36px rgba(0, 0, 0, 0.34));
 }
 
-.system-body-orb-panel__stage .health-orb {
+.system-body-orb-panel__stage .system-mark {
   width: 100%;
   min-width: min(100%, 420px);
   max-width: 960px;
@@ -44,7 +44,7 @@
   filter: drop-shadow(0 28px 48px rgba(0, 0, 0, 0.46));
 }
 
-.system-body-orb-panel--compact-preview .system-body-orb-panel__stage .health-orb {
+.system-body-orb-panel--compact-preview .system-body-orb-panel__stage .system-mark {
   min-width: 0;
   max-width: 100%;
 }

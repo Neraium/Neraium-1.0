@@ -171,7 +171,7 @@
     min-height: 120px;
   }
 
-  .system-body-mobile-empty__orb-preview .system-body-orb-panel__stage .health-orb {
+  .system-body-mobile-empty__orb-preview .system-body-orb-panel__stage .system-mark {
     max-width: 156px;
   }
 
@@ -355,7 +355,7 @@
     min-height: 220px;
   }
 
-  .system-body-orb-panel__stage .health-orb {
+  .system-body-orb-panel__stage .system-mark {
     max-width: 248px;
   }
 

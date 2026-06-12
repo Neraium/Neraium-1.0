@@ -1,4 +1,4 @@
-import HealthOrb from "../../HealthOrb";
+import SystemStateMark from "../../SystemStateMark";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
 const STATE_COPY = {
@@ -56,7 +56,7 @@ export default function SystemOrbPanel({
       <div className="system-body-orb-panel__depth" />
       <div className="system-body-orb-panel__ambient-motion" aria-hidden="true" />
       <div className="system-body-orb-panel__stage">
-        <HealthOrb
+        <SystemStateMark
           systemState={resolvedSystemState}
           intensity={instability}
           animated
@@ -70,7 +70,7 @@ export default function SystemOrbPanel({
         </div>
       ) : null}
       {!compactPreview ? (
-        <div className="system-body-orb-panel__sync" aria-label="Live orb timestamp">
+        <div className="system-body-orb-panel__sync" aria-label="Live system mark timestamp">
           <span />
           <strong>{lastUpdate || EMPTY_VALUE}</strong>
           <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Change signal ${instabilityDisplay}`}</em>

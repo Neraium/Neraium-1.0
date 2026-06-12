@@ -738,7 +738,7 @@
   line-height: 1.35;
 }
 
-.system-gate--gray .system-body-orb-panel__stage .health-orb {
+.system-gate--gray .system-body-orb-panel__stage .system-mark {
   opacity: 0.82;
   filter:
     grayscale(0.14)
@@ -746,13 +746,13 @@
     drop-shadow(0 0 24px rgba(136, 153, 170, 0.09));
 }
 
-.system-gate--yellow .system-body-orb-panel__stage .health-orb {
+.system-gate--yellow .system-body-orb-panel__stage .system-mark {
   filter:
     drop-shadow(0 24px 42px rgba(0, 0, 0, 0.4))
     drop-shadow(0 0 22px rgba(197, 146, 60, 0.16));
 }
 
-.system-gate--red .system-body-orb-panel__stage .health-orb {
+.system-gate--red .system-body-orb-panel__stage .system-mark {
   filter:
     drop-shadow(0 28px 44px rgba(0, 0, 0, 0.44))
     drop-shadow(0 0 36px rgba(184, 110, 58, 0.22));
@@ -815,12 +815,12 @@
     padding: 0;
   }
 
-  .system-gate__center .system-body-orb-panel__stage .health-orb {
+  .system-gate__center .system-body-orb-panel__stage .system-mark {
     width: min(100%, 110%);
     max-width: none;
   }
 
-  .system-gate__center .system-body-orb-panel__stage .health-orb__svg--gate-iris {
+  .system-gate__center .system-body-orb-panel__stage .system-mark__svg {
     width: 110%;
     max-width: none;
   }

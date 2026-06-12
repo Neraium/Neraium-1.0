@@ -458,7 +458,7 @@ body {
   min-height: 220px;
 }
 
-.observation-center__snapshot-orb .health-orb {
+.observation-center__snapshot-orb .system-mark {
   width: min(100%, 220px);
 }
 

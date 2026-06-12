@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
-import HealthOrb from "./HealthOrb";
+import SystemStateMark from "./SystemStateMark";
 
 const FEEDBACK_OPTIONS = [
   { id: "confirmed_issue", label: "Confirmed developing issue" },
@@ -454,7 +454,7 @@ export default function ObservationCenterWorkspace({
       <div className="observation-center__hero">
         <section className="observation-center__snapshot" aria-label="Latest finding snapshot">
           <div className="observation-center__snapshot-orb">
-            <HealthOrb systemState={gateOrbState} intensity={Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18))} />
+            <SystemStateMark systemState={gateOrbState} intensity={Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18))} />
           </div>
           <div className="observation-center__snapshot-copy">
             <p className="section-token">Latest Finding</p>
