@@ -315,36 +315,31 @@ function App() {
     window.__NERAIUM_APP_READY__ = true;
   }, []);
 
+  const handleBackToGate = useCallback(async () => {
+    setGateUploadCompleteSeen(true);
+    setGateStateOverride("Monitoring");
+    setSessionIntent("current");
+    const hasResult = await loadLatestUploadState({ includePersisted: true });
+    if (!hasResult) {
+      setCompletedUploadOverride((current) => current ?? buildGateFallbackUploadResult());
+    }
+    await loadFacilitySystems();
+    setActiveWorkspace("system-body");
+  }, [loadFacilitySystems, loadLatestUploadState]);
+
   function renderWithBackControl(content) {
     return (
-      <div style={{ position: "relative", minHeight: "100svh" }}>
-        <button
-          type="button"
-          className="system-gate__settings-action"
-          onClick={async () => {
-            setGateUploadCompleteSeen(true);
-            setGateStateOverride("Monitoring");
-            setSessionIntent("current");
-            const hasResult = await loadLatestUploadState({ includePersisted: true });
-            if (!hasResult) {
-              setCompletedUploadOverride((current) => current ?? buildGateFallbackUploadResult());
-            }
-            await loadFacilitySystems();
-            setActiveWorkspace("system-body");
-          }}
-          aria-label="Back to Gate"
-          style={{
-            position: "fixed",
-            top: "max(12px, env(safe-area-inset-top, 0px))",
-            left: "max(12px, env(safe-area-inset-left, 0px))",
-            zIndex: 1000,
-            width: "fit-content",
-            paddingInline: "12px",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          Back to Gate
-        </button>
+      <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
+        <div className="workspace-back-control" aria-label="Workspace navigation">
+          <button
+            type="button"
+            className="system-gate__settings-action"
+            onClick={handleBackToGate}
+            aria-label="Back to Gate"
+          >
+            Back to Gate
+          </button>
+        </div>
         {content}
       </div>
     );
