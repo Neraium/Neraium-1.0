@@ -8,7 +8,7 @@ const INTAKE_STAGES = [
   "Uploading telemetry batch",
   "Detecting variables",
   "Parsing state matrix",
-  "Building baseline regime",
+  "Learning reference behavior",
   "Reviewing system behavior change",
   "Generating replay frames",
   "Preparing observations",
@@ -34,7 +34,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       return {
         title: stage,
         detail: index === 2
-          ? "Baseline profiling begins after the telemetry batch is accepted."
+          ? "Reference learning begins after the telemetry batch is accepted."
           : "Upload telemetry to begin structural analysis.",
         state: "standby",
         tone: index === 3 ? "review" : "info",
@@ -45,7 +45,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
       `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
       `${result.row_count ?? result.rows_processed ?? 0} rows parsed from the state matrix.`,
-      "Baseline regime profiled from the uploaded telemetry.",
+      "Reference behavior learned from the uploaded telemetry.",
       "System behavior review complete.",
       "Replay/evidence generation complete or available in the evidence workspace.",
       "Observation layer prepared from the latest uploaded state.",
@@ -221,7 +221,7 @@ export function uploadStateMessage(uploadState) {
     return "Parsing signal matrix";
   }
   if (normalized === "baseline_modeling") {
-    return "Building baseline regime";
+    return "Learning reference behavior";
   }
   if (normalized === "structural_scoring") {
     return "Reviewing system behavior change";
@@ -274,7 +274,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
     job?.message ?? "Telemetry batch upload starts after operator confirmation.",
     jobStatus === "validating_schema" ? job.progress_label : "Waiting for variable and schema detection.",
     jobStatus === "parsing" ? job.progress_label : "Parser will stream the state matrix without loading the full export into memory.",
-    jobStatus === "baseline_modeling" ? job.progress_label : "The instrument is profiling a baseline regime from the uploaded telemetry.",
+    jobStatus === "baseline_modeling" ? job.progress_label : "Neraium is learning reference behavior from the uploaded telemetry.",
     jobStatus === "structural_scoring" ? job.progress_label : "System behavior review starts after reference modeling.",
     jobStatus === "generating_replay" ? job.progress_label : "Replay frames are deferred until first cognition state is ready.",
     ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Observations become usable before all downstream artifacts finish.",

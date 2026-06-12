@@ -65,7 +65,7 @@ export default function IntakeStatusPanel({
           <MetricGrid
             metrics={[
               { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
-              { label: "Baseline Reference", value: baselineReference },
+              { label: "Reference Source", value: baselineReference },
               { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
               { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
             ]}

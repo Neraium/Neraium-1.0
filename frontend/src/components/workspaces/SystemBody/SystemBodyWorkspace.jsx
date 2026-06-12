@@ -112,8 +112,8 @@ export default function SystemBodyWorkspace({
             <ul>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Connect Data Source</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Evidence Replay</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Observation Review</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Why It Changed</button></li>
+              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Findings</button></li>
               <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>Help</button></li>
             </ul>
           </aside>
@@ -146,7 +146,7 @@ export default function SystemBodyWorkspace({
         <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="System behavior snapshot">
           <div className="panel-body">
             <ul className="onboarding-summary">
-              <li><span>Current Pattern</span><strong>{stabilitySnapshot.regime}</strong></li>
+              <li><span>Current Meaning</span><strong>{stabilitySnapshot.regime}</strong></li>
               <li><span>Change Strength</span><strong>{stabilitySnapshot.changeStrength}</strong></li>
               <li><span>Open Reviews</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
               <li><span>Replay Window</span><strong>{stabilitySnapshot.replayWindow}</strong></li>
@@ -231,7 +231,7 @@ function ageLabel(value) {
 
 function displayRegimeLabel(value) {
   const text = String(value ?? "").trim();
-  if (!text || /^state group [a-z]$/i.test(text)) return "Baseline pattern";
+  if (!text || /^state group [a-z]$/i.test(text)) return "Usual pattern";
   return text;
 }
 
@@ -256,7 +256,7 @@ function mapBackendSystemInterpretation(contract) {
         : (Array.isArray(backendSummary.affected_systems) ? backendSummary.affected_systems : []),
     },
     hasTelemetry: true,
-    nextStep: "Review observations.",
+    nextStep: "Review findings.",
   };
 }
 
@@ -358,7 +358,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     primaryDriver: driver,
     relationshipSummary: relationship,
     confidence,
-    nextStep: hasDriftState ? "Review observations." : "Continue monitoring.",
+    nextStep: hasDriftState ? "Review findings." : "Continue monitoring.",
     hasTelemetry: true,
   };
 }
@@ -377,7 +377,7 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
   ];
   const selected = candidates.find((item) => typeof item === "string" && item.trim());
   const text = selected ? selected.trim() : "Interpretation Unavailable";
-  if (hasDriftState && describesStable(text)) return { text: "Drift detected." };
+  if (hasDriftState && describesStable(text)) return { text: "Change detected." };
   return { text };
 }
 

@@ -39,14 +39,14 @@ export default function EvidenceLineagePanel({ frame, lineage = null }) {
   const confidenceTier = normalizeTier(confidence.confidence_tier ?? confidence.evidence_density ?? confidence.corroboration_strength);
   return (
     <div className="evidence-lineage-panel">
-      <p className="evidence-lineage-panel__title">{first.target ?? "Lineage Target"}</p>
+      <p className="evidence-lineage-panel__title">{first.target ?? "Evidence Target"}</p>
       <ul className="system-body-timeline-list">
         {renderLineageItem("Contributing relationships", sources.supporting_signals ?? [])}
         {renderLineageItem("Subsystem corroboration", sources.subsystem_corroboration ?? [])}
-        {renderLineageItem("Topology evidence", sources.topology_evidence ?? [])}
+        {renderLineageItem("Relationship evidence", sources.topology_evidence ?? [])}
         {renderLineageItem("Persistence", sources.persistence_evidence ?? [])}
-        {renderLineageItem("Propagation evidence", sources.propagation_evidence ?? [])}
-        {renderLineageItem("Structural memory evidence", sources.historical_memory_references ?? [])}
+        {renderLineageItem("Change support", sources.propagation_evidence ?? [])}
+        {renderLineageItem("Historical evidence", sources.historical_memory_references ?? [])}
         {renderLineageItem("Replay support", sources.replay_support ?? [])}
         {renderLineageItem("Confidence basis", confidence.corroboration_strength ?? confidence.evidence_density)}
         {renderLineageItem("Confidence tier", confidenceTier)}

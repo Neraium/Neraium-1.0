@@ -198,7 +198,7 @@ export default function ReplayWorkspace({
     { label: "Replay frames", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
     { label: "Current moment", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
     { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
-    { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
+    { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
   ]), [currentFrameIndex, hasReplaySnapshots, meta.frame_count, operativeTimeline.length, shownFrame]);
 
   const expertMetrics = useMemo(() => {
@@ -206,12 +206,12 @@ export default function ReplayWorkspace({
       return [
         { label: "Structure Timeline", value: dash },
         { label: "Current Frame", value: dash },
-        { label: "Baseline Separation", value: dash },
-        { label: "Drift Velocity", value: dash },
-        { label: "Drift Acceleration", value: dash },
-        { label: "Structural State", value: dash },
+        { label: "Raw change strength", value: dash },
+        { label: "Raw change direction", value: dash },
+        { label: "Raw change momentum", value: dash },
+        { label: "Raw state", value: dash },
         { label: "Primary Contributors", value: dash },
-        { label: "Evidence confidence", value: dash },
+        { label: "Confidence", value: dash },
       ];
     }
     const contributors = Array.isArray(shownFrame?.primary_contributors) && shownFrame.primary_contributors.length
@@ -220,15 +220,15 @@ export default function ReplayWorkspace({
     return [
       { label: "Structure Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
       { label: "Current Frame", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
-      { label: "Baseline Separation", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
-      { label: "Drift Velocity", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
-      { label: "Drift Acceleration", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
-      { label: "Structural State", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
+      { label: "Raw change strength", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
+      { label: "Raw change direction", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
+      { label: "Raw change momentum", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
+      { label: "Raw state", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
       { label: "Primary Contributors", value: contributors },
       { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : dash },
       { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash },
       { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
-      { label: "Evidence confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
+      { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
     ];
   }, [currentFrameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]);
 
@@ -241,10 +241,10 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="Why the system behavior changed, what supports it, and what to review next.">
+      <Panel title="Why It Changed" className="span-12 workspace-hero-panel replay-discovery" subtitle="Before, change detected, after, and the evidence to review next.">
         <div className="replay-discovery__header">
           <div>
-            <p className="section-token">Change detected</p>
+            <p className="section-token">Finding explanation</p>
             <h3>{hasReplaySnapshots ? discovery.headline : "No replay available yet"}</h3>
             <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload telemetry to generate replay and review supporting evidence."}</p>
           </div>
@@ -264,7 +264,7 @@ export default function ReplayWorkspace({
             <p>{hasReplaySnapshots ? discovery.whatChanged.detail : "No replay available yet."}</p>
           </section>
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
-            <span className="section-token">Supporting evidence</span>
+            <span className="section-token">Supporting Evidence</span>
             <ul className="compact-list">
               {hasReplaySnapshots
                 ? discovery.evidence.map((item) => <li key={item}>{item}</li>)
@@ -303,7 +303,7 @@ export default function ReplayWorkspace({
 
         {hasReplaySnapshots ? (
           <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
-            <span className="historian-replay-status__badge">{replayMode ? "System Status Review Active" : "Telemetry replay available"}</span>
+            <span className="historian-replay-status__badge">{replayMode ? "System Status Review Active" : "Replay available"}</span>
             <span>{executionMode === "live_causal" ? "No-lookahead replay" : "Standard evidence replay"}</span>
             <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
             <span>{currentPercent}% through dataset</span>
@@ -314,7 +314,7 @@ export default function ReplayWorkspace({
           <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p>
         ) : null}
         {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p> : null}
-        <p className="metadata-text">Replay timestamp: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
+        <p className="metadata-text">Current moment: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
@@ -325,27 +325,27 @@ export default function ReplayWorkspace({
           <MetricGrid metrics={expertMetrics} compact />
         </Panel>
       ) : null}
-      <Panel title="Relationship Pattern" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Details" : "Observation Summary"} className="span-6">
+      <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
+      <Panel title={expertMode ? "Evidence Details" : "Supporting Evidence"} className="span-6">
         {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
           <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Evidence confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
-            <li><span className="metadata-text">System behavior</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
-            <li><span className="metadata-text">Cross-variable support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
+            <li><span className="metadata-text">Confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
+            <li><span className="metadata-text">What changed</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
+            <li><span className="metadata-text">Relationship support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
           </ul>
         )}
       </Panel>
-      <Panel title="Stability Path" className="span-6">
+      <Panel title="Why It Matters" className="span-6">
         <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Recovery signal</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.recovery_convergence ?? dash) : dash}</strong></li>
+          <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
           <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
-          <li><span className="metadata-text">Analysis state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
+          <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
         </ul>
       </Panel>
       {expertMode ? (
         <>
           <Panel title="Historical Structure Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
-          <Panel title="Evidence Lineage" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
+          <Panel title="Evidence Details" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
           <Panel title="Temporal Structure" className="span-6">
             <ul className="system-body-timeline-list">
               <li><span className="metadata-text">State phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
@@ -510,7 +510,7 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
     summary: frameCount > 0
       ? "Telemetry replay available across " + String(frameCount) + " frame" + (frameCount === 1 ? "" : "s") + ". Current moment " + String(Math.min(frameIndex + 1, frameCount)) + " shows " + changeStrength.toLowerCase() + " change strength."
       : "No replay available yet.",
-    before: buildDiscoveryMoment(first, "Baseline reference", "Starting behavior pattern", formatClockTime),
+    before: buildDiscoveryMoment(first, "Before", "Usual behavior pattern", formatClockTime),
     current: buildDiscoveryMoment(current, "System behavior changed", replayMomentDetail(current), formatClockTime),
     after: buildDiscoveryMoment(last, "Latest replay state", "Most recent observed behavior pattern", formatClockTime),
     whatChanged: {
@@ -521,7 +521,7 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
     },
     evidence: [
       "Telemetry replay available: " + String(frameCount || 0) + " frame" + (frameCount === 1 ? "" : "s"),
-      "Evidence confidence: " + confidence,
+      "Confidence: " + confidence,
       "Change strength: " + changeStrength,
       relationshipSupport,
     ],
@@ -558,8 +558,8 @@ function replayMomentDetail(frame) {
   const paths = Array.isArray(frame?.propagation_state?.dominant_paths) ? frame.propagation_state.dominant_paths.length : 0;
   if (paths > 0) return "Relationship pattern shifted with cross-variable support.";
   const strength = readChangeStrength(frame);
-  if (Number.isFinite(strength) && strength > 0) return "System behavior changed relative to the reference pattern.";
-  return "System behavior remains close to the reference pattern.";
+  if (Number.isFinite(strength) && strength > 0) return "System behavior changed from its usual pattern.";
+  return "System behavior remains close to its usual pattern.";
 }
 
 function readChangeStrength(frame) {
@@ -581,6 +581,14 @@ function formatChangeStrength(frame) {
   if (value < 0.24) return "Low";
   if (value < 0.72) return "Moderate";
   return "High";
+}
+
+function simplifyRecoverySignal(value) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (!normalized.trim()) return "Pending";
+  if (normalized.includes("slow") || normalized.includes("elong") || normalized.includes("weak")) return "Slower than usual";
+  if (normalized.includes("recover") || normalized.includes("convergen") || normalized.includes("stable")) return "Tracking";
+  return sentenceCase(String(value).replaceAll("_", " "));
 }
 
 function formatRelationshipContinuity(frame) {
@@ -614,8 +622,8 @@ function formatConfidenceLabel(value) {
   const normalized = String(value ?? "").toLowerCase();
   if (normalized.includes("structural_evidence_confirmed")) return "Structural evidence confirmed";
   if (normalized.includes("relationship_evidence_present")) return "Relationship evidence present";
-  if (normalized.includes("baseline_reference_confirmed") || normalized.includes("baseline_evidence")) return "Baseline reference confirmed";
-  if (!normalized.trim()) return "Baseline reference pending";
+  if (normalized.includes("baseline_reference_confirmed") || normalized.includes("baseline_evidence")) return "Reference confirmed";
+  if (!normalized.trim()) return "Pending";
   return sentenceCase(String(value).replaceAll("_", " "));
 }
 

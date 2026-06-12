@@ -13,15 +13,15 @@ export const WORKSPACES = [
   },
   {
     id: "historical-replay",
-    label: "Evidence Replay",
+    label: "Why It Changed",
     eyebrow: "Evidence",
-    description: "Replay what changed, why it matters, and which telemetry evidence supports the discovery.",
+    description: "Replay the before, change, and after moments behind a finding.",
   },
   {
     id: "observation-center",
-    label: "Observation Review",
+    label: "Findings",
     eyebrow: "Evidence",
-    description: "Review system observations, record operator findings, inspect supporting evidence, and export records.",
+    description: "Review what changed, confidence, possible impact, and supporting evidence.",
   },
   {
     id: "help-changelog",
@@ -48,11 +48,11 @@ export const FALLBACK_SYSTEMS = [
   },
   {
     name: "Recovery Pattern",
-    scope: "How the system returns toward baseline after perturbations.",
+    scope: "How the system returns to its usual behavior after a disturbance.",
   },
   {
-    name: "Covariance Shift",
-    scope: "Where the current covariance structure differs from baseline.",
+    name: "Relationship Pattern Shift",
+    scope: "Where variable relationships now behave differently than usual.",
   },
   {
     name: "Change Direction",
@@ -67,7 +67,7 @@ export const FALLBACK_SYSTEMS = [
 export const INTAKE_STAGES = [
   "Batch receipt",
   "Variable and timestamp detection",
-  "Baseline window profiling",
+  "Reference behavior learning",
   "System behavior review",
   "Observation and state write",
   "Complete",

@@ -42,7 +42,7 @@ const STEPS = [
   "Connection Details",
   "Variable Mapping",
   "Connection Test",
-  "Baseline Setup",
+  "Reference Setup",
   "Begin Monitoring",
 ];
 
@@ -580,7 +580,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 5 && (
           <div className="onboarding-section">
-            <h2>Baseline Setup</h2>
+            <h2>Reference Setup</h2>
             <div className="onboarding-form-grid" style={{ marginBottom: 16 }}>
               <label className="onboarding-map-row">
                 <span>Training mode</span>
@@ -610,13 +610,13 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
               </label>
             </div>
             <p className="narrative-text">
-              Connect to data source, verify telemetry, choose a stable training period or accept auto-detection, and let the baseline regime finish learning before observations go live.
+              Connect to data source, verify telemetry, choose a stable training period or accept auto-detection, and let the reference behavior finish learning before findings go live.
             </p>
             <div className="onboarding-choice-grid">
               {[
-                { id: "historical-upload", label: "Upload Historical Baseline" },
+                { id: "historical-upload", label: "Upload Historical Reference" },
                 { id: "live-learning-window", label: "Use First Live Learning Window" },
-                { id: "demo-baseline", label: "Use Demo Baseline" },
+                { id: "demo-baseline", label: "Use Demo Reference" },
               ].map((mode) => (
                 <button
                   key={mode.id}

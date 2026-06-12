@@ -59,14 +59,14 @@ export default function EvidenceInteractionPanel({ frame }) {
       </div>
       <div className="evidence-interaction-panel__detail">
         <p className="evidence-lineage-panel__title">{selected?.type ?? "Evidence Target"}</p>
-        <p className="narrative-text">{selected?.label ?? "Select a cognition element to inspect lineage."}</p>
+        <p className="narrative-text">{selected?.label ?? "Select an evidence item to inspect details."}</p>
         <ul className="system-body-timeline-list">
           <li><span className="metadata-text">Corroborating Signals</span><strong>{(sources.supporting_signals ?? []).slice(0, 3).join(" | ") || "n/a"}</strong></li>
           <li><span className="metadata-text">Persistence Evidence</span><strong>{(sources.persistence_evidence ?? []).join(" | ") || "n/a"}</strong></li>
-          <li><span className="metadata-text">Topology Evidence</span><strong>{(sources.topology_evidence ?? []).join(" | ") || "n/a"}</strong></li>
-          <li><span className="metadata-text">Propagation Evidence</span><strong>{(sources.propagation_confirmations ?? []).slice(0, 2).join(" | ") || "n/a"}</strong></li>
+          <li><span className="metadata-text">Relationship Evidence</span><strong>{(sources.topology_evidence ?? []).join(" | ") || "n/a"}</strong></li>
+          <li><span className="metadata-text">Change Support</span><strong>{(sources.propagation_confirmations ?? []).slice(0, 2).join(" | ") || "n/a"}</strong></li>
           <li><span className="metadata-text">Historical Similarity</span><strong>{confidence.historical_similarity ?? "n/a"}</strong></li>
-          <li><span className="metadata-text">Subsystem Agreement</span><strong>{confidence.topology_support ?? "n/a"}</strong></li>
+          <li><span className="metadata-text">Relationship Support</span><strong>{confidence.topology_support ?? "n/a"}</strong></li>
         </ul>
       </div>
     </div>

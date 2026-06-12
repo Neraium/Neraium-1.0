@@ -46,7 +46,13 @@ function normalizeObservationStatus(run) {
 
 function observationTypeLabel(value) {
   const text = String(value ?? "").replaceAll("_", " ").trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "Observation";
+  if (!text) return "Finding";
+  const normalized = text.toLowerCase();
+  if (normalized === "coupling change") return "Relationship Pattern Shift";
+  if (normalized === "recovery elongation") return "Slower Recovery";
+  if (normalized === "trajectory drift") return "Behavior Change Continuing";
+  if (normalized === "covariance shift") return "Relationship Pattern Shift";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function formatDurationFrom(dateText) {
@@ -65,7 +71,7 @@ function displayVariable(name, aliases) {
 
 function displayPatternLabel(value) {
   const text = String(value ?? "").trim();
-  if (!text || /^state group [a-z]$/i.test(text)) return "Baseline pattern";
+  if (!text || /^state group [a-z]$/i.test(text)) return "Usual pattern";
   return text;
 }
 
@@ -77,23 +83,23 @@ function driftToneFor(run) {
 }
 
 function summarizeObservation(run, aliases) {
-  if (!run) return "No observation selected.";
+  if (!run) return "No finding selected.";
   const variables = (run?.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases));
   const type = String(run?.observation_type ?? "");
   const duration = formatDurationFrom(run?.deformation_started_at);
   if (type === "coupling_change" && variables.length >= 2) {
-    return `The relationship between ${variables[0]} and ${variables[1]} has shifted away from baseline${duration !== "-" ? ` for ${duration}` : ""}.`;
+    return `The relationship between ${variables[0]} and ${variables[1]} changed${duration !== "-" ? ` for ${duration}` : ""}.`;
   }
   if (type === "recovery_elongation") {
-    return `Recovery back to baseline is taking longer${duration !== "-" ? ` and has stayed elongated for ${duration}` : ""}.`;
+    return `Recovery is taking longer than usual${duration !== "-" ? ` and has stayed slow for ${duration}` : ""}.`;
   }
   if (type === "trajectory_drift") {
     return `The system behavior is continuing to move away from its usual pattern${duration !== "-" ? ` for ${duration}` : ""}.`;
   }
   if (type === "covariance_shift") {
-    return `The overall relationship pattern has shifted away from the reference pattern${duration !== "-" ? ` for ${duration}` : ""}.`;
+    return `The overall relationship pattern changed${duration !== "-" ? ` for ${duration}` : ""}.`;
   }
-  return (run?.evidence_summary ?? [])[0] ?? "A persistent system behavior change has been recorded.";
+  return (run?.evidence_summary ?? [])[0] ?? "A persistent system behavior change was found.";
 }
 
 function classifyChangeStrength(value) {
@@ -102,6 +108,35 @@ function classifyChangeStrength(value) {
   if (numeric < 0.24) return "Low";
   if (numeric < 0.72) return "Moderate";
   return "High";
+}
+
+function formatDetectedTime(run) {
+  return run?.created_at ? formatDurationFrom(run.created_at) + " ago" : "Pending";
+}
+
+function confidenceForFinding(run) {
+  const value = Number(run?.confidence ?? run?.confidence_score ?? run?.evidence_confidence ?? run?.drift_metrics?.confidence);
+  if (Number.isFinite(value)) {
+    const normalized = value > 1 ? value / 100 : value;
+    if (normalized >= 0.82) return "High";
+    if (normalized >= 0.62) return "Medium";
+    return "Developing";
+  }
+  const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
+  if (strength === "High") return "High";
+  if (strength === "Moderate") return "Medium";
+  return "Developing";
+}
+
+function potentialImpactForFinding(run) {
+  const explicit = run?.potential_impact ?? run?.impact_summary ?? run?.operator_impact;
+  if (explicit) return String(explicit);
+  const type = String(run?.observation_type ?? "");
+  const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
+  if (type === "recovery_elongation") return strength === "High" ? "Possible recovery issue" : "Recovery may need review";
+  if (type === "coupling_change" || type === "covariance_shift") return strength === "High" ? "Possible infrastructure risk" : "Relationship may need review";
+  if (type === "trajectory_drift") return strength === "High" ? "Review recommended" : "Watch for persistence";
+  return strength === "Low" ? "Continue monitoring" : "Review recommended";
 }
 
 function readPendingObservationRunId() {
@@ -396,7 +431,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <Panel title="Observation Review" subtitle="Loading system observation history..." />
+        <Panel title="Findings" subtitle="Loading findings..." />
       </section>
     );
   }
@@ -405,7 +440,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <EmptyState title="Observation Review Unavailable" body={error} />
+        <EmptyState title="Findings Unavailable" body={error} />
       </section>
     );
   }
@@ -417,27 +452,27 @@ export default function ObservationCenterWorkspace({
     <section className="workspace-surface observation-center">
       {backControl}
       <div className="observation-center__hero">
-        <section className="observation-center__snapshot" aria-label="Current structural snapshot">
+        <section className="observation-center__snapshot" aria-label="Latest finding snapshot">
           <div className="observation-center__snapshot-orb">
             <HealthOrb systemState={gateOrbState} intensity={Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18))} />
           </div>
           <div className="observation-center__snapshot-copy">
-            <p className="section-token">Discovery Snapshot</p>
-            <strong>{latestRun ? displayPatternLabel(latestRun?.regime_label) : "No observations recorded"}</strong>
-            <span>Change strength {latestRun ? classifyChangeStrength(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) : "Pending"}</span>
-            <span>{activeObservationCount} active observations</span>
+            <p className="section-token">Latest Finding</p>
+            <strong>{latestRun ? observationTypeLabel(latestRun?.observation_type) : "No findings recorded"}</strong>
+            <span>{latestRun ? `Detected ${formatDetectedTime(latestRun)}` : "Awaiting telemetry"}</span>
+            <span>{activeObservationCount} active findings</span>
           </div>
         </section>
         <section className="observation-center__summary" aria-label="Current instrument summary">
           <p className="section-token">Discovery State</p>
-          <h1>Observation Review</h1>
-          <p>The instrument stays quiet until system behavior changes. Review observations, record what you found, and keep the original evidence available.</p>
+          <h1>Findings</h1>
+          <p>Neraium stays quiet until system behavior changes. Review what changed, why it matters, and what evidence supports it.</p>
           <MetricGrid
             metrics={[
-              { label: "Current behavior pattern", value: latestRun ? displayPatternLabel(latestRun?.regime_label) : "No observations recorded" },
-              { label: "Change strength", value: latestRun ? classifyChangeStrength(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index) : "Pending" },
-              { label: "Pattern age", value: latestRun ? formatDurationFrom(latestRun?.deformation_started_at) : "No active pattern" },
-              { label: "Instrument status", value: silenceHealth.state },
+              { label: "Finding", value: latestRun ? observationTypeLabel(latestRun?.observation_type) : "No findings recorded" },
+              { label: "Detected", value: latestRun ? formatDetectedTime(latestRun) : "No active finding" },
+              { label: "Confidence", value: latestRun ? confidenceForFinding(latestRun) : "Pending" },
+              { label: "Potential impact", value: latestRun ? potentialImpactForFinding(latestRun) : "Monitoring" },
             ]}
             compact
           />
@@ -445,9 +480,9 @@ export default function ObservationCenterWorkspace({
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="Observation Timeline" className="span-7 observation-center__panel observation-center__panel--timeline">
+        <Panel title="Findings Timeline" className="span-7 observation-center__panel observation-center__panel--timeline">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search variable, source, date, or observation text" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search finding, source, date, or evidence" />
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
               <option value="open">Open</option>
@@ -461,8 +496,8 @@ export default function ObservationCenterWorkspace({
           </div>
           {filteredRuns.length === 0 ? (
             <>
-              <EmptyState title="No structural observations have been recorded yet" body="The instrument is quiet because no reviewable structural changes have been recorded in the current evidence history." compact />
-              <p className="metadata-text">Pattern age means how long the current structural behavior has been present in the available telemetry.</p>
+              <EmptyState title="No findings have been recorded yet" body="Neraium is quiet because no reviewable changes have been recorded in the current evidence history." compact />
+              <p className="metadata-text">Findings appear when a persistent behavior change is supported by telemetry.</p>
             </>
           ) : (
             <div className="feed-list">
@@ -476,7 +511,7 @@ export default function ObservationCenterWorkspace({
                 >
                   <div className="intervention-card__header">
                     <div>
-                      <span>{run.source_name || run.source_type}</span>
+                      <span>Finding</span>
                       <strong>{observationTypeLabel(run.observation_type)}</strong>
                     </div>
                     <span className={`observation-history-card__status observation-history-card__status--${normalizeObservationStatus(run)}`}>{normalizeObservationStatus(run)}</span>
@@ -484,9 +519,9 @@ export default function ObservationCenterWorkspace({
                   {relationshipSketch(run)}
                   <p>{summarizeObservation(run, aliases)}</p>
                   <div className="intervention-card__footer">
-                    <span>{run.created_at}</span>
-                    <span>{(run.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases)).join(" | ") || "No variables listed"}</span>
-                    <span className="observation-history-card__review">Review</span>
+                    <span>Detected {formatDetectedTime(run)}</span>
+                    <span>Confidence {confidenceForFinding(run)}</span>
+                    <span>{potentialImpactForFinding(run)}</span>
                   </div>
                 </button>
               ))}
@@ -494,29 +529,27 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Observation Review" className="span-5 observation-center__panel observation-center__panel--detail">
+        <Panel title="Finding Details" className="span-5 observation-center__panel observation-center__panel--detail">
           {!selectedRun ? (
-            <EmptyState title="No observation selected" body="Select an observation from the history to inspect and annotate it." compact />
+            <EmptyState title="No finding selected" body="Select a finding to inspect impact, confidence, and supporting evidence." compact />
           ) : (
             <>
               <div className="observation-detail-callout">
-                <span className="section-token">Observation</span>
+                <span className="section-token">Finding</span>
                 <strong>{selectedRunSummary}</strong>
                 {selectedRunHistoricalFact ? <p>{selectedRunHistoricalFact}</p> : null}
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Status", value: normalizeObservationStatus(selectedRun) },
-                  { label: "Type", value: observationTypeLabel(selectedRun.observation_type) },
-                  { label: "System behavior", value: selectedRun.structural_state ?? selectedRun.operating_state },
-                  { label: "Behavior pattern", value: displayPatternLabel(selectedRun.regime_label) },
+                  { label: "Detected", value: formatDetectedTime(selectedRun) },
+                  { label: "Confidence", value: confidenceForFinding(selectedRun) },
+                  { label: "Potential impact", value: potentialImpactForFinding(selectedRun) },
                   { label: "Change strength", value: classifyChangeStrength(selectedRun?.drift_metrics?.baseline_distance ?? selectedRun?.drift_metrics?.drift_index) },
-                  { label: "Time since change", value: formatDurationFrom(selectedRun.deformation_started_at) },
                 ]}
                 compact
               />
-              <div className="observation-pair-visual" aria-label="Relationship deformation sketch">
-                <svg viewBox="0 0 320 120" role="img" aria-label="Structural relationship sketch">
+              <div className="observation-pair-visual" aria-label="Relationship change sketch">
+                <svg viewBox="0 0 320 120" role="img" aria-label="Relationship change sketch">
                   <defs>
                     <linearGradient id="observationEdge" x1="0%" y1="0%" x2="100%" y2="0%">
                       <stop offset="0%" stopColor="rgba(105, 183, 198, 0.78)" />
@@ -543,33 +576,39 @@ export default function ObservationCenterWorkspace({
                   </text>
                 </svg>
               </div>
-              <div className="compact-list-block">
-                <p className="section-token">Variables</p>
-                <ul className="compact-list">
-                  {(selectedRun.variables ?? []).map((item) => <li key={item}>{displayVariable(item, aliases)}</li>)}
-                </ul>
-              </div>
-              <div className="compact-list-block">
-                <p className="section-token">Evidence</p>
+              <details className="compact-list-block">
+                <summary className="section-token">Supporting Evidence</summary>
                 <ul className="compact-list">
                   {(selectedRun.evidence_summary ?? []).length > 0
                     ? selectedRun.evidence_summary.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)
                     : <li>No evidence summary recorded.</li>}
                 </ul>
-              </div>
-              <div className="compact-list-block">
-                <p className="section-token">Data Conditions</p>
+              </details>
+              <details className="compact-list-block">
+                <summary className="section-token">Details</summary>
+                <ul className="compact-list">
+                  <li>Status: {normalizeObservationStatus(selectedRun)}</li>
+                  <li>Source: {selectedRun.source_name || selectedRun.source_type || "Unknown source"}</li>
+                  <li>Usual pattern: {displayPatternLabel(selectedRun.regime_label)}</li>
+                  {(selectedRun.variables ?? []).map((item) => <li key={item}>{displayVariable(item, aliases)}</li>)}
+                </ul>
+              </details>
+              <details className="compact-list-block">
+                <summary className="section-token">Data Conditions</summary>
                 <ul className="compact-list">
                   {(selectedRun.data_conditions ?? []).length > 0
                     ? selectedRun.data_conditions.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)
                     : <li>No data conditions recorded.</li>}
                 </ul>
-              </div>
-              <div className="intake-flow__controls">
-                <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "markdown")}>Export Markdown</button>
-                <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
-                <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
-              </div>
+              </details>
+              <details className="compact-list-block">
+                <summary className="section-token">Export</summary>
+                <div className="intake-flow__controls">
+                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "markdown")}>Markdown</button>
+                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>JSON</button>
+                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>CSV</button>
+                </div>
+              </details>
               <div className="why-panel__section guidance-checks">
                 <span className="section-token">What did you find?</span>
                 <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)}>
@@ -585,7 +624,7 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Relationship Explorer" className="span-7 observation-center__panel observation-center__panel--explorer">
+        <Panel title="Pattern History" className="span-7 observation-center__panel observation-center__panel--explorer">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
             <select value={selectedVariables[0]} onChange={(event) => setSelectedVariables([event.target.value, selectedVariables[1]])}>
               <option value="">Select variable A</option>
@@ -597,7 +636,7 @@ export default function ObservationCenterWorkspace({
             </select>
           </div>
           {relationshipSeries.length === 0 ? (
-            <EmptyState title="No relationship history" body="Select two variables that have appeared together in recorded observations." compact />
+            <EmptyState title="No pattern history" body="Select two variables that have appeared together in recorded observations." compact />
           ) : (
             <>
               <svg viewBox="0 0 420 120" className="observation-explorer__chart">
@@ -605,7 +644,7 @@ export default function ObservationCenterWorkspace({
               </svg>
               <ul className="compact-list">
                 {relationshipSeries.slice(-6).reverse().map((item) => (
-                  <li key={item.runId}>{item.createdAt}: {observationTypeLabel(item.type)} with relationship signal {classifyChangeStrength(item.value)}</li>
+                  <li key={item.runId}>{item.createdAt}: {observationTypeLabel(item.type)} with change strength {classifyChangeStrength(item.value)}</li>
                 ))}
               </ul>
             </>
@@ -615,8 +654,8 @@ export default function ObservationCenterWorkspace({
         <Panel title="Review Quiet and Notifications" className="span-5 observation-center__panel">
           <MetricGrid
             metrics={[
-              { label: "Observations / 24h", value: silenceHealth.lastDay },
-              { label: "Observations / 7d", value: silenceHealth.lastWeek },
+              { label: "Findings / 24h", value: silenceHealth.lastDay },
+              { label: "Findings / 7d", value: silenceHealth.lastWeek },
               { label: "Instrument state", value: silenceHealth.state },
             ]}
             compact
@@ -649,7 +688,7 @@ export default function ObservationCenterWorkspace({
           </div>
           <div className="observation-trust-note">
             <strong>Default silence is preserved.</strong>
-            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored observations remain open without reminders or escalation.</p>
+            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored findings remain open without reminders or escalation.</p>
           </div>
         </Panel>
 
@@ -676,7 +715,7 @@ export default function ObservationCenterWorkspace({
           </ul>
         </Panel>
 
-        <Panel title="Multi-Source Evidence Snapshot" className="span-7 observation-center__panel">
+        <Panel title="Supporting Evidence Snapshot" className="span-7 observation-center__panel">
           <div className="telemetry-grid telemetry-grid--compact">
             {sourceSnapshots.map((run) => (
               <div className="telemetry-card" key={run.run_id}>

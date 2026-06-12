@@ -10,7 +10,7 @@ export default function HistorianSourcePanel() {
           { label: "Authentication", value: "Token / basic / service account (read-only scope)" },
           { label: "Polling Interval", value: "1 to 15 minutes" },
           { label: "Timezone", value: "Deployment local timezone" },
-          { label: "Retention Window", value: "30 to 90 day baseline capture" },
+          { label: "Retention Window", value: "30 to 90 day reference capture" },
         ]}
       />
     </Panel>

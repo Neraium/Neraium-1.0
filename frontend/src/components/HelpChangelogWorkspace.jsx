@@ -8,13 +8,13 @@ const CHANGELOG_ENTRIES = [
   },
   {
     date: "2026-06-05",
-    title: "Observation review simplified",
-    detail: "Trust boundaries and version history now live in a dedicated help workspace so observation review stays focused on evidence.",
+    title: "Findings simplified",
+    detail: "Trust boundaries and version history now live in a dedicated help workspace so findings stay focused on what changed.",
   },
   {
     date: "2026-06-04",
     title: "Instrument language tightened",
-    detail: "Warm shift tones replaced emergency red so the instrument stays calm while still showing sustained deformation.",
+    detail: "Warm shift tones replaced emergency red so the instrument stays calm while still showing sustained change.",
   },
 ];
 
@@ -29,7 +29,7 @@ export default function HelpChangelogWorkspace({
           Back to System Status
         </button>
         <button type="button" className="system-gate__settings-action" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-          Open Observation Review
+          Open Findings
         </button>
       </div>
 
@@ -38,7 +38,7 @@ export default function HelpChangelogWorkspace({
           <p className="section-token">Trust Boundary</p>
           <h1>Help</h1>
           <p>
-            Neraium observes system behavior change, records evidence, and stays read-only. This page holds the operating boundary and the version history so observation review can stay quiet.
+            Neraium observes system behavior change, records evidence, and stays read-only. This page holds the operating boundary and version history so findings stay focused.
           </p>
           <MetricGrid
             metrics={[

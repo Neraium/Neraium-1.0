@@ -1,7 +1,7 @@
 export const OPERATIONAL_VOCABULARY = {
   neutral: {
     awaitingTelemetry: "Awaiting telemetry",
-    baselinePending: "Baseline pending",
+    baselinePending: "Reference pending",
     standby: "Standby",
     noActiveAnalysis: "No Active Structural Analysis",
     noActiveTrajectory: "No Active Structural Trajectory",
@@ -13,10 +13,10 @@ export const OPERATIONAL_VOCABULARY = {
     structuralTrackingActive: "Persistence Under Evaluation",
   },
   escalation: {
-    driftEmerging: "Emerging Drift",
+    driftEmerging: "Change Emerging",
     structuralInstabilityDetected: "Structural Instability",
     relationshipDivergenceObserved: "Divergence Observed",
-    crossSubsystemPropagationObserved: "Drift Propagation",
+    crossSubsystemPropagationObserved: "Change Spread",
   },
   recovery: {
     structuralConvergenceObserved: "Stability Recovery",
@@ -27,8 +27,8 @@ export const OPERATIONAL_VOCABULARY = {
 export const ESCALATION_LAYERS = [
   "Stable",
   "Monitoring",
-  "Emerging Drift",
-  "Persistent Drift",
+  "Change Emerging",
+  "Persistent Change",
   "Structural Instability",
   "Sustained Structural Shift",
   "Fragmented Structural Shift",

@@ -211,7 +211,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
       </svg>
 
       <div className="replay-cognition-field__footer">
-        <div><span>Structural state</span><strong>{inactive ? "-" : display(frame?.topology_state?.fragmentation_indicator, "-")}</strong></div>
+        <div><span>Change state</span><strong>{inactive ? "-" : display(frame?.topology_state?.fragmentation_indicator, "-")}</strong></div>
         <div><span>Coupling pressure</span><strong>{inactive ? "-" : display(frame?.propagation_state?.propagation_acceleration, "-")}</strong></div>
         <div><span>Return path</span><strong>{inactive ? "-" : display(frame?.propagation_state?.recovery_convergence, "-")}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>

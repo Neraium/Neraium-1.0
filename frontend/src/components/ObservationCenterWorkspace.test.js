@@ -64,13 +64,13 @@ describe("ObservationCenterWorkspace", () => {
     renderWorkspace(apiFetch);
 
     await waitFor(() => {
-      expect(screen.getByText(/no structural observations have been recorded yet/i)).toBeTruthy();
+      expect(screen.getByText(/no findings have been recorded yet/i)).toBeTruthy();
     });
 
-    expect(screen.getByText(/the instrument is quiet because no reviewable structural changes have been recorded/i)).toBeTruthy();
-    expect(screen.getByText(/Current behavior pattern:No observations recorded/i)).toBeTruthy();
-    expect(screen.getByText(/Pattern age means how long the current structural behavior has been present in the available telemetry/i)).toBeTruthy();
-    expect(screen.getByText(/Instrument status:Silent/i)).toBeTruthy();
+    expect(screen.getByText(/Neraium is quiet because no reviewable changes have been recorded/i)).toBeTruthy();
+    expect(screen.getByText(/Finding:No findings recorded/i)).toBeTruthy();
+    expect(screen.getByText(/Findings appear when a persistent behavior change is supported by telemetry/i)).toBeTruthy();
+    expect(screen.getByText(/Potential impact:Monitoring/i)).toBeTruthy();
     expect(screen.queryByText(/Current regime/i)).toBeNull();
     expect(screen.queryByText(/Deformation age/i)).toBeNull();
     expect(screen.queryByText(/Silence health/i)).toBeNull();
@@ -111,11 +111,11 @@ describe("ObservationCenterWorkspace", () => {
       expect(screen.getByText(/similar coupling change observations involving temperature and humidity/i)).toBeTruthy();
     });
 
-    expect(screen.getAllByText(/Baseline pattern/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Current behavior pattern:Baseline pattern/i)).toBeTruthy();
-    expect(screen.getByText("Behavior pattern:Baseline pattern")).toBeTruthy();
-    expect(screen.getByText(/The instrument stays quiet until system behavior changes/i)).toBeTruthy();
-    expect(screen.getByText(/keep the original evidence available/i)).toBeTruthy();
+    expect(screen.getAllByText(/Usual pattern/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Finding:Relationship Pattern Shift/i)).toBeTruthy();
+    expect(screen.getAllByText(/Potential impact:Possible infrastructure risk/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Neraium stays quiet until system behavior changes/i)).toBeTruthy();
+    expect(screen.getByText(/what evidence supports it/i)).toBeTruthy();
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/evidence intact/i)).toBeNull();
   });

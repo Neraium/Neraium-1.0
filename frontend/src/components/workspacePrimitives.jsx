@@ -144,7 +144,7 @@ export function MiniSeries({ values, tone }) {
 
 export function DriftMonitor({ rows, detailed = false }) {
   if (!rows || rows.length === 0) {
-    return <EmptyState title="No segment trend review available" body="Upload telemetry to generate segment drift review." compact />;
+    return <EmptyState title="No segment trend review available" body="Upload telemetry to generate change review." compact />;
   }
 
   const maxMagnitude = Math.max(
@@ -446,7 +446,7 @@ export function WhyPanel({
 
       {!compact && (
         <div className="why-panel__baseline">
-          <span className="section-token">Baseline</span>
+          <span className="section-token">Usual pattern</span>
           <p>{item.baselineContext ?? item.change ?? "Current telemetry state remains inside the expected operating band."}</p>
         </div>
       )}
@@ -492,12 +492,12 @@ export function OperatorActionControls({ actionStatus, targetId, onOperatorActio
 export function ProgressionStrip({ tone, compact = false, detailed = false }) {
   const stages = detailed
     ? [
-        "Baseline-aligned recovery",
+        "Usual recovery",
         "Early relationship shift",
-        "Persistent drift formation",
+        "Persistent change formation",
         "Compressed intervention horizon",
       ]
-    : ["Stable recovery", "Shift watch", "Drift persistence", "Window tightening"];
+    : ["Stable recovery", "Shift watch", "Change persistence", "Window tightening"];
   const activeIndex = tone === "unstable" ? 3 : tone === "elevated" ? 2 : tone === "review" ? 1 : 0;
 
   return (

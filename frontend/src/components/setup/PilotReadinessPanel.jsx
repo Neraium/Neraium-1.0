@@ -22,7 +22,7 @@ export default function PilotReadinessPanel({
   const checks = [
     { label: "Control plane connectivity", ok: String(apiStatus?.label ?? "").toLowerCase() === "online", detail: apiStatus?.label ?? "Unknown" },
     { label: "Latest upload validity", ok: latestStatus === "active" || latestStatus === "complete", detail: latestUploadSnapshot?.last_filename ?? "No recent upload" },
-    { label: "Baseline status", ok: baselineStatus === "active", detail: baselineStatus === "active" ? "Baseline active" : "Baseline pending" },
+    { label: "Reference status", ok: baselineStatus === "active", detail: baselineStatus === "active" ? "Reference active" : "Reference pending" },
     { label: "Analysis freshness", ok: isFresh, detail: lastProcessedAt ? formatClockTime(lastProcessedAt) : "No analysis timestamp" },
     { label: "Read-only boundary", ok: true, detail: "Read-only. No control or actuation paths enabled." },
     { label: "Session data availability", ok: Boolean(hasActiveSession), detail: hasActiveSession ? "Uploaded or resumed session is available" : "No upload session available yet" },

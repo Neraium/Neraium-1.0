@@ -7,10 +7,10 @@ export function buildFleetSummary(interventionItems, score, tone) {
     score,
     tone,
     summary: unstable > 0
-      ? `${unstable} structural segment${unstable === 1 ? "" : "s"} show persistent drift that warrants immediate review.`
+      ? `${unstable} area${unstable === 1 ? "" : "s"} show a persistent change that warrants review.`
       : elevated > 0
-        ? `${elevated} structural segment${elevated === 1 ? "" : "s"} are deviating from baseline and should be watched closely.`
-        : "The observed telemetry remains close to its learned baseline regime.",
+        ? `${elevated} area${elevated === 1 ? "" : "s"} changed from usual behavior and should be watched closely.`
+        : "The observed telemetry remains close to usual behavior.",
     metrics: [
       { label: "Immediate", value: unstable || 0, tone: unstable > 0 ? "unstable" : "nominal" },
       { label: "Watch", value: elevated || 0, tone: elevated > 0 ? "elevated" : "nominal" },
@@ -23,36 +23,36 @@ export function buildFleetSummary(interventionItems, score, tone) {
 export function buildStructuralExplanation(item) {
   if (item?.likelyDriver) {
     return [
-      `${item.likelyDriver} is the strongest available structural explanation at this time.`,
+      `${item.likelyDriver} is the strongest available explanation at this time.`,
       item.confidenceBasis ?? "Supporting evidence is being compared across variable relationships.",
-      "The instrument is describing deformation, not assigning root cause.",
+      "Neraium is describing a change, not assigning root cause.",
     ];
   }
   if (item?.tone === "unstable") {
     return [
-      "The active covariance structure has shifted materially away from baseline.",
-      "A subset of variables is carrying persistent, directional drift.",
-      "Recovery behavior appears less stable than the learned baseline regime.",
+      "Key variable relationships have changed materially.",
+      "A subset of variables is changing in the same direction over time.",
+      "Recovery behavior appears less stable than usual.",
     ];
   }
   if (item?.tone === "elevated") {
     return [
-      "Variable coupling is weakening compared to baseline.",
+      "Variable relationships are weaker than usual.",
       "The current state trajectory is moving away from its normal operating envelope.",
       "Persistence should be watched through the next analysis window.",
     ];
   }
   if (item?.tone === "review") {
     return [
-      "Drift is visible, but the system remains inside a reviewable range.",
-      "The baseline relationship structure is still partially intact.",
+      "A change is visible, but it remains inside a reviewable range.",
+      "The usual relationship pattern is still partially intact.",
       "Additional persistence would strengthen the observation.",
     ];
   }
   return [
-    "The system remains inside its learned baseline regime.",
+    "The system remains inside its usual behavior pattern.",
     "Variable relationships are stable relative to recent history.",
-    "No persistent structural deformation is visible.",
+    "No persistent behavior change is visible.",
   ];
 }
 
@@ -74,7 +74,7 @@ export function buildConfidenceBasis(item, findings) {
   if (drivers.length === 1) {
     return `Based on ${drivers[0].toLowerCase()}.`;
   }
-  return "Based on baseline separation, drift persistence, and relationship change strength.";
+  return "Based on change strength, persistence, and relationship support.";
 }
 
 export function processingTraceLines(trace) {
@@ -105,9 +105,9 @@ export function runnerTraceLines(result) {
 
 export function formatPlainState(tone, primarySegment) {
   const label = primarySegment?.label ?? "One segment";
-  if (tone === "unstable") return `${label} shows persistent structural drift`;
-  if (tone === "elevated" || tone === "review") return `${label} is diverging from baseline`;
-  return "Baseline-aligned";
+  if (tone === "unstable") return `${label} shows a persistent behavior change`;
+  if (tone === "elevated" || tone === "review") return `${label} changed from usual behavior`;
+  return "Usual behavior";
 }
 
 export function formatScoreReadiness(score) {
@@ -120,7 +120,7 @@ export function formatScoreReadiness(score) {
 export function formatSegmentDecisionState(tone, index = 0) {
   if (tone === "unstable") return "Immediate review window";
   if (tone === "elevated" || tone === "review") return decisionLabelFromTone(tone, index);
-  return "Baseline-aligned";
+  return "Usual behavior";
 }
 
 export const formatFacilityPlainState = formatPlainState;
@@ -200,18 +200,18 @@ function buildGuidanceFromCategory(category) {
   const guidance = {
     persistent_drift: {
       nextMove: "Inspect the affected variable relationships",
-      primaryDriver: "Persistent structural drift is visible across the active telemetry window.",
-      whyFlagged: "The system has shifted away from its learned baseline regime and has not returned.",
+      primaryDriver: "A persistent behavior change is visible across the active telemetry window.",
+      whyFlagged: "The system changed from usual behavior and has not returned.",
       whatToCheck: [
         "Inspect the affected variables in context",
         "Check whether the shift reflects an operational change, sensor issue, or emerging fault",
-        "Compare the current recovery path to baseline",
+        "Compare the current recovery path to usual behavior",
       ],
     },
     relationship_shift: {
       nextMove: "Review the coupling change",
-      primaryDriver: "A relationship between key variables has shifted away from baseline.",
-      whyFlagged: "Variable coupling is weaker than it was during the learned baseline regime.",
+      primaryDriver: "A relationship between key variables changed.",
+      whyFlagged: "Variable relationships are weaker than usual.",
       whatToCheck: [
         "Compare before/after relationship strength",
         "Review the time window where the shift began",
@@ -220,11 +220,11 @@ function buildGuidanceFromCategory(category) {
     },
     baseline_divergence: {
       nextMove: "Watch the next analysis window",
-      primaryDriver: "The current state is drifting away from the baseline envelope.",
-      whyFlagged: "The active state trajectory is no longer centered inside the baseline regime.",
+      primaryDriver: "The current state is moving away from usual behavior.",
+      whyFlagged: "The active state is no longer centered inside its usual pattern.",
       whatToCheck: [
-        "Review baseline separation",
-        "Watch drift velocity and persistence",
+        "Review change strength",
+        "Watch change direction and persistence",
         "Confirm whether recovery remains normal after perturbations",
       ],
     },
@@ -235,17 +235,17 @@ function buildGuidanceFromCategory(category) {
       whatToCheck: [
         "Confirm telemetry continuity for the affected variables",
         "Review missing, stale, or noisy readings",
-        "Check whether the structural shift survives after filtering suspect data",
+        "Check whether the behavior change survives after filtering suspect data",
       ],
     },
     stable_monitoring: {
       nextMove: "Continue monitoring",
-      primaryDriver: "The current covariance structure remains close to baseline.",
-      whyFlagged: "No persistent structural deformation is visible in the current telemetry window.",
+      primaryDriver: "Current variable relationships remain close to usual behavior.",
+      whyFlagged: "No persistent behavior change is visible in the current telemetry window.",
       whatToCheck: [
         "Continue monitoring",
         "Watch the next perturbation and recovery cycle",
-        "Review only if persistence or drift velocity increases",
+        "Review only if persistence or change strength increases",
       ],
     },
   };
@@ -264,8 +264,8 @@ function isGenericOperatorMove(move) {
 function decisionLabelFromTone(tone, index = 0) {
   if (tone === "unstable") return "Immediate review window";
   if (tone === "elevated") return index % 2 === 0 ? "Relationship shift" : "Persistence watch";
-  if (tone === "review") return index % 2 === 0 ? "Baseline divergence" : "Transition watch";
-  return "Baseline-aligned";
+  if (tone === "review") return index % 2 === 0 ? "Pattern change" : "Transition watch";
+  return "Usual behavior";
 }
 
 function humanizeDriverCategory(value) {

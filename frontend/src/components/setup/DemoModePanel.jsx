@@ -11,18 +11,18 @@ export const DEMO_STEPS = [
     tab: "overview",
   },
   {
-    title: "Baseline Formation",
+    title: "Reference Learning",
     message: "Neraium establishes normal operating relationships across telemetry signals.",
     workspace: "data-connections",
     tab: "historian-setup",
   },
   {
-    title: "Structural Monitoring",
-    message: "Live or uploaded telemetry is compared against baseline system behavior.",
+    title: "System Monitoring",
+    message: "Live or uploaded telemetry is compared against usual system behavior.",
     workspace: "system-body",
   },
   {
-    title: "Drift Emergence",
+    title: "Change Detected",
     message: "Relationship movement begins before alarms or threshold failures.",
     workspace: "system-body",
   },
@@ -32,13 +32,13 @@ export const DEMO_STEPS = [
     workspace: "system-body",
   },
   {
-    title: "Diagnostics",
-    message: "Engineering teams can inspect replay, topology, and structural evidence.",
+    title: "Evidence Review",
+    message: "Engineering teams can inspect replay and supporting details.",
     workspace: "historical-replay",
   },
   {
     title: "Replay Timeline",
-    message: "Uploaded telemetry can replay the movement from stable behavior into drift or recovery.",
+    message: "Uploaded telemetry can replay movement from usual behavior into a change or recovery.",
     workspace: "historical-replay",
   },
 ];
