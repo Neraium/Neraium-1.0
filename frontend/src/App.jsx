@@ -34,7 +34,6 @@ function App() {
   const [resetGuardActive, setResetGuardActive] = useState(false);
   const [completedUploadOverride, setCompletedUploadOverride] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
-  const [gateStateOverride, setGateStateOverride] = useState("");
 
   const {
     apiStatus,
@@ -85,7 +84,6 @@ function App() {
       return;
     }
     setSessionIntent("resumed");
-    setGateStateOverride("Monitoring");
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
@@ -96,7 +94,7 @@ function App() {
   const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
   const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
   const effectiveLatestUploadResult = hasActiveSession
-    ? (completedUploadOverride ?? guardedLatestUploadResult ?? (gateUploadCompleteSeen ? buildGateFallbackUploadResult() : null))
+    ? (completedUploadOverride ?? guardedLatestUploadResult)
     : null;
   const effectiveLatestUploadSnapshot = hasActiveSession
     ? guardedLatestUploadSnapshot
@@ -220,7 +218,6 @@ function App() {
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
-    setGateStateOverride("Monitoring");
     if (completedPayload && typeof completedPayload === "object") {
       setCompletedUploadOverride(completedPayload);
     }
@@ -274,7 +271,6 @@ function App() {
     clearUploadSessionState();
     setCompletedUploadOverride(null);
     setGateUploadCompleteSeen(false);
-    setGateStateOverride("");
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
@@ -317,12 +313,9 @@ function App() {
 
   const handleBackToGate = useCallback(async () => {
     setGateUploadCompleteSeen(true);
-    setGateStateOverride("Monitoring");
     setSessionIntent("current");
     const hasResult = await loadLatestUploadState({ includePersisted: true });
-    if (!hasResult) {
-      setCompletedUploadOverride((current) => current ?? buildGateFallbackUploadResult());
-    }
+    if (!hasResult) setCompletedUploadOverride(null);
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState]);
@@ -457,72 +450,11 @@ function App() {
       domainMode={domainMode}
       domainDetection={domainDetection}
       gateProcessing={gateProcessing}
-      gateStateOverride={gateStateOverride}
     />
   </div>
   );
 }
 
-
-function buildGateFallbackUploadResult() {
-  const now = new Date().toISOString();
-  return {
-    filename: "Uploaded telemetry",
-    row_count: 1,
-    column_count: 1,
-    rows_processed: 1,
-    columns_detected: 1,
-    operating_state: "Monitoring",
-    drift_status: "info",
-    last_processed_at: now,
-    completed_at: now,
-    timestamp_profile: {
-      first_timestamp: now,
-      last_timestamp: now,
-    },
-    sii_intelligence: {
-      facility_state: "Monitoring",
-      urgency: "info",
-      primary_room: "Uploaded telemetry",
-      neraium_score: 0,
-      last_updated: now,
-      replay_timeline: {
-        meta: { frame_count: 1 },
-        timeline: [
-          {
-            total_frames: 1,
-            affected_subsystem: "Uploaded telemetry",
-            cognition_state: { facility_state: "Monitoring", canonical_phase: "stable_topology" },
-            topology_state: { drift_index: 0 },
-            propagation_state: {},
-            evidence_state: {},
-            row_start: 1,
-            row_end: 1,
-            timestamp_start: now,
-            timestamp_end: now,
-          },
-        ],
-      },
-    },
-    replay_timeline: {
-      meta: { frame_count: 1 },
-      timeline: [
-        {
-          total_frames: 1,
-          affected_subsystem: "Uploaded telemetry",
-          cognition_state: { facility_state: "Monitoring", canonical_phase: "stable_topology" },
-          topology_state: { drift_index: 0 },
-          propagation_state: {},
-          evidence_state: {},
-          row_start: 1,
-          row_end: 1,
-          timestamp_start: now,
-          timestamp_end: now,
-        },
-      ],
-    },
-  };
-}
 
 function deriveGateProcessing(snapshot) {
   const rawStatus = String(snapshot?.status ?? snapshot?.processing_state ?? "");

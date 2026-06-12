@@ -301,19 +301,8 @@ function uniqueValues(values) {
 export function hasVerifiedSiiCompletion({ latestResult, latestSnapshot } = {}) {
   const result = latestResult ?? null;
   const snapshot = latestSnapshot ?? null;
+  if (!result) return false;
   if (snapshot?.sii_completed === true) return true;
-  // Fallback acceptance for large uploads where snapshot flags may lag but
-  // result payload already contains a full SII intelligence artifact.
-  const hasResultStructuralPayload = Boolean(
-    result
-    && result.sii_intelligence
-    && (
-      result.sii_intelligence.core_sii_outputs
-      || result.sii_intelligence.instability_index
-      || result.sii_intelligence.replay_timeline
-    )
-  );
-  if (hasResultStructuralPayload) return true;
   const hasResultEvidence = Boolean(
     result
     && result.sii_intelligence

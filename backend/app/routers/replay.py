@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 
+from app.core.config import get_settings
 from app.services import upload_jobs
 from app.services.sii_runner import read_latest_sii_state
 
@@ -33,7 +34,7 @@ async def replay_timeline(mode: str = Query(default="live"), intervals: int = Qu
         timeline = fallback.get("timeline", [])
         fallback_source = fallback.get("source", "empty")
         source = "uploaded" if fallback_source == "persisted" and timeline else fallback_source
-    if not timeline:
+    if not timeline and get_settings().app_env.lower() not in {"prod", "production"}:
         timeline = synthetic_timeline(max(6, int(intervals or 12)), prefix="live")
         source = "state_synthesized"
 

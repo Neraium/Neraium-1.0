@@ -62,6 +62,19 @@ def test_aquatic_demo_mode_replay_timeline_available() -> None:
     assert payload["meta"]["frame_count"] >= 18
 
 
+def test_production_live_replay_does_not_return_synthetic_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    client = TestClient(create_app())
+
+    response = client.get("/api/replay/timeline?mode=live&intervals=12")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "empty"
+    assert payload["meta"]["frame_count"] == 0
+    assert payload["timeline"] == []
+
+
 def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
     write_latest_sii_state(build_sample_intelligence())
     client = TestClient(create_app())

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveRoomContext, deriveTimeCoverage } from "../uploadState";
+import { deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion } from "../uploadState";
 
 describe("uploadState normalization", () => {
   it("resolves room aliases from messy column names", () => {
@@ -26,5 +26,33 @@ describe("uploadState normalization", () => {
     const coverage = deriveTimeCoverage(result);
     expect(coverage.hasCoverage).toBe(true);
     expect(coverage.summary).toContain("2026-05-18T12:00:00.000Z");
+  });
+
+  it("does not verify SII from a completion flag without a persisted backend result", () => {
+    expect(hasVerifiedSiiCompletion({
+      latestResult: null,
+      latestSnapshot: {
+        status: "COMPLETE",
+        sii_completed: true,
+        state_available: true,
+      },
+    })).toBe(false);
+  });
+
+  it("does not verify a synthetic result from replay shape alone", () => {
+    expect(hasVerifiedSiiCompletion({
+      latestResult: {
+        sii_intelligence: {
+          replay_timeline: {
+            timeline: [{ cognition_state: { canonical_phase: "stable_topology" } }],
+          },
+        },
+      },
+      latestSnapshot: {
+        status: "COMPLETE",
+        sii_completed: false,
+        state_available: false,
+      },
+    })).toBe(false);
   });
 });
