@@ -33,6 +33,7 @@ export default function ReplayWorkspace({
   const [comparisonMode, setComparisonMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState("");
+  const [evidenceRun, setEvidenceRun] = useState(null);
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
@@ -70,6 +71,7 @@ export default function ReplayWorkspace({
       setCurrentFrameIndex(0);
       setIsPlaying(false);
       setError("");
+      setEvidenceRun(null);
       replaySessionKeyRef.current = null;
       return () => {};
     }
@@ -77,6 +79,9 @@ export default function ReplayWorkspace({
     async function loadReplay() {
       try {
         const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
+        const matchedEvidenceRun = scoped.jobId
+          ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId })
+          : null;
         if (cancelled) return;
         const nextTimeline = scoped.timeline;
         const nextMeta = {
@@ -97,6 +102,7 @@ export default function ReplayWorkspace({
         setTimeline(effectiveTimeline);
         setComparisonTimeline([]);
         setMeta(effectiveMeta);
+        setEvidenceRun(matchedEvidenceRun);
         setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay is available for this session."));
 
         if (sessionChanged) {
@@ -114,6 +120,7 @@ export default function ReplayWorkspace({
         setCurrentFrameIndex(0);
         setIsPlaying(false);
         setError(buildReplayNotice(loadError, normalizeErrorMessage));
+        setEvidenceRun(null);
       }
     }
     loadReplay();
@@ -235,6 +242,20 @@ export default function ReplayWorkspace({
     frameIndex: currentFrameIndex,
     formatClockTime,
   }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
+  const supportingEvidence = useMemo(() => {
+    const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
+    if (!hasRealSiiOutput || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "")) {
+      return [];
+    }
+    return buildSupportingEvidence({
+      evidenceRun,
+      uploadResult: currentSession?.latestUploadResult,
+      frame: shownFrame,
+      frameIndex: currentFrameIndex,
+      frameCount: operativeTimeline.length,
+      formatClockTime,
+    });
+  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, hasRealSiiOutput, meta.replay_job_id, operativeTimeline.length, sessionJobId, shownFrame]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -263,9 +284,7 @@ export default function ReplayWorkspace({
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
             <span className="section-token">Supporting Evidence</span>
             <ul className="compact-list">
-              {hasReplaySnapshots
-                ? discovery.evidence.map((item) => <li key={item}>{item}</li>)
-                : <li>Upload telemetry to generate replay.</li>}
+              {supportingEvidence.map((item) => <li key={item}>{item}</li>)}
             </ul>
           </section>
           <section className="replay-discovery__insight" aria-label="Next operator review">
@@ -363,13 +382,6 @@ function DiscoveryCard({ label, item, active = false, emphasized = false }) {
 
 
 async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
-  // Prefer the global persisted replay endpoint. It is stable across ECS tasks and
-  // avoids hammering job-scoped upload replay when latest upload state flaps.
-  const stableGlobalReplay = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-  if (stableGlobalReplay.timeline.length > 0) {
-    return stableGlobalReplay;
-  }
-
   let targetJobId = jobId;
   if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
@@ -381,11 +393,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
     targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
     if (!targetJobId) {
-      const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-      if (globalFallback.timeline.length > 0) {
-        return globalFallback;
-      }
-      return { jobId: null, timeline: [], meta: {} };
+      return fetchGlobalReplayFallback({ apiFetch, accessCode });
     }
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
@@ -402,21 +410,11 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   }
   const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
   if (!replayResponse.ok) {
-    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-    if (globalFallback.timeline.length > 0) {
-      return globalFallback;
-    }
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
   const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  if (!timeline.length) {
-    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-    if (globalFallback.timeline.length > 0) {
-      return globalFallback;
-    }
-  }
   return {
     jobId: targetJobId,
     timeline,
@@ -425,6 +423,17 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
       ? (typeof replayPayload?.message === "string" ? replayPayload.message : "")
       : (pendingReplayMessage || (typeof replayPayload?.message === "string" ? replayPayload.message : "")),
   };
+}
+
+async function fetchEvidenceRunForJob({ apiFetch, accessCode, jobId }) {
+  const response = await apiFetch("/api/evidence/runs", { accessCode });
+  if (!response.ok) return null;
+  const payload = await response.json();
+  const runs = Array.isArray(payload?.runs) ? payload.runs : [];
+  return runs.find((run) => (
+    String(run?.run_id ?? "") === String(jobId)
+    && String(run?.status ?? "").toLowerCase() === "completed"
+  )) ?? null;
 }
 
 async function fetchGlobalReplayFallback({ apiFetch, accessCode }) {
@@ -519,6 +528,61 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
         : "Use the timeline controls to inspect when the change first appeared.",
     },
   };
+}
+
+function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime }) {
+  const items = [];
+  const sourceName = evidenceRun?.source_name ?? evidenceRun?.filename ?? uploadResult?.filename;
+  const runId = evidenceRun?.run_id;
+  const variables = Array.isArray(evidenceRun?.variables) ? evidenceRun.variables.filter(Boolean).slice(0, 4) : [];
+  const summaries = Array.isArray(evidenceRun?.evidence_summary) ? evidenceRun.evidence_summary.filter(Boolean) : [];
+  const metrics = evidenceRun?.drift_metrics && typeof evidenceRun.drift_metrics === "object" ? evidenceRun.drift_metrics : {};
+  const detectedAt = evidenceRun?.deformation_started_at ?? frame?.timestamp_start ?? frame?.timestamp;
+  const confidence = evidenceRun?.confidence
+    ?? evidenceRun?.confidence_score
+    ?? evidenceRun?.evidence_confidence
+    ?? metrics.confidence
+    ?? frame?.cognition_state?.confidence_tier;
+  const changeMetric = firstFiniteNumber(
+    metrics.baseline_distance,
+    metrics.drift_index,
+    metrics.coupling_delta,
+    frame?.baseline_distance,
+    frame?.topology_state?.drift_index,
+  );
+
+  if (sourceName) items.push("Source file: " + sourceName);
+  if (runId) items.push("Run ID: " + runId);
+  if (variables.length) items.push("Variables: " + variables.join(" | "));
+  if (summaries[0]) items.push("Relationship summary: " + summaries[0]);
+  if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
+  if (detectedAt) items.push("Detected: " + formatClockTime(detectedAt));
+  if (frameCount > 0) {
+    const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
+    items.push("Replay frame: " + String(Math.min(frameIndex + 1, frameCount)) + "/" + String(frameCount) + (frameTime ? " at " + formatClockTime(frameTime) : ""));
+  }
+  if (confidence != null && String(confidence).trim()) {
+    items.push("Confidence: " + formatEvidenceConfidence(confidence));
+  }
+  return items;
+}
+
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value == null || String(value).trim() === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+function formatEvidenceConfidence(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    const percent = numeric <= 1 ? numeric * 100 : numeric;
+    return String(Math.round(percent)) + "%";
+  }
+  return formatConfidenceLabel(value);
 }
 
 function buildDiscoveryMoment(frame, title, fallbackDetail, formatClockTime) {
