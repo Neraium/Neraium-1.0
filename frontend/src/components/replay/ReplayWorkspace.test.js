@@ -29,17 +29,25 @@ function buildFrames(count = 4) {
   }));
 }
 
+function createReplayApiFetch(frameCount = 4) {
+  return vi.fn(async (path) => {
+    if (String(path).startsWith("/api/data/upload-status/")) {
+      return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+    }
+    if (String(path).startsWith("/api/data/replay/")) {
+      return createResponse({ timeline: buildFrames(frameCount), meta: { frame_count: frameCount } });
+    }
+    if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
+    return createResponse({}, 404);
+  });
+}
+
 function renderReplayWorkspace(props) {
   return render(h(ReplayWorkspace, props));
 }
 
 function baseProps({ apiFetch, currentSession } = {}) {
-  const fetchMock = apiFetch ?? vi.fn(async (path) => {
-    if (String(path).startsWith("/api/replay/timeline")) {
-      return createResponse({ timeline: buildFrames(4), meta: { frame_count: 4 } });
-    }
-    return createResponse({}, 404);
-  });
+  const fetchMock = apiFetch ?? createReplayApiFetch();
 
   return {
     apiFetch: fetchMock,
@@ -81,6 +89,17 @@ describe("ReplayWorkspace playback stability", () => {
     expectFrame("4/4");
   });
 
+  it("keeps technical replay diagnostics out of the default view", async () => {
+    renderReplayWorkspace(baseProps());
+
+    await waitFor(() => expectFrame("1\/4"));
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting Evidence")).toBeTruthy();
+    expect(screen.getByText("Review next")).toBeTruthy();
+    expect(screen.queryByText("Raw change direction")).toBeNull();
+    expect(screen.queryByText("Structural Progression")).toBeNull();
+  });
+
   it("manual next and previous move exactly one frame", async () => {
     renderReplayWorkspace(baseProps());
 
@@ -107,12 +126,7 @@ describe("ReplayWorkspace playback stability", () => {
   });
 
   it("timeline refetch with same session does not reset current frame", async () => {
-    const fetchMock = vi.fn(async (path) => {
-      if (String(path).startsWith("/api/replay/timeline")) {
-        return createResponse({ timeline: buildFrames(4), meta: { frame_count: 4 } });
-      }
-      return createResponse({}, 404);
-    });
+    const fetchMock = createReplayApiFetch();
 
     const props = baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-1" }, latestUploadSnapshot: null } });
     const { rerender } = renderReplayWorkspace(props);
@@ -134,12 +148,7 @@ describe("ReplayWorkspace playback stability", () => {
   });
 
   it("new replay session resets frame index", async () => {
-    const fetchMock = vi.fn(async (path) => {
-      if (String(path).startsWith("/api/replay/timeline")) {
-        return createResponse({ timeline: buildFrames(4), meta: { frame_count: 4 } });
-      }
-      return createResponse({}, 404);
-    });
+    const fetchMock = createReplayApiFetch();
 
     const { rerender } = renderReplayWorkspace(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-1" }, latestUploadSnapshot: null } }));
     await waitFor(() => expectFrame("1/4"));
@@ -150,5 +159,92 @@ describe("ReplayWorkspace playback stability", () => {
     rerender(h(ReplayWorkspace, baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-2" }, latestUploadSnapshot: null } })));
 
     await waitFor(() => expectFrame("1/4"));
+  });
+
+  it("keeps Supporting Evidence empty when no persisted evidence run exists", async () => {
+    renderReplayWorkspace(baseProps({ currentSession: { latestUploadResult: { job_id: "job-1" } } }));
+
+    await waitFor(() => expectFrame("1/4"));
+    expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
+  });
+
+  it("renders telemetry-derived evidence for the matching persisted upload run", async () => {
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith("/api/data/upload-status/job-real")) {
+        return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      }
+      if (String(path).startsWith("/api/data/replay/job-real")) {
+        return createResponse({
+          timeline: [{
+            ...buildFrames(1)[0],
+            primary_contributors: ["temperature", "humidity"],
+            cognition_state: { confidence_tier: "relationship_evidence_present" },
+            topology_state: { drift_index: 0.73, stability_state: "Needs review" },
+          }],
+          meta: { frame_count: 1, job_id: "job-real" },
+        });
+      }
+      if (String(path) === "/api/evidence/runs") {
+        return createResponse({
+          runs: [{
+            run_id: "job-real",
+            status: "completed",
+            source_name: "uploaded-telemetry.csv",
+            variables: ["temperature", "humidity"],
+            evidence_summary: ["Temperature and humidity coupling moved away from baseline."],
+            drift_metrics: { baseline_distance: null, drift_index: 0.73, confidence: 0.88 },
+            deformation_started_at: "2026-01-01T00:00:00Z",
+          }],
+        });
+      }
+      return createResponse({}, 404);
+    });
+
+    renderReplayWorkspace({
+      ...baseProps({
+        apiFetch: fetchMock,
+        currentSession: {
+          latestUploadResult: {
+            job_id: "job-real",
+            filename: "uploaded-telemetry.csv",
+            sii_intelligence: { source: "uploaded" },
+          },
+        },
+      }),
+      hasRealSiiOutput: true,
+    });
+
+    await waitFor(() => expect(screen.getByText("Source file: uploaded-telemetry.csv")).toBeTruthy());
+    expect(screen.getByText("Run ID: job-real")).toBeTruthy();
+    expect(screen.getByText("Variables: temperature | humidity")).toBeTruthy();
+    expect(screen.getByText("Relationship summary: Temperature and humidity coupling moved away from baseline.")).toBeTruthy();
+    expect(screen.getByText("Change metric: 0.73")).toBeTruthy();
+    expect(screen.getByText("Confidence: 88%")).toBeTruthy();
+  });
+
+  it("prefers job-scoped replay and does not use global replay as production evidence", async () => {
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith("/api/data/upload-status/job-scoped")) {
+        return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      }
+      if (String(path).startsWith("/api/data/replay/job-scoped")) {
+        return createResponse({ timeline: buildFrames(2), meta: { frame_count: 2, job_id: "job-scoped" } });
+      }
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
+      if (String(path).startsWith("/api/replay/timeline")) {
+        return createResponse({ timeline: buildFrames(9), meta: { frame_count: 9 } });
+      }
+      return createResponse({}, 404);
+    });
+
+    renderReplayWorkspace({
+      ...baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-scoped" } } }),
+      hasRealSiiOutput: true,
+    });
+
+    await waitFor(() => expectFrame("1/2"));
+    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
+    expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
   });
 });

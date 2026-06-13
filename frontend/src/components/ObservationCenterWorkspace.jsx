@@ -464,15 +464,13 @@ export default function ObservationCenterWorkspace({
           </div>
         </section>
         <section className="observation-center__summary" aria-label="Current instrument summary">
-          <p className="section-token">Discovery State</p>
+          <p className="section-token">Review queue</p>
           <h1>Findings</h1>
-          <p>Neraium stays quiet until system behavior changes. Review what changed, why it matters, and what evidence supports it.</p>
+          <p>Review supported changes, their impact, and the evidence behind them.</p>
           <MetricGrid
             metrics={[
-              { label: "Finding", value: latestRun ? observationTypeLabel(latestRun?.observation_type) : "No findings recorded" },
-              { label: "Detected", value: latestRun ? formatDetectedTime(latestRun) : "No active finding" },
               { label: "Confidence", value: latestRun ? confidenceForFinding(latestRun) : "Pending" },
-              { label: "Potential impact", value: latestRun ? potentialImpactForFinding(latestRun) : "Monitoring" },
+              { label: "Why it matters", value: latestRun ? potentialImpactForFinding(latestRun) : "Monitoring" },
             ]}
             compact
           />
@@ -480,9 +478,9 @@ export default function ObservationCenterWorkspace({
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="Findings Timeline" className="span-7 observation-center__panel observation-center__panel--timeline">
+        <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search finding, source, date, or evidence" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search findings" />
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
               <option value="open">Open</option>
@@ -496,8 +494,7 @@ export default function ObservationCenterWorkspace({
           </div>
           {filteredRuns.length === 0 ? (
             <>
-              <EmptyState title="No findings have been recorded yet" body="Neraium is quiet because no reviewable changes have been recorded in the current evidence history." compact />
-              <p className="metadata-text">Findings appear when a persistent behavior change is supported by telemetry.</p>
+              <EmptyState title="No findings yet" body="No supported changes are ready for review." compact />
             </>
           ) : (
             <div className="feed-list">
@@ -529,13 +526,13 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Finding Details" className="span-5 observation-center__panel observation-center__panel--detail">
+        <Panel title="Review Finding" className="span-5 observation-center__panel observation-center__panel--detail">
           {!selectedRun ? (
-            <EmptyState title="No finding selected" body="Select a finding to inspect impact, confidence, and supporting evidence." compact />
+            <EmptyState title="Select a finding" body="Choose a finding to review its impact and evidence." compact />
           ) : (
             <>
               <div className="observation-detail-callout">
-                <span className="section-token">Finding</span>
+                <span className="section-token">What changed</span>
                 <strong>{selectedRunSummary}</strong>
                 {selectedRunHistoricalFact ? <p>{selectedRunHistoricalFact}</p> : null}
               </div>
@@ -543,7 +540,7 @@ export default function ObservationCenterWorkspace({
                 metrics={[
                   { label: "Detected", value: formatDetectedTime(selectedRun) },
                   { label: "Confidence", value: confidenceForFinding(selectedRun) },
-                  { label: "Potential impact", value: potentialImpactForFinding(selectedRun) },
+                  { label: "Why it matters", value: potentialImpactForFinding(selectedRun) },
                   { label: "Change strength", value: classifyChangeStrength(selectedRun?.drift_metrics?.baseline_distance ?? selectedRun?.drift_metrics?.drift_index) },
                 ]}
                 compact
@@ -577,7 +574,7 @@ export default function ObservationCenterWorkspace({
                 </svg>
               </div>
               <details className="compact-list-block">
-                <summary className="section-token">Supporting Evidence</summary>
+                <summary className="section-token">Review Evidence</summary>
                 <ul className="compact-list">
                   {(selectedRun.evidence_summary ?? []).length > 0
                     ? selectedRun.evidence_summary.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)
@@ -589,7 +586,7 @@ export default function ObservationCenterWorkspace({
                 <ul className="compact-list">
                   <li>Status: {normalizeObservationStatus(selectedRun)}</li>
                   <li>Source: {selectedRun.source_name || selectedRun.source_type || "Unknown source"}</li>
-                  <li>Usual pattern: {displayPatternLabel(selectedRun.regime_label)}</li>
+                  <li>Usual behavior: {displayPatternLabel(selectedRun.regime_label)}</li>
                   {(selectedRun.variables ?? []).map((item) => <li key={item}>{displayVariable(item, aliases)}</li>)}
                 </ul>
               </details>
@@ -610,13 +607,13 @@ export default function ObservationCenterWorkspace({
                 </div>
               </details>
               <div className="why-panel__section guidance-checks">
-                <span className="section-token">What did you find?</span>
+                <span className="section-token">Review outcome</span>
                 <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)}>
                   {FEEDBACK_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
-                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional note about what the operator found." rows={4} />
+                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={4} />
                 <div className="intake-flow__controls">
-                  <button type="button" className="command-button" onClick={submitFeedback}>Record to Memory</button>
+                  <button type="button" className="command-button" onClick={submitFeedback}>Save Review</button>
                   {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : null}
                 </div>
               </div>
@@ -624,6 +621,9 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
+        <details className="span-12 observation-center__advanced">
+          <summary>Additional tools</summary>
+          <div className="workspace-grid workspace-grid--console observation-center__advanced-grid">
         <Panel title="Pattern History" className="span-7 observation-center__panel observation-center__panel--explorer">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
             <select value={selectedVariables[0]} onChange={(event) => setSelectedVariables([event.target.value, selectedVariables[1]])}>
@@ -651,7 +651,7 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Review Quiet and Notifications" className="span-5 observation-center__panel">
+        <Panel title="Notifications" className="span-5 observation-center__panel">
           <MetricGrid
             metrics={[
               { label: "Findings / 24h", value: silenceHealth.lastDay },
@@ -692,7 +692,7 @@ export default function ObservationCenterWorkspace({
           </div>
         </Panel>
 
-        <Panel title="Variable Aliases" className="span-5 observation-center__panel">
+        <Panel title="Variable Labels" className="span-5 observation-center__panel">
           <div className="setup-grid">
             <label>
               <span>Variable</span>
@@ -715,7 +715,7 @@ export default function ObservationCenterWorkspace({
           </ul>
         </Panel>
 
-        <Panel title="Supporting Evidence Snapshot" className="span-7 observation-center__panel">
+        <Panel title="Evidence Sources" className="span-7 observation-center__panel">
           <div className="telemetry-grid telemetry-grid--compact">
             {sourceSnapshots.map((run) => (
               <div className="telemetry-card" key={run.run_id}>
@@ -733,6 +733,8 @@ export default function ObservationCenterWorkspace({
             ))}
           </div>
         </Panel>
+          </div>
+        </details>
       </div>
     </section>
   );
@@ -745,7 +747,7 @@ function maybeNotifyForObservation(run, prefs, aliases) {
   const body = variables
     ? `${observationTypeLabel(run?.observation_type)} involving ${variables}`
     : `${observationTypeLabel(run?.observation_type)} recorded`;
-  const notification = new Notification("Neraium observation", { body });
+  const notification = new Notification("Neraium finding", { body });
   notification.onclick = () => {
     try {
       window.localStorage.setItem(PENDING_OBSERVATION_STORAGE_KEY, String(run?.run_id ?? ""));

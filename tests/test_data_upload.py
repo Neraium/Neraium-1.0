@@ -561,8 +561,15 @@ def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None
     assert latest.json()["run"]["status"] == "completed"
     assert latest.json()["run"]["initiated_by"] == "anonymous"
     assert detail.status_code == 200
-    assert detail.json()["rows_accepted"] == 6
-    assert detail.json()["sensors_detected"] >= 2
+    evidence = detail.json()
+    persisted_upload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    assert evidence["rows_accepted"] == 6
+    assert evidence["sensors_detected"] >= 2
+    assert evidence["run_id"] == persisted_upload["latest_result"]["job_id"]
+    assert evidence["source_name"] == persisted_upload["latest_result"]["filename"]
+    assert set(evidence["variables"]) >= {"temperature", "humidity"}
+    assert evidence["drift_metrics"]["replay_frame_count"] > 0
+    assert evidence["deformation_started_at"]
 
 
 def test_upload_records_authenticated_actor_in_evidence() -> None:

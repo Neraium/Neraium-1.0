@@ -37,20 +37,20 @@ function isLargeOperationalUpload(file) {
 }
 
 function uploadReadinessMessage(file) {
-  if (!file) return "Choose telemetry export data to begin pilot intake analysis.";
+  if (!file) return "Choose a telemetry file to begin.";
   if (isLargeOperationalUpload(file)) {
-    return "Large telemetry export detected. Transfer is secure and processing continues in the background while status is tracked in Intake Status.";
+    return "Large file selected. Processing continues in the background.";
   }
-  return "Telemetry export is ready for secure intake and analysis.";
+  return "File ready to upload.";
 }
 
 function validateTelemetryFile(file, kind) {
-  if (!file) return "Choose a CSV telemetry file to upload.";
+  if (!file) return "Choose a CSV file to upload.";
   if (file.size > MAX_UPLOAD_BYTES) return `High-volume export above ${formatFileSize(MAX_UPLOAD_BYTES)}. Use partitioned export or enterprise batch intake.`;
   const filename = String(file.name ?? "").toLowerCase();
   const mime = String(file.type ?? "").toLowerCase();
   const looksCsv = filename.endsWith(".csv") || mime.includes("csv") || mime === "text/plain" || mime === "";
-  if (kind === "csv" && !looksCsv) return "Selected file does not look like CSV telemetry.";
+  if (kind === "csv" && !looksCsv) return "Choose a CSV file.";
   return "";
 }
 
@@ -408,7 +408,7 @@ export default function DataConnectionsWorkspace({
     stopUploadPolling("new_upload_request");
     setUploadProcessingFlag(true);
     let keepProcessingLock = false;
-    const validationError = filesToProcess.length === 0 ? "Choose a CSV telemetry file to upload." : validateTelemetryFile(filesToProcess[0], pendingUploadKind);
+    const validationError = filesToProcess.length === 0 ? "Choose a CSV file to upload." : validateTelemetryFile(filesToProcess[0], pendingUploadKind);
     if (validationError) {
       setUploadError(validationError);
       setUploadState("validation_error");
@@ -559,14 +559,6 @@ export default function DataConnectionsWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--connections workspace-grid--connections-clean">
-      <section className="panel span-12 data-connections-reset-panel" aria-label="Data connections controls">
-        <header className="panel-header">
-          <h2>Data Connections</h2>
-        </header>
-        <div className="panel-body">
-          <button type="button" className="secondary-command-button" onClick={handleResetDemoClick}>Reset Everything</button>
-        </div>
-      </section>
       <IntakeFlowPanel
         handleUpload={handleUpload}
         uploadInputRef={uploadInputRef}
@@ -590,6 +582,7 @@ export default function DataConnectionsWorkspace({
         batchResults={batchResults}
         onRetryFailedUploads={() => processUploadBatch(batchResults.filter((item) => item.status === "failed").map((item) => item.file))}
         onReprocessCurrentBatch={() => processUploadBatch(selectedFiles)}
+        onResetWorkspace={handleResetDemoClick}
       />
     </div>
   );

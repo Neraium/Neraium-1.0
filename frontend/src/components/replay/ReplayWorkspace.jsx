@@ -33,6 +33,7 @@ export default function ReplayWorkspace({
   const [comparisonMode, setComparisonMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState("");
+  const [evidenceRun, setEvidenceRun] = useState(null);
   const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
   const [rangePreviewCount, setRangePreviewCount] = useState(0);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
@@ -70,6 +71,7 @@ export default function ReplayWorkspace({
       setCurrentFrameIndex(0);
       setIsPlaying(false);
       setError("");
+      setEvidenceRun(null);
       replaySessionKeyRef.current = null;
       return () => {};
     }
@@ -77,6 +79,9 @@ export default function ReplayWorkspace({
     async function loadReplay() {
       try {
         const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
+        const matchedEvidenceRun = scoped.jobId
+          ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId })
+          : null;
         if (cancelled) return;
         const nextTimeline = scoped.timeline;
         const nextMeta = {
@@ -97,7 +102,8 @@ export default function ReplayWorkspace({
         setTimeline(effectiveTimeline);
         setComparisonTimeline([]);
         setMeta(effectiveMeta);
-        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay snapshots are available for this session."));
+        setEvidenceRun(matchedEvidenceRun);
+        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay is available for this session."));
 
         if (sessionChanged) {
           replaySessionKeyRef.current = replaySessionKey;
@@ -114,6 +120,7 @@ export default function ReplayWorkspace({
         setCurrentFrameIndex(0);
         setIsPlaying(false);
         setError(buildReplayNotice(loadError, normalizeErrorMessage));
+        setEvidenceRun(null);
       }
     }
     loadReplay();
@@ -169,7 +176,6 @@ export default function ReplayWorkspace({
   const activeFrame = operativeTimeline[Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
   const comparisonFrame = comparisonTimeline[currentFrameIndex] ?? null;
   const shownFrame = comparisonMode ? (comparisonFrame ?? activeFrame) : activeFrame;
-  const currentPercent = hasReplaySnapshots ? Math.round(((Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1)) + 1) / Math.max(operativeTimeline.length, 1)) * 100) : 0;
   const currentTimeLabel = shownFrame?.timestamp_end ?? shownFrame?.timestamp ?? dash;
 
   useEffect(() => {
@@ -195,11 +201,9 @@ export default function ReplayWorkspace({
   }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
   const replayStatusMetrics = useMemo(() => ([
-    { label: "Replay frames", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-    { label: "Current moment", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
     { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
     { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
-  ]), [currentFrameIndex, hasReplaySnapshots, meta.frame_count, operativeTimeline.length, shownFrame]);
+  ]), [hasReplaySnapshots, shownFrame]);
 
   const expertMetrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
@@ -238,15 +242,29 @@ export default function ReplayWorkspace({
     frameIndex: currentFrameIndex,
     formatClockTime,
   }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
+  const supportingEvidence = useMemo(() => {
+    const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
+    if (!hasRealSiiOutput || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "")) {
+      return [];
+    }
+    return buildSupportingEvidence({
+      evidenceRun,
+      uploadResult: currentSession?.latestUploadResult,
+      frame: shownFrame,
+      frameIndex: currentFrameIndex,
+      frameCount: operativeTimeline.length,
+      formatClockTime,
+    });
+  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, hasRealSiiOutput, meta.replay_job_id, operativeTimeline.length, sessionJobId, shownFrame]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
-      <Panel title="Why It Changed" className="span-12 workspace-hero-panel replay-discovery" subtitle="Before, change detected, after, and the evidence to review next.">
+      <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="See what changed, why it matters, and what to review next.">
         <div className="replay-discovery__header">
           <div>
-            <p className="section-token">Finding explanation</p>
+            <p className="section-token">Change review</p>
             <h3>{hasReplaySnapshots ? discovery.headline : "No replay available yet"}</h3>
-            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload telemetry to generate replay and review supporting evidence."}</p>
+            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay."}</p>
           </div>
           <MetricGrid metrics={replayStatusMetrics} compact />
         </div>
@@ -266,9 +284,7 @@ export default function ReplayWorkspace({
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
             <span className="section-token">Supporting Evidence</span>
             <ul className="compact-list">
-              {hasReplaySnapshots
-                ? discovery.evidence.map((item) => <li key={item}>{item}</li>)
-                : <li>Upload telemetry to generate replay.</li>}
+              {supportingEvidence.map((item) => <li key={item}>{item}</li>)}
             </ul>
           </section>
           <section className="replay-discovery__insight" aria-label="Next operator review">
@@ -287,7 +303,7 @@ export default function ReplayWorkspace({
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>{expertMode ? "Previous Frame" : "Previous"}</button>
             <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>{expertMode ? "Next Frame" : "Next"}</button>
             <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Restart</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Start Over</button>
             <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
             {expertMode ? (
               <>
@@ -296,25 +312,20 @@ export default function ReplayWorkspace({
                 <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
               </>
             ) : null}
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Review in System Status"}</button>
+            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Open in System Status"}</button>
             <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
           </div>
         </div>
 
         {hasReplaySnapshots ? (
           <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
-            <span className="historian-replay-status__badge">{replayMode ? "System Status Review Active" : "Replay available"}</span>
-            <span>{executionMode === "live_causal" ? "No-lookahead replay" : "Standard evidence replay"}</span>
-            <span>Frame {Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length))}/{Math.max(1, operativeTimeline.length)}</span>
-            <span>{currentPercent}% through dataset</span>
+            <span className="historian-replay-status__badge">{replayMode ? "System Status review active" : "Replay ready"}</span>
+            <span>{"Frame " + Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length)) + "/" + Math.max(1, operativeTimeline.length)}</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
           </div>
-        ) : null}
-        {!hasDiagnosticsEvidence ? (
-          <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p>
-        ) : null}
-        {hasDiagnosticsEvidence && !hasReplaySnapshots ? <p className="narrative-text">No replay available yet. Upload telemetry to generate replay.</p> : null}
-        <p className="metadata-text">Current moment: {shownFrame?.timestamp ? formatClockTime(shownFrame.timestamp) : dash}</p>
+        ) : (
+          <p className="narrative-text">No replay yet. Upload data to create one.</p>
+        )}
         <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
       {expertMode ? (
@@ -325,23 +336,19 @@ export default function ReplayWorkspace({
           <MetricGrid metrics={expertMetrics} compact />
         </Panel>
       ) : null}
-      <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-      <Panel title={expertMode ? "Evidence Details" : "Supporting Evidence"} className="span-6">
-        {expertMode ? <EvidenceInteractionPanel frame={shownFrame} /> : (
-          <ul className="system-body-timeline-list">
-            <li><span className="metadata-text">Confidence</span><strong>{formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier)}</strong></li>
-            <li><span className="metadata-text">What changed</span><strong>{strengthenReplayState(shownFrame?.topology_state?.stability_state)}</strong></li>
-            <li><span className="metadata-text">Relationship support</span><strong>{hasReplaySnapshots ? ((shownFrame?.propagation_state?.dominant_paths ?? []).length > 0 ? "Present" : dash) : dash}</strong></li>
-          </ul>
-        )}
-      </Panel>
-      <Panel title="Why It Matters" className="span-6">
-        <ul className="system-body-timeline-list">
-          <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
-          <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
-          <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
-        </ul>
-      </Panel>
+      {expertMode ? (
+        <>
+          <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
+          <Panel title="Evidence Details" className="span-6"><EvidenceInteractionPanel frame={shownFrame} /></Panel>
+          <Panel title="Why It Matters" className="span-6">
+            <ul className="system-body-timeline-list">
+              <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
+              <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
+              <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
+            </ul>
+          </Panel>
+        </>
+      ) : null}
       {expertMode ? (
         <>
           <Panel title="Historical Structure Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
@@ -375,13 +382,6 @@ function DiscoveryCard({ label, item, active = false, emphasized = false }) {
 
 
 async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
-  // Prefer the global persisted replay endpoint. It is stable across ECS tasks and
-  // avoids hammering job-scoped upload replay when latest upload state flaps.
-  const stableGlobalReplay = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-  if (stableGlobalReplay.timeline.length > 0) {
-    return stableGlobalReplay;
-  }
-
   let targetJobId = jobId;
   if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
@@ -393,11 +393,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
     targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
     if (!targetJobId) {
-      const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-      if (globalFallback.timeline.length > 0) {
-        return globalFallback;
-      }
-      return { jobId: null, timeline: [], meta: {} };
+      return fetchGlobalReplayFallback({ apiFetch, accessCode });
     }
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
@@ -414,21 +410,11 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
   }
   const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
   if (!replayResponse.ok) {
-    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-    if (globalFallback.timeline.length > 0) {
-      return globalFallback;
-    }
     throw new Error(`Unexpected response: ${replayResponse.status}`);
   }
   const replayPayload = await replayResponse.json();
   const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
   const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  if (!timeline.length) {
-    const globalFallback = await fetchGlobalReplayFallback({ apiFetch, accessCode });
-    if (globalFallback.timeline.length > 0) {
-      return globalFallback;
-    }
-  }
   return {
     jobId: targetJobId,
     timeline,
@@ -437,6 +423,17 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
       ? (typeof replayPayload?.message === "string" ? replayPayload.message : "")
       : (pendingReplayMessage || (typeof replayPayload?.message === "string" ? replayPayload.message : "")),
   };
+}
+
+async function fetchEvidenceRunForJob({ apiFetch, accessCode, jobId }) {
+  const response = await apiFetch("/api/evidence/runs", { accessCode });
+  if (!response.ok) return null;
+  const payload = await response.json();
+  const runs = Array.isArray(payload?.runs) ? payload.runs : [];
+  return runs.find((run) => (
+    String(run?.run_id ?? "") === String(jobId)
+    && String(run?.status ?? "").toLowerCase() === "completed"
+  )) ?? null;
 }
 
 async function fetchGlobalReplayFallback({ apiFetch, accessCode }) {
@@ -520,7 +517,6 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
         : replayMomentDetail(current),
     },
     evidence: [
-      "Telemetry replay available: " + String(frameCount || 0) + " frame" + (frameCount === 1 ? "" : "s"),
       "Confidence: " + confidence,
       "Change strength: " + changeStrength,
       relationshipSupport,
@@ -532,6 +528,61 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
         : "Use the timeline controls to inspect when the change first appeared.",
     },
   };
+}
+
+function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime }) {
+  const items = [];
+  const sourceName = evidenceRun?.source_name ?? evidenceRun?.filename ?? uploadResult?.filename;
+  const runId = evidenceRun?.run_id;
+  const variables = Array.isArray(evidenceRun?.variables) ? evidenceRun.variables.filter(Boolean).slice(0, 4) : [];
+  const summaries = Array.isArray(evidenceRun?.evidence_summary) ? evidenceRun.evidence_summary.filter(Boolean) : [];
+  const metrics = evidenceRun?.drift_metrics && typeof evidenceRun.drift_metrics === "object" ? evidenceRun.drift_metrics : {};
+  const detectedAt = evidenceRun?.deformation_started_at ?? frame?.timestamp_start ?? frame?.timestamp;
+  const confidence = evidenceRun?.confidence
+    ?? evidenceRun?.confidence_score
+    ?? evidenceRun?.evidence_confidence
+    ?? metrics.confidence
+    ?? frame?.cognition_state?.confidence_tier;
+  const changeMetric = firstFiniteNumber(
+    metrics.baseline_distance,
+    metrics.drift_index,
+    metrics.coupling_delta,
+    frame?.baseline_distance,
+    frame?.topology_state?.drift_index,
+  );
+
+  if (sourceName) items.push("Source file: " + sourceName);
+  if (runId) items.push("Run ID: " + runId);
+  if (variables.length) items.push("Variables: " + variables.join(" | "));
+  if (summaries[0]) items.push("Relationship summary: " + summaries[0]);
+  if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
+  if (detectedAt) items.push("Detected: " + formatClockTime(detectedAt));
+  if (frameCount > 0) {
+    const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
+    items.push("Replay frame: " + String(Math.min(frameIndex + 1, frameCount)) + "/" + String(frameCount) + (frameTime ? " at " + formatClockTime(frameTime) : ""));
+  }
+  if (confidence != null && String(confidence).trim()) {
+    items.push("Confidence: " + formatEvidenceConfidence(confidence));
+  }
+  return items;
+}
+
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value == null || String(value).trim() === "") continue;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
+function formatEvidenceConfidence(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    const percent = numeric <= 1 ? numeric * 100 : numeric;
+    return String(Math.round(percent)) + "%";
+  }
+  return formatConfidenceLabel(value);
 }
 
 function buildDiscoveryMoment(frame, title, fallbackDetail, formatClockTime) {
@@ -631,10 +682,10 @@ function buildReplayNotice(error, normalizeErrorMessage) {
   const message = String(normalizeErrorMessage(error?.message ?? error) ?? "");
   const lower = message.toLowerCase();
   if (lower.includes("404") || lower.includes("unexpected response")) {
-    return "No replay snapshots are available for this session.";
+    return "No replay is available for this session.";
   }
   if (lower.includes("network") || lower.includes("failed to fetch")) {
-    return "Replay data will appear after telemetry processing completes.";
+    return "Replay will appear when processing completes.";
   }
-  return "No replay snapshots are available for this session.";
+  return "No replay is available for this session.";
 }
