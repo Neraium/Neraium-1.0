@@ -82,6 +82,11 @@ export function normalizeErrorMessage(error) {
   return "Unexpected processing error";
 }
 
+export function hasSupportedSiiClaims(payload = {}) {
+  return payload.sii_reliable_enough_to_show === true
+    && (payload.evidence_persisted === true || payload.evidence_persistence?.persisted === true);
+}
+
 export function normalizeUploadJob(payload = {}) {
   const jobId = payload.job_id ?? payload.jobId ?? payload.id ?? null;
   const status = normalizeUploadStatus(payload.status ?? payload.processing_state ?? payload.stage ?? payload.propagation_stage);
@@ -109,6 +114,15 @@ export function normalizeUploadJob(payload = {}) {
     result_available: Boolean(payload.result_available),
     replay_ready: Boolean(payload.replay_ready),
     replay_frame_count: Number(payload.replay_frame_count ?? 0) || 0,
+    rows_received: Number(payload.rows_received ?? payload.ingestion_report?.rows_received ?? payload.row_count ?? 0) || 0,
+    rows_used: Number(payload.rows_used ?? payload.ingestion_report?.rows_used ?? payload.rows_processed ?? 0) || 0,
+    rows_dropped: Number(payload.rows_dropped ?? payload.ingestion_report?.rows_dropped ?? 0) || 0,
+    drop_reasons: payload.drop_reasons ?? payload.ingestion_report?.drop_reasons ?? {},
+    processing_time_seconds: Number(payload.processing_time_seconds ?? payload.processing_stats?.processing_time_seconds ?? 0) || 0,
+    quality_warning: payload.quality_warning ?? payload.data_quality?.warnings?.[0] ?? null,
+    sii_reliable_enough_to_show: payload.sii_reliable_enough_to_show === true,
+    evidence_persisted: payload.evidence_persisted === true || payload.evidence_persistence?.persisted === true,
+    supported_sii_claims: hasSupportedSiiClaims(payload),
   };
 }
 

@@ -78,6 +78,46 @@ test.describe("Responsive layout audit", () => {
     await expect(page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i })).toBeVisible();
   });
 
+  test("mobile views overlay covers the viewport and restores the gate on dismiss", async ({ page }) => {
+    await openGate(page, { width: 390, height: 844 });
+    await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
+
+    const overlay = page.getByTestId("views-overlay");
+    await expect(overlay).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close workspace menu" })).toBeVisible();
+
+    const metrics = await overlay.evaluate((node) => {
+      const overlayStyle = window.getComputedStyle(node);
+      const panel = node.querySelector(".system-gate__settings-panel");
+      const panelStyle = panel ? window.getComputedStyle(panel) : null;
+      const overlayRect = node.getBoundingClientRect();
+      const panelRect = panel ? panel.getBoundingClientRect() : null;
+      return {
+        overlayPosition: overlayStyle.position,
+        overlayZIndex: overlayStyle.zIndex,
+        bodyOverflow: window.getComputedStyle(document.body).overflow,
+        documentOverflow: window.getComputedStyle(document.documentElement).overflow,
+        overlayWidth: overlayRect.width,
+        overlayHeight: overlayRect.height,
+        panelMinHeight: panelStyle?.minHeight ?? null,
+        panelTop: panelRect?.top ?? null,
+      };
+    });
+
+    expect(metrics.overlayPosition).toBe("fixed");
+    expect(Number(metrics.overlayZIndex)).toBeGreaterThan(100);
+    expect(metrics.bodyOverflow).toBe("hidden");
+    expect(metrics.documentOverflow).toBe("hidden");
+    expect(metrics.overlayWidth).toBe(390);
+    expect(metrics.overlayHeight).toBe(844);
+    expect(metrics.panelMinHeight).toBe("844px");
+    expect(metrics.panelTop).toBe(0);
+
+    await page.getByRole("button", { name: "Close workspace menu" }).click();
+    await expect(overlay).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ })).toBeVisible();
+  });
+
   test("buttons do not overlap across responsive widths", async ({ page }) => {
     const viewports = [
       { width: 320, height: 720 },

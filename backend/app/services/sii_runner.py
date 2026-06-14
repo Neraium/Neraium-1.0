@@ -37,6 +37,9 @@ STATE_REQUIRED_FIELDS = {
     "last_processed_at",
     "source",
 }
+MIN_COVARIANCE_BASELINE_ROWS = 8
+COVARIANCE_REGULARIZATION_FRACTION = 0.05
+COVARIANCE_REGULARIZATION_FLOOR = 1e-3
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
@@ -71,8 +74,8 @@ class BackendSiiRunner:
         self._history.append(vector)
 
         baseline_vectors, recent_vectors = self._windowed_history()
-        baseline_mean = np.nan_to_num(np.nanmean(baseline_vectors, axis=0), nan=0.0)
-        recent_mean = np.nan_to_num(np.nanmean(recent_vectors, axis=0), nan=0.0)
+        baseline_mean = _nanmean_columns(baseline_vectors)
+        recent_mean = _nanmean_columns(recent_vectors)
         safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
         normalized_delta = np.abs(recent_mean - baseline_mean) / safe_baseline
         fallback_structural_drift = float(np.clip(np.nan_to_num(np.nanmean(normalized_delta), nan=0.0), 0.0, 1.5))
@@ -115,13 +118,22 @@ class BackendSiiRunner:
         previous_distance = self._distance_history[-1] if self._distance_history else 0.0
         previous_velocity = self._distance_velocity_history[-1] if self._distance_velocity_history else 0.0
 
+        baseline_completeness = _matrix_completeness(baseline_vectors)
+        recent_completeness = _matrix_completeness(recent_vectors)
+        enough_baseline_for_covariance = (
+            len(baseline_matrix) >= MIN_COVARIANCE_BASELINE_ROWS
+            and baseline_completeness >= 0.65
+            and current_vector.shape[0] > 0
+        )
+
         try:
-            baseline_covariance = np.atleast_2d(np.cov(baseline_matrix, rowvar=False))
+            if not enough_baseline_for_covariance:
+                raise ValueError("insufficient baseline for covariance scoring")
+            baseline_covariance = _regularized_covariance_matrix(baseline_matrix)
             baseline_covariance = np.nan_to_num(baseline_covariance, nan=0.0)
             expected_shape = (current_vector.shape[0], current_vector.shape[0])
             if baseline_covariance.shape != expected_shape:
                 baseline_covariance = np.eye(current_vector.shape[0], dtype=float)
-            baseline_covariance = baseline_covariance + (np.eye(baseline_covariance.shape[0], dtype=float) * 1e-6)
             covariance_inverse = np.linalg.pinv(baseline_covariance)
             centered_vector = np.nan_to_num(current_vector - baseline_mean, nan=0.0)
             mahalanobis_sq = float(centered_vector.T @ covariance_inverse @ centered_vector)
@@ -134,10 +146,15 @@ class BackendSiiRunner:
             mahalanobis_distance = fallback_score
 
         if covariance_valid:
-            structural_drift_score = float(np.clip(mahalanobis_distance / max(mahalanobis_distance + 1.0, 1.0), 0.0, 1.0))
+            baseline_distances = _baseline_mahalanobis_distances(baseline_matrix, baseline_mean, covariance_inverse)
+            baseline_distance_center = float(np.mean(baseline_distances)) if baseline_distances else 0.0
+            baseline_distance_spread = float(np.std(baseline_distances)) if baseline_distances else 0.0
+            baseline_distance_limit = max(baseline_distance_center + baseline_distance_spread * 3.0, 1.0)
+            excess_distance = max(0.0, mahalanobis_distance - baseline_distance_limit)
+            structural_drift_score = float(np.clip(excess_distance / baseline_distance_limit, 0.0, 1.0))
             drift_velocity = float(mahalanobis_distance - previous_distance)
             drift_acceleration = float(drift_velocity - previous_velocity)
-            recent_covariance = np.atleast_2d(np.cov(recent_matrix, rowvar=False))
+            recent_covariance = _regularized_covariance_matrix(recent_matrix)
             recent_covariance = np.nan_to_num(recent_covariance, nan=0.0)
             if recent_covariance.shape == baseline_covariance.shape:
                 baseline_norm = float(np.linalg.norm(baseline_covariance, ord="fro"))
@@ -147,6 +164,8 @@ class BackendSiiRunner:
             else:
                 covariance_shift = 0.0
             trajectory_curvature = float(np.clip(abs(drift_acceleration) / max(abs(drift_velocity), 1e-6), 0.0, 1.0))
+            if fallback_structural_drift < 0.08 and covariance_shift < 0.8:
+                structural_drift_score = 0.0
 
             distance_history = list(self._distance_history) + [mahalanobis_distance]
             dynamic_threshold = float(np.mean(distance_history) + np.std(distance_history)) if distance_history else 0.0
@@ -155,23 +174,30 @@ class BackendSiiRunner:
                 persistence_condition = bool(sum(value > dynamic_threshold for value in distance_window) >= 3)
             accumulation = float(np.sum(distance_window)) if distance_window else 0.0
             accumulation_condition = bool(len(distance_window) >= 3 and accumulation >= dynamic_threshold * 3.0)
+            corroborated_drift = persistence_condition and accumulation_condition and structural_drift_score >= 0.08
+            motion_gate = max(structural_drift_score, min(covariance_shift, 1.0) * 0.25 if corroborated_drift else 0.0)
 
             technical_score = float(
                 np.clip(
                     structural_drift_score * 0.45
-                    + min(abs(drift_velocity), 1.0) * 0.20
-                    + min(abs(drift_acceleration), 1.0) * 0.15
-                    + min(covariance_shift, 1.0) * 0.15
-                    + min(trajectory_curvature, 1.0) * 0.05,
+                    + min(abs(drift_velocity), 1.0) * motion_gate * 0.20
+                    + min(abs(drift_acceleration), 1.0) * motion_gate * 0.15
+                    + min(covariance_shift, 1.0) * (1.0 if corroborated_drift else 0.25) * 0.15
+                    + min(trajectory_curvature, 1.0) * motion_gate * 0.05,
                     0.0,
                     1.0,
                 )
             )
             if not (persistence_condition and accumulation_condition):
-                technical_score = min(technical_score, 0.49)
-            instability_score = float(max(fallback_score * 0.35, technical_score))
+                technical_score = min(technical_score, 0.19)
+            fallback_adjusted_score = fallback_score
+            if not corroborated_drift and fallback_structural_drift < 0.08:
+                fallback_adjusted_score = min(fallback_adjusted_score, 0.20)
+            instability_score = float(max(fallback_adjusted_score * 0.35, technical_score))
             structural_drift = structural_drift_score
-            transition_pressure = float(np.clip(abs(drift_velocity) + abs(drift_acceleration), 0.0, 1.0))
+            transition_pressure = float(np.clip((abs(drift_velocity) + abs(drift_acceleration)) * motion_gate, 0.0, 1.0))
+            if not corroborated_drift:
+                transition_pressure = min(transition_pressure, 0.27)
         else:
             instability_score = fallback_score
 
@@ -193,11 +219,13 @@ class BackendSiiRunner:
             "fallback_normalized_drift": round(float(np.clip(fallback_structural_drift, 0.0, 1.0)), 6),
             "fallback_transition_pressure": round(float(np.clip(fallback_transition_pressure, 0.0, 1.0)), 6),
             "fallback_variability_pressure": round(float(np.clip(fallback_variability_pressure, 0.0, 1.0)), 6),
+            "baseline_completeness": round(float(np.clip(baseline_completeness, 0.0, 1.0)), 6),
+            "recent_completeness": round(float(np.clip(recent_completeness, 0.0, 1.0)), 6),
         }
         velocity = instability_score - (self._instability_history[-1] if self._instability_history else instability_score)
 
         regime, urgency = classify_state(len(self._history), instability_score, transition_pressure)
-        confidence = confidence_from_history(len(self._history), vector)
+        confidence = confidence_from_history(len(self._history), vector, recent_vectors=recent_vectors)
 
         self._instability_history.append(instability_score)
         self._velocity_history.append(float(velocity))
@@ -234,6 +262,53 @@ class BackendSiiRunner:
             baseline_source = self._history[:split_index]
         baseline_vectors = np.vstack(baseline_source[-self.baseline_window :])
         return baseline_vectors, recent_vectors
+
+
+def _covariance_matrix(matrix: np.ndarray) -> np.ndarray:
+    with np.errstate(all="ignore"):
+        covariance = np.cov(matrix, rowvar=False, bias=True)
+    covariance = np.atleast_2d(covariance)
+    return np.nan_to_num(covariance, nan=0.0)
+
+
+def _regularized_covariance_matrix(matrix: np.ndarray) -> np.ndarray:
+    covariance = _covariance_matrix(matrix)
+    dimension = covariance.shape[0]
+    diagonal = np.diag(covariance) if covariance.ndim == 2 and covariance.shape[0] == covariance.shape[1] else np.array([])
+    positive_diagonal = diagonal[diagonal > 0]
+    variance_scale = float(np.mean(positive_diagonal)) if positive_diagonal.size else 1.0
+    regularization = max(variance_scale * COVARIANCE_REGULARIZATION_FRACTION, COVARIANCE_REGULARIZATION_FLOOR)
+    return covariance + (np.eye(dimension, dtype=float) * regularization)
+
+
+def _baseline_mahalanobis_distances(
+    baseline_matrix: np.ndarray,
+    baseline_mean: np.ndarray,
+    covariance_inverse: np.ndarray,
+) -> list[float]:
+    distances: list[float] = []
+    for baseline_vector in baseline_matrix:
+        centered = np.nan_to_num(baseline_vector - baseline_mean, nan=0.0)
+        distance_sq = float(centered.T @ covariance_inverse @ centered)
+        if np.isfinite(distance_sq):
+            distances.append(float(np.sqrt(max(distance_sq, 0.0))))
+    return distances
+
+
+def _nanmean_columns(matrix: np.ndarray) -> np.ndarray:
+    values = np.asarray(matrix, dtype=float)
+    if values.size == 0:
+        return np.asarray([], dtype=float)
+    valid_counts = np.sum(~np.isnan(values), axis=0)
+    sums = np.nansum(values, axis=0)
+    return np.divide(sums, valid_counts, out=np.zeros(values.shape[1], dtype=float), where=valid_counts > 0)
+
+
+def _matrix_completeness(matrix: np.ndarray) -> float:
+    values = np.asarray(matrix, dtype=float)
+    if values.size == 0:
+        return 0.0
+    return float(np.mean(~np.isnan(values)))
 
 
 def _try_import_runner() -> None:
@@ -343,7 +418,7 @@ def run_sii_runner(
         base_result["errors"].append("No complete numeric sensor vectors were available for SII runner ingestion.")
         return base_result
 
-    baseline_window = min(50, max(2, min(12, len(vector_rows["vectors"]) // 2 or 2)))
+    baseline_window = min(50, max(2, min(48, len(vector_rows["vectors"]) // 2 or 2)))
     adapter = _SII_ENGINE_ADAPTER(baseline_window=baseline_window, recent_window=baseline_window)
     states: list[dict[str, Any]] = []
     run_id = f"upload-{datetime.now(UTC).timestamp()}"
@@ -564,7 +639,8 @@ def build_instability_index(latest_state: dict[str, Any]) -> dict[str, Any]:
     if "transition_pressure" not in latest_state:
         relationship = float(components.get("relationship_degradation", 0.0))
     entropy = float(components.get("covariance_shift", components.get("entropy_growth", 0.0)))
-    causal = float(latest_state.get("confidence", 0.0))
+    runner_score = float(latest_state.get("instability_score", 0.0))
+    causal = float(np.clip(latest_state.get("confidence", 0.0), 0.0, 1.0) * np.clip(runner_score, 0.0, 1.0))
     if "covariance_shift" in components or "trajectory_curvature" in components:
         topology = float(
             np.clip(
@@ -705,12 +781,23 @@ def classify_state(history_length: int, instability_score: float, transition_pre
     return "STABLE", "NOMINAL"
 
 
-def confidence_from_history(history_length: int, vector: np.ndarray) -> float: 
-    completeness = float(np.mean(~np.isnan(vector))) if vector.size else 0.0 
-    history_factor = min(history_length / 12, 1.0) 
-    return max(0.35, min(0.94, 0.4 + history_factor * 0.35 + completeness * 0.19)) 
- 
- 
+def confidence_from_history(history_length: int, vector: np.ndarray, *, recent_vectors: np.ndarray | None = None) -> float:
+    current_completeness = float(np.mean(~np.isnan(vector))) if vector.size else 0.0
+    recent_completeness = _matrix_completeness(recent_vectors) if recent_vectors is not None else current_completeness
+    history_factor = min(history_length / 36.0, 1.0)
+    raw_confidence = 0.20 + history_factor * 0.26 + current_completeness * 0.18 + recent_completeness * 0.18
+    quality_cap = 0.90 if min(current_completeness, recent_completeness) >= 0.995 else 0.55 + min(current_completeness, recent_completeness) * 0.35
+    if history_length < 8:
+        quality_cap = min(quality_cap, 0.42)
+    elif history_length < 16:
+        quality_cap = min(quality_cap, 0.58)
+    elif history_length < 24:
+        quality_cap = min(quality_cap, 0.58)
+    elif history_length < 36:
+        quality_cap = min(quality_cap, 0.72)
+    return float(np.clip(raw_confidence, 0.18, quality_cap))
+
+
 def normalize_urgency(urgency: str) -> str: 
     normalized = urgency.lower()
     if normalized == "critical":

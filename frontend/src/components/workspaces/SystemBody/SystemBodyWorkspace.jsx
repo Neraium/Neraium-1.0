@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
@@ -72,6 +73,14 @@ export default function SystemBodyWorkspace({
     ],
   );
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
+  const stabilitySnapshot = useMemo(
+    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
+    [latestReplayFrame, latestUploadResult],
+  );
+  const dataConditions = useMemo(
+    () => collectDataConditions(latestUploadResult),
+    [latestUploadResult],
+  );
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -79,6 +88,102 @@ export default function SystemBodyWorkspace({
     }
     setMenuOpen(false);
   }
+
+  useEffect(() => {
+    if (!menuOpen || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousDocumentOverflow = documentElement.style.overflow;
+
+    body.classList.add("views-overlay-open");
+    documentElement.classList.add("views-overlay-open");
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.classList.remove("views-overlay-open");
+      documentElement.classList.remove("views-overlay-open");
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen || typeof window === "undefined") {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
+  const menuOverlay = menuOpen && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        className="system-gate__settings-overlay"
+        data-testid="views-overlay"
+        onClick={() => setMenuOpen(false)}
+      >
+        <aside
+          id="system-body-menu"
+          className="system-gate__settings-panel"
+          aria-label="System body navigation menu"
+          aria-modal="true"
+          role="dialog"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="system-gate__settings-panel-header">
+            <p className="system-gate__settings-panel-title">Views</p>
+            <button
+              type="button"
+              className="system-gate__settings-close"
+              aria-label="Close workspace menu"
+              onClick={() => setMenuOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <ul>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                Upload CSV / Connect Data
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                Connect API
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
+                Structural Replay
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
+                Observation Review
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
+                Help / Changelog
+              </button>
+            </li>
+          </ul>
+        </aside>
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
     <PageContainer className="system-body system-body--gate">
@@ -99,29 +204,73 @@ export default function SystemBodyWorkspace({
           Views
         </button>
 
-        {menuOpen ? (
-          <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
-            <ul>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>Evidence Replay</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>Findings</button></li>
-              <li><button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>Help</button></li>
-            </ul>
-          </aside>
-        ) : null}
+        <div className="system-gate__layout">
+          <div className="system-gate__column system-gate__column--left">
+            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
+                  <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
+                  <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
+                </ul>
+              </div>
+            </section>
+          </div>
 
-        <div className="system-gate__center" style={{ cursor: "default" }}>
-          <SystemOrbPanel
-            systemState={systemState}
-            uiState={uiState}
-            coherence={coherence}
-            stateLabel={interpretation.structuralState}
-            lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
-            focusLabel={interpretation.primaryDriver}
-            orbData={orbData}
-            compactPreview
-          />
-          <p className="system-gate__state">{interpretation.structuralState}</p>
+          <div className="system-gate__center" style={{ cursor: "default" }}>
+            <SystemOrbPanel
+              systemState={systemState}
+              uiState={uiState}
+              coherence={coherence}
+              stateLabel={interpretation.structuralState}
+              lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
+              focusLabel={interpretation.primaryDriver}
+              orbData={orbData}
+              compactPreview
+            />
+            <p className="system-gate__state">{interpretation.structuralState}</p>
+          </div>
+
+          <div className="system-gate__column system-gate__column--right">
+            <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
+                  <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
+                  <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
+                  <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
+                </ul>
+                {dataConditions.length > 0 ? (
+                  <div style={{ marginTop: "0.8rem" }}>
+                    <p className="section-token">Data Conditions</p>
+                    <ul className="compact-list">
+                      {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
+              <div className="panel-body">
+                <ul className="onboarding-summary">
+                  <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
+                  <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
+                  <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+                </ul>
+              </div>
+            </section>
+
+            <div className="system-gate__actions">
+              <button
+                type="button"
+                className="command-button"
+                onClick={() => navigateWorkspace("observation-center")}
+              >
+                Review Observations
+              </button>
+            </div>
+          </div>
         </div>
 
         <section className="panel system-gate__plate system-gate__plate--summary system-gate__plate--operator" aria-label="System status summary">
@@ -146,8 +295,44 @@ export default function SystemBodyWorkspace({
           </button>
         </div>
       </section>
+      {menuOverlay}
     </PageContainer>
   );
+}
+
+function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
+  const sii = latestUploadResult?.sii_intelligence ?? {};
+  const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
+  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
+  const driftMagnitude = frame?.baseline_distance
+    ?? frame?.topology_state?.drift_index
+    ?? sii?.instability_index
+    ?? "-";
+  const startedAt = frame?.timestamp_start
+    ?? latestUploadResult?.timestamp_profile?.first_timestamp
+    ?? null;
+  return {
+    regime: sii?.baseline_regime ?? sii?.regime_label ?? "State Group A",
+    driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : String(driftMagnitude ?? "-"),
+    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
+    deformationAge: ageLabel(startedAt),
+  };
+}
+
+function collectDataConditions(latestUploadResult) {
+  const result = latestUploadResult ?? {};
+  const dataQualityWarnings = Array.isArray(result?.data_quality?.warnings) ? result.data_quality.warnings : [];
+  const timestampWarnings = Array.isArray(result?.timestamp_profile?.warnings) ? result.timestamp_profile.warnings : [];
+  return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
+}
+
+function ageLabel(value) {
+  if (!value) return "-";
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "-";
+  const hours = Math.round(ms / 3600000);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 function mapBackendSystemInterpretation(contract) {

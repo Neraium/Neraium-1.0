@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.cultivation_mapping import map_cultivation_columns
-from app.services.data_quality import build_data_quality, profile_numeric_columns, profile_timestamps
+from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 from app.services.notifications import dispatch_observation_notification
@@ -253,7 +253,7 @@ def _complete_with_partial_result(
         "row_count": row_count,
         "column_count": len(columns),
         "columns": columns,
-        "preview_rows": rows[:10],
+        "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
         "detected_timestamp_column": snapshot.get("timestamp_column"),
         "numeric_profiles": [],
         "timestamp_profile": {
@@ -384,42 +384,244 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
     write_job(payload)
 
 
+def _detect_delimiter(sample: str) -> str:
+    non_blank = [line for line in sample.splitlines() if line.strip()][:20]
+    joined = "\n".join(non_blank)
+    if not joined:
+        raise ValueError("CSV file is empty.")
+    try:
+        return csv.Sniffer().sniff(joined, delimiters=",\t;|").delimiter
+    except csv.Error:
+        return "whitespace"
+
+
+def _row_tokens(line: str, delimiter: str) -> list[str]:
+    if delimiter == "whitespace":
+        return line.strip().split()
+    return next(csv.reader([line], delimiter=delimiter))
+
+
+def _looks_like_header(tokens: list[str]) -> bool:
+    if not tokens:
+        return False
+    numeric_count = sum(parse_numeric_value(token) is not None for token in tokens)
+    timestamp_count = sum(parse_timestamp(token) is not None for token in tokens)
+    return numeric_count + timestamp_count < max(1, len(tokens) // 2)
+
+
+def _normalized_columns(tokens: list[str], *, header_present: bool) -> list[str]:
+    if not header_present:
+        return [f"column_{index + 1}" for index in range(len(tokens))]
+    columns: list[str] = []
+    seen: dict[str, int] = {}
+    for index, token in enumerate(tokens):
+        base = token.strip() or f"column_{index + 1}"
+        seen[base] = seen.get(base, 0) + 1
+        columns.append(base if seen[base] == 1 else f"{base}_{seen[base]}")
+    return columns
+
+
 def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | None = None) -> dict[str, Any]:
     with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
-        reader = csv.DictReader(handle)
-        columns = list(reader.fieldnames or [])
+        sample_lines: list[str] = []
+        while len(sample_lines) < 20 and sum(len(item) for item in sample_lines) < 65536:
+            line = handle.readline()
+            if line == "":
+                break
+            if line.strip():
+                sample_lines.append(line.rstrip("\r\n"))
+
+        if not sample_lines:
+            raise ValueError("CSV file is empty.")
+
+        delimiter = _detect_delimiter("\n".join(sample_lines))
+        first_tokens = _row_tokens(sample_lines[0], delimiter)
+        header_present = _looks_like_header(first_tokens)
+        columns = _normalized_columns(first_tokens, header_present=header_present)
         if not columns:
-            raise ValueError("CSV must include a header and at least one data row.")
-        timestamp_column = _detect_timestamp_column(columns)
-        sample_rows: list[dict[str, Any]] = []
-        row_count = 0
-        first_timestamp = None
-        last_timestamp = None
-        memory_estimate_bytes = 0
-        for row in reader:
-            row_count += 1
-            if timestamp_column:
-                ts_value = row.get(timestamp_column)
-                if first_timestamp is None:
-                    first_timestamp = ts_value
-                last_timestamp = ts_value
-            if len(sample_rows) < max_analysis_rows:
-                sample_rows.append(row)
-                memory_estimate_bytes += sum(len(str(v or "")) for v in row.values())
-            if job_id and row_count % CSV_PROGRESS_UPDATE_EVERY == 0:
-                _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label=f"Parsing telemetry ({row_count:,} rows)...")
-    if row_count == 0:
-        raise ValueError("CSV must include a header and at least one data row.")
-    return {
-        "columns": columns,
-        "timestamp_column": timestamp_column,
-        "sample_rows": sample_rows,
-        "row_count": row_count,
-        "first_timestamp": first_timestamp,
-        "last_timestamp": last_timestamp,
-        "chunk_count": max(1, (row_count + CSV_CHUNK_SIZE_ROWS - 1) // CSV_CHUNK_SIZE_ROWS),
-        "memory_estimate_bytes": int(memory_estimate_bytes),
-    }
+            raise ValueError("CSV must include at least one column.")
+
+        timestamp_column = _detect_timestamp_column(columns) if header_present else None
+        timestamp_index = columns.index(timestamp_column) if timestamp_column in columns else None
+
+        handle.seek(0)
+        saw_header = not header_present
+        detection_rows: list[list[str]] = []
+        while True:
+            line = handle.readline()
+            if line == "":
+                break
+            if not line.strip():
+                continue
+            if header_present and not saw_header:
+                saw_header = True
+                continue
+            tokens = _row_tokens(line.rstrip("\r\n"), delimiter)
+            if len(tokens) != len(columns):
+                continue
+            row_values = [token.strip() for token in tokens]
+            if len(detection_rows) < 1000:
+                detection_rows.append(row_values)
+
+        if not detection_rows:
+            raise ValueError("CSV must include a header and at least one usable data row.")
+
+        if timestamp_index is None:
+            detected = detect_timestamp_column(columns, detection_rows)
+            if detected in columns:
+                timestamp_column = detected
+                timestamp_index = columns.index(detected)
+
+        identity_index = next(
+            (
+                index
+                for index, column in enumerate(columns)
+                if column.lower().strip() in {"room", "zone", "location", "area", "group", "system", "asset", "asset name", "zone name"}
+            ),
+            None,
+        )
+        excluded_indexes = {index for index in (timestamp_index, identity_index) if index is not None}
+        numeric_indexes = [
+            index
+            for index in range(len(columns))
+            if index not in excluded_indexes
+            and sum(parse_numeric_value(row[index]) is not None for row in detection_rows)
+            >= max(3, int(min(len(detection_rows), 1000) * 0.15))
+        ]
+
+        handle.seek(0)
+        rows_received = 0
+        blank_rows = 0
+        malformed_rows = 0
+        duplicate_timestamps = 0
+        invalid_timestamps = 0
+        no_numeric_values = 0
+        rows_with_missing_values = 0
+        rows_with_invalid_numeric = 0
+        invalid_numeric_cells = 0
+        seen_timestamps: set[str] = set()
+        raw_rows_in_order: list[tuple[Any, dict[str, Any]]] = []
+        header_skipped = not header_present
+
+        for line in handle:
+            if not line.strip():
+                if header_skipped:
+                    rows_received += 1
+                    blank_rows += 1
+                continue
+
+            if not header_skipped:
+                header_skipped = True
+                continue
+
+            rows_received += 1
+            tokens = _row_tokens(line.rstrip("\r\n"), delimiter)
+            if len(tokens) != len(columns):
+                malformed_rows += 1
+                continue
+
+            raw_row = [token.strip() for token in tokens]
+            parsed_ts = None
+            if timestamp_index is not None:
+                parsed_ts = parse_timestamp(raw_row[timestamp_index])
+                if parsed_ts is None:
+                    invalid_timestamps += 1
+                    continue
+                identity_value = raw_row[identity_index].strip() if identity_index is not None else ""
+                timestamp_key = f"{identity_value}::{parsed_ts.isoformat()}"
+                if timestamp_key in seen_timestamps:
+                    duplicate_timestamps += 1
+                    continue
+                seen_timestamps.add(timestamp_key)
+
+            row = {column: raw_row[index] for index, column in enumerate(columns)}
+            row["__source_row_number"] = rows_received
+            if parsed_ts is not None:
+                row["__source_timestamp"] = parsed_ts.isoformat()
+            missing_in_row = any(raw_row[index] == "" for index in numeric_indexes)
+            invalid_in_row = False
+            usable_numeric = 0
+            for index in numeric_indexes:
+                raw_value = raw_row[index]
+                if raw_value == "":
+                    continue
+                numeric_value = parse_numeric_value(raw_value)
+                if numeric_value is None:
+                    row[columns[index]] = ""
+                    invalid_numeric_cells += 1
+                    invalid_in_row = True
+                    continue
+                row[columns[index]] = str(numeric_value)
+                usable_numeric += 1
+            if numeric_indexes and usable_numeric == 0:
+                no_numeric_values += 1
+                continue
+            if missing_in_row:
+                rows_with_missing_values += 1
+            if invalid_in_row:
+                rows_with_invalid_numeric += 1
+            raw_rows_in_order.append((parsed_ts, row))
+
+        if not raw_rows_in_order:
+            raise ValueError("CSV contains no usable telemetry rows after cleaning.")
+
+        rows_used = len(raw_rows_in_order)
+        cleaned = sorted(raw_rows_in_order, key=lambda item: item[0]) if timestamp_index is not None else raw_rows_in_order
+        sample_rows = [row for _, row in cleaned[:max_analysis_rows]]
+        first_timestamp = cleaned[0][1].get(timestamp_column) if timestamp_column else None
+        last_timestamp = cleaned[-1][1].get(timestamp_column) if timestamp_column else None
+        memory_estimate_bytes = sum(sum(len(str(value or "")) for value in row.values()) for row in sample_rows)
+        rows_dropped = rows_received - rows_used
+        drop_reasons = {
+            key: value
+            for key, value in {
+                "blank_row": blank_rows,
+                "column_count_mismatch": malformed_rows,
+                "invalid_timestamp": invalid_timestamps,
+                "duplicate_timestamp": duplicate_timestamps,
+                "no_usable_numeric_values": no_numeric_values,
+            }.items()
+            if value
+        }
+        warnings = []
+        if rows_dropped:
+            warnings.append(f"{rows_dropped} rows were dropped during safe cleaning.")
+        if rows_with_missing_values:
+            warnings.append(f"{rows_with_missing_values} rows contain missing numeric values.")
+        if rows_with_invalid_numeric:
+            warnings.append(f"{rows_with_invalid_numeric} rows contained non-numeric values that were ignored.")
+        if delimiter == "whitespace":
+            warnings.append("Whitespace-delimited telemetry was detected.")
+        if not header_present:
+            warnings.append("No header row was detected; generic column names were assigned.")
+        if timestamp_index is not None and [item[0] for item in raw_rows_in_order] != [item[0] for item in cleaned]:
+            warnings.append("Timestamps were unsorted and were ordered before analysis.")
+
+        if job_id and rows_received >= CSV_PROGRESS_UPDATE_EVERY:
+            _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label=f"Parsed and cleaned {rows_received:,} rows.")
+
+        return {
+            "columns": columns,
+            "timestamp_column": timestamp_column,
+            "sample_rows": sample_rows,
+            "row_count": rows_used,
+            "rows_received": rows_received,
+            "rows_used": rows_used,
+            "rows_dropped": rows_dropped,
+            "drop_reasons": drop_reasons,
+            "quality_counts": {
+                "rows_with_missing_values": rows_with_missing_values,
+                "rows_with_invalid_numeric": rows_with_invalid_numeric,
+                "invalid_numeric_cells": invalid_numeric_cells,
+            },
+            "cleaning_warnings": warnings,
+            "delimiter": delimiter,
+            "header_present": header_present,
+            "first_timestamp": first_timestamp,
+            "last_timestamp": last_timestamp,
+            "chunk_count": max(1, (rows_received + CSV_CHUNK_SIZE_ROWS - 1) // CSV_CHUNK_SIZE_ROWS),
+            "memory_estimate_bytes": int(memory_estimate_bytes),
+        }
 
 
 def _signal_level_from_drift(item: dict[str, Any]) -> str:
@@ -513,6 +715,53 @@ def _deformation_started_at(result: dict[str, Any]) -> str | None:
     return None
 
 
+
+def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    baseline = result.get("baseline_analysis") or {}
+    anchors: list[dict[str, Any]] = []
+    for item in baseline.get("top_relationship_changes") or baseline.get("relationship_drift") or []:
+        if not isinstance(item, dict):
+            continue
+        for anchor in item.get("source_rows") or []:
+            if isinstance(anchor, dict):
+                anchors.append(
+                    {
+                        "window": anchor.get("window"),
+                        "source_row": anchor.get("source_row"),
+                        "timestamp": anchor.get("timestamp"),
+                    }
+                )
+        for ref in item.get("evidence_refs") or []:
+            if not isinstance(ref, dict):
+                continue
+            for anchor in ref.get("source_rows") or []:
+                if isinstance(anchor, dict):
+                    anchors.append(
+                        {
+                            "window": anchor.get("window"),
+                            "source_row": anchor.get("source_row"),
+                            "timestamp": anchor.get("timestamp"),
+                            "column": ref.get("column"),
+                        }
+                    )
+    if not anchors:
+        profile = result.get("timestamp_profile") or {}
+        first = profile.get("first_timestamp") if isinstance(profile, dict) else None
+        last = profile.get("last_timestamp") if isinstance(profile, dict) else None
+        if first:
+            anchors.append({"window": "upload_start", "timestamp": first})
+        if last and last != first:
+            anchors.append({"window": "upload_end", "timestamp": last})
+    seen: set[tuple[Any, Any, Any, Any]] = set()
+    deduped: list[dict[str, Any]] = []
+    for anchor in anchors:
+        key = (anchor.get("window"), anchor.get("source_row"), anchor.get("timestamp"), anchor.get("column"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(anchor)
+    return deduped[:16]
+
 def build_evidence_record_from_result(
     *,
     run_id: str,
@@ -531,10 +780,12 @@ def build_evidence_record_from_result(
     replay = result.get("replay_timeline") or (sii.get("replay_timeline")) or {}
     replay_timeline = replay.get("timeline") if isinstance(replay, dict) else []
     latest_frame = replay_timeline[-1] if isinstance(replay_timeline, list) and replay_timeline else {}
-    relationship_drift = ((result.get("baseline_analysis") or {}).get("relationship_drift")) or []
+    baseline_payload = result.get("baseline_analysis") or {}
+    relationship_drift = (baseline_payload.get("relationship_drift") or baseline_payload.get("top_relationship_changes") or [])
     primary_relationship = relationship_drift[0] if isinstance(relationship_drift, list) and relationship_drift else {}
     variables = _observation_variables_from_result(result)
     data_conditions = _data_conditions_from_result(result)
+    source_rows = _source_rows_from_result(result)
     observation_type = _observation_type_from_result(result)
     structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
     drift_metrics = {
@@ -583,6 +834,7 @@ def build_evidence_record_from_result(
         "variables": variables,
         "drift_metrics": drift_metrics,
         "data_conditions": data_conditions,
+        "source_rows": source_rows,
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,
         "deformation_started_at": _deformation_started_at(result),
@@ -659,6 +911,7 @@ def _build_upload_engine_result(
                 "baseline_sample_size": item.get("baseline_sample_size"),
                 "recent_sample_size": item.get("recent_sample_size"),
                 "evidence_refs": item.get("evidence_refs"),
+                "source_rows": item.get("source_rows"),
             }
         )
         for column in columns:
@@ -712,7 +965,20 @@ def _build_upload_engine_result(
     }
 
 
-def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list[dict[str, Any]], row_count_total: int, timestamp_column: str | None, first_timestamp: Any, last_timestamp: Any, chunk_count: int, memory_estimate_bytes: int) -> dict[str, Any]:
+def _build_csv_result(
+    job_id: str,
+    filename: str,
+    columns: list[str],
+    rows: list[dict[str, Any]],
+    row_count_total: int,
+    timestamp_column: str | None,
+    first_timestamp: Any,
+    last_timestamp: Any,
+    chunk_count: int,
+    memory_estimate_bytes: int,
+    ingestion_report: dict[str, Any] | None = None,
+    processing_started_at: float | None = None,
+) -> dict[str, Any]:
     initiated_by = (read_job(job_id) or {}).get("initiated_by", "anonymous")
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
@@ -757,22 +1023,27 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
             for key in tracked_columns:
                 series = [_to_float(row.get(key)) for row in sample_rows]
                 clean = [value for value in series if value is not None]
-                if len(clean) < 2:
+                if len(clean) < 6:
                     continue
-                minimum = min(clean)
-                maximum = max(clean)
-                baseline_slice = clean[: max(1, len(clean) // 3)]
-                baseline = sum(baseline_slice) / max(1, len(baseline_slice))
-                denom = abs(baseline) if abs(baseline) > 1e-6 else 1.0
-                per_signal_drifts.append(abs(maximum - minimum) / denom)
+                window_size = max(3, len(clean) // 3)
+                baseline_slice = clean[:window_size]
+                recent_slice = clean[-window_size:]
+                baseline = sum(baseline_slice) / len(baseline_slice)
+                recent = sum(recent_slice) / len(recent_slice)
+                baseline_std = _population_std(baseline_slice)
+                recent_std = _population_std(recent_slice)
+                denom = max(abs(baseline), baseline_std * 3.0, 1.0)
+                mean_shift = abs(recent - baseline) / denom
+                variance_growth = max(0.0, recent_std - baseline_std) / denom
+                per_signal_drifts.append(mean_shift + variance_growth * 0.5)
             if per_signal_drifts:
                 room_drift = sum(per_signal_drifts) / len(per_signal_drifts)
         if sparse:
-            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Sparse telemetry"
-            relationship_evidence = [f"{name}: Relationship evidence is limited because the telemetry window is too sparse."]
+            urgency = "review"; driver_category = "sensor_network"; attribution_confidence = "low"; signal_strength = "low"; room_state = "Insufficient telemetry"
+            relationship_evidence = [f"{name}: Relationship evidence is limited due to sparse telemetry."]
             structural_explanation = [f"{name}: The system needs more telemetry before its structural state can be interpreted confidently."]
         elif room_drift > 0.25:
-            urgency = "unstable"; driver_category = "structural_drift"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Persistent structural drift observed"
+            urgency = "unstable"; driver_category = "process_timing"; attribution_confidence = "high"; signal_strength = "high"; room_state = "Persistent structural drift observed"
             relationship_pair = tracked_columns[:2]
             relationship_evidence = [
                 f"{name}: Coupling between {relationship_pair[0]} and {relationship_pair[1]} has shifted away from baseline."
@@ -780,6 +1051,10 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
                 else f"{name}: Multiple variables are drifting away from the baseline regime."
             ]
             structural_explanation = [f"{name}: Persistent multi-variable drift indicates a deformation in the system's baseline relational structure."]
+        elif room_drift > 0.08:
+            urgency = "review"; driver_category = "structural_drift"; attribution_confidence = "medium"; signal_strength = "medium"; room_state = "Structural drift observed"
+            relationship_evidence = [f"{name}: Variable relationships show moderate movement away from the baseline regime."]
+            structural_explanation = [f"{name}: Multi-variable drift warrants review, but the evidence does not yet indicate instability."]
         else:
             urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Baseline-aligned"
             relationship_evidence = [f"{name}: Variable relationships remain inside the baseline regime."]
@@ -829,6 +1104,14 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         "sampled_for_baseline": bool(relationship_baseline.get("sampled_for_baseline")),
     }
     cultivation_mapping = map_cultivation_columns(columns)
+    ingestion_report = ingestion_report or {}
+    cleaning_warnings = list(ingestion_report.get("warnings") or [])
+    baseline_reliable = (
+        baseline_analysis.get("baseline_window_rows", 0) >= 5
+        and baseline_analysis.get("recent_window_rows", 0) >= 1
+        and baseline_analysis.get("columns_analyzed", 0) >= 1
+    )
+    stuck_sensor_count = sum(1 for profile in numeric_profiles if profile.get("constant_or_stuck"))
     data_quality = build_data_quality(
         row_count_total,
         len(columns),
@@ -837,13 +1120,27 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         list(
             dict.fromkeys(
                 [
+                    *cleaning_warnings,
                     *timestamp_profile.get("warnings", []),
-                    *baseline_analysis.get("warnings", []),
                     *cultivation_mapping.get("warnings", []),
+                    *([f"{stuck_sensor_count} numeric sensor(s) appear constant or stuck."] if stuck_sensor_count else []),
                 ]
             )
         ),
+        {
+            "rows_received": ingestion_report.get("rows_received", row_count_total),
+            "rows_dropped": ingestion_report.get("rows_dropped", 0),
+            "quality_counts": ingestion_report.get("quality_counts", {}),
+            "stuck_sensor_count": stuck_sensor_count,
+            "irregular_sampling": any("inconsistent" in str(warning).lower() for warning in timestamp_profile.get("warnings", [])),
+            "baseline_reliable": baseline_reliable,
+        },
     )
+    reliability_warning = None
+    if not baseline_reliable:
+        reliability_warning = "Insufficient baseline: SII findings are not reliable enough to show."
+        data_quality["warnings"] = list(dict.fromkeys([*data_quality.get("warnings", []), reliability_warning]))
+
     room_assessments = {item["room"]: dict(item) for item in room_intelligence if item.get("room")}
     primary_room_assessment = next((item for item in room_intelligence if item.get("room") == (room_names[0] if room_names else "")), room_intelligence[0] if room_intelligence else {})
     engine_result = _build_upload_engine_result(
@@ -901,7 +1198,8 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
     )
     sii_intelligence["runner_module"] = RUNNER_MODULE
     sii_intelligence["replay_timeline"] = replay
-    processing_trace = {"sii_pipeline_ran": True, "sii_completed": True, "replay_frame_count": frame_count, "rows_processed": row_count_total, "columns_analyzed": len(numeric_columns), "completed_at": now}
+    processing_time_seconds = round(max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())), 6)
+    processing_trace = {"sii_pipeline_ran": True, "sii_completed": True, "replay_frame_count": frame_count, "rows_processed": row_count_total, "columns_analyzed": len(numeric_columns), "processing_time_seconds": processing_time_seconds, "completed_at": now}
     _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
     runner_result = run_sii_runner(columns=columns, rows=matrix_rows, numeric_profiles=numeric_profiles, timestamp_column=timestamp_column, primary_room=(driver_attribution.get("room") or room_names[0] if room_names else "Uploaded telemetry"), driver_attribution=driver_attribution, engine_result=engine_result, processing_trace=processing_trace)
     latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
@@ -912,11 +1210,29 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         "row_count": row_count_total,
         "column_count": len(columns),
         "columns": columns,
-        "preview_rows": rows[:10],
+        "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
         "detected_timestamp_column": timestamp_column,
         "numeric_profiles": numeric_profiles,
         "timestamp_profile": timestamp_profile,
         "data_quality": data_quality,
+        "ingestion_report": {
+            "rows_received": int(ingestion_report.get("rows_received", row_count_total)),
+            "rows_used": row_count_total,
+            "rows_dropped": int(ingestion_report.get("rows_dropped", 0)),
+            "drop_reasons": dict(ingestion_report.get("drop_reasons") or {}),
+            "quality_counts": dict(ingestion_report.get("quality_counts") or {}),
+            "delimiter": ingestion_report.get("delimiter", ","),
+            "header_present": bool(ingestion_report.get("header_present", True)),
+        },
+        "processing_time_seconds": processing_time_seconds,
+        "quality_warning": reliability_warning or (data_quality.get("warnings") or [None])[0],
+        "sii_reliable_enough_to_show": False,
+        "evidence_persistence": {
+            "persisted": False,
+            "run_id": job_id,
+            "source": "uploaded_telemetry",
+            "synthetic_fallback_used": False,
+        },
         "baseline_analysis": baseline_analysis,
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
@@ -927,7 +1243,7 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
-        "processing_stats": {"used_streaming": True, "sampled_rows": len(rows), "chunk_count": chunk_count, "memory_estimate_bytes": memory_estimate_bytes},
+        "processing_stats": {"used_streaming": True, "sampled_rows": len(rows), "chunk_count": chunk_count, "memory_estimate_bytes": memory_estimate_bytes, "processing_time_seconds": processing_time_seconds},
         "room_summary": room_summary,
         "ingestion_metadata": {"source_type": "csv_upload"},
         "source_type": "csv",
@@ -943,7 +1259,7 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
         result["sii_intelligence"]["projected_time_to_failure"] = latest_runner_state.get("projected_time_to_failure")
         result["sii_intelligence"]["projected_time_to_failure_hours"] = latest_runner_state.get("projected_time_to_failure_hours")
 
-    summary = {"job_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary = {"job_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
 
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
@@ -975,12 +1291,30 @@ def _build_csv_result(job_id: str, filename: str, columns: list[str], rows: list
                 completed_at=now,
                 status="completed",
                 initiated_by=initiated_by,
-                rows_received=row_count_total,
+                rows_received=result["ingestion_report"]["rows_received"],
                 rows_accepted=row_count_total,
-                rows_rejected=0,
+                rows_rejected=result["ingestion_report"]["rows_dropped"],
             )
         )
         if isinstance(record, dict):
+            from app.services.evidence_store import read_evidence_run
+            persisted_record = read_evidence_run(job_id)
+            evidence_persisted = bool(persisted_record and persisted_record.get("run_id") == job_id)
+            result["evidence_persistence"]["persisted"] = evidence_persisted
+            result["evidence_persistence"]["record_status"] = persisted_record.get("status") if persisted_record else None
+            result["sii_reliable_enough_to_show"] = bool(baseline_reliable and evidence_persisted)
+            summary["sii_reliable_enough_to_show"] = result["sii_reliable_enough_to_show"]
+            summary["evidence_persisted"] = evidence_persisted
+            _write_json(f"upload_result_{job_id}.json", result)
+            _write_json("latest_upload_result.json", result)
+            _write_json(f"upload_status_{job_id}.json", summary)
+            _write_json("latest_upload_summary.json", summary)
+            _write_shared_state(f"upload_result_{job_id}", result)
+            _write_shared_state("latest_upload_result", result)
+            _write_shared_state(f"upload_status_{job_id}", summary)
+            _write_shared_state("latest_upload_summary", summary)
+            LATEST_UPLOAD_CACHE["result"] = result
+            LATEST_UPLOAD_CACHE["summary"] = summary
             dispatch_observation_notification(record)
     except Exception:
         pass
@@ -1046,6 +1380,13 @@ def _to_float(value: Any) -> float | None:
     except ValueError:
         return None
     return None
+
+
+def _population_std(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((value - mean) ** 2 for value in values) / len(values))
 
 
 def _detect_numeric_columns(rows: list[dict[str, Any]], columns: list[str], exclude: set[str | None]) -> list[str]:
@@ -1657,6 +1998,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         raise FileNotFoundError(str(p))
 
     snapshot: dict[str, Any] | None = None
+    processing_started_at = time.perf_counter()
 
     if job_id:
         _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label="Parsing telemetry.")
@@ -1679,6 +2021,16 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             snapshot["last_timestamp"],
             int(snapshot["chunk_count"]),
             int(snapshot["memory_estimate_bytes"]),
+            {
+                "rows_received": snapshot["rows_received"],
+                "rows_dropped": snapshot["rows_dropped"],
+                "drop_reasons": snapshot["drop_reasons"],
+                "quality_counts": snapshot["quality_counts"],
+                "warnings": snapshot["cleaning_warnings"],
+                "delimiter": snapshot["delimiter"],
+                "header_present": snapshot["header_present"],
+            },
+            processing_started_at,
         )
 
         return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
