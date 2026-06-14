@@ -1329,6 +1329,15 @@ def test_relationship_baseline_drift_emits_evidence_backed_top_changes() -> None
     columns = {ref.get("column") for ref in first["evidence_refs"] if isinstance(ref, dict)}
     assert {"temperature", "humidity"}.issubset(columns)
 
+    finding_chains = payload["system_interpretation"]["finding_evidence_chains"]
+    assert isinstance(finding_chains, list) and finding_chains
+    assert finding_chains[0]["finding_type"] == "primary_conclusion"
+    relationship_chain = next(item for item in finding_chains if item["finding_type"] == "relationship_change")
+    assert relationship_chain["evidence_refs"]
+    assert relationship_chain["source_rows"]
+    stages = [step["stage"] for step in relationship_chain["evidence_chain"]]
+    assert stages[:4] == ["baseline_comparison", "engine_corroboration", "persistence_check", "operator_conclusion"]
+
 
 def test_relationship_baseline_ignores_weak_or_no_coupling() -> None:
     client = TestClient(create_app())

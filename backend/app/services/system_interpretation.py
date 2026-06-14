@@ -153,6 +153,248 @@ def _build_relationship_divergence_metrics(result: dict[str, Any], replay_frame:
     }
 
 
+def _format_metric(value: Any, digits: int = 2) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return _to_text(value)
+    return f"{number:.{digits}f}"
+
+
+
+def _clean_evidence_refs(refs: Any) -> list[dict[str, Any]]:
+    if not isinstance(refs, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        cleaned.append(
+            {
+                "column": _to_text(ref.get("column")),
+                "baseline_window": _to_text(ref.get("baseline_window")),
+                "recent_window": _to_text(ref.get("recent_window")),
+                "baseline_value": ref.get("baseline_value"),
+                "recent_value": ref.get("recent_value"),
+            }
+        )
+    return cleaned
+
+
+
+def _clean_source_rows(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        cleaned.append(
+            {
+                "window": _to_text(row.get("window")),
+                "timestamp": _to_text(row.get("timestamp")),
+                "values": row.get("values") if isinstance(row.get("values"), dict) else {},
+            }
+        )
+    return cleaned
+
+
+
+def _columns_from_entry(entry: dict[str, Any]) -> list[str]:
+    refs = _clean_evidence_refs(entry.get("evidence_refs"))
+    columns = [ref["column"] for ref in refs if ref.get("column")]
+    if columns:
+        return list(dict.fromkeys(columns))[:4]
+    relationship = _to_text(entry.get("relationship"))
+    if "<->" in relationship:
+        return [part.strip() for part in relationship.split("<->") if part.strip()][:4]
+    return []
+
+
+
+def _matching_engine_relationships(engine_result: dict[str, Any], columns: list[str]) -> list[dict[str, Any]]:
+    expected = {column for column in columns if column}
+    matches: list[dict[str, Any]] = []
+    for item in engine_result.get("evidence", []):
+        if not isinstance(item, dict) or item.get("type") != "relationship_change":
+            continue
+        item_columns = {str(column) for column in (item.get("columns") or []) if column}
+        if expected and (expected == item_columns or expected <= item_columns or item_columns <= expected or expected & item_columns):
+            matches.append(item)
+    return matches[:4]
+
+
+
+def _stage(stage: str, detail: str, *, evidence_refs: list[dict[str, Any]] | None = None, source_rows: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    return {
+        "stage": stage,
+        "detail": detail,
+        "evidence_refs": evidence_refs or [],
+        "source_rows": source_rows or [],
+    }
+
+
+
+def _build_primary_finding_chain(
+    *,
+    result: dict[str, Any],
+    intelligence: dict[str, Any],
+    relationship_divergence: dict[str, Any],
+    relationship_change_entries: list[dict[str, Any]],
+    label: str,
+    driver: str,
+    summary_text: str,
+) -> dict[str, Any] | None:
+    driver_attribution = result.get("driver_attribution") if isinstance(result.get("driver_attribution"), dict) else {}
+    engine_result = result.get("engine_result") if isinstance(result.get("engine_result"), dict) else {}
+    baseline_analysis = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
+    top_change = relationship_change_entries[0] if relationship_change_entries else {}
+    refs = _clean_evidence_refs(top_change.get("evidence_refs"))
+    source_rows = _clean_source_rows(top_change.get("source_rows"))
+    persistent_columns = [
+        str(column)
+        for column in ((engine_result.get("persistence_assessment") or {}).get("persistent_columns") or [])
+        if column
+    ]
+    supporting = [str(item) for item in (driver_attribution.get("supporting_evidence") or intelligence.get("supporting_evidence") or []) if item][:3]
+    if not (summary_text or driver or refs or source_rows or supporting):
+        return None
+
+    baseline_detail = (
+        f"Baseline relationship drift moved from correlation {_format_metric(top_change.get('baseline_correlation'))} "
+        f"to {_format_metric(top_change.get('recent_correlation'))} "
+        f"(delta {_format_metric(top_change.get('correlation_delta'))}) across "
+        f"{int(top_change.get('baseline_sample_size') or 0)} baseline and {int(top_change.get('recent_sample_size') or 0)} recent samples."
+        if top_change else
+        f"Baseline analysis reviewed {len(baseline_analysis.get('column_drift') or [])} drifted columns and {len(baseline_analysis.get('top_relationship_changes') or [])} relationship changes."
+    )
+    engine_detail = (
+        f"Engine corroboration was {str((engine_result.get('system_evidence') or {}).get('corroboration_level') or 'limited')} "
+        f"with {int((engine_result.get('system_evidence') or {}).get('categories_showing_meaningful_change') or 0)} affected categories "
+        f"and {len(persistent_columns)} persistent columns."
+    )
+    attribution_detail = (
+        f"Driver attribution selected '{driver or driver_attribution.get('likely_driver') or 'Unknown'}' "
+        f"because {supporting[0] if supporting else 'the evidence cluster remained the strongest available chain.'}"
+    )
+    conclusion_detail = (
+        f"Operator conclusion '{label}' surfaced as '{summary_text}' with {relationship_divergence.get('confidence') or intelligence.get('attribution_confidence') or 'unknown'} confidence."
+    )
+    return {
+        "finding_id": "primary_conclusion",
+        "finding_type": "primary_conclusion",
+        "title": driver or driver_attribution.get("likely_driver") or "Primary conclusion",
+        "conclusion": label,
+        "operator_summary": summary_text,
+        "confidence": str(relationship_divergence.get("confidence") or intelligence.get("attribution_confidence") or "unknown"),
+        "evidence_refs": refs,
+        "source_rows": source_rows,
+        "supporting_evidence": supporting,
+        "evidence_chain": [
+            _stage("baseline_comparison", baseline_detail, evidence_refs=refs, source_rows=source_rows),
+            _stage("engine_corroboration", engine_detail),
+            _stage("driver_attribution", attribution_detail),
+            _stage("operator_conclusion", conclusion_detail),
+        ],
+    }
+
+
+
+def _build_relationship_finding_chain(
+    *,
+    entry: dict[str, Any],
+    index: int,
+    engine_result: dict[str, Any],
+    relationship_divergence: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    refs = _clean_evidence_refs(entry.get("evidence_refs"))
+    source_rows = _clean_source_rows(entry.get("source_rows"))
+    columns = _columns_from_entry(entry)
+    engine_matches = _matching_engine_relationships(engine_result, columns)
+    persistent_columns = {
+        str(column)
+        for column in ((engine_result.get("persistence_assessment") or {}).get("persistent_columns") or [])
+        if column
+    }
+    persistent_hits = [column for column in columns if column in persistent_columns]
+    baseline_detail = (
+        f"Relationship {entry.get('relationship') or entry.get('summary') or f'#{index + 1}'} moved from "
+        f"{_format_metric(entry.get('baseline_correlation'))} to {_format_metric(entry.get('recent_correlation'))} "
+        f"with delta {_format_metric(entry.get('correlation_delta'))} and coupling strength {_format_metric(entry.get('coupling_strength'))}."
+    )
+    engine_detail = (
+        f"Engine reproduced this change with {len(engine_matches)} corroborating relationship event(s) under "
+        f"{str((engine_result.get('system_evidence') or {}).get('corroboration_level') or 'limited')} corroboration."
+    )
+    persistence_detail = (
+        f"Persistent columns carried into this finding: {', '.join(persistent_hits)}."
+        if persistent_hits else
+        "No persistent-column boost was applied to this finding."
+    )
+    conclusion_detail = (
+        f"This relationship fed the operator-facing state '{label}' at {entry.get('confidence') or relationship_divergence.get('confidence') or 'unknown'} confidence "
+        f"with {entry.get('severity') or relationship_divergence.get('severity') or 'contained'} severity."
+    )
+    return {
+        "finding_id": f"relationship_change_{index + 1}",
+        "finding_type": "relationship_change",
+        "title": _to_text(entry.get("relationship") or entry.get("summary") or f"Relationship change {index + 1}"),
+        "conclusion": _to_text(entry.get("summary") or entry.get("relationship") or f"Relationship change {index + 1}"),
+        "operator_summary": _to_text(entry.get("summary") or entry.get("relationship")),
+        "confidence": str(entry.get("confidence") or relationship_divergence.get("confidence") or "unknown"),
+        "severity": str(entry.get("severity") or relationship_divergence.get("severity") or "contained"),
+        "evidence_refs": refs,
+        "source_rows": source_rows,
+        "supporting_evidence": [_to_text(item.get("summary")) for item in engine_matches if item.get("summary")][:3],
+        "evidence_chain": [
+            _stage("baseline_comparison", baseline_detail, evidence_refs=refs, source_rows=source_rows),
+            _stage("engine_corroboration", engine_detail),
+            _stage("persistence_check", persistence_detail),
+            _stage("operator_conclusion", conclusion_detail),
+        ],
+    }
+
+
+
+def _build_finding_evidence_chains(
+    *,
+    result: dict[str, Any],
+    intelligence: dict[str, Any],
+    relationship_divergence: dict[str, Any],
+    relationship_change_entries: list[dict[str, Any]],
+    label: str,
+    driver: str,
+    summary_text: str,
+) -> list[dict[str, Any]]:
+    engine_result = result.get("engine_result") if isinstance(result.get("engine_result"), dict) else {}
+    chains: list[dict[str, Any]] = []
+    primary = _build_primary_finding_chain(
+        result=result,
+        intelligence=intelligence,
+        relationship_divergence=relationship_divergence,
+        relationship_change_entries=relationship_change_entries,
+        label=label,
+        driver=driver,
+        summary_text=summary_text,
+    )
+    if primary is not None:
+        chains.append(primary)
+    for index, entry in enumerate(relationship_change_entries[:5]):
+        if not isinstance(entry, dict):
+            continue
+        chains.append(
+            _build_relationship_finding_chain(
+                entry=entry,
+                index=index,
+                engine_result=engine_result,
+                relationship_divergence=relationship_divergence,
+                label=label,
+            )
+        )
+    return chains
+
+
 def build_system_interpretation(result: dict | None, summary: dict | None, snapshot: dict | None, frames: list[dict]) -> dict:
     result = result if isinstance(result, dict) else {}
     summary = summary if isinstance(summary, dict) else {}
@@ -233,6 +475,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
                 "affected_systems": [],
                 "top_relationship_changes": [],
             },
+            "finding_evidence_chains": [],
             "relationship_events": _timeline_events_from_frames([], snapshot, result),
             "compound_systems_score": 0,
             "propagation_scope": "none",
@@ -398,16 +641,29 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         f"{fallback_count} are fallback-derived."
     )
 
+    primary_driver_text = _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_driver") or intelligence.get("primary_room") or result.get("primary_room") or "Facility relationship scope")
+    relationship_summary_text = _to_text((result.get("relationship_summary") or {}).get("text") if isinstance(result.get("relationship_summary"), dict) else "") or reason
+    finding_evidence_chains = _build_finding_evidence_chains(
+        result=result,
+        intelligence=intelligence,
+        relationship_divergence=relationship_divergence,
+        relationship_change_entries=relationship_change_entries,
+        label=label,
+        driver=primary_driver_text,
+        summary_text=relationship_summary_text,
+    )
+
     return {
         "facility_state_enum": enum,
         "facility_state_label": label,
         "confidence": relationship_metrics["confidence"] if relationship_change_entries else (raw_confidence or "unknown"),
         "instability_index": instability_index,
         "instability_scale": "0-100",
-        "primary_driver": _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_driver") or intelligence.get("primary_room") or result.get("primary_room") or "Facility relationship scope"),
+        "primary_driver": primary_driver_text,
         "escalation_window": _to_text(intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure") or snapshot.get("last_processed_at") or ""),
         "state_derivation_reason": reason,
         "relationship_divergence": relationship_divergence,
+        "finding_evidence_chains": finding_evidence_chains,
         "relationship_events": _timeline_events_from_frames(frames, snapshot, result),
         "compound_systems_score": compound_systems_score,
         "propagation_scope": propagation_scope,

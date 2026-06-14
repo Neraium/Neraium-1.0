@@ -285,6 +285,37 @@ export default function SystemBodyWorkspace({
           </div>
         </section>
 
+        {Array.isArray(interpretation.findingEvidenceChains) && interpretation.findingEvidenceChains.length > 0 ? (
+          <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Finding evidence chains">
+            <div className="panel-body">
+              <p className="section-token">Evidence Chain</p>
+              {interpretation.findingEvidenceChains.slice(0, 3).map((finding) => (
+                <div key={finding.finding_id || finding.title} style={{ marginBottom: "1rem" }}>
+                  <p style={{ margin: "0 0 0.35rem", fontWeight: 700 }}>{finding.title || "Finding"}</p>
+                  <p style={{ margin: "0 0 0.45rem" }}>{finding.operator_summary || finding.conclusion || ""}</p>
+                  <ul className="compact-list">
+                    {(finding.evidence_chain || []).slice(0, 4).map((step, index) => (
+                      <li key={`${finding.finding_id || finding.title}-${step.stage || index}`}>
+                        <strong>{formatEvidenceStage(step.stage)}:</strong> {step.detail}
+                      </li>
+                    ))}
+                  </ul>
+                  {Array.isArray(finding.evidence_refs) && finding.evidence_refs.length > 0 ? (
+                    <p className="metadata-text" style={{ marginTop: "0.35rem" }}>
+                      Evidence refs: {summarizeEvidenceRefs(finding.evidence_refs)}
+                    </p>
+                  ) : null}
+                  {Array.isArray(finding.source_rows) && finding.source_rows.length > 0 ? (
+                    <p className="metadata-text">
+                      Source rows: {summarizeSourceRows(finding.source_rows)}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className="system-gate__primary-action">
           <button
             type="button"
@@ -355,6 +386,9 @@ function mapBackendSystemInterpretation(contract) {
         ? divergence.affected_systems
         : (Array.isArray(backendSummary.affected_systems) ? backendSummary.affected_systems : []),
     },
+    findingEvidenceChains: Array.isArray(value.finding_evidence_chains)
+      ? value.finding_evidence_chains
+      : [],
     hasTelemetry: true,
     nextStep: "Review findings.",
   };
@@ -458,6 +492,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     primaryDriver: driver,
     relationshipSummary: relationship,
     confidence,
+    findingEvidenceChains: [],
     nextStep: hasDriftState ? "Review findings." : "Continue monitoring.",
     hasTelemetry: true,
   };
@@ -479,6 +514,34 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
   const text = selected ? simplifyOperatorSummary(selected.trim()) : "Interpretation unavailable";
   if (hasDriftState && describesStable(text)) return { text: "Change detected." };
   return { text };
+}
+
+
+function formatEvidenceStage(stage) {
+  const normalized = String(stage ?? "").replaceAll("_", " ").trim();
+  if (!normalized) return "Evidence";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function summarizeEvidenceRefs(refs) {
+  return refs
+    .slice(0, 3)
+    .map((ref) => {
+      const column = String(ref?.column ?? "").trim();
+      const baseline = String(ref?.baseline_window ?? "").trim();
+      const recent = String(ref?.recent_window ?? "").trim();
+      return [column, baseline && recent ? `${baseline} -> ${recent}` : baseline || recent].filter(Boolean).join(" ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function summarizeSourceRows(rows) {
+  return rows
+    .slice(0, 3)
+    .map((row) => [String(row?.window ?? "").trim(), String(row?.timestamp ?? "").trim()].filter(Boolean).join(" @ "))
+    .filter(Boolean)
+    .join("; ");
 }
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
