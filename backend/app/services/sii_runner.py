@@ -784,10 +784,18 @@ def classify_state(history_length: int, instability_score: float, transition_pre
 def confidence_from_history(history_length: int, vector: np.ndarray, *, recent_vectors: np.ndarray | None = None) -> float:
     current_completeness = float(np.mean(~np.isnan(vector))) if vector.size else 0.0
     recent_completeness = _matrix_completeness(recent_vectors) if recent_vectors is not None else current_completeness
-    history_factor = min(history_length / 24.0, 1.0)
-    raw_confidence = 0.25 + history_factor * 0.30 + current_completeness * 0.20 + recent_completeness * 0.20
+    history_factor = min(history_length / 36.0, 1.0)
+    raw_confidence = 0.20 + history_factor * 0.26 + current_completeness * 0.18 + recent_completeness * 0.18
     quality_cap = 0.90 if min(current_completeness, recent_completeness) >= 0.995 else 0.55 + min(current_completeness, recent_completeness) * 0.35
-    return float(np.clip(raw_confidence, 0.25, quality_cap))
+    if history_length < 8:
+        quality_cap = min(quality_cap, 0.42)
+    elif history_length < 16:
+        quality_cap = min(quality_cap, 0.58)
+    elif history_length < 24:
+        quality_cap = min(quality_cap, 0.58)
+    elif history_length < 36:
+        quality_cap = min(quality_cap, 0.72)
+    return float(np.clip(raw_confidence, 0.18, quality_cap))
 
 
 def normalize_urgency(urgency: str) -> str: 

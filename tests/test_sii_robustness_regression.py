@@ -35,6 +35,10 @@ def _latest_runner_state(result: dict) -> dict:
     return result["sii_runner_result"]["latest_state"]
 
 
+def _primary_room(result: dict) -> dict:
+    return result["sii_intelligence"]["rooms"][0]
+
+
 def test_stable_upload_stays_nominal_in_runner_and_ui_summary() -> None:
     result = process_csv_content(filename="stable-regression.csv", content=_csv_from_rows(_telemetry_rows(240)))
     latest = _latest_runner_state(result)
@@ -66,6 +70,36 @@ def test_missing_values_lower_confidence_without_forcing_alert() -> None:
     assert missing_latest["confidence"] < complete_latest["confidence"]
     assert missing_latest["urgency"] != "CRITICAL"
     assert missing_latest["instability_components"]["recent_completeness"] < 1.0
+
+
+def test_short_persistence_does_not_produce_strong_finding() -> None:
+    result = process_csv_content(filename="short-drift-regression.csv", content=_csv_from_rows(_telemetry_rows(18, drift=True)))
+    latest = _latest_runner_state(result)
+    primary_room = _primary_room(result)
+
+    assert primary_room["urgency"] == "review"
+    assert primary_room["confidence"] <= 52
+    assert "confidence is capped" in primary_room["confidence_basis"].lower()
+    assert latest["confidence"] <= 0.58
+
+
+def test_heavy_missingness_caps_confidence_and_temper_driver_language() -> None:
+    rows = _telemetry_rows(240)
+    degraded_rows: list[str] = []
+    for index, row in enumerate(rows):
+        timestamp, temp, humidity, airflow, pressure = row.split(",")
+        if index % 2 == 0:
+            temp = ""
+        if index % 3 == 0:
+            humidity = "null"
+        degraded_rows.append(",".join([timestamp, temp, humidity, airflow, pressure]))
+
+    result = process_csv_content(filename="heavy-missing-regression.csv", content=_csv_from_rows(degraded_rows))
+    primary_room = _primary_room(result)
+
+    assert primary_room["confidence"] <= 50
+    assert "evidence remains limited" in primary_room["primary_driver"].lower() or "insufficient" in primary_room["primary_driver"].lower()
+    assert "data quality is poor" in primary_room["confidence_basis"].lower()
 
 
 def test_progressive_degradation_remains_detectable() -> None:
