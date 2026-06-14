@@ -45,7 +45,8 @@ def test_upload_and_polling_use_shared_api_helper() -> None:
     source = read_upload_surface()
     system_api_source = read_frontend(SYSTEM_API)
 
-    assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
+    assert "let pollingPath = normalizeUploadStatusPath(statusUrl, requestedJobId) ?? `/api/data/upload-status/${requestedJobId}`;" in source
+    assert "const response = await apiFetch(requestPath, { accessCode });" in source
     assert 'apiFetch("/api/data/latest-upload?include_persisted=1"' in source
     assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
     assert 'apiFetch("/api/ready"' in read_frontend(HEALTH_API)
@@ -57,7 +58,9 @@ def test_upload_and_polling_use_shared_api_helper() -> None:
 def test_frontend_polling_uses_bounded_backoff_under_failures() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
     assert "const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);" in source
-    assert "baseDelay = Math.min(6000 + failureCount * 12000, 120000);" in source
+    assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
+    assert "Math.min(30000, baseDelay * (1.5 ** failureCount))" in source
+    assert "Math.min(Math.max(backoff, 1000), 45000)" in source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
@@ -78,19 +81,20 @@ def test_polling_does_not_enter_error_state_on_single_auth_failure() -> None:
 def test_polling_retries_missing_upload_status() -> None:
     source = read_upload_surface()
 
-    assert 'response.status === 404 && errorType === "upload_session_missing"' in source
-    assert "pollFailureCountRef.current < 30" in source
-    assert "Waiting for upload status to become available." in source
+    assert "response.status === 404 || response.status >= 500" in source
+    assert "statusEndpointFailureCountRef.current += 1;" in source
+    assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
+    assert "Upload status remained unavailable after repeated retries." in source
 
 
 def test_upload_polling_preserves_returned_job_id() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
 
     assert "const uploadJobIdRef = useRef(null);" in source
-    assert "uploadJobIdRef.current = payload.job_id ?? pollingJobId;" in source
-    assert "const pollingJobId = jobId || uploadJobIdRef.current;" in source
-    assert "apiFetch(`/api/data/upload-status/${pollingJobId}`" in source
-    assert 'throw buildUploadRequestError({ status }, { ...payload, error_type: "upload_session_missing", message: "Upload state unavailable." }, "upload");' in source
+    assert "const requestedJobId = String(jobId ?? \"\").trim();" in source
+    assert "uploadJobIdRef.current = requestedJobId;" in source
+    assert "uploadJobIdRef.current = payload.job_id ?? requestedJobId;" in source
+    assert "normalizeUploadStatusPath(statusUrl, requestedJobId) ?? `/api/data/upload-status/${requestedJobId}`" in source
 
 
 def test_object_errors_render_through_normalized_messages() -> None:
@@ -110,7 +114,8 @@ def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> Non
     assert "propagationPercent" in source
     assert "[uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
-    assert "propagationLabel || uploadJob?.progress_label || latestMessage" in panel
+    assert "const primaryProgressText = String(uploadJob?.progress_label || latestMessage || \"\").trim();" in panel
+    assert "const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || \"\").trim();" in panel
 
 
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
@@ -169,10 +174,10 @@ def test_system_body_uses_backend_system_interpretation_when_present() -> None:
 def test_system_body_fallback_is_neutral_without_semantic_derivation() -> None:
     source = read_frontend(SYSTEM_BODY_WORKSPACE)
 
-    assert '"No Active Session"' in source
-    assert '"Awaiting Interpretation"' in source
-    assert '"Processing Upload"' in source
+    assert '"No data yet"' in source
+    assert '"Processing data"' in source
     assert '"Interpretation Unavailable"' in source
+    assert '"Upload data to begin."' in source
 
     assert "compoundSignals" not in source
     assert "normalizeSeverity(" not in source
@@ -184,10 +189,10 @@ def test_system_body_fallback_is_neutral_without_semantic_derivation() -> None:
 def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
     source = read_frontend(SYSTEM_BODY_WORKSPACE)
 
-    assert "facility_state: String(value.facility_state_label" in source
+    assert "structuralState: normalizeStructuralLabel(value.facility_state_label" in source
     assert "confidence: String(value.confidence" in source
-    assert "primary_driver: String(value.primary_driver" in source
-    assert "text: String(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
+    assert "primaryDriver: String(value.primary_driver" in source
+    assert "text: simplifyOperatorSummary(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
     assert "divergence_severity: String(divergence.severity" in source
 
 
@@ -195,7 +200,7 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Telemetry Setup"' in workspaces_source
+    assert 'label: "Upload Data"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source

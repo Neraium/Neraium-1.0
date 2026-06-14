@@ -297,6 +297,18 @@ export default function DataConnectionsWorkspace({
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
+              if (statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES) {
+                pollFailureCountRef.current = MAX_STATUS_POLL_FAILURES;
+                throw buildUploadRequestError(
+                  response,
+                  {
+                    ...payload,
+                    error_type: payload?.error_type || "upload_status_unavailable",
+                    message: payload?.message || "Upload status remained unavailable after repeated retries.",
+                  },
+                  "poll",
+                );
+              }
               const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);
               statusEndpointCooldownUntilRef.current = Date.now() + cooldownMs;
               await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });

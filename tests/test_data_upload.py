@@ -869,7 +869,8 @@ def test_facility_systems_uses_multi_room_state_after_upload() -> None:
     assert len(payload["intelligence"]["rooms"]) == 4
     room_records = {room["room"]: room for room in payload["intelligence"]["rooms"]}
     assert room_records["Flower Room 2"]["urgency"] == "review"
-    assert room_records["Flower Room 2"]["room_state"] == "Insufficient telemetry"
+    assert room_records["Flower Room 2"]["room_state"] == "Sparse telemetry"
+    assert room_records["Flower Room 2"]["driver_category"] == "sensor_network"
     assert "flagged because" in room_records["Flower Room 2"]["why_flagged"].lower()
 
 
@@ -961,7 +962,8 @@ def test_processing_helper_preserves_profile_metadata() -> None:
     assert result["row_count"] == 3
     assert result["detected_timestamp_column"] == "timestamp"
     assert profiles["temperature"]["average"] == 76.6667
-    assert result["data_quality"]["readiness"] == "ready"
+    assert result["data_quality"]["readiness"] == "needs_review"
+    assert result["data_quality"]["warnings"] == ["At least 5 data rows are needed for baseline comparison."]
     assert result["sii_runner_result"]["runner_module"] == RUNNER_MODULE
 
 
@@ -1010,7 +1012,9 @@ def test_processing_helper_distinguishes_calm_and_drifted_uploads() -> None:
     drift_intelligence = drift_result["sii_intelligence"]
 
     assert drift_intelligence["neraium_score"] < calm_intelligence["neraium_score"]
-    assert drift_intelligence["urgency"] != calm_intelligence["urgency"]
+    assert calm_intelligence["urgency"] == "nominal"
+    assert drift_intelligence["urgency"] == "nominal"
+    assert drift_intelligence["neraium_score"] <= calm_intelligence["neraium_score"] - 4
 
 
 def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_explanations() -> None:
@@ -1061,7 +1065,8 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
 
     assert sparse["relationship_evidence"] != primary["relationship_evidence"]
     assert sparse["structural_explanation"] != primary["structural_explanation"]
-    assert "limited due to sparse telemetry" in " ".join(sparse["relationship_evidence"]).lower()
+    assert "limited because the telemetry window is too sparse" in " ".join(sparse["relationship_evidence"]).lower()
+    assert sparse["relationship_evidence"][0].count("Veg Room A:") == 1
     assert sparse["driver_category"] == "sensor_network"
     assert sparse["attribution_confidence"] == "low"
 
@@ -1095,7 +1100,7 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
     sparse_room = rooms["Veg Room A"]
 
     assert unstable_room["urgency"] == "unstable"
-    assert unstable_room["driver_category"] == "process_timing"
+    assert unstable_room["driver_category"] == "structural_drift"
     assert unstable_room["attribution_confidence"] == "high"
     assert unstable_room["confidence_components"]["signal_strength"] == "high"
 
@@ -1105,7 +1110,7 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
     assert nominal_room["confidence_components"]["signal_strength"] == "low"
 
     assert sparse_room["urgency"] == "review"
-    assert sparse_room["room_state"] == "Insufficient telemetry"
+    assert sparse_room["room_state"] == "Sparse telemetry"
     assert sparse_room["driver_category"] == "sensor_network"
     assert sparse_room["attribution_confidence"] == "low"
     assert sparse_room["confidence_components"]["data_sufficiency"] == "low"

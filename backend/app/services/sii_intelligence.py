@@ -394,22 +394,22 @@ def build_upload_room_records(
         room_supporting_evidence = (
             supporting_evidence
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("supporting_evidence") or supporting_evidence)[:3]]
+            else prefix_room_evidence(room_name, assessment.get("supporting_evidence") or supporting_evidence)
         )
         room_relationship_evidence = (
             relationship_evidence
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("relationship_evidence") or relationship_evidence)[:3]]
+            else prefix_room_evidence(room_name, assessment.get("relationship_evidence") or relationship_evidence)
         )
         room_structural_explanation = (
             structural_explanation
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("structural_explanation") or structural_explanation)[:3]]
+            else prefix_room_evidence(room_name, assessment.get("structural_explanation") or structural_explanation)
         )
         room_checks = (
             what_to_check
             if index == 0
-            else [f"{room_name}: {line}" for line in (assessment.get("what_to_check") or what_to_check)[:3]]
+            else prefix_room_evidence(room_name, assessment.get("what_to_check") or what_to_check)
         )
         room_urgency = str(assessment.get("urgency") or urgency)
         room_state_value = str(assessment.get("room_state") or (room_state if index == 0 else state_from_urgency(room_urgency)))
@@ -480,6 +480,15 @@ def build_upload_room_records(
             }
         )
     return records
+
+
+def prefix_room_evidence(room_name: str, lines: list[Any]) -> list[str]:
+    prefix = f"{room_name}:"
+    return [
+        text if text.startswith(prefix) else f"{prefix} {text}"
+        for line in lines[:3]
+        if (text := str(line).strip())
+    ]
 
 
 def confidence_basis_from_components(components: dict[str, Any]) -> str:
