@@ -210,6 +210,14 @@ def build_upload_intelligence(
         driver_attribution=driver_attribution,
     )
     projected_time_to_failure = format_projected_time_to_failure(projected_time_to_failure_hours)
+    calibrated_confidence = confidence_number(
+        driver_attribution,
+        data_quality=data_quality,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+    )
+    reliability_rating = data_quality.get("reliability_rating") or "unknown"
+    data_quality_warning = (data_quality.get("warnings") or [None])[0]
     structural_cognition = build_structural_cognition(
         baseline_analysis=baseline_analysis,
         engine_result=engine_result,
@@ -242,7 +250,7 @@ def build_upload_intelligence(
         projected_time_to_failure=projected_time_to_failure,
         projected_time_to_failure_hours=projected_time_to_failure_hours,
         last_updated=last_updated,
-        confidence=confidence_number(driver_attribution),
+        confidence=calibrated_confidence,
         room_assessments=room_assessments,
     )
     primary_room_record = room_records[0]
@@ -274,6 +282,11 @@ def build_upload_intelligence(
         "next_operator_move": primary_room_record["recommended_operator_review"],
         "what_to_check": what_to_check,
         "why_flagged": why_flagged,
+        "what_changed": primary_room_record["baseline_comparison"],
+        "why_it_matters": why_flagged,
+        "review_next": primary_room_record["recommended_operator_review"],
+        "data_quality_warning": data_quality_warning,
+        "reliability_rating": reliability_rating,
         "baseline_comparison": primary_room_record["baseline_comparison"],
         "observed_persistence": primary_room_record["observed_persistence"],
         "projected_time_to_failure": primary_room_record["projected_time_to_failure"],
@@ -573,8 +586,10 @@ def score_from_upload(data_quality: dict[str, Any], engine_result: dict[str, Any
     score -= min(signal_profile["persistent_columns"] * 2, 4)
     if engine_result.get("overall_result") == "needs_review" and not engine_result.get("signals"):
         score -= 6
+    elif engine_result.get("overall_result") == "needs_review":
+        score -= 8
     elif engine_result.get("overall_result") == "elevated":
-        score -= 4
+        score -= 10
     if severity == "action":
         score -= 6
     elif severity == "review":
@@ -696,13 +711,59 @@ def observed_persistence_from_engine(engine_result: dict[str, Any]) -> str:
     return "Persistence evidence is limited in the current telemetry."
 
 
-def confidence_number(attribution: dict[str, Any]) -> int:
+def confidence_number(
+    attribution: dict[str, Any],
+    *,
+    data_quality: dict[str, Any] | None = None,
+    baseline_analysis: dict[str, Any] | None = None,
+    engine_result: dict[str, Any] | None = None,
+) -> int:
     confidence = attribution.get("attribution_confidence")
     if confidence == "high":
-        return 88
-    if confidence == "medium":
-        return 74
-    return 58
+        score = 88
+    elif confidence == "medium":
+        score = 74
+    else:
+        score = 58
+
+    data_quality = data_quality or {}
+    baseline_analysis = baseline_analysis or {}
+    engine_result = engine_result or {}
+    rating = str(data_quality.get("reliability_rating") or "unknown")
+    readiness = str(data_quality.get("readiness") or "")
+    quality_metrics = data_quality.get("quality_metrics") or {}
+    baseline_rows = int(baseline_analysis.get("baseline_window_rows") or 0)
+    recent_rows = int(baseline_analysis.get("recent_window_rows") or 0)
+    columns_analyzed = int(baseline_analysis.get("columns_analyzed") or 0)
+    evidence_count = len(engine_result.get("evidence") or []) + len(engine_result.get("signals") or [])
+
+    caps = []
+    if rating == "not_reliable":
+        caps.append(38)
+    elif rating == "weak":
+        caps.append(48)
+    elif rating == "usable":
+        caps.append(68)
+    if readiness == "not_ready":
+        caps.append(35)
+    elif readiness == "needs_review":
+        caps.append(70)
+    if baseline_rows < 5 or recent_rows < 1 or columns_analyzed < 1:
+        caps.append(42)
+    elif baseline_rows < 25:
+        caps.append(62)
+    if int(quality_metrics.get("rows_used") or 0) < 12:
+        caps.append(44)
+    if float(quality_metrics.get("drop_ratio") or 0.0) >= 0.2:
+        caps.append(58)
+    if quality_metrics.get("irregular_sampling"):
+        caps.append(72)
+    if evidence_count == 0:
+        caps.append(56)
+
+    if caps:
+        score = min(score, min(caps))
+    return max(0, min(100, score))
 
 
 def window_from_urgency(urgency: str) -> str:

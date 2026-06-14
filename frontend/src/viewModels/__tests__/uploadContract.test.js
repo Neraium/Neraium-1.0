@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUploadJob } from "../uploadContract";
+import { hasSupportedSiiClaims, normalizeUploadJob } from "../uploadContract";
 
 describe("upload reliability contract", () => {
   it("preserves cleaning, runtime, evidence, and display reliability fields", () => {
@@ -25,5 +25,34 @@ describe("upload reliability contract", () => {
     expect(job.quality_warning).toContain("3 rows");
     expect(job.evidence_persisted).toBe(true);
     expect(job.sii_reliable_enough_to_show).toBe(false);
+  });
+});
+
+
+describe("unsupported SII claim guard", () => {
+  it("does not mark claims as supported without persisted evidence and display reliability", () => {
+    expect(hasSupportedSiiClaims({
+      sii_reliable_enough_to_show: true,
+      evidence_persistence: { persisted: false },
+    })).toBe(false);
+
+    const job = normalizeUploadJob({
+      status: "complete",
+      sii_reliable_enough_to_show: false,
+      evidence_persistence: { persisted: true },
+      primary_driver: "unsupported drift claim",
+    });
+
+    expect(job.supported_sii_claims).toBe(false);
+  });
+
+  it("marks claims as supported only after reliability and evidence persistence are both true", () => {
+    const job = normalizeUploadJob({
+      status: "complete",
+      sii_reliable_enough_to_show: true,
+      evidence_persistence: { persisted: true },
+    });
+
+    expect(job.supported_sii_claims).toBe(true);
   });
 });

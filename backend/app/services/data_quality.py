@@ -99,6 +99,9 @@ def profile_numeric_columns(columns: list[str], rows: list[list[str]]) -> list[d
                 "average": round_number(average),
                 "missing_count": missing_count,
                 "missing_percent": round_number(missing_percent),
+                "valid_numeric_count": len(values),
+                "non_numeric_count": max(0, row_count - missing_count - len(values)),
+                "constant_or_stuck": minimum == maximum,
                 "variability": variability_flag(values, average),
                 "range_warning": range_warning(column, minimum, maximum),
             }
@@ -164,7 +167,49 @@ def build_data_quality(
     numeric_column_count: int,
     timestamp_detected: bool,
     warnings: list[str],
+    quality_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    quality_metrics = quality_metrics or {}
+    rows_received = int(quality_metrics.get("rows_received") or row_count or 0)
+    rows_dropped = int(quality_metrics.get("rows_dropped") or 0)
+    drop_ratio = rows_dropped / max(1, rows_received)
+    quality_counts = quality_metrics.get("quality_counts") or {}
+    missing_rows = int(quality_counts.get("rows_with_missing_values") or 0)
+    invalid_numeric_rows = int(quality_counts.get("rows_with_invalid_numeric") or 0)
+    stuck_sensor_count = int(quality_metrics.get("stuck_sensor_count") or 0)
+    irregular_sampling = bool(quality_metrics.get("irregular_sampling"))
+    baseline_reliable = bool(quality_metrics.get("baseline_reliable", True))
+
+    score = 100
+    if not timestamp_detected:
+        score -= 18
+    if row_count < 12:
+        score -= 30
+    elif row_count < 50:
+        score -= 12
+    if drop_ratio > 0:
+        score -= min(28, int(drop_ratio * 100))
+    if missing_rows:
+        score -= min(18, int((missing_rows / max(1, row_count)) * 80))
+    if invalid_numeric_rows:
+        score -= min(14, int((invalid_numeric_rows / max(1, row_count)) * 70))
+    if irregular_sampling:
+        score -= 8
+    if stuck_sensor_count:
+        score -= min(18, stuck_sensor_count * 6)
+    if not baseline_reliable:
+        score -= 24
+    reliability_score = max(0, min(100, score))
+
+    if reliability_score >= 82:
+        reliability_rating = "strong"
+    elif reliability_score >= 62:
+        reliability_rating = "usable"
+    elif reliability_score >= 40:
+        reliability_rating = "weak"
+    else:
+        reliability_rating = "not_reliable"
+
     if row_count == 0 or column_count == 0 or numeric_column_count == 0:
         readiness = "not_ready"
     elif not timestamp_detected or warnings:
@@ -179,6 +224,19 @@ def build_data_quality(
         "timestamp_detected": timestamp_detected,
         "warnings": warnings,
         "readiness": readiness,
+        "reliability_rating": reliability_rating,
+        "reliability_score": reliability_score,
+        "quality_metrics": {
+            "rows_received": rows_received,
+            "rows_used": row_count,
+            "rows_dropped": rows_dropped,
+            "drop_ratio": round_number(drop_ratio),
+            "rows_with_missing_values": missing_rows,
+            "rows_with_invalid_numeric": invalid_numeric_rows,
+            "stuck_sensor_count": stuck_sensor_count,
+            "irregular_sampling": irregular_sampling,
+            "baseline_reliable": baseline_reliable,
+        },
     }
 
 

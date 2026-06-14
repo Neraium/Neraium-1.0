@@ -1,5 +1,30 @@
 # SII Robustness Assessment
 
+## 2026-06-14 Reliability Hardening Update
+
+This pass strengthens the upload path and evidence contract beyond the earlier post-fix runner guardrails:
+
+- Data quality now includes `reliability_score`, `reliability_rating`, and structured metrics for rows received/used/dropped, drop ratio, missing numeric rows, invalid numeric rows, stuck sensors, irregular sampling, and baseline reliability.
+- Numeric profiles mark constant or stuck sensors.
+- Relationship-change evidence now carries real variables, baseline/recent window metrics, source-row anchors, and timestamps.
+- Persisted evidence records include source-row anchors, variables, drift metrics, data conditions, and source row counts.
+- Upload intelligence now exposes operator-grade fields: what changed, why it matters, review next, supporting evidence, data-quality warning, and reliability rating.
+- Confidence is capped when data quality is weak, baselines are sparse, rows are dropped, timestamps are irregular, evidence is absent, or row counts are too low.
+- Frontend upload normalization now exposes `supported_sii_claims`, which is true only when SII output is reliable enough to show and evidence persistence succeeded.
+
+New automated coverage:
+
+| Area | Test coverage |
+|---|---|
+| Messy data | Missing numeric values, duplicate timestamps, unsorted timestamps, invalid timestamps, bad numeric fields, whitespace-delimited uploads |
+| Evidence reliability | Persisted evidence includes variables, coupling metrics, source rows, and baseline/recent windows |
+| Confidence calibration | Missing data and constant/sparse sensors lower confidence |
+| Benchmark matrix | Stable clean, stable noisy/missing, injected drift, relationship collapse, sensor dropout, 10k rows, 100k rows |
+| Large upload guard | 1M-row test exists behind `NERAIUM_RUN_1M_BENCHMARK=1` |
+| Frontend guard | Unsupported SII claims are not marked supported unless persisted evidence and display reliability are both true |
+
+The historical pre-fix benchmark below remains useful as a failure baseline. Current acceptance should be based on the pytest suite and benchmark targets in `docs/platform_strengthening_plan.md`.
+
 This assessment was originally produced from `docs/sii_math_audit.md` and the then-current codebase to evaluate whether the uploaded-telemetry SII path could handle messy real-world telemetry reliably. It is retained as the pre-fix benchmark that drove the robustness changes below.
 
 ## Post-Fix Status (Implemented After Original Benchmark)

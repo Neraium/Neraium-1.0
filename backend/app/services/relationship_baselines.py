@@ -58,6 +58,26 @@ def _select_numeric_columns_for_relationships(
     return numeric_columns[:max_relationship_columns], True
 
 
+
+def _source_row_anchor(row: dict[str, Any] | None, window: str) -> dict[str, Any]:
+    row = row or {}
+    return {
+        "window": window,
+        "source_row": row.get("__source_row_number"),
+        "timestamp": row.get("__source_timestamp"),
+    }
+
+
+def _relationship_source_rows(baseline_rows: list[dict[str, Any]], recent_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    anchors = []
+    if baseline_rows:
+        anchors.append(_source_row_anchor(baseline_rows[0], "baseline_start"))
+        anchors.append(_source_row_anchor(baseline_rows[-1], "baseline_end"))
+    if recent_rows:
+        anchors.append(_source_row_anchor(recent_rows[0], "recent_start"))
+        anchors.append(_source_row_anchor(recent_rows[-1], "recent_end"))
+    return [anchor for anchor in anchors if anchor.get("source_row") is not None or anchor.get("timestamp")]
+
 def build_relationship_baseline(
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
@@ -143,9 +163,22 @@ def build_relationship_baseline(
                     "recent_sample_size": len(left_recent),
                     "sampled_for_baseline": sampled_for_baseline,
                     "evidence_refs": [
-                        {"column": left_col, "role": "left_variable"},
-                        {"column": right_col, "role": "right_variable"},
+                        {
+                            "column": left_col,
+                            "role": "left_variable",
+                            "baseline_window": {"rows": len(left_base), "correlation": round(baseline_corr, 6)},
+                            "recent_window": {"rows": len(left_recent), "correlation": round(recent_corr, 6)},
+                            "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
+                        },
+                        {
+                            "column": right_col,
+                            "role": "right_variable",
+                            "baseline_window": {"rows": len(right_base), "correlation": round(baseline_corr, 6)},
+                            "recent_window": {"rows": len(right_recent), "correlation": round(recent_corr, 6)},
+                            "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
+                        },
                     ],
+                    "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
                     "summary": (
                         f"Coupling shift in {left_col} vs {right_col}: "
                         f"baseline={baseline_corr:.3f}, recent={recent_corr:.3f}, delta={drift:.3f}."

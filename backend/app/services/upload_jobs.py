@@ -253,7 +253,7 @@ def _complete_with_partial_result(
         "row_count": row_count,
         "column_count": len(columns),
         "columns": columns,
-        "preview_rows": rows[:10],
+        "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
         "detected_timestamp_column": snapshot.get("timestamp_column"),
         "numeric_profiles": [],
         "timestamp_profile": {
@@ -535,6 +535,9 @@ def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | No
                 seen_timestamps.add(timestamp_key)
 
             row = {column: raw_row[index] for index, column in enumerate(columns)}
+            row["__source_row_number"] = rows_received
+            if parsed_ts is not None:
+                row["__source_timestamp"] = parsed_ts.isoformat()
             missing_in_row = any(raw_row[index] == "" for index in numeric_indexes)
             invalid_in_row = False
             usable_numeric = 0
@@ -712,6 +715,53 @@ def _deformation_started_at(result: dict[str, Any]) -> str | None:
     return None
 
 
+
+def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    baseline = result.get("baseline_analysis") or {}
+    anchors: list[dict[str, Any]] = []
+    for item in baseline.get("top_relationship_changes") or baseline.get("relationship_drift") or []:
+        if not isinstance(item, dict):
+            continue
+        for anchor in item.get("source_rows") or []:
+            if isinstance(anchor, dict):
+                anchors.append(
+                    {
+                        "window": anchor.get("window"),
+                        "source_row": anchor.get("source_row"),
+                        "timestamp": anchor.get("timestamp"),
+                    }
+                )
+        for ref in item.get("evidence_refs") or []:
+            if not isinstance(ref, dict):
+                continue
+            for anchor in ref.get("source_rows") or []:
+                if isinstance(anchor, dict):
+                    anchors.append(
+                        {
+                            "window": anchor.get("window"),
+                            "source_row": anchor.get("source_row"),
+                            "timestamp": anchor.get("timestamp"),
+                            "column": ref.get("column"),
+                        }
+                    )
+    if not anchors:
+        profile = result.get("timestamp_profile") or {}
+        first = profile.get("first_timestamp") if isinstance(profile, dict) else None
+        last = profile.get("last_timestamp") if isinstance(profile, dict) else None
+        if first:
+            anchors.append({"window": "upload_start", "timestamp": first})
+        if last and last != first:
+            anchors.append({"window": "upload_end", "timestamp": last})
+    seen: set[tuple[Any, Any, Any, Any]] = set()
+    deduped: list[dict[str, Any]] = []
+    for anchor in anchors:
+        key = (anchor.get("window"), anchor.get("source_row"), anchor.get("timestamp"), anchor.get("column"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(anchor)
+    return deduped[:16]
+
 def build_evidence_record_from_result(
     *,
     run_id: str,
@@ -730,10 +780,12 @@ def build_evidence_record_from_result(
     replay = result.get("replay_timeline") or (sii.get("replay_timeline")) or {}
     replay_timeline = replay.get("timeline") if isinstance(replay, dict) else []
     latest_frame = replay_timeline[-1] if isinstance(replay_timeline, list) and replay_timeline else {}
-    relationship_drift = ((result.get("baseline_analysis") or {}).get("relationship_drift")) or []
+    baseline_payload = result.get("baseline_analysis") or {}
+    relationship_drift = (baseline_payload.get("relationship_drift") or baseline_payload.get("top_relationship_changes") or [])
     primary_relationship = relationship_drift[0] if isinstance(relationship_drift, list) and relationship_drift else {}
     variables = _observation_variables_from_result(result)
     data_conditions = _data_conditions_from_result(result)
+    source_rows = _source_rows_from_result(result)
     observation_type = _observation_type_from_result(result)
     structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
     drift_metrics = {
@@ -782,6 +834,7 @@ def build_evidence_record_from_result(
         "variables": variables,
         "drift_metrics": drift_metrics,
         "data_conditions": data_conditions,
+        "source_rows": source_rows,
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,
         "deformation_started_at": _deformation_started_at(result),
@@ -858,6 +911,7 @@ def _build_upload_engine_result(
                 "baseline_sample_size": item.get("baseline_sample_size"),
                 "recent_sample_size": item.get("recent_sample_size"),
                 "evidence_refs": item.get("evidence_refs"),
+                "source_rows": item.get("source_rows"),
             }
         )
         for column in columns:
@@ -1052,6 +1106,12 @@ def _build_csv_result(
     cultivation_mapping = map_cultivation_columns(columns)
     ingestion_report = ingestion_report or {}
     cleaning_warnings = list(ingestion_report.get("warnings") or [])
+    baseline_reliable = (
+        baseline_analysis.get("baseline_window_rows", 0) >= 5
+        and baseline_analysis.get("recent_window_rows", 0) >= 1
+        and baseline_analysis.get("columns_analyzed", 0) >= 1
+    )
+    stuck_sensor_count = sum(1 for profile in numeric_profiles if profile.get("constant_or_stuck"))
     data_quality = build_data_quality(
         row_count_total,
         len(columns),
@@ -1063,14 +1123,18 @@ def _build_csv_result(
                     *cleaning_warnings,
                     *timestamp_profile.get("warnings", []),
                     *cultivation_mapping.get("warnings", []),
+                    *([f"{stuck_sensor_count} numeric sensor(s) appear constant or stuck."] if stuck_sensor_count else []),
                 ]
             )
         ),
-    )
-    baseline_reliable = (
-        baseline_analysis.get("baseline_window_rows", 0) >= 5
-        and baseline_analysis.get("recent_window_rows", 0) >= 1
-        and baseline_analysis.get("columns_analyzed", 0) >= 1
+        {
+            "rows_received": ingestion_report.get("rows_received", row_count_total),
+            "rows_dropped": ingestion_report.get("rows_dropped", 0),
+            "quality_counts": ingestion_report.get("quality_counts", {}),
+            "stuck_sensor_count": stuck_sensor_count,
+            "irregular_sampling": any("inconsistent" in str(warning).lower() for warning in timestamp_profile.get("warnings", [])),
+            "baseline_reliable": baseline_reliable,
+        },
     )
     reliability_warning = None
     if not baseline_reliable:
@@ -1146,7 +1210,7 @@ def _build_csv_result(
         "row_count": row_count_total,
         "column_count": len(columns),
         "columns": columns,
-        "preview_rows": rows[:10],
+        "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
         "detected_timestamp_column": timestamp_column,
         "numeric_profiles": numeric_profiles,
         "timestamp_profile": timestamp_profile,

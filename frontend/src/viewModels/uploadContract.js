@@ -82,6 +82,11 @@ export function normalizeErrorMessage(error) {
   return "Unexpected processing error";
 }
 
+export function hasSupportedSiiClaims(payload = {}) {
+  return payload.sii_reliable_enough_to_show === true
+    && (payload.evidence_persisted === true || payload.evidence_persistence?.persisted === true);
+}
+
 export function normalizeUploadJob(payload = {}) {
   const jobId = payload.job_id ?? payload.jobId ?? payload.id ?? null;
   const status = normalizeUploadStatus(payload.status ?? payload.processing_state ?? payload.stage ?? payload.propagation_stage);
@@ -117,6 +122,7 @@ export function normalizeUploadJob(payload = {}) {
     quality_warning: payload.quality_warning ?? payload.data_quality?.warnings?.[0] ?? null,
     sii_reliable_enough_to_show: payload.sii_reliable_enough_to_show === true,
     evidence_persisted: payload.evidence_persisted === true || payload.evidence_persistence?.persisted === true,
+    supported_sii_claims: hasSupportedSiiClaims(payload),
   };
 }
 

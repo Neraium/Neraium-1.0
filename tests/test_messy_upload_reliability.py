@@ -46,7 +46,12 @@ def test_messy_csv_degrades_gracefully_and_reports_cleaning() -> None:
     assert result["processing_time_seconds"] >= 0
     assert result["evidence_persistence"]["persisted"] is True
     assert result["evidence_persistence"]["synthetic_fallback_used"] is False
-    assert read_evidence_run(result["job_id"])["rows_rejected"] == 4
+    assert result["data_quality"]["reliability_rating"] in {"not_reliable", "weak", "usable"}
+    assert result["sii_intelligence"]["reliability_rating"] == result["data_quality"]["reliability_rating"]
+    assert result["sii_intelligence"]["rooms"][0]["confidence"] <= 70
+    evidence = read_evidence_run(result["job_id"])
+    assert evidence["rows_rejected"] == 4
+    assert evidence["source_rows"]
 
 
 def test_whitespace_delimited_cmapss_style_upload_is_ingested(client) -> None:
@@ -136,3 +141,46 @@ def test_six_month_upload_performance_smoke() -> None:
     assert result["processing_time_seconds"] < 20
     assert result["sii_reliable_enough_to_show"] is True
     assert result["evidence_persistence"]["persisted"] is True
+
+
+def test_relationship_findings_persist_source_rows_and_windows() -> None:
+    baseline_rows = [
+        f"2026-05-01T08:{index:02d}:00Z,{70 + index},{130 + (2 * index)},{210 + index}"
+        for index in range(18)
+    ]
+    recent_rows = [
+        f"2026-05-01T09:{index:02d}:00Z,{88 + index},{160 - (3 * index)},{235 + index}"
+        for index in range(12)
+    ]
+    result = process_csv_content(
+        filename="relationship-source-rows.csv",
+        content=("timestamp,temperature,humidity,airflow\n" + "\n".join(baseline_rows + recent_rows)).encode(),
+    )
+
+    changes = result["baseline_analysis"]["top_relationship_changes"]
+    assert changes
+    first = changes[0]
+    assert first["source_rows"]
+    assert {anchor["window"] for anchor in first["source_rows"]} >= {"baseline_start", "recent_end"}
+    assert all(ref.get("baseline_window") and ref.get("recent_window") for ref in first["evidence_refs"])
+
+    evidence = read_evidence_run(result["job_id"])
+    assert evidence["variables"]
+    assert evidence["source_rows"]
+    assert evidence["drift_metrics"]["coupling_delta"] is not None
+
+
+def test_constant_sensor_and_sparse_upload_lower_reliability_and_confidence() -> None:
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,72,50,{400 + index}"
+        for index in range(8)
+    )
+    result = process_csv_content(
+        filename="constant-sparse.csv",
+        content=("timestamp,temp,humidity,airflow\n" + rows).encode(),
+    )
+
+    assert result["data_quality"]["quality_metrics"]["stuck_sensor_count"] >= 2
+    assert result["data_quality"]["reliability_rating"] in {"weak", "not_reliable"}
+    assert result["sii_intelligence"]["rooms"][0]["confidence"] <= 48
+    assert result["sii_reliable_enough_to_show"] is False
