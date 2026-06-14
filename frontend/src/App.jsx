@@ -213,17 +213,25 @@ function App() {
     setHistorianReplayState((current) => ({ ...current, enabled }));
   }, []);
 
-  const handleGateUploadComplete = useCallback(async (completedPayload = null) => {
+  const handleGateUploadComplete = useCallback(async (completedPayload = null, options = {}) => {
     setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
-    if (completedPayload && typeof completedPayload === "object") {
-      setCompletedUploadOverride(completedPayload);
+    const completedResult = uploadStateView.hasFullUploadResult(completedPayload?.latest_result)
+      ? completedPayload.latest_result
+      : uploadStateView.hasFullUploadResult(completedPayload)
+        ? completedPayload
+        : null;
+    if (completedResult) {
+      setCompletedUploadOverride(completedResult);
     }
     await loadLatestUploadState({ includePersisted: true });
     setSessionIntent("current");
     await loadFacilitySystems();
+    if (options.navigateToGate !== false) {
+      setActiveWorkspace("system-body");
+    }
   }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {

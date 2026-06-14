@@ -193,3 +193,96 @@
     width: min(340px, calc(100% - 20px));
   }
 }
+
+@media (max-width: 760px) {
+  .workspace-view--system-body,
+  .system-body--gate {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .system-gate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(18px, 5vw, 28px);
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .system-gate__center {
+    order: 2;
+    width: 100%;
+    max-width: 640px;
+    min-height: 0;
+    gap: clamp(14px, 4vw, 22px);
+    padding: 0;
+  }
+
+  .system-gate__state {
+    order: -1;
+    margin: 0;
+    max-width: 100%;
+    padding-inline: 8px;
+    overflow-wrap: anywhere;
+  }
+
+  .system-gate__plate--summary {
+    order: 1;
+    align-self: center;
+    width: min(100%, 560px);
+    min-width: 0;
+    margin: 0 auto;
+  }
+
+  .system-gate__plate--summary .panel-body {
+    min-width: 0;
+    padding: clamp(12px, 4vw, 18px);
+  }
+
+  .system-gate__plate--summary .onboarding-summary,
+  .system-gate__plate--summary .onboarding-summary li {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .system-gate__plate--summary .onboarding-summary li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    justify-items: stretch;
+    gap: 4px;
+  }
+
+  .system-gate__plate--summary .onboarding-summary li strong {
+    min-width: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .system-gate__boundary-note {
+    overflow-wrap: anywhere;
+  }
+
+  .system-gate__primary-action {
+    position: static;
+    order: 3;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 0;
+    transform: none;
+  }
+
+  .system-gate__primary-action .command-button {
+    width: min(100%, 320px);
+    min-height: 44px;
+    white-space: normal;
+  }
+}

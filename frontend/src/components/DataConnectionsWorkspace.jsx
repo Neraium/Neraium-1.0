@@ -165,7 +165,9 @@ export default function DataConnectionsWorkspace({
         if (latestResult || latestStatus === "complete") {
           setUploadState("complete");
           setUploadProcessingFlag(false);
-          if (typeof onUploadComplete === "function") await onUploadComplete(latestResult ?? latestPayload);
+          if (typeof onUploadComplete === "function") {
+            await onUploadComplete(latestResult ?? latestPayload, { navigateToGate: false });
+          }
           return;
         }
         setUploadState("running_sii");
