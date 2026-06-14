@@ -969,14 +969,19 @@ def _build_csv_result(
             for key in tracked_columns:
                 series = [_to_float(row.get(key)) for row in sample_rows]
                 clean = [value for value in series if value is not None]
-                if len(clean) < 2:
+                if len(clean) < 6:
                     continue
-                minimum = min(clean)
-                maximum = max(clean)
-                baseline_slice = clean[: max(1, len(clean) // 3)]
-                baseline = sum(baseline_slice) / max(1, len(baseline_slice))
-                denom = abs(baseline) if abs(baseline) > 1e-6 else 1.0
-                per_signal_drifts.append(abs(maximum - minimum) / denom)
+                window_size = max(3, len(clean) // 3)
+                baseline_slice = clean[:window_size]
+                recent_slice = clean[-window_size:]
+                baseline = sum(baseline_slice) / len(baseline_slice)
+                recent = sum(recent_slice) / len(recent_slice)
+                baseline_std = _population_std(baseline_slice)
+                recent_std = _population_std(recent_slice)
+                denom = max(abs(baseline), baseline_std * 3.0, 1.0)
+                mean_shift = abs(recent - baseline) / denom
+                variance_growth = max(0.0, recent_std - baseline_std) / denom
+                per_signal_drifts.append(mean_shift + variance_growth * 0.5)
             if per_signal_drifts:
                 room_drift = sum(per_signal_drifts) / len(per_signal_drifts)
         if sparse:
@@ -1311,6 +1316,13 @@ def _to_float(value: Any) -> float | None:
     except ValueError:
         return None
     return None
+
+
+def _population_std(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((value - mean) ** 2 for value in values) / len(values))
 
 
 def _detect_numeric_columns(rows: list[dict[str, Any]], columns: list[str], exclude: set[str | None]) -> list[str]:
