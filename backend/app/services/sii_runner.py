@@ -116,7 +116,7 @@ class BackendSiiRunner:
         previous_velocity = self._distance_velocity_history[-1] if self._distance_velocity_history else 0.0
 
         try:
-            baseline_covariance = np.atleast_2d(np.cov(baseline_matrix, rowvar=False))
+            baseline_covariance = _covariance_matrix(baseline_matrix)
             baseline_covariance = np.nan_to_num(baseline_covariance, nan=0.0)
             expected_shape = (current_vector.shape[0], current_vector.shape[0])
             if baseline_covariance.shape != expected_shape:
@@ -137,7 +137,7 @@ class BackendSiiRunner:
             structural_drift_score = float(np.clip(mahalanobis_distance / max(mahalanobis_distance + 1.0, 1.0), 0.0, 1.0))
             drift_velocity = float(mahalanobis_distance - previous_distance)
             drift_acceleration = float(drift_velocity - previous_velocity)
-            recent_covariance = np.atleast_2d(np.cov(recent_matrix, rowvar=False))
+            recent_covariance = _covariance_matrix(recent_matrix)
             recent_covariance = np.nan_to_num(recent_covariance, nan=0.0)
             if recent_covariance.shape == baseline_covariance.shape:
                 baseline_norm = float(np.linalg.norm(baseline_covariance, ord="fro"))
@@ -234,6 +234,13 @@ class BackendSiiRunner:
             baseline_source = self._history[:split_index]
         baseline_vectors = np.vstack(baseline_source[-self.baseline_window :])
         return baseline_vectors, recent_vectors
+
+
+def _covariance_matrix(matrix: np.ndarray) -> np.ndarray:
+    with np.errstate(all="ignore"):
+        covariance = np.cov(matrix, rowvar=False, bias=True)
+    covariance = np.atleast_2d(covariance)
+    return np.nan_to_num(covariance, nan=0.0)
 
 
 def _try_import_runner() -> None:
