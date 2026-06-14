@@ -18,10 +18,6 @@
   right: 18px;
 }
 
-.system-gate__settings-panel {
-  top: 62px;
-  right: 18px;
-}
 
 .system-gate__layout {
   position: relative;
@@ -178,11 +174,5 @@
 
   .system-gate__settings {
     right: calc(10px + env(safe-area-inset-right, 0px));
-  }
-
-  .system-gate__settings-panel {
-    top: calc(46px + env(safe-area-inset-top, 0px));
-    right: calc(10px + env(safe-area-inset-right, 0px));
-    width: min(340px, calc(100% - 20px));
   }
 }

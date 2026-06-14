@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
@@ -84,6 +85,102 @@ export default function SystemBodyWorkspace({
     setMenuOpen(false);
   }
 
+  useEffect(() => {
+    if (!menuOpen || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousDocumentOverflow = documentElement.style.overflow;
+
+    body.classList.add("views-overlay-open");
+    documentElement.classList.add("views-overlay-open");
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.classList.remove("views-overlay-open");
+      documentElement.classList.remove("views-overlay-open");
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen || typeof window === "undefined") {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
+  const menuOverlay = menuOpen && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        className="system-gate__settings-overlay"
+        data-testid="views-overlay"
+        onClick={() => setMenuOpen(false)}
+      >
+        <aside
+          id="system-body-menu"
+          className="system-gate__settings-panel"
+          aria-label="System body navigation menu"
+          aria-modal="true"
+          role="dialog"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="system-gate__settings-panel-header">
+            <p className="system-gate__settings-panel-title">Views</p>
+            <button
+              type="button"
+              className="system-gate__settings-close"
+              aria-label="Close workspace menu"
+              onClick={() => setMenuOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <ul>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                Upload CSV / Connect Data
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+                Connect API
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
+                Structural Replay
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
+                Observation Review
+              </button>
+            </li>
+            <li>
+              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
+                Help / Changelog
+              </button>
+            </li>
+          </ul>
+        </aside>
+      </div>,
+      document.body,
+    )
+    : null;
+
   return (
     <PageContainer className="system-body system-body--gate">
       <section className={`system-gate system-gate--${resolvedStatusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="System interpretation view">
@@ -102,38 +199,6 @@ export default function SystemBodyWorkspace({
         >
           Views
         </button>
-
-        {menuOpen ? (
-          <aside id="system-body-menu" className="system-gate__settings-panel" aria-label="System body navigation menu">
-            <ul>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                  Upload CSV / Connect Data
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                  Connect API
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
-                  Structural Replay
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
-                  Observation Review
-                </button>
-              </li>
-              <li>
-                <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
-                  Help / Changelog
-                </button>
-              </li>
-            </ul>
-          </aside>
-        ) : null}
 
         <div className="system-gate__layout">
           <div className="system-gate__column system-gate__column--left">
@@ -205,6 +270,7 @@ export default function SystemBodyWorkspace({
         </div>
 
       </section>
+      {menuOverlay}
     </PageContainer>
   );
 }
