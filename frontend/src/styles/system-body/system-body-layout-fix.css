@@ -121,17 +121,22 @@
     padding:
       calc(64px + env(safe-area-inset-top, 0px))
       calc(10px + env(safe-area-inset-right, 0px))
-      calc(14px + env(safe-area-inset-bottom, 0px))
+      calc(32px + env(safe-area-inset-bottom, 0px))
       calc(10px + env(safe-area-inset-left, 0px));
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .system-gate__layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "left"
-      "center"
-      "right";
+    display: flex;
+    flex-direction: column;
     gap: 14px;
+    overflow-x: clip;
+  }
+
+  .system-gate__column {
+    gap: 14px;
+    min-width: 0;
   }
 
   .system-gate__column--left,
@@ -139,18 +144,49 @@
     padding-top: 0;
   }
 
+  .system-gate__column--right {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .system-gate__column--right .system-gate__actions {
+    order: 0;
+  }
+
+  .system-gate__column--right .system-gate__plate--snapshot {
+    order: 1;
+  }
+
+  .system-gate__column--right .system-gate__plate--trust {
+    order: 2;
+  }
+
   .system-gate__center {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
     min-height: 0;
     gap: 8px;
+    overflow-x: clip;
+  }
+
+  .system-gate__state {
+    order: -1;
+    margin: 0;
+    max-width: 100%;
   }
 
   .system-gate__center .system-body-orb-panel {
-    width: min(100%, 560px);
+    width: 100%;
+    max-width: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .system-gate__center .system-body-orb-panel__stage {
-    width: min(100%, 560px);
+    width: min(100%, 360px);
+    max-width: 100%;
     min-width: 0;
     min-height: auto;
     height: auto;
@@ -158,8 +194,10 @@
     aspect-ratio: 1 / 1;
   }
 
-  .system-gate__state {
+  .system-gate__center .system-body-orb-panel__stage .health-orb {
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
   }
 
   .system-gate__heartbeat,
@@ -174,5 +212,13 @@
 
   .system-gate__settings {
     right: calc(10px + env(safe-area-inset-right, 0px));
+  }
+
+  .system-gate__plate {
+    position: static;
+    inset: auto;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
   }
 }
