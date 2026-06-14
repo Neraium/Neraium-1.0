@@ -331,13 +331,13 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     settings = request.app.state.settings
     filename = file.filename or "upload.csv"
     lowered = filename.lower()
-    if not (lowered.endswith(".csv") or lowered.endswith(".json")):
+    if not (lowered.endswith(".csv") or lowered.endswith(".json") or lowered.endswith(".txt")):
         return JSONResponse(
             status_code=400,
             content={
                 "status": "FAILED",
                 "processing_state": "failed",
-                "message": "Only .csv and .json telemetry files are supported.",
+                "message": "Only .csv, .txt, and .json telemetry files are supported.",
             },
         )
 

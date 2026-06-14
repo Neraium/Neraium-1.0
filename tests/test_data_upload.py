@@ -883,12 +883,12 @@ def test_upload_rejects_invalid_extension() -> None:
 
     response = client.post(
         "/api/data/upload",
-        files={"file": ("sensor-export.txt", "timestamp,value\n2026-05-01,75", "text/plain")},
+        files={"file": ("sensor-export.xml", "<telemetry />", "application/xml")},
     )
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["message"] == "Only .csv and .json telemetry files are supported."
+    assert payload["message"] == "Only .csv, .txt, and .json telemetry files are supported."
     assert payload["status"] == "FAILED"
     assert payload["processing_state"] == "failed"
 
