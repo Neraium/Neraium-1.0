@@ -1163,6 +1163,8 @@ def _build_csv_result(
             "columns": columns,
             "telemetry_profile": telemetry_profile,
             "telemetry_profile_signals": telemetry_profile_signals,
+            "operational_signal_profile": operational_profile,
+            "operational_signal_profile_signals": operational_profile_signals,
         },
         {
             "baseline_analysis": baseline_analysis,

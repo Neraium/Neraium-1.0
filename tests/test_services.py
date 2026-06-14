@@ -443,3 +443,94 @@ def test_driver_attribution_elevates_aquatic_infrastructure_narrative_when_multi
     assert "makeup-water demand increase" in attribution["likely_driver"]
     assert "heater runtime divergence" in attribution["likely_driver"]
     assert attribution["attribution_confidence"] in {"medium", "high"}
+
+
+def test_driver_attribution_elevates_hvac_infrastructure_narrative_when_multiple_families_align() -> None:
+    columns = ["supply_temp", "return_temp", "static_pressure", "compressor_runtime", "air_handler_status"]
+    attribution = build_driver_attribution(
+        room_state={"room": "AHU-3", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "columns": columns,
+            "telemetry_profile": "hvac_systems",
+            "numeric_profiles": [],
+            "timestamp_profile": {"detected_timestamp_column": "timestamp", "warnings": []},
+            "data_quality": {"warnings": [], "readiness": "ready"},
+            "cultivation_mapping": map_cultivation_columns(columns),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(columns),
+            "baseline_analysis": {
+                "column_drift": [
+                    {"column": "static_pressure", "drift_flag": "review", "direction": "up", "warnings": []},
+                    {"column": "supply_temp", "drift_flag": "review", "direction": "down", "warnings": []},
+                    {"column": "compressor_runtime", "drift_flag": "watch", "direction": "up", "warnings": []},
+                ]
+            },
+        },
+        engine_result={
+            "system_evidence": {"corroboration_level": "strong"},
+            "persistence_assessment": {"persistent_columns": ["static_pressure", "compressor_runtime"]},
+            "evidence": [
+                {
+                    "type": "relationship_change",
+                    "columns": ["static_pressure", "compressor_runtime"],
+                    "change": 0.78,
+                }
+            ],
+        },
+    )
+
+    assert attribution["driver_category"] == "hvac_air_distribution_infrastructure"
+    assert "Air distribution system drift coincides with" in attribution["likely_driver"]
+    assert "supply-return thermal split divergence" in attribution["likely_driver"]
+    assert "compressor runtime divergence" in attribution["likely_driver"]
+    assert attribution["attribution_confidence"] in {"medium", "high"}
+
+
+def test_driver_attribution_elevates_utility_infrastructure_narrative_from_operational_profile() -> None:
+    columns = [
+        "distribution_pressure",
+        "pump_station_output",
+        "reservoir_refill_rate",
+        "leak_detection_indicator",
+        "sewer_flow",
+    ]
+    attribution = build_driver_attribution(
+        room_state={"room": "Utility Grid", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "columns": columns,
+            "telemetry_profile": "unknown",
+            "operational_signal_profile": "utility_infrastructure",
+            "numeric_profiles": [],
+            "timestamp_profile": {"detected_timestamp_column": "timestamp", "warnings": []},
+            "data_quality": {"warnings": [], "readiness": "ready"},
+            "cultivation_mapping": map_cultivation_columns(columns),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(columns),
+            "baseline_analysis": {
+                "column_drift": [
+                    {"column": "distribution_pressure", "drift_flag": "review", "direction": "down", "warnings": []},
+                    {"column": "reservoir_refill_rate", "drift_flag": "watch", "direction": "up", "warnings": []},
+                    {"column": "leak_detection_indicator", "drift_flag": "review", "direction": "up", "warnings": []},
+                ]
+            },
+        },
+        engine_result={
+            "system_evidence": {"corroboration_level": "strong"},
+            "persistence_assessment": {"persistent_columns": ["distribution_pressure", "leak_detection_indicator"]},
+            "evidence": [
+                {
+                    "type": "relationship_change",
+                    "columns": ["distribution_pressure", "pump_station_output", "leak_detection_indicator"],
+                    "change": 0.74,
+                }
+            ],
+        },
+    )
+
+    assert attribution["driver_category"] == "utility_distribution_infrastructure"
+    assert "Utility distribution system drift coincides with" in attribution["likely_driver"]
+    assert "reservoir refill divergence" in attribution["likely_driver"]
+    assert "leak or downstream demand divergence" in attribution["likely_driver"]
+    assert attribution["attribution_confidence"] in {"medium", "high"}
