@@ -402,3 +402,44 @@ def test_confidence_and_urgency_are_downgraded_for_contradictory_weak_evidence()
         engine_result=engine_result,
         attribution=attribution,
     ) == "review"
+
+
+def test_driver_attribution_elevates_aquatic_infrastructure_narrative_when_multiple_families_align() -> None:
+    attribution = build_driver_attribution(
+        room_state={"room": "Pool 4", "state": "Needs review", "severity": "review"},
+        telemetry_context={
+            "columns": ["pool_water_temp", "heater_runtime", "filter_pressure", "water_level", "circulation_pump_runtime"],
+            "telemetry_profile": "pool_hottub_systems",
+            "numeric_profiles": [],
+            "timestamp_profile": {"detected_timestamp_column": "timestamp", "warnings": []},
+            "data_quality": {"warnings": [], "readiness": "ready"},
+            "cultivation_mapping": map_cultivation_columns(["pool_water_temp", "heater_runtime", "filter_pressure", "water_level", "circulation_pump_runtime"]),
+        },
+        baseline_context={
+            "cultivation_mapping": map_cultivation_columns(["pool_water_temp", "heater_runtime", "filter_pressure", "water_level", "circulation_pump_runtime"]),
+            "baseline_analysis": {
+                "column_drift": [
+                    {"column": "filter_pressure", "drift_flag": "review", "direction": "up", "warnings": []},
+                    {"column": "water_level", "drift_flag": "watch", "direction": "down", "warnings": []},
+                    {"column": "heater_runtime", "drift_flag": "review", "direction": "up", "warnings": []},
+                ]
+            },
+        },
+        engine_result={
+            "system_evidence": {"corroboration_level": "strong"},
+            "persistence_assessment": {"persistent_columns": ["filter_pressure", "heater_runtime"]},
+            "evidence": [
+                {
+                    "type": "relationship_change",
+                    "columns": ["filter_pressure", "heater_runtime"],
+                    "change": 0.81,
+                }
+            ],
+        },
+    )
+
+    assert attribution["driver_category"] == "aquatic_circulation_infrastructure"
+    assert "Pool circulation system drift coincides with" in attribution["likely_driver"]
+    assert "makeup-water demand increase" in attribution["likely_driver"]
+    assert "heater runtime divergence" in attribution["likely_driver"]
+    assert attribution["attribution_confidence"] in {"medium", "high"}

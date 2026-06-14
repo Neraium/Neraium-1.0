@@ -1160,6 +1160,9 @@ def _build_csv_result(
             "data_quality": data_quality,
             "numeric_profiles": numeric_profiles,
             "cultivation_mapping": cultivation_mapping,
+            "columns": columns,
+            "telemetry_profile": telemetry_profile,
+            "telemetry_profile_signals": telemetry_profile_signals,
         },
         {
             "baseline_analysis": baseline_analysis,

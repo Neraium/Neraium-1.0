@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.aquatic_domain import normalize_signal_name
 from app.services.cultivation_mapping import category_for_column
 
 
@@ -113,6 +114,15 @@ def build_driver_attribution(
     score_baseline_drift(scores, baseline_analysis, column_to_category, persistent_columns)
     score_relationships(scores, engine_result, column_to_category)
     score_sensor_network(scores, telemetry_context, baseline_analysis, cultivation_mapping)
+
+    aquatic_override = aquatic_infrastructure_attribution(
+        room_state=room_state,
+        telemetry_context=telemetry_context,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+    )
+    if aquatic_override is not None:
+        return aquatic_override
 
     ranked = sorted(scores.values(), key=lambda item: item.score, reverse=True)
     top = ranked[0] if ranked else DriverScore("unknown_system_drift")
@@ -275,6 +285,103 @@ def unknown_attribution(
         "severity": "review" if readiness != "ready" or has_directional_evidence else "info",
         "attribution_confidence": "low",
     }
+
+
+def aquatic_infrastructure_attribution(
+    *,
+    room_state: dict[str, Any],
+    telemetry_context: dict[str, Any],
+    baseline_analysis: dict[str, Any],
+    engine_result: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not is_aquatic_telemetry(telemetry_context):
+        return None
+
+    signal_profile = engine_result.get("system_evidence", {}) or {}
+    corroboration_level = str(signal_profile.get("corroboration_level") or "limited").lower()
+    persistent_columns = {
+        normalize_signal_name(column)
+        for column in (engine_result.get("persistence_assessment", {}) or {}).get("persistent_columns", [])
+        if column
+    }
+    relationship_columns = {
+        normalize_signal_name(column)
+        for item in (engine_result.get("evidence") or [])
+        if item.get("type") == "relationship_change"
+        for column in (item.get("columns") or [])
+    }
+    drift_columns = {
+        normalize_signal_name(item.get("column"))
+        for item in (baseline_analysis.get("column_drift") or [])
+        if item.get("drift_flag") in {"watch", "review"} and item.get("column")
+    }
+    active_columns = persistent_columns | relationship_columns | drift_columns
+
+    hydraulic_signals = {
+        "flow_rate", "filter_pressure", "pump_runtime", "pump_amperage", "circulation_pump_runtime", "pressure", "water_pressure"
+    }
+    makeup_signals = {"water_level", "makeup_water", "makeup_water_flow", "fill_valve", "tank_level", "level"}
+    thermal_signals = {"heater_runtime", "pool_temperature", "spa_temperature", "pool_water_temp", "spa_water_temp"}
+
+    families: list[tuple[str, str, set[str]]] = []
+    if active_columns & hydraulic_signals:
+        families.append(("circulation", "circulation system drift", hydraulic_signals))
+    if active_columns & makeup_signals:
+        families.append(("makeup", "makeup-water demand increase", makeup_signals))
+    if active_columns & thermal_signals and normalize_signal_name("heater_runtime") in active_columns:
+        families.append(("thermal", "heater runtime divergence", thermal_signals))
+
+    relationship_count = len([item for item in (engine_result.get("evidence") or []) if item.get("type") == "relationship_change"])
+    persistent_family_count = sum(1 for _, _, signals in families if persistent_columns & signals)
+    if len(families) < 2:
+        return None
+    if corroboration_level not in {"moderate", "strong"} and relationship_count == 0:
+        return None
+    if persistent_family_count == 0 and corroboration_level != "strong":
+        return None
+
+    secondary_phrases = [phrase for family, phrase, _signals in families if family != "circulation"]
+    if not secondary_phrases:
+        secondary_phrases = [phrase for _family, phrase, _signals in families[1:]]
+    likely_driver = "Pool circulation system drift"
+    if secondary_phrases:
+        likely_driver = f"{likely_driver} coincides with {' and '.join(secondary_phrases[:2])}."
+    else:
+        likely_driver = f"{likely_driver} is showing multi-signal infrastructure divergence."
+
+    supporting_evidence = [
+        "Circulation-side signals are moving together rather than as an isolated sensor excursion.",
+    ]
+    if any(family == "makeup" for family, _phrase, _signals in families):
+        supporting_evidence.append("Water-level related behavior suggests rising makeup-water demand alongside the circulation change.")
+    if any(family == "thermal" for family, _phrase, _signals in families):
+        supporting_evidence.append("Heater runtime is diverging from expected pool/spa thermal response.")
+    if relationship_count > 0:
+        supporting_evidence.append("Relationship-change evidence links the affected signals into one infrastructure pattern.")
+
+    contributing_signals = sorted(active_columns & (hydraulic_signals | makeup_signals | thermal_signals))
+    confidence = "high" if corroboration_level == "strong" and persistent_family_count >= 2 else "medium"
+    severity = "action" if corroboration_level == "strong" and persistent_family_count >= 2 else "review"
+    return {
+        "room": room_state.get("room") or room_state.get("label") or "Current room",
+        "state": room_state.get("state") or room_state.get("status") or "Needs review",
+        "likely_driver": likely_driver,
+        "driver_category": "aquatic_circulation_infrastructure",
+        "contributing_signals": contributing_signals or ["circulation", "heater_runtime"],
+        "supporting_evidence": supporting_evidence[:4],
+        "confidence_basis": "Multi-family pool infrastructure evidence aligned across circulation, persistence, and corroborating relationship changes.",
+        "next_operator_move": "Inspect circulation hydraulics, confirm makeup-water demand, and compare heater runtime against turnover recovery.",
+        "severity": severity,
+        "attribution_confidence": confidence,
+    }
+
+
+def is_aquatic_telemetry(telemetry_context: dict[str, Any]) -> bool:
+    telemetry_profile = str(telemetry_context.get("telemetry_profile") or "").lower()
+    if telemetry_profile == "pool_hottub_systems":
+        return True
+    columns = [str(column).lower() for column in (telemetry_context.get("columns") or [])]
+    return any(token in column for column in columns for token in ("pool", "spa", "orp", "heater", "circulation"))
 
 
 def build_column_category_lookup(cultivation_mapping: dict[str, Any]) -> dict[str, str]:
