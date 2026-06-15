@@ -71,6 +71,7 @@ After:
 
 Backend:
 - `backend/app/services/upload_jobs.py`
+- `backend/app/services/upload_state.py`
 - `backend/app/routers/data.py`
 - `backend/app/routers/replay.py`
 
@@ -83,6 +84,7 @@ Frontend:
 Tests:
 - `tests/test_data_upload.py`
 - `tests/test_replay_api.py`
+- `tests/test_upload_state.py`
 
 Documentation:
 - `docs/upload_state_integrity_refactor.md`
@@ -90,6 +92,7 @@ Documentation:
 ## Tests Added
 
 Added or tightened lifecycle coverage for:
+- pure canonical upload-state construction and current-result selection
 - no active session returns empty latest-upload state without `relationship_drift`
 - completed upload identity alignment across latest-upload, findings/evidence, and replay
 - queued replacement upload suppresses prior completed findings
