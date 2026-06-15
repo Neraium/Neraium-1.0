@@ -152,6 +152,22 @@ def write_upload_status(job_id: str, payload: dict[str, Any]) -> None:
     write_shared_state(f"upload_status_{job_id}", payload)
 
 
+def write_upload_status_progress(
+    job_id: str,
+    payload: dict[str, Any],
+    *,
+    latest_summary: dict[str, Any] | None = None,
+    keep_result: bool = False,
+) -> dict[str, Any]:
+    normalized_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    normalized_payload["job_id"] = str(job_id)
+    write_upload_status(str(job_id), normalized_payload)
+    summary_payload = dict(latest_summary or normalized_payload)
+    write_latest_upload_summary_payload(summary_payload)
+    persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+    return summary_payload
+
+
 def write_latest_upload_result_payload(payload: dict[str, Any]) -> None:
     write_local_json("latest_upload_result.json", payload)
     write_shared_state("latest_upload_result", payload)

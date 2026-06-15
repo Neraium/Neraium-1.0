@@ -2,7 +2,8 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.services.runtime_db import upsert_latest_payload
-from app.services.upload_jobs import write_job, write_latest_upload_summary
+from app.services.upload_jobs import write_job
+from app.services.upload_state_repository import write_latest_upload_summary
 
 
 def test_upload_status_complete_without_sii_contract_is_failed() -> None:

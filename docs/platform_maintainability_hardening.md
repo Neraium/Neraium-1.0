@@ -91,6 +91,9 @@ See also: [cache_ownership_policy.md](cache_ownership_policy.md)
 
 Migrated out of `upload_jobs.py`:
 
+- `reset_latest_upload_state` callers in `data_connections.py` now use `upload_state_repository.reset_upload_state()` plus `runtime_db.clear_upload_runtime_tables()` directly.
+- `write_latest_upload_result` callers in `tests/test_domain_mode.py` and `tests/test_replay_api.py` now import from `upload_state_repository.py`.
+- `write_latest_upload_summary` callers in `tests/test_sii_contract_enforcement.py` now import from `upload_state_repository.py`.
 - `read_current_upload_result` callers in `facility.py`, `audit.py`, `domain_mode.py`, `backend/api/ecosystem.py`, `backend/api/distributed_cognition.py`, and `data_connections.py` now import from `upload_state_repository.py`.
 - `shared_state_configured`, `upload_state_backend`, and `warm_latest_upload_cache` callers in app startup and health paths now import from `upload_state_repository.py`.
 - `has_active_session_artifact` in `facility.py` now imports from `upload_state.py`.
@@ -106,7 +109,7 @@ Remaining compatibility exports in `upload_jobs.py`:
 - `process_next_queued_upload_job`, `process_csv_file`, `process_json_payload`, `process_csv_content`, `build_upload_result`
   Reason: these are orchestration/processing entrypoints, not pure state helpers.
 - `write_job`, `read_job`, `read_upload_status`, `reset_latest_upload_state`
-  Reason: queue lifecycle and reset callers still depend on the facade surface.
+  Reason: queue lifecycle callers still depend on the facade surface, and a few tests still verify reset compatibility directly.
 - `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
   Reason: preserved for compatibility while tests and callers continue migrating off legacy imports.
 - `build_evidence_record_from_result`, `build_traceability_packet`, `read_upload_cache_stats`
@@ -115,7 +118,8 @@ Remaining compatibility exports in `upload_jobs.py`:
 Completion write sequencing:
 
 - `upload_state_repository.write_upload_completion()` now owns the persisted write ordering for per-job result, per-job status, latest result, latest summary, and canonical latest-upload record.
-- `upload_jobs.py` no longer hand-orders those writes separately for normal completion and partial completion paths.
+- `upload_state_repository.write_upload_status_progress()` now owns the lower-level progress/latest-summary ordering that `upload_jobs.write_job()` and `_set_status()` previously hand-assembled.
+- `upload_jobs.py` no longer hand-orders those writes separately for normal completion, partial completion, and status/progress updates.
 
 `latest_result` migration status:
 
@@ -126,12 +130,13 @@ Completion write sequencing:
 Benchmark status:
 
 - The 1M-row benchmark remains opt-in by design.
-- Run it only when explicitly desired with `NERAIUM_RUN_1M_BENCHMARK=1`.
+- Run it only when explicitly desired with `NERAIUM_RUN_1M_BENCHMARK=1 ./backend/.venv/bin/pytest tests/test_upload_robustness_benchmark.py -q`.
 - Smaller-scale benchmark validation remains acceptable for routine hardening passes.
+- This pass should keep using targeted or reduced-scale validation unless the opt-in environment variable is set.
 
 ## Future Refactor Opportunities
 
-1. Migrate the remaining `write_latest_upload_result` and `write_latest_upload_summary` compatibility imports in tests and services onto `upload_state_repository.py`.
+1. Migrate the remaining `write_latest_upload_result`, `write_latest_upload_summary`, and reset compatibility imports in tests and services onto `upload_state_repository.py` or a dedicated reset service.
 2. Remove compatibility re-exports for `build_evidence_record_from_result` and `build_traceability_packet` once no internal callers still import them from `upload_jobs.py`.
 3. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
 4. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.

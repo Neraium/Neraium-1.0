@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
-from app.services.upload_jobs import reset_latest_upload_state, write_job, write_latest_upload_result
+from app.services.upload_jobs import write_job
+from app.services.upload_state_repository import reset_upload_state, write_latest_upload_result
 
 
 def _seed_canonical_replay(job_id: str = "live-replay-job", frame_count: int = 6) -> None:
@@ -47,7 +48,7 @@ def _seed_canonical_replay(job_id: str = "live-replay-job", frame_count: int = 6
 
 
 def test_replay_timeline_returns_structural_frames() -> None:
-    reset_latest_upload_state()
+    reset_upload_state()
     _seed_canonical_replay(frame_count=6)
     client = TestClient(create_app())
 
@@ -69,7 +70,7 @@ def test_replay_timeline_returns_structural_frames() -> None:
 
 
 def test_replay_frame_and_range_endpoints() -> None:
-    reset_latest_upload_state()
+    reset_upload_state()
     _seed_canonical_replay(frame_count=12)
     client = TestClient(create_app())
     timeline_response = client.get("/api/replay/timeline?intervals=12")
@@ -118,7 +119,7 @@ def test_production_live_replay_does_not_return_synthetic_fallback(monkeypatch) 
 
 
 def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
-    reset_latest_upload_state()
+    reset_upload_state()
     _seed_canonical_replay(frame_count=12)
     client = TestClient(create_app())
 

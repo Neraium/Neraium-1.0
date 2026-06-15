@@ -9,8 +9,8 @@ from app.main import create_app
 from app.services.evidence_store import upsert_evidence_run
 from app.services import upload_jobs, upload_state_repository
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, db_connection, init_runtime_db
-from app.services.upload_jobs import (
-    build_empty_latest_upload_record,
+from app.services.upload_jobs import build_empty_latest_upload_record
+from app.services.upload_state_repository import (
     read_current_upload_result,
     read_latest_upload_record,
     read_upload_result_by_job_id,
@@ -151,6 +151,36 @@ def test_upload_state_repository_write_upload_completion_persists_consistent_art
     assert record["job_id"] == job_id
     assert record["result"]["job_id"] == job_id
     assert record["summary"]["job_id"] == job_id
+
+
+def test_upload_jobs_write_job_delegates_progress_persistence_to_repository(monkeypatch) -> None:
+    calls: list[tuple[str, dict, dict, bool]] = []
+    original = upload_jobs.repository_write_upload_status_progress
+
+    def _record(job_id: str, payload: dict, *, latest_summary: dict | None = None, keep_result: bool = False) -> dict:
+        calls.append((job_id, dict(payload), dict(latest_summary or {}), keep_result))
+        return original(job_id, payload, latest_summary=latest_summary, keep_result=keep_result)
+
+    monkeypatch.setattr(upload_jobs, "repository_write_upload_status_progress", _record)
+
+    upload_jobs.write_job(
+        {
+            "job_id": "delegated-progress-job",
+            "filename": "delegated.csv",
+            "status": "PROCESSING",
+            "processing_state": "parsing_telemetry",
+            "progress": 20,
+            "message": "Parsing telemetry.",
+        }
+    )
+
+    assert len(calls) == 1
+    job_id, payload, latest_summary, keep_result = calls[0]
+    assert job_id == "delegated-progress-job"
+    assert payload["job_id"] == "delegated-progress-job"
+    assert latest_summary["job_id"] == "delegated-progress-job"
+    assert latest_summary["processing_state"] == "parsing_telemetry"
+    assert keep_result is False
 
 
 def test_upload_jobs_compatibility_write_helpers_remain_stable() -> None:
@@ -348,6 +378,17 @@ def test_upload_state_missing_persisted_data_fails_safely() -> None:
     assert payload["current_upload"]["status"] == "empty"
     assert payload["latest_result"] is None
     assert payload["job_id"] is None
+
+
+def test_repository_latest_result_fallback_remains_available_without_canonical_record() -> None:
+    job_id = "legacy-latest-result-only"
+    stale = _persisted_result(job_id, filename="legacy.csv")
+
+    upload_state_repository.write_local_json("latest_upload_result.json", stale)
+    upload_state_repository.write_shared_state("latest_upload_result", stale)
+
+    assert upload_state_repository.read_latest_upload_result()["job_id"] == job_id
+    assert upload_state_repository.read_current_upload_result() is None
 
 
 def test_latest_upload_prefers_canonical_current_upload_result_over_stale_legacy_latest_result() -> None:

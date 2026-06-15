@@ -14,6 +14,7 @@ from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import Settings, get_settings
 from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.runtime_db import (
+    clear_upload_runtime_tables,
     delete_data_connection,
     list_data_connections,
     read_data_connection,
@@ -21,12 +22,9 @@ from app.services.runtime_db import (
     upsert_data_connection,
     upsert_latest_payload,
 )
-from app.services.upload_jobs import (
-    build_upload_result,
-    reset_latest_upload_state,
-)
+from app.services.upload_jobs import build_upload_result
 from app.services.upload_persistence import summarize_result
-from app.services.upload_state_repository import read_current_upload_result, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_state_repository import read_current_upload_result, reset_upload_state, write_latest_upload_result, write_latest_upload_summary
 
 
 logger = logging.getLogger(__name__)
@@ -171,7 +169,8 @@ def reset_all_data_connections() -> list[dict[str, Any]]:
         }
         reset_connections.append(upsert_registered_data_connection(reset_payload))
 
-    reset_latest_upload_state(purge_job_records=True)
+    reset_upload_state()
+    clear_upload_runtime_tables()
     return reset_connections
 
 

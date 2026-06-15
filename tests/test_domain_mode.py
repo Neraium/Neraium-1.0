@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
-from app.services.upload_jobs import write_latest_upload_result
+from app.services.upload_state_repository import write_latest_upload_result
 
 
 def _write_detectable_upload(job_id: str, *, columns: list[str], room_names: list[str]) -> None:

@@ -46,6 +46,7 @@ from app.services.upload_state_repository import (
     upload_state_backend,
     warm_latest_upload_cache,
     write_upload_completion as repository_write_upload_completion,
+    write_upload_status_progress as repository_write_upload_status_progress,
     write_latest_upload_record as repository_write_latest_upload_record,
     write_latest_upload_result as repository_write_latest_upload_result,
     write_latest_upload_summary as repository_write_latest_upload_summary,
@@ -155,13 +156,12 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     }
     payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower())
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
-    _write_json(f"upload_status_{job_id}.json", payload)
-    upsert_upload_job(payload)
-    _write_shared_state(f"upload_status_{job_id}", payload)
-    _write_shared_state("latest_upload_summary", payload)
+    repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
-    persist_latest_upload_state(summary=payload, result=None, keep_result=False)
+    upsert_upload_job(payload)
     return payload
+
+
 def _complete_with_partial_result(
     *,
     job_id: str,
@@ -1236,8 +1236,6 @@ def write_job(*args) -> None:
     payload.setdefault("upload_id", job_id)
     payload.setdefault("session_scope", build_session_scope(job_id, filename=payload.get("filename"), status=str(payload.get("processing_state") or payload.get("status") or "active").lower()))
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
-    _write_json(f"upload_status_{job_id}.json", payload)
-    _write_shared_state(f"upload_status_{job_id}", payload)
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
     visible_states = {
@@ -1270,10 +1268,10 @@ def write_job(*args) -> None:
         latest_summary.setdefault("propagation_progress", latest_summary.get("progress", 0))
         latest_summary.setdefault("propagation_label", latest_summary.get("message") or "Queued.")
 
-        _write_json("latest_upload_summary.json", latest_summary)
-        _write_shared_state("latest_upload_summary", latest_summary)
+        repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
         UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = latest_summary
-        persist_latest_upload_state(summary=latest_summary, result=None, keep_result=False)
+    else:
+        write_upload_status(job_id, payload)
     try:
         upsert_upload_job(payload)
     except Exception:
