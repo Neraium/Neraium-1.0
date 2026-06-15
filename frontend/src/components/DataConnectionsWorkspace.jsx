@@ -140,10 +140,10 @@ export default function DataConnectionsWorkspace({
       const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
       const latestPayload = await loadLatestUpload();
       if (cancelled) return;
-      const latestJobId = String(latestPayload?.current_upload?.job_id ?? latestPayload?.snapshot?.current_upload?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.latest_result?.job_id ?? latestPayload?.job_id ?? "").trim();
+      const latestJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload);
       const restoreJobId = latestJobId || storedJobId;
       const latestStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
-      const latestResult = latestPayload?.latest_result;
+      const latestResult = uploadStateView.resolveCurrentUploadResult(latestPayload);
       if (!restoreJobId && !latestResult) return;
       uploadJobIdRef.current = restoreJobId || null;
       uploadStatusPathRef.current = normalizeUploadStatusPath(latestPayload?.status_url, restoreJobId);
@@ -477,7 +477,7 @@ export default function DataConnectionsWorkspace({
         }
       }
       const latestPayload = await loadLatestUpload();
-      const latestResult = latestPayload?.latest_result;
+      const latestResult = uploadStateView.resolveCurrentUploadResult(latestPayload);
       const completedPayload = { ...(uploadStateView.hasFullUploadResult(latestResult) ? latestResult : {}), ...(latestPayload ?? {}) };
       setUploadTransfer({ loaded: totalBytes, total: totalBytes, percent: 100, speedBytesPerSecond: 0, stage: "accepted", message: "All files processed." });
       if (hasBackgroundProcessing && failedCount === 0) {

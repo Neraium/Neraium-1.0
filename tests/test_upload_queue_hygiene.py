@@ -1,6 +1,7 @@
 from app.main import create_app
 from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
-from app.services.upload_jobs import process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
+from app.services.upload_jobs import UPLOAD_QUEUE_LIFECYCLE, process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
+from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from fastapi.testclient import TestClient
 
 
@@ -139,3 +140,24 @@ def test_shared_upload_queue_backend_allows_api_enqueue_and_worker_claim(monkeyp
     assert claimed["status"] == "processing"
     assert claimed["attempts"] == 1
     assert queue_metrics() == {"pending": 0, "processing": 1, "completed": 0, "failed": 0}
+
+
+def test_queue_lifecycle_uses_explicit_runtime_state() -> None:
+    assert UPLOAD_QUEUE_LIFECYCLE.runtime_state is UPLOAD_RUNTIME_STATE
+
+    job_id = "runtime-state-owned-job"
+    write_job(
+        {
+            "job_id": job_id,
+            "filename": "missing.csv",
+            "file_path": "/definitely/missing.csv",
+            "status": "PENDING",
+            "processing_state": "queued",
+        }
+    )
+    enqueue_upload_job(job_id)
+
+    process_next_queued_upload_job()
+
+    assert UPLOAD_RUNTIME_STATE.jobs[job_id]["status"] == "FAILED"
+    assert UPLOAD_RUNTIME_STATE.jobs[job_id]["processing_state"] == "failed"

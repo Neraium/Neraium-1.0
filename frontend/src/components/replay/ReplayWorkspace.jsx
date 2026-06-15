@@ -5,6 +5,7 @@ import EvidenceLineagePanel from "../EvidenceLineagePanel";
 import EvidenceInteractionPanel from "../EvidenceInteractionPanel";
 import ReplayCognitionField from "../ReplayCognitionField";
 import { resolveSessionJobId } from "../../viewModels/currentSession";
+import * as uploadStateView from "../../viewModels/uploadState";
 
 export default function ReplayWorkspace({
   apiFetch,
@@ -387,9 +388,9 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
       throw new Error(`Unexpected response: ${latestResponse.status}`);
     }
     const latestPayload = await latestResponse.json();
-    const latestResult = latestPayload?.latest_result ?? {};
+    const latestResult = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? {};
     const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
-    targetJobId = currentUpload?.job_id ?? latestResult?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.job_id ?? null;
+    targetJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload) ?? currentUpload?.job_id ?? null;
     if (!targetJobId) {
       return { jobId: null, timeline: [], meta: {}, message: "No replay is available for the active session." };
     }

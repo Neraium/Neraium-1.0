@@ -4,6 +4,26 @@ import {
   normalizeUploadStatus as normalizeUploadContractStatus,
 } from "./uploadContract";
 
+export function resolveCurrentUploadResult(payload) {
+  const currentUpload = payload?.current_upload ?? payload?.snapshot?.current_upload ?? null;
+  const candidate = currentUpload?.result ?? payload?.latest_result ?? payload?.latestResult ?? null;
+  return hasFullUploadResult(candidate) ? candidate : null;
+}
+
+export function resolveCurrentUploadJobId(payload) {
+  const currentUpload = payload?.current_upload ?? payload?.snapshot?.current_upload ?? null;
+  const latestResult = resolveCurrentUploadResult(payload);
+  return String(
+    currentUpload?.job_id
+    ?? currentUpload?.run_id
+    ?? currentUpload?.upload_id
+    ?? latestResult?.job_id
+    ?? payload?.snapshot?.job_id
+    ?? payload?.job_id
+    ?? ""
+  ).trim() || null;
+}
+
 export function hasFullUploadResult(result) {
   const replayTimeline = result?.replay_timeline?.timeline ?? result?.sii_intelligence?.replay_timeline?.timeline;
   return Boolean(

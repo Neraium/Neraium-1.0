@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.services.evidence_store import upsert_evidence_run
-from app.services import upload_jobs
+from app.services import upload_jobs, upload_state_repository
+from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, db_connection, init_runtime_db
 from app.services.upload_jobs import (
     build_empty_latest_upload_record,
     read_current_upload_result,
@@ -198,3 +199,66 @@ def test_upload_state_corrupted_record_fails_safely() -> None:
     assert payload["current_upload"]["job_id"] is None
     assert payload["latest_result"] is None
 
+
+
+def test_upload_state_malformed_runtime_db_payload_fails_safely(tmp_path: Path, monkeypatch) -> None:
+    upload_jobs.configure_runtime_dir(tmp_path)
+    configure_runtime_db_dir(tmp_path)
+    init_runtime_db()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO latest_payloads (key, updated_at, payload_json)
+            VALUES ('latest_upload', '2026-06-15T00:00:00+00:00', '{not valid json')
+            """
+        )
+    client = TestClient(create_app())
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["current_upload"]["status"] == "empty"
+    assert payload["latest_result"] is None
+    assert payload["job_id"] is None
+
+
+def test_upload_state_malformed_s3_payload_fails_safely(tmp_path: Path, monkeypatch) -> None:
+    class _InvalidBody:
+        def read(self) -> bytes:
+            return b'{not valid json'
+
+    class _InvalidS3Client:
+        def get_object(self, *, Bucket: str, Key: str):
+            return {"Body": _InvalidBody()}
+
+    upload_jobs.configure_runtime_dir(tmp_path)
+    configure_runtime_db_dir(tmp_path)
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
+    monkeypatch.setenv("NERAIUM_DISABLE_RUNTIME_DB_LATEST", "1")
+    monkeypatch.setattr(upload_state_repository, "_get_s3_client", lambda: _InvalidS3Client())
+    client = TestClient(create_app())
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["current_upload"]["status"] == "empty"
+    assert payload["latest_result"] is None
+    assert payload["job_id"] is None
+
+
+def test_reset_flow_does_not_preserve_stale_latest_upload_route_state() -> None:
+    job_id = "reset-route-state"
+    write_latest_upload_result(job_id, _persisted_result(job_id, filename="reset.csv"))
+    client = TestClient(create_app())
+
+    before = client.get("/api/data/latest-upload?include_persisted=1").json()
+    reset = client.post("/api/data/reset").json()
+    after = client.get("/api/data/latest-upload?include_persisted=1").json()
+    second_after = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert before["current_upload"]["job_id"] == job_id
+    assert reset == {"ok": True, "status": "reset"}
+    assert after["current_upload"]["status"] == "empty"
+    assert after["latest_result"] is None
+    assert after["job_id"] is None
+    assert second_after["current_upload"]["status"] == "empty"
+    assert second_after["latest_result"] is None

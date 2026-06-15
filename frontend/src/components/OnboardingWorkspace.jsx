@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApiCandidateUrls } from "../config";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import * as uploadStateView from "../viewModels/uploadState";
 
 const STORAGE_KEY = "neraium.onboarding.v1";
 
@@ -294,7 +295,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
   async function refreshLatestUploadAndPropagate(fallbackPayload = null) {
     const latestResponse = await onboardingFetch("/api/data/latest-upload?include_persisted=1");
     const latestPayload = await readJsonSafely(latestResponse);
-    const finalPayload = latestPayload?.latest_result ?? latestPayload ?? fallbackPayload;
+    const finalPayload = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? latestPayload ?? fallbackPayload;
     if (typeof onUploadComplete === "function") {
       await onUploadComplete(finalPayload);
     }

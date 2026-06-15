@@ -218,11 +218,8 @@ function App() {
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
-    const completedResult = uploadStateView.hasFullUploadResult(completedPayload?.latest_result)
-      ? completedPayload.latest_result
-      : uploadStateView.hasFullUploadResult(completedPayload)
-        ? completedPayload
-        : null;
+    const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload)
+      ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
     if (completedResult) {
       setCompletedUploadOverride(completedResult);
     }
