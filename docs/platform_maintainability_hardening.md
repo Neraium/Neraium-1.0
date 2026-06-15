@@ -93,6 +93,7 @@ Migrated out of `upload_jobs.py`:
 
 - `reset_latest_upload_state` callers in `data_connections.py` now use `upload_state_repository.reset_upload_state()` plus `runtime_db.clear_upload_runtime_tables()` directly.
 - `build_upload_result` callers in `data_connections.py` now use `upload_live_result.build_live_upload_result()` directly, and the unused compatibility export was removed from `upload_jobs.py`.
+- `build_evidence_record_from_result` and `build_traceability_packet` are now consumed directly from `upload_evidence.py`; the duplicate compatibility implementations were removed from `upload_jobs.py`.
 - `write_latest_upload_result` callers in `tests/test_domain_mode.py` and `tests/test_replay_api.py` now import from `upload_state_repository.py`.
 - `write_latest_upload_summary` callers in `tests/test_sii_contract_enforcement.py` now import from `upload_state_repository.py`.
 - `read_current_upload_result` callers in `facility.py`, `audit.py`, `domain_mode.py`, `backend/api/ecosystem.py`, `backend/api/distributed_cognition.py`, and `data_connections.py` now import from `upload_state_repository.py`.
@@ -113,8 +114,8 @@ Remaining compatibility exports in `upload_jobs.py`:
   Reason: queue lifecycle callers still depend on the facade surface, and a few tests still verify reset compatibility directly.
 - `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
   Reason: preserved for compatibility while tests and callers continue migrating off legacy imports.
-- `build_evidence_record_from_result`, `build_traceability_packet`, `read_upload_cache_stats`
-  Reason: compatibility exports remain for older internal callers, even though canonical callers now use `upload_evidence.py` and `upload_state_repository.py` directly.
+- `read_upload_cache_stats`
+  Reason: compatibility stub remains for older internal callers.
 
 Completion write sequencing:
 
@@ -138,7 +139,6 @@ Benchmark status:
 ## Future Refactor Opportunities
 
 1. Migrate the remaining `write_latest_upload_result`, `write_latest_upload_summary`, and reset compatibility imports in tests and services onto `upload_state_repository.py` or a dedicated reset service.
-2. Remove compatibility re-exports for `build_evidence_record_from_result` and `build_traceability_packet` once no internal callers still import them from `upload_jobs.py`.
-3. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
-4. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
-5. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.
+2. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
+3. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
+4. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.

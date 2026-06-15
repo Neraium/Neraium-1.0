@@ -1862,8 +1862,16 @@ def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_pa
     assert payload["system_interpretation"]["facility_state_enum"] == "no_active_session"
 
 
-def test_latest_upload_always_returns_system_interpretation_for_no_active_session() -> None:
-    client = TestClient(create_app())
+def test_latest_upload_always_returns_system_interpretation_for_no_active_session(tmp_path: Path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+    )
+    upload_jobs.configure_runtime_dir(tmp_path)
+    client = TestClient(create_app(settings))
 
     payload = client.get("/api/data/latest-upload?include_persisted=1").json()
 
