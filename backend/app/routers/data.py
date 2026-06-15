@@ -651,171 +651,98 @@ async def latest_upload(include_persisted: int | bool = True):
     cached = _cache_get_latest() if use_persisted else None
     if isinstance(cached, dict):
         return cached
+
     state_backend = upload_jobs.upload_state_backend()
-    result = upload_jobs.read_latest_upload_result() if use_persisted else None
-    summary = (latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}) if use_persisted else {}
-    history = upload_jobs.read_upload_history(limit=20) if use_persisted else []
-
+    canonical = upload_jobs.read_latest_upload_record() if use_persisted else upload_jobs.build_empty_latest_upload_record()
     if upload_jobs.reset_block_persisted_active():
+        canonical = upload_jobs.build_empty_latest_upload_record()
+
+    if not isinstance(canonical, dict):
+        canonical = upload_jobs.build_empty_latest_upload_record()
+
+    summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
+    result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
+    canonical_job_id = str(canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
+    canonical_status = str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "empty").strip().lower()
+    processing_states = {
+        "queued", "pending", "processing", "parsing_telemetry", "building_relationship_baselines",
+        "scoring_relationship_drift", "building_propagation_model", "generating_system_interpretation",
+    }
+    complete_states = {"complete", "partial_complete", "active"}
+
+    has_result = bool(result) and upload_jobs.has_active_session_artifact(result, job_id=canonical_job_id)
+    has_summary = bool(summary) and (
+        upload_jobs.has_active_session_artifact(summary, job_id=canonical_job_id)
+        or canonical_status in processing_states
+        or canonical_status in complete_states
+    )
+
+    if canonical_status in complete_states and not has_result:
+        canonical = upload_jobs.build_empty_latest_upload_record()
         summary = {}
         result = None
-        history = []
-
-    history = [item for item in history if upload_jobs.has_active_session_artifact(item)]
-    if not upload_jobs.has_active_session_artifact(summary):
+        canonical_job_id = ""
+        canonical_status = "empty"
+        has_summary = False
+    elif not has_result and not has_summary:
+        canonical = upload_jobs.build_empty_latest_upload_record()
         summary = {}
-    if not upload_jobs.has_active_session_artifact(result, job_id=(summary or {}).get("job_id")):
         result = None
+        canonical_job_id = ""
+        canonical_status = "empty"
 
-    def _has_persisted_status(job_id: str | None) -> bool:
-        if not job_id:
-            return False
-        status = upload_jobs.read_upload_status(str(job_id))
-        return isinstance(status, dict) and bool(status.get("job_id"))
+    history = []
+    if use_persisted and canonical_job_id and (has_result or has_summary):
+        history = [item for item in upload_jobs.read_upload_history(limit=20) if isinstance(item, dict)]
+        current_history = next((item for item in history if str(item.get("job_id") or "") == canonical_job_id), None)
+        if current_history is None and summary:
+            current_history = dict(summary)
+        remaining = [item for item in history if str(item.get("job_id") or "") != canonical_job_id]
+        history = ([current_history] if current_history else []) + remaining
 
-    def _is_rich_persisted_result(candidate: dict | None) -> bool:
-        if not isinstance(candidate, dict):
-            return False
-        if int(candidate.get("row_count") or 0) > 0:
-            return True
-        if isinstance(candidate.get("data_quality"), dict):
-            return True
-        if isinstance(candidate.get("room_summary"), dict):
-            return True
-        return False
-
-    # If latest cache points to an incomplete artifact, refresh from
-    # canonical per-job persisted result when available.
-    result_job_id = str((result or {}).get("job_id") or "")
-    if isinstance(result, dict) and result_job_id and not result.get("filename"):
-        by_job_result = upload_jobs.read_upload_result_by_job_id(result_job_id)
-        if isinstance(by_job_result, dict) and by_job_result.get("filename"):
-            result = by_job_result
-
-    # If latest summary/result are stale or empty, recover from any completed
-    # persisted upload status. This keeps latest-upload aligned with
-    # upload-status in multi-task ECS deployments.
-    if not summary and history:
-        for item in history:
-            candidate_job_id = str(item.get("job_id") or "") if isinstance(item, dict) else ""
-            if not _has_persisted_status(candidate_job_id):
-                continue
-            if isinstance(item, dict) and (
-                item.get("status") == "COMPLETE"
-                or item.get("result_available")
-                or item.get("sii_completed")
-            ):
-                summary = dict(item)
-                break
-
-    result_job_id = str((result or {}).get("job_id") or "")
-    if not summary and not _is_rich_persisted_result(result):
-        result = None
-    elif summary and not _has_persisted_status(result_job_id) and not _is_rich_persisted_result(result):
-        result = None
-
-    # Recovery path for split API/worker containers:
-    # if the full result is not visible in this container but a completed
-    # upload summary/history is visible, return a non-empty latest-upload
-    # snapshot so the frontend stops treating the system as empty.
-    if not result and summary:
-        job_id = summary.get("job_id")
-        by_job = upload_jobs.read_upload_result_by_job_id(str(job_id)) if job_id else None
-        result = by_job or None
-
-    # Evidence records are written per upload job. If latest summary/result drift
-    # apart transiently, recover the active upload artifact through the latest
-    # evidence run rather than dropping the completed session on the floor.
-    if not result and not upload_jobs.reset_block_persisted_active():
-        try:
-            from app.services.evidence_store import latest_evidence_run
-
-            evidence_run = latest_evidence_run() or {}
-            evidence_job_id = str(evidence_run.get("run_id") or evidence_run.get("job_id") or "")
-            if evidence_job_id:
-                by_job = upload_jobs.read_upload_result_by_job_id(evidence_job_id)
-                if isinstance(by_job, dict) and upload_jobs.has_active_session_artifact(by_job, job_id=evidence_job_id):
-                    result = by_job
-                    if not summary or str(summary.get("job_id") or "") != evidence_job_id:
-                        summary = upload_jobs.summarize_result(by_job)
-        except Exception:
-            pass
-
-    preferred_job_id = str((result or {}).get("job_id") or summary.get("job_id") or "")
-    if preferred_job_id and history:
-        preferred_item = None
-        remaining_history = []
-        for item in history:
-            if not isinstance(item, dict):
-                continue
-            item_job_id = str(item.get("job_id") or "")
-            if item_job_id == preferred_job_id and preferred_item is None:
-                preferred_item = item
-                continue
-            remaining_history.append(item)
-        if preferred_item is None:
-            preferred_item = next((item for item in remaining_history if str(item.get("job_id") or "") == preferred_job_id), None)
-            if preferred_item is not None:
-                remaining_history = [item for item in remaining_history if item is not preferred_item]
-        if preferred_item is not None:
-            history = [preferred_item, *remaining_history]
-
-
-    if not result and history:
-        latest = history[0] if isinstance(history[0], dict) else {}
-        latest_job_id = str(latest.get("job_id") or "")
-        if latest_job_id and not _has_persisted_status(latest_job_id):
-            latest = {}
-        if latest.get("status") == "COMPLETE" or latest.get("result_available"):
-            result = {
-                "job_id": latest.get("job_id"),
-                "filename": latest.get("filename"),
-                "row_count": latest.get("row_count") or latest.get("rows_processed") or 0,
-                "column_count": latest.get("column_count") or latest.get("columns_detected") or 0,
-                "replay_timeline": {"timeline": [None] * int(latest.get("replay_frame_count") or latest.get("latest_replay_frames") or 0)},
-                "last_processed_at": latest.get("last_processed_at"),
-                "sii_completion_artifacts": latest.get("sii_completion_artifacts") or {},
-                "result_summary": latest.get("result_summary") or {},
-            }
-            summary = {**latest, **summary}
-    frames = _extract_timeline(result if isinstance(result, dict) else None, summary.get("job_id") if isinstance(summary, dict) else None)
-    traceability = (result.get("traceability") if isinstance(result, dict) and isinstance(result.get("traceability"), dict) else (summary.get("traceability") if isinstance(summary, dict) and isinstance(summary.get("traceability"), dict) else {}))
-    adaptive = {}
+    frames = canonical.get("replay", {}).get("timeline") if isinstance(canonical.get("replay"), dict) else None
+    if not isinstance(frames, list):
+        frames = _extract_timeline(result if isinstance(result, dict) else None, canonical_job_id or None)
+    traceability = canonical.get("traceability") if isinstance(canonical.get("traceability"), dict) else {}
+    state_available = bool(result)
+    snapshot_status = "COMPLETE" if state_available else (summary.get("status") if isinstance(summary, dict) else canonical_status or "empty")
+    snapshot_processing_state = "complete" if state_available else (summary.get("processing_state") if isinstance(summary, dict) else canonical_status or "empty")
     snapshot = {
-        **summary,
+        **(summary if isinstance(summary, dict) else {}),
         "state_backend": state_backend,
-        "source": "uploaded" if result else "none",
-        "last_filename": (result or {}).get("filename") or summary.get("filename"),
-        "rows_processed": (result or {}).get("row_count") or summary.get("rows_processed") or summary.get("row_count") or 0,
-        "columns_detected": (result or {}).get("column_count") or summary.get("columns_detected") or summary.get("column_count") or 0,
-        "state_available": bool(result),
-        "status": "COMPLETE" if result else summary.get("status", "empty"),
-        "processing_state": "complete" if result else summary.get("processing_state", "empty"),
-        "result_available": bool(result) or bool(summary.get("result_available")),
-        "sii_completed": bool(result) or bool(summary.get("sii_completed")),
+        "source": "uploaded" if state_available else ("processing" if canonical_job_id and canonical_status in processing_states else "none"),
+        "last_filename": (result or {}).get("filename") or (summary.get("filename") if isinstance(summary, dict) else None),
+        "rows_processed": (result or {}).get("row_count") or (summary.get("rows_processed") if isinstance(summary, dict) else 0) or (summary.get("row_count") if isinstance(summary, dict) else 0) or 0,
+        "columns_detected": (result or {}).get("column_count") or (summary.get("columns_detected") if isinstance(summary, dict) else 0) or (summary.get("column_count") if isinstance(summary, dict) else 0) or 0,
+        "state_available": state_available,
+        "status": snapshot_status,
+        "processing_state": snapshot_processing_state,
+        "result_available": state_available,
+        "sii_completed": bool((result or {}).get("sii_reliable_enough_to_show") is not False and state_available) if state_available else bool((summary or {}).get("sii_completed")),
         "replay_ready": bool(frames),
         "replay_frame_count": len(frames or []),
         "latest_replay_frames": len(frames or []),
-        "replay_source": "persisted" if frames else "unknown",
-        "run_id": (result or {}).get("run_id") or summary.get("run_id"),
-        "upload_id": (result or {}).get("upload_id") or summary.get("upload_id"),
+        "replay_source": "persisted" if frames else "empty",
+        "job_id": canonical_job_id or None,
+        "run_id": str(canonical.get("run_id") or (summary.get("run_id") if isinstance(summary, dict) else "") or (result or {}).get("run_id") or canonical_job_id or "") or None,
+        "upload_id": str(canonical.get("upload_id") or (summary.get("upload_id") if isinstance(summary, dict) else "") or (result or {}).get("upload_id") or canonical_job_id or "") or None,
         "traceability": traceability,
+        "current_upload": canonical,
     }
-    if history and snapshot.get("last_filename"):
-        history[0]["filename"] = snapshot["last_filename"]
     system_interpretation = _build_system_interpretation(result if isinstance(result, dict) else None, summary if isinstance(summary, dict) else None, snapshot, frames if isinstance(frames, list) else [])
     response_payload = {
         "snapshot": snapshot,
+        "current_upload": canonical,
         "latest_result": result,
         "latestResult": result,
-        "summary": summary,
-        "history": history,
-        "adaptive_learning": adaptive,
+        "summary": summary if isinstance(summary, dict) else {},
+        "history": history if state_available or canonical_job_id else [],
+        "adaptive_learning": {},
         "state_backend": state_backend,
         "system_interpretation": system_interpretation,
         **snapshot,
     }
-    cache_ttl = 4.0 if bool(result) else 1.5
+    cache_ttl = 4.0 if state_available else 1.5
     if use_persisted:
         _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
     return response_payload
@@ -917,4 +844,9 @@ def snapshot_time(summary: dict) -> str:
 
 
 def latest_completed_job_summary() -> dict:
-    return upload_jobs.read_latest_upload_summary() or {}
+    record = upload_jobs.read_latest_upload_record() or {}
+    result = record.get("result") if isinstance(record.get("result"), dict) else None
+    summary = record.get("summary") if isinstance(record.get("summary"), dict) else None
+    if result and upload_jobs.has_active_session_artifact(result):
+        return summary or upload_jobs.summarize_result(result)
+    return {}

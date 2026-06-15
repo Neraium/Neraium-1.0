@@ -175,13 +175,16 @@ describe("ReplayWorkspace playback stability", () => {
       }
       if (String(path).startsWith("/api/data/replay/job-real")) {
         return createResponse({
+          job_id: "job-real",
+          run_id: "job-real",
+          upload_id: "job-real",
           timeline: [{
             ...buildFrames(1)[0],
             primary_contributors: ["temperature", "humidity"],
             cognition_state: { confidence_tier: "relationship_evidence_present" },
             topology_state: { drift_index: 0.73, stability_state: "Needs review" },
           }],
-          meta: { frame_count: 1, job_id: "job-real" },
+          meta: { frame_count: 1, job_id: "job-real", lineage: { aligned: true, job_id: "job-real", run_id: "job-real", upload_id: "job-real" } },
         });
       }
       if (String(path) === "/api/evidence/runs") {

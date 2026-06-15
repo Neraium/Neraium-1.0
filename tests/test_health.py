@@ -159,7 +159,7 @@ def test_runner_status_endpoint_reports_state_age_when_latest_state_exists() -> 
     assert payload["state_age_seconds"] >= 0
 
 
-def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
+def test_facility_systems_suppresses_latest_sii_state_without_active_upload() -> None:
     write_latest_sii_state(
         {
             "source": "uploaded",
@@ -192,9 +192,8 @@ def test_facility_systems_prefers_latest_sii_state_when_present() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["intelligence"]["source"] == "uploaded"
-    assert payload["intelligence"]["facility_state"] == "Runner facility state"
-    assert payload["intelligence"]["primary_driver"] == "Runner driver"
+    assert payload["intelligence"] is None
+    assert payload["intelligence_status"]["mode"] == "empty"
 
 
 def test_facility_systems_returns_empty_state_when_latest_sii_state_is_corrupt() -> None:
@@ -290,7 +289,7 @@ def test_latest_upload_endpoint_returns_cors_header_for_production_frontend() ->
 
 def test_api_errors_return_json_with_cors_header_for_production_frontend(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.routers.data.latest_completed_job_summary",
+        "app.routers.data.upload_jobs.read_latest_upload_record",
         lambda: (_ for _ in ()).throw(RuntimeError("runtime state unavailable")),
     )
     client = TestClient(create_app(), raise_server_exceptions=False)

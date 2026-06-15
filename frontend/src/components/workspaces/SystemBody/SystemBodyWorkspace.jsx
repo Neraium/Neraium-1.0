@@ -34,8 +34,13 @@ export default function SystemBodyWorkspace({
   const [menuOpen, setMenuOpen] = useState(false);
   const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
-  const interpretation = useMemo(
-    () => buildSystemInterpretation({
+  const interpretation = useMemo(() => {
+    const backendSystemInterpretation = latestUploadSnapshot?.system_interpretation;
+    const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);
+    if (mappedBackendInterpretation) {
+      return mappedBackendInterpretation;
+    }
+    return buildSystemInterpretation({
       latestUploadSnapshot,
       latestUploadResult,
       liveSnapshot,
@@ -53,7 +58,8 @@ export default function SystemBodyWorkspace({
         connectionTone,
         connectionStatus,
       },
-    }),
+    });
+  },
     [
       latestUploadSnapshot,
       latestUploadResult,

@@ -16,7 +16,7 @@ describe("currentSession view model", () => {
     expect(session.latestUploadResult?.job_id).toBe("job-1");
   });
 
-  it("resolves job id from latest result first, then snapshot history", () => {
+  it("resolves job id from canonical current upload identity and does not fall back to stale history", () => {
     expect(resolveSessionJobId({
       latestUploadResult: { job_id: "job-primary" },
       latestUploadSnapshot: { history: [{ job_id: "job-history" }] },
@@ -24,7 +24,15 @@ describe("currentSession view model", () => {
 
     expect(resolveSessionJobId({
       latestUploadResult: null,
+      latestUploadSnapshot: {
+        current_upload: { job_id: "job-current" },
+        history: [{ job_id: "job-history" }],
+      },
+    })).toBe("job-current");
+
+    expect(resolveSessionJobId({
+      latestUploadResult: null,
       latestUploadSnapshot: { history: [{ job_id: "job-history" }] },
-    })).toBe("job-history");
+    })).toBe(null);
   });
 });

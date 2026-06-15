@@ -7,7 +7,7 @@ from app.services.domain_mode import detect_domain_mode, domain_profile, normali
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
-from app.services.upload_jobs import has_active_session_artifact, read_latest_upload_result
+from app.services.upload_jobs import has_active_session_artifact, read_latest_upload_record
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 
@@ -17,7 +17,7 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
     detection = detect_domain_mode()
     selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
     profile = domain_profile(selected_mode)
-    latest_result = read_latest_upload_result()
+    latest_result = read_current_upload_result(include_persisted=include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     return {
         "systems": profile["systems"],
@@ -35,14 +35,14 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
 
 @router.get("/intelligence/status")
 def read_intelligence_status(include_persisted: bool = Query(True)) -> dict[str, Any]:
-    latest_result = read_latest_upload_result()
+    latest_result = read_current_upload_result(include_persisted=include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     return build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status()
 
 
 @router.get("/facility/cognition-state")
 def read_cognition_state(include_persisted: bool = Query(True)) -> dict[str, Any]:
-    latest_result = read_latest_upload_result()
+    latest_result = read_current_upload_result(include_persisted=include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     if not intelligence:
         return {
@@ -61,6 +61,19 @@ def read_cognition_state(include_persisted: bool = Query(True)) -> dict[str, Any
     response = build_canonical_cognition_state_response(intelligence)
     response["source_mode"] = "live"
     return response
+
+
+def read_current_upload_result(*, include_persisted: bool = False) -> dict[str, Any] | None:
+    if not include_persisted:
+        return None
+    record = read_latest_upload_record()
+    if not isinstance(record, dict):
+        return None
+    job_id = str(record.get("job_id") or "").strip()
+    result = record.get("result") if isinstance(record.get("result"), dict) else None
+    if not has_active_session_artifact(result, job_id=job_id):
+        return None
+    return result
 
 
 def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, include_persisted: bool = False) -> dict[str, Any] | None:

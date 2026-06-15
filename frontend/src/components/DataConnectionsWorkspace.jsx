@@ -140,8 +140,8 @@ export default function DataConnectionsWorkspace({
       const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
       const latestPayload = await loadLatestUpload();
       if (cancelled) return;
-      const latestJobId = String(latestPayload?.latest_result?.job_id ?? latestPayload?.history?.[0]?.job_id ?? latestPayload?.job_id ?? "").trim();
-      const restoreJobId = storedJobId || latestJobId;
+      const latestJobId = String(latestPayload?.current_upload?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.latest_result?.job_id ?? latestPayload?.job_id ?? "").trim();
+      const restoreJobId = latestJobId || storedJobId;
       const latestStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
       const latestResult = latestPayload?.latest_result;
       if (!restoreJobId && !latestResult) return;

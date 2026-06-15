@@ -25,13 +25,24 @@ async def replay_timeline(mode: str = Query(default="live"), intervals: int = Qu
             "timeline": timeline,
         }
 
-    state = read_latest_sii_state() or {}
-    replay = (state.get("replay_timeline") if isinstance(state, dict) else {}) or {}
-    timeline = replay.get("timeline") if isinstance(replay, dict) else []
-    source = state.get("source", "uploaded") if timeline else "empty"
+    canonical = upload_jobs.read_latest_upload_record() or {}
+    canonical_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
+    canonical_job_id = str(canonical.get("job_id") or "").strip()
+    has_canonical_session = bool(canonical_job_id or canonical_result)
+    replay_payload = upload_jobs.replay_payload() if canonical_result and upload_jobs.has_active_session_artifact(canonical_result, job_id=canonical_job_id) else {}
+    timeline = replay_payload.get("timeline", []) if isinstance(replay_payload, dict) else []
+    timeline = timeline if isinstance(timeline, list) else []
+    source = "uploaded" if timeline else "empty"
+
+    if not timeline and not has_canonical_session:
+        state = read_latest_sii_state() or {}
+        replay = (state.get("replay_timeline") if isinstance(state, dict) else {}) or {}
+        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+        timeline = timeline if isinstance(timeline, list) else []
+        source = state.get("source", "uploaded") if timeline else "empty"
 
     if normalized_mode == "live_causal":
-        timeline = [{**frame, "live_causal": {"lookahead_free": True}} for frame in timeline]
+        timeline = [{**frame, "live_causal": {"lookahead_free": True}} for frame in (timeline or []) if isinstance(frame, dict)]
     canonical_flow = [frame.get("cognition_state", {}).get("canonical_phase") for frame in timeline if isinstance(frame, dict)]
     return {
         "source": source,

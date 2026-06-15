@@ -1880,6 +1880,62 @@ def test_latest_upload_always_returns_system_interpretation_for_no_active_sessio
     assert interpretation["interpretation_quality"]["fallback_count"] == 4
 
 
+def test_latest_upload_uses_canonical_identity_across_result_evidence_and_replay() -> None:
+    upload_jobs.reset_latest_upload_state()
+    client = TestClient(create_app())
+    result = process_csv_content(
+        filename="identity-alignment.csv",
+        content=(
+            "timestamp,temperature,humidity,airflow\n"
+            "2026-05-01T08:00:00Z,70,120,210\n"
+            "2026-05-01T08:05:00Z,71,122,212\n"
+            "2026-05-01T08:10:00Z,72,124,214\n"
+            "2026-05-01T08:15:00Z,73,126,216\n"
+            "2026-05-01T08:20:00Z,74,128,218\n"
+            "2026-05-01T08:25:00Z,81,140,225\n"
+            "2026-05-01T08:30:00Z,82,135,227\n"
+            "2026-05-01T08:35:00Z,83,130,229\n"
+            "2026-05-01T08:40:00Z,84,125,231\n"
+            "2026-05-01T08:45:00Z,85,120,233\n"
+        ).encode(),
+    )
+
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    replay_payload = client.get(f"/api/data/replay/{result['job_id']}").json()
+    evidence_record = evidence_store.read_evidence_run(result["job_id"])
+
+    assert latest_payload["current_upload"]["job_id"] == result["job_id"]
+    assert latest_payload["current_upload"]["run_id"] == result["job_id"]
+    assert latest_payload["current_upload"]["upload_id"] == result["job_id"]
+    assert latest_payload["latest_result"]["job_id"] == result["job_id"]
+    assert latest_payload["summary"]["job_id"] == result["job_id"]
+    assert latest_payload["history"][0]["job_id"] == result["job_id"]
+    assert replay_payload["job_id"] == result["job_id"]
+    assert replay_payload["run_id"] == result["job_id"]
+    assert replay_payload["upload_id"] == result["job_id"]
+    assert evidence_record["run_id"] == result["job_id"]
+
+
+def test_new_upload_status_suppresses_prior_completed_result() -> None:
+    upload_jobs.reset_latest_upload_state()
+    client = TestClient(create_app())
+    write_latest_upload_result("completed-job", _build_interpretation_result_for_state("relationship_drift"))
+    write_job({
+        "job_id": "queued-job",
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "message": "Upload accepted. Processing is queued.",
+    })
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["job_id"] == "queued-job"
+    assert payload["latest_result"] is None
+    assert payload["current_upload"]["job_id"] == "queued-job"
+    assert payload["current_upload"]["result"] is None
+
+
 @pytest.mark.parametrize(
     ("state", "expected_enum", "expected_label"),
     [

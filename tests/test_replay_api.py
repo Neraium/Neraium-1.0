@@ -3,11 +3,52 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
-from app.services.upload_jobs import write_latest_upload_result
+from app.services.upload_jobs import reset_latest_upload_state, write_job, write_latest_upload_result
+
+
+def _seed_canonical_replay(job_id: str = "live-replay-job", frame_count: int = 6) -> None:
+    timeline = [
+        {
+            "timestamp": f"2026-01-01T00:00:0{index}Z",
+            "timestamp_end": f"2026-01-01T00:00:0{index}Z",
+            "topology_state": {"phase": "relationship_weakening", "drift_index": 0.25 + index * 0.05},
+            "subsystem_pressure": {"score": round(0.2 + index * 0.1, 3)},
+            "active_archetypes": ["relationship_shift"],
+            "propagation_state": {"dominant_paths": ["loop_a"]},
+            "evidence_state": {"corroboration_strength": "moderate"},
+            "cognition_state": {"canonical_phase": "relationship_weakening"},
+        }
+        for index in range(frame_count)
+    ]
+    write_latest_upload_result(
+        job_id,
+        {
+            "filename": "telemetry.csv",
+            "row_count": 120,
+            "column_count": 4,
+            "columns": ["timestamp", "flow", "pressure", "power"],
+            "preview_rows": [],
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"categories": {}},
+            "sii_intelligence": {
+                "source": "uploaded",
+                "replay_timeline": {
+                    "meta": {"frame_count": frame_count},
+                    "timeline": timeline,
+                },
+            },
+            "driver_attribution": {},
+            "processing_trace": {},
+            "processing_stats": {},
+            "room_summary": {"room_count": 1, "rooms": [{"room": "Loop A", "row_count": 120}]},
+        },
+    )
 
 
 def test_replay_timeline_returns_structural_frames() -> None:
-    write_latest_sii_state(build_sample_intelligence())
+    reset_latest_upload_state()
+    _seed_canonical_replay(frame_count=6)
     client = TestClient(create_app())
 
     response = client.get("/api/replay/timeline")
@@ -28,7 +69,8 @@ def test_replay_timeline_returns_structural_frames() -> None:
 
 
 def test_replay_frame_and_range_endpoints() -> None:
-    write_latest_sii_state(build_sample_intelligence())
+    reset_latest_upload_state()
+    _seed_canonical_replay(frame_count=12)
     client = TestClient(create_app())
     timeline_response = client.get("/api/replay/timeline?intervals=12")
     assert timeline_response.status_code == 200
@@ -76,7 +118,8 @@ def test_production_live_replay_does_not_return_synthetic_fallback(monkeypatch) 
 
 
 def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
-    write_latest_sii_state(build_sample_intelligence())
+    reset_latest_upload_state()
+    _seed_canonical_replay(frame_count=12)
     client = TestClient(create_app())
 
     response = client.get("/api/replay/timeline?mode=live_causal&intervals=12")
@@ -88,6 +131,25 @@ def test_live_causal_mode_replay_includes_lookahead_free_metadata() -> None:
     assert isinstance(payload.get("timeline"), list)
     if payload["timeline"]:
         assert payload["timeline"][0].get("live_causal", {}).get("lookahead_free") is True
+
+
+def test_replay_timeline_does_not_fall_back_to_stale_global_state_when_current_upload_is_only_queued() -> None:
+    write_latest_sii_state(build_sample_intelligence())
+    write_job({
+        "job_id": "queued-job",
+        "filename": "queued.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "message": "Upload accepted. Processing is queued.",
+    })
+    client = TestClient(create_app())
+
+    response = client.get("/api/replay/timeline?mode=live&intervals=12")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "empty"
+    assert payload["timeline"] == []
 
 
 def test_replay_timeline_falls_back_to_latest_persisted_replay_frames() -> None:
