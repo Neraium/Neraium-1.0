@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-import io
 import json
 import logging
 import os
@@ -1158,21 +1156,6 @@ def write_latest_upload_result(*args) -> None:
 
 def write_latest_upload_summary(*args, **kwargs) -> None:
     repository_write_latest_upload_summary(*args, **kwargs)
-
-
-def build_upload_result(
-    columns: list[str] | None = None,
-    rows: list[Any] | None = None,
-    filename: str = "telemetry.csv",
-    **kwargs,
-) -> dict[str, Any]:
-    """
-    Compatibility entrypoint for callers still importing from upload_jobs.
-    Delegates to the focused live-upload adapter.
-    """
-    from app.services.upload_live_result import build_live_upload_result
-
-    return build_live_upload_result(columns=columns, rows=rows, filename=filename, **kwargs)
 
 
 def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
