@@ -1167,25 +1167,12 @@ def build_upload_result(
     **kwargs,
 ) -> dict[str, Any]:
     """
-    Compatibility entrypoint for live/data-connection code.
-    Converts rows into CSV bytes and runs the V2 upload replay pipeline.
+    Compatibility entrypoint for callers still importing from upload_jobs.
+    Delegates to the focused live-upload adapter.
     """
-    columns = columns or kwargs.get("columns") or []
-    rows = rows or kwargs.get("rows") or []
+    from app.services.upload_live_result import build_live_upload_result
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(columns)
-
-    for row in rows:
-        if isinstance(row, dict):
-            writer.writerow([row.get(col, "") for col in columns])
-        else:
-            writer.writerow(row)
-
-    summary = process_upload_bytes(filename, output.getvalue().encode("utf-8"))
-    result = read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
-    return result
+    return build_live_upload_result(columns=columns, rows=rows, filename=filename, **kwargs)
 
 
 def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:

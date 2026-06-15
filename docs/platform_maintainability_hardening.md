@@ -92,6 +92,7 @@ See also: [cache_ownership_policy.md](cache_ownership_policy.md)
 Migrated out of `upload_jobs.py`:
 
 - `reset_latest_upload_state` callers in `data_connections.py` now use `upload_state_repository.reset_upload_state()` plus `runtime_db.clear_upload_runtime_tables()` directly.
+- `build_upload_result` callers in `data_connections.py` now use `upload_live_result.build_live_upload_result()` directly.
 - `write_latest_upload_result` callers in `tests/test_domain_mode.py` and `tests/test_replay_api.py` now import from `upload_state_repository.py`.
 - `write_latest_upload_summary` callers in `tests/test_sii_contract_enforcement.py` now import from `upload_state_repository.py`.
 - `read_current_upload_result` callers in `facility.py`, `audit.py`, `domain_mode.py`, `backend/api/ecosystem.py`, `backend/api/distributed_cognition.py`, and `data_connections.py` now import from `upload_state_repository.py`.
@@ -107,7 +108,7 @@ Remaining compatibility exports in `upload_jobs.py`:
 - `configure_runtime_dir`
   Reason: startup/app test bootstrapping still expects the facade entrypoint.
 - `process_next_queued_upload_job`, `process_csv_file`, `process_json_payload`, `process_csv_content`, `build_upload_result`
-  Reason: these are orchestration/processing entrypoints, not pure state helpers.
+  Reason: queue/file processing entrypoints still live in the facade; `build_upload_result` remains only as a compatibility wrapper over the focused live-upload adapter.
 - `write_job`, `read_job`, `read_upload_status`, `reset_latest_upload_state`
   Reason: queue lifecycle callers still depend on the facade surface, and a few tests still verify reset compatibility directly.
 - `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
@@ -137,7 +138,8 @@ Benchmark status:
 ## Future Refactor Opportunities
 
 1. Migrate the remaining `write_latest_upload_result`, `write_latest_upload_summary`, and reset compatibility imports in tests and services onto `upload_state_repository.py` or a dedicated reset service.
-2. Remove compatibility re-exports for `build_evidence_record_from_result` and `build_traceability_packet` once no internal callers still import them from `upload_jobs.py`.
-3. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
-4. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
-5. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.
+2. Remove the `build_upload_result` compatibility export from `upload_jobs.py` once no internal callers still import it.
+3. Remove compatibility re-exports for `build_evidence_record_from_result` and `build_traceability_packet` once no internal callers still import them from `upload_jobs.py`.
+4. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
+5. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
+6. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.

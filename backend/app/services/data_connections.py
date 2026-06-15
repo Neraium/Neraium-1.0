@@ -22,7 +22,7 @@ from app.services.runtime_db import (
     upsert_data_connection,
     upsert_latest_payload,
 )
-from app.services.upload_jobs import build_upload_result
+from app.services.upload_live_result import build_live_upload_result
 from app.services.upload_persistence import summarize_result
 from app.services.upload_state_repository import read_current_upload_result, reset_upload_state, write_latest_upload_result, write_latest_upload_summary
 
@@ -636,7 +636,7 @@ def result_from_connection_batch(
     baseline_state: dict[str, Any],
 ) -> dict[str, Any]:
     columns, rows, room_summary = build_rows_from_normalized_records(processing_records)
-    result = build_upload_result(
+    result = build_live_upload_result(
         columns=columns,
         data_rows=rows,
         total_rows=len(rows),

@@ -79,6 +79,76 @@ def mock_transport(payloads: list[dict]) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
+def test_result_from_connection_batch_uses_focused_live_upload_adapter(monkeypatch):
+    calls: list[dict] = []
+
+    def fake_build_live_upload_result(*, columns=None, rows=None, filename="telemetry.csv", **kwargs):
+        delegated_rows = rows or kwargs.get("data_rows") or []
+        calls.append({
+            "columns": list(columns or []),
+            "rows": list(delegated_rows),
+            "filename": filename,
+            "kwargs": dict(kwargs),
+        })
+        return {
+            "processing_stats": {},
+            "sii_intelligence": {},
+        }
+
+    monkeypatch.setattr(data_connections, "build_live_upload_result", fake_build_live_upload_result)
+
+    connection = {
+        "name": "Live Telemetry Intake",
+        "url": "https://telemetry.example.test/latest",
+        "source_type": "external_rest_api",
+        "connection_id": "rest-telemetry-intake",
+    }
+    metadata = {
+        "readings_received": 2,
+        "readings_accepted": 2,
+        "readings_rejected": 0,
+        "sensors_detected": 2,
+        "scenario": "airflow_drift",
+        "tick": 4,
+    }
+    baseline_state = {
+        "baseline_source": "live_rest",
+        "baseline_status": "building",
+        "samples_collected": 1,
+        "samples_required": 6,
+        "last_baseline_update": "2026-05-10T12:00:00Z",
+    }
+
+    result = data_connections.result_from_connection_batch(
+        connection,
+        [
+            {"timestamp": "2026-05-10T12:00:00Z", "room_id": "flower-room-1", "facility_id": "facility-1", "sensor_name": "temperature", "value": 75.0},
+            {"timestamp": "2026-05-10T12:00:00Z", "room_id": "flower-room-1", "facility_id": "facility-1", "sensor_name": "humidity", "value": 58.0},
+        ],
+        metadata,
+        baseline_state=baseline_state,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["filename"] == "Live Telemetry Intake"
+    assert calls[0]["columns"][:3] == ["timestamp", "room", "facility_id"]
+    assert calls[0]["rows"]
+    assert result["source_name"] == "Live Telemetry Intake"
+    assert result["source_type"] == "external_rest_api"
+
+
+def test_reset_all_data_connections_clears_runtime_tables_without_upload_jobs_reset(monkeypatch, isolated_runtime):
+    called = {"reset": 0, "clear": 0}
+
+    monkeypatch.setattr(data_connections, "reset_upload_state", lambda: called.__setitem__("reset", called["reset"] + 1))
+    monkeypatch.setattr(data_connections, "clear_upload_runtime_tables", lambda: called.__setitem__("clear", called["clear"] + 1))
+
+    payload = data_connections.reset_all_data_connections()
+
+    assert isinstance(payload, list)
+    assert called == {"reset": 1, "clear": 1}
+
+
 def test_successful_poll_persists_telemetry_and_increments_baseline(isolated_runtime):
     transport = mock_transport(
         [
