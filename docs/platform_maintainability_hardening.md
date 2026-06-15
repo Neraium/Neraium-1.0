@@ -9,6 +9,7 @@ The upload pipeline remains externally compatible through `backend/app/services/
 - `upload_replay.py`: replay identity and replay frame construction helpers
 - `upload_parser.py`: JSON-to-CSV normalization for upload ingestion
 - `upload_completion.py`: partial-completion artifact assembly
+- `upload_evidence.py`: upload traceability packet and evidence-record assembly
 - `upload_persistence.py`: summary generation and upload history reads
 - `upload_runtime_state.py`: explicit in-process ownership for jobs, latest-upload cache, reset-block state, and upload-state client reuse
 - `upload_state_repository.py`: backend repository for latest-upload records, summary/result artifacts, and shared-state reads/writes
@@ -39,6 +40,8 @@ The upload pipeline remains externally compatible through `backend/app/services/
   Normalization of JSON payload uploads into CSV-shaped processing input.
 - `upload_completion.py`
   Safe partial-result packaging when analysis cannot fully complete.
+- `upload_evidence.py`
+  Traceability packet construction plus upload evidence-record assembly.
 - `upload_persistence.py`
   Upload summaries and history reads used by observability/latest-upload views.
 - `upload_runtime_state.py`
@@ -92,6 +95,7 @@ Migrated out of `upload_jobs.py`:
 - `shared_state_configured`, `upload_state_backend`, and `warm_latest_upload_cache` callers in app startup and health paths now import from `upload_state_repository.py`.
 - `has_active_session_artifact` in `facility.py` now imports from `upload_state.py`.
 - `replay.py` now reads replay payloads directly from `upload_state_repository.py`.
+- `data.py` now reads canonical latest-upload state from `upload_state_repository.py` and uses `upload_evidence.py` for upload evidence enrichment.
 - `data_connections.py` now imports `summarize_result` from `upload_persistence.py` and latest-upload write helpers from `upload_state_repository.py`.
 - `observability.py` now reads upload history from `upload_persistence.py` using `UPLOAD_RUNTIME_STATE.runtime_dir` plus canonical `read_current_upload_result()`.
 
@@ -105,8 +109,8 @@ Remaining compatibility exports in `upload_jobs.py`:
   Reason: queue lifecycle and reset callers still depend on the facade surface.
 - `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
   Reason: preserved for compatibility while tests and callers continue migrating off legacy imports.
-- `build_evidence_record_from_result`, `read_upload_cache_stats`
-  Reason: still used by router/service compatibility paths.
+- `build_evidence_record_from_result`, `build_traceability_packet`, `read_upload_cache_stats`
+  Reason: compatibility exports remain for older internal callers, even though canonical callers now use `upload_evidence.py` and `upload_state_repository.py` directly.
 
 Completion write sequencing:
 
@@ -128,7 +132,7 @@ Benchmark status:
 ## Future Refactor Opportunities
 
 1. Migrate the remaining `write_latest_upload_result` and `write_latest_upload_summary` compatibility imports in tests and services onto `upload_state_repository.py`.
-2. Move `build_evidence_record_from_result` into a focused evidence/upload artifact helper so routers no longer need `upload_jobs.py` for evidence assembly.
+2. Remove compatibility re-exports for `build_evidence_record_from_result` and `build_traceability_packet` once no internal callers still import them from `upload_jobs.py`.
 3. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
 4. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
 5. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.

@@ -16,7 +16,10 @@ from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services import upload_jobs
-from app.services.upload_jobs import build_evidence_record_from_result
+from app.services.upload_evidence import build_evidence_record_from_result
+from app.services.upload_persistence import read_upload_history, summarize_result
+from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
+from app.services.upload_state import build_empty_latest_upload_record, has_active_session_artifact
 from app.services.upload_status_contract import normalize_upload_status_payload
 from app.services.system_interpretation import build_system_interpretation as _build_system_interpretation
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
@@ -25,7 +28,7 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import resolve_upload_artifacts
+from app.services.upload_state_repository import read_latest_upload_record, read_replay_payload, read_upload_result_by_job_id, reset_block_persisted_active, reset_upload_state, resolve_upload_artifacts, upload_state_backend
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -216,13 +219,13 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
         normalized = normalize_upload_status_payload(status)
         normalized.setdefault("state_backend", state_backend)
         return _with_worker_visibility(normalized, job_id)
-    latest_record = upload_jobs.read_latest_upload_record() or {}
+    latest_record = read_latest_upload_record() or {}
     latest_summary = latest_record.get("summary") if isinstance(latest_record.get("summary"), dict) else {}
     if str(latest_summary.get("job_id") or latest_record.get("job_id") or "") == str(job_id):
         normalized = normalize_upload_status_payload(latest_summary)
         normalized.setdefault("state_backend", state_backend)
         return _with_worker_visibility(normalized, job_id)
-    latest_result = upload_jobs.read_upload_result_by_job_id(job_id)
+    latest_result = read_upload_result_by_job_id(job_id)
     if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
         timeline = _extract_timeline(latest_result, job_id)
         return _with_worker_visibility({
@@ -528,7 +531,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 @router.get("/upload-status/{job_id}")
 async def upload_status(job_id: str):
-    state_backend = upload_jobs.upload_state_backend()
+    state_backend = upload_state_backend()
     logger.warning("upload_status_request job_id=%s state_backend=%s", job_id, state_backend)
     try:
         normalized = _resolve_upload_status_payload(job_id, state_backend)
@@ -545,7 +548,7 @@ async def upload_status(job_id: str):
                 existing = read_evidence_run(str(job_id))
                 if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
                     now = datetime.now(timezone.utc).isoformat()
-                    upload_result = upload_jobs.read_upload_result_by_job_id(job_id) or {}
+                    upload_result = read_upload_result_by_job_id(job_id) or {}
                     enriched = build_evidence_record_from_result(
                         run_id=str(job_id),
                         filename=str(upload_result.get("filename") or existing.get("source_name") or "upload.csv"),
@@ -579,7 +582,7 @@ async def upload_status(job_id: str):
 
 @router.get("/upload-stream/{job_id}")
 async def upload_stream(job_id: str):
-    state_backend = upload_jobs.upload_state_backend()
+    state_backend = upload_state_backend()
 
     async def event_generator():
         # Stream for up to ~12 minutes with heartbeat-like cadence.
@@ -596,19 +599,24 @@ async def upload_stream(job_id: str):
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
     use_persisted = bool(include_persisted)
-    state_backend = upload_jobs.upload_state_backend()
-    canonical = upload_jobs.read_latest_upload_record() if use_persisted else upload_jobs.build_empty_latest_upload_record()
+    state_backend = upload_state_backend()
+    canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
     artifacts = resolve_upload_artifacts() if use_persisted else {}
-    if upload_jobs.reset_block_persisted_active():
+    if reset_block_persisted_active():
         artifacts = {}
-        canonical = upload_jobs.build_empty_latest_upload_record()
+        canonical = build_empty_latest_upload_record()
 
     if not isinstance(canonical, dict):
         artifacts = {}
-        canonical = upload_jobs.build_empty_latest_upload_record()
+        canonical = build_empty_latest_upload_record()
 
     summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
-    result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else (canonical.get("result") if isinstance(canonical.get("result"), dict) else None)
+    record_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
+    active_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
+    canonical_record_job_id = str(canonical.get("job_id") or summary.get("job_id") or "").strip() or None
+    result = active_result if isinstance(active_result, dict) else (
+        record_result if has_active_session_artifact(record_result, job_id=canonical_record_job_id) else None
+    )
     canonical_job_id = str(artifacts.get("job_id") or canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
     canonical_status = str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "empty").strip().lower()
     processing_states = {
@@ -617,22 +625,22 @@ async def latest_upload(include_persisted: int | bool = True):
     }
     complete_states = {"complete", "partial_complete", "active"}
 
-    has_result = bool(result) and upload_jobs.has_active_session_artifact(result, job_id=canonical_job_id)
+    has_result = bool(result) and has_active_session_artifact(result, job_id=canonical_job_id)
     has_summary = bool(summary) and (
-        upload_jobs.has_active_session_artifact(summary, job_id=canonical_job_id)
+        has_active_session_artifact(summary, job_id=canonical_job_id)
         or canonical_status in processing_states
         or canonical_status in complete_states
     )
 
     if canonical_status in complete_states and not has_result:
-        canonical = upload_jobs.build_empty_latest_upload_record()
+        canonical = build_empty_latest_upload_record()
         summary = {}
         result = None
         canonical_job_id = ""
         canonical_status = "empty"
         has_summary = False
     elif not has_result and not has_summary:
-        canonical = upload_jobs.build_empty_latest_upload_record()
+        canonical = build_empty_latest_upload_record()
         summary = {}
         result = None
         canonical_job_id = ""
@@ -640,7 +648,15 @@ async def latest_upload(include_persisted: int | bool = True):
 
     history = []
     if use_persisted and canonical_job_id and (has_result or has_summary):
-        history = [item for item in upload_jobs.read_upload_history(limit=20) if isinstance(item, dict)]
+        history = [
+            item
+            for item in read_upload_history(
+                UPLOAD_RUNTIME_STATE.runtime_dir,
+                limit=20,
+                current_result=artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None,
+            )
+            if isinstance(item, dict)
+        ]
         current_history = next((item for item in history if str(item.get("job_id") or "") == canonical_job_id), None)
         if current_history is None and summary:
             current_history = dict(summary)
@@ -683,6 +699,7 @@ async def latest_upload(include_persisted: int | bool = True):
     response_payload = {
         "snapshot": snapshot,
         "current_upload": canonical,
+        "current_result": result,
         "latest_result": result,
         "latestResult": result,
         "summary": summary if isinstance(summary, dict) else {},
@@ -715,12 +732,12 @@ async def system_interpretation_contract(include_persisted: int | bool = True):
 
 @router.get("/replay/{job_id}")
 async def data_replay(job_id: str):
-    return resolve_upload_artifacts(job_id).get("replay") or upload_jobs.replay_payload(job_id)
+    return resolve_upload_artifacts(job_id).get("replay") or read_replay_payload(job_id)
 
 
 @router.get("/intake/{job_id}/result")
 async def intake_result(job_id: str):
-    result = upload_jobs.read_upload_result_by_job_id(job_id)
+    result = read_upload_result_by_job_id(job_id)
     if not result:
         return {
             "job_id": job_id,
@@ -738,7 +755,7 @@ async def intake_result(job_id: str):
 
 @router.post("/reset")
 async def reset_data():
-    upload_jobs.reset_upload_state()
+    reset_upload_state()
     _clear_endpoint_caches()
     return {"ok": True, "status": "reset"}
 
@@ -748,7 +765,7 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
     requested_job_id = str(payload.get("job_id") or job_id or "")
     file_path = payload.get("file_path")
     if not file_path:
-        return upload_jobs.replay_payload(requested_job_id or None)
+        return read_replay_payload(requested_job_id or None)
 
     result = upload_jobs.process_csv_file(Path(file_path))
     replay = result.get("replay_timeline") or {}
@@ -791,9 +808,9 @@ def snapshot_time(summary: dict) -> str:
 
 
 def latest_completed_job_summary() -> dict:
-    record = upload_jobs.read_latest_upload_record() or {}
+    record = read_latest_upload_record() or {}
     result = record.get("result") if isinstance(record.get("result"), dict) else None
     summary = record.get("summary") if isinstance(record.get("summary"), dict) else None
-    if result and upload_jobs.has_active_session_artifact(result):
-        return summary or upload_jobs.summarize_result(result)
+    if result and has_active_session_artifact(result):
+        return summary or summarize_result(result)
     return {}

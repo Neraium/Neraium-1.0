@@ -356,7 +356,7 @@ def _attach_traceability(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict) or not payload.get("filename"):
         return payload
     try:
-        from app.services.upload_jobs import build_traceability_packet
+        from app.services.upload_evidence import build_traceability_packet
 
         payload["traceability"] = build_traceability_packet(
             job_id=str(payload.get("job_id") or ""),

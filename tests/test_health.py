@@ -289,7 +289,7 @@ def test_latest_upload_endpoint_returns_cors_header_for_production_frontend() ->
 
 def test_api_errors_return_json_with_cors_header_for_production_frontend(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.routers.data.upload_jobs.read_latest_upload_record",
+        "app.routers.data.read_latest_upload_record",
         lambda: (_ for _ in ()).throw(RuntimeError("runtime state unavailable")),
     )
     client = TestClient(create_app(), raise_server_exceptions=False)
