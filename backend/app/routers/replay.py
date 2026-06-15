@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from app.core.config import get_settings
 from app.services import upload_jobs
 from app.services.sii_runner import read_latest_sii_state
+from app.services.upload_state_repository import resolve_upload_artifacts
 
 router = APIRouter(prefix="/replay", tags=["replay"])
 
@@ -25,11 +26,12 @@ async def replay_timeline(mode: str = Query(default="live"), intervals: int = Qu
             "timeline": timeline,
         }
 
-    canonical = upload_jobs.read_latest_upload_record() or {}
-    canonical_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
-    canonical_job_id = str(canonical.get("job_id") or "").strip()
+    artifacts = resolve_upload_artifacts()
+    canonical = artifacts.get("record") if isinstance(artifacts.get("record"), dict) else {}
+    canonical_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
+    canonical_job_id = str(artifacts.get("job_id") or "").strip()
     has_canonical_session = bool(canonical_job_id or canonical_result)
-    replay_payload = upload_jobs.replay_payload() if canonical_result and upload_jobs.has_active_session_artifact(canonical_result, job_id=canonical_job_id) else {}
+    replay_payload = artifacts.get("replay") if canonical_result else {}
     timeline = replay_payload.get("timeline", []) if isinstance(replay_payload, dict) else []
     timeline = timeline if isinstance(timeline, list) else []
     source = "uploaded" if timeline else "empty"

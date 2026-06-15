@@ -86,6 +86,44 @@ def test_upload_state_multiple_uploads_preserves_current_and_history_identity() 
     assert read_upload_result_by_job_id(second_job)["job_id"] == second_job
 
 
+def test_upload_state_repository_latest_write_helpers_persist_canonical_record() -> None:
+    job_id = "upload-state-repository-write"
+    result = _persisted_result(job_id, filename="repository.csv")
+
+    upload_state_repository.write_latest_upload_result(job_id, result)
+
+    summary = upload_state_repository.read_latest_upload_summary()
+    record = upload_state_repository.read_latest_upload_record()
+
+    assert summary is not None
+    assert summary["job_id"] == job_id
+    assert record is not None
+    assert record["job_id"] == job_id
+    assert record["result"]["job_id"] == job_id
+    assert record["summary"]["job_id"] == job_id
+
+
+def test_upload_state_repository_latest_summary_write_preserves_matching_result() -> None:
+    job_id = "upload-state-summary-write"
+    upload_state_repository.write_upload_result(job_id, _persisted_result(job_id, filename="summary.csv"))
+
+    upload_state_repository.write_latest_upload_summary(
+        job_id,
+        {
+            "job_id": job_id,
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "filename": "summary.csv",
+        },
+    )
+
+    record = upload_state_repository.read_latest_upload_record()
+
+    assert record is not None
+    assert record["summary"]["job_id"] == job_id
+    assert record["result"]["job_id"] == job_id
+
+
 def test_upload_state_replay_lookup_resolves_correct_upload_identity() -> None:
     first_job = "upload-state-replay-first"
     second_job = "upload-state-replay-second"
@@ -150,6 +188,87 @@ def test_upload_state_evidence_lookup_resolves_correct_upload_identity() -> None
     assert payload["traceability"]["job_id"] == job_id
     assert payload["traceability"]["run_id"] == job_id
     assert payload["traceability"]["upload_id"] == job_id
+
+
+def test_latest_evidence_prefers_current_upload_identity() -> None:
+    first_job = "latest-evidence-first"
+    second_job = "latest-evidence-second"
+    write_latest_upload_result(first_job, _persisted_result(first_job, filename="first.csv"))
+    upsert_evidence_run(
+        {
+            "run_id": first_job,
+            "job_id": first_job,
+            "upload_id": first_job,
+            "source_name": "first.csv",
+            "source_type": "csv_upload",
+            "status": "completed",
+            "created_at": "2026-05-01T08:00:00+00:00",
+            "completed_at": "2026-05-01T08:05:00+00:00",
+            "rows_received": 6,
+            "rows_accepted": 6,
+            "rows_rejected": 0,
+            "sensors_detected": 2,
+            "room": "Uploaded telemetry",
+            "warnings": [],
+            "errors": [],
+            "primary_drivers": [],
+            "evidence_summary": [],
+            "structural_archetypes": [],
+            "initiated_by": "anonymous",
+            "adaptive_site_key": "site::default",
+            "operator_feedback_history": [],
+            "observation_type": "baseline_shift",
+            "observation_status": "completed",
+            "variables": ["temperature"],
+            "drift_metrics": {"replay_frame_count": 1},
+            "data_conditions": [],
+            "regime_label": "State Group A",
+            "structural_state": "Monitoring",
+            "deformation_started_at": "2026-05-01T08:00:00+00:00",
+            "traceability": {"job_id": first_job, "run_id": first_job, "upload_id": first_job},
+        }
+    )
+    upsert_evidence_run(
+        {
+            "run_id": second_job,
+            "job_id": second_job,
+            "upload_id": second_job,
+            "source_name": "second.csv",
+            "source_type": "csv_upload",
+            "status": "completed",
+            "created_at": "2026-05-02T08:00:00+00:00",
+            "completed_at": "2026-05-02T08:05:00+00:00",
+            "rows_received": 6,
+            "rows_accepted": 6,
+            "rows_rejected": 0,
+            "sensors_detected": 2,
+            "room": "Uploaded telemetry",
+            "warnings": [],
+            "errors": [],
+            "primary_drivers": [],
+            "evidence_summary": [],
+            "structural_archetypes": [],
+            "initiated_by": "anonymous",
+            "adaptive_site_key": "site::default",
+            "operator_feedback_history": [],
+            "observation_type": "baseline_shift",
+            "observation_status": "completed",
+            "variables": ["humidity"],
+            "drift_metrics": {"replay_frame_count": 1},
+            "data_conditions": [],
+            "regime_label": "State Group A",
+            "structural_state": "Monitoring",
+            "deformation_started_at": "2026-05-02T08:00:00+00:00",
+            "traceability": {"job_id": second_job, "run_id": second_job, "upload_id": second_job},
+        }
+    )
+    write_latest_upload_result(first_job, _persisted_result(first_job, filename="first.csv"))
+    client = TestClient(create_app())
+
+    payload = client.get("/api/evidence/latest").json()
+
+    assert payload["status"] == "ok"
+    assert payload["run"]["run_id"] == first_job
 
 
 def test_upload_state_missing_persisted_data_fails_safely() -> None:

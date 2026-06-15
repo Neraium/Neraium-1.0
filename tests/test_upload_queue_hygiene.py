@@ -3,6 +3,7 @@ from app.services.runtime_db import claim_next_upload_job, clear_stale_processin
 from app.services.upload_jobs import UPLOAD_QUEUE_LIFECYCLE, process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from fastapi.testclient import TestClient
+import json
 
 
 def test_clear_stale_processing_queue_jobs_marks_processing_as_failed() -> None:
@@ -140,6 +141,30 @@ def test_shared_upload_queue_backend_allows_api_enqueue_and_worker_claim(monkeyp
     assert claimed["status"] == "processing"
     assert claimed["attempts"] == 1
     assert queue_metrics() == {"pending": 0, "processing": 1, "completed": 0, "failed": 0}
+
+
+def test_shared_upload_queue_backend_ignores_malformed_s3_payload(monkeypatch) -> None:
+    fake_s3 = _FakeS3Client()
+    fake_s3.objects[("shared-upload-state", "upload-state/upload-queue/bad-job.json")] = b"{not valid json"
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
+    monkeypatch.setattr("app.services.runtime_db._get_s3_client", lambda: fake_s3)
+
+    assert read_upload_queue_job("bad-job") is None
+    assert queue_metrics() == {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+
+
+def test_shared_upload_queue_backend_ignores_non_mapping_s3_payload(monkeypatch) -> None:
+    fake_s3 = _FakeS3Client()
+    fake_s3.objects[("shared-upload-state", "upload-state/upload-queue/list-job.json")] = json.dumps(["not", "a", "mapping"]).encode("utf-8")
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
+    monkeypatch.setattr("app.services.runtime_db._get_s3_client", lambda: fake_s3)
+
+    assert read_upload_queue_job("list-job") is None
+    assert queue_metrics() == {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
 
 
 def test_queue_lifecycle_uses_explicit_runtime_state() -> None:

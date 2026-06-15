@@ -20,7 +20,6 @@ from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
-from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
 from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_parser import json_payload_to_csv_text
@@ -37,6 +36,7 @@ from app.services.upload_state_repository import (
     read_latest_upload_result,
     read_latest_upload_summary,
     read_local_json as repository_read_local_json,
+    read_replay_payload as repository_read_replay_payload,
     read_shared_state as repository_read_shared_state,
     read_upload_result_by_job_id,
     read_upload_status as repository_read_upload_status,
@@ -46,8 +46,8 @@ from app.services.upload_state_repository import (
     upload_state_backend,
     warm_latest_upload_cache,
     write_latest_upload_record as repository_write_latest_upload_record,
-    write_latest_upload_result_payload,
-    write_latest_upload_summary_payload,
+    write_latest_upload_result as repository_write_latest_upload_result,
+    write_latest_upload_summary as repository_write_latest_upload_summary,
     write_local_json as repository_write_local_json,
     write_shared_state as repository_write_shared_state,
     write_upload_result,
@@ -57,12 +57,8 @@ from app.services.upload_replay import build_replay, detect_numeric_columns, det
 from app.services.upload_validator import detect_delimiter, looks_like_header, normalized_columns, row_tokens, stream_csv_snapshot
 from app.services.upload_state import (
     build_empty_latest_upload_record,
-    build_latest_upload_record,
-    build_replay_payload_from_result,
     build_session_scope,
     has_active_session_artifact,
-    normalize_upload_identity,
-    select_current_upload_result,
 )
 
 RUNTIME_DIR = Path("backend/runtime")
@@ -1003,17 +999,9 @@ def _build_csv_result(
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
-    _write_json(f"upload_result_{job_id}.json", result)
-    _write_json(f"upload_status_{job_id}.json", summary)
-    _write_json("latest_upload_result.json", result)
-    upsert_latest_payload("latest_upload_result", result)
-    if _runtime_db_latest_enabled():
-        upsert_latest_payload("latest_upload_result", result)
-    _write_json("latest_upload_summary.json", summary)
-    _write_shared_state(f"upload_result_{job_id}", result)
-    _write_shared_state(f"upload_status_{job_id}", summary)
-    _write_shared_state("latest_upload_result", result)
-    _write_shared_state("latest_upload_summary", summary)
+    write_upload_result(job_id, result)
+    write_upload_status(job_id, summary)
+    repository_write_latest_upload_result(job_id, result)
     latest_sii = read_latest_sii_state()
     if isinstance(latest_sii, dict):
         _write_shared_state("latest_sii_state", latest_sii)
@@ -1048,17 +1036,9 @@ def _build_csv_result(
             result["sii_reliable_enough_to_show"] = bool(baseline_reliable and evidence_persisted)
             summary["sii_reliable_enough_to_show"] = result["sii_reliable_enough_to_show"]
             summary["evidence_persisted"] = evidence_persisted
-            _write_json(f"upload_result_{job_id}.json", result)
-            _write_json("latest_upload_result.json", result)
-            _write_json(f"upload_status_{job_id}.json", summary)
-            _write_json("latest_upload_summary.json", summary)
-            _write_shared_state(f"upload_result_{job_id}", result)
-            _write_shared_state("latest_upload_result", result)
-            _write_shared_state(f"upload_status_{job_id}", summary)
-            _write_shared_state("latest_upload_summary", summary)
-            UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-            UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
-            persist_latest_upload_state(summary=summary, result=result)
+            write_upload_result(job_id, result)
+            write_upload_status(job_id, summary)
+            repository_write_latest_upload_result(job_id, result)
             dispatch_observation_notification(record)
     except Exception:
         pass
@@ -1081,17 +1061,7 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
 
 
 def replay_payload(job_id: str | None = None) -> dict[str, Any]:
-    result = read_upload_result_by_job_id(job_id) if job_id else None
-    if job_id is None:
-        latest_record = read_latest_upload_record() or {}
-        latest_result = latest_record.get("result") if isinstance(latest_record.get("result"), dict) else None
-        result = latest_result if has_active_session_artifact(latest_result) else {}
-    else:
-        result = result or {}
-    payload = build_replay_payload_from_result(result, job_id=job_id)
-    if job_id and not result:
-        payload["message"] = "No replay is available for the requested upload job."
-    return payload
+    return repository_read_replay_payload(job_id)
 
 
 def _detect_timestamp_column(columns: list[str]) -> str | None:
@@ -1198,94 +1168,11 @@ def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_latest_upload_result(*args) -> None:
-    clear_reset_block_persisted()
-    if len(args) == 2:
-        job_id, result = args
-        payload = dict(result or {})
-        payload["job_id"] = str(job_id)
-        payload["run_id"] = str(job_id)
-        payload["upload_id"] = str(job_id)
-        payload["session_scope"] = build_session_scope(str(job_id), filename=payload.get("filename"), status="active")
-        if payload.get("filename"):
-            payload["traceability"] = build_traceability_packet(job_id=str(job_id), filename=str(payload.get("filename") or ""), result=payload)
-        if isinstance(payload.get("traceability"), dict):
-            payload["decision_integrity"] = dict(payload["traceability"])
-        _write_json(f"upload_result_{job_id}.json", payload)
-        _write_json("latest_upload_result.json", payload)
-        _write_shared_state(f"upload_result_{job_id}", payload)
-        _write_shared_state("latest_upload_result", payload)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = payload
-        latest_summary = summarize_result(payload)
-        _write_json("latest_upload_summary.json", latest_summary)
-        _write_shared_state("latest_upload_summary", latest_summary)
-        _write_shared_state(f"upload_status_{job_id}", latest_summary)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = latest_summary
-        persist_latest_upload_state(summary=latest_summary, result=payload)
-        return
-    result = args[0] if args else {}
-    if isinstance(result, dict):
-        result.setdefault("session_scope", build_session_scope(result.get("job_id"), filename=result.get("filename"), status="active"))
-    _write_json("latest_upload_result.json", result)
-    _write_shared_state("latest_upload_result", result)
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-    if isinstance(result, dict) and result.get("job_id"):
-        latest_summary = summarize_result(result)
-        _write_json("latest_upload_summary.json", latest_summary)
-        _write_shared_state("latest_upload_summary", latest_summary)
-        _write_shared_state(f"upload_status_{result.get('job_id')}", latest_summary)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = latest_summary
-        persist_latest_upload_state(summary=latest_summary, result=result)
-    _invalidate_router_latest_cache()
+    repository_write_latest_upload_result(*args)
 
 
 def write_latest_upload_summary(*args, **kwargs) -> None:
-    clear_reset_block_persisted()
-    if len(args) >= 2 and isinstance(args[0], str) and isinstance(args[1], dict):
-        job_id = args[0]
-        summary = args[1]
-        payload = dict(summary or {})
-        payload["job_id"] = str(job_id)
-        payload["run_id"] = str(job_id)
-        payload["upload_id"] = str(job_id)
-        payload.setdefault("status", "COMPLETE")
-        payload["session_scope"] = build_session_scope(str(job_id), filename=payload.get("filename"), status="active")
-        if "status_url" not in payload:
-            payload["status_url"] = f"/api/data/upload-status/{job_id}"
-        _write_json("latest_upload_summary.json", payload)
-        _write_shared_state("latest_upload_summary", payload)
-        _write_shared_state(f"upload_status_{job_id}", payload)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
-        persist_latest_upload_state(summary=payload, result=read_upload_result_by_job_id(str(job_id)), keep_result=True)
-        return
-    if len(args) >= 1 and isinstance(args[0], dict):
-        summary = args[0]
-        summary.setdefault("session_scope", build_session_scope(summary.get("job_id"), filename=summary.get("filename"), status="active"))
-        _write_json("latest_upload_summary.json", summary)
-        _write_shared_state("latest_upload_summary", summary)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
-        persist_latest_upload_state(summary=summary, result=read_upload_result_by_job_id(str(summary.get("job_id") or "")) if summary.get("job_id") else None, keep_result=True)
-        return
-    if len(args) == 2:
-        job_id, summary = args
-        payload = dict(summary or {})
-        payload["job_id"] = str(job_id)
-        payload["run_id"] = str(job_id)
-        payload["upload_id"] = str(job_id)
-        payload.setdefault("status", "COMPLETE")
-        payload["session_scope"] = build_session_scope(str(job_id), filename=payload.get("filename"), status="active")
-        if "status_url" not in payload:
-            payload["status_url"] = f"/api/data/upload-status/{job_id}"
-        _write_json("latest_upload_summary.json", payload)
-        _write_shared_state("latest_upload_summary", payload)
-        _write_shared_state(f"upload_status_{job_id}", payload)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
-        persist_latest_upload_state(summary=payload, result=read_upload_result_by_job_id(str(job_id)), keep_result=True)
-        return
-    summary = args[0] if args else {}
-    _write_json("latest_upload_summary.json", summary)
-    _write_shared_state("latest_upload_summary", summary)
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
-    persist_latest_upload_state(summary=summary if isinstance(summary, dict) else None, result=read_upload_result_by_job_id(str(summary.get("job_id") or "")) if isinstance(summary, dict) and summary.get("job_id") else None, keep_result=True)
+    repository_write_latest_upload_summary(*args, **kwargs)
 
 
 def build_upload_result(

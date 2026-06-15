@@ -8,6 +8,7 @@ from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse,
 from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
+from app.services.upload_state_repository import read_evidence_by_identity
 
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(require_api_access)])
@@ -20,7 +21,7 @@ def get_evidence_runs() -> dict[str, Any]:
 
 @router.get("/evidence/runs/{run_id}", response_model=EvidenceRunResponse)
 def get_evidence_run(run_id: str) -> dict[str, Any]:
-    record = read_evidence_run(run_id)
+    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
     return record
@@ -28,7 +29,7 @@ def get_evidence_run(run_id: str) -> dict[str, Any]:
 
 @router.get("/evidence/latest", response_model=LatestEvidenceResponse)
 def get_latest_evidence() -> dict[str, Any]:
-    record = latest_evidence_run()
+    record = read_evidence_by_identity() or latest_evidence_run()
     if record is None:
         return {
             "status": "empty",
@@ -40,7 +41,7 @@ def get_latest_evidence() -> dict[str, Any]:
 
 @router.get("/evidence/export/{run_id}", response_model=None)
 def export_evidence_run(request: Request, run_id: str, format: str = Query(default="markdown")):
-    record = read_evidence_run(run_id)
+    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
     auth_context = getattr(request.state, "auth_context", {})

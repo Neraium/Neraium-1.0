@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion } from "../uploadState";
+import { deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult } from "../uploadState";
 
 describe("uploadState normalization", () => {
   it("resolves room aliases from messy column names", () => {
@@ -54,5 +54,22 @@ describe("uploadState normalization", () => {
         state_available: false,
       },
     })).toBe(false);
+  });
+
+  it("prefers current_upload.result over legacy latest_result when both are present", () => {
+    const resolved = resolveCurrentUploadResult({
+      current_upload: {
+        result: {
+          job_id: "current-upload-job",
+          engine_result: { overall_result: "stable" },
+        },
+      },
+      latest_result: {
+        job_id: "legacy-latest-job",
+        engine_result: { overall_result: "stale" },
+      },
+    });
+
+    expect(resolved?.job_id).toBe("current-upload-job");
   });
 });

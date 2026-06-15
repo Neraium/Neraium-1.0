@@ -11,9 +11,13 @@ from app.services.runtime_db import (
     upsert_latest_payload,
 )
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE, UploadRuntimeState
+from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_state import (
     build_empty_latest_upload_record,
     build_latest_upload_record,
+    build_replay_payload_from_result,
+    build_session_scope,
+    has_active_session_artifact,
     normalize_upload_identity,
     select_current_upload_result,
 )
@@ -184,6 +188,86 @@ def read_current_upload_result() -> dict[str, Any] | None:
     return select_current_upload_result(read_latest_upload_record())
 
 
+def _payload_identity_values(payload: dict[str, Any] | None) -> set[str]:
+    if not isinstance(payload, dict):
+        return set()
+    values = set(value for value in normalize_upload_identity(payload) if value)
+    scope = payload.get("session_scope") if isinstance(payload.get("session_scope"), dict) else {}
+    for key in ("job_id", "run_id", "upload_id"):
+        value = str(scope.get(key) or "").strip()
+        if value:
+            values.add(value)
+    return values
+
+
+def _record_identity_values(record: dict[str, Any] | None) -> set[str]:
+    if not isinstance(record, dict):
+        return set()
+    values = _payload_identity_values(record)
+    values.update(_payload_identity_values(record.get("summary") if isinstance(record.get("summary"), dict) else None))
+    values.update(_payload_identity_values(record.get("result") if isinstance(record.get("result"), dict) else None))
+    return values
+
+
+def identity_matches(record: dict[str, Any] | None, requested_id: str | None) -> bool:
+    requested = str(requested_id or "").strip()
+    return bool(requested) and requested in _record_identity_values(record)
+
+
+def resolve_upload_artifacts(job_id: str | None = None) -> dict[str, Any]:
+    requested_id = str(job_id or "").strip()
+    record = read_latest_upload_record() or {}
+    if requested_id and not identity_matches(record, requested_id):
+        record = {}
+
+    summary = record.get("summary") if isinstance(record.get("summary"), dict) else None
+    record_result = record.get("result") if isinstance(record.get("result"), dict) else None
+    result = read_upload_result_by_job_id(requested_id) if requested_id else None
+    if not isinstance(result, dict):
+        result = record_result if isinstance(record_result, dict) else None
+
+    canonical_job_id, canonical_run_id, canonical_upload_id = normalize_upload_identity(result or summary or record)
+    active_result = result if has_active_session_artifact(result, job_id=canonical_job_id or requested_id or None) else None
+    replay = build_replay_payload_from_result(active_result or result, job_id=canonical_job_id or requested_id or None)
+
+    evidence = None
+    evidence_identity = canonical_job_id or canonical_run_id or canonical_upload_id or requested_id
+    if evidence_identity:
+        try:
+            from app.services.evidence_store import read_evidence_run
+
+            evidence = read_evidence_run(evidence_identity)
+        except Exception:
+            evidence = None
+
+    return {
+        "requested_id": requested_id or None,
+        "record": record if isinstance(record, dict) else {},
+        "summary": summary,
+        "result": result,
+        "active_result": active_result,
+        "replay": replay,
+        "evidence": evidence,
+        "job_id": canonical_job_id or requested_id or None,
+        "run_id": canonical_run_id or canonical_job_id or requested_id or None,
+        "upload_id": canonical_upload_id or canonical_job_id or requested_id or None,
+    }
+
+
+def read_replay_payload(job_id: str | None = None) -> dict[str, Any]:
+    artifacts = resolve_upload_artifacts(job_id)
+    payload = dict(artifacts.get("replay") or {})
+    if job_id and not isinstance(artifacts.get("result"), dict):
+        payload["message"] = "No replay is available for the requested upload job."
+    return payload
+
+
+def read_evidence_by_identity(job_id: str | None = None) -> dict[str, Any] | None:
+    artifacts = resolve_upload_artifacts(job_id)
+    evidence = artifacts.get("evidence")
+    return evidence if isinstance(evidence, dict) else None
+
+
 def persist_latest_upload_state(
     *,
     summary: dict[str, Any] | None = None,
@@ -256,6 +340,88 @@ def clear_reset_block_persisted() -> None:
 
 def reset_block_persisted_active() -> bool:
     return bool(runtime_state().reset_block_persisted)
+
+
+def _attach_traceability(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not payload.get("filename"):
+        return payload
+    try:
+        from app.services.upload_jobs import build_traceability_packet
+
+        payload["traceability"] = build_traceability_packet(
+            job_id=str(payload.get("job_id") or ""),
+            filename=str(payload.get("filename") or ""),
+            result=payload,
+        )
+    except Exception:
+        return payload
+    if isinstance(payload.get("traceability"), dict):
+        payload["decision_integrity"] = dict(payload["traceability"])
+    return payload
+
+
+def write_latest_upload_result(*args) -> None:
+    clear_reset_block_persisted()
+    result = args[0] if len(args) == 1 else args[1] if len(args) >= 2 else {}
+    payload = dict(result or {}) if isinstance(result, dict) else {}
+
+    if len(args) >= 2:
+        job_id = str(args[0])
+        payload["job_id"] = job_id
+        payload["run_id"] = job_id
+        payload["upload_id"] = job_id
+
+    payload["session_scope"] = build_session_scope(
+        payload.get("job_id"),
+        filename=payload.get("filename"),
+        status="active",
+    )
+    payload = _attach_traceability(payload)
+
+    if payload.get("job_id"):
+        write_upload_result(str(payload["job_id"]), payload)
+    write_latest_upload_result_payload(payload)
+
+    if payload.get("job_id"):
+        latest_summary = summarize_result_payload(payload)
+        write_latest_upload_summary_payload(latest_summary)
+        write_upload_status(str(payload["job_id"]), latest_summary)
+        persist_latest_upload_state(summary=latest_summary, result=payload)
+    else:
+        _invalidate_router_latest_cache()
+
+
+def write_latest_upload_summary(*args, **kwargs) -> None:
+    del kwargs
+    clear_reset_block_persisted()
+    summary = args[0] if len(args) == 1 else args[1] if len(args) >= 2 else {}
+    payload = dict(summary or {}) if isinstance(summary, dict) else {}
+
+    if len(args) >= 2:
+        job_id = str(args[0])
+        payload["job_id"] = job_id
+        payload["run_id"] = job_id
+        payload["upload_id"] = job_id
+
+    payload.setdefault("status", "COMPLETE")
+    payload["session_scope"] = build_session_scope(
+        payload.get("job_id"),
+        filename=payload.get("filename"),
+        status="active",
+    )
+    if payload.get("job_id") and "status_url" not in payload:
+        payload["status_url"] = f"/api/data/upload-status/{payload['job_id']}"
+
+    write_latest_upload_summary_payload(payload)
+    if payload.get("job_id"):
+        write_upload_status(str(payload["job_id"]), payload)
+        persist_latest_upload_state(
+            summary=payload,
+            result=read_upload_result_by_job_id(str(payload["job_id"])),
+            keep_result=True,
+        )
+    else:
+        persist_latest_upload_state(summary=payload, result=None, keep_result=True)
 
 
 def reset_upload_state() -> None:

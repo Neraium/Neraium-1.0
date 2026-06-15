@@ -25,6 +25,7 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
+from app.services.upload_state_repository import resolve_upload_artifacts
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -597,15 +598,18 @@ async def latest_upload(include_persisted: int | bool = True):
     use_persisted = bool(include_persisted)
     state_backend = upload_jobs.upload_state_backend()
     canonical = upload_jobs.read_latest_upload_record() if use_persisted else upload_jobs.build_empty_latest_upload_record()
+    artifacts = resolve_upload_artifacts() if use_persisted else {}
     if upload_jobs.reset_block_persisted_active():
+        artifacts = {}
         canonical = upload_jobs.build_empty_latest_upload_record()
 
     if not isinstance(canonical, dict):
+        artifacts = {}
         canonical = upload_jobs.build_empty_latest_upload_record()
 
     summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
-    result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
-    canonical_job_id = str(canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
+    result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else (canonical.get("result") if isinstance(canonical.get("result"), dict) else None)
+    canonical_job_id = str(artifacts.get("job_id") or canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
     canonical_status = str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "empty").strip().lower()
     processing_states = {
         "queued", "pending", "processing", "parsing_telemetry", "building_relationship_baselines",
@@ -643,7 +647,7 @@ async def latest_upload(include_persisted: int | bool = True):
         remaining = [item for item in history if str(item.get("job_id") or "") != canonical_job_id]
         history = ([current_history] if current_history else []) + remaining
 
-    frames = canonical.get("replay", {}).get("timeline") if isinstance(canonical.get("replay"), dict) else None
+    frames = artifacts.get("replay", {}).get("timeline") if isinstance(artifacts.get("replay"), dict) else None
     if not isinstance(frames, list):
         frames = _extract_timeline(result if isinstance(result, dict) else None, canonical_job_id or None)
     traceability = canonical.get("traceability") if isinstance(canonical.get("traceability"), dict) else {}
@@ -711,7 +715,7 @@ async def system_interpretation_contract(include_persisted: int | bool = True):
 
 @router.get("/replay/{job_id}")
 async def data_replay(job_id: str):
-    return upload_jobs.replay_payload(job_id)
+    return resolve_upload_artifacts(job_id).get("replay") or upload_jobs.replay_payload(job_id)
 
 
 @router.get("/intake/{job_id}/result")

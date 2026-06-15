@@ -5,6 +5,7 @@ import logging
 import os
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
@@ -16,13 +17,21 @@ RUNTIME_DIR = get_settings().runtime_dir
 DB_PATH = RUNTIME_DIR / "runtime.db" 
 UPLOAD_QUEUE_RETENTION_DAYS = int(os.getenv("NERAIUM_UPLOAD_QUEUE_RETENTION_DAYS", "14"))
 EVIDENCE_RUN_RETENTION_DAYS = int(os.getenv("NERAIUM_EVIDENCE_RUN_RETENTION_DAYS", "45"))
-_S3_CLIENT: Any | None = None
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RuntimeDbClients:
+    upload_queue_s3_client: Any | None = None
+
+
+RUNTIME_DB_CLIENTS = RuntimeDbClients()
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
     global RUNTIME_DIR, DB_PATH
     RUNTIME_DIR = runtime_dir
     DB_PATH = RUNTIME_DIR / "runtime.db"
+    RUNTIME_DB_CLIENTS.upload_queue_s3_client = None
 
 
 def now_iso() -> str:
@@ -273,16 +282,15 @@ def _queue_object_key(job_id: str) -> str:
 
 
 def _get_s3_client() -> Any | None:
-    global _S3_CLIENT
-    if _S3_CLIENT is not None:
-        return _S3_CLIENT
+    if RUNTIME_DB_CLIENTS.upload_queue_s3_client is not None:
+        return RUNTIME_DB_CLIENTS.upload_queue_s3_client
     if not _upload_state_bucket():
         return None
     try:
         import boto3  # type: ignore
 
-        _S3_CLIENT = boto3.client("s3")
-        return _S3_CLIENT
+        RUNTIME_DB_CLIENTS.upload_queue_s3_client = boto3.client("s3")
+        return RUNTIME_DB_CLIENTS.upload_queue_s3_client
     except Exception:
         logger.exception("upload_queue_s3_client_unavailable queue_backend=s3")
         return None
