@@ -72,4 +72,18 @@ describe("uploadState normalization", () => {
 
     expect(resolved?.job_id).toBe("current-upload-job");
   });
+
+  it("falls back to legacy latest_result when canonical current_upload.result is absent", () => {
+    const resolved = resolveCurrentUploadResult({
+      current_upload: {
+        result: null,
+      },
+      latest_result: {
+        job_id: "legacy-latest-job",
+        engine_result: { overall_result: "stable" },
+      },
+    });
+
+    expect(resolved?.job_id).toBe("legacy-latest-job");
+  });
 });

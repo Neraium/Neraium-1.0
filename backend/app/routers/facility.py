@@ -7,7 +7,8 @@ from app.services.domain_mode import detect_domain_mode, domain_profile, normali
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
-from app.services.upload_jobs import has_active_session_artifact, read_current_upload_result
+from app.services.upload_state import has_active_session_artifact
+from app.services.upload_state_repository import read_current_upload_result
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 

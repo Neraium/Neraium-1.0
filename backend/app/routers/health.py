@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.services.runtime_db import queue_metrics, queue_operational_metrics
 from app.services.sii_runner import build_runner_status
-from app.services.upload_jobs import shared_state_configured, upload_state_backend
+from app.services.upload_state_repository import shared_state_configured, upload_state_backend
 
 router = APIRouter(tags=["health"])
 

@@ -10,7 +10,10 @@ from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
 from app.services.evidence_store import list_evidence_runs
 from app.services.runtime_db import audit_events_count, queue_metrics, upload_duration_samples
-from app.services.upload_jobs import read_upload_cache_stats, read_upload_history
+from app.services.upload_jobs import read_upload_cache_stats
+from app.services.upload_persistence import read_upload_history
+from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
+from app.services.upload_state_repository import read_current_upload_result
 
 
 router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access)]) 
@@ -29,7 +32,7 @@ def percentile(values: list[float], point: float) -> float | None:
 def get_observability_summary() -> ObservabilitySummaryResponse:
     queue = queue_metrics()
     evidence_runs = list_evidence_runs(limit=100)
-    upload_history = read_upload_history(limit=100)
+    upload_history = read_upload_history(UPLOAD_RUNTIME_STATE.runtime_dir, limit=100, current_result=read_current_upload_result())
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0
@@ -88,7 +91,7 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
 def get_observability_metrics() -> PlainTextResponse:
     queue = queue_metrics()
     evidence_runs = list_evidence_runs(limit=100)
-    upload_history = read_upload_history(limit=100)
+    upload_history = read_upload_history(UPLOAD_RUNTIME_STATE.runtime_dir, limit=100, current_result=read_current_upload_result())
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0

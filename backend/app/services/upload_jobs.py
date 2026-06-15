@@ -45,6 +45,7 @@ from app.services.upload_state_repository import (
     shared_state_configured,
     upload_state_backend,
     warm_latest_upload_cache,
+    write_upload_completion as repository_write_upload_completion,
     write_latest_upload_record as repository_write_latest_upload_record,
     write_latest_upload_result as repository_write_latest_upload_result,
     write_latest_upload_summary as repository_write_latest_upload_summary,
@@ -176,21 +177,10 @@ def _complete_with_partial_result(
         snapshot=snapshot,
         build_traceability_packet=build_traceability_packet,
     )
-
-    _write_json(f"upload_result_{job_id}.json", result)
-    _write_json(f"upload_status_{job_id}.json", summary)
-    _write_json("latest_upload_result.json", result)
-    _write_json("latest_upload_summary.json", summary)
-
-    _write_shared_state(f"upload_result_{job_id}", result)
-    _write_shared_state(f"upload_status_{job_id}", summary)
-    _write_shared_state("latest_upload_result", result)
-    _write_shared_state("latest_upload_summary", summary)
-
+    repository_write_upload_completion(job_id, result=result, summary=summary)
     UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
-    persist_latest_upload_state(summary=summary, result=result)
 
     try:
         upsert_upload_job(summary)
@@ -999,9 +989,7 @@ def _build_csv_result(
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
-    write_upload_result(job_id, result)
-    write_upload_status(job_id, summary)
-    repository_write_latest_upload_result(job_id, result)
+    repository_write_upload_completion(job_id, result=result, summary=summary)
     latest_sii = read_latest_sii_state()
     if isinstance(latest_sii, dict):
         _write_shared_state("latest_sii_state", latest_sii)
@@ -1009,7 +997,6 @@ def _build_csv_result(
     UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
-    persist_latest_upload_state(summary=summary, result=result)
     try:
         from app.services.evidence_store import upsert_evidence_run
         record = upsert_evidence_run(
@@ -1036,9 +1023,7 @@ def _build_csv_result(
             result["sii_reliable_enough_to_show"] = bool(baseline_reliable and evidence_persisted)
             summary["sii_reliable_enough_to_show"] = result["sii_reliable_enough_to_show"]
             summary["evidence_persisted"] = evidence_persisted
-            write_upload_result(job_id, result)
-            write_upload_status(job_id, summary)
-            repository_write_latest_upload_result(job_id, result)
+            repository_write_upload_completion(job_id, result=result, summary=summary)
             dispatch_observation_notification(record)
     except Exception:
         pass

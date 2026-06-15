@@ -5,9 +5,8 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Query
 
 from app.core.config import get_settings
-from app.services import upload_jobs
 from app.services.sii_runner import read_latest_sii_state
-from app.services.upload_state_repository import resolve_upload_artifacts
+from app.services.upload_state_repository import read_replay_payload, resolve_upload_artifacts
 
 router = APIRouter(prefix="/replay", tags=["replay"])
 
@@ -78,7 +77,7 @@ async def replay_range(start_timestamp: str, end_timestamp: str, mode: str = Que
 
 @router.get("/{job_id}")
 async def replay_by_job(job_id: str):
-    return upload_jobs.replay_payload(job_id)
+    return read_replay_payload(job_id)
 
 
 def synthetic_timeline(frame_count: int, prefix: str) -> list[dict]:

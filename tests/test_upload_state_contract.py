@@ -124,6 +124,49 @@ def test_upload_state_repository_latest_summary_write_preserves_matching_result(
     assert record["result"]["job_id"] == job_id
 
 
+def test_upload_state_repository_write_upload_completion_persists_consistent_artifacts() -> None:
+    job_id = "upload-state-completion-write"
+    result = _persisted_result(job_id, filename="completion.csv")
+    summary = {
+        "job_id": job_id,
+        "run_id": job_id,
+        "upload_id": job_id,
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "filename": "completion.csv",
+        "row_count": 6,
+        "column_count": 3,
+        "result_available": True,
+        "sii_completed": True,
+    }
+
+    upload_state_repository.write_upload_completion(job_id, result=result, summary=summary)
+
+    assert upload_state_repository.read_upload_result_by_job_id(job_id)["job_id"] == job_id
+    assert upload_state_repository.read_upload_status(job_id)["job_id"] == job_id
+    assert upload_state_repository.read_latest_upload_result()["job_id"] == job_id
+    assert upload_state_repository.read_latest_upload_summary()["job_id"] == job_id
+    record = upload_state_repository.read_latest_upload_record()
+    assert record is not None
+    assert record["job_id"] == job_id
+    assert record["result"]["job_id"] == job_id
+    assert record["summary"]["job_id"] == job_id
+
+
+def test_upload_jobs_compatibility_write_helpers_remain_stable() -> None:
+    job_id = "upload-jobs-compat-write"
+    result = _persisted_result(job_id, filename="compat.csv")
+
+    upload_jobs.write_latest_upload_result(job_id, result)
+
+    assert upload_state_repository.read_latest_upload_result()["job_id"] == job_id
+    assert upload_state_repository.read_latest_upload_summary()["job_id"] == job_id
+    record = upload_state_repository.read_latest_upload_record()
+    assert record is not None
+    assert record["job_id"] == job_id
+    assert read_current_upload_result()["job_id"] == job_id
+
+
 def test_upload_state_replay_lookup_resolves_correct_upload_identity() -> None:
     first_job = "upload-state-replay-first"
     second_job = "upload-state-replay-second"
@@ -305,6 +348,32 @@ def test_upload_state_missing_persisted_data_fails_safely() -> None:
     assert payload["current_upload"]["status"] == "empty"
     assert payload["latest_result"] is None
     assert payload["job_id"] is None
+
+
+def test_latest_upload_prefers_canonical_current_upload_result_over_stale_legacy_latest_result() -> None:
+    current_job = "canonical-current-upload"
+    stale_job = "stale-legacy-upload"
+    write_latest_upload_result(current_job, _persisted_result(current_job, filename="current.csv"))
+    upload_state_repository.write_latest_upload_result_payload(
+        {
+            **_persisted_result(stale_job, filename="stale.csv"),
+            "session_scope": {
+                "active": False,
+                "status": "complete",
+                "job_id": stale_job,
+                "run_id": stale_job,
+                "upload_id": stale_job,
+                "source_name": "stale.csv",
+            },
+        }
+    )
+    client = TestClient(create_app())
+
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["current_upload"]["job_id"] == current_job
+    assert payload["current_upload"]["result"]["job_id"] == current_job
+    assert payload["latest_result"]["job_id"] == current_job
 
 
 def test_upload_state_corrupted_record_fails_safely() -> None:

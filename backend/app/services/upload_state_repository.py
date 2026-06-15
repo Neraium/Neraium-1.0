@@ -164,6 +164,16 @@ def write_latest_upload_summary_payload(payload: dict[str, Any]) -> None:
     runtime_state().latest_upload_cache["summary"] = payload
 
 
+def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
+    normalized_result = dict(result or {}) if isinstance(result, dict) else {}
+    normalized_summary = dict(summary or {}) if isinstance(summary, dict) else {}
+    write_upload_result(job_id, normalized_result)
+    write_upload_status(job_id, normalized_summary)
+    write_latest_upload_result_payload(normalized_result)
+    write_latest_upload_summary_payload(normalized_summary)
+    persist_latest_upload_state(summary=normalized_summary, result=normalized_result)
+
+
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
     payload = build_empty_latest_upload_record() if not isinstance(record, dict) else dict(record)
     write_local_json("latest_upload.json", payload)

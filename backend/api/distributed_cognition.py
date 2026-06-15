@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
-from app.services.upload_jobs import read_current_upload_result
+from app.services.upload_state_repository import read_current_upload_result
 from archives.infrastructure_behavioral_archive import build_infrastructure_behavior_archive
 from behavior_science.behavioral_taxonomy import build_behavioral_taxonomy
 from behavior_science.long_horizon_memory import build_long_horizon_memory

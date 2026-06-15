@@ -9,12 +9,8 @@ import uvicorn
 from app.core.config import Settings, get_settings
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
-from app.services.upload_jobs import (
-    configure_runtime_dir as configure_upload_jobs_dir,
-    process_next_queued_upload_job,
-    shared_state_configured,
-    upload_state_backend,
-)
+from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir, process_next_queued_upload_job
+from app.services.upload_state_repository import shared_state_configured, upload_state_backend
 
 logger = logging.getLogger(__name__)
 

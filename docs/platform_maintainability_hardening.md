@@ -14,16 +14,16 @@ The upload pipeline remains externally compatible through `backend/app/services/
 - `upload_state_repository.py`: backend repository for latest-upload records, summary/result artifacts, and shared-state reads/writes
 - `upload_queue_lifecycle.py`: queue dispatch lifecycle separated from the compatibility facade
 
-`upload_jobs.py` is now the compatibility facade that keeps public imports stable while delegating state ownership, queue lifecycle handling, and persisted upload-state access.
+`upload_jobs.py` is now the compatibility facade that keeps public imports stable while delegating state ownership, queue lifecycle handling, and persisted upload-state access. This pass reduced its role further by moving read-only callers onto focused modules and moving completion write sequencing into the repository layer.
 
 ## Upload State Flow
 
 1. `/api/data/upload` creates a queued upload job and writes initial status.
 2. `upload_jobs.process_next_queued_upload_job()` claims the job and delegates parsing/cleaning.
 3. `upload_validator.stream_csv_snapshot()` produces the cleaned telemetry snapshot used for analysis.
-4. `upload_jobs` builds the analysis result and writes canonical latest-upload state through `upload_state.py` plus `upload_state_repository.py`.
+4. `upload_jobs` builds the analysis result, then `upload_state_repository.write_upload_completion()` owns the persisted result/summary/latest-upload write sequence.
 5. `upload_queue_lifecycle.py` owns queue dispatch transitions while using the explicit `UploadRuntimeState` instance.
-6. `latest-upload`, replay, facility, and frontend session restoration resolve the active upload from the canonical `current_upload` contract.
+6. `latest-upload`, replay, facility, evidence, and frontend session restoration resolve the active upload from the canonical `current_upload` contract.
 
 ## Module Ownership
 
@@ -79,15 +79,56 @@ See also: [cache_ownership_policy.md](cache_ownership_policy.md)
 
 ## Remaining Technical Debt
 
-- `upload_jobs.py` still owns orchestration plus compatibility write paths even though state ownership moved out.
+- `upload_jobs.py` still owns orchestration plus compatibility exports for queue/reset/build flows even though state ownership and completion sequencing moved out.
 - `backend/app/services/runtime_db.py` still owns a process-global `_S3_CLIENT` for queue storage.
+- Some backend and frontend contracts still preserve `latest_result` for compatibility, even where `current_upload.result` is now preferred.
 - Evidence and replay enrichment still happen across routers and service boundaries instead of one upload-state resolver.
-- Frontend still carries both `latest_result` and `current_upload` compatibility paths.
+
+## This Pass
+
+Migrated out of `upload_jobs.py`:
+
+- `read_current_upload_result` callers in `facility.py`, `audit.py`, `domain_mode.py`, `backend/api/ecosystem.py`, `backend/api/distributed_cognition.py`, and `data_connections.py` now import from `upload_state_repository.py`.
+- `shared_state_configured`, `upload_state_backend`, and `warm_latest_upload_cache` callers in app startup and health paths now import from `upload_state_repository.py`.
+- `has_active_session_artifact` in `facility.py` now imports from `upload_state.py`.
+- `replay.py` now reads replay payloads directly from `upload_state_repository.py`.
+- `data_connections.py` now imports `summarize_result` from `upload_persistence.py` and latest-upload write helpers from `upload_state_repository.py`.
+- `observability.py` now reads upload history from `upload_persistence.py` using `UPLOAD_RUNTIME_STATE.runtime_dir` plus canonical `read_current_upload_result()`.
+
+Remaining compatibility exports in `upload_jobs.py`:
+
+- `configure_runtime_dir`
+  Reason: startup/app test bootstrapping still expects the facade entrypoint.
+- `process_next_queued_upload_job`, `process_csv_file`, `process_json_payload`, `process_csv_content`, `build_upload_result`
+  Reason: these are orchestration/processing entrypoints, not pure state helpers.
+- `write_job`, `read_job`, `read_upload_status`, `reset_latest_upload_state`
+  Reason: queue lifecycle and reset callers still depend on the facade surface.
+- `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
+  Reason: preserved for compatibility while tests and callers continue migrating off legacy imports.
+- `build_evidence_record_from_result`, `read_upload_cache_stats`
+  Reason: still used by router/service compatibility paths.
+
+Completion write sequencing:
+
+- `upload_state_repository.write_upload_completion()` now owns the persisted write ordering for per-job result, per-job status, latest result, latest summary, and canonical latest-upload record.
+- `upload_jobs.py` no longer hand-orders those writes separately for normal completion and partial completion paths.
+
+`latest_result` migration status:
+
+- Canonical resolution prefers `current_upload.result` wherever canonical latest-upload state is available.
+- Frontend normalization still falls back to `latest_result` and `latestResult` for backward-compatible payloads.
+- Backend `latest-upload` style responses still expose `latest_result` where required for compatibility, but active-upload reads now route through canonical record helpers first.
+
+Benchmark status:
+
+- The 1M-row benchmark remains opt-in by design.
+- Run it only when explicitly desired with `NERAIUM_RUN_1M_BENCHMARK=1`.
+- Smaller-scale benchmark validation remains acceptable for routine hardening passes.
 
 ## Future Refactor Opportunities
 
-1. Finish moving the remaining compatibility writes out of `upload_jobs.py` and into repository/service helpers.
-2. Move evidence-run enrichment into a dedicated upload state resolver service.
-3. Remove compatibility aliases once all callers read `current_upload.result`.
+1. Migrate the remaining `write_latest_upload_result` and `write_latest_upload_summary` compatibility imports in tests and services onto `upload_state_repository.py`.
+2. Move `build_evidence_record_from_result` into a focused evidence/upload artifact helper so routers no longer need `upload_jobs.py` for evidence assembly.
+3. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
 4. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
 5. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.

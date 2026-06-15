@@ -13,12 +13,8 @@ from app.services.data_connection_poller import start_data_connection_poller, st
 from app.services.data_connections import ensure_default_data_connection
 from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records, queue_operational_metrics 
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
-from app.services.upload_jobs import (
-    configure_runtime_dir as configure_upload_jobs_dir,
-    shared_state_configured,
-    upload_state_backend,
-    warm_latest_upload_cache,
-)
+from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
+from app.services.upload_state_repository import shared_state_configured, upload_state_backend, warm_latest_upload_cache
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
 from app.services.sii_runner import build_runner_status
 

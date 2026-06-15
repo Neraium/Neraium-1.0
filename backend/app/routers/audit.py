@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
-from app.services.upload_jobs import read_current_upload_result
+from app.services.upload_state_repository import read_current_upload_result
 from audit.operational_audit_engine import OperationalAuditEngine
 from replay.structural_replay_engine import StructuralReplayEngine
 
@@ -54,4 +54,3 @@ def current_intelligence() -> dict[str, Any]:
         return build_sample_intelligence()
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
     return intelligence or build_sample_intelligence()
-
