@@ -647,18 +647,25 @@ async def upload_stream(job_id: str):
 
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
-    cached = _cache_get_latest()
+    use_persisted = bool(include_persisted)
+    cached = _cache_get_latest() if use_persisted else None
     if isinstance(cached, dict):
         return cached
     state_backend = upload_jobs.upload_state_backend()
-    result = upload_jobs.read_latest_upload_result()
-    summary = latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}
-    history = upload_jobs.read_upload_history(limit=20)
+    result = upload_jobs.read_latest_upload_result() if use_persisted else None
+    summary = (latest_completed_job_summary() or upload_jobs.read_latest_upload_summary() or {}) if use_persisted else {}
+    history = upload_jobs.read_upload_history(limit=20) if use_persisted else []
 
     if upload_jobs.reset_block_persisted_active():
         summary = {}
         result = None
         history = []
+
+    history = [item for item in history if upload_jobs.has_active_session_artifact(item)]
+    if not upload_jobs.has_active_session_artifact(summary):
+        summary = {}
+    if not upload_jobs.has_active_session_artifact(result, job_id=(summary or {}).get("job_id")):
+        result = None
 
     def _has_persisted_status(job_id: str | None) -> bool:
         if not job_id:
@@ -716,6 +723,24 @@ async def latest_upload(include_persisted: int | bool = True):
         by_job = upload_jobs.read_upload_result_by_job_id(str(job_id)) if job_id else None
         result = by_job or None
 
+    # Evidence records are written per upload job. If latest summary/result drift
+    # apart transiently, recover the active upload artifact through the latest
+    # evidence run rather than dropping the completed session on the floor.
+    if not result and not upload_jobs.reset_block_persisted_active():
+        try:
+            from app.services.evidence_store import latest_evidence_run
+
+            evidence_run = latest_evidence_run() or {}
+            evidence_job_id = str(evidence_run.get("run_id") or evidence_run.get("job_id") or "")
+            if evidence_job_id:
+                by_job = upload_jobs.read_upload_result_by_job_id(evidence_job_id)
+                if isinstance(by_job, dict) and upload_jobs.has_active_session_artifact(by_job, job_id=evidence_job_id):
+                    result = by_job
+                    if not summary or str(summary.get("job_id") or "") != evidence_job_id:
+                        summary = upload_jobs.summarize_result(by_job)
+        except Exception:
+            pass
+
     preferred_job_id = str((result or {}).get("job_id") or summary.get("job_id") or "")
     if preferred_job_id and history:
         preferred_item = None
@@ -754,6 +779,7 @@ async def latest_upload(include_persisted: int | bool = True):
             }
             summary = {**latest, **summary}
     frames = _extract_timeline(result if isinstance(result, dict) else None, summary.get("job_id") if isinstance(summary, dict) else None)
+    traceability = (result.get("traceability") if isinstance(result, dict) and isinstance(result.get("traceability"), dict) else (summary.get("traceability") if isinstance(summary, dict) and isinstance(summary.get("traceability"), dict) else {}))
     adaptive = {}
     snapshot = {
         **summary,
@@ -771,6 +797,9 @@ async def latest_upload(include_persisted: int | bool = True):
         "replay_frame_count": len(frames or []),
         "latest_replay_frames": len(frames or []),
         "replay_source": "persisted" if frames else "unknown",
+        "run_id": (result or {}).get("run_id") or summary.get("run_id"),
+        "upload_id": (result or {}).get("upload_id") or summary.get("upload_id"),
+        "traceability": traceability,
     }
     if history and snapshot.get("last_filename"):
         history[0]["filename"] = snapshot["last_filename"]
@@ -787,7 +816,8 @@ async def latest_upload(include_persisted: int | bool = True):
         **snapshot,
     }
     cache_ttl = 4.0 if bool(result) else 1.5
-    _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
+    if use_persisted:
+        _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
     return response_payload
 
 

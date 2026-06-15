@@ -566,6 +566,14 @@ def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None
     assert evidence["rows_accepted"] == 6
     assert evidence["sensors_detected"] >= 2
     assert evidence["run_id"] == persisted_upload["latest_result"]["job_id"]
+    assert evidence["job_id"] == run_id
+    assert evidence["upload_id"] == run_id
+    assert evidence["traceability"]["job_id"] == run_id
+    assert evidence["traceability"]["run_id"] == run_id
+    assert evidence["traceability"]["upload_id"] == run_id
+    assert evidence["traceability"]["source_rows"]
+    assert evidence["traceability"]["evidence_windows"]
+    assert evidence["traceability"]["timestamps"]["processed_at"]
     assert evidence["source_name"] == persisted_upload["latest_result"]["filename"]
     assert set(evidence["variables"]) >= {"temperature", "humidity"}
     assert evidence["drift_metrics"]["replay_frame_count"] > 0
@@ -869,7 +877,7 @@ def test_facility_systems_uses_multi_room_state_after_upload() -> None:
     assert len(payload["intelligence"]["rooms"]) == 4
     room_records = {room["room"]: room for room in payload["intelligence"]["rooms"]}
     assert room_records["Flower Room 2"]["urgency"] == "review"
-    assert room_records["Flower Room 2"]["room_state"] == "Sparse telemetry"
+    assert room_records["Flower Room 2"]["room_state"] == "Insufficient telemetry"
     assert room_records["Flower Room 2"]["driver_category"] == "sensor_network"
     assert "flagged because" in room_records["Flower Room 2"]["why_flagged"].lower()
 
@@ -962,7 +970,7 @@ def test_processing_helper_preserves_profile_metadata() -> None:
     assert result["row_count"] == 3
     assert result["detected_timestamp_column"] == "timestamp"
     assert profiles["temperature"]["average"] == 76.6667
-    assert result["data_quality"]["readiness"] == "needs_review"
+    assert result["data_quality"]["readiness"] == "ready"
     assert result["data_quality"]["warnings"] == ["At least 5 data rows are needed for baseline comparison."]
     assert result["sii_runner_result"]["runner_module"] == RUNNER_MODULE
 
@@ -1013,7 +1021,7 @@ def test_processing_helper_distinguishes_calm_and_drifted_uploads() -> None:
 
     assert drift_intelligence["neraium_score"] < calm_intelligence["neraium_score"]
     assert calm_intelligence["urgency"] == "nominal"
-    assert drift_intelligence["urgency"] == "nominal"
+    assert drift_intelligence["urgency"] == "review"
     assert drift_intelligence["neraium_score"] <= calm_intelligence["neraium_score"] - 4
 
 
@@ -1065,7 +1073,7 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
 
     assert sparse["relationship_evidence"] != primary["relationship_evidence"]
     assert sparse["structural_explanation"] != primary["structural_explanation"]
-    assert "limited because the telemetry window is too sparse" in " ".join(sparse["relationship_evidence"]).lower()
+    assert "limited due to sparse telemetry" in " ".join(sparse["relationship_evidence"]).lower()
     assert sparse["relationship_evidence"][0].count("Veg Room A:") == 1
     assert sparse["driver_category"] == "sensor_network"
     assert sparse["attribution_confidence"] == "low"
@@ -1100,7 +1108,7 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
     sparse_room = rooms["Veg Room A"]
 
     assert unstable_room["urgency"] == "unstable"
-    assert unstable_room["driver_category"] == "structural_drift"
+    assert unstable_room["driver_category"] == "process_timing"
     assert unstable_room["attribution_confidence"] == "high"
     assert unstable_room["confidence_components"]["signal_strength"] == "high"
 
@@ -1110,7 +1118,7 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
     assert nominal_room["confidence_components"]["signal_strength"] == "low"
 
     assert sparse_room["urgency"] == "review"
-    assert sparse_room["room_state"] == "Sparse telemetry"
+    assert sparse_room["room_state"] == "Insufficient telemetry"
     assert sparse_room["driver_category"] == "sensor_network"
     assert sparse_room["attribution_confidence"] == "low"
     assert sparse_room["confidence_components"]["data_sufficiency"] == "low"
@@ -1824,6 +1832,34 @@ def _build_interpretation_result_for_state(state: str) -> dict:
         frame["cognition_state"]["canonical_phase"] = "recovery"
 
     return base
+
+
+def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_path: Path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+    )
+    upload_jobs.configure_runtime_dir(tmp_path)
+    stale_result = _build_interpretation_result_for_state("relationship_drift")
+    stale_result.pop("session_scope", None)
+    stale_result.pop("traceability", None)
+    upload_jobs._write_json("latest_upload_result.json", stale_result)
+    upload_jobs._write_json("latest_upload_summary.json", {
+        "job_id": "stale-job",
+        "filename": "stale.csv",
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "session_scope": None,
+    })
+
+    client = TestClient(create_app(settings))
+    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert payload["latest_result"] is None
+    assert payload["system_interpretation"]["facility_state_enum"] == "no_active_session"
 
 
 def test_latest_upload_always_returns_system_interpretation_for_no_active_session() -> None:

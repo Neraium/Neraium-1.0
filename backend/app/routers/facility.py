@@ -7,7 +7,7 @@ from app.services.domain_mode import detect_domain_mode, domain_profile, normali
 from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
-from app.services.upload_jobs import read_latest_upload_result
+from app.services.upload_jobs import has_active_session_artifact, read_latest_upload_result
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 
@@ -64,16 +64,19 @@ def read_cognition_state(include_persisted: bool = Query(True)) -> dict[str, Any
 
 
 def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, include_persisted: bool = False) -> dict[str, Any] | None:
-    if not include_persisted:
+    if not include_persisted or not has_active_session_artifact(latest_result):
         return None
     intelligence = read_latest_sii_state()
     result_intel = latest_result.get("sii_intelligence") if isinstance(latest_result, dict) and isinstance(latest_result.get("sii_intelligence"), dict) else {}
     result_rooms = result_intel.get("rooms") if isinstance(result_intel.get("rooms"), list) else []
     persisted_rooms = intelligence.get("rooms") if isinstance(intelligence, dict) and isinstance(intelligence.get("rooms"), list) else []
 
-    if is_valid_persisted_intelligence(intelligence):
-        if len(result_rooms) > len(persisted_rooms):
+    if is_valid_persisted_intelligence(result_intel):
+        if not is_valid_persisted_intelligence(intelligence):
             return result_intel
+        if len(result_rooms) >= len(persisted_rooms):
+            return result_intel
+    if is_valid_persisted_intelligence(intelligence):
         if isinstance(latest_result, dict):
             result_room_summary = latest_result.get("room_summary") if isinstance(latest_result.get("room_summary"), dict) else {}
             if not isinstance(intelligence.get("room_summary"), dict):
@@ -81,8 +84,6 @@ def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, inclu
                 if isinstance(fallback_summary, dict) and fallback_summary:
                     intelligence = {**intelligence, "room_summary": fallback_summary}
         return intelligence
-    if is_valid_persisted_intelligence(result_intel):
-        return result_intel
     return None
 
 

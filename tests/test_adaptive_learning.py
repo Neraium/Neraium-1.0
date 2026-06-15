@@ -34,6 +34,13 @@ def test_latest_upload_disables_adaptive_learning_snapshot() -> None:
     assert payload["adaptive_learning"] == {}
 
 
+def test_operator_feedback_requires_exact_run_id() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/evidence/runs/not-a-real-run/feedback", json={"category": "false_positive", "note": "no fallback allowed"})
+
+    assert response.status_code == 404
+
+
 def test_operator_feedback_updates_evidence_record_without_adaptive_memory() -> None:
     client = TestClient(create_app())
     rows = "\n".join(

@@ -210,9 +210,14 @@ def build_data_quality(
     else:
         reliability_rating = "not_reliable"
 
+    informational_warnings = {
+        "At least 5 data rows are needed for baseline comparison.",
+    }
+    blocking_warnings = [warning for warning in warnings if warning not in informational_warnings]
+
     if row_count == 0 or column_count == 0 or numeric_column_count == 0:
         readiness = "not_ready"
-    elif not timestamp_detected or warnings:
+    elif not timestamp_detected or blocking_warnings:
         readiness = "needs_review"
     else:
         readiness = "ready"

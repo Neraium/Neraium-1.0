@@ -82,12 +82,7 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
     except ValueError as error:
         detail = str(error)
         if detail == "evidence_run_not_found":
-            fallback_run = latest_evidence_run()
-            fallback_run_id = str((fallback_run or {}).get("run_id") or "")
-            if fallback_run_id:
-                updated = record_operator_feedback(fallback_run_id, payload.category, payload.note, actor, now_iso())
-            else:
-                raise HTTPException(status_code=404, detail="Evidence run not found.") from None
+            raise HTTPException(status_code=404, detail="Evidence run not found.") from None
         elif detail == "invalid_feedback_category":
             raise HTTPException(status_code=400, detail={"allowed_categories": FEEDBACK_CATEGORIES}) from None
         else:

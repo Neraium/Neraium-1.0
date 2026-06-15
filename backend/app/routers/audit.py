@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.core.security import require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
-from app.services.upload_jobs import read_latest_upload_result
+from app.services.upload_jobs import has_active_session_artifact, read_latest_upload_result
 from audit.operational_audit_engine import OperationalAuditEngine
 from replay.structural_replay_engine import StructuralReplayEngine
 
@@ -50,6 +50,8 @@ def read_audit_evidence(session_id: str) -> dict[str, Any]:
 
 def current_intelligence() -> dict[str, Any]:
     latest_result = read_latest_upload_result()
-    intelligence = resolve_uploaded_intelligence(latest_result)
+    if not has_active_session_artifact(latest_result):
+        return build_sample_intelligence()
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
     return intelligence or build_sample_intelligence()
 

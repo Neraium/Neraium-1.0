@@ -409,6 +409,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
     dominant_paths = propagation_state.get("dominant_paths") if isinstance(propagation_state.get("dominant_paths"), list) else []
 
     has_session = bool(result or summary or snapshot.get("last_filename") or frames)
+    lineage = (result.get("traceability") if isinstance(result.get("traceability"), dict) else (summary.get("traceability") if isinstance(summary.get("traceability"), dict) else {}))
     raw_facility_state = _to_text(cognition_state.get("facility_state") or intelligence.get("facility_state") or result.get("operating_state") or snapshot.get("status"))
     raw_confidence = _to_text(evidence_state.get("corroboration_strength") or replay_frame.get("confidence_tier") or cognition_state.get("confidence_tier") or intelligence.get("telemetry_profile_confidence"))
     raw_instability = replay_frame.get("instability_score")
@@ -418,6 +419,8 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         raw_instability = intelligence.get("instability_index")
     if raw_instability is None:
         raw_instability = ((result.get("emerging_instability") or {}).get("instability_score")) if isinstance(result.get("emerging_instability"), dict) else None
+    if raw_instability is None and frames:
+        raw_instability = 0.0
     instability_index = _normalize_instability_percent(raw_instability)
     relationship_metrics = _build_relationship_divergence_metrics(result, replay_frame)
     relationship_change_entries = relationship_metrics["entries"]
@@ -492,6 +495,17 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
                 "confidence_trace_stored": False,
                 "relationship_snapshot_archived": False,
             },
+            "lineage": {
+                "job_id": "",
+                "run_id": "",
+                "upload_id": "",
+                "aligned": False,
+                "traceability_complete": False,
+                "source_rows": [],
+                "evidence_windows": [],
+                "timestamps": {},
+            },
+            "run_alignment_verified": False,
             "forensic": {
                 "correlation_matrix_summary": "",
                 "temporal_geometry_summary": "",
@@ -579,6 +593,10 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         fallback_fields.append("evidence_packet.processing_trace_summary")
 
     evidence_packet_id = _to_text((result.get("evidence_packet") or {}).get("packet_id") if isinstance(result.get("evidence_packet"), dict) else "")
+    lineage_job_id = _to_text((lineage or {}).get("job_id") or result.get("job_id") or summary.get("job_id"))
+    lineage_run_id = _to_text((lineage or {}).get("run_id") or lineage_job_id)
+    lineage_upload_id = _to_text((lineage or {}).get("upload_id") or lineage_job_id)
+    run_alignment_verified = bool(lineage_job_id and lineage_job_id == lineage_run_id == lineage_upload_id)
     if not evidence_packet_id:
         evidence_packet_id = _to_text((result.get("decision_integrity") or {}).get("run_id") if isinstance(result.get("decision_integrity"), dict) else "")
     if not evidence_packet_id:
@@ -680,6 +698,17 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
             "confidence_trace_stored": bool(raw_confidence),
             "relationship_snapshot_archived": replay_frame_count > 0,
         },
+        "lineage": {
+            "job_id": lineage_job_id,
+            "run_id": lineage_run_id,
+            "upload_id": lineage_upload_id,
+            "aligned": run_alignment_verified and bool((lineage or {}).get("aligned", True)),
+            "traceability_complete": bool((lineage or {}).get("traceability_complete")),
+            "source_rows": list((lineage or {}).get("source_rows") or []),
+            "evidence_windows": list((lineage or {}).get("evidence_windows") or []),
+            "timestamps": dict((lineage or {}).get("timestamps") or {}),
+        },
+        "run_alignment_verified": run_alignment_verified and bool((lineage or {}).get("aligned", True)),
         "forensic": {
             "correlation_matrix_summary": _to_text(replay_frame.get("correlation_matrix") or topology_state.get("correlation_matrix") or ""),
             "temporal_geometry_summary": _to_text(replay_frame.get("temporal_geometry") or topology_state.get("temporal_geometry") or propagation_state.get("geometry") or ""),

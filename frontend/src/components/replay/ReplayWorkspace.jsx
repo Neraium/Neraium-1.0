@@ -45,13 +45,6 @@ export default function ReplayWorkspace({
     || hasResumedSession
     || hasRealSiiOutput
   );
-  const embeddedReplay = useMemo(() => {
-    const result = currentSession?.latestUploadResult;
-    const replay = result?.replay_timeline ?? result?.sii_intelligence?.replay_timeline ?? null;
-    const timeline = Array.isArray(replay?.timeline) ? replay.timeline : [];
-    const meta = replay?.meta && typeof replay.meta === "object" ? replay.meta : {};
-    return { timeline, meta };
-  }, [currentSession]);
   const [replayMode, setReplayMode] = useState(false);
   const togglePlayback = () => {
     setIsPlaying((value) => {
@@ -90,12 +83,8 @@ export default function ReplayWorkspace({
           replay_job_id: scoped.jobId,
           message: scoped.message,
         };
-        const fallbackTimeline = embeddedReplay.timeline;
-        const fallbackMeta = embeddedReplay.meta;
-        const effectiveTimeline = sortReplayTimeline(nextTimeline.length > 0 ? nextTimeline : fallbackTimeline);
-        const effectiveMeta = nextTimeline.length > 0
-          ? nextMeta
-          : { ...fallbackMeta, replay_source: "latest_upload_result_fallback", replay_job_id: scoped.jobId };
+        const effectiveTimeline = sortReplayTimeline(nextTimeline);
+        const effectiveMeta = nextMeta;
         const replaySessionKey = String(scoped.jobId ?? sessionJobId ?? "global");
         const sessionChanged = replaySessionKeyRef.current !== replaySessionKey;
 
@@ -125,7 +114,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, embeddedReplay.meta, embeddedReplay.timeline, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -244,7 +233,15 @@ export default function ReplayWorkspace({
   }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
   const supportingEvidence = useMemo(() => {
     const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
-    if (!hasRealSiiOutput || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "")) {
+    const replayLineage = meta.lineage && typeof meta.lineage === "object" ? meta.lineage : {};
+    const uploadJobId = currentSession?.latestUploadResult?.job_id ?? null;
+    const alignmentOk = Boolean(
+      replayLineage.aligned
+      && evidenceJobId
+      && String(replayLineage.job_id ?? "") === String(evidenceJobId)
+      && (!uploadJobId || String(uploadJobId) === String(evidenceJobId))
+    );
+    if (!hasRealSiiOutput || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "") || !alignmentOk) {
       return [];
     }
     return buildSupportingEvidence({
@@ -254,8 +251,9 @@ export default function ReplayWorkspace({
       frameIndex: currentFrameIndex,
       frameCount: operativeTimeline.length,
       formatClockTime,
+      lineage: replayLineage,
     });
-  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, hasRealSiiOutput, meta.replay_job_id, operativeTimeline.length, sessionJobId, shownFrame]);
+  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, hasRealSiiOutput, meta.lineage, meta.replay_job_id, operativeTimeline.length, sessionJobId, shownFrame]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -393,7 +391,7 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
     targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
     if (!targetJobId) {
-      return fetchGlobalReplayFallback({ apiFetch, accessCode });
+      return { jobId: null, timeline: [], meta: {}, message: "No replay is available for the active session." };
     }
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
@@ -434,22 +432,6 @@ async function fetchEvidenceRunForJob({ apiFetch, accessCode, jobId }) {
     String(run?.run_id ?? "") === String(jobId)
     && String(run?.status ?? "").toLowerCase() === "completed"
   )) ?? null;
-}
-
-async function fetchGlobalReplayFallback({ apiFetch, accessCode }) {
-  const response = await apiFetch("/api/replay/timeline?intervals=96&replay_compression=1&mode=live", { accessCode });
-  if (!response.ok) {
-    return { jobId: null, timeline: [], meta: {} };
-  }
-  const payload = await response.json();
-  const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];
-  const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
-  return {
-    jobId: null,
-    timeline,
-    meta: { ...meta, replay_source: "global_timeline_fallback" },
-    message: typeof payload?.message === "string" ? payload.message : "",
-  };
 }
 
 function sortReplayTimeline(frames) {
@@ -530,7 +512,7 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
   };
 }
 
-function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime }) {
+function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime, lineage = {} }) {
   const items = [];
   const sourceName = evidenceRun?.source_name ?? evidenceRun?.filename ?? uploadResult?.filename;
   const runId = evidenceRun?.run_id;
@@ -553,10 +535,19 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
 
   if (sourceName) items.push("Source file: " + sourceName);
   if (runId) items.push("Run ID: " + runId);
+  if (lineage?.upload_id) items.push("Upload ID: " + String(lineage.upload_id));
   if (variables.length) items.push("Variables: " + variables.join(" | "));
   if (summaries[0]) items.push("Relationship summary: " + summaries[0]);
   if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
   if (detectedAt) items.push("Detected: " + formatClockTime(detectedAt));
+  if (Array.isArray(lineage?.source_rows) && lineage.source_rows.length > 0) {
+    const firstAnchor = lineage.source_rows[0] ?? {};
+    items.push("Source rows: " + [firstAnchor.window, firstAnchor.source_row, firstAnchor.timestamp].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").join(" @ "));
+  }
+  if (Array.isArray(lineage?.evidence_windows) && lineage.evidence_windows.length > 0) {
+    const firstWindow = lineage.evidence_windows[0] ?? {};
+    items.push("Evidence window: " + [firstWindow.column, firstWindow.baseline_window && firstWindow.recent_window ? `${firstWindow.baseline_window} -> ${firstWindow.recent_window}` : (firstWindow.window_start || firstWindow.window_end)].filter(Boolean).join(" "));
+  }
   if (frameCount > 0) {
     const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
     items.push("Replay frame: " + String(Math.min(frameIndex + 1, frameCount)) + "/" + String(frameCount) + (frameTime ? " at " + formatClockTime(frameTime) : ""));

@@ -29,14 +29,6 @@ async def replay_timeline(mode: str = Query(default="live"), intervals: int = Qu
     replay = (state.get("replay_timeline") if isinstance(state, dict) else {}) or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
     source = state.get("source", "uploaded") if timeline else "empty"
-    if not timeline:
-        fallback = upload_jobs.replay_payload()
-        timeline = fallback.get("timeline", [])
-        fallback_source = fallback.get("source", "empty")
-        source = "uploaded" if fallback_source == "persisted" and timeline else fallback_source
-    if not timeline and get_settings().app_env.lower() not in {"prod", "production"}:
-        timeline = synthetic_timeline(max(6, int(intervals or 12)), prefix="live")
-        source = "state_synthesized"
 
     if normalized_mode == "live_causal":
         timeline = [{**frame, "live_causal": {"lookahead_free": True}} for frame in timeline]

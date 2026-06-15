@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.routers.data import rebuild_upload_replay_from_source
+from app.services import upload_jobs
 from app.services.upload_jobs import read_job, write_job, write_latest_upload_result
 
 
@@ -158,6 +159,44 @@ def test_replay_endpoint_uses_canonical_per_job_persisted_frames() -> None:
 
     assert payload["frame_count"] == 1
     assert len(payload["timeline"]) == 1
+
+
+def test_replay_payload_with_missing_job_does_not_fall_back_to_latest_result() -> None:
+    write_latest_upload_result(
+        "latest-visible-job",
+        {
+            "filename": "latest.csv",
+            "row_count": 12,
+            "column_count": 3,
+            "columns": ["timestamp", "x", "y"],
+            "preview_rows": [],
+            "data_quality": {"readiness": "ready"},
+            "engine_result": {"overall_result": "stable"},
+            "cultivation_mapping": {"categories": {}},
+            "sii_intelligence": {
+                "source": "uploaded",
+                "mode": "live",
+                "replay_timeline": {
+                    "meta": {"frame_count": 1},
+                    "timeline": [{"timestamp": "2026-05-21T08:00:00+00:00"}],
+                },
+            },
+            "driver_attribution": {},
+            "processing_trace": {},
+            "processing_stats": {},
+            "room_summary": {"room_count": 0, "rooms": []},
+        },
+    )
+
+    payload = read_job("latest-visible-job")
+    assert payload is None or payload.get("job_id") != "missing-job"
+
+    replay = upload_jobs.replay_payload("missing-job")
+
+    assert replay["job_id"] == "missing-job"
+    assert replay["timeline"] == []
+    assert replay["source"] == "empty"
+    assert "requested upload job" in replay["message"].lower()
 
 
 def test_intake_result_reads_canonical_per_job_artifact_not_just_latest() -> None:

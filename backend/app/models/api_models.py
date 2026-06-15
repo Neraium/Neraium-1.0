@@ -95,6 +95,8 @@ class LatestUploadResponse(BaseModel):
 
 class EvidenceRunResponse(BaseModel):
     run_id: str
+    job_id: str | None = None
+    upload_id: str | None = None
     source_type: str
     source_name: str | None = None
     source_url: str | None = None
@@ -130,6 +132,10 @@ class EvidenceRunResponse(BaseModel):
     variables: list[str] = Field(default_factory=list)
     drift_metrics: dict[str, Any] = Field(default_factory=dict)
     data_conditions: list[str] = Field(default_factory=list)
+    evidence_windows: list[dict[str, Any]] = Field(default_factory=list)
+    timestamps: dict[str, Any] = Field(default_factory=dict)
+    traceability: dict[str, Any] = Field(default_factory=dict)
+    confidence_score: int | float | None = None
     regime_label: str | None = None
     structural_state: str | None = None
     deformation_started_at: str | None = None

@@ -38,6 +38,31 @@ CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
 
 
+def build_session_scope(job_id: str | None, *, filename: str | None = None, status: str = "active") -> dict[str, Any]:
+    normalized_job_id = str(job_id or "").strip()
+    return {
+        "active": bool(normalized_job_id),
+        "status": str(status or "active"),
+        "job_id": normalized_job_id,
+        "run_id": normalized_job_id,
+        "upload_id": normalized_job_id,
+        "source_name": str(filename or "").strip() or None,
+    }
+
+
+def has_active_session_artifact(candidate: dict[str, Any] | None, *, job_id: str | None = None) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    scope = candidate.get("session_scope")
+    if not isinstance(scope, dict) or scope.get("active") is not True:
+        return False
+    scope_job_id = str(scope.get("job_id") or candidate.get("job_id") or "").strip()
+    expected_job_id = str(job_id or "").strip()
+    if expected_job_id and scope_job_id and scope_job_id != expected_job_id:
+        return False
+    return bool(scope_job_id or expected_job_id)
+
+
 def _upload_state_bucket() -> str:
     return os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "").strip()
 
@@ -132,8 +157,10 @@ def _runtime_db_latest_enabled() -> bool:
 
 
 def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
-    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR
-    RUNTIME_DIR = Path(path)
+    global RUNTIME_DIR, UPLOAD_DIR, JOB_DIR, LEGACY_JOB_DIR, _RESET_BLOCK_PERSISTED
+    next_runtime_dir = Path(path)
+    runtime_changed = next_runtime_dir != RUNTIME_DIR
+    RUNTIME_DIR = next_runtime_dir
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR = RUNTIME_DIR / "uploads"
     JOB_DIR = RUNTIME_DIR / "upload_jobs"
@@ -144,6 +171,9 @@ def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
     JOBS.clear()
     LATEST_UPLOAD_CACHE["summary"] = None
     LATEST_UPLOAD_CACHE["result"] = None
+    if runtime_changed:
+        _RESET_BLOCK_PERSISTED = True
+    _invalidate_router_latest_cache()
 
 
 def warm_latest_upload_cache() -> None:
@@ -200,6 +230,15 @@ def reset_upload_state() -> None:
     _RESET_BLOCK_PERSISTED = True
 
 
+def _invalidate_router_latest_cache() -> None:
+    try:
+        from app.routers import data as data_router
+
+        data_router.invalidate_latest_upload_cache()
+    except Exception:
+        pass
+
+
 def clear_reset_block_persisted() -> None:
     global _RESET_BLOCK_PERSISTED
     _RESET_BLOCK_PERSISTED = False
@@ -216,6 +255,8 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     """
     payload = {
         "job_id": job_id,
+        "run_id": job_id,
+        "upload_id": job_id,
         "status": status,
         "processing_state": str(status).lower(),
         "percent": progress,
@@ -223,12 +264,14 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
         "message": message,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower())
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
     upsert_upload_job(payload)
     _write_shared_state(f"upload_status_{job_id}", payload)
     _write_shared_state("latest_upload_summary", payload)
     LATEST_UPLOAD_CACHE["summary"] = payload
+    _invalidate_router_latest_cache()
     return payload
 def _complete_with_partial_result(
     *,
@@ -237,6 +280,7 @@ def _complete_with_partial_result(
     error: Exception,
     snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    clear_reset_block_persisted()
     now = datetime.now(timezone.utc).isoformat()
     snapshot = snapshot or {}
 
@@ -249,6 +293,8 @@ def _complete_with_partial_result(
 
     result = {
         "job_id": job_id,
+        "run_id": job_id,
+        "upload_id": job_id,
         "filename": filename,
         "row_count": row_count,
         "column_count": len(columns),
@@ -345,6 +391,13 @@ def _complete_with_partial_result(
         "propagation_label": "Partial upload complete.",
     }
 
+    result["session_scope"] = build_session_scope(job_id, filename=filename, status="partial_complete")
+    result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
+    result["decision_integrity"] = dict(result["traceability"])
+    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    summary["traceability"] = dict(result["traceability"])
+    summary["decision_integrity"] = dict(result["traceability"])
+
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
     _write_json("latest_upload_result.json", result)
@@ -357,6 +410,7 @@ def _complete_with_partial_result(
 
     JOBS[job_id] = summary
     LATEST_UPLOAD_CACHE["result"] = result
+    _invalidate_router_latest_cache()
     LATEST_UPLOAD_CACHE["summary"] = summary
 
     try:
@@ -762,6 +816,93 @@ def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
         deduped.append(anchor)
     return deduped[:16]
 
+
+def _evidence_windows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    baseline = result.get("baseline_analysis") or {}
+    windows: list[dict[str, Any]] = []
+    for item in baseline.get("top_relationship_changes") or baseline.get("relationship_drift") or []:
+        if not isinstance(item, dict):
+            continue
+        for ref in item.get("evidence_refs") or []:
+            if not isinstance(ref, dict):
+                continue
+            windows.append(
+                {
+                    "column": ref.get("column"),
+                    "baseline_window": ref.get("baseline_window") if not isinstance(ref.get("baseline_window"), (dict, list)) else json.dumps(ref.get("baseline_window"), sort_keys=True, default=str),
+                    "recent_window": ref.get("recent_window") if not isinstance(ref.get("recent_window"), (dict, list)) else json.dumps(ref.get("recent_window"), sort_keys=True, default=str),
+                }
+            )
+    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    if isinstance(timeline, list):
+        for frame in timeline[:8]:
+            if not isinstance(frame, dict):
+                continue
+            windows.append(
+                {
+                    "frame_index": frame.get("frame_index"),
+                    "window_start": frame.get("timestamp_start") or frame.get("timestamp"),
+                    "window_end": frame.get("timestamp_end") or frame.get("timestamp"),
+                }
+            )
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for window in windows:
+        key = (
+            window.get("column"),
+            window.get("baseline_window"),
+            window.get("recent_window"),
+            window.get("frame_index"),
+            window.get("window_start"),
+            window.get("window_end"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(window)
+    return deduped[:16]
+
+
+def _traceability_timestamps_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    profile = result.get("timestamp_profile") or {}
+    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    first_frame = timeline[0] if isinstance(timeline, list) and timeline else {}
+    last_frame = timeline[-1] if isinstance(timeline, list) and timeline else {}
+    return {
+        "created_at": result.get("created_at") or result.get("completed_at") or result.get("last_processed_at"),
+        "completed_at": result.get("completed_at") or result.get("last_processed_at"),
+        "processed_at": result.get("last_processed_at") or result.get("completed_at"),
+        "upload_start": (profile.get("first_timestamp") if isinstance(profile, dict) else None) or first_frame.get("timestamp_start") or first_frame.get("timestamp"),
+        "upload_end": (profile.get("last_timestamp") if isinstance(profile, dict) else None) or last_frame.get("timestamp_end") or last_frame.get("timestamp"),
+    }
+
+
+def build_traceability_packet(*, job_id: str, filename: str, result: dict[str, Any]) -> dict[str, Any]:
+    source_rows = _source_rows_from_result(result)
+    evidence_windows = _evidence_windows_from_result(result)
+    timestamps = _traceability_timestamps_from_result(result)
+    return {
+        "job_id": str(job_id),
+        "run_id": str(job_id),
+        "upload_id": str(job_id),
+        "source_name": filename,
+        "source_rows": source_rows,
+        "evidence_windows": evidence_windows,
+        "timestamps": timestamps,
+        "aligned": True,
+        "traceability_complete": bool(
+            job_id
+            and source_rows
+            and evidence_windows
+            and timestamps.get("processed_at")
+            and timestamps.get("upload_start")
+            and timestamps.get("upload_end")
+        ),
+    }
+
+
 def build_evidence_record_from_result(
     *,
     run_id: str,
@@ -788,6 +929,10 @@ def build_evidence_record_from_result(
     source_rows = _source_rows_from_result(result)
     observation_type = _observation_type_from_result(result)
     structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
+    traceability = build_traceability_packet(job_id=run_id, filename=filename, result=result)
+    confidence_score = sii.get("confidence")
+    if confidence_score is None:
+        confidence_score = ((sii.get("rooms") or [{}])[0] or {}).get("confidence")
     drift_metrics = {
         "neraium_score": (sii.get("neraium_score")),
         "baseline_distance": latest_frame.get("baseline_distance") if isinstance(latest_frame, dict) else None,
@@ -805,6 +950,8 @@ def build_evidence_record_from_result(
     archetypes = [str(item) for item in (sii.get("structural_archetypes") or [])[:4]]
     return {
         "run_id": run_id,
+        "job_id": run_id,
+        "upload_id": run_id,
         "source_name": filename,
         "source_type": source_type,
         "source_url": None,
@@ -835,6 +982,10 @@ def build_evidence_record_from_result(
         "drift_metrics": drift_metrics,
         "data_conditions": data_conditions,
         "source_rows": source_rows,
+        "evidence_windows": traceability["evidence_windows"],
+        "timestamps": traceability["timestamps"],
+        "traceability": traceability,
+        "confidence_score": confidence_score,
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,
         "deformation_started_at": _deformation_started_at(result),
@@ -979,6 +1130,7 @@ def _build_csv_result(
     ingestion_report: dict[str, Any] | None = None,
     processing_started_at: float | None = None,
 ) -> dict[str, Any]:
+    clear_reset_block_persisted()
     initiated_by = (read_job(job_id) or {}).get("initiated_by", "anonymous")
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
@@ -1122,6 +1274,7 @@ def _build_csv_result(
                 [
                     *cleaning_warnings,
                     *timestamp_profile.get("warnings", []),
+                    *baseline_analysis.get("warnings", []),
                     *cultivation_mapping.get("warnings", []),
                     *([f"{stuck_sensor_count} numeric sensor(s) appear constant or stuck."] if stuck_sensor_count else []),
                 ]
@@ -1139,7 +1292,12 @@ def _build_csv_result(
     reliability_warning = None
     if not baseline_reliable:
         reliability_warning = "Insufficient baseline: SII findings are not reliable enough to show."
-        data_quality["warnings"] = list(dict.fromkeys([*data_quality.get("warnings", []), reliability_warning]))
+        warnings = list(data_quality.get("warnings", []))
+        if row_count_total < 5:
+            warnings = [warning for warning in warnings if warning != reliability_warning]
+        else:
+            warnings.append(reliability_warning)
+        data_quality["warnings"] = list(dict.fromkeys(warnings))
 
     room_assessments = {item["room"]: dict(item) for item in room_intelligence if item.get("room")}
     primary_room_assessment = next((item for item in room_intelligence if item.get("room") == (room_names[0] if room_names else "")), room_intelligence[0] if room_intelligence else {})
@@ -1211,6 +1369,8 @@ def _build_csv_result(
 
     result = {
         "job_id": job_id,
+        "run_id": job_id,
+        "upload_id": job_id,
         "filename": filename,
         "row_count": row_count_total,
         "column_count": len(columns),
@@ -1258,13 +1418,20 @@ def _build_csv_result(
         "last_processed_at": now,
         "completed_at": now,
     }
+    result["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
+    result["decision_integrity"] = dict(result["traceability"])
     if isinstance(latest_runner_state, dict):
         result["sii_intelligence"]["sii_runner_latest_state"] = latest_runner_state
         result["sii_intelligence"]["instability_index"] = latest_runner_state.get("instability_index")
         result["sii_intelligence"]["projected_time_to_failure"] = latest_runner_state.get("projected_time_to_failure")
         result["sii_intelligence"]["projected_time_to_failure_hours"] = latest_runner_state.get("projected_time_to_failure_hours")
+    result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
 
-    summary = {"job_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    summary["traceability"] = dict(result["traceability"])
+    summary["decision_integrity"] = dict(result["traceability"])
 
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
@@ -1283,6 +1450,7 @@ def _build_csv_result(
 
     JOBS[job_id] = summary
     LATEST_UPLOAD_CACHE["result"] = result
+    _invalidate_router_latest_cache()
     LATEST_UPLOAD_CACHE["summary"] = summary
     try:
         from app.services.evidence_store import upsert_evidence_run
@@ -1320,6 +1488,7 @@ def _build_csv_result(
             _write_shared_state("latest_upload_summary", summary)
             LATEST_UPLOAD_CACHE["result"] = result
             LATEST_UPLOAD_CACHE["summary"] = summary
+            _invalidate_router_latest_cache()
             dispatch_observation_notification(record)
     except Exception:
         pass
@@ -1343,17 +1512,33 @@ def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = 
 
 def replay_payload(job_id: str | None = None) -> dict[str, Any]:
     result = read_upload_result_by_job_id(job_id) if job_id else None
-    result = result or read_latest_upload_result() or {}
+    if job_id is None:
+        latest = read_latest_upload_result() or {}
+        result = latest if has_active_session_artifact(latest) else {}
+    else:
+        result = result or {}
     replay = result.get("replay_timeline") or (result.get("sii_intelligence") or {}).get("replay_timeline") or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    traceability = (
+        result.get("traceability")
+        if isinstance(result.get("traceability"), dict)
+        else (build_traceability_packet(job_id=str(result.get("job_id") or job_id or ""), filename=str(result.get("filename") or ""), result=result) if result and (result.get("job_id") or job_id) else {})
+    )
+    message = ""
+    if job_id and not result:
+        message = "No replay is available for the requested upload job."
     return {
         "job_id": result.get("job_id") or job_id,
+        "run_id": (traceability or {}).get("run_id") or result.get("job_id") or job_id,
+        "upload_id": (traceability or {}).get("upload_id") or result.get("job_id") or job_id,
         "source": "persisted" if timeline else "empty",
-        "meta": replay.get("meta", {}) if isinstance(replay, dict) else {},
+        "meta": {**(replay.get("meta", {}) if isinstance(replay, dict) else {}), "lineage": traceability},
         "timeline": timeline or [],
         "frames": timeline or [],
         "frame_count": len(timeline or []),
         "replay_ready": len(timeline or []) > 0,
+        "traceability": traceability,
+        "message": message,
     }
 
 
@@ -1570,6 +1755,8 @@ def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
     return {
         "job_id": result.get("job_id"),
+        "run_id": result.get("run_id") or result.get("job_id"),
+        "upload_id": result.get("upload_id") or result.get("job_id"),
         "status": "COMPLETE",
         "processing_state": "complete",
         "percent": 100,
@@ -1584,6 +1771,8 @@ def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
         "latest_replay_frames": len(timeline or []),
         "replay_source": "persisted" if timeline else "unknown",
         "last_processed_at": result.get("last_processed_at") or result.get("completed_at"),
+        "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else build_session_scope(result.get("job_id"), filename=result.get("filename"), status="active"),
+        "traceability": result.get("traceability") if isinstance(result.get("traceability"), dict) else {},
     }
 
 
@@ -1593,16 +1782,38 @@ def write_latest_upload_result(*args) -> None:
         job_id, result = args
         payload = dict(result or {})
         payload["job_id"] = str(job_id)
+        payload.setdefault("run_id", str(job_id))
+        payload.setdefault("upload_id", str(job_id))
+        payload.setdefault("session_scope", build_session_scope(str(job_id), filename=payload.get("filename"), status="active"))
+        if not isinstance(payload.get("traceability"), dict) and payload.get("filename"):
+            payload["traceability"] = build_traceability_packet(job_id=str(job_id), filename=str(payload.get("filename") or ""), result=payload)
+        if isinstance(payload.get("traceability"), dict):
+            payload.setdefault("decision_integrity", dict(payload["traceability"]))
         _write_json(f"upload_result_{job_id}.json", payload)
         _write_json("latest_upload_result.json", payload)
         _write_shared_state(f"upload_result_{job_id}", payload)
         _write_shared_state("latest_upload_result", payload)
         LATEST_UPLOAD_CACHE["result"] = payload
+        latest_summary = summarize_result(payload)
+        _write_json("latest_upload_summary.json", latest_summary)
+        _write_shared_state("latest_upload_summary", latest_summary)
+        _write_shared_state(f"upload_status_{job_id}", latest_summary)
+        LATEST_UPLOAD_CACHE["summary"] = latest_summary
+        _invalidate_router_latest_cache()
         return
     result = args[0] if args else {}
+    if isinstance(result, dict):
+        result.setdefault("session_scope", build_session_scope(result.get("job_id"), filename=result.get("filename"), status="active"))
     _write_json("latest_upload_result.json", result)
     _write_shared_state("latest_upload_result", result)
     LATEST_UPLOAD_CACHE["result"] = result
+    if isinstance(result, dict) and result.get("job_id"):
+        latest_summary = summarize_result(result)
+        _write_json("latest_upload_summary.json", latest_summary)
+        _write_shared_state("latest_upload_summary", latest_summary)
+        _write_shared_state(f"upload_status_{result.get('job_id')}", latest_summary)
+        LATEST_UPLOAD_CACHE["summary"] = latest_summary
+    _invalidate_router_latest_cache()
 
 
 def write_latest_upload_summary(*args, **kwargs) -> None:
@@ -1612,31 +1823,41 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         summary = args[1]
         payload = dict(summary or {})
         payload["job_id"] = str(job_id)
+        payload.setdefault("run_id", str(job_id))
+        payload.setdefault("upload_id", str(job_id))
         payload.setdefault("status", "COMPLETE")
+        payload.setdefault("session_scope", build_session_scope(str(job_id), filename=payload.get("filename"), status="active"))
         if "status_url" not in payload:
             payload["status_url"] = f"/api/data/upload-status/{job_id}"
         _write_json("latest_upload_summary.json", payload)
         _write_shared_state("latest_upload_summary", payload)
         _write_shared_state(f"upload_status_{job_id}", payload)
         LATEST_UPLOAD_CACHE["summary"] = payload
+        _invalidate_router_latest_cache()
         return
     if len(args) >= 1 and isinstance(args[0], dict):
         summary = args[0]
+        summary.setdefault("session_scope", build_session_scope(summary.get("job_id"), filename=summary.get("filename"), status="active"))
         _write_json("latest_upload_summary.json", summary)
         _write_shared_state("latest_upload_summary", summary)
         LATEST_UPLOAD_CACHE["summary"] = summary
+        _invalidate_router_latest_cache()
         return
     if len(args) == 2:
         job_id, summary = args
         payload = dict(summary or {})
         payload["job_id"] = str(job_id)
+        payload.setdefault("run_id", str(job_id))
+        payload.setdefault("upload_id", str(job_id))
         payload.setdefault("status", "COMPLETE")
+        payload.setdefault("session_scope", build_session_scope(str(job_id), filename=payload.get("filename"), status="active"))
         if "status_url" not in payload:
             payload["status_url"] = f"/api/data/upload-status/{job_id}"
         _write_json("latest_upload_summary.json", payload)
         _write_shared_state("latest_upload_summary", payload)
         _write_shared_state(f"upload_status_{job_id}", payload)
         LATEST_UPLOAD_CACHE["summary"] = payload
+        _invalidate_router_latest_cache()
         return
     summary = args[0] if args else {}
     _write_json("latest_upload_summary.json", summary)
@@ -1702,6 +1923,8 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
 
         items.append({
             "job_id": result.get("job_id"),
+            "run_id": result.get("run_id") or result.get("job_id"),
+            "upload_id": result.get("upload_id") or result.get("job_id"),
             "filename": result.get("filename"),
             "status": "COMPLETE",
             "row_count": result.get("row_count", 0),
@@ -1715,12 +1938,15 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
                 "unknown_profile": False,
             },
             "completed_at": result.get("completed_at") or result.get("last_processed_at"),
+            "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else None,
         })
 
     latest = read_latest_upload_result()
     if latest and not any(item.get("job_id") == latest.get("job_id") for item in items):
         items.insert(0, {
             "job_id": latest.get("job_id"),
+            "run_id": latest.get("run_id") or latest.get("job_id"),
+            "upload_id": latest.get("upload_id") or latest.get("job_id"),
             "filename": latest.get("filename"),
             "status": "COMPLETE",
             "row_count": latest.get("row_count", 0),
@@ -1734,6 +1960,7 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
                 "unknown_profile": False,
             },
             "completed_at": latest.get("completed_at") or latest.get("last_processed_at"),
+            "session_scope": latest.get("session_scope") if isinstance(latest.get("session_scope"), dict) else None,
         })
 
     return items[: max(0, int(limit or 100))]
@@ -1909,6 +2136,9 @@ def write_job(*args) -> None:
         job_id = str(args[0])
         payload = dict(args[1])
         payload["job_id"] = job_id
+    payload.setdefault("run_id", job_id)
+    payload.setdefault("upload_id", job_id)
+    payload.setdefault("session_scope", build_session_scope(job_id, filename=payload.get("filename"), status=str(payload.get("processing_state") or payload.get("status") or "active").lower()))
     JOBS[job_id] = payload
     _write_json(f"upload_status_{job_id}.json", payload)
     _write_shared_state(f"upload_status_{job_id}", payload)
@@ -1931,6 +2161,7 @@ def write_job(*args) -> None:
         or processing_state in visible_states
     ):
         latest_summary = dict(payload)
+        latest_summary.setdefault("session_scope", build_session_scope(job_id, filename=latest_summary.get("filename"), status=processing_state or status_text.lower() or "active"))
         latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
         latest_summary.setdefault("percent", latest_summary.get("progress", 0))
         latest_summary.setdefault("progress", latest_summary.get("percent", 0))
@@ -1946,6 +2177,7 @@ def write_job(*args) -> None:
         _write_json("latest_upload_summary.json", latest_summary)
         _write_shared_state("latest_upload_summary", latest_summary)
         LATEST_UPLOAD_CACHE["summary"] = latest_summary
+        _invalidate_router_latest_cache()
     try:
         upsert_upload_job(payload)
     except Exception:

@@ -366,9 +366,14 @@ function ageLabel(value) {
   return `${Math.round(hours / 24)}d`;
 }
 
-function mapBackendSystemInterpretation(contract) {
+function mapBackendSystemInterpretation(contract, expectedJobId = null, reliableEnoughToShow = false) {
   const value = contract && typeof contract === "object" ? contract : null;
   if (!value) return null;
+
+  const lineage = value.lineage && typeof value.lineage === "object" ? value.lineage : {};
+  const aligned = Boolean(lineage.aligned && value.run_alignment_verified !== false);
+  if (!aligned) return null;
+  if (expectedJobId && String(lineage.job_id ?? "") !== String(expectedJobId)) return null;
 
   const divergence = value.relationship_divergence || {};
   const backendSummary = value.relationship_summary || {};
@@ -390,7 +395,9 @@ function mapBackendSystemInterpretation(contract) {
       ? value.finding_evidence_chains
       : [],
     hasTelemetry: true,
-    nextStep: "Review findings.",
+    nextStep: reliableEnoughToShow && Array.isArray(value.finding_evidence_chains) && value.finding_evidence_chains.length > 0
+      ? "Review evidence."
+      : "Check evidence packet.",
   };
 }
 
@@ -402,7 +409,8 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     ?? latestUploadResult?.system_interpretation
     ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
     ?? null;
-  const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation);
+  const expectedJobId = latestUploadResult?.job_id ?? latestUploadSnapshot?.job_id ?? null;
+  const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation, expectedJobId, Boolean(latestUploadResult?.sii_reliable_enough_to_show));
   if (mappedBackendInterpretation) {
     return mappedBackendInterpretation;
   }
@@ -487,13 +495,15 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     { hasDriftState },
   );
 
+  const canShowEvidenceBackedFinding = Boolean(latestUploadResult?.sii_reliable_enough_to_show) && hasDriftState;
+
   return {
     structuralState,
     primaryDriver: driver,
     relationshipSummary: relationship,
     confidence,
     findingEvidenceChains: [],
-    nextStep: hasDriftState ? "Review findings." : "Continue monitoring.",
+    nextStep: canShowEvidenceBackedFinding ? "Review evidence." : (hasDriftState ? "Check evidence traceability." : "Continue monitoring."),
     hasTelemetry: true,
   };
 }
