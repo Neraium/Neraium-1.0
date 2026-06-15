@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Callable
+
+from app.services.upload_state import build_session_scope
+
+
+def summarize_result(result: dict[str, Any], *, build_scope: Callable[..., dict[str, Any]] = build_session_scope) -> dict[str, Any]:
+    replay = (
+        result.get("replay_timeline")
+        or (result.get("sii_intelligence") or {}).get("replay_timeline")
+        or {}
+    )
+    timeline = replay.get("timeline") if isinstance(replay, dict) else []
+    return {
+        "job_id": result.get("job_id"),
+        "run_id": result.get("run_id") or result.get("job_id"),
+        "upload_id": result.get("upload_id") or result.get("job_id"),
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "percent": 100,
+        "progress": 100,
+        "filename": result.get("filename"),
+        "row_count": result.get("row_count", 0),
+        "column_count": result.get("column_count", 0),
+        "result_available": True,
+        "sii_completed": True,
+        "replay_ready": len(timeline or []) > 0,
+        "replay_frame_count": len(timeline or []),
+        "latest_replay_frames": len(timeline or []),
+        "replay_source": "persisted" if timeline else "unknown",
+        "last_processed_at": result.get("last_processed_at") or result.get("completed_at"),
+        "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else build_scope(result.get("job_id"), filename=result.get("filename"), status="active"),
+        "traceability": result.get("traceability") if isinstance(result.get("traceability"), dict) else {},
+    }
+
+
+def read_upload_history(
+    runtime_dir: Path,
+    *,
+    limit: int = 100,
+    current_result: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    try:
+        paths = sorted(
+            runtime_dir.glob("upload_result_*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+    except Exception:
+        paths = []
+
+    for path in paths[: max(0, int(limit or 100))]:
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        replay = (
+            result.get("replay_timeline")
+            or (result.get("sii_intelligence") or {}).get("replay_timeline")
+            or {}
+        )
+        timeline = replay.get("timeline") if isinstance(replay, dict) else []
+
+        items.append({
+            "job_id": result.get("job_id"),
+            "run_id": result.get("run_id") or result.get("job_id"),
+            "upload_id": result.get("upload_id") or result.get("job_id"),
+            "filename": result.get("filename"),
+            "status": "COMPLETE",
+            "row_count": result.get("row_count", 0),
+            "column_count": result.get("column_count", 0),
+            "replay_ready": len(timeline or []) > 0,
+            "replay_frame_count": len(timeline or []),
+            "intelligence_metrics": {
+                "room_count": 1,
+                "flagged_room_count": 0,
+                "sparse_room_count": 0,
+                "unknown_profile": False,
+            },
+            "completed_at": result.get("completed_at") or result.get("last_processed_at"),
+            "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else None,
+        })
+
+    latest = current_result
+    if latest and not any(item.get("job_id") == latest.get("job_id") for item in items):
+        items.insert(0, {
+            "job_id": latest.get("job_id"),
+            "run_id": latest.get("run_id") or latest.get("job_id"),
+            "upload_id": latest.get("upload_id") or latest.get("job_id"),
+            "filename": latest.get("filename"),
+            "status": "COMPLETE",
+            "row_count": latest.get("row_count", 0),
+            "column_count": latest.get("column_count", 0),
+            "replay_ready": bool((latest.get("replay_timeline") or {}).get("timeline")),
+            "replay_frame_count": len((latest.get("replay_timeline") or {}).get("timeline", [])),
+            "intelligence_metrics": {
+                "room_count": 1,
+                "flagged_room_count": 0,
+                "sparse_room_count": 0,
+                "unknown_profile": False,
+            },
+            "completed_at": latest.get("completed_at") or latest.get("last_processed_at"),
+            "session_scope": latest.get("session_scope") if isinstance(latest.get("session_scope"), dict) else None,
+        })
+
+    return items[: max(0, int(limit or 100))]

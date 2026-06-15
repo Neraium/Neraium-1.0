@@ -4,7 +4,6 @@ import csv
 import io
 import json
 import logging
-import math
 import os
 import time
 import uuid
@@ -23,6 +22,12 @@ from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_s
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
 from app.services.runtime_db import delete_latest_payload_prefix, read_latest_payload, upsert_latest_payload
 from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
+from app.services.upload_completion import build_partial_upload_artifacts
+from app.services.upload_parser import json_payload_to_csv_text
+from app.services.upload_persistence import read_upload_history as read_upload_history_from_runtime
+from app.services.upload_persistence import summarize_result as summarize_result_payload
+from app.services.upload_replay import build_replay, detect_numeric_columns, detect_timestamp_column as detect_replay_timestamp_column, minimal_replay, population_std, to_float
+from app.services.upload_validator import detect_delimiter, looks_like_header, normalized_columns, row_tokens, stream_csv_snapshot
 from app.services.upload_state import (
     build_empty_latest_upload_record,
     build_latest_upload_record,
@@ -316,122 +321,13 @@ def _complete_with_partial_result(
     snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     clear_reset_block_persisted()
-    now = datetime.now(timezone.utc).isoformat()
-    snapshot = snapshot or {}
-
-    columns = list(snapshot.get("columns") or [])
-    rows = list(snapshot.get("sample_rows") or [])
-    row_count = int(snapshot.get("row_count") or 0)
-    chunk_count = snapshot.get("chunk_count")
-    memory_estimate_bytes = snapshot.get("memory_estimate_bytes")
-    error_message = str(error) or error.__class__.__name__
-
-    result = {
-        "job_id": job_id,
-        "run_id": job_id,
-        "upload_id": job_id,
-        "filename": filename,
-        "row_count": row_count,
-        "column_count": len(columns),
-        "columns": columns,
-        "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
-        "detected_timestamp_column": snapshot.get("timestamp_column"),
-        "numeric_profiles": [],
-        "timestamp_profile": {
-            "warnings": ["Full timestamp profiling was skipped because processing completed partially."]
-        },
-        "data_quality": {
-            "status": "partial",
-            "warnings": [
-                "Upload completed, but full intelligence processing could not finish.",
-                error_message,
-            ],
-        },
-        "baseline_analysis": {
-            "warnings": ["Full baseline analysis was skipped because processing completed partially."]
-        },
-        "cultivation_mapping": {"warnings": []},
-        "operator_report": {},
-        "engine_result": {
-            "overall_result": "partial",
-            "signals": [],
-            "evidence": [],
-        },
-        "driver_attribution": {},
-        "operating_state": "Partial upload processed",
-        "drift_status": "partial",
-        "sii_intelligence": {
-            "sii_completed": False,
-            "partial_result": True,
-            "warning": "Upload completed with partial processing.",
-        },
-        "sii_runner_result": {
-            "runner_used": False,
-            "error": error_message,
-        },
-        "processing_trace": {
-            "sii_pipeline_ran": False,
-            "sii_completed": False,
-            "completed_with_partial_result": True,
-            "error": error_message,
-            "rows_processed": row_count,
-            "columns_analyzed": len(columns),
-            "completed_at": now,
-        },
-        "processing_stats": {
-            "used_streaming": True,
-            "sampled_rows": len(rows),
-            "chunk_count": chunk_count,
-            "memory_estimate_bytes": memory_estimate_bytes,
-        },
-        "room_summary": {
-            "room_count": 1,
-            "rooms": [{"room": "Uploaded telemetry", "row_count": row_count}],
-        },
-        "ingestion_metadata": {"source_type": "csv_upload"},
-        "source_type": "csv",
-        "replay_timeline": {"meta": {"frame_count": 0}, "timeline": []},
-        "replay_ready": False,
-        "replay_frame_count": 0,
-        "last_processed_at": now,
-        "completed_at": now,
-    }
-
-    summary = {
-        "job_id": job_id,
-        "status_url": f"/api/data/upload-status/{job_id}",
-        "status": "COMPLETE",
-        "processing_state": "partial_complete",
-        "percent": 100,
-        "progress": 100,
-        "result_available": True,
-        "first_usable_available": True,
-        "sii_completed": False,
-        "replay_ready": False,
-        "replay_frame_count": 0,
-        "latest_replay_frames": 0,
-        "replay_source": "partial",
-        "last_processed_at": now,
-        "filename": filename,
-        "row_count": row_count,
-        "column_count": len(columns),
-        "rows_processed": row_count,
-        "columns_detected": len(columns),
-        "chunk_count": chunk_count,
-        "warning": "Upload completed with partial processing.",
-        "error": error_message,
-        "message": "Upload completed, but full intelligence processing could not finish.",
-        "propagation_stage": "partial_complete",
-        "propagation_progress": 100,
-        "propagation_label": "Partial upload complete.",
-    }
-
-    result["session_scope"] = build_session_scope(job_id, filename=filename, status="partial_complete")
-    result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
-    result["decision_integrity"] = dict(result["traceability"])
-    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
-    summary["traceability"] = dict(result["traceability"])
-    summary["decision_integrity"] = dict(result["traceability"])
+    result, summary = build_partial_upload_artifacts(
+        job_id=job_id,
+        filename=filename,
+        error=error,
+        snapshot=snapshot,
+        build_traceability_packet=build_traceability_packet,
+    )
 
     _write_json(f"upload_result_{job_id}.json", result)
     _write_json(f"upload_status_{job_id}.json", summary)
@@ -474,243 +370,30 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
 
 
 def _detect_delimiter(sample: str) -> str:
-    non_blank = [line for line in sample.splitlines() if line.strip()][:20]
-    joined = "\n".join(non_blank)
-    if not joined:
-        raise ValueError("CSV file is empty.")
-    try:
-        return csv.Sniffer().sniff(joined, delimiters=",\t;|").delimiter
-    except csv.Error:
-        return "whitespace"
+    return detect_delimiter(sample)
 
 
 def _row_tokens(line: str, delimiter: str) -> list[str]:
-    if delimiter == "whitespace":
-        return line.strip().split()
-    return next(csv.reader([line], delimiter=delimiter))
+    return row_tokens(line, delimiter)
 
 
 def _looks_like_header(tokens: list[str]) -> bool:
-    if not tokens:
-        return False
-    numeric_count = sum(parse_numeric_value(token) is not None for token in tokens)
-    timestamp_count = sum(parse_timestamp(token) is not None for token in tokens)
-    return numeric_count + timestamp_count < max(1, len(tokens) // 2)
+    return looks_like_header(tokens)
 
 
 def _normalized_columns(tokens: list[str], *, header_present: bool) -> list[str]:
-    if not header_present:
-        return [f"column_{index + 1}" for index in range(len(tokens))]
-    columns: list[str] = []
-    seen: dict[str, int] = {}
-    for index, token in enumerate(tokens):
-        base = token.strip() or f"column_{index + 1}"
-        seen[base] = seen.get(base, 0) + 1
-        columns.append(base if seen[base] == 1 else f"{base}_{seen[base]}")
-    return columns
+    return normalized_columns(tokens, header_present=header_present)
 
 
 def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | None = None) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
-        sample_lines: list[str] = []
-        while len(sample_lines) < 20 and sum(len(item) for item in sample_lines) < 65536:
-            line = handle.readline()
-            if line == "":
-                break
-            if line.strip():
-                sample_lines.append(line.rstrip("\r\n"))
-
-        if not sample_lines:
-            raise ValueError("CSV file is empty.")
-
-        delimiter = _detect_delimiter("\n".join(sample_lines))
-        first_tokens = _row_tokens(sample_lines[0], delimiter)
-        header_present = _looks_like_header(first_tokens)
-        columns = _normalized_columns(first_tokens, header_present=header_present)
-        if not columns:
-            raise ValueError("CSV must include at least one column.")
-
-        timestamp_column = _detect_timestamp_column(columns) if header_present else None
-        timestamp_index = columns.index(timestamp_column) if timestamp_column in columns else None
-
-        handle.seek(0)
-        saw_header = not header_present
-        detection_rows: list[list[str]] = []
-        while True:
-            line = handle.readline()
-            if line == "":
-                break
-            if not line.strip():
-                continue
-            if header_present and not saw_header:
-                saw_header = True
-                continue
-            tokens = _row_tokens(line.rstrip("\r\n"), delimiter)
-            if len(tokens) != len(columns):
-                continue
-            row_values = [token.strip() for token in tokens]
-            if len(detection_rows) < 1000:
-                detection_rows.append(row_values)
-
-        if not detection_rows:
-            raise ValueError("CSV must include a header and at least one usable data row.")
-
-        if timestamp_index is None:
-            detected = detect_timestamp_column(columns, detection_rows)
-            if detected in columns:
-                timestamp_column = detected
-                timestamp_index = columns.index(detected)
-
-        identity_index = next(
-            (
-                index
-                for index, column in enumerate(columns)
-                if column.lower().strip() in {"room", "zone", "location", "area", "group", "system", "asset", "asset name", "zone name"}
-            ),
-            None,
-        )
-        excluded_indexes = {index for index in (timestamp_index, identity_index) if index is not None}
-        numeric_indexes = [
-            index
-            for index in range(len(columns))
-            if index not in excluded_indexes
-            and sum(parse_numeric_value(row[index]) is not None for row in detection_rows)
-            >= max(3, int(min(len(detection_rows), 1000) * 0.15))
-        ]
-
-        handle.seek(0)
-        rows_received = 0
-        blank_rows = 0
-        malformed_rows = 0
-        duplicate_timestamps = 0
-        invalid_timestamps = 0
-        no_numeric_values = 0
-        rows_with_missing_values = 0
-        rows_with_invalid_numeric = 0
-        invalid_numeric_cells = 0
-        seen_timestamps: set[str] = set()
-        raw_rows_in_order: list[tuple[Any, dict[str, Any]]] = []
-        header_skipped = not header_present
-
-        for line in handle:
-            if not line.strip():
-                if header_skipped:
-                    rows_received += 1
-                    blank_rows += 1
-                continue
-
-            if not header_skipped:
-                header_skipped = True
-                continue
-
-            rows_received += 1
-            tokens = _row_tokens(line.rstrip("\r\n"), delimiter)
-            if len(tokens) != len(columns):
-                malformed_rows += 1
-                continue
-
-            raw_row = [token.strip() for token in tokens]
-            parsed_ts = None
-            if timestamp_index is not None:
-                parsed_ts = parse_timestamp(raw_row[timestamp_index])
-                if parsed_ts is None:
-                    invalid_timestamps += 1
-                    continue
-                identity_value = raw_row[identity_index].strip() if identity_index is not None else ""
-                timestamp_key = f"{identity_value}::{parsed_ts.isoformat()}"
-                if timestamp_key in seen_timestamps:
-                    duplicate_timestamps += 1
-                    continue
-                seen_timestamps.add(timestamp_key)
-
-            row = {column: raw_row[index] for index, column in enumerate(columns)}
-            row["__source_row_number"] = rows_received
-            if parsed_ts is not None:
-                row["__source_timestamp"] = parsed_ts.isoformat()
-            missing_in_row = any(raw_row[index] == "" for index in numeric_indexes)
-            invalid_in_row = False
-            usable_numeric = 0
-            for index in numeric_indexes:
-                raw_value = raw_row[index]
-                if raw_value == "":
-                    continue
-                numeric_value = parse_numeric_value(raw_value)
-                if numeric_value is None:
-                    row[columns[index]] = ""
-                    invalid_numeric_cells += 1
-                    invalid_in_row = True
-                    continue
-                row[columns[index]] = str(numeric_value)
-                usable_numeric += 1
-            if numeric_indexes and usable_numeric == 0:
-                no_numeric_values += 1
-                continue
-            if missing_in_row:
-                rows_with_missing_values += 1
-            if invalid_in_row:
-                rows_with_invalid_numeric += 1
-            raw_rows_in_order.append((parsed_ts, row))
-
-        if not raw_rows_in_order:
-            raise ValueError("CSV contains no usable telemetry rows after cleaning.")
-
-        rows_used = len(raw_rows_in_order)
-        cleaned = sorted(raw_rows_in_order, key=lambda item: item[0]) if timestamp_index is not None else raw_rows_in_order
-        sample_rows = [row for _, row in cleaned[:max_analysis_rows]]
-        first_timestamp = cleaned[0][1].get(timestamp_column) if timestamp_column else None
-        last_timestamp = cleaned[-1][1].get(timestamp_column) if timestamp_column else None
-        memory_estimate_bytes = sum(sum(len(str(value or "")) for value in row.values()) for row in sample_rows)
-        rows_dropped = rows_received - rows_used
-        drop_reasons = {
-            key: value
-            for key, value in {
-                "blank_row": blank_rows,
-                "column_count_mismatch": malformed_rows,
-                "invalid_timestamp": invalid_timestamps,
-                "duplicate_timestamp": duplicate_timestamps,
-                "no_usable_numeric_values": no_numeric_values,
-            }.items()
-            if value
-        }
-        warnings = []
-        if rows_dropped:
-            warnings.append(f"{rows_dropped} rows were dropped during safe cleaning.")
-        if rows_with_missing_values:
-            warnings.append(f"{rows_with_missing_values} rows contain missing numeric values.")
-        if rows_with_invalid_numeric:
-            warnings.append(f"{rows_with_invalid_numeric} rows contained non-numeric values that were ignored.")
-        if delimiter == "whitespace":
-            warnings.append("Whitespace-delimited telemetry was detected.")
-        if not header_present:
-            warnings.append("No header row was detected; generic column names were assigned.")
-        if timestamp_index is not None and [item[0] for item in raw_rows_in_order] != [item[0] for item in cleaned]:
-            warnings.append("Timestamps were unsorted and were ordered before analysis.")
-
-        if job_id and rows_received >= CSV_PROGRESS_UPDATE_EVERY:
-            _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label=f"Parsed and cleaned {rows_received:,} rows.")
-
-        return {
-            "columns": columns,
-            "timestamp_column": timestamp_column,
-            "sample_rows": sample_rows,
-            "row_count": rows_used,
-            "rows_received": rows_received,
-            "rows_used": rows_used,
-            "rows_dropped": rows_dropped,
-            "drop_reasons": drop_reasons,
-            "quality_counts": {
-                "rows_with_missing_values": rows_with_missing_values,
-                "rows_with_invalid_numeric": rows_with_invalid_numeric,
-                "invalid_numeric_cells": invalid_numeric_cells,
-            },
-            "cleaning_warnings": warnings,
-            "delimiter": delimiter,
-            "header_present": header_present,
-            "first_timestamp": first_timestamp,
-            "last_timestamp": last_timestamp,
-            "chunk_count": max(1, (rows_received + CSV_CHUNK_SIZE_ROWS - 1) // CSV_CHUNK_SIZE_ROWS),
-            "memory_estimate_bytes": int(memory_estimate_bytes),
-        }
+    return stream_csv_snapshot(
+        path,
+        max_analysis_rows=max_analysis_rows,
+        csv_progress_update_every=CSV_PROGRESS_UPDATE_EVERY,
+        csv_chunk_size_rows=CSV_CHUNK_SIZE_ROWS,
+        job_id=job_id,
+        on_progress=lambda current_job_id, stage, progress, label: _set_propagation_stage(current_job_id, stage=stage, progress=progress, label=label),
+    )
 
 
 def _signal_level_from_drift(item: dict[str, Any]) -> str:
@@ -1560,71 +1243,19 @@ def replay_payload(job_id: str | None = None) -> dict[str, Any]:
 
 
 def _detect_timestamp_column(columns: list[str]) -> str | None:
-    hints = ("timestamp", "time", "datetime", "date_time", "logged_at", "recorded_at")
-    lowered = {c.lower().strip(): c for c in columns}
-    for hint in hints:
-        for key, original in lowered.items():
-            if hint == key or hint in key:
-                return original
-    return columns[0] if columns else None
+    return detect_replay_timestamp_column(columns)
 
 
 def _to_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip().replace(",", "").replace("%", "")
-    if text == "":
-        return None
-    low = text.lower()
-    if low in {"true", "yes", "on"}:
-        return 1.0
-    if low in {"false", "no", "off"}:
-        return 0.0
-    try:
-        value = float(text)
-        if math.isfinite(value):
-            return value
-    except ValueError:
-        return None
-    return None
+    return to_float(value)
 
 
 def _population_std(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    mean = sum(values) / len(values)
-    return math.sqrt(sum((value - mean) ** 2 for value in values) / len(values))
+    return population_std(values)
 
 
 def _detect_numeric_columns(rows: list[dict[str, Any]], columns: list[str], exclude: set[str | None]) -> list[str]:
-    event_words = ("event", "status", "fault", "alarm", "override")
-    numeric = []
-    sample = rows[: min(len(rows), 1000)]
-    for col in columns:
-        if col in exclude:
-            continue
-        vals = [_to_float(row.get(col)) for row in sample]
-        count = sum(v is not None for v in vals)
-        if count >= max(3, int(len(sample) * 0.15)):
-            numeric.append(col)
-    continuous = [c for c in numeric if not any(w in c.lower() for w in event_words)]
-    return continuous if len(continuous) >= 3 else numeric
-
-
-
-def _parse_ts(value: Any, fallback_index: int) -> str:
-    text = str(value or "").strip()
-    if text:
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
-            try:
-                return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
-            except ValueError:
-                pass
-        try:
-            return datetime.fromisoformat(text.replace("Z", "+00:00")).isoformat()
-        except ValueError:
-            pass
-    return datetime.fromtimestamp(fallback_index, tz=timezone.utc).isoformat()
+    return detect_numeric_columns(rows, columns, exclude)
 
 
 def _build_replay(
@@ -1634,63 +1265,11 @@ def _build_replay(
     job_id: str,
     relationship_model: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    frame_target = min(120, max(20, len(rows)))
-    positions = sorted(set(round(i * (len(rows) - 1) / max(frame_target - 1, 1)) for i in range(frame_target)))
-    baseline_rows = rows[: max(5, min(100, len(rows) // 10))]
-    baseline = {}
-    for col in numeric_columns:
-        vals = [_to_float(r.get(col)) for r in baseline_rows]
-        vals = [v for v in vals if v is not None]
-        baseline[col] = sum(vals) / len(vals) if vals else 0.0
-
-    timeline = []
-    prev_drift = 0.0
-    for idx, pos in enumerate(positions):
-        row = rows[pos]
-        shifts = []
-        for col in numeric_columns:
-            val = _to_float(row.get(col))
-            base = baseline.get(col, 0.0)
-            if val is None:
-                continue
-            denom = abs(base) if abs(base) > 1e-6 else 1.0
-            shifts.append((col, abs(val - base) / denom))
-        shifts.sort(key=lambda x: x[1], reverse=True)
-        drift = sum(v for _, v in shifts[:5]) / max(1, min(5, len(shifts)))
-        velocity = drift - prev_drift
-        prev_drift = drift
-        top = [c for c, _ in shifts[:3]]
-        ts = _parse_ts(row.get(timestamp_column), pos)
-        phase = "stable_topology" if drift < 0.1 else "relationship_weakening" if drift < 0.25 else "propagation_activation"
-        timeline.append({
-            "timestamp": ts,
-            "frame_index": idx,
-            "row_start": max(1, pos),
-            "row_end": pos + 1,
-            "timestamp_start": ts,
-            "timestamp_end": ts,
-            "total_frames": len(positions),
-            "affected_subsystem": "Uploaded telemetry",
-            "affected_area": "Uploaded telemetry",
-            "primary_contributors": top,
-            "topology_state": {"phase": phase, "drift_index": round(drift, 6), "stability_state": "Monitoring"},
-            "cognition_state": {"facility_state": "Monitoring", "canonical_phase": phase, "confidence_tier": "BASELINE_EVIDENCE"},
-            "propagation_state": {"dominant_paths": top, "activation_intensity": round(min(1, drift), 6)},
-            "evidence_state": {"corroboration_strength": "MODERATE"},
-            "drift_velocity": round(velocity, 6),
-            "operator_summary": f"Replay frame {idx + 1} of {len(positions)}.",
-        })
-    top_relationship_changes = (relationship_model or {}).get("top_relationship_changes")
-    if timeline and isinstance(top_relationship_changes, list) and top_relationship_changes:
-        timeline[-1]["relationship_changes"] = [item.get("summary", "") for item in top_relationship_changes if isinstance(item, dict)]
-        timeline[-1]["relationship_change_evidence_refs"] = top_relationship_changes
-    return {"meta": {"frame_count": len(timeline), "total_rows": len(rows), "job_id": job_id}, "timeline": timeline}
+    return build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
 
 def _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model: dict[str, Any] | None = None):
-    if not rows:
-        return {"meta": {"frame_count": 0}, "timeline": []}
-    return _build_replay(rows, timestamp_column or columns[0], numeric_columns or columns[1:4], job_id, relationship_model)
+    return minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
 
 def classify_telemetry_profile(columns: list[str]) -> tuple[str, str, list[str]]:
@@ -1764,33 +1343,7 @@ def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
 
 
 def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
-    replay = (
-        result.get("replay_timeline")
-        or (result.get("sii_intelligence") or {}).get("replay_timeline")
-        or {}
-    )
-    timeline = replay.get("timeline") if isinstance(replay, dict) else []
-    return {
-        "job_id": result.get("job_id"),
-        "run_id": result.get("run_id") or result.get("job_id"),
-        "upload_id": result.get("upload_id") or result.get("job_id"),
-        "status": "COMPLETE",
-        "processing_state": "complete",
-        "percent": 100,
-        "progress": 100,
-        "filename": result.get("filename"),
-        "row_count": result.get("row_count", 0),
-        "column_count": result.get("column_count", 0),
-        "result_available": True,
-        "sii_completed": True,
-        "replay_ready": len(timeline or []) > 0,
-        "replay_frame_count": len(timeline or []),
-        "latest_replay_frames": len(timeline or []),
-        "replay_source": "persisted" if timeline else "unknown",
-        "last_processed_at": result.get("last_processed_at") or result.get("completed_at"),
-        "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else build_session_scope(result.get("job_id"), filename=result.get("filename"), status="active"),
-        "traceability": result.get("traceability") if isinstance(result.get("traceability"), dict) else {},
-    }
+    return summarize_result_payload(result)
 
 
 def write_latest_upload_result(*args) -> None:
@@ -1913,76 +1466,11 @@ def build_upload_result(
 
 
 def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
-    """
-    Compatibility helper for observability.
-    V2 stores latest upload plus per-job upload_result_*.json files.
-    """
-    items: list[dict[str, Any]] = []
-    try:
-        paths = sorted(
-            RUNTIME_DIR.glob("upload_result_*.json"),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
-    except Exception:
-        paths = []
-
-    for path in paths[: max(0, int(limit or 100))]:
-        try:
-            result = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-
-        replay = (
-            result.get("replay_timeline")
-            or (result.get("sii_intelligence") or {}).get("replay_timeline")
-            or {}
-        )
-        timeline = replay.get("timeline") if isinstance(replay, dict) else []
-
-        items.append({
-            "job_id": result.get("job_id"),
-            "run_id": result.get("run_id") or result.get("job_id"),
-            "upload_id": result.get("upload_id") or result.get("job_id"),
-            "filename": result.get("filename"),
-            "status": "COMPLETE",
-            "row_count": result.get("row_count", 0),
-            "column_count": result.get("column_count", 0),
-            "replay_ready": len(timeline or []) > 0,
-            "replay_frame_count": len(timeline or []),
-            "intelligence_metrics": {
-                "room_count": 1,
-                "flagged_room_count": 0,
-                "sparse_room_count": 0,
-                "unknown_profile": False,
-            },
-            "completed_at": result.get("completed_at") or result.get("last_processed_at"),
-            "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else None,
-        })
-
-    latest = read_current_upload_result()
-    if latest and not any(item.get("job_id") == latest.get("job_id") for item in items):
-        items.insert(0, {
-            "job_id": latest.get("job_id"),
-            "run_id": latest.get("run_id") or latest.get("job_id"),
-            "upload_id": latest.get("upload_id") or latest.get("job_id"),
-            "filename": latest.get("filename"),
-            "status": "COMPLETE",
-            "row_count": latest.get("row_count", 0),
-            "column_count": latest.get("column_count", 0),
-            "replay_ready": bool((latest.get("replay_timeline") or {}).get("timeline")),
-            "replay_frame_count": len((latest.get("replay_timeline") or {}).get("timeline", [])),
-            "intelligence_metrics": {
-                "room_count": 1,
-                "flagged_room_count": 0,
-                "sparse_room_count": 0,
-                "unknown_profile": False,
-            },
-            "completed_at": latest.get("completed_at") or latest.get("last_processed_at"),
-            "session_scope": latest.get("session_scope") if isinstance(latest.get("session_scope"), dict) else None,
-        })
-
-    return items[: max(0, int(limit or 100))]
+    return read_upload_history_from_runtime(
+        RUNTIME_DIR,
+        limit=limit,
+        current_result=read_current_upload_result(),
+    )
 
 
 def process_next_queued_upload_job() -> bool:
@@ -2305,38 +1793,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
 
         raise
 
+
+
 def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
-    if isinstance(payload, bytes):
-        payload = json.loads(payload.decode("utf-8"))
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-
-    if isinstance(payload, dict) and isinstance(payload.get("readings"), list):
-        grouped: dict[str, dict[str, Any]] = {}
-        for reading in payload.get("readings", []):
-            if not isinstance(reading, dict):
-                continue
-            ts = str(reading.get("timestamp") or payload.get("timestamp") or "")
-            record = grouped.setdefault(ts, {"timestamp": ts})
-            sensor_name = str(reading.get("sensor_name") or reading.get("sensor_id") or "value")
-            record[sensor_name] = reading.get("value")
-        rows = list(grouped.values())
-    else:
-        rows = payload if isinstance(payload, list) else payload.get("rows") or payload.get("data") or []
-        if not rows:
-            rows = [payload if isinstance(payload, dict) else {"value": payload}]
-
-    columns = sorted({key for row in rows if isinstance(row, dict) for key in row.keys()})
-    if not columns:
-        columns = ["timestamp", "value"]
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(columns)
-    for row in rows:
-        if isinstance(row, dict):
-            writer.writerow([row.get(col, "") for col in columns])
-        else:
-            writer.writerow(["", row])
-
-    return process_csv_content(output.getvalue(), filename=filename, **kwargs)
+    return process_csv_content(json_payload_to_csv_text(payload), filename=filename, **kwargs)

@@ -140,7 +140,7 @@ export default function DataConnectionsWorkspace({
       const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
       const latestPayload = await loadLatestUpload();
       if (cancelled) return;
-      const latestJobId = String(latestPayload?.current_upload?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.latest_result?.job_id ?? latestPayload?.job_id ?? "").trim();
+      const latestJobId = String(latestPayload?.current_upload?.job_id ?? latestPayload?.snapshot?.current_upload?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.latest_result?.job_id ?? latestPayload?.job_id ?? "").trim();
       const restoreJobId = latestJobId || storedJobId;
       const latestStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
       const latestResult = latestPayload?.latest_result;
@@ -556,7 +556,7 @@ export default function DataConnectionsWorkspace({
   const backendPercent = Number.isFinite(uploadJob?.percent ?? uploadJob?.progress) ? Math.min(100, Math.max(0, uploadJob.percent ?? uploadJob.progress)) : null;
   const propagationPercent = Number.isFinite(uploadJob?.propagation_progress) ? Math.min(100, Math.max(0, Number(uploadJob?.propagation_progress))) : backendPercent;
   const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
-  const latestResultJobId = String(latestUploadResult?.job_id ?? "").trim();
+  const latestResultJobId = String(latestUploadSnapshot?.current_upload?.job_id ?? latestUploadResult?.job_id ?? "").trim();
   const latestResultMatchesCurrentJob = Boolean(currentJobId) && currentJobId === latestResultJobId;
   const backendComplete = String(uploadJob?.processing_state ?? "").toLowerCase() === "complete" || Number(uploadJob?.percent ?? uploadJob?.progress ?? 0) >= 100 || Boolean(uploadJob?.result_available) || latestResultMatchesCurrentJob;
   const effectiveUploadState = backendComplete ? "complete" : normalizeUploadStatus(uploadState);

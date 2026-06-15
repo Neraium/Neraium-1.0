@@ -90,8 +90,8 @@ export default function DiagnosticsPanel({
   const [replayFrames, setReplayFrames] = useState([]);
   const [replayError, setReplayError] = useState("");
   const activeJobId = useMemo(
-    () => latestUploadResult?.job_id ?? latestUploadSnapshot?.history?.[0]?.job_id ?? null,
-    [latestUploadResult?.job_id, latestUploadSnapshot?.history],
+    () => latestUploadSnapshot?.current_upload?.job_id ?? latestUploadResult?.job_id ?? latestUploadSnapshot?.job_id ?? null,
+    [latestUploadSnapshot?.current_upload?.job_id, latestUploadResult?.job_id, latestUploadSnapshot?.job_id],
   );
 
   useEffect(() => {

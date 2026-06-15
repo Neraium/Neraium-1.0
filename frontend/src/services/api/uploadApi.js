@@ -23,7 +23,8 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
     }
 
     const payload = await response.json();
-    const latestResult = payload?.latest_result;
+    const canonicalUpload = payload?.current_upload ?? null;
+    const latestResult = canonicalUpload?.result ?? payload?.latest_result ?? null;
     const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
     const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
     const value = {

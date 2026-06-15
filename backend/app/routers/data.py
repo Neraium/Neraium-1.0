@@ -29,53 +29,12 @@ from app.services.runtime_db import configure_runtime_dir as configure_runtime_d
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
-_UPLOAD_STATUS_CACHE: dict[str, tuple[float, dict]] = {}
-_LATEST_UPLOAD_CACHE: tuple[float, dict] | None = None
-
-
-def _cache_get_status(job_id: str) -> dict | None:
-    entry = _UPLOAD_STATUS_CACHE.get(str(job_id))
-    if not entry:
-        return None
-    expires_at, payload = entry
-    if time.monotonic() >= expires_at:
-        _UPLOAD_STATUS_CACHE.pop(str(job_id), None)
-        return None
-    status_text = str((payload or {}).get("status") or "").upper()
-    if status_text not in {"COMPLETE", "FAILED", "NOT_FOUND"}:
-        _UPLOAD_STATUS_CACHE.pop(str(job_id), None)
-        return None
-    return dict(payload)
-
-
-def _cache_set_status(job_id: str, payload: dict, ttl_seconds: float = 1.5) -> None:
-    _UPLOAD_STATUS_CACHE[str(job_id)] = (time.monotonic() + max(0.2, float(ttl_seconds)), dict(payload or {}))
-
-
-def _cache_get_latest() -> dict | None:
-    global _LATEST_UPLOAD_CACHE
-    if not _LATEST_UPLOAD_CACHE:
-        return None
-    expires_at, payload = _LATEST_UPLOAD_CACHE
-    if time.monotonic() >= expires_at:
-        _LATEST_UPLOAD_CACHE = None
-        return None
-    return dict(payload)
-
-
-def _cache_set_latest(payload: dict, ttl_seconds: float = 2.0) -> None:
-    global _LATEST_UPLOAD_CACHE
-    _LATEST_UPLOAD_CACHE = (time.monotonic() + max(0.2, float(ttl_seconds)), dict(payload or {}))
-
-
 def _clear_endpoint_caches() -> None:
-    global _LATEST_UPLOAD_CACHE
-    _UPLOAD_STATUS_CACHE.clear()
-    _LATEST_UPLOAD_CACHE = None
+    return None
 
 
 def invalidate_latest_upload_cache() -> None:
-    _clear_endpoint_caches()
+    return None
 
 
 def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
@@ -256,8 +215,9 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
         normalized = normalize_upload_status_payload(status)
         normalized.setdefault("state_backend", state_backend)
         return _with_worker_visibility(normalized, job_id)
-    latest_summary = upload_jobs.read_latest_upload_summary() or {}
-    if str(latest_summary.get("job_id") or "") == str(job_id):
+    latest_record = upload_jobs.read_latest_upload_record() or {}
+    latest_summary = latest_record.get("summary") if isinstance(latest_record.get("summary"), dict) else {}
+    if str(latest_summary.get("job_id") or latest_record.get("job_id") or "") == str(job_id):
         normalized = normalize_upload_status_payload(latest_summary)
         normalized.setdefault("state_backend", state_backend)
         return _with_worker_visibility(normalized, job_id)
@@ -570,22 +530,12 @@ async def upload_status(job_id: str):
     state_backend = upload_jobs.upload_state_backend()
     logger.warning("upload_status_request job_id=%s state_backend=%s", job_id, state_backend)
     try:
-        cached = _cache_get_status(job_id)
-        if isinstance(cached, dict):
-            status_text = str(cached.get("status", "")).upper()
-            status_code = 404 if status_text == "NOT_FOUND" else 200
-            logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, status_code, status_text, True)
-            if status_text == "NOT_FOUND":
-                return JSONResponse(status_code=404, content=cached)
-            return cached
-
         normalized = _resolve_upload_status_payload(job_id, state_backend)
         if str(normalized.get("status", "")).upper() == "NOT_FOUND":
             logger.warning(
                 "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
                 job_id,
             )
-            _cache_set_status(job_id, normalized, ttl_seconds=1.0)
             logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 404, "NOT_FOUND", False)
             return JSONResponse(status_code=404, content=normalized)
 
@@ -619,9 +569,6 @@ async def upload_status(job_id: str):
                             "observation_status": "failed",
                         }
                     )
-        terminal = str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}
-        if terminal:
-            _cache_set_status(job_id, normalized, ttl_seconds=4.0)
         logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 200, str(normalized.get("status", "")).upper(), False)
         return normalized
     except Exception:
@@ -648,10 +595,6 @@ async def upload_stream(job_id: str):
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
     use_persisted = bool(include_persisted)
-    cached = _cache_get_latest() if use_persisted else None
-    if isinstance(cached, dict):
-        return cached
-
     state_backend = upload_jobs.upload_state_backend()
     canonical = upload_jobs.read_latest_upload_record() if use_persisted else upload_jobs.build_empty_latest_upload_record()
     if upload_jobs.reset_block_persisted_active():
@@ -729,7 +672,10 @@ async def latest_upload(include_persisted: int | bool = True):
         "traceability": traceability,
         "current_upload": canonical,
     }
-    system_interpretation = _build_system_interpretation(result if isinstance(result, dict) else None, summary if isinstance(summary, dict) else None, snapshot, frames if isinstance(frames, list) else [])
+    if state_available or canonical_job_id:
+        system_interpretation = _build_system_interpretation(result if isinstance(result, dict) else None, summary if isinstance(summary, dict) else None, snapshot, frames if isinstance(frames, list) else [])
+    else:
+        system_interpretation = _build_system_interpretation(None, None, {}, [])
     response_payload = {
         "snapshot": snapshot,
         "current_upload": canonical,
@@ -742,9 +688,6 @@ async def latest_upload(include_persisted: int | bool = True):
         "system_interpretation": system_interpretation,
         **snapshot,
     }
-    cache_ttl = 4.0 if state_available else 1.5
-    if use_persisted:
-        _cache_set_latest(response_payload, ttl_seconds=cache_ttl)
     return response_payload
 
 

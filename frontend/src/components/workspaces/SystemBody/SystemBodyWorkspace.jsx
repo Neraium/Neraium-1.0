@@ -415,7 +415,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     ?? latestUploadResult?.system_interpretation
     ?? liveSnapshot?.latestUploadSnapshot?.system_interpretation
     ?? null;
-  const expectedJobId = latestUploadResult?.job_id ?? latestUploadSnapshot?.job_id ?? null;
+  const expectedJobId = latestUploadSnapshot?.current_upload?.job_id ?? latestUploadResult?.job_id ?? latestUploadSnapshot?.job_id ?? null;
   const mappedBackendInterpretation = mapBackendSystemInterpretation(backendSystemInterpretation, expectedJobId, Boolean(latestUploadResult?.sii_reliable_enough_to_show));
   if (mappedBackendInterpretation) {
     return mappedBackendInterpretation;

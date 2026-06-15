@@ -234,7 +234,7 @@ export default function ReplayWorkspace({
   const supportingEvidence = useMemo(() => {
     const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
     const replayLineage = meta.lineage && typeof meta.lineage === "object" ? meta.lineage : {};
-    const uploadJobId = currentSession?.latestUploadResult?.job_id ?? null;
+    const uploadJobId = sessionJobId ?? null;
     const alignmentOk = Boolean(
       replayLineage.aligned
       && evidenceJobId

@@ -23,7 +23,7 @@ from app.services.runtime_db import (
 )
 from app.services.upload_jobs import (
     build_upload_result,
-    read_latest_upload_result,
+    read_current_upload_result,
     reset_latest_upload_state,
     summarize_result,
     write_latest_upload_result,
@@ -1044,7 +1044,7 @@ def update_live_baseline(connection: dict[str, Any], normalized_records: list[No
 
 
 def latest_result_without_live_baseline(connection: dict[str, Any], baseline_state: dict[str, Any]) -> dict[str, Any]:
-    latest_result = read_latest_upload_result()
+    latest_result = read_current_upload_result()
     return {
         "connection": update_connection_health_fields(
             connection,
@@ -1216,7 +1216,7 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
         return {
             "connection": connection,
             "summary": None,
-            "latest_result": read_latest_upload_result(),
+            "latest_result": read_current_upload_result(),
             "meaningful_change": False,
             "actor": actor,
             "error": error_message,
