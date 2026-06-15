@@ -220,6 +220,17 @@ def read_latest_upload_record() -> dict[str, Any] | None:
     return _read_json("latest_upload.json")
 
 
+def read_current_upload_result() -> dict[str, Any] | None:
+    record = read_latest_upload_record()
+    if not isinstance(record, dict):
+        return None
+    job_id = str(record.get("job_id") or "").strip()
+    result = record.get("result") if isinstance(record.get("result"), dict) else None
+    if not has_active_session_artifact(result, job_id=job_id):
+        return None
+    return result
+
+
 def persist_latest_upload_state(
     *,
     summary: dict[str, Any] | None = None,
@@ -2056,7 +2067,7 @@ def build_upload_result(
             writer.writerow(row)
 
     summary = process_upload_bytes(filename, output.getvalue().encode("utf-8"))
-    result = read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+    result = read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
     return result
 
 
@@ -2108,7 +2119,7 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
             "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else None,
         })
 
-    latest = read_latest_upload_result()
+    latest = read_current_upload_result()
     if latest and not any(item.get("job_id") == latest.get("job_id") for item in items):
         items.insert(0, {
             "job_id": latest.get("job_id"),
@@ -2390,7 +2401,7 @@ def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kw
     if isinstance(content, str):
         content = content.encode("utf-8")
     summary = process_upload_bytes(filename, content, job_id=kwargs.get("job_id"))
-    return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+    return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
 
 def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
@@ -2437,7 +2448,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             processing_started_at,
         )
 
-        return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+        return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
     except Exception as exc:
         logger.exception("CSV upload processing failed job_id=%s filename=%s", job_id, filename)
@@ -2449,7 +2460,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 error=exc,
                 snapshot=snapshot,
             )
-            return read_upload_result_by_job_id(summary["job_id"]) or read_latest_upload_result() or {}
+            return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
         raise
 

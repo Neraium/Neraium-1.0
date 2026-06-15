@@ -125,3 +125,33 @@ def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> No
     assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
+
+
+def test_domain_mode_ignores_stale_latest_result_without_active_upload_marker(tmp_path) -> None:
+    from app.services import upload_jobs
+
+    upload_jobs.configure_runtime_dir(tmp_path)
+    upload_jobs._write_json("latest_upload_result.json", {
+        "job_id": "stale-upload",
+        "columns": ["timestamp", "pool_water_temp", "chlorine_ppm"],
+        "room_summary": {"rooms": [{"room": "Pool Deck", "row_count": 4}]},
+    })
+    client = TestClient(
+        create_app(
+            Settings(
+                app_env="test",
+                backend_host="127.0.0.1",
+                backend_port=8000,
+                cors_origins=["http://localhost"],
+                runtime_dir=tmp_path,
+            )
+        )
+    )
+
+    status = client.get("/api/domain/mode")
+
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["source"] == "unclassified"
+    assert payload["confidence"] == 0
+    assert payload["evidence"] == []

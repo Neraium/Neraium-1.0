@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.aquatic_domain import INTEGRATION_STUBS as AQUATIC_INTEGRATION_STUBS
-from app.services.upload_jobs import read_latest_upload_result
+from app.services.upload_jobs import read_current_upload_result
 
 DEFAULT_DOMAIN_MODE = "cultivation" 
 SUPPORTED_DOMAIN_MODES = {"aquatic", "cultivation"}
@@ -56,7 +56,7 @@ def read_domain_mode() -> str:
 
 
 def detect_domain_mode() -> dict[str, Any]:
-    latest_result = read_latest_upload_result()
+    latest_result = read_current_upload_result()
     if not isinstance(latest_result, dict):
         return {
             "mode": DEFAULT_DOMAIN_MODE,

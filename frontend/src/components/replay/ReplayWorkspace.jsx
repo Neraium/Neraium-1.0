@@ -388,8 +388,8 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
     }
     const latestPayload = await latestResponse.json();
     const latestResult = latestPayload?.latest_result ?? {};
-    const history = Array.isArray(latestPayload?.history) ? latestPayload.history : [];
-    targetJobId = latestResult?.job_id ?? history[0]?.job_id ?? null;
+    const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
+    targetJobId = currentUpload?.job_id ?? latestResult?.job_id ?? latestPayload?.snapshot?.job_id ?? latestPayload?.job_id ?? null;
     if (!targetJobId) {
       return { jobId: null, timeline: [], meta: {}, message: "No replay is available for the active session." };
     }

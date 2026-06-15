@@ -251,3 +251,21 @@ describe("ReplayWorkspace playback stability", () => {
     expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
   });
 });
+
+  it("does not fetch replay from stale history when there is no current upload", async () => {
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path) === "/api/data/latest-upload?include_persisted=1") {
+        return createResponse({ latest_result: null, history: [{ job_id: "stale-history-job" }] });
+      }
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
+      return createResponse({}, 404);
+    });
+
+    renderReplayWorkspace({
+      ...baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: null, latestUploadSnapshot: null } }),
+      hasRealSiiOutput: true,
+    });
+
+    await waitFor(() => expect(screen.getByText("No replay is available for the active session.")).toBeTruthy());
+    expect(fetchMock.mock.calls.some(([path]) => String(path).includes("stale-history-job"))).toBe(false);
+  });
