@@ -225,7 +225,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     evidenceBackedOperatorFocus:
       governance?.operator_focus
       ?? intervention?.recommendation
-      ?? "Inspect admitted structural relationship path and recovery window status.",
+      ?? "Review admitted structural relationship path and recovery window status.",
     persistenceWindowConfirmation:
       governance?.elapsed_operational_duration
       ?? intervention?.window
@@ -261,7 +261,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       operatorFocus:
         governance?.operator_focus
         ?? intervention?.recommendation
-        ?? "Inspect admitted structural relationship path and recovery window status.",
+        ?? "Review admitted structural relationship path and recovery window status.",
       telemetryWindowReferences:
         governance?.first_admitted_window
         ?? intervention?.window

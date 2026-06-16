@@ -190,7 +190,7 @@ function App() {
       interventionItems: hasPass
         ? [{
           label: governance?.affected_subsystem ?? roomContext.primary,
-          recommendation: governance?.operator_focus ?? "Inspect admitted structural relationship path.",
+          recommendation: governance?.operator_focus ?? "Review admitted structural relationship path.",
           window: governance?.elapsed_operational_duration ?? "Governed window active",
           confidence: 90,
           relationshipEvidence: [governance?.affected_relationship_path ?? "Admitted relationship path"],

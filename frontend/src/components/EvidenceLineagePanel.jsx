@@ -1,18 +1,19 @@
 import React from "react";
+import { normalizeOperatorConfidenceLabel, sanitizeOperatorList, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
 function renderLineageItem(label, value) {
   if (Array.isArray(value)) {
     return (
       <li key={label}>
         <span className="metadata-text">{label}</span>
-        <strong>{value.length ? value.join(" | ") : "none"}</strong>
+        <strong>{value.length ? sanitizeOperatorList(value).join(" | ") : "none"}</strong>
       </li>
     );
   }
   return (
     <li key={label}>
       <span className="metadata-text">{label}</span>
-      <strong>{value ?? "n/a"}</strong>
+      <strong>{sanitizeOperatorText(value ?? "n/a")}</strong>
     </li>
   );
 }
@@ -39,17 +40,17 @@ export default function EvidenceLineagePanel({ frame, lineage = null }) {
   const confidenceTier = normalizeTier(confidence.confidence_tier ?? confidence.evidence_density ?? confidence.corroboration_strength);
   return (
     <div className="evidence-lineage-panel">
-      <p className="evidence-lineage-panel__title">{first.target ?? "Evidence Target"}</p>
+      <p className="evidence-lineage-panel__title">{sanitizeOperatorText(first.target ?? "Evidence Target")}</p>
       <ul className="system-body-timeline-list">
         {renderLineageItem("Contributing relationships", sources.supporting_signals ?? [])}
         {renderLineageItem("Subsystem corroboration", sources.subsystem_corroboration ?? [])}
-        {renderLineageItem("Relationship evidence", sources.topology_evidence ?? [])}
+        {renderLineageItem("Historical comparison evidence", sources.topology_evidence ?? [])}
         {renderLineageItem("Persistence", sources.persistence_evidence ?? [])}
         {renderLineageItem("Change support", sources.propagation_evidence ?? [])}
         {renderLineageItem("Historical evidence", sources.historical_memory_references ?? [])}
-        {renderLineageItem("Replay support", sources.replay_support ?? [])}
+        {renderLineageItem("Replay evidence", sources.replay_support ?? [])}
         {renderLineageItem("Confidence basis", confidence.corroboration_strength ?? confidence.evidence_density)}
-        {renderLineageItem("Confidence tier", confidenceTier)}
+        {renderLineageItem("Confidence", normalizeOperatorConfidenceLabel(confidenceTier))}
       </ul>
     </div>
   );

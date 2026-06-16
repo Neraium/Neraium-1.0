@@ -90,7 +90,6 @@ Evidence:
 
 ## Remaining UX improvements
 
-Areas still worth improving without changing backend behavior:
-- Reduce decorative vertical space further on small iPhone Safari viewports.
+Future enhancements can focus on polish rather than consistency fixes:
 - Add explicit scroll anchoring from `Review Evidence` actions into the replay evidence section.
-- Extend sanitization coverage to any future operator-facing exports or changelog summaries.
+- Tune visual density further for narrow mobile viewports if future content expands.

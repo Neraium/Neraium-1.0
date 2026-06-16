@@ -194,7 +194,7 @@ describe("ReplayWorkspace playback stability", () => {
             status: "completed",
             source_name: "uploaded-telemetry.csv",
             variables: ["temperature", "humidity"],
-            evidence_summary: ["Temperature and humidity coupling moved away from baseline."],
+            evidence_summary: ["Temperature and humidity relationship divergence moved away from State Group A with replay/relationship evidence."],
             drift_metrics: { baseline_distance: null, drift_index: 0.73, confidence: 0.88 },
             deformation_started_at: "2026-01-01T00:00:00Z",
           }],
@@ -220,7 +220,9 @@ describe("ReplayWorkspace playback stability", () => {
     await waitFor(() => expect(screen.getByText("Source file: uploaded-telemetry.csv")).toBeTruthy());
     expect(screen.getByText("Run ID: job-real")).toBeTruthy();
     expect(screen.getByText("Variables: temperature | humidity")).toBeTruthy();
-    expect(screen.getByText("Relationship summary: Temperature and humidity coupling moved away from baseline.")).toBeTruthy();
+    expect(screen.getByText(/Relationship summary: Temperature and humidity system behavior changed from its normal pattern moved away from current operating pattern with historical comparison evidence\./)).toBeTruthy();
+    expect(screen.queryByText(/relationship divergence/i)).toBeNull();
+    expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.getByText("Change metric: 0.73")).toBeTruthy();
     expect(screen.getByText("Confidence: 88%")).toBeTruthy();
   });

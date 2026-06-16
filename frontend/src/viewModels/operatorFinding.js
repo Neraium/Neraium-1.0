@@ -132,6 +132,21 @@ export function sanitizeOperatorText(value) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+
+export function sanitizeOperatorList(values) {
+  if (!Array.isArray(values)) return [];
+  return values.map((item) => sanitizeOperatorText(item)).filter(Boolean);
+}
+
+export function normalizeOperatorConfidenceLabel(value) {
+  const normalized = String(value ?? "").toLowerCase().trim();
+  if (!normalized) return "Low";
+  if (normalized.includes("high") || normalized.includes("confirmed") || normalized.includes("strong")) return "High";
+  if (normalized.includes("moderate") || normalized.includes("medium") || normalized.includes("present") || normalized.includes("reference")) return "Moderate";
+  if (normalized.includes("low") || normalized.includes("weak") || normalized.includes("developing") || normalized.includes("monitoring") || normalized.includes("pending")) return "Low";
+  return sanitizeOperatorText(value);
+}
+
 export function containsDisallowedOperatorTerms(value) {
   const text = String(value ?? "");
   return DISALLOWED_REPLACEMENTS.some(([pattern]) => pattern.test(text));

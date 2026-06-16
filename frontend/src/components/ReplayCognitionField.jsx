@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { normalizeOperatorConfidenceLabel, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
 const BASE_NODES = [
   { id: "baseline", label: "Baseline", x: 118, y: 190, group: "anchor" },
@@ -116,7 +117,7 @@ function buildFieldModel(timeline, frameIndex) {
 
 function display(value, fallback = "-") {
   const raw = String(value ?? "").replaceAll("_", " ").trim();
-  return raw || fallback;
+  return sanitizeOperatorText(raw || fallback);
 }
 
 export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, comparisonMode, formatClockTime, inactive = false }) {
@@ -124,8 +125,8 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
   const frame = model.activeFrame;
   const status = inactive ? "-" : display(frame?.topology_state?.stability_state, "-");
   const phase = inactive ? "-" : display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "-");
-  const confidence = inactive ? "-" : display(frame?.cognition_state?.confidence_tier, "-");
-  const pathLabel = inactive ? "-" : (model.dominantPaths?.[0]?.replaceAll?.("_", " -> ") ?? "-");
+  const confidence = inactive ? "-" : normalizeOperatorConfidenceLabel(frame?.cognition_state?.confidence_tier);
+  const pathLabel = inactive ? "-" : sanitizeOperatorText(model.dominantPaths?.[0]?.replaceAll?.("_", " -> ") ?? "-");
 
   return (
     <section

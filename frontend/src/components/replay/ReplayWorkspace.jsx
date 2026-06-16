@@ -6,6 +6,7 @@ import EvidenceInteractionPanel from "../EvidenceInteractionPanel";
 import ReplayCognitionField from "../ReplayCognitionField";
 import { resolveSessionJobId } from "../../viewModels/currentSession";
 import * as uploadStateView from "../../viewModels/uploadState";
+import { normalizeOperatorConfidenceLabel, sanitizeOperatorList, sanitizeOperatorText } from "../../viewModels/operatorFinding";
 
 export default function ReplayWorkspace({
   apiFetch,
@@ -281,7 +282,7 @@ export default function ReplayWorkspace({
 
         <div className="replay-discovery__sequence" aria-label="Evidence replay discovery sequence">
           <DiscoveryCard label="Before" item={discovery.before} active={hasReplaySnapshots && currentFrameIndex === 0} />
-          <DiscoveryCard label="Change Detected" item={discovery.current} active={hasReplaySnapshots} emphasized />
+          <DiscoveryCard label="Behavior Change" item={discovery.current} active={hasReplaySnapshots} emphasized />
           <DiscoveryCard label="After" item={discovery.after} active={hasReplaySnapshots && currentFrameIndex === operativeTimeline.length - 1} />
         </div>
 
@@ -294,7 +295,7 @@ export default function ReplayWorkspace({
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
             <span className="section-token">Supporting Evidence</span>
             <ul className="compact-list">
-              {(replayFinding.supportingEvidence.length > 0 ? replayFinding.supportingEvidence : supportingEvidence).map((item) => <li key={item}>{item}</li>)}
+              {sanitizeOperatorList(replayFinding.supportingEvidence.length > 0 ? replayFinding.supportingEvidence : supportingEvidence).map((item) => <li key={item}>{item}</li>)}
             </ul>
           </section>
           <section className="replay-discovery__insight" aria-label="Next operator review">
@@ -507,8 +508,8 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
     whatChanged: {
       title: replayStateHeadline(current),
       detail: contributors.length
-        ? "Relationship pattern shifted around " + contributorText + "."
-        : replayMomentDetail(current),
+        ? sanitizeOperatorText("Relationship pattern shifted around " + contributorText + ".")
+        : sanitizeOperatorText(replayMomentDetail(current)),
     },
     evidence: [
       "Confidence: " + confidence,
@@ -518,7 +519,7 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
     reviewNext: {
       title: contributors.length ? "Review supporting evidence" : "Review replay timeline",
       detail: contributors.length
-        ? "Check " + contributorText + " against the source telemetry and operator notes."
+        ? sanitizeOperatorText("Review " + contributorText + " against the source telemetry and operator notes.")
         : "Use the timeline controls to inspect when the change first appeared.",
     },
   };
@@ -545,20 +546,20 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
     frame?.topology_state?.drift_index,
   );
 
-  if (sourceName) items.push("Source file: " + sourceName);
+  if (sourceName) items.push("Source file: " + sanitizeOperatorText(sourceName));
   if (runId) items.push("Run ID: " + runId);
   if (lineage?.upload_id) items.push("Upload ID: " + String(lineage.upload_id));
-  if (variables.length) items.push("Variables: " + variables.join(" | "));
-  if (summaries[0]) items.push("Relationship summary: " + summaries[0]);
+  if (variables.length) items.push("Variables: " + sanitizeOperatorList(variables).join(" | "));
+  if (summaries[0]) items.push("Relationship summary: " + sanitizeOperatorText(summaries[0]));
   if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
   if (detectedAt) items.push("Detected: " + formatClockTime(detectedAt));
   if (Array.isArray(lineage?.source_rows) && lineage.source_rows.length > 0) {
     const firstAnchor = lineage.source_rows[0] ?? {};
-    items.push("Source rows: " + [firstAnchor.window, firstAnchor.source_row, firstAnchor.timestamp].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").join(" @ "));
+    items.push("Source rows: " + sanitizeOperatorText([firstAnchor.window, firstAnchor.source_row, firstAnchor.timestamp].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").join(" @ ")));
   }
   if (Array.isArray(lineage?.evidence_windows) && lineage.evidence_windows.length > 0) {
     const firstWindow = lineage.evidence_windows[0] ?? {};
-    items.push("Evidence window: " + [firstWindow.column, firstWindow.baseline_window && firstWindow.recent_window ? `${firstWindow.baseline_window} -> ${firstWindow.recent_window}` : (firstWindow.window_start || firstWindow.window_end)].filter(Boolean).join(" "));
+    items.push("Evidence window: " + sanitizeOperatorText([firstWindow.column, firstWindow.baseline_window && firstWindow.recent_window ? `${firstWindow.baseline_window} -> ${firstWindow.recent_window}` : (firstWindow.window_start || firstWindow.window_end)].filter(Boolean).join(" ")));
   }
   if (frameCount > 0) {
     const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
@@ -567,7 +568,7 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
   if (confidence != null && String(confidence).trim()) {
     items.push("Confidence: " + formatEvidenceConfidence(confidence));
   }
-  return items;
+  return sanitizeOperatorList(items);
 }
 
 function firstFiniteNumber(...values) {
@@ -674,11 +675,7 @@ function sentenceCase(value) {
 
 function formatConfidenceLabel(value) {
   const normalized = String(value ?? "").toLowerCase();
-  if (normalized.includes("high") || normalized.includes("confirmed") || normalized.includes("strong")) return "High";
-  if (normalized.includes("moderate") || normalized.includes("medium") || normalized.includes("present") || normalized.includes("reference")) return "Moderate";
-  if (!normalized.trim()) return "Low";
-  if (normalized.includes("low") || normalized.includes("weak") || normalized.includes("developing") || normalized.includes("monitoring")) return "Low";
-  return sentenceCase(String(value).replaceAll("_", " "));
+  return normalizeOperatorConfidenceLabel(value);
 }
 
 function buildReplayNotice(error, normalizeErrorMessage) {
