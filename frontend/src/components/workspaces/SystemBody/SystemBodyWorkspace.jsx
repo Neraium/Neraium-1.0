@@ -28,6 +28,7 @@ export default function SystemBodyWorkspace({
   liveSnapshot = null,
   latestReplayFrame = null,
   canonicalFinding = null,
+  telemetrySessionMode = "empty",
 }) {
   void dataFreshness;
   void siiVerification;
@@ -79,7 +80,7 @@ export default function SystemBodyWorkspace({
       connectionStatus,
     ],
   );
-  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
+  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry, telemetrySessionMode);
   const stabilitySnapshot = useMemo(
     () => buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, latestReplayFrame }),
     [latestReplayFrame, latestUploadResult, latestUploadSnapshot],
@@ -666,13 +667,14 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
 }
 
 
-function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
+function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry, telemetrySessionMode = "empty") {
   if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };
   if (isConnectionDegraded(connectionTone, connectionStatus)) return { tone: "offline", label: "Connection degraded" };
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
   if (text.includes("replay")) return { label: "Replay running", tone: "syncing" };
   if (text.includes("sync")) return { label: "Data stream active", tone: "syncing" };
   if (lastUpdate) return { tone: "online", label: "Telemetry active" };
+  if (telemetrySessionMode === "persisted") return { tone: "watch", label: "Persisted telemetry available" };
   return { tone: "pending", label: "Awaiting telemetry" };
 }
 

@@ -64,6 +64,39 @@ export function hasActiveTelemetrySnapshot(snapshot) {
   );
 }
 
+export function deriveTelemetrySessionState({ latestUploadResult = null, latestUploadSnapshot = null, latestReplayFrame = null } = {}) {
+  const hasReplayFrame = Boolean(latestReplayFrame && Object.keys(latestReplayFrame).length > 0);
+  const hasLiveResult = hasFullUploadResult(latestUploadResult);
+  const hasActiveSnapshot = hasActiveTelemetrySnapshot(latestUploadSnapshot);
+  const hasTelemetry = hasReplayFrame || hasLiveResult || hasActiveSnapshot;
+  const sessionMode = !hasTelemetry
+    ? "empty"
+    : (hasReplayFrame || hasLiveResult)
+      ? "live"
+      : "persisted";
+  const heartbeatAt = latestReplayFrame?.timestamp
+    ?? latestReplayFrame?.last_processed_at
+    ?? latestReplayFrame?.completed_at
+    ?? latestUploadSnapshot?.last_processed_at
+    ?? latestUploadSnapshot?.last_upload_at
+    ?? latestUploadResult?.last_processed_at
+    ?? latestUploadResult?.completed_at
+    ?? latestUploadResult?.processing_trace?.completed_at
+    ?? latestUploadResult?.sii_intelligence?.last_updated
+    ?? null;
+  const statusLabel = !hasTelemetry
+    ? "Awaiting telemetry data"
+    : sessionMode === "persisted"
+      ? "Persisted telemetry available"
+      : "Data stream active";
+  return {
+    hasTelemetry,
+    sessionMode,
+    heartbeatAt,
+    statusLabel,
+  };
+}
+
 export function buildEmptyLatestUploadSnapshot() {
   return {
     status: "empty",

@@ -80,10 +80,15 @@ function App() {
     }),
     [guardedLatestUploadResult, guardedLatestUploadSnapshot],
   );
-  const hasObservableUploadSession = useMemo(
-    () => gateUploadCompleteSeen || Boolean(completedUploadOverride) || uploadStateView.hasActiveTelemetrySnapshot(guardedLatestUploadSnapshot) || uploadStateView.hasFullUploadResult(guardedLatestUploadResult),
-    [gateUploadCompleteSeen, completedUploadOverride, guardedLatestUploadResult, guardedLatestUploadSnapshot],
+  const telemetrySession = useMemo(
+    () => uploadStateView.deriveTelemetrySessionState({
+      latestUploadResult: guardedLatestUploadResult,
+      latestUploadSnapshot: guardedLatestUploadSnapshot,
+      latestReplayFrame: historianReplayState.frame,
+    }),
+    [guardedLatestUploadResult, guardedLatestUploadSnapshot, historianReplayState.frame],
   );
+  const hasObservableUploadSession = telemetrySession.hasTelemetry || gateUploadCompleteSeen || Boolean(completedUploadOverride);
   const effectiveSessionIntent = sessionIntent;
   useEffect(() => {
     if (
@@ -139,17 +144,7 @@ function App() {
     const hasPass = ENABLE_ADMISSION_GATE && gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
     const uploadTone = deriveUploadTone(effectiveLatestUploadResult);
 
-    const heartbeatSource =
-      hasObservableUploadSession
-        ? (
-          effectiveLatestUploadSnapshot?.last_processed_at
-          ?? effectiveLatestUploadSnapshot?.last_upload_at
-          ?? effectiveLatestUploadResult?.last_processed_at
-          ?? effectiveLatestUploadResult?.completed_at
-          ?? effectiveLatestUploadResult?.processing_trace?.completed_at
-          ?? effectiveLatestUploadResult?.sii_intelligence?.last_updated
-        )
-        : null;
+    const heartbeatSource = telemetrySession.heartbeatAt;
     const hasTelemetryHeartbeat = Boolean(heartbeatSource);
     const facilityTone = hasTelemetryHeartbeat
       ? (hasPass
@@ -157,7 +152,9 @@ function App() {
           ? "critical"
           : "watch"
         : uploadTone)
-      : "empty";
+      : telemetrySession.sessionMode === "persisted"
+        ? "watch"
+        : "empty";
 
     const intelligenceMode = hasTelemetryHeartbeat
       ? deriveIntelligenceMode({
@@ -169,7 +166,7 @@ function App() {
       ? `Updated ${formatClockTime(heartbeatSource)} CT`
       : null;
     const connectionStatusLine = apiStatus.state === "online"
-      ? (heartbeatSource ? "Data stream active" : "Awaiting telemetry data")
+      ? telemetrySession.statusLabel
       : "Connection degraded";
     const dataFreshness = classifyDataFreshness({
       heartbeatAt: heartbeatSource,
@@ -217,12 +214,13 @@ function App() {
       latestUploadResult: completedUploadOverride ?? effectiveLatestUploadResult,
       latestUploadSnapshot: effectiveLatestUploadSnapshot,
       currentSession,
+      telemetrySession,
       systems,
       systemsState,
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, canonicalFinding, completedUploadOverride, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, canonicalFinding, completedUploadOverride, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
   const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {

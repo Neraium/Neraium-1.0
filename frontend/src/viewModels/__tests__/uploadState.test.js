@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { connectionStateLabel, deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult, resolveOperatorReviewReadiness } from "../uploadState";
+import { connectionStateLabel, deriveRoomContext, deriveTelemetrySessionState, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult, resolveOperatorReviewReadiness } from "../uploadState";
 
 describe("uploadState normalization", () => {
   it("resolves room aliases from messy column names", () => {
@@ -80,6 +80,41 @@ describe("uploadState normalization", () => {
         },
       },
     })).toBe("Active Session");
+  });
+
+  it("classifies empty, persisted, and live telemetry sessions consistently", () => {
+    expect(deriveTelemetrySessionState({})).toEqual({
+      hasTelemetry: false,
+      sessionMode: "empty",
+      heartbeatAt: null,
+      statusLabel: "Awaiting telemetry data",
+    });
+
+    expect(deriveTelemetrySessionState({
+      latestUploadSnapshot: {
+        status: "complete",
+        last_filename: "cached-upload.csv",
+      },
+    })).toEqual({
+      hasTelemetry: true,
+      sessionMode: "persisted",
+      heartbeatAt: null,
+      statusLabel: "Persisted telemetry available",
+    });
+
+    expect(deriveTelemetrySessionState({
+      latestUploadResult: {
+        job_id: "live-job-1",
+        sii_intelligence: {
+          last_updated: "2026-06-15T12:00:00Z",
+        },
+      },
+    })).toEqual({
+      hasTelemetry: true,
+      sessionMode: "live",
+      heartbeatAt: "2026-06-15T12:00:00Z",
+      statusLabel: "Data stream active",
+    });
   });
 
 

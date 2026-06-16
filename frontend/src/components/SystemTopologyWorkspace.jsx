@@ -140,6 +140,7 @@ export default function SystemTopologyWorkspace({
       liveSnapshot={liveOps}
       latestReplayFrame={replayFrame}
       canonicalFinding={liveOps.canonicalFinding ?? null}
+      telemetrySessionMode={liveOps.telemetrySession?.sessionMode ?? "empty"}
       gateProcessing={gateProcessing}
     /> 
   ); 

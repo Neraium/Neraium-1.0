@@ -1,3 +1,5 @@
+import { deriveTelemetrySessionState } from "./uploadState";
+
 export function deriveCurrentSession({
   latestUploadResult,
   latestUploadSnapshot,
@@ -17,6 +19,10 @@ export function deriveCurrentSession({
     && interpretation?.lineage?.aligned
     && interpretation?.run_alignment_verified !== false,
   );
+  const telemetrySession = deriveTelemetrySessionState({
+    latestUploadResult: result,
+    latestUploadSnapshot: snapshot,
+  });
   const interpretationMatchesSession = !sessionJobId || !lineageJobId || String(lineageJobId) === String(sessionJobId);
   const hasReliableOperatorEvidence = Boolean(
     hasActiveSession
@@ -42,6 +48,8 @@ export function deriveCurrentSession({
     hasCurrentUploadResult: Boolean(hasCurrentUploadResult),
     hasResumedSession: Boolean(hasResumedSession),
     hasRealSiiOutput: Boolean(hasRealSiiOutput),
+    telemetrySessionMode: telemetrySession.sessionMode,
+    telemetryHeartbeatAt: telemetrySession.heartbeatAt,
     hasReliableOperatorEvidence,
     reviewReadiness,
   };

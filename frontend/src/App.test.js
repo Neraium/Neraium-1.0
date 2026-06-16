@@ -109,7 +109,7 @@ it("treats persisted metadata without a heartbeat timestamp as awaiting telemetr
   render(h(App));
 
   expect(screen.getByTestId("gate-heartbeat-summary").textContent).toBe("none");
-  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Persisted telemetry available");
 });
 
 describe("App upload completion navigation", () => {
