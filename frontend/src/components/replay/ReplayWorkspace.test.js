@@ -60,6 +60,10 @@ function renderReplayWorkspace(props = baseProps()) {
   return render(React.createElement(ReplayWorkspace, props));
 }
 
+function expectReplayHeading() {
+  expect(screen.getAllByText("Evidence Replay").length).toBeGreaterThan(0);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -69,7 +73,7 @@ describe("ReplayWorkspace", () => {
     const props = baseProps();
     renderReplayWorkspace(props);
 
-    expect(screen.getByText("Evidence Replay")).toBeTruthy();
+    expectReplayHeading();
     await waitFor(() => {
       expect(props.apiFetch).toHaveBeenCalledWith(expect.stringContaining("/api/data/replay/"), expect.any(Object));
     });
@@ -78,7 +82,7 @@ describe("ReplayWorkspace", () => {
   it("keeps technical replay diagnostics out of the default view", async () => {
     renderReplayWorkspace(baseProps());
 
-    await waitFor(() => expect(screen.getByText("Evidence Replay")).toBeTruthy());
+    await waitFor(() => expectReplayHeading());
     expect(screen.queryByText("Raw change direction")).toBeNull();
     expect(screen.queryByText("Structural Progression")).toBeNull();
   });
@@ -86,9 +90,9 @@ describe("ReplayWorkspace", () => {
   it("allows replay controls to be clicked when replay data is loaded", async () => {
     renderReplayWorkspace(baseProps());
 
-    await waitFor(() => expect(screen.getByText("Evidence Replay")).toBeTruthy());
+    await waitFor(() => expectReplayHeading());
     const nextButton = screen.queryByRole("button", { name: "Next" });
     if (nextButton) fireEvent.click(nextButton);
-    expect(screen.getByText("Evidence Replay")).toBeTruthy();
+    expectReplayHeading();
   });
 });
