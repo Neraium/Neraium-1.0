@@ -113,6 +113,12 @@ export default function SystemBodyWorkspace({
     { label: "Operating pattern", value: stabilitySnapshot.regime },
     { label: "Persistence", value: stabilitySnapshot.deformationAge },
   ];
+  const stabilityRows = [
+    { label: "Current operating pattern", value: stabilitySnapshot.regime },
+    { label: "Behavior has persisted", value: stabilitySnapshot.deformationAge },
+    { label: "Drift magnitude", value: stabilitySnapshot.driftMagnitude },
+    { label: "Active observations", value: String(stabilitySnapshot.activeObservations) },
+  ];
   const insightRows = [
     { label: "Primary driver", value: interpretation.primaryDriver },
     { label: "Why it matters", value: finding.whyItMatters },
@@ -364,6 +370,21 @@ export default function SystemBodyWorkspace({
                 </ul>
               </div>
             ) : null}
+          </section>
+
+          <section className="system-gate__panel" aria-label="Structural stability snapshot">
+            <div className="system-gate__panel-header">
+              <p className="section-token">Structural stability snapshot</p>
+              <strong>Review baseline</strong>
+            </div>
+            <ul className="system-gate__detail-list system-gate__detail-list--dense">
+              {stabilityRows.map((item) => (
+                <li key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </li>
+              ))}
+            </ul>
           </section>
 
           <section className="system-gate__panel" aria-label="Workspace navigation">
@@ -666,7 +687,7 @@ function hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestRe
 function normalizeStructuralLabel(value, fallback = EMPTY_VALUE) {
   const text = String(value ?? "").trim();
   const normalized = text.toLowerCase().replaceAll("_", " ");
-  if (!text || ["empty", "idle", "none", "null", "undefined"].includes(normalized)) return fallback;
+  if (!text || ["empty", "idle", "none", "null", "undefined", "complete", "completed", "success", "ok"].includes(normalized)) return fallback;
   if (normalized === "no active session" || normalized.includes("baseline pending")) return "No data yet";
   if (normalized.includes("stable") || normalized.includes("nominal")) return "Monitoring";
   if (normalized.includes("drift") || normalized.includes("degrad") || normalized.includes("topology") || normalized.includes("fragment")) return "Change Detected";

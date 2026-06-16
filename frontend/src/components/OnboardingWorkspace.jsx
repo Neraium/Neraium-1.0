@@ -115,17 +115,21 @@ function defaultState() {
     baselineWindowStart: "",
     baselineWindowEnd: "",
     connectionTest: null,
+    connectionTestState: "idle",
+    connectionTestMessage: "",
+    connectionTestError: "",
     monitoringStarted: false,
   };
 }
 
-function runMockConnectionTest(flow) {
+function buildLocalConnectionAssessment(flow) {
+  const mappedCount = Object.values(flow.signalMapping).filter(Boolean).length;
   const sourceReachable = Boolean(
     flow.dataSource
     && (
       flow.dataSource === "Demo Mode"
       || flow.dataSource === "CSV Upload"
-      || (flow.api.baseUrl && flow.api.token)
+      || Boolean(flow.api.baseUrl)
     )
   );
   const telemetryReceived = flow.dataSource === "CSV Upload"
@@ -134,17 +138,14 @@ function runMockConnectionTest(flow) {
   const timestampDetected = flow.dataSource === "CSV Upload"
     ? flow.detectedColumns.includes("timestamp")
     : true;
-  const mappedCount = Object.values(flow.signalMapping).filter(Boolean).length;
-  const requiredSignalsMapped = mappedCount >= 3;
-  const sampleRateAcceptable = flow.dataSource === "API"
-    ? Number(flow.api.pollingInterval) > 0 && Number(flow.api.pollingInterval) <= 300
-    : true;
   return {
     sourceReachable,
     telemetryReceived,
     timestampDetected,
-    requiredSignalsMapped,
-    sampleRateAcceptable,
+    requiredSignalsMapped: mappedCount >= 3,
+    sampleRateAcceptable: flow.dataSource === "API"
+      ? Number(flow.api.pollingInterval) > 0 && Number(flow.api.pollingInterval) <= 300
+      : true,
   };
 }
 
@@ -189,17 +190,30 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       return true;
     }
     if (flow.step === 3) return mappedCount > 0;
-    if (flow.step === 4) return Boolean(flow.connectionTest);
+    if (flow.step === 4) return flow.connectionTestState === "passed";
     if (flow.step === 5) return Boolean(flow.baselineMode);
     return true;
   }, [flow, mappedCount]);
+
+  function buildConnectionTestReset() {
+    return {
+      connectionTest: null,
+      connectionTestState: "idle",
+      connectionTestMessage: "",
+      connectionTestError: "",
+    };
+  }
 
   function updateFlow(patch) {
     setFlow((current) => ({ ...current, ...patch }));
   }
 
   function setApiField(field, value) {
-    setFlow((current) => ({ ...current, api: { ...current.api, [field]: value } }));
+    setFlow((current) => ({
+      ...current,
+      ...buildConnectionTestReset(),
+      api: { ...current.api, [field]: value },
+    }));
   }
 
   function prevStep() {
@@ -224,6 +238,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         state_variable_b: current.signalMapping.state_variable_b || "variable_b",
         state_variable_c: current.signalMapping.state_variable_c || "variable_c",
       },
+      ...buildConnectionTestReset(),
       step: 3,
       uploadStatus: "complete",
       uploadMessage: "Demo telemetry loaded.",
@@ -337,6 +352,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         state_variable_b: current.signalMapping.state_variable_b || (detectedColumns.includes("variable_b") ? "variable_b" : ""),
         state_variable_c: current.signalMapping.state_variable_c || (detectedColumns.includes("variable_c") ? "variable_c" : ""),
       },
+      ...buildConnectionTestReset(),
       step: 3,
     }));
 
@@ -394,14 +410,73 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
     }
   }
 
-  function runConnectionTest() {
-    const results = runMockConnectionTest(flow);
-    updateFlow({ connectionTest: results });
+  async function runConnectionTest() {
+    if (flow.dataSource === "API") {
+      updateFlow({
+        ...buildConnectionTestReset(),
+        connectionTestState: "running",
+        connectionTestMessage: "Verifying read-only API access and telemetry structure...",
+      });
+
+      try {
+        const response = await onboardingFetch("/api/connectors/rest/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: flow.api.baseUrl,
+            token: flow.api.token,
+            source_id: flow.api.siteName || "customer-rest",
+            system_id: flow.api.systemName || "facility-rest",
+          }),
+        });
+        const payload = await readJsonSafely(response);
+        if (!response.ok) {
+          throw new Error(String(payload?.detail || payload?.message || "API verification failed."));
+        }
+        const readiness = buildLocalConnectionAssessment(flow);
+        updateFlow({
+          connectionTest: {
+            ...readiness,
+            sourceReachable: payload.connection_status !== "offline" && payload.connection_status !== "not_configured",
+            telemetryReceived: Number(payload.records_ingested) > 0 || Number(payload.sensors_detected) > 0,
+            backendValidated: true,
+            connectionStatus: payload.connection_status,
+            sensorsDetected: Number(payload.sensors_detected ?? 0),
+            recordsIngested: Number(payload.records_ingested ?? 0),
+            warnings: Array.isArray(payload.warnings) ? payload.warnings : [],
+          },
+          connectionTestState: "passed",
+          connectionTestMessage: String(payload?.message || "Read-only verification passed."),
+          connectionTestError: "",
+          step: 5,
+        });
+        return;
+      } catch (error) {
+        updateFlow({
+          ...buildConnectionTestReset(),
+          connectionTestState: "failed",
+          connectionTestError: String(error?.message || "API verification failed."),
+        });
+        return;
+      }
+    }
+
+    const results = buildLocalConnectionAssessment(flow);
+    updateFlow({
+      connectionTest: results,
+      connectionTestState: "passed",
+      connectionTestMessage: flow.dataSource === "CSV Upload"
+        ? "Uploaded telemetry is ready for mapping review."
+        : "Readiness checks passed for the selected data source.",
+      connectionTestError: "",
+      step: 5,
+    });
   }
 
   function setMappedField(role, value) {
     setFlow((current) => ({
       ...current,
+      ...buildConnectionTestReset(),
       signalMapping: { ...current.signalMapping, [role]: value || "" },
     }));
   }
@@ -411,19 +486,10 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
     if (typeof onStartMonitoring === "function") onStartMonitoring();
   }
 
-  useEffect(() => {
-    if (flow.step === 2 && canContinue && flow.dataSource === "API") {
-      const timer = window.setTimeout(() => {
-        setFlow((current) => (
-          current.step === 2
-            ? { ...current, step: Math.min(current.step + 1, STEPS.length - 1) }
-            : current
-        ));
-      }, 180);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
-  }, [canContinue, flow.step, flow.dataSource]);
+  function advanceStep() {
+    if (!canContinue) return;
+    updateFlow({ step: Math.min(flow.step + 1, STEPS.length - 1) });
+  }
 
   return (
     <section className="onboarding-shell" aria-label="Neraium setup wizard">
@@ -458,7 +524,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   key={option}
                   type="button"
                   className={`onboarding-choice ${flow.systemType === option ? "is-selected" : ""}`}
-                  onClick={() => updateFlow({ systemType: option, step: 1 })}
+                  onClick={() => updateFlow({ systemType: option, ...buildConnectionTestReset(), step: 1 })}
                 >
                   {option}
                 </button>
@@ -476,7 +542,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   key={option}
                   type="button"
                   className={`onboarding-choice ${flow.dataSource === option ? "is-selected" : ""}`}
-                  onClick={() => updateFlow({ dataSource: option, step: 2 })}
+                  onClick={() => updateFlow({
+                    dataSource: option,
+                    ...buildConnectionTestReset(),
+                    step: 2,
+                  })}
                 >
                   {option}
                 </button>
@@ -562,11 +632,19 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
           <div className="onboarding-section">
             <h2>Connection Test</h2>
             <div className="onboarding-inline">
-              <button type="button" className="command-button" onClick={() => {
-                runConnectionTest();
-                updateFlow({ step: 5 });
-              }}>Run Connection Test</button>
+              <button
+                type="button"
+                className="command-button"
+                onClick={() => {
+                  void runConnectionTest();
+                }}
+                disabled={flow.connectionTestState === "running"}
+              >
+                {flow.connectionTestState === "running" ? "Testing Connection..." : "Run Connection Test"}
+              </button>
             </div>
+            {flow.connectionTestMessage ? <p className="narrative-text">{flow.connectionTestMessage}</p> : null}
+            {flow.connectionTestError ? <p className="narrative-text">{flow.connectionTestError}</p> : null}
             {flow.connectionTest && (
               <ul className="onboarding-checklist">
                 <li className={flow.connectionTest.sourceReachable ? "ok" : "warn"}>Data source reachable</li>
@@ -576,6 +654,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                 <li className={flow.connectionTest.sampleRateAcceptable ? "ok" : "warn"}>Sample rate acceptable</li>
               </ul>
             )}
+            {Array.isArray(flow.connectionTest?.warnings) && flow.connectionTest.warnings.length > 0 ? (
+              <ul className="compact-list">
+                {flow.connectionTest.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+              </ul>
+            ) : null}
           </div>
         )}
 
@@ -652,6 +735,9 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
       <footer className="onboarding-footer">
         <button type="button" className="secondary-command-button" onClick={prevStep} disabled={flow.step === 0}>Back</button>
+        {(flow.step === 2 || flow.step === 3) ? (
+          <button type="button" className="command-button" onClick={advanceStep} disabled={!canContinue}>Continue</button>
+        ) : null}
       </footer>
     </section>
   );
