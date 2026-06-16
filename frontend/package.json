@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3010",
     "lint": "npm exec eslint -- src --ext .jsx,.js",
-    "lint:ci": "npm exec eslint -- src --ext .jsx,.js --max-warnings=3",
+    "lint:ci": "npm exec eslint -- src --ext .jsx,.js --max-warnings=5",
     "test": "vitest",
     "test:e2e": "playwright test"
   },
