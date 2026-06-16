@@ -185,8 +185,8 @@ function App() {
         window: governance?.elapsed_operational_duration ?? "Governed window active",
       },
       findings: hasPass
-        ? [{ detail: governance?.why_summary ?? "Admitted governed finding active." }]
-        : [],
+        ? [{ detail: governance?.why_summary ?? canonicalFinding.summary ?? "Admitted governed finding active." }]
+        : (canonicalFinding.exists ? [{ detail: canonicalFinding.summary }] : []),
       interventionItems: hasPass
         ? [{
           label: governance?.affected_subsystem ?? roomContext.primary,
@@ -195,7 +195,13 @@ function App() {
           confidence: 90,
           relationshipEvidence: [governance?.affected_relationship_path ?? "Admitted relationship path"],
         }]
-        : [],
+        : (canonicalFinding.exists ? [{
+          label: roomContext.primary,
+          recommendation: canonicalFinding.reviewNext,
+          window: canonicalFinding.technicalDetails?.find((item) => item.label === "Behavior duration")?.value ?? "Current observation",
+          confidence: canonicalFinding.confidence === "High" ? 90 : canonicalFinding.confidence === "Moderate" ? 70 : 50,
+          relationshipEvidence: canonicalFinding.supportingEvidence ?? [],
+        }] : []),
       relationshipRows: effectiveLatestUploadResult?.baseline_analysis?.relationship_drift ?? [],
       distributed_cognition_governance: governance,
       sourceIntelligence: intelligence,
@@ -207,7 +213,7 @@ function App() {
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, completedUploadOverride, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
+  }, [apiStatus.state, canonicalFinding, completedUploadOverride, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasObservableUploadSession, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetryTick]);
   const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
@@ -423,6 +429,7 @@ function App() {
             apiFetch={apiFetch}
             accessCode={accessCode}
             canonicalFinding={canonicalFinding}
+            currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
             onReviewEvidence={() => setActiveWorkspace("historical-replay")}
             onWorkspaceNavigate={setActiveWorkspace}

@@ -124,6 +124,54 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
   };
 }
 
+export function buildCanonicalFindingRun({ canonicalFinding, currentSession }) {
+  if (!canonicalFinding?.exists) return null;
+  const result = currentSession?.latestUploadResult ?? null;
+  const runId = canonicalFinding.runId ?? resolveSessionJobId(currentSession) ?? "current-observation";
+  const evidenceSummary = Array.isArray(canonicalFinding.supportingEvidence) && canonicalFinding.supportingEvidence.length > 0
+    ? canonicalFinding.supportingEvidence
+    : [canonicalFinding.summary];
+  const confidence = normalizeOperatorConfidenceLabel(canonicalFinding.confidence);
+
+  return {
+    run_id: runId,
+    source_name: canonicalFinding.sourceName ?? result?.filename ?? "Current telemetry session",
+    source_type: "current_session",
+    observation_type: result?.observation_type ?? "trajectory_drift",
+    observation_status: "open",
+    status: "complete",
+    structural_state: canonicalFinding.status,
+    operating_state: canonicalFinding.status,
+    evidence_summary: evidenceSummary,
+    historical_fact: canonicalFinding.historicalComparison ?? "Historical comparison evidence supports a change from the normal pattern.",
+    potential_impact: canonicalFinding.whyItMatters,
+    operator_impact: canonicalFinding.whyItMatters,
+    variables: canonicalFinding.affectedVariables ?? [],
+    confidence,
+    evidence_confidence: confidence,
+    created_at: result?.completed_at ?? result?.last_processed_at ?? result?.processing_trace?.completed_at ?? result?.timestamp_profile?.last_timestamp ?? null,
+    deformation_started_at: result?.deformation_started_at ?? result?.timestamp_profile?.first_timestamp ?? null,
+    regime_label: result?.sii_intelligence?.baseline_regime ?? result?.sii_intelligence?.regime_label ?? null,
+    drift_metrics: {
+      baseline_distance: firstFiniteNumber(
+        result?.drift_metrics?.baseline_distance,
+        result?.drift_metrics?.drift_index,
+        result?.sii_intelligence?.instability_index,
+      ) ?? null,
+      drift_index: firstFiniteNumber(
+        result?.drift_metrics?.drift_index,
+        result?.drift_metrics?.baseline_distance,
+        result?.sii_intelligence?.instability_index,
+      ) ?? null,
+      confidence: confidence.toLowerCase(),
+    },
+    data_conditions: buildDataQualityGroups(result).missingRecentValues ?? [],
+    technical_details: canonicalFinding.technicalDetails ?? [],
+    replay_references: canonicalFinding.replayReferences ?? [],
+    synthetic_current_run: true,
+  };
+}
+
 export function sanitizeOperatorText(value) {
   let text = String(value ?? "").trim();
   for (const [pattern, replacement] of DISALLOWED_REPLACEMENTS) {

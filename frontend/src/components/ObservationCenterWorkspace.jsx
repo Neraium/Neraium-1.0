@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import SystemStateMark from "./SystemStateMark";
-import { OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
+import { buildCanonicalFindingRun, OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
 const FEEDBACK_OPTIONS = [
   { id: "confirmed_issue", label: "Confirmed developing issue" },
@@ -175,6 +175,7 @@ export default function ObservationCenterWorkspace({
   apiFetch,
   accessCode,
   canonicalFinding = null,
+  currentSession = null,
   onBackToGate = null,
   onReviewEvidence = null,
   onWorkspaceNavigate = null,
@@ -257,15 +258,22 @@ export default function ObservationCenterWorkspace({
     };
   }, [accessCode, aliases, apiFetch, notificationPrefs]);
 
+  const reviewRuns = useMemo(() => {
+    const canonicalRun = buildCanonicalFindingRun({ canonicalFinding, currentSession });
+    if (!canonicalRun) return runs;
+    const remainingRuns = runs.filter((run) => run?.run_id !== canonicalRun.run_id);
+    return [canonicalRun, ...remainingRuns];
+  }, [canonicalFinding, currentSession, runs]);
+
   const variables = useMemo(() => {
     const values = new Set();
-    runs.forEach((run) => {
+    reviewRuns.forEach((run) => {
       (run?.variables ?? []).forEach((item) => {
         if (item) values.add(String(item));
       });
     });
     return [...values];
-  }, [runs]);
+  }, [reviewRuns]);
 
   useEffect(() => {
     if (!selectedAliasVariable && variables.length) {
@@ -287,7 +295,7 @@ export default function ObservationCenterWorkspace({
   }, [selectedVariables, variables]);
 
   const filteredRuns = useMemo(() => {
-    return runs.filter((run) => {
+    return reviewRuns.filter((run) => {
       const haystack = [
         run?.run_id,
         run?.source_name,
@@ -303,14 +311,14 @@ export default function ObservationCenterWorkspace({
       const typeMatch = typeFilter === "all" || String(run?.observation_type ?? "") === typeFilter;
       return queryMatch && statusMatch && typeMatch;
     });
-  }, [query, runs, statusFilter, typeFilter]);
+  }, [query, reviewRuns, statusFilter, typeFilter]);
 
   const selectedRun = useMemo(
     () => filteredRuns.find((run) => run.run_id === selectedRunId) ?? filteredRuns[0] ?? null,
     [filteredRuns, selectedRunId],
   );
 
-  const latestRun = runs[0] ?? null;
+  const latestRun = reviewRuns[0] ?? null;
   const activeFinding = canonicalFinding ?? {
     exists: false,
     status: "Normal",
@@ -330,8 +338,8 @@ export default function ObservationCenterWorkspace({
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
     const now = Date.now();
-    const lastDay = runs.filter((run) => now - new Date(run.created_at).getTime() <= 86400000);
-    const lastWeek = runs.filter((run) => now - new Date(run.created_at).getTime() <= 7 * 86400000);
+    const lastDay = reviewRuns.filter((run) => now - new Date(run.created_at).getTime() <= 86400000);
+    const lastWeek = reviewRuns.filter((run) => now - new Date(run.created_at).getTime() <= 7 * 86400000);
     const weeklyRate = Number((lastWeek.length / 7).toFixed(2));
     const state = lastDay.length > Math.max(3, weeklyRate * 2) ? "Noisy" : lastWeek.length === 0 ? "Silent" : "Quiet";
     return {
@@ -340,23 +348,23 @@ export default function ObservationCenterWorkspace({
       weeklyRate,
       state,
     };
-  }, [runs]);
+  }, [reviewRuns]);
 
   const sourceSnapshots = useMemo(() => {
     const latestBySource = new Map();
-    runs.forEach((run) => {
+    reviewRuns.forEach((run) => {
       const key = String(run?.source_name || run?.source_type || run?.run_id);
       if (!latestBySource.has(key)) {
         latestBySource.set(key, run);
       }
     });
     return [...latestBySource.values()].slice(0, 6);
-  }, [runs]);
+  }, [reviewRuns]);
 
   const relationshipSeries = useMemo(() => {
     const [left, right] = selectedVariables;
     if (!left || !right) return [];
-    return [...runs]
+    return [...reviewRuns]
       .reverse()
       .filter((run) => (run?.variables ?? []).includes(left) && (run?.variables ?? []).includes(right))
       .map((run) => ({
@@ -365,7 +373,7 @@ export default function ObservationCenterWorkspace({
         value: run?.drift_metrics?.coupling_delta ?? run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index ?? 0,
         type: run?.observation_type ?? "observation",
       }));
-  }, [runs, selectedVariables]);
+  }, [reviewRuns, selectedVariables]);
 
   async function submitFeedback() {
     if (!selectedRun?.run_id) return;

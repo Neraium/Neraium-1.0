@@ -41,8 +41,8 @@ function installLocalStorageMock() {
   });
 }
 
-function renderWorkspace({ apiFetch = vi.fn(async () => createResponse({ runs: [] })), canonicalFinding, onReviewEvidence = vi.fn() } = {}) {
-  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "", canonicalFinding, onReviewEvidence }));
+function renderWorkspace({ apiFetch = vi.fn(async () => createResponse({ runs: [] })), canonicalFinding, currentSession, onReviewEvidence = vi.fn() } = {}) {
+  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "", canonicalFinding, currentSession, onReviewEvidence }));
 }
 
 afterEach(() => {
@@ -111,4 +111,44 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
   });
+
+  it("synthesizes the current review item from the canonical finding when no evidence run is persisted yet", async () => {
+    installLocalStorageMock();
+    renderWorkspace({
+      canonicalFinding: {
+        exists: true,
+        runId: "job-current-1",
+        status: "Behavior Change Detected",
+        confidence: "Moderate",
+        summary: "System behavior has moved away from its historical operating pattern.",
+        whyItMatters: "The observed relationships between system variables have changed.",
+        reviewNext: "Review supporting evidence.",
+        supportingEvidence: ["Affected variables: temperature, humidity."],
+        technicalDetails: [{ label: "Behavior duration", value: "4h" }],
+        dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
+        evidenceButtonLabel: "Review Evidence",
+        historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
+        affectedVariables: ["temperature", "humidity"],
+        emptyState: {
+          title: "No current observations.",
+          subtitle: "Telemetry is being monitored.",
+          detail: "No structural changes detected.",
+        },
+      },
+      currentSession: {
+        latestUploadResult: {
+          job_id: "job-current-1",
+          observation_type: "trajectory_drift",
+          drift_metrics: { baseline_distance: 0.7, drift_index: 0.7 },
+          timestamp_profile: { first_timestamp: "2026-06-16T00:00:00Z", last_timestamp: "2026-06-16T04:00:00Z" },
+          filename: "telemetry.csv",
+        },
+      },
+    });
+
+    await waitFor(() => expect(screen.getAllByText("Behavior Change Detected").length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/Historical comparison evidence/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Affected variables: temperature, humidity/i)).toBeTruthy();
+  });
+
 });
