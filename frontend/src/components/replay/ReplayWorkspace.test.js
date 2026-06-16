@@ -1,3 +1,4 @@
+import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReplayWorkspace from "./ReplayWorkspace";
@@ -31,22 +32,22 @@ function baseProps(overrides = {}) {
     expertMode: false,
     normalizeErrorMessage: (message) => String(message ?? ""),
     formatClockTime: (value) => String(value ?? "-"),
-    Panel: ({ title, subtitle, children, className = "" }) => (
-      <section className={className}>
-        <h2>{title}</h2>
-        {subtitle ? <p>{subtitle}</p> : null}
-        {children}
-      </section>
+    Panel: ({ title, subtitle, children, className = "" }) => React.createElement(
+      "section",
+      { className },
+      React.createElement("h2", null, title),
+      subtitle ? React.createElement("p", null, subtitle) : null,
+      children,
     ),
-    MetricGrid: ({ metrics = [] }) => (
-      <dl>
-        {metrics.map((metric) => (
-          <div key={metric.label}>
-            <dt>{metric.label}</dt>
-            <dd>{metric.value}</dd>
-          </div>
-        ))}
-      </dl>
+    MetricGrid: ({ metrics = [] }) => React.createElement(
+      "dl",
+      null,
+      metrics.map((metric) => React.createElement(
+        "div",
+        { key: metric.label },
+        React.createElement("dt", null, metric.label),
+        React.createElement("dd", null, metric.value),
+      )),
     ),
     hasActiveSession: true,
     hasRealSiiOutput: true,
@@ -56,7 +57,7 @@ function baseProps(overrides = {}) {
 }
 
 function renderReplayWorkspace(props = baseProps()) {
-  return render(<ReplayWorkspace {...props} />);
+  return render(React.createElement(ReplayWorkspace, props));
 }
 
 function expectFrame(text) {
