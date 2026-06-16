@@ -165,7 +165,7 @@ body {
 .feed-list,
 .timeline-list {
   display: grid;
-  gap: var(--space-8);
+  gap: var(--space-10);
 }
 
 .metric-grid {
@@ -184,9 +184,9 @@ body {
 .timeline-item,
 .empty-state,
 .table-shell {
-  border: 1px solid rgba(136, 153, 170, 0.1);
+  border: 1px solid rgba(136, 153, 170, 0.08);
   border-radius: var(--radius-md);
-  background: rgba(16, 26, 41, 0.72);
+  background: linear-gradient(180deg, rgba(15, 25, 39, 0.82), rgba(10, 18, 30, 0.78));
   box-shadow: var(--shadow-soft);
 }
 
@@ -194,9 +194,9 @@ body {
 .zone-summary-card,
 .telemetry-card {
   display: grid;
-  gap: var(--space-6);
-  min-height: 72px;
-  padding: var(--space-14);
+  gap: var(--space-8);
+  min-height: 82px;
+  padding: var(--space-16);
 }
 
 .metric-cell span,
@@ -218,8 +218,8 @@ body {
 .timeline-item strong,
 .empty-state strong {
   color: var(--text-primary);
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 0.84rem;
+  line-height: 1.48;
   overflow-wrap: anywhere;
 }
 
@@ -266,8 +266,8 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
+  padding: 0 16px;
+  border-radius: 12px;
   font-weight: 700;
   transition:
     transform var(--motion-quiet, 420ms cubic-bezier(0.22, 1, 0.36, 1)),
@@ -278,16 +278,16 @@ body {
 }
 
 .command-button {
-  min-width: 148px;
-  border: 1px solid rgba(59, 122, 140, 0.24);
-  background: linear-gradient(180deg, rgba(24, 54, 66, 0.96), rgba(17, 39, 50, 0.98));
+  min-width: 156px;
+  border: 1px solid rgba(88, 184, 208, 0.22);
+  background: linear-gradient(180deg, rgba(32, 74, 90, 0.98), rgba(18, 42, 55, 0.99));
   color: var(--text-primary);
   box-shadow: var(--glow-cyan);
 }
 
 .secondary-command-button {
-  border: 1px solid rgba(136, 153, 170, 0.16);
-  background: linear-gradient(180deg, rgba(21, 32, 46, 0.94), rgba(15, 25, 39, 0.96));
+  border: 1px solid rgba(136, 153, 170, 0.12);
+  background: linear-gradient(180deg, rgba(20, 31, 44, 0.9), rgba(13, 22, 35, 0.94));
   color: var(--text-secondary);
   box-shadow: none;
 }
@@ -338,8 +338,8 @@ body {
 }
 
 .observation-history-card {
-  gap: 10px;
-  border-color: rgba(136, 153, 170, 0.12);
+  gap: 12px;
+  border-color: rgba(136, 153, 170, 0.1);
   background:
     radial-gradient(circle at 0% 0%, rgba(59, 122, 140, 0.07), transparent 24%),
     linear-gradient(180deg, rgba(15, 25, 39, 0.98), rgba(11, 20, 33, 0.98));
@@ -387,9 +387,9 @@ body {
 .observation-pair-visual {
   display: grid;
   gap: 8px;
-  padding: 14px;
-  border: 1px solid rgba(136, 153, 170, 0.12);
-  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(136, 153, 170, 0.1);
+  border-radius: 16px;
   background: rgba(11, 21, 35, 0.84);
 }
 
@@ -424,13 +424,13 @@ body {
 
 .observation-center {
   display: grid;
-  gap: 26px;
+  gap: 30px;
 }
 
 .observation-center__hero {
   display: grid;
   grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
-  gap: 24px;
+  gap: 28px;
 }
 
 .observation-center__snapshot,
@@ -438,24 +438,24 @@ body {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(136, 153, 170, 0.14);
-  border-radius: 22px;
+  border-radius: 24px;
   background:
     radial-gradient(circle at 50% 14%, rgba(59, 122, 140, 0.14), transparent 38%),
     linear-gradient(180deg, rgba(19, 32, 51, 0.96), rgba(11, 21, 35, 0.98));
-  box-shadow: 0 26px 60px rgba(3, 8, 14, 0.28);
+  box-shadow: 0 30px 70px rgba(3, 8, 14, 0.24);
 }
 
 .observation-center__snapshot {
   display: grid;
-  gap: 12px;
-  padding: 18px;
+  gap: 14px;
+  padding: 22px;
   align-content: start;
 }
 
 .observation-center__snapshot-orb {
   display: grid;
   place-items: center;
-  min-height: 220px;
+  min-height: 236px;
 }
 
 .observation-center__snapshot-orb .system-mark {
@@ -464,25 +464,25 @@ body {
 
 .observation-center__snapshot-copy {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .observation-center__snapshot-copy strong {
   color: var(--text-primary);
-  font-size: 1.08rem;
-  line-height: 1.25;
+  font-size: 1.18rem;
+  line-height: 1.22;
 }
 
 .observation-center__snapshot-copy span {
   color: var(--text-secondary);
   font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
 .observation-center__summary {
   display: grid;
-  gap: 16px;
-  padding: 22px 24px;
+  gap: 18px;
+  padding: 28px 30px;
 }
 
 .observation-center__summary .intake-flow__controls {
@@ -492,8 +492,8 @@ body {
 .observation-center__summary h1 {
   margin: 0;
   color: var(--text-primary);
-  font-size: clamp(2rem, 3.4vw, 3.2rem);
-  line-height: 0.94;
+  font-size: clamp(2.2rem, 3.8vw, 3.5rem);
+  line-height: 0.9;
   letter-spacing: -0.05em;
   font-weight: 500;
 }
@@ -501,8 +501,8 @@ body {
 .observation-center__summary > p:last-of-type {
   max-width: 56ch;
   color: var(--text-secondary);
-  font-size: 0.96rem;
-  line-height: 1.62;
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 .help-changelog__hero {
@@ -511,12 +511,12 @@ body {
 
 .observation-center__grid {
   align-items: start;
-  row-gap: 24px;
+  row-gap: 28px;
 }
 
 .observation-center__advanced {
   border-top: 1px solid rgba(136, 153, 170, 0.12);
-  padding-top: 16px;
+  padding-top: 18px;
 }
 
 .observation-center__advanced > summary,
@@ -529,7 +529,7 @@ body {
 }
 
 .observation-center__advanced-grid {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .upload-secondary-actions {
@@ -734,3 +734,19 @@ body {
 .secondary-command-button:hover:enabled {
   transform: translateY(-2px);
 }
+
+@keyframes surfaceFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.observation-center__snapshot,
+.observation-center__summary,
+.observation-center__panel,
+.telemetry-card,
+.metric-cell {
+  animation: surfaceFadeUp 380ms ease both;
+}
+
+.observation-center__summary { animation-delay: 60ms; }
+.observation-center__panel { animation-delay: 100ms; }

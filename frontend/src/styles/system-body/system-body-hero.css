@@ -2,10 +2,10 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.85fr);
-  gap: clamp(18px, 2.3vw, 30px);
+  gap: clamp(22px, 2.6vw, 34px);
   align-items: stretch;
   min-height: clamp(320px, 42vh, 460px);
-  padding: clamp(12px, 1.4vw, 18px);
+  padding: clamp(16px, 1.8vw, 24px);
   overflow: hidden;
   border: 1px solid rgba(var(--state-accent-rgb), 0.12);
   border-radius: 28px;
@@ -13,7 +13,7 @@
     radial-gradient(circle at 78% 24%, rgba(var(--state-accent-rgb), 0.09), transparent 34%),
     radial-gradient(circle at 18% 18%, rgba(52, 122, 255, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(16, 23, 28, 0.98), rgba(8, 12, 15, 0.96));
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
 }
 
 .system-body-hero::before {
@@ -42,14 +42,14 @@
   z-index: 3;
   display: grid;
   grid-template-rows: auto auto;
-  gap: clamp(14px, 2vw, 20px);
+  gap: clamp(18px, 2.2vw, 24px);
   min-width: 0;
 }
 
 .system-body-hero__header {
   display: grid;
   align-content: start;
-  gap: var(--space-10);
+  gap: var(--space-12);
   min-width: 0;
 }
 
@@ -75,21 +75,21 @@
 
 .system-body-top-cards {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   overflow-x: auto;
   padding-bottom: 8px;
   scroll-snap-type: x mandatory;
 }
 
 .system-body-top-card {
-  min-width: 140px;
+  min-width: 156px;
   flex-shrink: 0;
   scroll-snap-align: start;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(12px);
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: grid;
   gap: 6px;
 }
@@ -102,7 +102,7 @@
 }
 
 .system-body-top-card strong {
-  font-size: 1.7rem;
+  font-size: 1.86rem;
   line-height: 1;
   font-weight: 600;
   color: #fff;
@@ -110,11 +110,11 @@
 
 .system-body-action-strip {
   display: grid;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 8px 10px;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px 14px;
   border: 1px solid rgba(var(--state-accent-rgb), 0.16);
-  border-radius: 16px;
+  border-radius: 18px;
   background: linear-gradient(135deg, rgba(var(--state-accent-rgb), 0.08), rgba(5, 9, 12, 0.48));
 }
 
@@ -128,8 +128,8 @@
 
 .system-body-action-strip strong {
   color: var(--text-primary);
-  font-size: clamp(0.82rem, 0.86vw, 0.92rem);
-  line-height: 1.32;
+  font-size: clamp(0.9rem, 0.96vw, 1rem);
+  line-height: 1.42;
 }
 
 .system-body-status-light {
