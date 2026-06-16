@@ -148,7 +148,6 @@ function App() {
           ?? effectiveLatestUploadResult?.completed_at
           ?? effectiveLatestUploadResult?.processing_trace?.completed_at
           ?? effectiveLatestUploadResult?.sii_intelligence?.last_updated
-          ?? new Date().toISOString()
         )
         : null;
     const hasTelemetryHeartbeat = Boolean(heartbeatSource);
@@ -168,7 +167,7 @@ function App() {
       : "empty";
     const connectionSummary = heartbeatSource
       ? `Updated ${formatClockTime(heartbeatSource)} CT`
-      : "Awaiting telemetry heartbeat";
+      : null;
     const connectionStatusLine = apiStatus.state === "online"
       ? (heartbeatSource ? "Data stream active" : "Awaiting telemetry data")
       : "Connection degraded";

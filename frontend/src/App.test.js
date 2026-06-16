@@ -47,6 +47,8 @@ vi.mock("./components/SystemTopologyWorkspace", () => ({
     h("span", { "data-testid": "gate-result" }, liveOps.latestUploadResult?.job_id ?? "empty"),
     h("span", { "data-testid": "gate-finding-summary" }, liveOps.canonicalFinding?.summary ?? "none"),
     h("span", { "data-testid": "gate-finding-confidence" }, liveOps.canonicalFinding?.confidence ?? "none"),
+    h("span", { "data-testid": "gate-heartbeat-summary" }, liveOps.connectionSummary ?? "none"),
+    h("span", { "data-testid": "gate-heartbeat-status" }, liveOps.connectionStatusLine ?? "none"),
     h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
     h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
   ),
@@ -95,6 +97,19 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+
+it("treats persisted metadata without a heartbeat timestamp as awaiting telemetry", () => {
+  runtimeState.latestUploadSnapshot = {
+    status: "complete",
+    last_filename: "cached-upload.csv",
+  };
+
+  render(h(App));
+
+  expect(screen.getByTestId("gate-heartbeat-summary").textContent).toBe("none");
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
 });
 
 describe("App upload completion navigation", () => {
