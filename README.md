@@ -35,6 +35,7 @@ Current capabilities include:
 - Data connection scaffolding
 - Backend worker processing
 - AWS ECS deployment preparation
+- Continuous backend and frontend validation through GitHub Actions
 
 ---
 
@@ -206,6 +207,8 @@ npm run build
 npm run test
 ```
 
+GitHub Actions CI now validates the backend and frontend on push to `main` and on pull requests. The CI workflow runs backend tests, frontend linting, frontend build, and frontend unit tests.
+
 Helper scripts are available from the repository root:
 
 ```powershell
@@ -232,11 +235,25 @@ Local backend development runs on port `8010`. Local frontend development runs o
 
 ---
 
+## Production Hardening
+
+Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` for authentication, authorization, runtime storage, CI, screenshot/demo assets, observability, deployment, and operator-flow acceptance checks.
+
+Current hardening focus areas include:
+
+- Replacing or explicitly constraining file-backed auth for production environments
+- Documenting role and permission boundaries before multi-customer use
+- Confirming runtime database persistence across API and worker restarts
+- Verifying multi-task or multi-worker deployment behavior
+- Keeping README/demo screenshots current with the deployed UI
+
+---
+
 ## Current Status
 
 Neraium 1.0 is the active production-oriented foundation for system intelligence workflows.
 
-The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, and cloud deployment preparation.
+The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, CI validation, and cloud deployment preparation.
 
 The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and operator reporting.
 
