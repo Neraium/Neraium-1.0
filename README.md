@@ -265,4 +265,4 @@ Neraium is building a general-purpose system intelligence layer for operational 
 
 The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, equipment failure, and operational uncertainty across multiple industries.
 
-<!-- CI trigger: README validation touch -->
+<!-- CI trigger: replay test smoke update -->
