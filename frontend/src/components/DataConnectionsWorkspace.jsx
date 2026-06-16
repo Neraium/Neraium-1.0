@@ -10,7 +10,6 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import { buildApiCandidateUrls } from "../config";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -106,7 +105,6 @@ export default function DataConnectionsWorkspace({
   const statusEndpointFailureCountRef = useRef(0);
   const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
-  const uploadInFlightRef = useRef(false);
   const uploadStateRef = useRef("idle");
   const pollSessionRef = useRef(0);
 
