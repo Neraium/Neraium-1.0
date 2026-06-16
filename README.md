@@ -1,26 +1,135 @@
 # Neraium
 
-Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes visible crop stress.
+**See system drift before it becomes operational failure.**
 
-This repository is the production-oriented foundation for pilot customer access in controlled environment cannabis grow facilities. It currently contains a FastAPI backend, a Vite React frontend, initial customer app sections, initial tests, and architecture notes.
+Neraium is a system intelligence platform for complex, telemetry-driven environments. It analyzes multivariable data to detect drift, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
 
-The product is focused on controlled environment operations across HVAC, humidity, airflow, irrigation, lighting, and sensor data.
+The platform is designed for environments where many signals interact at once: facilities, equipment, controlled environments, infrastructure, industrial systems, building systems, and other operational networks. Cultivation is one active pilot domain, but the core product is broader than cultivation.
+
+---
+
+## What Neraium Does
+
+Neraium helps operators answer four practical questions:
+
+1. **What state is the system in?**
+2. **What is drifting or behaving abnormally?**
+3. **What evidence supports the finding?**
+4. **What should the operator check next?**
+
+Instead of treating each sensor as an isolated alarm, Neraium evaluates relationships across signals and looks for structural changes in system behavior.
+
+Current capabilities include:
+
+- Telemetry upload and validation
+- CSV, TXT, and JSON ingestion paths
+- Data quality checks
+- Timestamp and signal profiling
+- Baseline versus recent comparison
+- Neraium SII v1 engine results
+- Evidence summaries
+- Operator-facing reports
+- Replay-ready upload artifacts
+- Audit events
+- Runtime observability
+- Data connection scaffolding
+- Backend worker processing
+- AWS ECS deployment preparation
+
+---
+
+## Core Use Cases
+
+Neraium is built for operational environments where drift matters before failure becomes obvious.
+
+Potential domains include:
+
+- Controlled-environment agriculture
+- Building automation
+- HVAC and mechanical systems
+- Industrial equipment
+- Manufacturing processes
+- Water systems
+- Energy systems
+- Facility operations
+- Predictive maintenance
+- Sensor-heavy operational networks
+
+The current pilot workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
+
+---
+
+## Pilot Workflow
+
+A typical workflow looks like this:
+
+1. Upload telemetry from a system, facility, room, controller, or exported dataset.
+2. Neraium validates the file and checks basic data quality.
+3. The platform profiles timestamps, numeric signals, and available system fields.
+4. Baseline behavior is compared against recent behavior.
+5. The SII engine produces a deterministic system intelligence result.
+6. Neraium generates evidence, warnings, readiness indicators, replay artifacts, and an operator report.
+7. Operators review what changed, what evidence supports it, and what should be checked next.
+
+---
 
 ## Repository Structure
 
 ```text
-backend/    FastAPI application and backend documentation
-frontend/   Vite React customer-facing app shell
-docs/       Architecture and implementation notes
-scripts/    Local development helper scripts
+backend/    FastAPI application, runtime services, upload processing, workers, and backend documentation
+frontend/   Vite React customer-facing app shell and operator interface
+docs/       Architecture, deployment, pilot, and implementation notes
+scripts/    Local development and validation helper scripts
 tests/      Backend tests
 ```
+
+---
+
+## Backend
+
+The backend is a FastAPI application with runtime services for uploads, evidence, audit events, observability, data connections, replay, and worker processing.
+
+Important API areas include:
+
+- `GET /api/health`
+- `GET /api/app`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/facility/systems`
+- `POST /api/data/upload`
+- Upload status and replay endpoints
+- Evidence and audit endpoints
+- Observability and readiness endpoints
+
+Backend runtime state is written under `NERAIUM_RUNTIME_DIR`. Runtime storage includes upload jobs, upload queue records, evidence runs, audit events, latest payloads, and data connection records.
+
+---
+
+## Frontend
+
+The frontend is a Vite React application for customer and operator workflows.
+
+Current sections include:
+
+- Overview
+- Facility and system views
+- Data upload
+- Upload status and result review
+- Operator reports
+- Replay-oriented views
+- Evidence and observability surfaces
+
+The frontend runs locally at `http://127.0.0.1:3010` and calls the backend configured by `VITE_API_BASE_URL`.
+
+---
 
 ## Prerequisites
 
 - Python 3.11+
 - Node.js 20+
 - npm
+
+---
 
 ## Backend Setup
 
@@ -33,23 +142,13 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
-The backend exposes:
+The backend runs locally at:
 
-- `GET /api/health`
-- `GET /api/app`
-- `GET /api/facility/systems`
-- `POST /api/data/upload`
+```text
+http://127.0.0.1:8010
+```
 
-Backend configuration is read from environment variables with local defaults:
-
-- `APP_ENV=development`
-- `BACKEND_HOST=127.0.0.1`
-- `BACKEND_PORT=8010`
-- `CORS_ORIGINS=http://127.0.0.1:3010,http://localhost:3010,https://app.neraium.com`
-- `NERAIUM_RUNTIME_DIR=backend/app/runtime`
-- `NERAIUM_UPLOAD_CHUNK_SIZE_ROWS=10000`
-- `NERAIUM_MAX_ANALYSIS_ROWS=20000`
-- `NERAIUM_MAX_SII_ROWS=5000`
+---
 
 ## Frontend Setup
 
@@ -59,42 +158,92 @@ npm install
 npm run dev
 ```
 
-The frontend runs at `http://127.0.0.1:3010` and calls the API configured by `VITE_API_BASE_URL`. The local default remains `http://127.0.0.1:8010`.
+The frontend runs locally at:
 
-Current frontend sections:
+```text
+http://127.0.0.1:3010
+```
 
-- Overview
-- Facility Systems
-- Data Upload with CSV validation, cultivation mapping, profiling, baseline comparison, Neraium SII v1 engine result, operator report, and preview
-- Reports
+---
 
-CSV uploads are parsed for validation, preview, cultivation column mapping, lightweight data profiling, simple baseline comparison, a deterministic Neraium SII v1 engine result, and a plain-English operator report only. Uploaded CSV files are deleted after the job completes or fails; job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. The upload response includes data quality, timestamp range, cultivation mapping, numeric column profiles, baseline versus recent averages, `engine_result`, warnings, readiness, and `operator_report`. `engine_result` includes system-level evidence, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details. No non-deterministic analysis is run at this stage.
+## Common Environment Variables
 
-## Tests
+Backend defaults are provided for local development. Production should explicitly configure runtime storage, CORS, workers, and deployment settings.
+
+Common variables include:
+
+- `APP_ENV`
+- `BACKEND_HOST`
+- `BACKEND_PORT`
+- `CORS_ORIGINS`
+- `CORS_ORIGIN_REGEX`
+- `NERAIUM_RUNTIME_DIR`
+- `NERAIUM_PROCESS_ROLE`
+- `NERAIUM_START_BACKGROUND_WORKERS`
+- `NERAIUM_START_DATA_POLLER`
+- `NERAIUM_MAX_UPLOAD_SIZE_BYTES`
+- `NERAIUM_MAX_PENDING_UPLOAD_JOBS`
+- `NERAIUM_UPLOAD_STATE_BUCKET`
+- `VITE_API_BASE_URL`
+
+---
+
+## Tests and Validation
+
+Run backend tests from the repository root:
 
 ```powershell
 $env:PYTHONPATH = ".\backend"
 python -m pytest tests
 ```
 
-## Helper Scripts
+Run frontend validation from the frontend directory:
 
-From the repository root:
+```powershell
+cd frontend
+npm run lint
+npm run build
+npm run test
+```
+
+Helper scripts are available from the repository root:
 
 ```powershell
 .\scripts\start-backend.ps1
 .\scripts\start-frontend.ps1
-```
-
-Additional validation helpers:
-
-```powershell
 .\scripts\test-backend.ps1
 .\scripts\build-frontend.ps1
 ```
 
-## AWS Deployment Preparation
+---
 
-Deployment preparation notes are in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for Amazon ECS Express Mode / ECS Fargate on port `80`; local backend development remains on port `8010`, and local frontend development remains on port `3010`.
+## Deployment
 
-<!-- redeploy trigger 2026-06-02 -->
+Neraium includes AWS deployment preparation for a backend API service and worker service using ECS/Fargate and ECR.
+
+Deployment notes and runbooks are available in:
+
+- `docs/AWS_DEPLOYMENT.md`
+- `docs/DEPLOYMENT_RUNBOOK.md`
+- `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md`
+- `docs/PRODUCTION_OPERATOR_FLOW_CHECKLIST.md`
+
+Local backend development runs on port `8010`. Local frontend development runs on port `3010`. The backend container is prepared for cloud deployment on port `80`.
+
+---
+
+## Current Status
+
+Neraium 1.0 is the active production-oriented pilot foundation.
+
+The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, and cloud deployment preparation.
+
+The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and pilot-specific operator reporting.
+
+---
+
+## Vision
+
+Neraium is building a general-purpose system intelligence layer for operational environments.
+
+The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, crop loss, equipment failure, and operational uncertainty across multiple industries.
