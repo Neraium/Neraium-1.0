@@ -39,6 +39,27 @@ Current capabilities include:
 
 ---
 
+## Demo Path
+
+A strong demo should show Neraium as an evidence-backed system intelligence workflow, not just a dashboard.
+
+Recommended flow:
+
+1. Open the system status view.
+2. Upload a telemetry export.
+3. Show validation, queued worker visibility, and processing progress.
+4. Open the operator finding or report.
+5. Explain what changed, why it matters, and what the operator should inspect next.
+6. Open Evidence Replay to show the behavior change over time.
+7. Close by explaining that the same intelligence layer applies across telemetry-heavy operational environments.
+
+Demo and screenshot planning docs:
+
+- `docs/DEMO_SCRIPT.md`
+- `docs/SCREENSHOT_CHECKLIST.md`
+
+---
+
 ## Core Use Cases
 
 Neraium is built for operational environments where drift matters before failure becomes obvious.
@@ -264,5 +285,3 @@ The next major focus areas are broader data connectors, stronger production auth
 Neraium is building a general-purpose system intelligence layer for operational environments.
 
 The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, equipment failure, and operational uncertainty across multiple industries.
-
-<!-- CI trigger: replay test smoke update -->
