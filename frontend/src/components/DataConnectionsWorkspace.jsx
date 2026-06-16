@@ -37,9 +37,9 @@ function isLargeOperationalUpload(file) {
 function uploadReadinessMessage(file) {
   if (!file) return "Choose a telemetry file to begin.";
   if (isLargeOperationalUpload(file)) {
-    return "Large file selected. Processing continues in the background.";
+    return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "File ready to upload.";
+  return "Telemetry export validated.";
 }
 
 function validateTelemetryFile(file, kind) {
@@ -75,6 +75,22 @@ function fallbackPercentFromStatus(status) {
     error: 100,
   };
   return stagedPercent[normalized] ?? null;
+}
+
+function boundedFailureDelay(failureCount) {
+  const baseDelay = 2000;
+  const backoff = Math.min(30000, baseDelay * (1.5 ** failureCount));
+  return Math.min(Math.max(backoff, 1000), 45000);
+}
+
+function queuedWorkerMessage(uploadJob) {
+  const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
+  const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
+  if (workerState === "starting") return "Worker starting...";
+  if (workerState === "active" || workerState === "running") return `Worker active • last update ${lastUpdate || "just now"}`;
+  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Still queued • waiting for worker";
+  if (workerState === "stalled") return "Possible stall • no worker update yet";
+  return "";
 }
 
 export default function DataConnectionsWorkspace({
@@ -288,6 +304,7 @@ export default function DataConnectionsWorkspace({
           const requestPath = pollingPath;
           const response = await apiFetch(requestPath, { accessCode });
           const payload = await readJsonPayload(response);
+          uploadJobIdRef.current = payload.job_id ?? requestedJobId;
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
@@ -303,8 +320,9 @@ export default function DataConnectionsWorkspace({
                   "Upload status remained unavailable after repeated retries. Try uploading again.",
                 );
               }
-              statusEndpointCooldownUntilRef.current = Date.now() + 1500;
-              await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, 1500); });
+              const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);
+              statusEndpointCooldownUntilRef.current = Date.now() + cooldownMs;
+              await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });
               continue;
             }
             throw buildUploadRequestError(response, payload, payload?.message || "Upload status could not be checked.");
@@ -344,7 +362,8 @@ export default function DataConnectionsWorkspace({
           if (pollFailureCountRef.current >= MAX_STATUS_POLL_FAILURES) {
             throw error;
           }
-          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, 1500); });
+          const retryDelay = boundedFailureDelay(pollFailureCountRef.current);
+          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, retryDelay); });
         }
       }
       return null;
@@ -452,8 +471,14 @@ export default function DataConnectionsWorkspace({
   }
 
   const readiness = uploadReadinessMessage(selectedFiles[0]);
-  const uploadPercent = uploadTransfer?.percent ?? uploadJob?.percent ?? uploadJob?.progress ?? fallbackPercentFromStatus(uploadState) ?? 0;
+  const uploadTransferPercent = uploadTransfer?.percent;
+  const propagationPercent = uploadJob?.propagation_progress ?? uploadJob?.propagationProgress;
+  const backendPercent = uploadJob?.percent ?? uploadJob?.progress;
+  const statusFallbackPercent = fallbackPercentFromStatus(uploadState);
+  const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? 0;
+  const propagationLabel = uploadJob?.propagation_label ?? uploadJob?.propagationLabel ?? uploadJob?.propagation_stage ?? "";
   const statusLabel = uploadJob?.progress_label ?? uploadJob?.message ?? uploadStateMessage(uploadState);
+  const queuedWorkerDetail = queuedWorkerMessage(uploadJob);
   const isProcessing = isUploadProcessing(uploadState) || isUploadProcessing(uploadJob?.status) || isUploadProcessing(uploadJob?.processing_state);
   const latestSummary = latestUploadSnapshot?.summary ?? latestUploadSnapshot ?? null;
 
@@ -474,6 +499,8 @@ export default function DataConnectionsWorkspace({
         uploadError={uploadError}
         uploadState={uploadState}
         uploadPercent={uploadPercent}
+        propagationLabel={propagationLabel}
+        queuedWorkerDetail={queuedWorkerDetail}
         statusLabel={statusLabel}
         isProcessing={isProcessing}
         uploadJob={uploadJob}
