@@ -4,7 +4,7 @@
 
 Neraium is a system intelligence platform for complex, telemetry-driven environments. It analyzes multivariable data to detect drift, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
 
-The platform is designed for environments where many signals interact at once: facilities, equipment, controlled environments, infrastructure, industrial systems, building systems, and other operational networks. Cultivation is one active pilot domain, but the core product is broader than cultivation.
+The platform is designed for environments where many signals interact at once: facilities, equipment, controlled environments, infrastructure, industrial systems, building systems, and other operational networks. Controlled-environment agriculture is one possible application area, but Neraium is not limited to cultivation.
 
 ---
 
@@ -44,7 +44,6 @@ Neraium is built for operational environments where drift matters before failure
 
 Potential domains include:
 
-- Controlled-environment agriculture
 - Building automation
 - HVAC and mechanical systems
 - Industrial equipment
@@ -53,17 +52,18 @@ Potential domains include:
 - Energy systems
 - Facility operations
 - Predictive maintenance
+- Controlled environments
 - Sensor-heavy operational networks
 
-The current pilot workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
+The current workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
 
 ---
 
-## Pilot Workflow
+## Workflow
 
 A typical workflow looks like this:
 
-1. Upload telemetry from a system, facility, room, controller, or exported dataset.
+1. Upload telemetry from a system, facility, asset, controller, or exported dataset.
 2. Neraium validates the file and checks basic data quality.
 3. The platform profiles timestamps, numeric signals, and available system fields.
 4. Baseline behavior is compared against recent behavior.
@@ -234,11 +234,11 @@ Local backend development runs on port `8010`. Local frontend development runs o
 
 ## Current Status
 
-Neraium 1.0 is the active production-oriented pilot foundation.
+Neraium 1.0 is the active production-oriented foundation for system intelligence workflows.
 
 The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, and cloud deployment preparation.
 
-The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and pilot-specific operator reporting.
+The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and operator reporting.
 
 ---
 
@@ -246,4 +246,4 @@ The next major focus areas are broader data connectors, stronger production auth
 
 Neraium is building a general-purpose system intelligence layer for operational environments.
 
-The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, crop loss, equipment failure, and operational uncertainty across multiple industries.
+The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, equipment failure, and operational uncertainty across multiple industries.
