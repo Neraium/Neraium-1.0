@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ObservationCenterWorkspace from "./ObservationCenterWorkspace";
 
@@ -22,10 +22,6 @@ function createResponse(payload, status = 200) {
   };
 }
 
-function renderWorkspace(apiFetch = vi.fn()) {
-  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "" }));
-}
-
 function installLocalStorageMock() {
   const store = new Map();
   Object.defineProperty(window, "localStorage", {
@@ -45,75 +41,74 @@ function installLocalStorageMock() {
   });
 }
 
+function renderWorkspace({ apiFetch = vi.fn(async () => createResponse({ runs: [] })), canonicalFinding, onReviewEvidence = vi.fn() } = {}) {
+  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "", canonicalFinding, onReviewEvidence }));
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
 describe("ObservationCenterWorkspace", () => {
-
-  it("explains the zero-observation state without showing an abstract fallback pattern", async () => {
+  it("renders the canonical empty state consistently", async () => {
     installLocalStorageMock();
-    const apiFetch = vi.fn(async (path) => {
-      if (String(path) === "/api/evidence/runs") {
-        return createResponse({ runs: [] });
-      }
-      return createResponse({}, 404);
+    renderWorkspace({
+      canonicalFinding: {
+        exists: false,
+        status: "Normal",
+        confidence: "Low",
+        summary: "No current observations.",
+        whyItMatters: "Telemetry is being monitored.",
+        reviewNext: "No structural changes detected.",
+        supportingEvidence: [],
+        technicalDetails: [],
+        dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
+        evidenceButtonLabel: "Review Evidence",
+        emptyState: {
+          title: "No current observations.",
+          subtitle: "Telemetry is being monitored.",
+          detail: "No structural changes detected.",
+        },
+      },
     });
 
-    renderWorkspace(apiFetch);
-
-    await waitFor(() => {
-      expect(screen.getByText(/no findings yet/i)).toBeTruthy();
-    });
-
-    expect(screen.getByText(/No supported changes are ready for review/i)).toBeTruthy();
-    expect(screen.getByText(/Why it matters:Monitoring/i)).toBeTruthy();
-    expect(screen.queryByText(/Current regime/i)).toBeNull();
-    expect(screen.queryByText(/Deformation age/i)).toBeNull();
-    expect(screen.queryByText(/Silence health/i)).toBeNull();
-    expect(screen.queryByText(/State Group A/i)).toBeNull();
+    await waitFor(() => expect(screen.getAllByText("No current observations.").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("Telemetry is being monitored.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No structural changes detected.").length).toBeGreaterThan(0);
   });
-  it("renders backend historical fact text from the evidence API", async () => {
+
+  it("renders the canonical finding summary and opens evidence review", async () => {
     installLocalStorageMock();
-    const apiFetch = vi.fn(async (path) => {
-      if (String(path) === "/api/evidence/runs") {
-        return createResponse({
-          runs: [
-            {
-              run_id: "followup-run",
-              source_name: "followup.csv",
-              source_type: "csv_upload",
-              status: "completed",
-              created_at: "2026-05-02T08:00:00Z",
-              completed_at: "2026-05-02T08:01:00Z",
-              observation_type: "coupling_change",
-              observation_status: "open",
-              regime_label: "State Group A",
-              structural_state: "Monitoring",
-              variables: ["temperature", "humidity"],
-              drift_metrics: { baseline_distance: 0.91 },
-              evidence_summary: ["Follow-up structural drift observed."],
-              data_conditions: [],
-              historical_fact: "Similar coupling change observations involving temperature and humidity were later marked known operational change in 1 of 1 previous investigations.",
-            },
-          ],
-        });
-      }
-      return createResponse({}, 404);
+    const onReviewEvidence = vi.fn();
+    renderWorkspace({
+      canonicalFinding: {
+        exists: true,
+        status: "Behavior Change Detected",
+        confidence: "Moderate",
+        summary: "System behavior has moved away from its historical operating pattern.",
+        whyItMatters: "The observed relationships between system variables have changed.",
+        reviewNext: "Review supporting evidence.",
+        supportingEvidence: ["Affected variables: temperature, humidity."],
+        technicalDetails: [{ label: "Drift magnitude", value: "0.70" }],
+        dataQuality: { missingBaselineValues: [], missingRecentValues: ["Missing values in recent telemetry."], unavailableTelemetry: [] },
+        evidenceButtonLabel: "Review Evidence",
+        historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
+        emptyState: {
+          title: "No current observations.",
+          subtitle: "Telemetry is being monitored.",
+          detail: "No structural changes detected.",
+        },
+      },
+      onReviewEvidence,
     });
 
-    renderWorkspace(apiFetch);
-
-    await waitFor(() => {
-      expect(screen.getByText(/similar coupling change observations involving temperature and humidity/i)).toBeTruthy();
-    });
-
-    expect(screen.getAllByText(/Usual pattern/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Relationship Pattern Shift/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Why it matters:Possible infrastructure risk/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Review supported changes, their impact, and the evidence behind them/i)).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText("Behavior Change Detected").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("System behavior has moved away from its historical operating pattern.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "Review Evidence" })[0]);
+    expect(onReviewEvidence).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/State Group A/i)).toBeNull();
-    expect(screen.queryByText(/evidence intact/i)).toBeNull();
+    expect(screen.queryByText(/relationship divergence/i)).toBeNull();
   });
 });

@@ -27,6 +27,7 @@ export default function SystemBodyWorkspace({
   latestUploadResult = null,
   liveSnapshot = null,
   latestReplayFrame = null,
+  canonicalFinding = null,
 }) {
   void dataFreshness;
   void siiVerification;
@@ -87,6 +88,8 @@ export default function SystemBodyWorkspace({
     () => collectDataConditions(latestUploadResult),
     [latestUploadResult],
   );
+  const finding = canonicalFinding ?? buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions);
+  const findingDataQuality = flattenDataQuality(finding.dataQuality);
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -215,9 +218,9 @@ export default function SystemBodyWorkspace({
             <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
               <div className="panel-body">
                 <ul className="onboarding-summary">
-                  <li><span>Current State</span><strong>{interpretation.structuralState}</strong></li>
-                  <li><span>Current Reading</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-                  <li><span>Evidence Confidence</span><strong>{interpretation.confidence}</strong></li>
+                  <li><span>Current Status</span><strong>{finding.status}</strong></li>
+                  <li><span>Evidence Confidence</span><strong>{finding.confidence}</strong></li>
+                  <li><span>Observation Summary</span><strong>{finding.summary}</strong></li>
                 </ul>
               </div>
             </section>
@@ -228,29 +231,29 @@ export default function SystemBodyWorkspace({
               systemState={systemState}
               uiState={uiState}
               coherence={coherence}
-              stateLabel={interpretation.structuralState}
+              stateLabel={finding.status}
               lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
               focusLabel={interpretation.primaryDriver}
               orbData={orbData}
               compactPreview
             />
-            <p className="system-gate__state">{interpretation.structuralState}</p>
+            <p className="system-gate__state">{finding.status}</p>
           </div>
 
           <div className="system-gate__column system-gate__column--right">
             <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
               <div className="panel-body">
                 <ul className="onboarding-summary">
-                  <li><span>Current Regime</span><strong>{stabilitySnapshot.regime}</strong></li>
-                  <li><span>Drift Magnitude</span><strong>{stabilitySnapshot.driftMagnitude}</strong></li>
-                  <li><span>Active Observations</span><strong>{stabilitySnapshot.activeObservations}</strong></li>
-                  <li><span>Deformation Age</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
+                  <li><span>Why it matters</span><strong>{finding.whyItMatters}</strong></li>
+                  <li><span>Review next</span><strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong></li>
+                  <li><span>Current operating pattern</span><strong>{stabilitySnapshot.regime}</strong></li>
+                  <li><span>Behavior has persisted</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
                 </ul>
-                {dataConditions.length > 0 ? (
+                {findingDataQuality.length > 0 ? (
                   <div style={{ marginTop: "0.8rem" }}>
-                    <p className="section-token">Data Conditions</p>
+                    <p className="section-token">Data Quality</p>
                     <ul className="compact-list">
-                      {dataConditions.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+                      {findingDataQuality.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   </div>
                 ) : null}
@@ -262,7 +265,7 @@ export default function SystemBodyWorkspace({
                 <ul className="onboarding-summary">
                   <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
                   <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
-                  <li><span>Latest Update</span><strong>Observation grammar refined on 2026-06-04.</strong></li>
+                  <li><span>Latest Update</span><strong>Current observation aligned with the active analysis.</strong></li>
                 </ul>
               </div>
             </section>
@@ -273,7 +276,7 @@ export default function SystemBodyWorkspace({
                 className="command-button"
                 onClick={() => navigateWorkspace("observation-center")}
               >
-                Review Observations
+                Review Findings
               </button>
             </div>
           </div>
@@ -282,42 +285,23 @@ export default function SystemBodyWorkspace({
         <section className="panel system-gate__plate system-gate__plate--summary system-gate__plate--operator" aria-label="System status summary">
           <div className="panel-body">
             <ul className="onboarding-summary">
-              <li><span>What changed</span><strong>{interpretation.structuralState}</strong></li>
-              <li><span>Why it matters</span><strong>{interpretation.relationshipSummary.text}</strong></li>
-              <li><span>Review next</span><strong>{interpretation.nextStep}</strong></li>
-              <li><span>Confidence</span><strong>{interpretation.confidence}</strong></li>
+              <li><span>Current Status</span><strong>{finding.status}</strong></li>
+              <li><span>Confidence</span><strong>{finding.confidence}</strong></li>
+              <li><span>Observation Summary</span><strong>{finding.summary}</strong></li>
+              <li><span>Why it matters</span><strong>{finding.whyItMatters}</strong></li>
+              <li><span>Review next</span><strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong></li>
             </ul>
             <p className="system-gate__boundary-note">Read-only monitoring. No controls.</p>
           </div>
         </section>
 
-        {Array.isArray(interpretation.findingEvidenceChains) && interpretation.findingEvidenceChains.length > 0 ? (
-          <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Finding evidence chains">
+        {Array.isArray(finding.supportingEvidence) && finding.supportingEvidence.length > 0 ? (
+          <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Supporting evidence">
             <div className="panel-body">
-              <p className="section-token">Evidence Chain</p>
-              {interpretation.findingEvidenceChains.slice(0, 3).map((finding) => (
-                <div key={finding.finding_id || finding.title} style={{ marginBottom: "1rem" }}>
-                  <p style={{ margin: "0 0 0.35rem", fontWeight: 700 }}>{finding.title || "Finding"}</p>
-                  <p style={{ margin: "0 0 0.45rem" }}>{finding.operator_summary || finding.conclusion || ""}</p>
-                  <ul className="compact-list">
-                    {(finding.evidence_chain || []).slice(0, 4).map((step, index) => (
-                      <li key={`${finding.finding_id || finding.title}-${step.stage || index}`}>
-                        <strong>{formatEvidenceStage(step.stage)}:</strong> {step.detail}
-                      </li>
-                    ))}
-                  </ul>
-                  {Array.isArray(finding.evidence_refs) && finding.evidence_refs.length > 0 ? (
-                    <p className="metadata-text" style={{ marginTop: "0.35rem" }}>
-                      Evidence refs: {summarizeEvidenceRefs(finding.evidence_refs)}
-                    </p>
-                  ) : null}
-                  {Array.isArray(finding.source_rows) && finding.source_rows.length > 0 ? (
-                    <p className="metadata-text">
-                      Source rows: {summarizeSourceRows(finding.source_rows)}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
+              <p className="section-token">Supporting Evidence</p>
+              <ul className="compact-list">
+                {finding.supportingEvidence.map((item) => <li key={item}>{item}</li>)}
+              </ul>
             </div>
           </section>
         ) : null}
@@ -326,15 +310,53 @@ export default function SystemBodyWorkspace({
           <button
             type="button"
             className="command-button"
-            onClick={() => navigateWorkspace(interpretation.hasTelemetry ? "observation-center" : "data-connections")}
+            onClick={() => navigateWorkspace(finding.exists ? "historical-replay" : (interpretation.hasTelemetry ? "observation-center" : "data-connections"))}
           >
-            {interpretation.hasTelemetry ? "Review Evidence" : "Upload Data"}
+            {interpretation.hasTelemetry ? finding.evidenceButtonLabel : "Upload Data"}
           </button>
         </div>
       </section>
       {menuOverlay}
     </PageContainer>
   );
+}
+
+
+function flattenDataQuality(dataQuality) {
+  const groups = dataQuality && typeof dataQuality === "object" ? dataQuality : {};
+  return [
+    ...(groups.missingBaselineValues || []).map((item) => `Missing baseline values: ${item}`),
+    ...(groups.missingRecentValues || []).map((item) => `Missing recent values: ${item}`),
+    ...(groups.unavailableTelemetry || []).map((item) => `Unavailable telemetry: ${item}`),
+  ];
+}
+
+function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions) {
+  const exists = interpretation.structuralState !== "Monitoring" && interpretation.structuralState !== "No data yet";
+  return {
+    exists,
+    status: exists ? interpretation.structuralState : "Normal",
+    confidence: interpretation.confidence === "Pending" ? "Low" : interpretation.confidence,
+    summary: exists ? interpretation.relationshipSummary.text : "No current observations.",
+    whyItMatters: exists ? interpretation.relationshipSummary.text : "Telemetry is being monitored.",
+    reviewNext: interpretation.nextStep,
+    emptyState: {
+      title: "No current observations.",
+      subtitle: "Telemetry is being monitored.",
+      detail: "No structural changes detected.",
+    },
+    evidenceButtonLabel: "Review Evidence",
+    supportingEvidence: [],
+    dataQuality: {
+      missingBaselineValues: [],
+      missingRecentValues: dataConditions || [],
+      unavailableTelemetry: [],
+    },
+    technicalDetails: [
+      { label: "Drift magnitude", value: stabilitySnapshot.driftMagnitude },
+      { label: "Behavior duration", value: stabilitySnapshot.deformationAge },
+    ],
+  };
 }
 
 function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
@@ -532,33 +554,6 @@ function buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, 
   return { text };
 }
 
-
-function formatEvidenceStage(stage) {
-  const normalized = String(stage ?? "").replaceAll("_", " ").trim();
-  if (!normalized) return "Evidence";
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-}
-
-function summarizeEvidenceRefs(refs) {
-  return refs
-    .slice(0, 3)
-    .map((ref) => {
-      const column = String(ref?.column ?? "").trim();
-      const baseline = String(ref?.baseline_window ?? "").trim();
-      const recent = String(ref?.recent_window ?? "").trim();
-      return [column, baseline && recent ? `${baseline} -> ${recent}` : baseline || recent].filter(Boolean).join(" ");
-    })
-    .filter(Boolean)
-    .join("; ");
-}
-
-function summarizeSourceRows(rows) {
-  return rows
-    .slice(0, 3)
-    .map((row) => [String(row?.window ?? "").trim(), String(row?.timestamp ?? "").trim()].filter(Boolean).join(" @ "))
-    .filter(Boolean)
-    .join("; ");
-}
 
 function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTelemetry) {
   if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };

@@ -12,6 +12,10 @@ const runtimeMocks = vi.hoisted(() => ({
   setIsDemoMode: vi.fn(),
   clearUploadSessionState: vi.fn(),
 }));
+const runtimeState = vi.hoisted(() => ({
+  latestUploadResult: null,
+  latestUploadSnapshot: { status: "empty" },
+}));
 
 vi.mock("./config", () => ({
   apiFetch: vi.fn(),
@@ -26,8 +30,8 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
     systems: [],
     systemsState: "ready",
     intelligenceStatus: {},
-    latestUploadResult: null,
-    latestUploadSnapshot: { status: "empty" },
+    latestUploadResult: runtimeState.latestUploadResult,
+    latestUploadSnapshot: runtimeState.latestUploadSnapshot,
     domainDetection: null,
     allowPersistedLatest: true,
     telemetryTick: 0,
@@ -41,7 +45,20 @@ vi.mock("./components/SystemTopologyWorkspace", () => ({
     "div",
     { "data-testid": "gate-workspace" },
     h("span", { "data-testid": "gate-result" }, liveOps.latestUploadResult?.job_id ?? "empty"),
+    h("span", { "data-testid": "gate-finding-summary" }, liveOps.canonicalFinding?.summary ?? "none"),
+    h("span", { "data-testid": "gate-finding-confidence" }, liveOps.canonicalFinding?.confidence ?? "none"),
     h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
+    h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
+  ),
+}));
+
+
+vi.mock("./components/ObservationCenterWorkspace", () => ({
+  default: ({ canonicalFinding }) => h(
+    "div",
+    { "data-testid": "observation-workspace" },
+    h("span", { "data-testid": "observation-finding-summary" }, canonicalFinding?.summary ?? "none"),
+    h("span", { "data-testid": "observation-finding-confidence" }, canonicalFinding?.confidence ?? "none"),
   ),
 }));
 
@@ -70,6 +87,8 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
 
 beforeEach(() => {
   window.localStorage.clear();
+  runtimeState.latestUploadResult = null;
+  runtimeState.latestUploadSnapshot = { status: "empty" };
   Object.values(runtimeMocks).forEach((mock) => mock.mockClear());
 });
 
@@ -108,5 +127,30 @@ describe("App upload completion navigation", () => {
 
     expect(screen.getByTestId("upload-workspace")).toBeTruthy();
     expect(screen.queryByTestId("gate-workspace")).toBeNull();
+  });
+
+  it("passes the same canonical finding to Gate and Findings", async () => {
+    runtimeState.latestUploadResult = {
+      job_id: "finding-job-9",
+      observation_type: "trajectory_drift",
+      relationship_summary: "relationship divergence detected across chilled water supply.",
+      drift_status: "elevated",
+      drift_metrics: { baseline_distance: 0.7, confidence: 0.83 },
+      operator_report: { evidence_summary: ["replay/relationship evidence supports the shift."] },
+      sii_intelligence: { facility_state: "drift", confidence: 0.83 },
+    };
+    runtimeState.latestUploadSnapshot = { status: "complete", current_upload: { job_id: "finding-job-9" } };
+
+    render(h(App));
+
+    const gateSummary = screen.getByTestId("gate-finding-summary").textContent;
+    expect(gateSummary).toMatch(/historical operating pattern/i);
+    expect(screen.getByTestId("gate-finding-confidence").textContent).toBe("High");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open findings" }));
+
+    await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
+    expect(screen.getByTestId("observation-finding-summary").textContent).toBe(gateSummary);
+    expect(screen.getByTestId("observation-finding-confidence").textContent).toBe("High");
   });
 });

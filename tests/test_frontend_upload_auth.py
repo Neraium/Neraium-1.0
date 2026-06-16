@@ -195,8 +195,8 @@ def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
     assert "text: simplifyOperatorSummary(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
     assert "divergence_severity: String(divergence.severity" in source
     assert "findingEvidenceChains: Array.isArray(value.finding_evidence_chains)" in source
-    assert 'aria-label="Finding evidence chains"' in source
-    assert 'Evidence Chain' in source
+    assert 'aria-label="Supporting evidence"' in source
+    assert 'Supporting Evidence' in source
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:

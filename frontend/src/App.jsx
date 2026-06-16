@@ -8,6 +8,7 @@ import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState"; 
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState"; 
 import { deriveCurrentSession } from "./viewModels/currentSession"; 
+import { deriveCanonicalFinding } from "./viewModels/operatorFinding";
 import { logoutUser } from "./services/api/authApi";
 import { normalizeUploadStatus, uploadStateMessage } from "./viewModels/uploadFlow";
 
@@ -111,6 +112,10 @@ function App() {
     hasResumedSession,
     hasRealSiiOutput,
   }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasActiveSession, hasCurrentUploadResult, hasResumedSession, hasRealSiiOutput]);
+  const canonicalFinding = useMemo(
+    () => deriveCanonicalFinding({ currentSession, latestReplayFrame: historianReplayState.frame }),
+    [currentSession, historianReplayState.frame],
+  );
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;
@@ -384,6 +389,7 @@ function App() {
           hasResumedSession={hasResumedSession} 
           hasRealSiiOutput={hasRealSiiOutput} 
           currentSession={currentSession} 
+          canonicalFinding={canonicalFinding}
           domainMode={domainMode} 
           onReplayFrameChange={handleReplayFrameChange} 
           onReplayModeChange={handleReplayModeChange} 
@@ -416,7 +422,9 @@ function App() {
           <ObservationCenterWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
+            canonicalFinding={canonicalFinding}
             onBackToGate={() => setActiveWorkspace("system-body")}
+            onReviewEvidence={() => setActiveWorkspace("historical-replay")}
             onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
@@ -443,6 +451,7 @@ function App() {
       liveOps={{
         ...liveOps,
         replayOverlay: historianReplayState.frame ?? null,
+        canonicalFinding,
       }}
       replayFrame={historianReplayState.frame}
       selectedTarget={null}

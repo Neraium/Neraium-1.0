@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import SystemStateMark from "./SystemStateMark";
+import { OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
 const FEEDBACK_OPTIONS = [
   { id: "confirmed_issue", label: "Confirmed developing issue" },
@@ -119,13 +120,13 @@ function confidenceForFinding(run) {
   if (Number.isFinite(value)) {
     const normalized = value > 1 ? value / 100 : value;
     if (normalized >= 0.82) return "High";
-    if (normalized >= 0.62) return "Medium";
-    return "Developing";
+    if (normalized >= 0.62) return "Moderate";
+    return "Low";
   }
   const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
   if (strength === "High") return "High";
-  if (strength === "Moderate") return "Medium";
-  return "Developing";
+  if (strength === "Moderate") return "Moderate";
+  return "Low";
 }
 
 function potentialImpactForFinding(run) {
@@ -133,10 +134,10 @@ function potentialImpactForFinding(run) {
   if (explicit) return String(explicit);
   const type = String(run?.observation_type ?? "");
   const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
-  if (type === "recovery_elongation") return strength === "High" ? "Possible recovery issue" : "Recovery may need review";
-  if (type === "coupling_change" || type === "covariance_shift") return strength === "High" ? "Possible infrastructure risk" : "Relationship may need review";
-  if (type === "trajectory_drift") return strength === "High" ? "Review recommended" : "Watch for persistence";
-  return strength === "Low" ? "Continue monitoring" : "Review recommended";
+  if (type === "recovery_elongation") return "Recovery behavior differs from historical evidence.";
+  if (type === "coupling_change" || type === "covariance_shift") return "The observed relationships between system variables have changed.";
+  if (type === "trajectory_drift") return "This indicates the operating pattern differs from historical evidence.";
+  return strength === "Low" ? "No structural changes detected." : "Historical comparison evidence indicates a change from the normal operating pattern.";
 }
 
 function readPendingObservationRunId() {
@@ -170,28 +171,12 @@ function lineChartPoints(values, width = 420, height = 120) {
   }).join(" ");
 }
 
-function relationshipSketch(run) {
-  const strength = Math.max(2.2, Math.min(8, Number(run?.drift_metrics?.coupling_delta ?? run?.drift_metrics?.baseline_distance ?? 0.4) * 2.2));
-  const tone = driftToneFor(run);
-  const edgeStroke = tone === "alert"
-    ? "rgba(184, 110, 58, 0.9)"
-    : tone === "watch"
-      ? "rgba(197, 146, 60, 0.84)"
-      : "rgba(59, 122, 140, 0.82)";
-  const edgeDash = tone === "stable" ? undefined : tone === "watch" ? "5 7" : "3 5";
-  return (
-    <svg viewBox="0 0 176 52" className="observation-history-card__sketch" aria-hidden="true">
-      <line x1="34" y1="26" x2="142" y2="26" stroke={edgeStroke} strokeWidth={strength} strokeLinecap="round" strokeDasharray={edgeDash} opacity="0.9" />
-      <circle cx="34" cy="26" r="10" fill="rgba(11, 25, 41, 0.96)" stroke="rgba(59, 122, 140, 0.68)" />
-      <circle cx="142" cy="26" r="10" fill="rgba(11, 25, 41, 0.96)" stroke="rgba(168, 138, 75, 0.72)" />
-    </svg>
-  );
-}
-
 export default function ObservationCenterWorkspace({
   apiFetch,
   accessCode,
+  canonicalFinding = null,
   onBackToGate = null,
+  onReviewEvidence = null,
   onWorkspaceNavigate = null,
 }) {
   const [runs, setRuns] = useState([]);
@@ -326,14 +311,23 @@ export default function ObservationCenterWorkspace({
   );
 
   const latestRun = runs[0] ?? null;
+  const activeFinding = canonicalFinding ?? {
+    exists: false,
+    status: "Normal",
+    confidence: "Low",
+    summary: OPERATOR_EMPTY_STATE.title,
+    whyItMatters: OPERATOR_EMPTY_STATE.subtitle,
+    reviewNext: OPERATOR_EMPTY_STATE.detail,
+    supportingEvidence: [],
+    technicalDetails: [],
+    dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
+    evidenceButtonLabel: "Review Evidence",
+    emptyState: OPERATOR_EMPTY_STATE,
+  };
+  const hasCurrentFinding = Boolean(activeFinding.exists);
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
   const gateOrbState = driftToneFor(latestRun);
-  const activeObservationCount = useMemo(
-    () => runs.filter((run) => normalizeObservationStatus(run) === "open").length,
-    [runs],
-  );
-
   const silenceHealth = useMemo(() => {
     const now = Date.now();
     const lastDay = runs.filter((run) => now - new Date(run.created_at).getTime() <= 86400000);
@@ -446,7 +440,6 @@ export default function ObservationCenterWorkspace({
   }
 
   const relationshipPoints = lineChartPoints(relationshipSeries);
-  const distinctTypes = [...new Set(runs.map((run) => run?.observation_type).filter(Boolean))];
 
   return (
     <section className="workspace-surface observation-center">
@@ -454,158 +447,122 @@ export default function ObservationCenterWorkspace({
       <div className="observation-center__hero">
         <section className="observation-center__snapshot" aria-label="Latest finding snapshot">
           <div className="observation-center__snapshot-orb">
-            <SystemStateMark systemState={gateOrbState} intensity={Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18))} />
+            <SystemStateMark systemState={hasCurrentFinding ? gateOrbState : "stable"} intensity={hasCurrentFinding ? Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18)) : 0.12} />
           </div>
           <div className="observation-center__snapshot-copy">
-            <p className="section-token">Latest Finding</p>
-            <strong>{latestRun ? observationTypeLabel(latestRun?.observation_type) : "No findings recorded"}</strong>
-            <span>{latestRun ? `Detected ${formatDetectedTime(latestRun)}` : "Awaiting telemetry"}</span>
-            <span>{activeObservationCount} active findings</span>
+            <p className="section-token">Current Status</p>
+            <strong>{activeFinding.status}</strong>
+            <span>{activeFinding.confidence} confidence</span>
+            <span>{hasCurrentFinding ? activeFinding.reviewNext : activeFinding.emptyState.detail}</span>
           </div>
         </section>
         <section className="observation-center__summary" aria-label="Current instrument summary">
-          <p className="section-token">Review queue</p>
+          <p className="section-token">Current observation</p>
           <h1>Findings</h1>
-          <p>Review supported changes, their impact, and the evidence behind them.</p>
+          <p>{activeFinding.summary}</p>
           <MetricGrid
             metrics={[
-              { label: "Confidence", value: latestRun ? confidenceForFinding(latestRun) : "Pending" },
-              { label: "Why it matters", value: latestRun ? potentialImpactForFinding(latestRun) : "Monitoring" },
+              { label: "Confidence", value: activeFinding.confidence },
+              { label: "Why it matters", value: activeFinding.whyItMatters },
             ]}
             compact
           />
+          <div className="intake-flow__controls">
+            <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
+              {activeFinding.evidenceButtonLabel}
+            </button>
+          </div>
         </section>
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
         <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
-          <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search findings" />
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="open">Open</option>
-              <option value="resolved">Resolved</option>
-              <option value="failed">Failed</option>
-            </select>
-            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              <option value="all">All types</option>
-              {distinctTypes.map((type) => <option key={type} value={type}>{observationTypeLabel(type)}</option>)}
-            </select>
-          </div>
-          {filteredRuns.length === 0 ? (
-            <>
-              <EmptyState title="No findings yet" body="No supported changes are ready for review." compact />
-            </>
+          {!hasCurrentFinding ? (
+            <div className="observation-detail-callout">
+              <strong>{activeFinding.emptyState.title}</strong>
+              <p>{activeFinding.emptyState.subtitle}</p>
+              <p>{activeFinding.emptyState.detail}</p>
+            </div>
           ) : (
             <div className="feed-list">
-              {filteredRuns.map((run) => (
-                <button
-                  key={run.run_id}
-                  type="button"
-                  className={`intervention-card intervention-card--${selectedRun?.run_id === run.run_id ? "selected" : "review"} observation-history-card`}
-                  onClick={() => setSelectedRunId(run.run_id)}
-                  style={{ textAlign: "left", width: "100%" }}
-                >
-                  <div className="intervention-card__header">
-                    <div>
-                      <span>Finding</span>
-                      <strong>{observationTypeLabel(run.observation_type)}</strong>
-                    </div>
-                    <span className={`observation-history-card__status observation-history-card__status--${normalizeObservationStatus(run)}`}>{normalizeObservationStatus(run)}</span>
+              <button
+                type="button"
+                className="intervention-card intervention-card--selected observation-history-card"
+                style={{ textAlign: "left", width: "100%" }}
+              >
+                <div className="intervention-card__header">
+                  <div>
+                    <span>Current observation</span>
+                    <strong>{activeFinding.status}</strong>
                   </div>
-                  {relationshipSketch(run)}
-                  <p>{summarizeObservation(run, aliases)}</p>
-                  <div className="intervention-card__footer">
-                    <span>Detected {formatDetectedTime(run)}</span>
-                    <span>Confidence {confidenceForFinding(run)}</span>
-                    <span>{potentialImpactForFinding(run)}</span>
-                  </div>
-                </button>
-              ))}
+                  <span className="observation-history-card__status observation-history-card__status--open">active</span>
+                </div>
+                <p>{activeFinding.summary}</p>
+                <div className="intervention-card__footer">
+                  <span>Confidence {activeFinding.confidence}</span>
+                  <span>{activeFinding.whyItMatters}</span>
+                </div>
+              </button>
             </div>
           )}
         </Panel>
 
         <Panel title="Review Finding" className="span-5 observation-center__panel observation-center__panel--detail">
-          {!selectedRun ? (
-            <EmptyState title="Select a finding" body="Choose a finding to review its impact and evidence." compact />
+          {!hasCurrentFinding ? (
+            <div className="observation-detail-callout">
+              <strong>{activeFinding.emptyState.title}</strong>
+              <p>{activeFinding.emptyState.subtitle}</p>
+              <p>{activeFinding.emptyState.detail}</p>
+            </div>
           ) : (
             <>
               <div className="observation-detail-callout">
-                <span className="section-token">What changed</span>
-                <strong>{selectedRunSummary}</strong>
-                {selectedRunHistoricalFact ? <p>{selectedRunHistoricalFact}</p> : null}
+                <span className="section-token">Observation Summary</span>
+                <strong>{activeFinding.summary}</strong>
+                <p>{activeFinding.whyItMatters}</p>
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Detected", value: formatDetectedTime(selectedRun) },
-                  { label: "Confidence", value: confidenceForFinding(selectedRun) },
-                  { label: "Why it matters", value: potentialImpactForFinding(selectedRun) },
-                  { label: "Change strength", value: classifyChangeStrength(selectedRun?.drift_metrics?.baseline_distance ?? selectedRun?.drift_metrics?.drift_index) },
+                  { label: "Status", value: activeFinding.status },
+                  { label: "Confidence", value: activeFinding.confidence },
+                  { label: "Review next", value: activeFinding.reviewNext },
+                  { label: "Historical comparison", value: activeFinding.historicalComparison ?? OPERATOR_EMPTY_STATE.detail },
                 ]}
                 compact
               />
-              <div className="observation-pair-visual" aria-label="Relationship change sketch">
-                <svg viewBox="0 0 320 120" role="img" aria-label="Relationship change sketch">
-                  <defs>
-                    <linearGradient id="observationEdge" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="rgba(105, 183, 198, 0.78)" />
-                      <stop offset="100%" stopColor="rgba(211, 170, 103, 0.88)" />
-                    </linearGradient>
-                  </defs>
-                  <line
-                    x1="88"
-                    y1="60"
-                    x2="232"
-                    y2="60"
-                    stroke="url(#observationEdge)"
-                    strokeWidth={Math.max(3, Math.min(10, Number(selectedRun?.drift_metrics?.coupling_delta ?? selectedRun?.drift_metrics?.baseline_distance ?? 4) * 2.8))}
-                    strokeLinecap="round"
-                    opacity="0.74"
-                  />
-                  <circle cx="88" cy="60" r="20" fill="rgba(13, 23, 29, 0.96)" stroke="rgba(105, 183, 198, 0.72)" />
-                  <circle cx="232" cy="60" r="20" fill="rgba(15, 18, 21, 0.96)" stroke="rgba(211, 170, 103, 0.78)" />
-                  <text x="88" y="94" textAnchor="middle" fill="rgba(224, 236, 234, 0.92)" fontSize="10">
-                    {displayVariable((selectedRun.variables ?? [])[0] ?? "Variable A", aliases)}
-                  </text>
-                  <text x="232" y="94" textAnchor="middle" fill="rgba(224, 236, 234, 0.92)" fontSize="10">
-                    {displayVariable((selectedRun.variables ?? [])[1] ?? "Variable B", aliases)}
-                  </text>
-                </svg>
+              <div className="intake-flow__controls">
+                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>{activeFinding.evidenceButtonLabel}</button>
               </div>
-              <details className="compact-list-block">
-                <summary className="section-token">Review Evidence</summary>
+              <details className="compact-list-block" open>
+                <summary className="section-token">Supporting Evidence</summary>
                 <ul className="compact-list">
-                  {(selectedRun.evidence_summary ?? []).length > 0
-                    ? selectedRun.evidence_summary.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)
-                    : <li>No evidence summary recorded.</li>}
+                  {(activeFinding.supportingEvidence ?? []).length > 0
+                    ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
+                    : <li>{OPERATOR_EMPTY_STATE.detail}</li>}
                 </ul>
               </details>
               <details className="compact-list-block">
-                <summary className="section-token">Details</summary>
+                <summary className="section-token">Technical Details</summary>
                 <ul className="compact-list">
-                  <li>Status: {normalizeObservationStatus(selectedRun)}</li>
-                  <li>Source: {selectedRun.source_name || selectedRun.source_type || "Unknown source"}</li>
-                  <li>Usual behavior: {displayPatternLabel(selectedRun.regime_label)}</li>
-                  {(selectedRun.variables ?? []).map((item) => <li key={item}>{displayVariable(item, aliases)}</li>)}
+                  {(activeFinding.technicalDetails ?? []).map((item) => <li key={item.label}>{item.label}: {sanitizeOperatorText(item.value)}</li>)}
                 </ul>
               </details>
               <details className="compact-list-block">
-                <summary className="section-token">Data Conditions</summary>
+                <summary className="section-token">Data Quality</summary>
                 <ul className="compact-list">
-                  {(selectedRun.data_conditions ?? []).length > 0
-                    ? selectedRun.data_conditions.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)
-                    : <li>No data conditions recorded.</li>}
+                  {renderDataQualityRows(activeFinding.dataQuality)}
                 </ul>
               </details>
-              <details className="compact-list-block">
-                <summary className="section-token">Export</summary>
-                <div className="intake-flow__controls">
-                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "markdown")}>Markdown</button>
-                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>JSON</button>
-                  <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>CSV</button>
-                </div>
-              </details>
+              {selectedRun ? (
+                <details className="compact-list-block">
+                  <summary className="section-token">Historical comparison evidence</summary>
+                  <ul className="compact-list">
+                    <li>{sanitizeOperatorText(selectedRunSummary)}</li>
+                    {selectedRunHistoricalFact ? <li>{sanitizeOperatorText(selectedRunHistoricalFact)}</li> : null}
+                    <li>Confidence: {confidenceForFinding(selectedRun)}</li>
+                  </ul>
+                </details>
+              ) : null}
               <div className="why-panel__section guidance-checks">
                 <span className="section-token">Review outcome</span>
                 <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)}>
@@ -613,7 +570,7 @@ export default function ObservationCenterWorkspace({
                 </select>
                 <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={4} />
                 <div className="intake-flow__controls">
-                  <button type="button" className="command-button" onClick={submitFeedback}>Save Review</button>
+                  <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRun}>Save Review</button>
                   {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : null}
                 </div>
               </div>
@@ -757,6 +714,17 @@ function maybeNotifyForObservation(run, prefs, aliases) {
     }
     notification.close();
   };
+}
+
+
+function renderDataQualityRows(dataQuality) {
+  const groups = dataQuality && typeof dataQuality === "object" ? dataQuality : {};
+  const rows = [
+    ...(groups.missingBaselineValues || []).map((item, index) => <li key={`baseline-${index}`}>Missing baseline values: {sanitizeOperatorText(item)}</li>),
+    ...(groups.missingRecentValues || []).map((item, index) => <li key={`recent-${index}`}>Missing recent values: {sanitizeOperatorText(item)}</li>),
+    ...(groups.unavailableTelemetry || []).map((item, index) => <li key={`telemetry-${index}`}>Unavailable telemetry: {sanitizeOperatorText(item)}</li>),
+  ];
+  return rows.length > 0 ? rows : [<li key="quality-none">No data quality warnings recorded.</li>];
 }
 
 function insideQuietHours(start, end) {

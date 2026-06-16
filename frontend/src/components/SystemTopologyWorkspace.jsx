@@ -129,6 +129,7 @@ export default function SystemTopologyWorkspace({
       latestUploadResult={liveOps.latestUploadResult}
       liveSnapshot={liveOps}
       latestReplayFrame={replayFrame}
+      canonicalFinding={liveOps.canonicalFinding ?? null}
       gateProcessing={gateProcessing}
     /> 
   ); 

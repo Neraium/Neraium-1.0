@@ -485,6 +485,10 @@ body {
   padding: 22px 24px;
 }
 
+.observation-center__summary .intake-flow__controls {
+  margin-top: 4px;
+}
+
 .observation-center__summary h1 {
   margin: 0;
   color: var(--text-primary);
@@ -566,6 +570,19 @@ body {
 @media (max-width: 960px) {
   .observation-center__hero {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .observation-center__snapshot {
+    padding: 16px;
+  }
+
+  .observation-center__snapshot-orb {
+    min-height: 132px;
+  }
+
+  .observation-center__summary {
+    padding: 18px;
   }
 
   .observation-center__panel--detail {

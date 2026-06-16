@@ -22,6 +22,7 @@ export default function ReplayWorkspace({
   hasResumedSession = false,
   hasRealSiiOutput = false,
   currentSession = null,
+  canonicalFinding = null,
   onReplayFrameChange,
   onReplayModeChange,
 }) {
@@ -47,6 +48,16 @@ export default function ReplayWorkspace({
     || hasRealSiiOutput
   );
   const [replayMode, setReplayMode] = useState(false);
+  const replayFinding = canonicalFinding ?? {
+    exists: false,
+    status: "Normal",
+    confidence: "Low",
+    summary: "No current observations.",
+    whyItMatters: "Telemetry is being monitored.",
+    reviewNext: "No structural changes detected.",
+    supportingEvidence: [],
+    emptyState: { detail: "No structural changes detected." },
+  };
   const togglePlayback = () => {
     setIsPlaying((value) => {
       const next = !value;
@@ -192,8 +203,8 @@ export default function ReplayWorkspace({
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
   const replayStatusMetrics = useMemo(() => ([
     { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
-    { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
-  ]), [hasReplaySnapshots, shownFrame]);
+    { label: "Confidence", value: replayFinding.confidence },
+  ]), [hasReplaySnapshots, replayFinding.confidence, shownFrame]);
 
   const expertMetrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
@@ -261,9 +272,9 @@ export default function ReplayWorkspace({
       <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="See what changed, why it matters, and what to review next.">
         <div className="replay-discovery__header">
           <div>
-            <p className="section-token">Change review</p>
-            <h3>{hasReplaySnapshots ? discovery.headline : "No replay available yet"}</h3>
-            <p className="narrative-text">{hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay."}</p>
+            <p className="section-token">Evidence</p>
+            <h3>{replayFinding.exists ? replayFinding.status : (hasReplaySnapshots ? discovery.headline : "No replay available yet")}</h3>
+            <p className="narrative-text">{replayFinding.exists ? replayFinding.summary : (hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay.")}</p>
           </div>
           <MetricGrid metrics={replayStatusMetrics} compact />
         </div>
@@ -276,20 +287,20 @@ export default function ReplayWorkspace({
 
         <div className="replay-discovery__insight-grid">
           <section className="replay-discovery__insight" aria-label="What changed">
-            <span className="section-token">What changed</span>
-            <strong>{hasReplaySnapshots ? discovery.whatChanged.title : "Awaiting telemetry"}</strong>
-            <p>{hasReplaySnapshots ? discovery.whatChanged.detail : "No replay available yet."}</p>
+            <span className="section-token">Current Status</span>
+            <strong>{replayFinding.status}</strong>
+            <p>{replayFinding.summary}</p>
           </section>
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
             <span className="section-token">Supporting Evidence</span>
             <ul className="compact-list">
-              {supportingEvidence.map((item) => <li key={item}>{item}</li>)}
+              {(replayFinding.supportingEvidence.length > 0 ? replayFinding.supportingEvidence : supportingEvidence).map((item) => <li key={item}>{item}</li>)}
             </ul>
           </section>
           <section className="replay-discovery__insight" aria-label="Next operator review">
             <span className="section-token">Review next</span>
-            <strong>{hasReplaySnapshots ? discovery.reviewNext.title : "Telemetry replay unavailable"}</strong>
-            <p>{hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet."}</p>
+            <strong>{replayFinding.exists ? replayFinding.reviewNext : "Telemetry replay unavailable"}</strong>
+            <p>{replayFinding.exists ? replayFinding.whyItMatters : (hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet.")}</p>
           </section>
         </div>
 
@@ -663,10 +674,10 @@ function sentenceCase(value) {
 
 function formatConfidenceLabel(value) {
   const normalized = String(value ?? "").toLowerCase();
-  if (normalized.includes("structural_evidence_confirmed")) return "Structural evidence confirmed";
-  if (normalized.includes("relationship_evidence_present")) return "Relationship evidence present";
-  if (normalized.includes("baseline_reference_confirmed") || normalized.includes("baseline_evidence")) return "Reference confirmed";
-  if (!normalized.trim()) return "Pending";
+  if (normalized.includes("high") || normalized.includes("confirmed") || normalized.includes("strong")) return "High";
+  if (normalized.includes("moderate") || normalized.includes("medium") || normalized.includes("present") || normalized.includes("reference")) return "Moderate";
+  if (!normalized.trim()) return "Low";
+  if (normalized.includes("low") || normalized.includes("weak") || normalized.includes("developing") || normalized.includes("monitoring")) return "Low";
   return sentenceCase(String(value).replaceAll("_", " "));
 }
 

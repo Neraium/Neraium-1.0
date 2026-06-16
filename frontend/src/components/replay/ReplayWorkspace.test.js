@@ -93,7 +93,7 @@ describe("ReplayWorkspace playback stability", () => {
     renderReplayWorkspace(baseProps());
 
     await waitFor(() => expectFrame("1\/4"));
-    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Current Status")).toBeTruthy();
     expect(screen.getByText("Supporting Evidence")).toBeTruthy();
     expect(screen.getByText("Review next")).toBeTruthy();
     expect(screen.queryByText("Raw change direction")).toBeNull();
