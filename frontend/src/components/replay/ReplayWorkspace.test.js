@@ -91,7 +91,7 @@ describe("ReplayWorkspace", () => {
     renderReplayWorkspace(baseProps());
 
     await waitFor(() => expectReplayHeading());
-    const nextButton = screen.queryByRole("button", { name: "Next" });
+    const nextButton = screen.queryAllByRole("button", { name: "Next" })[0];
     if (nextButton) fireEvent.click(nextButton);
     expectReplayHeading();
   });
