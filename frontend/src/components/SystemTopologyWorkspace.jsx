@@ -38,18 +38,24 @@ export default function SystemTopologyWorkspace({
     uiState,
     layer,
   });
-  const uploadSignal = deriveUploadSignal(liveOps.latestUploadResult);
+  const reviewReady = liveOps.currentSession?.hasReliableOperatorEvidence === true;
+  const uploadSignal = deriveUploadSignal(liveOps.latestUploadResult, { reviewReady });
+  const pendingVerification = hasUploadResult && !reviewReady;
 
   const stateLabel = processingActive
     ? "Processing"
     : String(gateStateOverride || "").trim()
       ? String(gateStateOverride).trim()
-      : hasUploadResult
-        ? (uploadSignal.label || "Monitoring")
-        : awaitingSii
-          ? "No Data"
-          : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
-  const stateDescription = buildStateDescription(layer);
+      : pendingVerification
+        ? "Analysis pending verification"
+        : hasUploadResult
+          ? (uploadSignal.label || "Monitoring")
+          : awaitingSii
+            ? "No Data"
+            : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
+  const stateDescription = pendingVerification
+    ? "Telemetry is present, but the evidence packet is not yet verified for operator review."
+    : buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
     const total = (liveOps.relationshipRows ?? []).reduce(
@@ -59,21 +65,25 @@ export default function SystemTopologyWorkspace({
     return Math.max(0, Math.min(1, 1 - total));
   }, [liveOps.relationshipRows]);
 
-  const systemState = processingActive
+  const systemState = processingActive || pendingVerification
     ? "unknown"
     : hasUploadResult
       ? (uploadSignal.systemState || "stable")
       : (awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight)));
   const primaryMessage = awaitingSii
     ? "Upload or connect telemetry to begin monitoring."
-    : governed.hasPass
-      ? concise(governed.passedFindingSummary, 120)
-      : "Stable";
+    : pendingVerification
+      ? "Telemetry processing finished, but evidence verification is still pending before operator review."
+      : governed.hasPass
+        ? concise(governed.passedFindingSummary, 120)
+        : "Stable";
 
   const focusArea = governed.affectedSubsystem;
-  const summaryTitle = governed.hasPass
-    ? "Governed PASS Finding"
-    : "Governed Output Pending";
+  const summaryTitle = pendingVerification
+    ? "Evidence Verification Pending"
+    : governed.hasPass
+      ? "Governed PASS Finding"
+      : "Governed Output Pending";
   const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
 
   const metrics = [];
@@ -116,7 +126,7 @@ export default function SystemTopologyWorkspace({
       orbData={orbData}
       isLoading={awaitingSii}
       isEmptyStructuralState={awaitingSii || uiState === "neutral"}
-      statusLight={processingActive ? "gray" : (uploadSignal.statusLight || governed.statusLight)}
+      statusLight={processingActive || pendingVerification ? "gray" : (uploadSignal.statusLight || governed.statusLight)}
       governedOnly
       governedDetail={governed.detail}
       apiFetch={apiFetch}
@@ -135,7 +145,7 @@ export default function SystemTopologyWorkspace({
   ); 
 } 
 
-function deriveUploadSignal(latestUploadResult) {
+export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = {}) {
   if (!latestUploadResult) {
     return { systemState: null, label: "" };
   }
@@ -143,6 +153,9 @@ function deriveUploadSignal(latestUploadResult) {
   const operatingState = String(latestUploadResult?.operating_state ?? latestUploadResult?.sii_intelligence?.facility_state ?? "").toLowerCase();
   const urgency = String(latestUploadResult?.drift_status ?? latestUploadResult?.sii_intelligence?.urgency ?? "").toLowerCase();
 
+  if (!reviewReady) {
+    return { systemState: "unknown", label: "Analysis pending verification", statusLight: "gray" };
+  }
   if (!operatingState && !urgency) {
     return { systemState: null, label: "", statusLight: null };
   }

@@ -23,6 +23,7 @@ export default function useFacilityRuntime({
   formatClockTime,
   formatEndpoint,
   buildProtectedRequestMessage,
+  initialAllowPersistedLatest = true,
 }) {
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
@@ -43,7 +44,7 @@ export default function useFacilityRuntime({
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
-  const [allowPersistedLatest, setAllowPersistedLatest] = useState(true);
+  const [allowPersistedLatest, setAllowPersistedLatest] = useState(Boolean(initialAllowPersistedLatest));
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [domainMode, setDomainModeState] = useState(null);

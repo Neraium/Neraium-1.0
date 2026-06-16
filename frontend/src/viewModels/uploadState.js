@@ -183,18 +183,22 @@ export function deriveTimeCoverage(result) {
   };
 }
 
+export function resolveOperatorReviewReadiness({ latestUploadResult = null, latestUploadSnapshot = null } = {}) {
+  const result = latestUploadResult ?? resolveCurrentUploadResult({
+    current_upload: latestUploadSnapshot?.current_upload ?? null,
+    latest_result: latestUploadSnapshot?.latest_result ?? null,
+    snapshot: latestUploadSnapshot ?? null,
+  });
+  return result?.sii_reliable_enough_to_show === true;
+}
+
 export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext }) {
   const normalizedState = normalizeUploadStatus(uploadError ? "failed" : uploadState);
   const latestStatus = String(latestUploadSnapshot?.status ?? "empty").toLowerCase();
   const baselineStatus = String(latestUploadSnapshot?.baseline_status ?? "none").toLowerCase();
   const baselineSamplesCollected = latestUploadSnapshot?.baseline_samples_collected ?? 0;
   const baselineSamplesRequired = latestUploadSnapshot?.baseline_samples_required ?? 0;
-  const latestResult = resolveCurrentUploadResult({
-    current_upload: latestUploadSnapshot?.current_upload ?? null,
-    latest_result: latestUploadSnapshot?.latest_result ?? null,
-    snapshot: latestUploadSnapshot ?? null,
-  });
-  const operatorReviewReady = latestResult?.sii_reliable_enough_to_show === true;
+  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot });
   const baselineDetail = baselineSamplesRequired > 0
     ? `${baselineSamplesCollected}/${baselineSamplesRequired} live samples collected.`
     : "Waiting for live telemetry samples.";
@@ -270,14 +274,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
 
 export function connectionStateLabel(latestStatus, uploadState, uploadError, latestUploadSnapshot = null) {
   const normalizedLatestStatus = String(latestStatus).toLowerCase();
-  const latestResult = latestUploadSnapshot
-    ? resolveCurrentUploadResult({
-      current_upload: latestUploadSnapshot?.current_upload ?? null,
-      latest_result: latestUploadSnapshot?.latest_result ?? null,
-      snapshot: latestUploadSnapshot,
-    })
-    : null;
-  const operatorReviewReady = latestResult?.sii_reliable_enough_to_show === true;
+  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot });
   if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
     return "Upload failed";
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { connectionStateLabel, deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult } from "../uploadState";
+import { connectionStateLabel, deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult, resolveOperatorReviewReadiness } from "../uploadState";
 
 describe("uploadState normalization", () => {
   it("resolves room aliases from messy column names", () => {
@@ -80,6 +80,20 @@ describe("uploadState normalization", () => {
         },
       },
     })).toBe("Active Session");
+  });
+
+
+  it("reads operator review readiness from the canonical current upload result", () => {
+    expect(resolveOperatorReviewReadiness({
+      latestUploadSnapshot: {
+        current_upload: {
+          result: {
+            job_id: "job-review-ready",
+            sii_reliable_enough_to_show: true,
+          },
+        },
+      },
+    })).toBe(true);
   });
 
   it("prefers current_upload.result over legacy latest_result when both are present", () => {

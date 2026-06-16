@@ -22,8 +22,16 @@ const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
 
 function readStoredSessionIntent() {
   if (typeof window === "undefined") return "neutral";
+  const allowPersisted = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
+  if (allowPersisted === "0") return "neutral";
   const value = window.localStorage.getItem(SESSION_INTENT_STORAGE_KEY);
   return value === "current" || value === "resumed" ? value : "neutral";
+}
+
+
+function readStoredAllowPersistedLatest() {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) !== "0";
 }
 
 function App() {
@@ -35,6 +43,7 @@ function App() {
   const [resetGuardActive, setResetGuardActive] = useState(false);
   const [completedUploadOverride, setCompletedUploadOverride] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
+  const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
 
   const {
     apiStatus,
@@ -58,6 +67,7 @@ function App() {
     formatClockTime,
     formatEndpoint,
     buildProtectedRequestMessage,
+    initialAllowPersistedLatest,
   });
 
   const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? latestUploadResult);
@@ -233,6 +243,11 @@ function App() {
       ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
     if (completedResult) {
       setCompletedUploadOverride(completedResult);
+    } else {
+      setCompletedUploadOverride(null);
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
     await loadLatestUploadState({ includePersisted: true });
     setSessionIntent("current");
@@ -249,6 +264,10 @@ function App() {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
     const hasResult = await loadLatestUploadState({ includePersisted: true });
+    if (!hasResult) {
+      setCompletedUploadOverride(null);
+      setGateUploadCompleteSeen(false);
+    }
     setSessionIntent(hasResult ? "resumed" : "neutral");
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
@@ -289,6 +308,7 @@ function App() {
     setGateUploadCompleteSeen(false);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
+      window.localStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
     }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
@@ -311,6 +331,11 @@ function App() {
       setSessionIntent("neutral");
     }
   }, [allowPersistedLatest, effectiveSessionIntent]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, allowPersistedLatest ? "1" : "0");
+  }, [allowPersistedLatest]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;

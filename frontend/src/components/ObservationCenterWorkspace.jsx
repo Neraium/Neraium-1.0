@@ -39,10 +39,21 @@ function notificationAllowed() {
   return typeof window !== "undefined" && "Notification" in window;
 }
 
-function normalizeObservationStatus(run) {
+function normalizeObservationStatus(run, persistedRunIds = null) {
   if (String(run?.status ?? "").toLowerCase() === "failed") return "failed";
   if (run?.latest_feedback_category) return "resolved";
-  return String(run?.observation_status ?? "open").toLowerCase();
+  const hasPersistedRun = persistedRunIds instanceof Set && persistedRunIds.has(String(run?.run_id ?? ""));
+  if (run?.synthetic_current_run && !hasPersistedRun) return "active";
+  const workflowStatus = String(run?.status ?? "").toLowerCase();
+  if (workflowStatus && !["complete", "completed", "success"].includes(workflowStatus)) return "processing";
+  const observationStatus = String(run?.observation_status ?? "open").toLowerCase();
+  if (observationStatus === "completed") return "recorded";
+  return observationStatus || "open";
+}
+
+function canRecordFeedback(run, persistedRunIds) {
+  if (!run?.run_id) return false;
+  return persistedRunIds.has(String(run.run_id)) && normalizeObservationStatus(run, persistedRunIds) !== "processing";
 }
 
 function observationTypeLabel(value) {
@@ -258,11 +269,20 @@ export default function ObservationCenterWorkspace({
     };
   }, [accessCode, aliases, apiFetch, notificationPrefs]);
 
+  const persistedRunIds = useMemo(
+    () => new Set(runs.map((run) => String(run?.run_id ?? "")).filter(Boolean)),
+    [runs],
+  );
+
   const reviewRuns = useMemo(() => {
     const canonicalRun = buildCanonicalFindingRun({ canonicalFinding, currentSession });
     if (!canonicalRun) return runs;
+    const persistedRun = runs.find((run) => run?.run_id === canonicalRun.run_id) ?? null;
+    const mergedRun = persistedRun
+      ? { ...canonicalRun, ...persistedRun, synthetic_current_run: false }
+      : canonicalRun;
     const remainingRuns = runs.filter((run) => run?.run_id !== canonicalRun.run_id);
-    return [canonicalRun, ...remainingRuns];
+    return [mergedRun, ...remainingRuns];
   }, [canonicalFinding, currentSession, runs]);
 
   const variables = useMemo(() => {
@@ -307,11 +327,11 @@ export default function ObservationCenterWorkspace({
         run?.latest_feedback_category,
       ].join(" ").toLowerCase();
       const queryMatch = !query.trim() || haystack.includes(query.trim().toLowerCase());
-      const statusMatch = statusFilter === "all" || normalizeObservationStatus(run) === statusFilter;
+      const statusMatch = statusFilter === "all" || normalizeObservationStatus(run, persistedRunIds) === statusFilter;
       const typeMatch = typeFilter === "all" || String(run?.observation_type ?? "") === typeFilter;
       return queryMatch && statusMatch && typeMatch;
     });
-  }, [query, reviewRuns, statusFilter, typeFilter]);
+  }, [persistedRunIds, query, reviewRuns, statusFilter, typeFilter]);
 
   const selectedRun = useMemo(
     () => filteredRuns.find((run) => run.run_id === selectedRunId) ?? filteredRuns[0] ?? null,
@@ -335,6 +355,8 @@ export default function ObservationCenterWorkspace({
   const hasCurrentFinding = Boolean(activeFinding.exists);
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
+  const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
+  const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
     const now = Date.now();
@@ -376,7 +398,7 @@ export default function ObservationCenterWorkspace({
   }, [reviewRuns, selectedVariables]);
 
   async function submitFeedback() {
-    if (!selectedRun?.run_id) return;
+    if (!selectedRun?.run_id || !selectedRunAllowsFeedback) return;
     try {
       setFeedbackState({ status: "saving", message: "" });
       const response = await apiFetch(`/api/evidence/runs/${encodeURIComponent(selectedRun.run_id)}/feedback`, {
@@ -503,7 +525,7 @@ export default function ObservationCenterWorkspace({
                     <span>Current observation</span>
                     <strong>{activeFinding.status}</strong>
                   </div>
-                  <span className="observation-history-card__status observation-history-card__status--open">active</span>
+                  <span className="observation-history-card__status observation-history-card__status--open">{selectedRunStatus === "processing" ? "processing" : "active"}</span>
                 </div>
                 <p>{activeFinding.summary}</p>
                 <div className="intervention-card__footer">
@@ -578,8 +600,8 @@ export default function ObservationCenterWorkspace({
                 </select>
                 <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={4} />
                 <div className="intake-flow__controls">
-                  <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRun}>Save Review</button>
-                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : null}
+                  <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
+                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the evidence record is persisted.</span> : null)}
                 </div>
               </div>
             </>
@@ -686,7 +708,7 @@ export default function ObservationCenterWorkspace({
               <div className="telemetry-card" key={run.run_id}>
                 <div className="telemetry-card__header">
                   <span className="telemetry-card__eyebrow">{run.source_name || run.source_type}</span>
-                  <span>{normalizeObservationStatus(run)}</span>
+                  <span>{normalizeObservationStatus(run, persistedRunIds)}</span>
                 </div>
                 <strong>{run.structural_state ?? run.operating_state ?? "Monitoring"}</strong>
                 <p>{observationTypeLabel(run.observation_type)}</p>

@@ -1,4 +1,5 @@
 import { Panel } from "../workspacePrimitives";
+import { resolveOperatorReviewReadiness } from "../../viewModels/uploadState";
 
 function asEpoch(value) {
   if (!value) return null;
@@ -18,10 +19,12 @@ export default function PilotReadinessPanel({
   const lastProcessedEpoch = asEpoch(lastProcessedAt);
   const freshnessMs = lastProcessedEpoch == null ? null : Date.now() - lastProcessedEpoch;
   const isFresh = freshnessMs != null && freshnessMs <= 1000 * 60 * 60 * 24;
+  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot });
 
   const checks = [
     { label: "Control plane connectivity", ok: String(apiStatus?.label ?? "").toLowerCase() === "online", detail: apiStatus?.label ?? "Unknown" },
     { label: "Latest upload validity", ok: latestStatus === "active" || latestStatus === "complete", detail: latestUploadSnapshot?.last_filename ?? "No recent upload" },
+    { label: "Operator review readiness", ok: operatorReviewReady, detail: operatorReviewReady ? "Evidence packet verified" : "Evidence verification still pending" },
     { label: "Reference status", ok: baselineStatus === "active", detail: baselineStatus === "active" ? "Reference active" : "Reference pending" },
     { label: "Analysis freshness", ok: isFresh, detail: lastProcessedAt ? formatClockTime(lastProcessedAt) : "No analysis timestamp" },
     { label: "Read-only boundary", ok: true, detail: "Read-only. No control or actuation paths enabled." },
