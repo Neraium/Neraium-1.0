@@ -81,8 +81,8 @@ export default function SystemBodyWorkspace({
   );
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry);
   const stabilitySnapshot = useMemo(
-    () => buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }),
-    [latestReplayFrame, latestUploadResult],
+    () => buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, latestReplayFrame }),
+    [latestReplayFrame, latestUploadResult, latestUploadSnapshot],
   );
   const dataConditions = useMemo(
     () => collectDataConditions(latestUploadResult),
@@ -359,21 +359,40 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
   };
 }
 
-function buildStabilitySnapshot({ latestUploadResult, latestReplayFrame }) {
+function buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, latestReplayFrame }) {
+  const hasActiveDataset = hasUsableTelemetry({ latestUploadResult, latestUploadSnapshot, latestReplayFrame });
+  if (!hasActiveDataset) {
+    return {
+      regime: "—",
+      driftMagnitude: "—",
+      activeObservations: 0,
+      deformationAge: "—",
+    };
+  }
+
   const sii = latestUploadResult?.sii_intelligence ?? {};
   const replay = latestUploadResult?.replay_timeline?.timeline ?? sii?.replay_timeline?.timeline ?? [];
   const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
   const driftMagnitude = frame?.baseline_distance
     ?? frame?.topology_state?.drift_index
     ?? sii?.instability_index
-    ?? "-";
+    ?? null;
   const startedAt = frame?.timestamp_start
     ?? latestUploadResult?.timestamp_profile?.first_timestamp
     ?? null;
+  const regime = labelOrFallback(sii?.baseline_regime ?? sii?.regime_label, "—");
+  const hasObservationPayload = Boolean(
+    latestUploadResult?.observation_type
+    || latestUploadResult?.operator_report
+    || latestUploadResult?.finding_evidence_chains?.length
+    || latestReplayFrame
+    || replay.length > 0
+    || latestUploadResult?.sii_reliable_enough_to_show,
+  );
   return {
-    regime: sii?.baseline_regime ?? sii?.regime_label ?? "State Group A",
-    driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : String(driftMagnitude ?? "-"),
-    activeObservations: String(latestUploadResult?.drift_status ?? "").toLowerCase() === "info" ? 0 : 1,
+    regime,
+    driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : "—",
+    activeObservations: hasObservationPayload && String(latestUploadResult?.drift_status ?? "").toLowerCase() !== "info" ? 1 : 0,
     deformationAge: ageLabel(startedAt),
   };
 }
@@ -386,9 +405,9 @@ function collectDataConditions(latestUploadResult) {
 }
 
 function ageLabel(value) {
-  if (!value) return "-";
+  if (!value) return "—";
   const ms = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "-";
+  if (!Number.isFinite(ms) || ms < 0) return "—";
   const hours = Math.round(ms / 3600000);
   if (hours < 24) return `${hours}h`;
   return `${Math.round(hours / 24)}d`;
