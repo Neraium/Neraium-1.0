@@ -2,30 +2,39 @@
 __pycache__/
 *.py[cod]
 *.pyo
-.venv/
-venv/
-env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
 
-# Node / React
+# Node / frontend
 node_modules/
-build/
 dist/
+build/
 .next/
 coverage/
+.npm
+frontend/playwright-report/
+frontend/test-results/
+output/playwright/
 
 # Environment
 .env
 .env.local
 .env.*.local
 
-# OS / IDE
-.DS_Store
-Thumbs.db
+# IDE / OS
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
@@ -35,16 +44,12 @@ frontend-dev.err.log
 
 # Local tool caches
 .uv-cache/
+.aider*
+.terraform/
+*.tfstate
+*.tfstate.backup
 
-# Frontend generated test artifacts
-output/playwright/
-frontend/playwright-report/
-frontend/test-results/
-
-# Backup snapshots
-*.backup-before-ecs.js
-
-# Data / generated files
+# Generated data and runtime state
 data/
 results/
 uploads/
@@ -58,44 +63,9 @@ backend/app/runtime/uploads/
 backend/app/runtime/jobs/
 backend/app/runtime/*
 !backend/app/runtime/.gitkeep
-.aider*
-.terraform/
-*.tfstate
-*.tfstate.backup
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-.coverage
-htmlcov/
-.venv/
-venv/
-env/
-
-# Node
-node_modules/
-dist/
-build/
-.npm
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Runtime
-backend/app/runtime/
 *.db
+
+# Backup and stray root artifacts
+*.backup-before-ecs.js
+*.patch
+*.jpeg

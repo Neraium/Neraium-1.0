@@ -90,6 +90,40 @@ export default function SystemBodyWorkspace({
   );
   const finding = canonicalFinding ?? buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions);
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
+  const navigationItems = [
+    {
+      id: "data-connections",
+      label: "Data intake",
+      description: interpretation.hasTelemetry ? "Swap feeds, upload CSV, or reconnect APIs." : "Upload telemetry or connect a live source.",
+    },
+    {
+      id: finding.exists ? "historical-replay" : "observation-center",
+      label: finding.exists ? "Evidence trace" : "Observation review",
+      description: finding.exists ? "Open replay and inspect the evidence chain." : "Review current interpretation and monitoring context.",
+    },
+    {
+      id: "help-changelog",
+      label: "Help and updates",
+      description: "Reference product guidance and recent changes.",
+    },
+  ];
+  const heroStats = [
+    { label: "Observation status", value: finding.status },
+    { label: "Evidence confidence", value: finding.confidence },
+    { label: "Operating pattern", value: stabilitySnapshot.regime },
+    { label: "Persistence", value: stabilitySnapshot.deformationAge },
+  ];
+  const insightRows = [
+    { label: "Primary driver", value: interpretation.primaryDriver },
+    { label: "Why it matters", value: finding.whyItMatters },
+    { label: "Review next", value: finding.exists ? finding.reviewNext : finding.emptyState.detail },
+    { label: "Latest update", value: lastUpdate || "Awaiting telemetry" },
+  ];
+  const trustRows = [
+    { label: "Control boundary", value: "Read-only. No actuation or writeback." },
+    { label: "Analysis mode", value: "Structural relationship monitoring only." },
+    { label: "Data posture", value: interpretation.hasTelemetry ? "Live observation aligned to the active session." : "No telemetry attached yet." },
+  ];
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -214,106 +248,143 @@ export default function SystemBodyWorkspace({
         </button>
 
         <div className="system-gate__layout">
-          <div className="system-gate__column system-gate__column--left">
-            <section className="panel system-gate__plate system-gate__plate--summary" aria-label="System body home summary">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Current Status</span><strong>{finding.status}</strong></li>
-                  <li><span>Evidence Confidence</span><strong>{finding.confidence}</strong></li>
-                  <li><span>Observation Summary</span><strong>{finding.summary}</strong></li>
-                </ul>
+          <section className="system-gate__hero" aria-label="System status overview">
+            <div className="system-gate__hero-copy">
+              <p className="system-gate__eyebrow">Live system intelligence</p>
+              <h1>{finding.status}</h1>
+              <p className="system-gate__lede">{finding.summary}</p>
+              <div className="system-gate__hero-actions">
+                <button
+                  type="button"
+                  className="command-button"
+                  onClick={() => navigateWorkspace(finding.exists ? "historical-replay" : (interpretation.hasTelemetry ? "observation-center" : "data-connections"))}
+                >
+                  {interpretation.hasTelemetry ? finding.evidenceButtonLabel : "Upload Data"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-command-button"
+                  onClick={() => navigateWorkspace("observation-center")}
+                >
+                  Review Findings
+                </button>
               </div>
-            </section>
-          </div>
-
-          <div className="system-gate__center" style={{ cursor: "default" }}>
-            <SystemOrbPanel
-              systemState={systemState}
-              uiState={uiState}
-              coherence={coherence}
-              stateLabel={finding.status}
-              lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
-              focusLabel={interpretation.primaryDriver}
-              orbData={orbData}
-              compactPreview
-            />
-            <p className="system-gate__state">{finding.status}</p>
-          </div>
-
-          <div className="system-gate__column system-gate__column--right">
-            <section className="panel system-gate__plate system-gate__plate--snapshot" aria-label="Structural stability snapshot">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Why it matters</span><strong>{finding.whyItMatters}</strong></li>
-                  <li><span>Review next</span><strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong></li>
-                  <li><span>Current operating pattern</span><strong>{stabilitySnapshot.regime}</strong></li>
-                  <li><span>Behavior has persisted</span><strong>{stabilitySnapshot.deformationAge}</strong></li>
-                </ul>
-                {findingDataQuality.length > 0 ? (
-                  <div style={{ marginTop: "0.8rem" }}>
-                    <p className="section-token">Data Quality</p>
-                    <ul className="compact-list">
-                      {findingDataQuality.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                ) : null}
+              <div className="system-gate__stat-grid">
+                {heroStats.map((item) => (
+                  <article className="system-gate__stat-card" key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </article>
+                ))}
               </div>
-            </section>
-
-            <section className="panel system-gate__plate system-gate__plate--trust" aria-label="Instrument trust boundaries">
-              <div className="panel-body">
-                <ul className="onboarding-summary">
-                  <li><span>Control Boundary</span><strong>Read-only. No actuation possible.</strong></li>
-                  <li><span>Observation Method</span><strong>Structural change only. No severity or instructions.</strong></li>
-                  <li><span>Latest Update</span><strong>Current observation aligned with the active analysis.</strong></li>
-                </ul>
-              </div>
-            </section>
-
-            <div className="system-gate__actions">
-              <button
-                type="button"
-                className="command-button"
-                onClick={() => navigateWorkspace("observation-center")}
-              >
-                Review Findings
-              </button>
             </div>
-          </div>
-        </div>
 
-        <section className="panel system-gate__plate system-gate__plate--summary system-gate__plate--operator" aria-label="System status summary">
-          <div className="panel-body">
-            <ul className="onboarding-summary">
-              <li><span>Current Status</span><strong>{finding.status}</strong></li>
-              <li><span>Confidence</span><strong>{finding.confidence}</strong></li>
-              <li><span>Observation Summary</span><strong>{finding.summary}</strong></li>
-              <li><span>Why it matters</span><strong>{finding.whyItMatters}</strong></li>
-              <li><span>Review next</span><strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong></li>
-            </ul>
-            <p className="system-gate__boundary-note">Read-only monitoring. No controls.</p>
-          </div>
-        </section>
-
-        {Array.isArray(finding.supportingEvidence) && finding.supportingEvidence.length > 0 ? (
-          <section className="panel system-gate__plate system-gate__plate--summary" aria-label="Supporting evidence">
-            <div className="panel-body">
-              <p className="section-token">Supporting Evidence</p>
-              <ul className="compact-list">
-                {finding.supportingEvidence.map((item) => <li key={item}>{item}</li>)}
-              </ul>
+            <div className="system-gate__hero-visual">
+              <div className="system-gate__orb-stage">
+                <SystemOrbPanel
+                  systemState={systemState}
+                  uiState={uiState}
+                  coherence={coherence}
+                  stateLabel={finding.status}
+                  lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
+                  focusLabel={interpretation.primaryDriver}
+                  orbData={orbData}
+                  compactPreview
+                />
+              </div>
+              <div className="system-gate__orb-caption">
+                <p className="system-gate__state">{finding.status}</p>
+                <p className="system-gate__orb-note">{finding.whyItMatters}</p>
+              </div>
             </div>
           </section>
-        ) : null}
 
-        <div className="system-gate__primary-action">
-          <button
-            type="button"
-            className="command-button"
-            onClick={() => navigateWorkspace(finding.exists ? "historical-replay" : (interpretation.hasTelemetry ? "observation-center" : "data-connections"))}
-          >
-            {interpretation.hasTelemetry ? finding.evidenceButtonLabel : "Upload Data"}
-          </button>
+          <aside className="system-gate__sidebar" aria-label="Current briefing">
+            <section className="system-gate__panel">
+              <div className="system-gate__panel-header">
+                <p className="section-token">Current brief</p>
+                <strong>{heartbeat.label}</strong>
+              </div>
+              <ul className="system-gate__detail-list">
+                {insightRows.map((item) => (
+                  <li key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="system-gate__panel">
+              <div className="system-gate__panel-header">
+                <p className="section-token">Trust boundary</p>
+                <strong>Operator safe</strong>
+              </div>
+              <ul className="system-gate__detail-list">
+                {trustRows.map((item) => (
+                  <li key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </aside>
+        </div>
+
+        <div className="system-gate__lower-grid">
+          <section className="system-gate__panel system-gate__panel--wide" aria-label="Operational focus">
+            <div className="system-gate__panel-header">
+              <p className="section-token">Operational focus</p>
+              <strong>{interpretation.hasTelemetry ? "Session active" : "Awaiting telemetry"}</strong>
+            </div>
+            <ul className="system-gate__detail-list system-gate__detail-list--dense">
+              <li>
+                <span>Observation summary</span>
+                <strong>{finding.summary}</strong>
+              </li>
+              <li>
+                <span>Review next</span>
+                <strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong>
+              </li>
+            </ul>
+            {Array.isArray(finding.supportingEvidence) && finding.supportingEvidence.length > 0 ? (
+              <div className="system-gate__evidence-block">
+                <p className="section-token">Supporting evidence</p>
+                <ul className="compact-list">
+                  {finding.supportingEvidence.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
+            {findingDataQuality.length > 0 ? (
+              <div className="system-gate__evidence-block">
+                <p className="section-token">Data quality</p>
+                <ul className="compact-list">
+                  {findingDataQuality.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="system-gate__panel" aria-label="Workspace navigation">
+            <div className="system-gate__panel-header">
+              <p className="section-token">Workspace navigation</p>
+              <strong>Next actions</strong>
+            </div>
+            <div className="system-gate__nav-list">
+              {navigationItems.map((item) => (
+                <button
+                  type="button"
+                  className="system-gate__nav-card"
+                  key={item.id}
+                  onClick={() => navigateWorkspace(item.id)}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.description}</strong>
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
       </section>
       {menuOverlay}
