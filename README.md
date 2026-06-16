@@ -264,3 +264,5 @@ The next major focus areas are broader data connectors, stronger production auth
 Neraium is building a general-purpose system intelligence layer for operational environments.
 
 The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, equipment failure, and operational uncertainty across multiple industries.
+
+<!-- CI trigger: README validation touch -->
