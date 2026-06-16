@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult } from "../uploadState";
+import { connectionStateLabel, deriveRoomContext, deriveTimeCoverage, hasVerifiedSiiCompletion, resolveCurrentUploadResult } from "../uploadState";
 
 describe("uploadState normalization", () => {
   it("resolves room aliases from messy column names", () => {
@@ -54,6 +54,32 @@ describe("uploadState normalization", () => {
         state_available: false,
       },
     })).toBe(false);
+  });
+
+  it("labels an active upload as pending verification until review evidence is ready", () => {
+    expect(connectionStateLabel("active", "complete", "", {
+      status: "active",
+      current_upload: {
+        result: {
+          job_id: "job-pending",
+          sii_reliable_enough_to_show: false,
+          engine_result: { overall_result: "drift" },
+        },
+      },
+    })).toBe("Analysis pending verification");
+  });
+
+  it("keeps the active session label once operator review evidence is ready", () => {
+    expect(connectionStateLabel("active", "complete", "", {
+      status: "active",
+      current_upload: {
+        result: {
+          job_id: "job-ready",
+          sii_reliable_enough_to_show: true,
+          engine_result: { overall_result: "stable" },
+        },
+      },
+    })).toBe("Active Session");
   });
 
   it("prefers current_upload.result over legacy latest_result when both are present", () => {

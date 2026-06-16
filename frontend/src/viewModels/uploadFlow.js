@@ -12,11 +12,13 @@ const INTAKE_STAGES = [
   "Reviewing system behavior change",
   "Generating replay frames",
   "Preparing observations",
-  "Ready",
+  "Operator review ready",
 ];
 
 export function buildIntakeStages(result, uploadState, roomContext, job = null) {
   const activeIndex = uploadStageIndex(uploadState);
+  const operatorReviewReady = result?.sii_reliable_enough_to_show === true;
+  const finalStageIndex = INTAKE_STAGES.length - 1;
   return INTAKE_STAGES.map((stage, index) => {
     if (job || [...["failed"], ...["uploading", "queued", "validating_schema", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
@@ -49,14 +51,20 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       "System behavior review complete.",
       "Replay/evidence generation complete or available in the evidence workspace.",
       "Observation layer prepared from the latest uploaded state.",
-      "Structural state refreshed from the latest uploaded telemetry.",
+      operatorReviewReady
+        ? "Evidence packet verified and ready for operator review."
+        : "Processing completed, but evidence verification is still pending before operator review.",
     ];
 
     return {
       title: stage,
       detail: details[index],
-      state: "complete",
-      tone: index === 3 && !result.engine_result ? "review" : "nominal",
+      state: index === finalStageIndex && !operatorReviewReady ? "active" : "complete",
+      tone: index === finalStageIndex && !operatorReviewReady
+        ? "review"
+        : index === 3 && !result.engine_result
+          ? "review"
+          : "nominal",
     };
   });
 }

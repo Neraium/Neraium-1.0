@@ -48,6 +48,12 @@ function renderReplayWorkspace(props) {
 
 function baseProps({ apiFetch, currentSession } = {}) {
   const fetchMock = apiFetch ?? createReplayApiFetch();
+  const defaultSession = {
+    latestUploadResult: { job_id: "job-1" },
+    latestUploadSnapshot: null,
+    hasReliableOperatorEvidence: true,
+    reviewReadiness: "ready",
+  };
 
   return {
     apiFetch: fetchMock,
@@ -56,7 +62,7 @@ function baseProps({ apiFetch, currentSession } = {}) {
     formatClockTime: (value) => String(value ?? ""),
     Panel: ({ children }) => h("div", null, children),
     MetricGrid: () => h("div"),
-    currentSession: currentSession ?? { latestUploadResult: { job_id: "job-1" }, latestUploadSnapshot: null },
+    currentSession: currentSession ? { ...defaultSession, ...currentSession } : defaultSession,
     hasActiveSession: true,
   };
 }
@@ -251,6 +257,30 @@ describe("ReplayWorkspace playback stability", () => {
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped"))).toBe(true);
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
     expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
+  });
+
+
+  it("shows replay as pending verification until operator evidence is review-ready", async () => {
+    const fetchMock = createReplayApiFetch(2);
+
+    renderReplayWorkspace({
+      ...baseProps({
+        apiFetch: fetchMock,
+        currentSession: {
+          latestUploadResult: { job_id: "job-pending" },
+          latestUploadSnapshot: null,
+          hasReliableOperatorEvidence: false,
+          reviewReadiness: "quality_gate",
+        },
+      }),
+      hasRealSiiOutput: true,
+    });
+
+    await waitFor(() => expectFrame("1/2"));
+    expect(screen.getAllByText("Analysis pending verification.")[0]).toBeTruthy();
+    expect(screen.getByText("Replay generated, review pending")).toBeTruthy();
+    expect(screen.getAllByText(/does not yet meet the reliability threshold/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Upload more stable telemetry/i)).toBeTruthy();
   });
 });
 

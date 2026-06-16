@@ -189,6 +189,12 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
   const baselineStatus = String(latestUploadSnapshot?.baseline_status ?? "none").toLowerCase();
   const baselineSamplesCollected = latestUploadSnapshot?.baseline_samples_collected ?? 0;
   const baselineSamplesRequired = latestUploadSnapshot?.baseline_samples_required ?? 0;
+  const latestResult = resolveCurrentUploadResult({
+    current_upload: latestUploadSnapshot?.current_upload ?? null,
+    latest_result: latestUploadSnapshot?.latest_result ?? null,
+    snapshot: latestUploadSnapshot ?? null,
+  });
+  const operatorReviewReady = latestResult?.sii_reliable_enough_to_show === true;
   const baselineDetail = baselineSamplesRequired > 0
     ? `${baselineSamplesCollected}/${baselineSamplesRequired} live samples collected.`
     : "Waiting for live telemetry samples.";
@@ -224,28 +230,54 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
     {
       title: "Upload complete",
       detail: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll"
-        ? `${latestUploadSnapshot?.last_filename ?? "Latest upload"} completed and refreshed ${roomContext.primary}.`
+        ? operatorReviewReady
+          ? `${latestUploadSnapshot?.last_filename ?? "Latest upload"} completed and refreshed ${roomContext.primary}.`
+          : `${latestUploadSnapshot?.last_filename ?? "Latest upload"} finished processing, but evidence verification is still pending for operator review.`
         : "Upload telemetry remains available as an optional ingest action.",
       state: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll" ? "complete" : "standby",
-      tone: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll" ? "nominal" : "info",
+      tone: latestStatus === "active" && latestUploadSnapshot?.result_source !== "rest_poll"
+        ? (operatorReviewReady ? "nominal" : "review")
+        : "info",
     },
     {
-      title: uploadError ? "Upload failed" : (latestStatus === "active" || latestStatus === "baseline_active" ? "Active Session" : "No Active Session"),
+      title: uploadError
+        ? "Upload failed"
+        : latestStatus === "active"
+          ? (operatorReviewReady ? "Active Session" : "Analysis pending verification")
+          : latestStatus === "baseline_active"
+            ? "Live baseline active"
+            : "No Active Session",
       detail: uploadError
         ? normalizeErrorMessage(uploadError)
         : latestStatus === "active"
-          ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
+          ? operatorReviewReady
+            ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
+            : "Telemetry processing finished, but the evidence packet is still being verified before operator review."
           : latestStatus === "baseline_active"
             ? "Live baseline is active. The next telemetry comparison will activate the structural state view."
             : "No Active Session. Awaiting uploaded telemetry.",
       state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
-      tone: uploadError ? "elevated" : (latestStatus === "active" || latestStatus === "baseline_active" ? "nominal" : "info"),
+      tone: uploadError
+        ? "elevated"
+        : latestStatus === "active"
+          ? (operatorReviewReady ? "nominal" : "review")
+          : latestStatus === "baseline_active"
+            ? "nominal"
+            : "info",
     },
   ];
 }
 
-export function connectionStateLabel(latestStatus, uploadState, uploadError) {
+export function connectionStateLabel(latestStatus, uploadState, uploadError, latestUploadSnapshot = null) {
   const normalizedLatestStatus = String(latestStatus).toLowerCase();
+  const latestResult = latestUploadSnapshot
+    ? resolveCurrentUploadResult({
+      current_upload: latestUploadSnapshot?.current_upload ?? null,
+      latest_result: latestUploadSnapshot?.latest_result ?? null,
+      snapshot: latestUploadSnapshot,
+    })
+    : null;
+  const operatorReviewReady = latestResult?.sii_reliable_enough_to_show === true;
   if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
     return "Upload failed";
   }
@@ -259,7 +291,7 @@ export function connectionStateLabel(latestStatus, uploadState, uploadError) {
     return "Live baseline active";
   }
   if (normalizedLatestStatus === "active") {
-    return "Active Session";
+    return operatorReviewReady ? "Active Session" : "Analysis pending verification";
   }
   return NO_DATA_LABEL;
 }

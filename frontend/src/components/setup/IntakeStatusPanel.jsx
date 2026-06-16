@@ -18,7 +18,7 @@ export default function IntakeStatusPanel({
   latestUploadResult = null,
 }) {
   const showAnalysis = hasActiveSession && (hasCurrentUploadResult || hasResumedSession);
-  const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError) : "No Active Session";
+  const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError, latestUploadSnapshot) : "No Active Session";
   const timings = latestUploadResult?.processing_stats?.timings ?? uploadJob?.timings ?? {};
   const parseSeconds = timings?.parse_seconds ?? null;
   const baselineSeconds = timings?.baseline_build_seconds ?? null;

@@ -389,7 +389,7 @@ function buildDataQualityGroups(result) {
   };
 }
 
-function buildPendingState(reviewReadiness) {
+export function buildPendingState(reviewReadiness) {
   if (reviewReadiness === "processing") {
     return {
       title: "Analysis pending verification.",

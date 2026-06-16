@@ -6,7 +6,7 @@ import EvidenceInteractionPanel from "../EvidenceInteractionPanel";
 import ReplayCognitionField from "../ReplayCognitionField";
 import { resolveSessionJobId } from "../../viewModels/currentSession";
 import * as uploadStateView from "../../viewModels/uploadState";
-import { normalizeOperatorConfidenceLabel, sanitizeOperatorList, sanitizeOperatorText } from "../../viewModels/operatorFinding";
+import { buildPendingState, normalizeOperatorConfidenceLabel, sanitizeOperatorList, sanitizeOperatorText } from "../../viewModels/operatorFinding";
 
 export default function ReplayWorkspace({
   apiFetch,
@@ -59,6 +59,7 @@ export default function ReplayWorkspace({
     supportingEvidence: [],
     emptyState: { detail: "No structural changes detected." },
   };
+  const reviewReady = currentSession?.hasReliableOperatorEvidence === true;
   const togglePlayback = () => {
     setIsPlaying((value) => {
       const next = !value;
@@ -85,7 +86,7 @@ export default function ReplayWorkspace({
     async function loadReplay() {
       try {
         const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
-        const matchedEvidenceRun = scoped.jobId
+        const matchedEvidenceRun = scoped.jobId && reviewReady
           ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId })
           : null;
         if (cancelled) return;
@@ -127,7 +128,7 @@ export default function ReplayWorkspace({
     }
     loadReplay();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, normalizeErrorMessage, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, normalizeErrorMessage, reviewReady, sessionJobId, shouldRequestReplay]);
 
   useEffect(() => {
     if (!isPlaying) return undefined;
@@ -172,6 +173,9 @@ export default function ReplayWorkspace({
 
   const hasReplaySnapshots = timeline.length > 0;
   const dash = "-";
+  const replayPendingState = hasReplaySnapshots && !reviewReady
+    ? buildPendingState(currentSession?.reviewReadiness)
+    : null;
   const hasDiagnosticsEvidence = Boolean(hasRealSiiOutput || hasCurrentUploadResult || hasActiveSession || hasResumedSession || hasReplaySnapshots);
   const hasTopologyEvidence = Boolean(hasReplaySnapshots && timeline[0]?.topology_state);
   const operativeTimeline = timeline;
@@ -202,10 +206,11 @@ export default function ReplayWorkspace({
     }
   }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
   const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
+  const replayConfidence = replayPendingState ? "Pending" : replayFinding.confidence;
   const replayStatusMetrics = useMemo(() => ([
     { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
-    { label: "Confidence", value: replayFinding.confidence },
-  ]), [hasReplaySnapshots, replayFinding.confidence, shownFrame]);
+    { label: "Confidence", value: replayConfidence },
+  ]), [hasReplaySnapshots, replayConfidence, shownFrame]);
 
   const expertMetrics = useMemo(() => {
     if (!hasDiagnosticsEvidence) {
@@ -244,7 +249,30 @@ export default function ReplayWorkspace({
     frameIndex: currentFrameIndex,
     formatClockTime,
   }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
+  const replayStatusLabel = replayFinding.exists
+    ? replayFinding.status
+    : replayPendingState
+      ? replayPendingState.title
+      : (hasReplaySnapshots ? discovery.headline : "No replay available yet");
+  const replaySummary = replayFinding.exists
+    ? replayFinding.summary
+    : replayPendingState
+      ? replayPendingState.subtitle
+      : (hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay.");
+  const replayReviewNext = replayFinding.exists
+    ? replayFinding.reviewNext
+    : replayPendingState
+      ? replayPendingState.detail
+      : "Telemetry replay unavailable";
+  const replayReviewContext = replayFinding.exists
+    ? replayFinding.whyItMatters
+    : replayPendingState
+      ? replayPendingState.subtitle
+      : (hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet.");
   const supportingEvidence = useMemo(() => {
+    if (replayPendingState) {
+      return sanitizeOperatorList([replayPendingState.subtitle]);
+    }
     const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
     const replayLineage = meta.lineage && typeof meta.lineage === "object" ? meta.lineage : {};
     const uploadJobId = sessionJobId ?? null;
@@ -254,7 +282,7 @@ export default function ReplayWorkspace({
       && String(replayLineage.job_id ?? "") === String(evidenceJobId)
       && (!uploadJobId || String(uploadJobId) === String(evidenceJobId))
     );
-    if (!hasRealSiiOutput || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "") || !alignmentOk) {
+    if (!reviewReady || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "") || !alignmentOk) {
       return [];
     }
     return buildSupportingEvidence({
@@ -266,7 +294,7 @@ export default function ReplayWorkspace({
       formatClockTime,
       lineage: replayLineage,
     });
-  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, hasRealSiiOutput, meta.lineage, meta.replay_job_id, operativeTimeline.length, sessionJobId, shownFrame]);
+  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, meta.lineage, meta.replay_job_id, operativeTimeline.length, replayPendingState, reviewReady, sessionJobId, shownFrame]);
 
   return (
     <div className="workspace-grid workspace-grid--console">
@@ -274,8 +302,8 @@ export default function ReplayWorkspace({
         <div className="replay-discovery__header">
           <div>
             <p className="section-token">Evidence</p>
-            <h3>{replayFinding.exists ? replayFinding.status : (hasReplaySnapshots ? discovery.headline : "No replay available yet")}</h3>
-            <p className="narrative-text">{replayFinding.exists ? replayFinding.summary : (hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay.")}</p>
+            <h3>{replayStatusLabel}</h3>
+            <p className="narrative-text">{replaySummary}</p>
           </div>
           <MetricGrid metrics={replayStatusMetrics} compact />
         </div>
@@ -289,8 +317,8 @@ export default function ReplayWorkspace({
         <div className="replay-discovery__insight-grid">
           <section className="replay-discovery__insight" aria-label="What changed">
             <span className="section-token">Current Status</span>
-            <strong>{replayFinding.status}</strong>
-            <p>{replayFinding.summary}</p>
+            <strong>{replayStatusLabel}</strong>
+            <p>{replaySummary}</p>
           </section>
           <section className="replay-discovery__insight" aria-label="Supporting evidence">
             <span className="section-token">Supporting Evidence</span>
@@ -300,8 +328,8 @@ export default function ReplayWorkspace({
           </section>
           <section className="replay-discovery__insight" aria-label="Next operator review">
             <span className="section-token">Review next</span>
-            <strong>{replayFinding.exists ? replayFinding.reviewNext : "Telemetry replay unavailable"}</strong>
-            <p>{replayFinding.exists ? replayFinding.whyItMatters : (hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet.")}</p>
+            <strong>{replayReviewNext}</strong>
+            <p>{replayReviewContext}</p>
           </section>
         </div>
 
@@ -330,7 +358,7 @@ export default function ReplayWorkspace({
 
         {hasReplaySnapshots ? (
           <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
-            <span className="historian-replay-status__badge">{replayMode ? "System Status review active" : "Replay ready"}</span>
+            <span className="historian-replay-status__badge">{replayPendingState ? "Replay generated, review pending" : (replayMode ? "System Status review active" : "Replay ready")}</span>
             <span>{"Frame " + Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length)) + "/" + Math.max(1, operativeTimeline.length)}</span>
             <span>{formatClockTime(currentTimeLabel)}</span>
           </div>
