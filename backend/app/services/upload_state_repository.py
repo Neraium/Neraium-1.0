@@ -39,8 +39,12 @@ def _upload_state_bucket() -> str:
     return os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "").strip()
 
 
+def _external_shared_state_enabled() -> bool:
+    return os.getenv("PYTEST_CURRENT_TEST") is None
+
+
 def shared_state_configured() -> bool:
-    return bool(_upload_state_bucket())
+    return _external_shared_state_enabled() and bool(_upload_state_bucket())
 
 
 def upload_state_backend() -> str:
@@ -70,7 +74,7 @@ def _get_s3_client() -> Any | None:
     state = runtime_state()
     if state.upload_state_s3_client is not None:
         return state.upload_state_s3_client
-    if not _upload_state_bucket():
+    if not _external_shared_state_enabled() or not _upload_state_bucket():
         return None
     try:
         import boto3  # type: ignore
@@ -99,7 +103,7 @@ def write_local_json(name: str, payload: dict[str, Any]) -> None:
 
 
 def read_shared_state(name: str) -> dict[str, Any] | None:
-    bucket = _upload_state_bucket()
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     if bucket:
         client = _get_s3_client()
         if client is not None:

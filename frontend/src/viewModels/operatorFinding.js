@@ -7,6 +7,12 @@ export const OPERATOR_EMPTY_STATE = {
   detail: "No structural changes detected.",
 };
 
+export const OPERATOR_PENDING_STATE = {
+  title: "Analysis pending verification.",
+  subtitle: "Telemetry is present, but it is not ready for operator review yet.",
+  detail: "Wait for evidence-backed interpretation before reviewing findings.",
+};
+
 const DISALLOWED_REPLACEMENTS = [
   [/\brelationship divergence\b/gi, "system behavior changed from its normal pattern"],
   [/\breplay\/relationship evidence\b/gi, "historical comparison evidence"],
@@ -60,7 +66,31 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
   );
   const dataQuality = buildDataQualityGroups(result);
   const replayReferences = buildReplayReferences(result, frame);
+  const reviewReady = currentSession?.hasReliableOperatorEvidence === true;
   const hasFinding = hasTelemetry && statusLevel !== "normal";
+
+  if (hasTelemetry && !reviewReady) {
+    const pendingState = buildPendingState(currentSession?.reviewReadiness);
+    return {
+      id: jobId ? `current-${jobId}` : "current-pending",
+      runId: jobId,
+      exists: false,
+      status: "Analysis Pending",
+      confidence: "Pending",
+      summary: pendingState.title,
+      whyItMatters: pendingState.subtitle,
+      reviewNext: pendingState.detail,
+      emptyState: pendingState,
+      supportingEvidence: [],
+      technicalDetails: [],
+      dataQuality,
+      evidenceButtonLabel: "Review Evidence",
+      affectedVariables: [],
+      historicalComparison: pendingState.detail,
+      replayReferences,
+      sourceName: result?.filename ?? null,
+    };
+  }
 
   if (!hasFinding) {
     return {
@@ -125,7 +155,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
 }
 
 export function buildCanonicalFindingRun({ canonicalFinding, currentSession }) {
-  if (!canonicalFinding?.exists) return null;
+  if (!canonicalFinding?.exists || currentSession?.hasReliableOperatorEvidence !== true) return null;
   const result = currentSession?.latestUploadResult ?? null;
   const runId = canonicalFinding.runId ?? resolveSessionJobId(currentSession) ?? "current-observation";
   const evidenceSummary = Array.isArray(canonicalFinding.supportingEvidence) && canonicalFinding.supportingEvidence.length > 0
@@ -357,6 +387,31 @@ function buildDataQualityGroups(result) {
     missingRecentValues,
     unavailableTelemetry,
   };
+}
+
+function buildPendingState(reviewReadiness) {
+  if (reviewReadiness === "processing") {
+    return {
+      title: "Analysis pending verification.",
+      subtitle: "Telemetry is still being processed into an evidence-backed interpretation.",
+      detail: "Wait for processing to complete before reviewing findings.",
+    };
+  }
+  if (reviewReadiness === "quality_gate") {
+    return {
+      title: "Analysis pending verification.",
+      subtitle: "The current telemetry does not yet meet the reliability threshold for operator review.",
+      detail: "Upload more stable telemetry or correct data quality issues before reviewing findings.",
+    };
+  }
+  if (reviewReadiness === "unaligned") {
+    return {
+      title: "Analysis pending verification.",
+      subtitle: "The latest interpretation is not aligned to the active upload session.",
+      detail: "Refresh telemetry and wait for the evidence packet to realign before reviewing findings.",
+    };
+  }
+  return OPERATOR_PENDING_STATE;
 }
 
 function buildReplayReferences(result, frame) {

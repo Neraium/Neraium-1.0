@@ -355,8 +355,8 @@ export default function SystemBodyWorkspace({
               </li>
             </ul>
             {Array.isArray(finding.supportingEvidence) && finding.supportingEvidence.length > 0 ? (
-              <div className="system-gate__evidence-block">
-                <p className="section-token">Supporting evidence</p>
+              <div className="system-gate__evidence-block" aria-label="Supporting evidence">
+                <p className="section-token">Supporting Evidence</p>
                 <ul className="compact-list">
                   {finding.supportingEvidence.map((item) => <li key={item}>{item}</li>)}
                 </ul>

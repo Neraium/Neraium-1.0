@@ -6,6 +6,8 @@ function buildSession(result = null, snapshot = null) {
     latestUploadResult: result,
     latestUploadSnapshot: snapshot,
     hasRealSiiOutput: Boolean(result),
+    hasReliableOperatorEvidence: Boolean(result?.sii_reliable_enough_to_show),
+    reviewReadiness: result?.sii_reliable_enough_to_show ? "ready" : "quality_gate",
   };
 }
 
@@ -27,6 +29,7 @@ describe("deriveCanonicalFinding", () => {
         drift_status: "elevated",
         relationship_summary: "relationship divergence detected from State Group A in replay/relationship evidence.",
         drift_metrics: { baseline_distance: 0.69, confidence: 0.7 },
+        sii_reliable_enough_to_show: true,
         operator_report: {
           evidence_summary: ["latest_result shows upload_state changes in the observation grammar."],
         },
@@ -40,5 +43,24 @@ describe("deriveCanonicalFinding", () => {
     expect(containsDisallowedOperatorTerms(finding.summary)).toBe(false);
     expect(containsDisallowedOperatorTerms(finding.whyItMatters)).toBe(false);
     expect(finding.supportingEvidence.some((item) => /current observation|current analysis|historical comparison evidence|observation method/i.test(item))).toBe(true);
+  });
+
+  it("holds findings in a pending state when telemetry is not yet reviewable", () => {
+    const finding = deriveCanonicalFinding({
+      currentSession: buildSession({
+        job_id: "job-pending",
+        observation_type: "trajectory_drift",
+        drift_status: "elevated",
+        drift_metrics: { baseline_distance: 0.69, confidence: 0.7 },
+        sii_reliable_enough_to_show: false,
+        sii_intelligence: { facility_state: "drift", confidence: 0.7 },
+      }, { status: "complete", current_upload: { job_id: "job-pending" } }),
+    });
+
+    expect(finding.exists).toBe(false);
+    expect(finding.status).toBe("Analysis Pending");
+    expect(finding.confidence).toBe("Pending");
+    expect(finding.summary).toMatch(/pending verification/i);
+    expect(finding.reviewNext).toMatch(/stable telemetry|data quality|wait/i);
   });
 });

@@ -6,13 +6,44 @@ export function deriveCurrentSession({
   hasResumedSession,
   hasRealSiiOutput,
 }) {
+  const snapshot = latestUploadSnapshot ?? null;
+  const result = latestUploadResult ?? null;
+  const currentUpload = snapshot?.current_upload ?? null;
+  const interpretation = snapshot?.system_interpretation ?? result?.system_interpretation ?? null;
+  const sessionJobId = currentUpload?.job_id ?? result?.job_id ?? snapshot?.job_id ?? null;
+  const lineageJobId = interpretation?.lineage?.job_id ?? null;
+  const hasAlignedInterpretation = Boolean(
+    interpretation
+    && interpretation?.lineage?.aligned
+    && interpretation?.run_alignment_verified !== false,
+  );
+  const interpretationMatchesSession = !sessionJobId || !lineageJobId || String(lineageJobId) === String(sessionJobId);
+  const hasReliableOperatorEvidence = Boolean(
+    hasActiveSession
+    && hasRealSiiOutput
+    && result?.sii_reliable_enough_to_show === true
+    && hasAlignedInterpretation
+    && interpretationMatchesSession
+  );
+  const reviewReadiness = !hasActiveSession
+    ? "no_session"
+    : !hasRealSiiOutput
+      ? "processing"
+      : result?.sii_reliable_enough_to_show !== true
+        ? "quality_gate"
+        : !hasAlignedInterpretation || !interpretationMatchesSession
+          ? "unaligned"
+          : "ready";
+
   return {
-    latestUploadResult: latestUploadResult ?? null,
-    latestUploadSnapshot: latestUploadSnapshot ?? null,
+    latestUploadResult: result,
+    latestUploadSnapshot: snapshot,
     hasActiveSession: Boolean(hasActiveSession),
     hasCurrentUploadResult: Boolean(hasCurrentUploadResult),
     hasResumedSession: Boolean(hasResumedSession),
     hasRealSiiOutput: Boolean(hasRealSiiOutput),
+    hasReliableOperatorEvidence,
+    reviewReadiness,
   };
 }
 

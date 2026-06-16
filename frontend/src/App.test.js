@@ -136,10 +136,19 @@ describe("App upload completion navigation", () => {
       relationship_summary: "relationship divergence detected across chilled water supply.",
       drift_status: "elevated",
       drift_metrics: { baseline_distance: 0.7, confidence: 0.83 },
+      sii_reliable_enough_to_show: true,
       operator_report: { evidence_summary: ["replay/relationship evidence supports the shift."] },
       sii_intelligence: { facility_state: "drift", confidence: 0.83 },
     };
-    runtimeState.latestUploadSnapshot = { status: "complete", current_upload: { job_id: "finding-job-9" } };
+    runtimeState.latestUploadSnapshot = {
+      status: "complete",
+      sii_completed: true,
+      current_upload: { job_id: "finding-job-9" },
+      system_interpretation: {
+        lineage: { job_id: "finding-job-9", aligned: true },
+        run_alignment_verified: true,
+      },
+    };
 
     render(h(App));
 
@@ -152,5 +161,32 @@ describe("App upload completion navigation", () => {
     await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
     expect(screen.getByTestId("observation-finding-summary").textContent).toBe(gateSummary);
     expect(screen.getByTestId("observation-finding-confidence").textContent).toBe("High");
+  });
+
+  it("keeps findings pending when telemetry exists but operator review is not yet evidence-ready", async () => {
+    runtimeState.latestUploadResult = {
+      job_id: "pending-job-3",
+      observation_type: "trajectory_drift",
+      drift_status: "elevated",
+      drift_metrics: { baseline_distance: 0.71, confidence: 0.8 },
+      sii_reliable_enough_to_show: false,
+      sii_intelligence: { facility_state: "drift", confidence: 0.8 },
+    };
+    runtimeState.latestUploadSnapshot = {
+      status: "complete",
+      current_upload: { job_id: "pending-job-3" },
+      system_interpretation: {
+        lineage: { job_id: "pending-job-3", aligned: true },
+        run_alignment_verified: true,
+      },
+    };
+
+    render(h(App));
+
+    expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Analysis pending verification.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open findings" }));
+    await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
+    expect(screen.getByTestId("observation-finding-summary").textContent).toBe("Analysis pending verification.");
   });
 });
