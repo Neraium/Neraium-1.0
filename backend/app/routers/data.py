@@ -614,8 +614,16 @@ async def latest_upload(include_persisted: int | bool = True):
     record_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
     active_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
     canonical_record_job_id = str(canonical.get("job_id") or summary.get("job_id") or "").strip() or None
+    persisted_result = None
+    if isinstance(record_result, dict):
+        persisted_result_job_id = str(record_result.get("job_id") or canonical_record_job_id or "").strip()
+        if persisted_result_job_id and (
+            persisted_result_job_id == str(canonical_record_job_id or "").strip()
+            or str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "").strip().lower() in complete_states
+        ):
+            persisted_result = record_result
     result = active_result if isinstance(active_result, dict) else (
-        record_result if has_active_session_artifact(record_result, job_id=canonical_record_job_id) else None
+        record_result if has_active_session_artifact(record_result, job_id=canonical_record_job_id) else persisted_result
     )
     canonical_job_id = str(artifacts.get("job_id") or canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
     canonical_status = str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "empty").strip().lower()
@@ -632,7 +640,7 @@ async def latest_upload(include_persisted: int | bool = True):
         or canonical_status in complete_states
     )
 
-    if canonical_status in complete_states and not has_result:
+    if canonical_status in complete_states and not has_result and not persisted_result:
         canonical = build_empty_latest_upload_record()
         summary = {}
         result = None

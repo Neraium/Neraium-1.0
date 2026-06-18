@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveUploadSignal } from "./SystemTopologyWorkspace";
+import { derivePrimaryMessage, deriveUploadSignal } from "./SystemTopologyWorkspace";
 
 describe("SystemTopologyWorkspace operator trust mapping", () => {
   it("keeps upload state pending when operator review evidence is not ready", () => {
@@ -22,5 +22,15 @@ describe("SystemTopologyWorkspace operator trust mapping", () => {
       label: "Needs review",
       statusLight: "gray",
     });
+  });
+
+  it("uses the canonical finding summary when analysis is present without a governed pass", () => {
+    expect(derivePrimaryMessage({
+      awaitingSii: false,
+      pendingVerification: false,
+      governed: { hasPass: false, passedFindingSummary: "" },
+      canonicalFinding: { exists: true, summary: "Relationship drift detected across chilled water supply." },
+      uploadSignal: { label: "Needs review" },
+    })).toBe("Relationship drift detected across chilled water supply.");
   });
 });

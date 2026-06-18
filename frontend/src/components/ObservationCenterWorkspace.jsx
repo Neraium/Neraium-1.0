@@ -122,6 +122,10 @@ function classifyChangeStrength(value) {
   return "High";
 }
 
+function formatDetectedTime(run) {
+  return run?.created_at ? formatDurationFrom(run.created_at) + " ago" : "Pending";
+}
+
 function confidenceForFinding(run) {
   const value = Number(run?.confidence ?? run?.confidence_score ?? run?.evidence_confidence ?? run?.drift_metrics?.confidence);
   if (Number.isFinite(value)) {
@@ -134,6 +138,17 @@ function confidenceForFinding(run) {
   if (strength === "High") return "High";
   if (strength === "Moderate") return "Moderate";
   return "Low";
+}
+
+function potentialImpactForFinding(run) {
+  const explicit = run?.potential_impact ?? run?.impact_summary ?? run?.operator_impact;
+  if (explicit) return String(explicit);
+  const type = String(run?.observation_type ?? "");
+  const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
+  if (type === "recovery_elongation") return "Recovery behavior differs from historical evidence.";
+  if (type === "coupling_change" || type === "covariance_shift") return "The observed relationships between system variables have changed.";
+  if (type === "trajectory_drift") return "This indicates the operating pattern differs from historical evidence.";
+  return strength === "Low" ? "No structural changes detected." : "Historical comparison evidence indicates a change from the normal operating pattern.";
 }
 
 function readPendingObservationRunId() {
@@ -179,9 +194,9 @@ export default function ObservationCenterWorkspace({
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [query] = useState("");
-  const [statusFilter] = useState("all");
-  const [typeFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState(FEEDBACK_OPTIONS[0].id);
   const [feedbackNote, setFeedbackNote] = useState("");
@@ -280,6 +295,15 @@ export default function ObservationCenterWorkspace({
     return [...values];
   }, [reviewRuns]);
 
+  const observationTypeOptions = useMemo(() => {
+    const values = new Set();
+    reviewRuns.forEach((run) => {
+      const value = String(run?.observation_type ?? "").trim();
+      if (value) values.add(value);
+    });
+    return [...values];
+  }, [reviewRuns]);
+
   useEffect(() => {
     if (!selectedAliasVariable && variables.length) {
       setSelectedAliasVariable(variables[0]);
@@ -343,6 +367,20 @@ export default function ObservationCenterWorkspace({
   const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
+  const silenceHealth = useMemo(() => {
+    const now = Date.now();
+    const lastDay = reviewRuns.filter((run) => now - new Date(run.created_at).getTime() <= 86400000);
+    const lastWeek = reviewRuns.filter((run) => now - new Date(run.created_at).getTime() <= 7 * 86400000);
+    const weeklyRate = Number((lastWeek.length / 7).toFixed(2));
+    const state = lastDay.length > Math.max(3, weeklyRate * 2) ? "Noisy" : lastWeek.length === 0 ? "Silent" : "Quiet";
+    return {
+      lastDay: lastDay.length,
+      lastWeek: lastWeek.length,
+      weeklyRate,
+      state,
+    };
+  }, [reviewRuns]);
+
   const sourceSnapshots = useMemo(() => {
     const latestBySource = new Map();
     reviewRuns.forEach((run) => {
@@ -388,6 +426,19 @@ export default function ObservationCenterWorkspace({
     } catch (submitError) {
       setFeedbackState({ status: "error", message: String(submitError?.message ?? submitError) });
     }
+  }
+
+  function saveAlias() {
+    if (!selectedAliasVariable) return;
+    setAliases((current) => ({
+      ...current,
+      [selectedAliasVariable]: aliasDraft.trim(),
+    }));
+  }
+
+  function downloadRun(runId, format) {
+    const href = `/api/evidence/export/${encodeURIComponent(runId)}?format=${encodeURIComponent(format)}`;
+    window.open(href, "_blank", "noopener,noreferrer");
   }
 
   const backControl = (
@@ -465,6 +516,36 @@ export default function ObservationCenterWorkspace({
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
         <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
+          <div className="observation-center__filters" aria-label="Findings filters">
+            <label className="observation-center__field">
+              <span>Search findings</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search run ID, variables, or evidence"
+              />
+            </label>
+            <label className="observation-center__field">
+              <span>Status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="processing">Processing</option>
+                <option value="open">Open</option>
+                <option value="recorded">Recorded</option>
+                <option value="resolved">Resolved</option>
+                <option value="failed">Failed</option>
+              </select>
+            </label>
+            <label className="observation-center__field">
+              <span>Finding type</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="all">All types</option>
+                {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
+              </select>
+            </label>
+          </div>
           {!hasCurrentFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
@@ -515,11 +596,19 @@ export default function ObservationCenterWorkspace({
                   { label: "Confidence", value: activeFinding.confidence },
                   { label: "Review next", value: activeFinding.reviewNext },
                   { label: "Historical comparison", value: activeFinding.historicalComparison ?? OPERATOR_EMPTY_STATE.detail },
+                  { label: "Potential impact", value: potentialImpactForFinding(selectedRun) },
+                  { label: "Detected", value: formatDetectedTime(selectedRun) },
                 ]}
                 compact
               />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>{activeFinding.evidenceButtonLabel}</button>
+                {selectedRun ? (
+                  <div className="observation-center__export-actions">
+                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
+                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
+                  </div>
+                ) : null}
               </div>
               <details className="compact-list-block" open>
                 <summary className="section-token">Supporting Evidence</summary>
@@ -580,11 +669,84 @@ export default function ObservationCenterWorkspace({
               {variables.map((item) => <option key={item} value={item}>{displayVariable(item, aliases)}</option>)}
             </select>
           </div>
-          {relationshipSeries.length >= 2 ? (
-            <svg className="observation-line-chart" viewBox="0 0 420 120" role="img" aria-label="Relationship history">
-              <polyline points={relationshipPoints} fill="none" stroke="currentColor" strokeWidth="3" />
-            </svg>
-          ) : <p className="narrative-text">Select two variables with repeated observations to view pattern history.</p>}
+          {relationshipSeries.length === 0 ? (
+            <EmptyState title="No pattern history" body="Select two variables that have appeared together in recorded observations." compact />
+          ) : (
+            <>
+              <svg viewBox="0 0 420 120" className="observation-explorer__chart">
+                <polyline fill="none" stroke="rgba(59, 122, 140, 0.92)" strokeWidth="3" points={relationshipPoints} />
+              </svg>
+              <ul className="compact-list">
+                {relationshipSeries.slice(-6).reverse().map((item) => (
+                  <li key={item.runId}>{item.createdAt}: {observationTypeLabel(item.type)} with change strength {classifyChangeStrength(item.value)}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Panel>
+
+        <Panel title="Notifications" className="span-5 observation-center__panel">
+          <MetricGrid
+            metrics={[
+              { label: "Findings / 24h", value: silenceHealth.lastDay },
+              { label: "Findings / 7d", value: silenceHealth.lastWeek },
+              { label: "Instrument state", value: silenceHealth.state },
+            ]}
+            compact
+          />
+          <div className="setup-grid">
+            <label>
+              <span>Notification mode</span>
+              <select
+                value={notificationPrefs.enabled ? "on" : "off"}
+                onChange={async (event) => {
+                  const enabled = event.target.value === "on";
+                  if (enabled && notificationAllowed() && Notification.permission === "default") {
+                    await Notification.requestPermission();
+                  }
+                  setNotificationPrefs((current) => ({ ...current, enabled }));
+                }}
+              >
+                <option value="off">Off</option>
+                <option value="on">In-browser</option>
+              </select>
+            </label>
+            <label>
+              <span>Quiet hours start</span>
+              <input type="time" value={notificationPrefs.quietStart} onChange={(event) => setNotificationPrefs((current) => ({ ...current, quietStart: event.target.value }))} />
+            </label>
+            <label>
+              <span>Quiet hours end</span>
+              <input type="time" value={notificationPrefs.quietEnd} onChange={(event) => setNotificationPrefs((current) => ({ ...current, quietEnd: event.target.value }))} />
+            </label>
+          </div>
+          <div className="observation-trust-note">
+            <strong>Default silence is preserved.</strong>
+            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored findings remain open without reminders or escalation.</p>
+          </div>
+        </Panel>
+
+        <Panel title="Variable Labels" className="span-5 observation-center__panel">
+          <div className="setup-grid">
+            <label>
+              <span>Variable</span>
+              <select value={selectedAliasVariable} onChange={(event) => setSelectedAliasVariable(event.target.value)}>
+                {variables.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Friendly label</span>
+              <input value={aliasDraft} onChange={(event) => setAliasDraft(event.target.value)} placeholder="Optional local alias" />
+            </label>
+          </div>
+          <div className="intake-flow__controls">
+            <button type="button" className="command-button" onClick={saveAlias}>Save Alias</button>
+          </div>
+          <ul className="compact-list">
+            {Object.entries(aliases).filter(([, value]) => String(value ?? "").trim()).map(([key, value]) => (
+              <li key={key}>{value} ({key})</li>
+            ))}
+          </ul>
         </Panel>
 
         <Panel title="Evidence Sources" className="span-7 observation-center__panel">
@@ -647,8 +809,11 @@ function insideQuietHours(start, end) {
   const [endHour, endMinute] = String(end || "06:00").split(":").map(Number);
   const now = new Date();
   const minutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = startHour * 60 + startMinute;
-  const endMinutes = endHour * 60 + endMinute;
-  if (startMinutes < endMinutes) return minutes >= startMinutes && minutes <= endMinutes;
-  return minutes >= startMinutes || minutes <= endMinutes;
+  const startMinutes = (startHour * 60) + startMinute;
+  const endMinutes = (endHour * 60) + endMinute;
+  if (startMinutes === endMinutes) return false;
+  if (startMinutes < endMinutes) {
+    return minutes >= startMinutes && minutes < endMinutes;
+  }
+  return minutes >= startMinutes || minutes < endMinutes;
 }
