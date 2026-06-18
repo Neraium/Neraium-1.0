@@ -505,6 +505,53 @@ body {
   line-height: 1.7;
 }
 
+
+.observation-center__filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.observation-center__field {
+  display: grid;
+  gap: 6px;
+}
+
+.observation-center__field span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.observation-center__field input,
+.observation-center__field select,
+.setup-grid input,
+.setup-grid select,
+.why-panel__section select,
+.why-panel__section textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(136, 153, 170, 0.16);
+  border-radius: 12px;
+  background: rgba(7, 13, 23, 0.9);
+  color: var(--text-primary);
+  padding: 10px 12px;
+}
+
+.why-panel__section textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.observation-center__export-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .help-changelog__hero {
   min-height: 100%;
 }
@@ -571,6 +618,19 @@ body {
   .observation-center__hero {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .observation-center__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table {
+    min-width: 520px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
   }
 
   .observation-center__snapshot {

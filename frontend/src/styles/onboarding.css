@@ -123,7 +123,20 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.onboarding-form-grid input {
+.onboarding-field {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-field span {
+  color: rgba(182, 206, 210, 0.86);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.onboarding-form-grid input,
+.onboarding-form-grid select,
+.onboarding-section textarea {
   width: 100%;
   min-height: 42px;
   border: 1px solid rgba(138, 184, 196, 0.18);
@@ -132,6 +145,11 @@
   color: rgba(236, 244, 244, 0.94);
   padding: 8px 10px;
   font-size: 0.86rem;
+}
+
+.onboarding-section textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .onboarding-inline {

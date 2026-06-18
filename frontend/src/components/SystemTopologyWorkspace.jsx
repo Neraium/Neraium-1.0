@@ -70,13 +70,13 @@ export default function SystemTopologyWorkspace({
     : hasUploadResult
       ? (uploadSignal.systemState || "stable")
       : (awaitingSii ? "unknown" : (uploadSignal.systemState || orbStateFromStatusLight(governed.statusLight)));
-  const primaryMessage = awaitingSii
-    ? "Upload or connect telemetry to begin monitoring."
-    : pendingVerification
-      ? "Telemetry processing finished, but evidence verification is still pending before operator review."
-      : governed.hasPass
-        ? concise(governed.passedFindingSummary, 120)
-        : "Stable";
+  const primaryMessage = derivePrimaryMessage({
+    awaitingSii,
+    pendingVerification,
+    governed,
+    canonicalFinding: liveOps.canonicalFinding,
+    uploadSignal,
+  });
 
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = pendingVerification
@@ -145,6 +145,23 @@ export default function SystemTopologyWorkspace({
     /> 
   ); 
 } 
+
+export function derivePrimaryMessage({ awaitingSii, pendingVerification, governed, canonicalFinding, uploadSignal }) {
+  if (awaitingSii) return "Upload or connect telemetry to begin monitoring.";
+  if (pendingVerification) {
+    return "Telemetry processing finished, but evidence verification is still pending before operator review.";
+  }
+  if (governed.hasPass) {
+    return concise(governed.passedFindingSummary, 120);
+  }
+  if (canonicalFinding?.exists && canonicalFinding?.summary) {
+    return concise(canonicalFinding.summary, 120);
+  }
+  if (uploadSignal.label && uploadSignal.label !== "Stable") {
+    return uploadSignal.label;
+  }
+  return "Stable";
+}
 
 export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = {}) {
   if (!latestUploadResult) {

@@ -295,6 +295,15 @@ export default function ObservationCenterWorkspace({
     return [...values];
   }, [reviewRuns]);
 
+  const observationTypeOptions = useMemo(() => {
+    const values = new Set();
+    reviewRuns.forEach((run) => {
+      const value = String(run?.observation_type ?? "").trim();
+      if (value) values.add(value);
+    });
+    return [...values];
+  }, [reviewRuns]);
+
   useEffect(() => {
     if (!selectedAliasVariable && variables.length) {
       setSelectedAliasVariable(variables[0]);
@@ -507,6 +516,36 @@ export default function ObservationCenterWorkspace({
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
         <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
+          <div className="observation-center__filters" aria-label="Findings filters">
+            <label className="observation-center__field">
+              <span>Search findings</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search run ID, variables, or evidence"
+              />
+            </label>
+            <label className="observation-center__field">
+              <span>Status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="processing">Processing</option>
+                <option value="open">Open</option>
+                <option value="recorded">Recorded</option>
+                <option value="resolved">Resolved</option>
+                <option value="failed">Failed</option>
+              </select>
+            </label>
+            <label className="observation-center__field">
+              <span>Finding type</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="all">All types</option>
+                {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
+              </select>
+            </label>
+          </div>
           {!hasCurrentFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
@@ -557,11 +596,19 @@ export default function ObservationCenterWorkspace({
                   { label: "Confidence", value: activeFinding.confidence },
                   { label: "Review next", value: activeFinding.reviewNext },
                   { label: "Historical comparison", value: activeFinding.historicalComparison ?? OPERATOR_EMPTY_STATE.detail },
+                  { label: "Potential impact", value: potentialImpactForFinding(selectedRun) },
+                  { label: "Detected", value: formatDetectedTime(selectedRun) },
                 ]}
                 compact
               />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>{activeFinding.evidenceButtonLabel}</button>
+                {selectedRun ? (
+                  <div className="observation-center__export-actions">
+                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
+                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
+                  </div>
+                ) : null}
               </div>
               <details className="compact-list-block" open>
                 <summary className="section-token">Supporting Evidence</summary>

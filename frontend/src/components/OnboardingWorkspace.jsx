@@ -307,10 +307,22 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
     throw new Error("Upload status polling timed out.");
   }
 
-  async function refreshLatestUploadAndPropagate(fallbackPayload = null) {
+  async function refreshLatestUploadAndPropagate(expectedJobId, fallbackPayload = null) {
     const latestResponse = await onboardingFetch("/api/data/latest-upload?include_persisted=1");
     const latestPayload = await readJsonSafely(latestResponse);
-    const finalPayload = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? latestPayload ?? fallbackPayload;
+    if (!latestResponse.ok) {
+      throw new Error(String(latestPayload?.detail || latestPayload?.message || "Unable to confirm the latest upload state."));
+    }
+    const finalPayload = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? null;
+    const resolvedJobId = String(
+      finalPayload?.job_id
+      || uploadStateView.resolveCurrentUploadJobId(latestPayload)
+      || fallbackPayload?.job_id
+      || ""
+    ).trim();
+    if (!finalPayload || (expectedJobId && resolvedJobId !== String(expectedJobId).trim())) {
+      throw new Error("Upload completed, but the latest session state is not ready yet. Retry in a moment.");
+    }
     if (typeof onUploadComplete === "function") {
       await onUploadComplete(finalPayload);
     }
@@ -391,12 +403,18 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       const completionPayload = await pollUploadUntilTerminal(jobId);
       setFlow((current) => ({
         ...current,
+        uploadStatus: "processing",
+        uploadMessage: "Finalizing the active session state...",
+        uploadError: "",
+      }));
+      await refreshLatestUploadAndPropagate(jobId, completionPayload);
+      setFlow((current) => ({
+        ...current,
         uploadStatus: "complete",
         uploadMessage: String(completionPayload?.message || "Telemetry processing complete."),
         uploadError: "",
         uploadCompleteSticky: true,
       }));
-      await refreshLatestUploadAndPropagate(completionPayload);
     } catch (error) {
       setFlow((current) => {
         if (current.uploadCompleteSticky) return current;
@@ -560,11 +578,55 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             <h2>Connection Details</h2>
             {flow.dataSource === "API" && (
               <div className="onboarding-form-grid">
-                <input value={flow.api.baseUrl} onChange={(event) => setApiField("baseUrl", event.target.value)} placeholder="API base URL" />
-                <input value={flow.api.token} onChange={(event) => setApiField("token", event.target.value)} placeholder="API key / token" />
-                <input value={flow.api.pollingInterval} onChange={(event) => setApiField("pollingInterval", event.target.value)} placeholder="Polling interval (seconds)" />
-                <input value={flow.api.siteName} onChange={(event) => setApiField("siteName", event.target.value)} placeholder="Deployment label" />
-                <input value={flow.api.systemName} onChange={(event) => setApiField("systemName", event.target.value)} placeholder="Telemetry stream label" />
+                <label className="onboarding-field">
+                  <span>API base URL</span>
+                  <input
+                    aria-label="API base URL"
+                    value={flow.api.baseUrl}
+                    onChange={(event) => setApiField("baseUrl", event.target.value)}
+                    placeholder="https://example.test/telemetry"
+                    autoComplete="url"
+                  />
+                </label>
+                <label className="onboarding-field">
+                  <span>API key or token</span>
+                  <input
+                    aria-label="API key or token"
+                    type="password"
+                    value={flow.api.token}
+                    onChange={(event) => setApiField("token", event.target.value)}
+                    placeholder="Enter read-only token"
+                    autoComplete="current-password"
+                  />
+                </label>
+                <label className="onboarding-field">
+                  <span>Polling interval (seconds)</span>
+                  <input
+                    aria-label="Polling interval (seconds)"
+                    value={flow.api.pollingInterval}
+                    onChange={(event) => setApiField("pollingInterval", event.target.value)}
+                    placeholder="30"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label className="onboarding-field">
+                  <span>Deployment label</span>
+                  <input
+                    aria-label="Deployment label"
+                    value={flow.api.siteName}
+                    onChange={(event) => setApiField("siteName", event.target.value)}
+                    placeholder="Production greenhouse"
+                  />
+                </label>
+                <label className="onboarding-field">
+                  <span>Telemetry stream label</span>
+                  <input
+                    aria-label="Telemetry stream label"
+                    value={flow.api.systemName}
+                    onChange={(event) => setApiField("systemName", event.target.value)}
+                    placeholder="Main telemetry stream"
+                  />
+                </label>
               </div>
             )}
             {flow.dataSource === "CSV Upload" && (

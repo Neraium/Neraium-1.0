@@ -428,7 +428,6 @@ async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
       throw new Error(`Unexpected response: ${latestResponse.status}`);
     }
     const latestPayload = await latestResponse.json();
-    const latestResult = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? {};
     const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
     targetJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload) ?? currentUpload?.job_id ?? null;
     if (!targetJobId) {
@@ -702,7 +701,6 @@ function sentenceCase(value) {
 }
 
 function formatConfidenceLabel(value) {
-  const normalized = String(value ?? "").toLowerCase();
   return normalizeOperatorConfidenceLabel(value);
 }
 

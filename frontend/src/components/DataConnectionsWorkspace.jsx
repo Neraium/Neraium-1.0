@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildUploadRequestError,
   classifyUploadError,
@@ -17,7 +17,6 @@ const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
-const TERMINAL_UPLOAD_STATES = new Set(["complete", "error", "failed", "cancelled", "validation_error"]);
 const MAX_STATUS_POLL_FAILURES = 8;
 
 function formatTransferSpeed(bytesPerSecond) {
@@ -105,8 +104,6 @@ export default function DataConnectionsWorkspace({
   const missingStatusCooldownUntilRef = useRef(0);
   const statusEndpointCooldownUntilRef = useRef(0);
   const statusEndpointFailureCountRef = useRef(0);
-  const lastRecoveryProbeAtRef = useRef(0);
-  const lastRecoveryPayloadRef = useRef(null);
   const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
   const uploadInFlightRef = useRef(false);
@@ -265,7 +262,6 @@ export default function DataConnectionsWorkspace({
     if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, requestedJobId);
     const runPoll = async () => {
       let attempts = 0;
-      let notFoundCount = 0;
       let completeWithoutReplayCount = 0;
       while (shouldContinuePolling(requestedJobId) && pollSessionRef.current === pollSessionId) {
         attempts += 1;
@@ -637,11 +633,4 @@ function normalizeUploadStreamPath(path, jobId) {
   if (!statusPath) return null;
   if (statusPath.includes("/upload-status-stream/")) return statusPath;
   return statusPath.replace("/upload-status/", "/upload-status-stream/");
-}
-
-function extractJobIdFromStatusPath(path) {
-  const text = String(path ?? "").trim();
-  if (!text) return "";
-  const match = text.match(/upload-status(?:-stream)?\/([^/?#]+)/);
-  return match?.[1] ?? "";
 }

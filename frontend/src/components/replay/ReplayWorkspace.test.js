@@ -98,7 +98,7 @@ describe("ReplayWorkspace playback stability", () => {
   it("keeps technical replay diagnostics out of the default view", async () => {
     renderReplayWorkspace(baseProps());
 
-    await waitFor(() => expectFrame("1\/4"));
+    await waitFor(() => expectFrame("1/4"));
     expect(screen.getByText("Current Status")).toBeTruthy();
     expect(screen.getByText("Supporting Evidence")).toBeTruthy();
     expect(screen.getByText("Review next")).toBeTruthy();
