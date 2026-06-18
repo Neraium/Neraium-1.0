@@ -1,1 +1,7 @@
-Python is available as `python` on this EC2 instance. If missing, install python3 and symlink python to python3. Do not use apply_patch/internal patch helpers; use normal shell edits or Python scripts.
+Codex rules for this repo:
+- Never use apply_patch or patch helpers.
+- Never check for apply_patch.
+- Use direct file edits with python3, sed, perl, or cat.
+- If a file edit is needed, rewrite the file directly.
+- If a tool fails once, do not retry it.
+- Finish with git diff, build/test, commit, and git push.

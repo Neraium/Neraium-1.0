@@ -89,8 +89,21 @@ export default function SystemBodyWorkspace({
     () => collectDataConditions(latestUploadResult),
     [latestUploadResult],
   );
-  const finding = canonicalFinding ?? buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions);
+  const fallbackFinding = canonicalFinding ?? buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions);
+  const assessmentState = useMemo(
+    () => resolveAssessmentState({
+      interpretation,
+      latestUploadSnapshot,
+      latestUploadResult,
+      latestReplayFrame,
+      fallbackFinding,
+      stabilitySnapshot,
+    }),
+    [fallbackFinding, interpretation, latestReplayFrame, latestUploadResult, latestUploadSnapshot, stabilitySnapshot],
+  );
+  const finding = assessmentState.finding;
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
+  const canReviewFindings = assessmentState.mode === "analysis_ready";
   const navigationItems = [
     {
       id: "data-connections",
@@ -111,14 +124,14 @@ export default function SystemBodyWorkspace({
   const heroStats = [
     { label: "Observation status", value: finding.status },
     { label: "Evidence confidence", value: finding.confidence },
-    { label: "Operating pattern", value: stabilitySnapshot.regime },
-    { label: "Persistence", value: stabilitySnapshot.deformationAge },
+    { label: "Operating pattern", value: assessmentState.stability.regime },
+    { label: "Persistence", value: assessmentState.stability.deformationAge },
   ];
   const stabilityRows = [
-    { label: "Current operating pattern", value: stabilitySnapshot.regime },
-    { label: "Behavior has persisted", value: stabilitySnapshot.deformationAge },
-    { label: "Drift magnitude", value: stabilitySnapshot.driftMagnitude },
-    { label: "Active observations", value: String(stabilitySnapshot.activeObservations) },
+    { label: "Current operating pattern", value: assessmentState.stability.regime },
+    { label: "Behavior has persisted", value: assessmentState.stability.deformationAge },
+    { label: "Drift magnitude", value: assessmentState.stability.driftMagnitude },
+    { label: "Active observations", value: String(assessmentState.stability.activeObservations) },
   ];
   const insightRows = [
     { label: "Primary driver", value: interpretation.primaryDriver },
@@ -240,7 +253,7 @@ export default function SystemBodyWorkspace({
       <section className={`system-gate system-gate--${resolvedStatusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="System interpretation view">
         <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
           <span className="system-gate__heartbeat-dot" />
-          <strong>{heartbeat.label}</strong>
+          <strong>{assessmentState.headerStatus}</strong>
         </div>
 
         <button
@@ -258,7 +271,7 @@ export default function SystemBodyWorkspace({
           <section className="system-gate__hero" aria-label="System status overview">
             <div className="system-gate__hero-copy">
               <p className="system-gate__eyebrow">Live system intelligence</p>
-              <h1>{finding.status}</h1>
+              <h1>{finding.title}</h1>
               <p className="system-gate__lede">{finding.summary}</p>
               <div className="system-gate__hero-actions">
                 <button
@@ -271,6 +284,7 @@ export default function SystemBodyWorkspace({
                 <button
                   type="button"
                   className="secondary-command-button"
+                  disabled={!canReviewFindings}
                   onClick={() => navigateWorkspace("observation-center")}
                 >
                   Review Findings
@@ -292,7 +306,7 @@ export default function SystemBodyWorkspace({
                   systemState={systemState}
                   uiState={uiState}
                   coherence={coherence}
-                  stateLabel={finding.status}
+                  stateLabel={finding.title}
                   lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
                   focusLabel={interpretation.primaryDriver}
                   orbData={orbData}
@@ -300,7 +314,7 @@ export default function SystemBodyWorkspace({
                 />
               </div>
               <div className="system-gate__orb-caption">
-                <p className="system-gate__state">{finding.status}</p>
+                <p className="system-gate__state">{finding.title}</p>
                 <p className="system-gate__orb-note">{finding.whyItMatters}</p>
               </div>
             </div>
@@ -310,7 +324,7 @@ export default function SystemBodyWorkspace({
             <section className="system-gate__panel">
               <div className="system-gate__panel-header">
                 <p className="section-token">Current brief</p>
-                <strong>{heartbeat.label}</strong>
+                <strong>{assessmentState.headerStatus}</strong>
               </div>
               <ul className="system-gate__detail-list">
                 {insightRows.map((item) => (
@@ -343,7 +357,7 @@ export default function SystemBodyWorkspace({
           <section className="system-gate__panel system-gate__panel--wide" aria-label="Operational focus">
             <div className="system-gate__panel-header">
               <p className="section-token">Operational focus</p>
-              <strong>{interpretation.hasTelemetry ? "Session active" : "Awaiting telemetry"}</strong>
+              <strong>{assessmentState.headerStatus}</strong>
             </div>
             <ul className="system-gate__detail-list system-gate__detail-list--dense">
               <li>
@@ -428,6 +442,7 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
   const exists = interpretation.structuralState !== "Monitoring" && interpretation.structuralState !== "No data yet";
   return {
     exists,
+    title: exists ? interpretation.structuralState : "Normal",
     status: exists ? interpretation.structuralState : "Normal",
     confidence: interpretation.confidence === "Pending" ? "Low" : interpretation.confidence,
     summary: exists ? interpretation.relationshipSummary.text : "No current observations.",
@@ -450,6 +465,69 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
       { label: "Behavior duration", value: stabilitySnapshot.deformationAge },
     ],
   };
+}
+
+function resolveAssessmentState({
+  interpretation,
+  latestUploadSnapshot,
+  latestUploadResult,
+  latestReplayFrame,
+  fallbackFinding,
+  stabilitySnapshot,
+}) {
+  const analysisCompleted = hasCompletedAnalysis({ latestUploadSnapshot, latestUploadResult });
+  const observationsExist = hasCompletedObservations({ latestUploadResult, latestReplayFrame, stabilitySnapshot });
+  if (!interpretation.hasTelemetry || !analysisCompleted || !observationsExist) {
+    return {
+      mode: "awaiting_telemetry",
+      headerStatus: "Awaiting Telemetry",
+      finding: {
+        ...fallbackFinding,
+        exists: false,
+        title: "No Analysis",
+        status: "Not Assessed",
+        confidence: "Unknown",
+        summary: "Upload telemetry to generate an assessment.",
+        whyItMatters: "Upload telemetry to generate an assessment.",
+        reviewNext: "Upload telemetry to generate an assessment.",
+        emptyState: {
+          title: "No Analysis",
+          subtitle: "Upload telemetry to generate an assessment.",
+          detail: "Upload telemetry to generate an assessment.",
+        },
+      },
+      stability: {
+        regime: "No telemetry",
+        driftMagnitude: "No telemetry",
+        activeObservations: 0,
+        deformationAge: "No telemetry",
+      },
+    };
+  }
+
+  return {
+    mode: "analysis_ready",
+    headerStatus: "Telemetry active",
+    finding: fallbackFinding,
+    stability: stabilitySnapshot,
+  };
+}
+
+function hasCompletedAnalysis({ latestUploadSnapshot, latestUploadResult }) {
+  if (latestUploadResult?.processing_trace?.sii_completed === true) return true;
+  if (latestUploadResult?.sii_completed === true) return true;
+  if (String(latestUploadResult?.processing_state ?? latestUploadResult?.status ?? "").toLowerCase() === "complete") return true;
+  if (latestUploadSnapshot?.sii_completed === true) return true;
+  return String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase() === "complete";
+}
+
+function hasCompletedObservations({ latestUploadResult, latestReplayFrame, stabilitySnapshot }) {
+  if (stabilitySnapshot.activeObservations > 0) return true;
+  if (latestReplayFrame && Object.keys(latestReplayFrame).length > 0) return true;
+  if (String(latestUploadResult?.observation_type ?? "").trim()) return true;
+  if (Array.isArray(latestUploadResult?.finding_evidence_chains) && latestUploadResult.finding_evidence_chains.length > 0) return true;
+  if (Array.isArray(latestUploadResult?.operator_report?.evidence_summary) && latestUploadResult.operator_report.evidence_summary.length > 0) return true;
+  return false;
 }
 
 function buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, latestReplayFrame }) {

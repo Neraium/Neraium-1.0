@@ -46,23 +46,28 @@ afterEach(() => {
 });
 
 describe("SystemBodyWorkspace empty state", () => {
-  it("keeps review metrics empty when no active dataset exists", () => {
+  it("shows the awaiting telemetry state when no analysis exists", () => {
     renderWorkspace();
 
-    expect(screen.getAllByText("No current observations.").length).toBeGreaterThan(0);
-    expect(screen.queryByText("State Group A")).toBeNull();
-    expect(readSnapshotValue("Current operating pattern")).toBe("—");
-    expect(readSnapshotValue("Behavior has persisted")).toBe("—");
+    expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "No Analysis" })).toBeTruthy();
+    expect(screen.getAllByText("Upload telemetry to generate an assessment.").length).toBeGreaterThan(0);
+    expect(screen.getByText("Not Assessed")).toBeTruthy();
+    expect(screen.getByText("Unknown")).toBeTruthy();
+    expect(readSnapshotValue("Current operating pattern")).toBe("No telemetry");
+    expect(readSnapshotValue("Behavior has persisted")).toBe("No telemetry");
+    expect(screen.getByRole("button", { name: "Review Findings" }).disabled).toBe(true);
   });
 
-  it("derives review metrics from loaded observation data", () => {
+  it("enables review metrics after a completed analysis exists", () => {
     renderWorkspace({
-      latestUploadSnapshot: { status: "complete", current_upload: { job_id: "job-42" } },
+      latestUploadSnapshot: { status: "complete", sii_completed: true, current_upload: { job_id: "job-42" } },
       latestUploadResult: {
         job_id: "job-42",
         observation_type: "trajectory_drift",
         drift_status: "elevated",
         timestamp_profile: { first_timestamp: "2026-06-15T00:00:00Z" },
+        sii_completed: true,
         sii_intelligence: {
           baseline_regime: "State Group B",
           instability_index: 0.72,
@@ -71,6 +76,7 @@ describe("SystemBodyWorkspace empty state", () => {
     });
 
     expect(readSnapshotValue("Current operating pattern")).toBe("State Group B");
-    expect(readSnapshotValue("Behavior has persisted")).not.toBe("—");
+    expect(readSnapshotValue("Behavior has persisted")).not.toBe("No telemetry");
+    expect(screen.getByRole("button", { name: "Review Findings" }).disabled).toBe(false);
   });
 });
