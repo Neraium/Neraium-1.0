@@ -901,9 +901,13 @@ def write_job(*args) -> None:
         job_id = str(args[0])
         payload = dict(args[1])
         payload["job_id"] = job_id
-    payload.setdefault("run_id", job_id)
-    payload.setdefault("upload_id", job_id)
-    payload.setdefault("session_scope", build_session_scope(job_id, filename=payload.get("filename"), status=str(payload.get("processing_state") or payload.get("status") or "active").lower()))
+    payload["run_id"] = job_id
+    payload["upload_id"] = job_id
+    payload["session_scope"] = build_session_scope(
+        job_id,
+        filename=payload.get("filename"),
+        status=str(payload.get("processing_state") or payload.get("status") or "active").lower(),
+    )
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
