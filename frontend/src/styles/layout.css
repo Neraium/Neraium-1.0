@@ -1,7 +1,17 @@
 .page-container {
   width: 100%;
   max-width: var(--panel-max-wide);
+  min-width: 0;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 760px) {
+  .page-container {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .workspace-header {

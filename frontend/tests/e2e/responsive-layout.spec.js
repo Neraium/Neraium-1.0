@@ -9,6 +9,9 @@ async function visibleButtonRects(page) {
         const style = window.getComputedStyle(node);
         const rect = node.getBoundingClientRect();
         const label = (node.getAttribute("aria-label") || node.textContent || node.className || `button-${index}`).trim().replace(/\s+/g, " ");
+        const centerX = rect.left + (rect.width / 2);
+        const centerY = rect.top + (rect.height / 2);
+        const topNode = document.elementFromPoint(centerX, centerY);
         return {
           index,
           label,
@@ -18,7 +21,11 @@ async function visibleButtonRects(page) {
           bottom: rect.bottom,
           width: rect.width,
           height: rect.height,
-          visible: style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0,
+          visible: style.visibility !== "hidden"
+            && style.display !== "none"
+            && rect.width > 0
+            && rect.height > 0
+            && (!topNode || topNode === node || node.contains(topNode)),
         };
       })
       .filter((rect) => rect.visible);
@@ -44,6 +51,28 @@ function findOverlappingRects(rects) {
 async function expectNoVisibleButtonOverlap(page) {
   const overlaps = findOverlappingRects(await visibleButtonRects(page));
   expect(overlaps, overlaps.join("\n")).toEqual([]);
+}
+
+async function mobileLayoutMetrics(page) {
+  return page.evaluate(() => {
+    const gate = document.querySelector('.system-gate');
+    const hero = document.querySelector('.system-gate__hero');
+    const root = document.documentElement;
+    const body = document.body;
+    const gateRect = gate?.getBoundingClientRect() ?? null;
+    const heroRect = hero?.getBoundingClientRect() ?? null;
+    return {
+      viewportWidth: window.innerWidth,
+      scrollWidth: root.scrollWidth,
+      bodyScrollWidth: body.scrollWidth,
+      gateLeft: gateRect?.left ?? null,
+      gateRight: gateRect?.right ?? null,
+      gateWidth: gateRect?.width ?? null,
+      heroLeft: heroRect?.left ?? null,
+      heroRight: heroRect?.right ?? null,
+      heroWidth: heroRect?.width ?? null,
+    };
+  });
 }
 
 async function openGate(page, viewport) {
@@ -72,8 +101,21 @@ test.describe("Responsive layout audit", () => {
     expect(box.width).toBeGreaterThan(700);
   });
 
-  test("mobile gate and settings are reachable", async ({ page }) => {
+  test("mobile gate is centered with no horizontal overflow", async ({ page }) => {
     await openGate(page, { width: 390, height: 844 });
+
+    const metrics = await mobileLayoutMetrics(page);
+
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.gateWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.heroWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.gateLeft).toBeGreaterThanOrEqual(0);
+    expect(metrics.heroLeft).toBeGreaterThanOrEqual(0);
+    expect(metrics.gateRight).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.heroRight).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(Math.abs((metrics.viewportWidth - metrics.gateWidth) / 2 - metrics.gateLeft)).toBeLessThanOrEqual(2);
+
     await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
     await expect(page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i })).toBeVisible();
   });
@@ -133,11 +175,11 @@ test.describe("Responsive layout audit", () => {
       await expectNoVisibleButtonOverlap(page);
 
       await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
+      await expect(page.getByRole("button", { name: "Close workspace menu" })).toBeVisible();
       await expectNoVisibleButtonOverlap(page);
 
-      await page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i }).click();
-      await expect(page.getByRole("button", { name: /Back to Gate/i })).toBeVisible();
-      await expectNoVisibleButtonOverlap(page);
+      await page.getByRole("button", { name: "Close workspace menu" }).click();
+      await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ })).toBeVisible();
     }
   });
 

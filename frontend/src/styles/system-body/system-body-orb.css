@@ -565,3 +565,13 @@
   0%, 100% { opacity: 0.32; }
   50% { opacity: 0.72; }
 }
+
+
+@media (max-width: 760px) {
+  .system-body-orb-panel__stage,
+  .system-body-orb-panel__stage .system-mark {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+}

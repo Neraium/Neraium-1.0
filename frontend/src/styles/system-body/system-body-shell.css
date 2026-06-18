@@ -32,13 +32,22 @@
 
 /* Premium gate refresh */
 .system-body--gate {
-  max-width: min(1480px, calc(100vw - 24px));
-  padding: 12px 0 28px;
+  width: 100%;
+  max-width: 1360px;
+  min-width: 0;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .system-gate {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: calc(100dvh - 24px);
-  padding: 88px 28px 28px;
+  margin: 0 auto;
+  padding: calc(88px + env(safe-area-inset-top, 0px)) 28px calc(28px + env(safe-area-inset-bottom, 0px));
   border: 1px solid rgba(140, 174, 186, 0.16);
   border-radius: 32px;
   background:
@@ -59,6 +68,8 @@
 .system-gate__lower-grid {
   position: relative;
   z-index: 1;
+  width: 100%;
+  min-width: 0;
 }
 
 .system-gate__layout {
@@ -70,6 +81,8 @@
 
 .system-gate__hero,
 .system-gate__panel {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid rgba(154, 183, 193, 0.12);
   border-radius: 28px;
   background:
@@ -85,6 +98,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
   gap: 22px;
+  width: 100%;
   min-height: 620px;
   padding: 28px;
 }
@@ -95,6 +109,7 @@
 .system-gate__nav-list {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .system-gate__hero-copy {
@@ -133,6 +148,10 @@
   gap: 12px;
 }
 
+.system-gate__hero-actions > * {
+  max-width: 100%;
+}
+
 .system-gate__stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -143,6 +162,8 @@
 .system-gate__nav-card {
   display: grid;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   padding: 16px 18px;
   border: 1px solid rgba(154, 183, 193, 0.12);
@@ -176,6 +197,8 @@
 .system-gate__orb-stage {
   display: grid;
   place-items: center;
+  width: 100%;
+  max-width: 100%;
   min-height: 460px;
   padding: 10px;
   border-radius: 24px;
@@ -188,6 +211,8 @@
   position: relative;
   inset: auto;
   width: min(100%, 520px);
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   border: 0;
   background: transparent;
@@ -233,11 +258,13 @@
 }
 
 .system-gate__panel {
+  width: 100%;
   padding: 20px;
 }
 
 .system-gate__panel-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   align-items: start;
@@ -255,6 +282,13 @@
 .system-gate__detail-list li {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.system-gate__detail-list strong,
+.system-gate__lede,
+.system-gate__orb-note {
+  overflow-wrap: anywhere;
 }
 
 .system-gate__detail-list--dense {
@@ -314,7 +348,7 @@
 
 @media (max-width: 1100px) {
   .system-body--gate {
-    max-width: calc(100vw - 16px);
+    max-width: 100%;
     padding-top: 8px;
   }
 
@@ -342,16 +376,17 @@
 @media (max-width: 760px) {
   .system-body--gate {
     max-width: 100%;
-    padding: 0;
+    min-height: 100dvh;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .system-gate {
-    min-height: calc(100dvh - 8px);
+    min-height: 100dvh;
     padding:
       calc(70px + env(safe-area-inset-top, 0px))
-      calc(12px + env(safe-area-inset-right, 0px))
-      calc(14px + env(safe-area-inset-bottom, 0px))
-      calc(12px + env(safe-area-inset-left, 0px));
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(16px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
     border-radius: 20px;
   }
 
@@ -378,11 +413,14 @@
 
   .system-gate__hero-actions {
     display: grid;
+    grid-template-columns: 1fr;
   }
 
   .system-gate__hero-actions > button,
   .system-gate__nav-card {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .system-gate__orb-stage {
@@ -391,7 +429,9 @@
   }
 
   .system-gate__orb-stage .system-body-orb-panel {
-    width: min(100%, 360px);
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
   }
 
   .system-gate__heartbeat,
@@ -400,11 +440,11 @@
   }
 
   .system-gate__heartbeat {
-    left: calc(12px + env(safe-area-inset-left, 0px));
+    left: calc(16px + env(safe-area-inset-left, 0px));
   }
 
   .system-gate__settings {
-    right: calc(12px + env(safe-area-inset-right, 0px));
+    right: calc(16px + env(safe-area-inset-right, 0px));
   }
 
   .system-gate__settings-panel {
