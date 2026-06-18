@@ -1,0 +1,1 @@
+Python is available as `python` on this EC2 instance. If missing, install python3 and symlink python to python3. Do not use apply_patch/internal patch helpers; use normal shell edits or Python scripts.
