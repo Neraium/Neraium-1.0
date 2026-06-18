@@ -516,36 +516,39 @@ export default function ObservationCenterWorkspace({
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
         <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
-          <div className="observation-center__filters" aria-label="Findings filters">
-            <label className="observation-center__field">
-              <span>Search findings</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search run ID, variables, or evidence"
-              />
-            </label>
-            <label className="observation-center__field">
-              <span>Status</span>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="processing">Processing</option>
-                <option value="open">Open</option>
-                <option value="recorded">Recorded</option>
-                <option value="resolved">Resolved</option>
-                <option value="failed">Failed</option>
-              </select>
-            </label>
-            <label className="observation-center__field">
-              <span>Finding type</span>
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-                <option value="all">All types</option>
-                {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
-              </select>
-            </label>
-          </div>
+          <details className="observation-center__filters-toggle">
+            <summary>Filter findings</summary>
+            <div className="observation-center__filters" aria-label="Findings filters">
+              <label className="observation-center__field">
+                <span>Search findings</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search run ID, variables, or evidence"
+                />
+              </label>
+              <label className="observation-center__field">
+                <span>Status</span>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="all">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="processing">Processing</option>
+                  <option value="open">Open</option>
+                  <option value="recorded">Recorded</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </label>
+              <label className="observation-center__field">
+                <span>Finding type</span>
+                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                  <option value="all">All types</option>
+                  {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
+                </select>
+              </label>
+            </div>
+          </details>
           {!hasCurrentFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
@@ -603,12 +606,6 @@ export default function ObservationCenterWorkspace({
               />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>{activeFinding.evidenceButtonLabel}</button>
-                {selectedRun ? (
-                  <div className="observation-center__export-actions">
-                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
-                    <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
-                  </div>
-                ) : null}
               </div>
               <details className="compact-list-block" open>
                 <summary className="section-token">Supporting Evidence</summary>
@@ -750,6 +747,12 @@ export default function ObservationCenterWorkspace({
         </Panel>
 
         <Panel title="Evidence Sources" className="span-7 observation-center__panel">
+          {selectedRun ? (
+            <div className="observation-center__export-actions" style={{ marginBottom: 16 }}>
+              <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
+              <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
+            </div>
+          ) : null}
           <div className="telemetry-grid telemetry-grid--compact">
             {sourceSnapshots.map((run) => (
               <div className="telemetry-card" key={run.run_id}>

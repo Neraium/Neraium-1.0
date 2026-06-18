@@ -106,6 +106,7 @@ describe("ObservationCenterWorkspace", () => {
     await waitFor(() => expect(screen.getAllByText("Behavior Change Detected").length).toBeGreaterThan(0));
     expect(screen.getAllByText("System behavior has moved away from its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Filter findings")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Review Evidence" })[0]);
     expect(onReviewEvidence).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/State Group A/i)).toBeNull();

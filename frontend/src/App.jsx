@@ -1,13 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react"; 
-import { apiFetch } from "./config"; 
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "./config";
 import { ENABLE_ADMISSION_GATE } from "./config";
-import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace"; 
-import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace"; 
-import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives"; 
-import useFacilityRuntime from "./hooks/useFacilityRuntime"; 
-import * as uploadStateView from "./viewModels/uploadState"; 
-import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState"; 
-import { deriveCurrentSession } from "./viewModels/currentSession"; 
+import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
+import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
+import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
+import useFacilityRuntime from "./hooks/useFacilityRuntime";
+import * as uploadStateView from "./viewModels/uploadState";
+import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
+import { deriveCurrentSession, deriveSessionActivity } from "./viewModels/currentSession";
 import { deriveCanonicalFinding } from "./viewModels/operatorFinding";
 import { logoutUser } from "./services/api/authApi";
 import { normalizeUploadStatus, uploadStateMessage } from "./viewModels/uploadFlow";
@@ -88,8 +88,18 @@ function App() {
     }),
     [guardedLatestUploadResult, guardedLatestUploadSnapshot, historianReplayState.frame],
   );
-  const hasObservableUploadSession = telemetrySession.hasTelemetry || gateUploadCompleteSeen || Boolean(completedUploadOverride);
-  const effectiveSessionIntent = sessionIntent;
+  const sessionActivity = useMemo(
+    () => deriveSessionActivity({
+      telemetrySession,
+      sessionIntent,
+      gateUploadCompleteSeen,
+      hasCompletedUploadOverride: Boolean(completedUploadOverride),
+      resetGuardActive,
+    }),
+    [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, telemetrySession],
+  );
+  const hasObservableUploadSession = sessionActivity.hasObservableUploadSession;
+  const effectiveSessionIntent = sessionActivity.effectiveIntent;
   useEffect(() => {
     if (
       resetGuardActive
@@ -104,11 +114,9 @@ function App() {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
   }, [allowPersistedLatest, hasObservableUploadSession, resetGuardActive, sessionIntent]);
-  const hasCurrentUploadResult =
-    (effectiveSessionIntent === "current" || gateUploadCompleteSeen || Boolean(completedUploadOverride))
-    && hasObservableUploadSession;
-  const hasResumedSession = effectiveSessionIntent === "resumed" && hasObservableUploadSession;
-  const hasActiveSession = hasCurrentUploadResult || hasResumedSession;
+  const hasCurrentUploadResult = sessionActivity.hasCurrentUploadResult;
+  const hasResumedSession = sessionActivity.hasResumedSession;
+  const hasActiveSession = sessionActivity.hasActiveSession;
   const effectiveLatestUploadResult = hasActiveSession
     ? (completedUploadOverride ?? guardedLatestUploadResult)
     : null;
@@ -126,7 +134,9 @@ function App() {
     hasCurrentUploadResult,
     hasResumedSession,
     hasRealSiiOutput,
-  }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasActiveSession, hasCurrentUploadResult, hasResumedSession, hasRealSiiOutput]);
+    telemetrySession,
+    sessionIntent: effectiveSessionIntent,
+  }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, effectiveSessionIntent, hasActiveSession, hasCurrentUploadResult, hasResumedSession, hasRealSiiOutput, telemetrySession]);
   const canonicalFinding = useMemo(
     () => deriveCanonicalFinding({ currentSession, latestReplayFrame: historianReplayState.frame }),
     [currentSession, historianReplayState.frame],
@@ -399,49 +409,49 @@ function App() {
     );
   }
 
-  if (activeWorkspace === "historical-replay") { 
-    return renderWithBackControl( 
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}> 
+  if (activeWorkspace === "historical-replay") {
+    return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Replay" className="span-12"><p className="narrative-text">Preparing replay workspace...</p></Panel></div>}>
-        <StructuralReplayWorkspace 
-          apiFetch={apiFetch} 
-          accessCode={accessCode} 
-          expertMode={false} 
-          normalizeErrorMessage={(value) => String(value ?? "")} 
-          formatClockTime={formatClockTime} 
-          Panel={Panel} 
-          MetricGrid={MetricGrid} 
-          EmptyState={EmptyState} 
-          hasActiveSession={hasActiveSession} 
-          hasCurrentUploadResult={hasCurrentUploadResult} 
-          hasResumedSession={hasResumedSession} 
-          hasRealSiiOutput={hasRealSiiOutput} 
-          currentSession={currentSession} 
+        <StructuralReplayWorkspace
+          apiFetch={apiFetch}
+          accessCode={accessCode}
+          expertMode={false}
+          normalizeErrorMessage={(value) => String(value ?? "")}
+          formatClockTime={formatClockTime}
+          Panel={Panel}
+          MetricGrid={MetricGrid}
+          EmptyState={EmptyState}
+          hasActiveSession={hasActiveSession}
+          hasCurrentUploadResult={hasCurrentUploadResult}
+          hasResumedSession={hasResumedSession}
+          hasRealSiiOutput={hasRealSiiOutput}
+          currentSession={currentSession}
           canonicalFinding={canonicalFinding}
-          domainMode={domainMode} 
-          onReplayFrameChange={handleReplayFrameChange} 
-          onReplayModeChange={handleReplayModeChange} 
+          domainMode={domainMode}
+          onReplayFrameChange={handleReplayFrameChange}
+          onReplayModeChange={handleReplayModeChange}
         />
       </Suspense>
-      </div> 
-    ); 
-  } 
+      </div>
+    );
+  }
 
-  if (activeWorkspace === "governance-admin") { 
-    return renderWithBackControl( 
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}> 
+  if (activeWorkspace === "governance-admin") {
+    return renderWithBackControl(
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Governance" className="span-12"><p className="narrative-text">Preparing governance workspace...</p></Panel></div>}>
-        <GovernanceAdminWorkspace 
-          apiFetch={apiFetch} 
-          accessCode={accessCode} 
-          Panel={Panel} 
+        <GovernanceAdminWorkspace
+          apiFetch={apiFetch}
+          accessCode={accessCode}
+          Panel={Panel}
           EmptyState={EmptyState}
         onBackToGate={() => setActiveWorkspace("system-body")}
-        /> 
+        />
       </Suspense>
-      </div> 
-    ); 
-  } 
+      </div>
+    );
+  }
 
   if (activeWorkspace === "observation-center") {
     return renderWithBackControl(

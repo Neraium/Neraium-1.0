@@ -1,7 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { deriveCurrentSession, resolveSessionJobId } from "../currentSession";
+import { deriveCurrentSession, deriveSessionActivity, resolveSessionJobId } from "../currentSession";
 
 describe("currentSession view model", () => {
+  it("derives one canonical session activity contract from telemetry and intent", () => {
+    expect(deriveSessionActivity({
+      telemetrySession: { hasTelemetry: true },
+      sessionIntent: "neutral",
+    })).toEqual({
+      effectiveIntent: "neutral",
+      hasObservableUploadSession: true,
+      hasCurrentUploadResult: false,
+      hasResumedSession: false,
+      hasActiveSession: false,
+    });
+
+    expect(deriveSessionActivity({
+      telemetrySession: { hasTelemetry: true },
+      sessionIntent: "resumed",
+    })).toEqual({
+      effectiveIntent: "resumed",
+      hasObservableUploadSession: true,
+      hasCurrentUploadResult: false,
+      hasResumedSession: true,
+      hasActiveSession: true,
+    });
+
+    expect(deriveSessionActivity({
+      telemetrySession: { hasTelemetry: false },
+      sessionIntent: "current",
+      hasCompletedUploadOverride: true,
+    })).toEqual({
+      effectiveIntent: "current",
+      hasObservableUploadSession: true,
+      hasCurrentUploadResult: true,
+      hasResumedSession: false,
+      hasActiveSession: true,
+    });
+  });
   it("derives a stable session contract", () => {
     const session = deriveCurrentSession({
       latestUploadResult: { job_id: "job-1", sii_reliable_enough_to_show: true },

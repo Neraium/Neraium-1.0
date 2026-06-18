@@ -1,5 +1,35 @@
 import { deriveTelemetrySessionState } from "./uploadState";
 
+export function deriveSessionActivity({
+  telemetrySession = null,
+  sessionIntent = "neutral",
+  gateUploadCompleteSeen = false,
+  hasCompletedUploadOverride = false,
+  resetGuardActive = false,
+}) {
+  const hasObservableUploadSession = !resetGuardActive && (
+    telemetrySession?.hasTelemetry
+    || gateUploadCompleteSeen
+    || hasCompletedUploadOverride
+  );
+  const effectiveIntent = !hasObservableUploadSession
+    ? "neutral"
+    : (sessionIntent === "current" || gateUploadCompleteSeen || hasCompletedUploadOverride)
+      ? "current"
+      : sessionIntent === "resumed"
+        ? "resumed"
+        : "neutral";
+  const hasCurrentUploadResult = effectiveIntent === "current" && hasObservableUploadSession;
+  const hasResumedSession = effectiveIntent === "resumed" && hasObservableUploadSession;
+  return {
+    effectiveIntent,
+    hasObservableUploadSession,
+    hasCurrentUploadResult,
+    hasResumedSession,
+    hasActiveSession: hasCurrentUploadResult || hasResumedSession,
+  };
+}
+
 export function deriveCurrentSession({
   latestUploadResult,
   latestUploadSnapshot,
@@ -7,6 +37,8 @@ export function deriveCurrentSession({
   hasCurrentUploadResult,
   hasResumedSession,
   hasRealSiiOutput,
+  telemetrySession = null,
+  sessionIntent = "neutral",
 }) {
   const snapshot = latestUploadSnapshot ?? null;
   const result = latestUploadResult ?? null;
@@ -19,7 +51,7 @@ export function deriveCurrentSession({
     && interpretation?.lineage?.aligned
     && interpretation?.run_alignment_verified !== false,
   );
-  const telemetrySession = deriveTelemetrySessionState({
+  const resolvedTelemetrySession = telemetrySession ?? deriveTelemetrySessionState({
     latestUploadResult: result,
     latestUploadSnapshot: snapshot,
   });
@@ -48,8 +80,11 @@ export function deriveCurrentSession({
     hasCurrentUploadResult: Boolean(hasCurrentUploadResult),
     hasResumedSession: Boolean(hasResumedSession),
     hasRealSiiOutput: Boolean(hasRealSiiOutput),
-    telemetrySessionMode: telemetrySession.sessionMode,
-    telemetryHeartbeatAt: telemetrySession.heartbeatAt,
+    telemetrySession: resolvedTelemetrySession,
+    telemetrySessionMode: resolvedTelemetrySession.sessionMode,
+    telemetryHeartbeatAt: resolvedTelemetrySession.heartbeatAt,
+    sessionIntent,
+    sessionJobId,
     hasReliableOperatorEvidence,
     reviewReadiness,
   };
