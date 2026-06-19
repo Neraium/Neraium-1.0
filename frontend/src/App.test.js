@@ -18,6 +18,31 @@ const runtimeState = vi.hoisted(() => ({
   throwGateError: false,
 }));
 
+function expectOnlyExpectedRenderErrors(spy) {
+  const messages = spy.mock.calls.map(([firstArg]) => {
+    if (typeof firstArg === "string") return firstArg;
+    if (firstArg instanceof Error) return firstArg.message;
+    return String(firstArg ?? "");
+  });
+  expect(messages.length).toBeGreaterThan(0);
+  expect(messages.every((message) => (
+    message.includes("gate render failed")
+    || message.includes("[neraium] render fallback activated")
+    || message.includes("The above error occurred")
+  ))).toBe(true);
+}
+
+function suppressExpectedGateRenderWindowError() {
+  const handleWindowError = (event) => {
+    const message = String(event?.error?.message ?? event?.message ?? "");
+    if (message.includes("gate render failed")) {
+      event.preventDefault();
+    }
+  };
+  window.addEventListener("error", handleWindowError);
+  return () => window.removeEventListener("error", handleWindowError);
+}
+
 vi.mock("./config", () => ({
   apiFetch: vi.fn(),
   ENABLE_ADMISSION_GATE: false,
@@ -194,32 +219,48 @@ describe("App upload completion navigation", () => {
 
   it("shows a safe fallback when the post-upload route render throws", async () => {
     runtimeState.throwGateError = true;
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreWindowError = suppressExpectedGateRenderWindowError();
 
-    render(h(App));
+    try {
+      render(h(App));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
-    });
-    expect(screen.getByText(/workspace recovery/i)).toBeTruthy();
+      await waitFor(() => {
+        expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
+      });
+      expect(screen.getByText(/workspace recovery/i)).toBeTruthy();
+      expectOnlyExpectedRenderErrors(consoleErrorSpy);
+    } finally {
+      restoreWindowError();
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("retries the workspace from the render fallback", async () => {
     runtimeState.throwGateError = true;
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreWindowError = suppressExpectedGateRenderWindowError();
 
-    render(h(App));
+    try {
+      render(h(App));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
-    });
+      await waitFor(() => {
+        expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
+      });
 
-    runtimeState.throwGateError = false;
-    fireEvent.click(screen.getByRole("button", { name: "Retry Workspace" }));
+      runtimeState.throwGateError = false;
+      fireEvent.click(screen.getByRole("button", { name: "Retry Workspace" }));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("gate-workspace")).toBeTruthy();
-    });
-    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
-    expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+      await waitFor(() => {
+        expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+      });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+      expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+      expectOnlyExpectedRenderErrors(consoleErrorSpy);
+    } finally {
+      restoreWindowError();
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("passes the same canonical finding to Gate and Findings", async () => {
