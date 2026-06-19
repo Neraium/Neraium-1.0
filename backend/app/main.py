@@ -11,25 +11,14 @@ from app.core.config import Settings, get_settings
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
-from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records, queue_operational_metrics 
-from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
+from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records
+from app.services.service_status import STARTUP_STATUS, reset_startup_status, service_health_snapshot
+from app.services.sii_runner import build_runner_status, configure_runtime_dir as configure_sii_runner_dir
 from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
 from app.services.upload_state_repository import shared_state_configured, upload_state_backend, warm_latest_upload_cache
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
-from app.services.sii_runner import build_runner_status
 
 logger = logging.getLogger(__name__)
-
-STARTUP_STATUS: dict[str, Any] = {
-    "startup_complete": False,
-    "failed_modules": [],
-    "runtime_db_ready": False,
-    "default_connection_ready": False,
-    "upload_worker_started": False,
-    "data_poller_started": False,
-    "upload_state_backend": "unknown",
-    "upload_state_shared_configured": False,
-}
 
 
 @asynccontextmanager
@@ -37,6 +26,7 @@ async def app_lifespan(app: FastAPI):
     settings = app.state.settings
     upload_worker_started = False
     data_poller_started = False
+    reset_startup_status()
     STARTUP_STATUS["upload_state_backend"] = upload_state_backend()
     STARTUP_STATUS["upload_state_shared_configured"] = shared_state_configured()
     if settings.app_env == "production" and not shared_state_configured():
@@ -45,18 +35,18 @@ async def app_lifespan(app: FastAPI):
             upload_state_backend(),
         )
 
-    try: 
-        init_runtime_db() 
-        recovered_jobs = clear_stale_processing_queue_jobs() 
+    try:
+        init_runtime_db()
+        recovered_jobs = clear_stale_processing_queue_jobs()
         prune_stats = prune_runtime_db_records()
         if prune_stats.get("upload_queue_deleted") or prune_stats.get("evidence_runs_deleted"):
             logger.info("runtime_db_prune_stats %s", prune_stats)
-        if recovered_jobs: 
-            logger.warning("recovered_stale_processing_jobs count=%s", recovered_jobs) 
-        STARTUP_STATUS["runtime_db_ready"] = True 
-    except Exception as error: 
+        if recovered_jobs:
+            logger.warning("recovered_stale_processing_jobs count=%s", recovered_jobs)
+        STARTUP_STATUS["runtime_db_ready"] = True
+    except Exception as error:
         STARTUP_STATUS["failed_modules"].append(f"runtime_db: {error}")
-        logger.exception("runtime_db_startup_failure") 
+        logger.exception("runtime_db_startup_failure")
 
     try:
         warm_latest_upload_cache()
@@ -197,10 +187,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 headers=cors_error_headers(request),
             )
         logger.exception("upload_request_failed path=%s", request.url.path)
-        debug_detail = f"{type(exc).__name__}: {exc}"
         return JSONResponse(
             status_code=500,
-            content=upload_error_payload(debug_detail, status_code=500),
+            content=upload_error_payload(
+                {
+                    "message": "Upload interrupted. Refresh your workspace and try again.",
+                    "error_type": "upload_request_error",
+                },
+                status_code=500,
+            ),
             headers=cors_error_headers(request),
         )
 
@@ -208,7 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def read_root():
         return {
             "service": "neraium-api",
-            "status": "ok",
+            "status": service_health_snapshot()["status"],
             "docs": "/docs",
             "health": "/health",
             "process_role": settings.process_role,
@@ -218,11 +213,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health")
     def health_check_alias():
-        return {
-            "status": "ok",
-            "service": "neraium-api",
-            "process_role": settings.process_role,
-        }
+        snapshot = service_health_snapshot()
+        return JSONResponse(
+            status_code=200 if snapshot["status"] == "ok" else 503,
+            content={**snapshot, "service": "neraium-api", "process_role": settings.process_role},
+        )
 
     # Legacy frontend compatibility aliases. Older bundles may call shorthand
     # endpoints without the "/api/..." prefix.
@@ -233,15 +228,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/systems")
     def systems_alias(include_persisted: bool = True, domain_mode: str | None = None):
         return facility.read_facility_systems(include_persisted=include_persisted, domain_mode=domain_mode)
-
-    @app.get("/api/ready")
-    def read_api_ready():
-        queue_ops = {}
-        try:
-            queue_ops = {"queue_operational_metrics": queue_operational_metrics()}
-        except Exception:
-            queue_ops = {"queue_operational_metrics": {}}
-        return {**STARTUP_STATUS, **build_runner_status(), **queue_ops}
 
     @app.get("/api/startup-status")
     def read_startup_status():

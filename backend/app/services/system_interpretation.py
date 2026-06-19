@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.upload_state import has_active_session_artifact
+
 
 def _normalize_instability_percent(value) -> float:
     try:
@@ -399,6 +401,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
     result = result if isinstance(result, dict) else {}
     summary = summary if isinstance(summary, dict) else {}
     snapshot = snapshot if isinstance(snapshot, dict) else {}
+    current_upload = snapshot.get("current_upload") if isinstance(snapshot.get("current_upload"), dict) else {}
     intelligence = (result.get("sii_intelligence") or {}) if isinstance(result, dict) else {}
     replay_frame = frames[-1] if frames else {}
     cognition_state = replay_frame.get("cognition_state") or {}
@@ -408,7 +411,21 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
     relationship_changes = replay_frame.get("relationship_changes") if isinstance(replay_frame.get("relationship_changes"), list) else []
     dominant_paths = propagation_state.get("dominant_paths") if isinstance(propagation_state.get("dominant_paths"), list) else []
 
-    has_session = bool(result or summary or snapshot.get("last_filename") or frames)
+    session_job_id = _to_text(
+        result.get("job_id")
+        or summary.get("job_id")
+        or current_upload.get("job_id")
+        or snapshot.get("job_id")
+    )
+    if current_upload:
+        has_session = has_active_session_artifact(current_upload, job_id=session_job_id or None)
+    else:
+        has_session = any(
+            (
+                has_active_session_artifact(result, job_id=session_job_id or None),
+                has_active_session_artifact(summary, job_id=session_job_id or None),
+            )
+        )
     lineage = (result.get("traceability") if isinstance(result.get("traceability"), dict) else (summary.get("traceability") if isinstance(summary.get("traceability"), dict) else {}))
     raw_facility_state = _to_text(cognition_state.get("facility_state") or intelligence.get("facility_state") or result.get("operating_state") or snapshot.get("status"))
     raw_confidence = _to_text(evidence_state.get("corroboration_strength") or replay_frame.get("confidence_tier") or cognition_state.get("confidence_tier") or intelligence.get("telemetry_profile_confidence"))

@@ -8,3 +8,4 @@ cd "$repo_root"
 npm --prefix frontend run lint:ci
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
+npm --prefix frontend run test:e2e -- --project=chromium tests/e2e/smoke.spec.js

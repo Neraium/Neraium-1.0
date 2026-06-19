@@ -657,6 +657,9 @@ async def latest_upload(include_persisted: int | bool = True):
     state_backend = upload_state_backend()
     canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
     artifacts = resolve_upload_artifacts() if use_persisted else {}
+    if state_backend == "local" and not (UPLOAD_RUNTIME_STATE.runtime_dir / "latest_upload.json").exists():
+        canonical = build_empty_latest_upload_record()
+        artifacts = {}
     if reset_block_persisted_active():
         artifacts = {}
         canonical = build_empty_latest_upload_record()

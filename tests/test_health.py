@@ -4,13 +4,13 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from app.services.service_status import STARTUP_STATUS, reset_startup_status
 from app.services.sii_runner import CORE_ENGINE, RUNNER_CALLABLE, RUNNER_MODULE, STATE_PATH, VALIDATION_RUNNER, write_latest_sii_state
 
 
 def test_root_endpoint_returns_service_metadata() -> None:
-    client = TestClient(create_app())
-
-    response = client.get("/")
+    with TestClient(create_app()) as client:
+        response = client.get("/")
 
     assert response.status_code == 200
     payload = response.json()
@@ -21,23 +21,54 @@ def test_root_endpoint_returns_service_metadata() -> None:
 
 
 def test_health_endpoint_returns_ok() -> None:
-    client = TestClient(create_app())
-
-    response = client.get("/api/health")
+    with TestClient(create_app()) as client:
+        response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "neraium-api"}
+    assert response.json() == {
+        "status": "ok",
+        "service": "neraium-api",
+        "startup_complete": True,
+        "failed_modules": [],
+    }
 
 
-def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None: 
-    client = TestClient(create_app())
-    response = client.get("/api/ready")
+def test_health_endpoint_returns_degraded_when_startup_failed() -> None:
+    with TestClient(create_app()) as client:
+        STARTUP_STATUS["startup_complete"] = True
+        STARTUP_STATUS["failed_modules"] = ["runtime_db: unavailable"]
+
+        response = client.get("/api/health")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "degraded"
+    assert response.json()["failed_modules"] == ["runtime_db: unavailable"]
+
+
+def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/api/ready")
     assert response.status_code == 200
     payload = response.json()
-    assert "upload_state_backend" in payload 
-    assert "upload_state_shared_configured" in payload 
+    assert "upload_state_backend" in payload
+    assert "upload_state_shared_configured" in payload
     assert "details" in payload
     assert "queue_operational_metrics" in payload["details"]
+    assert payload["checks"]["startup"] == "ok"
+
+
+def test_ready_endpoint_returns_not_ready_when_startup_failed() -> None:
+    with TestClient(create_app()) as client:
+        STARTUP_STATUS["startup_complete"] = True
+        STARTUP_STATUS["failed_modules"] = ["upload_worker: unavailable"]
+
+        response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["status"] == "not_ready"
+    assert payload["checks"]["startup"] == "error"
+    assert payload["failed_modules"] == ["upload_worker: unavailable"]
 
 
 def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
@@ -310,7 +341,6 @@ def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -335,7 +365,6 @@ def test_upload_status_preflight_succeeds_without_auth_for_local_vite(tmp_path) 
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["http://127.0.0.1:5173"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -360,7 +389,6 @@ def test_facility_systems_allows_requests_without_shared_secret_in_production(tm
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -377,7 +405,6 @@ def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -397,7 +424,6 @@ def test_access_header_is_ignored_without_refreshing_auth_cookie(tmp_path) -> No
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -417,7 +443,6 @@ def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -437,7 +462,6 @@ def test_wrong_bearer_code_does_not_block_production_requests(tmp_path, caplog) 
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
