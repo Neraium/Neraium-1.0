@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "validate": "./scripts/validate_repo.sh"
+    "validate": "./scripts/validate_repo.sh",
+    "smoke:post-upload-browser": "node scripts/post-upload-browser-smoke.js"
   },
   "repository": {
     "type": "git",

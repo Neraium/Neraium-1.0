@@ -203,6 +203,25 @@ describe("App upload completion navigation", () => {
     expect(screen.getByText(/workspace recovery/i)).toBeTruthy();
   });
 
+  it("retries the workspace from the render fallback", async () => {
+    runtimeState.throwGateError = true;
+
+    render(h(App));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
+    });
+
+    runtimeState.throwGateError = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry Workspace" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+    });
+    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+    expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+  });
+
   it("passes the same canonical finding to Gate and Findings", async () => {
     runtimeState.latestUploadResult = {
       job_id: "finding-job-9",

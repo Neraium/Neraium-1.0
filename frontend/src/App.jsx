@@ -46,6 +46,7 @@ function App() {
   const [postUploadPendingSnapshot, setPostUploadPendingSnapshot] = useState(null);
   const [postUploadExpectedJobId, setPostUploadExpectedJobId] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
+  const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
 
   const {
@@ -425,9 +426,19 @@ function App() {
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState]);
 
+
+  const handleRetryWorkspace = useCallback(() => {
+    console.info("[neraium] route retry requested", { workspace: activeWorkspace });
+    setErrorBoundaryResetKey((current) => current + 1);
+    if (activeWorkspace === "system-body") {
+      void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+      void loadFacilitySystems({ forceRefresh: true });
+    }
+  }, [activeWorkspace, loadFacilitySystems, loadLatestUploadState]);
+
   function renderWithBackControl(content) {
     return (
-      <AppErrorBoundary>
+      <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
         <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
           <div className="workspace-back-control" aria-label="Workspace navigation">
             <button
@@ -544,7 +555,7 @@ function App() {
   }
 
   return (
-    <AppErrorBoundary>
+    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
       <SystemTopologyWorkspace
       liveOps={{
