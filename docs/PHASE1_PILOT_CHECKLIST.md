@@ -28,7 +28,7 @@ Status legend: `Implemented`, `Partial`, `Missing`
 - [x] Alert state machine hardened + restart-safe � **Partial** (state transitions present; explicit restart/idempotency transition test matrix incomplete).
 
 ## Security
-- [x] API authentication for every endpoint � **Partial** (`require_api_access` on core routers; ensure all externally exposed routes remain protected by policy).
+- [x] API authentication for every endpoint - **Partial** (`require_api_access` on core routers; ensure all externally exposed routes remain protected by policy).
 - [ ] Network isolation/private subnets � **Missing in repo** (deployment-level control not codified as IaC).
 - [x] CSP + security headers � **Implemented/Partial** (CSP, HSTS, nosniff, frame/referrer headers added in middleware).
 - [x] Dependency scanning in CI - **Implemented/Partial** (`pip-audit` for backend dependencies and `npm audit --omit=dev --audit-level=critical` in CI; image scanning still not present).

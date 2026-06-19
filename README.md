@@ -263,8 +263,9 @@ Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` 
 Current hardening focus areas include:
 
 - Confirming runtime database persistence across API and worker restarts
+- Confirming auth/session persistence through the dedicated auth database
 - Verifying multi-task or multi-worker deployment behavior
-- Moving runtime SQLite auth/session state to a shared production backend when multi-instance scale is required
+- Using Postgres for production auth/session state while keeping SQLite fallback for tests and local development
 - Keeping README/demo screenshots current with the deployed UI
 - Keeping browser clients free of build-time shared API secrets
 - Expanding dependency security policy from critical CVE blocking to broader release governance
@@ -281,8 +282,9 @@ The next major focus areas are broader data connectors, multi-instance shared ru
 
 Current Phase 3 hardening status:
 
-- Auth users and sessions persist in `runtime.db` instead of `auth_store.json`
-- Legacy JSON auth state is migrated forward on first boot into the runtime database
+- Auth users and sessions persist in a dedicated auth database instead of `auth_store.json`
+- The auth store uses local SQLite by default and Postgres when `NERAIUM_AUTH_DATABASE_URL` is configured
+- Legacy JSON auth state is migrated forward on first boot into the auth database
 - Admin APIs can list users/sessions, activate or deactivate users, and revoke sessions
 - Observability now includes auth user/session counts and CI includes dependency security scanning
 

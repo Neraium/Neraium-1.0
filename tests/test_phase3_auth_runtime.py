@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+import app.services.auth_store as auth_store
 from app.services.auth_store import create_user, get_session_record
 from app.services.rate_limiter import clear_rate_limits
 
@@ -21,7 +22,7 @@ def _production_client(monkeypatch, tmp_path) -> TestClient:
     return TestClient(create_app(settings))
 
 
-def test_auth_store_migrates_legacy_json_to_runtime_db(monkeypatch, tmp_path) -> None:
+def test_auth_store_migrates_legacy_json_to_auth_db(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     legacy_path = tmp_path / "auth_store.json"
@@ -55,8 +56,101 @@ def test_auth_store_migrates_legacy_json_to_runtime_db(monkeypatch, tmp_path) ->
 
     assert response.status_code == 200
     assert response.json()["user"]["email"] == "legacy@example.com"
-    assert (tmp_path / "runtime.db").exists()
+    assert (tmp_path / "auth_store.db").exists()
     assert (tmp_path / "auth_store.json.migrated").exists()
+
+
+def test_postgres_backend_is_selected_when_configured(monkeypatch, tmp_path) -> None:
+    clear_rate_limits()
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_URL", "postgresql://auth-user@db.example.com/neraium")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "password123")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+
+    state = {"users": {}, "sessions": {}, "dsn": []}
+
+    class FakePostgresBackend:
+        placeholder = "%s"
+
+        def __init__(self, dsn: str):
+            state["dsn"].append(dsn)
+
+        def ensure_schema(self) -> None:
+            return None
+
+        def upsert_user(self, payload):
+            state["users"][payload["email"]] = dict(payload)
+
+        def read_user(self, email):
+            return state["users"].get(email)
+
+        def list_users(self, *, include_inactive=True, limit=500):
+            users = list(state["users"].values())
+            if not include_inactive:
+                users = [item for item in users if item.get("is_active", True)]
+            return users[:limit]
+
+        def set_user_login(self, email, logged_in_at):
+            if email in state["users"]:
+                state["users"][email]["last_login_at"] = logged_in_at
+
+        def set_user_active_status(self, email, *, is_active):
+            if email not in state["users"]:
+                return None
+            state["users"][email]["is_active"] = is_active
+            state["users"][email]["deactivated_at"] = None if is_active else "2026-06-19T00:00:00+00:00"
+            return state["users"][email]
+
+        def upsert_session(self, payload):
+            state["sessions"][payload["session_id"]] = dict(payload)
+
+        def read_session(self, session_id):
+            return state["sessions"].get(session_id)
+
+        def list_sessions(self, *, email=None, include_revoked=False, limit=500):
+            sessions = list(state["sessions"].values())
+            if email:
+                sessions = [item for item in sessions if item.get("email") == email]
+            if not include_revoked:
+                sessions = [item for item in sessions if not item.get("revoked_at")]
+            return sessions[:limit]
+
+        def revoke_session(self, session_id, *, revoked_at=None):
+            if session_id in state["sessions"]:
+                state["sessions"][session_id]["revoked_at"] = revoked_at or "2026-06-19T00:00:00+00:00"
+
+        def revoke_sessions_for_email(self, email, *, revoked_at=None):
+            count = 0
+            for session in state["sessions"].values():
+                if session.get("email") == email and not session.get("revoked_at"):
+                    session["revoked_at"] = revoked_at or "2026-06-19T00:00:00+00:00"
+                    count += 1
+            return count
+
+        def delete_expired_sessions(self, now_value=None):
+            return 0
+
+        def metrics(self):
+            active_users = [item for item in state["users"].values() if item.get("is_active", True)]
+            active_sessions = [item for item in state["sessions"].values() if not item.get("revoked_at")]
+            return {
+                "total_users": len(state["users"]),
+                "active_users": len(active_users),
+                "inactive_users": len(state["users"]) - len(active_users),
+                "active_sessions": len(active_sessions),
+            }
+
+    monkeypatch.setattr(auth_store, "_PostgresAuthBackend", FakePostgresBackend)
+    monkeypatch.setattr(auth_store, "_SQLiteAuthBackend", FakePostgresBackend)
+    monkeypatch.setattr(auth_store, "_AUTH_BACKEND", None)
+    monkeypatch.setattr(auth_store, "_AUTH_BACKEND_KEY", None)
+
+    client = _production_client(monkeypatch, tmp_path)
+    login = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "password123"})
+
+    assert login.status_code == 200
+    assert state["dsn"] == ["postgresql://auth-user@db.example.com/neraium"]
+    assert state["users"]["admin@example.com"]["role"] == "admin"
 
 
 def test_admin_can_manage_users_and_sessions(monkeypatch, tmp_path) -> None:

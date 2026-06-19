@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import secrets
+import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -12,28 +13,280 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
-from app.services import runtime_db as runtime_db_module
-from app.services.runtime_db import (
-    auth_metrics,
-    configure_runtime_dir as configure_runtime_db_dir,
-    delete_expired_auth_sessions,
-    list_auth_sessions,
-    list_auth_users,
-    read_auth_session,
-    read_auth_user,
-    revoke_auth_session,
-    revoke_auth_sessions_for_email,
-    set_auth_user_active_status,
-    set_auth_user_login,
-    upsert_auth_session,
-    upsert_auth_user,
-)
+
+try:
+    import psycopg  # type: ignore
+except Exception:  # pragma: no cover - psycopg is optional in local/test envs
+    psycopg = None
 
 _STORE_LOCK = threading.RLock()
 _SESSION_COOKIE_NAME = "neraium_session"
 _SESSION_TTL_DAYS = 14
 _VALID_ROLES = {"viewer", "operator", "admin"}
-_AUTH_RUNTIME_KEY: str | None = None
+_AUTH_BACKEND_KEY: tuple[str, str] | None = None
+_AUTH_BACKEND: "_BaseAuthBackend" | None = None
+
+
+AUTH_SCHEMA_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS auth_users (
+        email TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_login_at TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT 1,
+        deactivated_at TEXT,
+        bootstrap_managed BOOLEAN NOT NULL DEFAULT 0
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+        session_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_seen_at TEXT,
+        revoked_at TEXT,
+        FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)
+    """,
+)
+
+
+class _BaseAuthBackend:
+    placeholder = "?"
+
+    def ensure_schema(self) -> None:
+        with self._connect() as connection:
+            for statement in AUTH_SCHEMA_STATEMENTS:
+                connection.execute(statement)
+
+    def _connect(self):
+        raise NotImplementedError
+
+    def _placeholders(self, count: int) -> str:
+        return ", ".join([self.placeholder] * count)
+
+    def _row_to_dict(self, cursor: Any, row: Any) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        if isinstance(row, dict):
+            return dict(row)
+        if hasattr(row, "keys"):
+            return {key: row[key] for key in row.keys()}
+        columns = [column[0] for column in getattr(cursor, "description", []) or []]
+        return {columns[index]: row[index] for index in range(min(len(columns), len(row)))}
+
+    def _fetch_one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            cursor = connection.execute(sql, params)
+            return self._row_to_dict(cursor, cursor.fetchone())
+
+    def _fetch_all(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            cursor = connection.execute(sql, params)
+            rows = cursor.fetchall()
+            return [self._row_to_dict(cursor, row) for row in rows if self._row_to_dict(cursor, row) is not None]
+
+    def _execute(self, sql: str, params: tuple[Any, ...] = ()) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(sql, params)
+            return int(getattr(cursor, "rowcount", 0) or 0)
+
+    def upsert_user(self, payload: dict[str, Any]) -> None:
+        sql = f"""
+            INSERT INTO auth_users (
+                email, name, role, salt, password_hash, created_at, updated_at,
+                last_login_at, is_active, deactivated_at, bootstrap_managed
+            )
+            VALUES ({self._placeholders(11)})
+            ON CONFLICT(email) DO UPDATE SET
+                name=excluded.name,
+                role=excluded.role,
+                salt=excluded.salt,
+                password_hash=excluded.password_hash,
+                updated_at=excluded.updated_at,
+                last_login_at=excluded.last_login_at,
+                is_active=excluded.is_active,
+                deactivated_at=excluded.deactivated_at,
+                bootstrap_managed=excluded.bootstrap_managed
+        """
+        self._execute(
+            sql,
+            (
+                payload["email"],
+                payload.get("name") or payload["email"],
+                payload.get("role", "operator"),
+                payload.get("salt", ""),
+                payload.get("password_hash", ""),
+                payload.get("created_at") or _now_iso(),
+                payload.get("updated_at") or _now_iso(),
+                payload.get("last_login_at"),
+                bool(payload.get("is_active", True)),
+                payload.get("deactivated_at"),
+                bool(payload.get("bootstrap_managed")),
+            ),
+        )
+
+    def read_user(self, email: str) -> dict[str, Any] | None:
+        return self._fetch_one("SELECT * FROM auth_users WHERE email = ?" if self.placeholder == "?" else "SELECT * FROM auth_users WHERE email = %s", (email,))
+
+    def list_users(self, *, include_inactive: bool = True, limit: int = 500) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM auth_users"
+        params: list[Any] = []
+        if not include_inactive:
+            sql += " WHERE is_active"
+        sql += f" ORDER BY created_at ASC LIMIT {self.placeholder}"
+        params.append(limit)
+        return self._fetch_all(sql, tuple(params))
+
+    def set_user_login(self, email: str, logged_in_at: str) -> None:
+        sql = (
+            "UPDATE auth_users SET last_login_at = ?, updated_at = ? WHERE email = ?"
+            if self.placeholder == "?"
+            else "UPDATE auth_users SET last_login_at = %s, updated_at = %s WHERE email = %s"
+        )
+        self._execute(sql, (logged_in_at, logged_in_at, email))
+
+    def set_user_active_status(self, email: str, *, is_active: bool) -> dict[str, Any] | None:
+        timestamp = _now_iso()
+        deactivated_at = None if is_active else timestamp
+        sql = (
+            "UPDATE auth_users SET is_active = ?, deactivated_at = ?, updated_at = ? WHERE email = ?"
+            if self.placeholder == "?"
+            else "UPDATE auth_users SET is_active = %s, deactivated_at = %s, updated_at = %s WHERE email = %s"
+        )
+        self._execute(sql, (bool(is_active), deactivated_at, timestamp, email))
+        return self.read_user(email)
+
+    def upsert_session(self, payload: dict[str, Any]) -> None:
+        sql = f"""
+            INSERT INTO auth_sessions (session_id, email, created_at, expires_at, last_seen_at, revoked_at)
+            VALUES ({self._placeholders(6)})
+            ON CONFLICT(session_id) DO UPDATE SET
+                email=excluded.email,
+                created_at=excluded.created_at,
+                expires_at=excluded.expires_at,
+                last_seen_at=excluded.last_seen_at,
+                revoked_at=excluded.revoked_at
+        """
+        self._execute(
+            sql,
+            (
+                payload["session_id"],
+                payload["email"],
+                payload.get("created_at") or _now_iso(),
+                payload.get("expires_at") or _session_expiry_iso(),
+                payload.get("last_seen_at"),
+                payload.get("revoked_at"),
+            ),
+        )
+
+    def read_session(self, session_id: str) -> dict[str, Any] | None:
+        sql = "SELECT * FROM auth_sessions WHERE session_id = ?" if self.placeholder == "?" else "SELECT * FROM auth_sessions WHERE session_id = %s"
+        return self._fetch_one(sql, (session_id,))
+
+    def list_sessions(self, *, email: str | None = None, include_revoked: bool = False, limit: int = 500) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM auth_sessions"
+        params: list[Any] = []
+        clauses: list[str] = []
+        if email:
+            clauses.append("email = ?" if self.placeholder == "?" else "email = %s")
+            params.append(email)
+        if not include_revoked:
+            clauses.append("revoked_at IS NULL")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += f" ORDER BY created_at DESC LIMIT {self.placeholder}"
+        params.append(limit)
+        return self._fetch_all(sql, tuple(params))
+
+    def revoke_session(self, session_id: str, *, revoked_at: str | None = None) -> None:
+        timestamp = revoked_at or _now_iso()
+        sql = (
+            "UPDATE auth_sessions SET revoked_at = ? WHERE session_id = ?"
+            if self.placeholder == "?"
+            else "UPDATE auth_sessions SET revoked_at = %s WHERE session_id = %s"
+        )
+        self._execute(sql, (timestamp, session_id))
+
+    def revoke_sessions_for_email(self, email: str, *, revoked_at: str | None = None) -> int:
+        timestamp = revoked_at or _now_iso()
+        sql = (
+            "UPDATE auth_sessions SET revoked_at = ? WHERE email = ? AND revoked_at IS NULL"
+            if self.placeholder == "?"
+            else "UPDATE auth_sessions SET revoked_at = %s WHERE email = %s AND revoked_at IS NULL"
+        )
+        return self._execute(sql, (timestamp, email))
+
+    def delete_expired_sessions(self, now_value: str | None = None) -> int:
+        cutoff = now_value or _now_iso()
+        sql = (
+            "DELETE FROM auth_sessions WHERE expires_at <= ?"
+            if self.placeholder == "?"
+            else "DELETE FROM auth_sessions WHERE expires_at <= %s"
+        )
+        return self._execute(sql, (cutoff,))
+
+    def metrics(self) -> dict[str, int]:
+        self.delete_expired_sessions()
+        users = self._fetch_one(
+            "SELECT COUNT(*) AS total, SUM(CASE WHEN is_active THEN 1 ELSE 0 END) AS active FROM auth_users"
+        )
+        sessions = self._fetch_one(
+            (
+                "SELECT COUNT(*) AS active_sessions FROM auth_sessions WHERE revoked_at IS NULL AND expires_at > ?"
+                if self.placeholder == "?"
+                else "SELECT COUNT(*) AS active_sessions FROM auth_sessions WHERE revoked_at IS NULL AND expires_at > %s"
+            ),
+            (_now_iso(),),
+        )
+        total_users = int(users["total"] or 0) if users else 0
+        active_users = int(users["active"] or 0) if users else 0
+        active_sessions = int(sessions["active_sessions"] or 0) if sessions else 0
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "inactive_users": max(total_users - active_users, 0),
+            "active_sessions": active_sessions,
+        }
+
+
+class _SQLiteAuthBackend(_BaseAuthBackend):
+    placeholder = "?"
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+
+    def _connect(self):
+        connection = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+
+class _PostgresAuthBackend(_BaseAuthBackend):
+    placeholder = "%s"
+
+    def __init__(self, dsn: str):
+        self.dsn = dsn
+
+    def _connect(self):
+        if psycopg is None:
+            raise RuntimeError("psycopg is required when NERAIUM_AUTH_DATABASE_URL is configured.")
+        return psycopg.connect(self.dsn)
 
 
 def session_cookie_name() -> str:
@@ -51,17 +304,33 @@ def _legacy_store_path() -> Path:
     return _runtime_dir() / "auth_store.json"
 
 
-@contextmanager
-def _auth_runtime_db_context():
-    runtime_dir = _runtime_dir()
-    previous_runtime_dir = runtime_db_module.RUNTIME_DIR
-    previous_db_path = runtime_db_module.DB_PATH
-    configure_runtime_db_dir(runtime_dir)
-    try:
-        yield
-    finally:
-        runtime_db_module.RUNTIME_DIR = previous_runtime_dir
-        runtime_db_module.DB_PATH = previous_db_path
+def _auth_database_url() -> str:
+    settings = get_settings()
+    return str(getattr(settings, "auth_database_url", "") or os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
+
+
+def _backend_key() -> tuple[str, str]:
+    dsn = _auth_database_url()
+    if dsn:
+        return ("postgres", dsn)
+    return ("sqlite", str(_runtime_dir() / "auth_store.db"))
+
+
+def _get_backend() -> _BaseAuthBackend:
+    global _AUTH_BACKEND, _AUTH_BACKEND_KEY
+    key = _backend_key()
+    with _STORE_LOCK:
+        if _AUTH_BACKEND is None or _AUTH_BACKEND_KEY != key:
+            if key[0] == "postgres":
+                _AUTH_BACKEND = _PostgresAuthBackend(key[1])
+            else:
+                _AUTH_BACKEND = _SQLiteAuthBackend(Path(key[1]))
+            _AUTH_BACKEND.ensure_schema()
+            _AUTH_BACKEND_KEY = key
+            _migrate_legacy_store_if_needed(_AUTH_BACKEND)
+        _AUTH_BACKEND.delete_expired_sessions()
+        _apply_bootstrap_users(_AUTH_BACKEND)
+        return _AUTH_BACKEND
 
 
 def _now_iso() -> str:
@@ -74,9 +343,7 @@ def _normalize_email(value: str) -> str:
 
 def normalize_role(value: str | None, default: str = "operator") -> str:
     normalized = str(value or "").strip().lower()
-    if normalized in _VALID_ROLES:
-        return normalized
-    return default
+    return normalized if normalized in _VALID_ROLES else default
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -85,8 +352,7 @@ def _hash_password(password: str, salt: str) -> str:
 
 
 def _session_expiry_iso() -> str:
-    expires = datetime.now(timezone.utc) + timedelta(days=_SESSION_TTL_DAYS)
-    return expires.isoformat()
+    return (datetime.now(timezone.utc) + timedelta(days=_SESSION_TTL_DAYS)).isoformat()
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -126,6 +392,7 @@ def sanitize_session_record(session: dict[str, Any]) -> dict[str, Any]:
 
 
 def _upsert_user_record(
+    backend: _BaseAuthBackend,
     *,
     email: str,
     password_hash: str,
@@ -138,32 +405,33 @@ def _upsert_user_record(
     deactivated_at: str | None = None,
     bootstrap_managed: bool = False,
 ) -> dict[str, Any]:
-    payload = {
-        "email": email,
-        "name": name,
-        "role": normalize_role(role, "operator"),
-        "salt": salt,
-        "password_hash": password_hash,
-        "created_at": created_at or _now_iso(),
-        "updated_at": _now_iso(),
-        "last_login_at": last_login_at,
-        "is_active": is_active,
-        "deactivated_at": deactivated_at,
-        "bootstrap_managed": bootstrap_managed,
-    }
-    upsert_auth_user(payload)
-    stored = read_auth_user(email)
+    backend.upsert_user(
+        {
+            "email": email,
+            "name": name,
+            "role": normalize_role(role, "operator"),
+            "salt": salt,
+            "password_hash": password_hash,
+            "created_at": created_at or _now_iso(),
+            "updated_at": _now_iso(),
+            "last_login_at": last_login_at,
+            "is_active": is_active,
+            "deactivated_at": deactivated_at,
+            "bootstrap_managed": bootstrap_managed,
+        }
+    )
+    stored = backend.read_user(email)
     if not stored:
         raise RuntimeError("auth_user_write_failed")
     return stored
 
 
-def _ensure_bootstrap_user(*, email: str, password: str, name: str, role: str) -> bool:
+def _ensure_bootstrap_user(backend: _BaseAuthBackend, *, email: str, password: str, name: str, role: str) -> bool:
     normalized_email = _normalize_email(email)
     if not normalized_email or not password:
         return False
     normalized_role = normalize_role(role, "admin")
-    existing = read_auth_user(normalized_email)
+    existing = backend.read_user(normalized_email)
     if existing:
         changed = False
         payload = dict(existing)
@@ -177,10 +445,11 @@ def _ensure_bootstrap_user(*, email: str, password: str, name: str, role: str) -
             payload["bootstrap_managed"] = True
             changed = True
         if changed:
-            upsert_auth_user(payload)
+            backend.upsert_user(payload)
         return changed
     salt = secrets.token_hex(16)
     _upsert_user_record(
+        backend,
         email=normalized_email,
         password_hash=_hash_password(password, salt),
         salt=salt,
@@ -191,14 +460,16 @@ def _ensure_bootstrap_user(*, email: str, password: str, name: str, role: str) -
     return True
 
 
-def _apply_bootstrap_users() -> None:
+def _apply_bootstrap_users(backend: _BaseAuthBackend) -> None:
     _ensure_bootstrap_user(
+        backend,
         email=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "")).strip(),
         password=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "")).strip(),
         name=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_NAME", "Admin")).strip(),
         role="admin",
     )
     _ensure_bootstrap_user(
+        backend,
         email=str(os.getenv("NERAIUM_BOOTSTRAP_OPERATOR_EMAIL", "")).strip(),
         password=str(os.getenv("NERAIUM_BOOTSTRAP_OPERATOR_PASSWORD", "")).strip(),
         name=str(os.getenv("NERAIUM_BOOTSTRAP_OPERATOR_NAME", "Operator")).strip(),
@@ -206,7 +477,7 @@ def _apply_bootstrap_users() -> None:
     )
 
 
-def _migrate_legacy_store_if_needed() -> None:
+def _migrate_legacy_store_if_needed(backend: _BaseAuthBackend) -> None:
     path = _legacy_store_path()
     if not path.exists():
         return
@@ -214,9 +485,7 @@ def _migrate_legacy_store_if_needed() -> None:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return
-    users = list_auth_users(include_inactive=True, limit=1)
-    sessions = list_auth_sessions(include_revoked=True, limit=1)
-    if users or sessions:
+    if backend.list_users(include_inactive=True, limit=1) or backend.list_sessions(include_revoked=True, limit=1):
         return
     migrated = False
     for raw_user in payload.get("users", []):
@@ -226,6 +495,7 @@ def _migrate_legacy_store_if_needed() -> None:
         if not email or not salt or not password_hash:
             continue
         _upsert_user_record(
+            backend,
             email=email,
             password_hash=password_hash,
             salt=salt,
@@ -241,12 +511,12 @@ def _migrate_legacy_store_if_needed() -> None:
     for session_id, raw_session in (payload.get("sessions") or {}).items():
         email = _normalize_email((raw_session or {}).get("email", ""))
         expires_at = (raw_session or {}).get("expires_at")
-        if not email or not read_auth_user(email):
+        if not email or not backend.read_user(email):
             continue
         expires = _parse_iso(expires_at)
         if not expires or expires <= datetime.now(timezone.utc):
             continue
-        upsert_auth_session(
+        backend.upsert_session(
             {
                 "session_id": str(session_id),
                 "email": email,
@@ -267,177 +537,155 @@ def _migrate_legacy_store_if_needed() -> None:
             pass
 
 
-def _ensure_auth_storage_ready() -> None:
-    global _AUTH_RUNTIME_KEY
-    runtime_key = str(_runtime_dir().resolve())
-    with _STORE_LOCK:
-        delete_expired_auth_sessions()
-        if _AUTH_RUNTIME_KEY != runtime_key:
-            _migrate_legacy_store_if_needed()
-            _AUTH_RUNTIME_KEY = runtime_key
-        _apply_bootstrap_users()
-
-
 def create_user(email: str, password: str, name: str | None = None, role: str = "operator") -> dict[str, Any]:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email)
-        if "@" not in normalized_email or len(normalized_email) < 5:
-            raise ValueError("Enter a valid email address.")
-        if len(password or "") < 8:
-            raise ValueError("Password must be at least 8 characters.")
-        display_name = str(name or "").strip() or normalized_email.split("@", 1)[0]
-        normalized_role = normalize_role(role, "operator")
-        with _STORE_LOCK:
-            if read_auth_user(normalized_email):
-                raise ValueError("An account with this email already exists.")
-            salt = secrets.token_hex(16)
-            user = _upsert_user_record(
-                email=normalized_email,
-                password_hash=_hash_password(password, salt),
-                salt=salt,
-                name=display_name,
-                role=normalized_role,
-            )
-            return sanitize_user_record(user)
-
-
-def list_users(*, include_inactive: bool = True) -> list[dict[str, Any]]:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        return [sanitize_user_record(user) for user in list_auth_users(include_inactive=include_inactive)]
-
-
-def activate_user(email: str) -> dict[str, Any] | None:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email)
-        with _STORE_LOCK:
-            user = set_auth_user_active_status(normalized_email, is_active=True)
-        return sanitize_user_record(user) if user else None
-
-
-def deactivate_user(email: str) -> dict[str, Any] | None:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email)
-        with _STORE_LOCK:
-            user = set_auth_user_active_status(normalized_email, is_active=False)
-            revoke_auth_sessions_for_email(normalized_email)
-        return sanitize_user_record(user) if user else None
-
-
-def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email)
-        with _STORE_LOCK:
-            user = read_auth_user(normalized_email)
-            if not user or not bool(user.get("is_active", True)):
-                return None
-            expected_hash = str(user.get("password_hash") or "")
-            salt = str(user.get("salt") or "")
-            candidate = _hash_password(password, salt)
-            if hmac.compare_digest(expected_hash, candidate):
-                return sanitize_user_record(user)
-            return None
-
-
-def create_session(email: str) -> str:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        session_id = secrets.token_urlsafe(48)
-        normalized_email = _normalize_email(email)
-        timestamp = _now_iso()
-        with _STORE_LOCK:
-            user = read_auth_user(normalized_email)
-            if not user or not bool(user.get("is_active", True)):
-                raise ValueError("Account is inactive or missing.")
-            revoke_auth_sessions_for_email(normalized_email, revoked_at=timestamp)
-            upsert_auth_session(
-                {
-                    "session_id": session_id,
-                    "email": normalized_email,
-                    "created_at": timestamp,
-                    "expires_at": _session_expiry_iso(),
-                    "last_seen_at": timestamp,
-                    "revoked_at": None,
-                }
-            )
-            set_auth_user_login(normalized_email, timestamp)
-        return session_id
-
-
-def delete_session(session_id: str | None) -> None:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        if not session_id:
-            return
-        with _STORE_LOCK:
-            revoke_auth_session(session_id)
-
-
-def get_session_record(session_id: str | None) -> dict[str, Any] | None:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        if not session_id:
-            return None
-        with _STORE_LOCK:
-            session = read_auth_session(session_id)
-            if not session:
-                return None
-            expires_at = _parse_iso(session.get("expires_at"))
-            now = datetime.now(timezone.utc)
-            if bool(session.get("revoked_at")):
-                return None
-            if not expires_at or expires_at <= now:
-                revoke_auth_session(session_id, revoked_at=now.isoformat())
-                return None
-            return sanitize_session_record(session)
-
-
-def get_user_by_session(session_id: str | None) -> dict[str, Any] | None:
-    with _auth_runtime_db_context():
-        session = get_session_record(session_id)
-        if not session:
-            return None
-        user = read_auth_user(session["email"])
-        if not user or not bool(user.get("is_active", True)):
-            return None
+    backend = _get_backend()
+    normalized_email = _normalize_email(email)
+    if "@" not in normalized_email or len(normalized_email) < 5:
+        raise ValueError("Enter a valid email address.")
+    if len(password or "") < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    display_name = str(name or "").strip() or normalized_email.split("@", 1)[0]
+    normalized_role = normalize_role(role, "operator")
+    with _STORE_LOCK:
+        if backend.read_user(normalized_email):
+            raise ValueError("An account with this email already exists.")
+        salt = secrets.token_hex(16)
+        user = _upsert_user_record(
+            backend,
+            email=normalized_email,
+            password_hash=_hash_password(password, salt),
+            salt=salt,
+            name=display_name,
+            role=normalized_role,
+        )
         return sanitize_user_record(user)
 
 
-def list_sessions(*, email: str | None = None, include_revoked: bool = False) -> list[dict[str, Any]]:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email or "") or None
-        sessions = list_auth_sessions(email=normalized_email, include_revoked=include_revoked)
+def list_users(*, include_inactive: bool = True) -> list[dict[str, Any]]:
+    backend = _get_backend()
+    return [sanitize_user_record(user) for user in backend.list_users(include_inactive=include_inactive)]
+
+
+def activate_user(email: str) -> dict[str, Any] | None:
+    backend = _get_backend()
+    normalized_email = _normalize_email(email)
+    with _STORE_LOCK:
+        user = backend.set_user_active_status(normalized_email, is_active=True)
+    return sanitize_user_record(user) if user else None
+
+
+def deactivate_user(email: str) -> dict[str, Any] | None:
+    backend = _get_backend()
+    normalized_email = _normalize_email(email)
+    with _STORE_LOCK:
+        user = backend.set_user_active_status(normalized_email, is_active=False)
+        backend.revoke_sessions_for_email(normalized_email)
+    return sanitize_user_record(user) if user else None
+
+
+def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
+    backend = _get_backend()
+    normalized_email = _normalize_email(email)
+    with _STORE_LOCK:
+        user = backend.read_user(normalized_email)
+        if not user or not bool(user.get("is_active", True)):
+            return None
+        expected_hash = str(user.get("password_hash") or "")
+        salt = str(user.get("salt") or "")
+        if hmac.compare_digest(expected_hash, _hash_password(password, salt)):
+            return sanitize_user_record(user)
+        return None
+
+
+def create_session(email: str) -> str:
+    backend = _get_backend()
+    session_id = secrets.token_urlsafe(48)
+    normalized_email = _normalize_email(email)
+    timestamp = _now_iso()
+    with _STORE_LOCK:
+        user = backend.read_user(normalized_email)
+        if not user or not bool(user.get("is_active", True)):
+            raise ValueError("Account is inactive or missing.")
+        backend.revoke_sessions_for_email(normalized_email, revoked_at=timestamp)
+        backend.upsert_session(
+            {
+                "session_id": session_id,
+                "email": normalized_email,
+                "created_at": timestamp,
+                "expires_at": _session_expiry_iso(),
+                "last_seen_at": timestamp,
+                "revoked_at": None,
+            }
+        )
+        backend.set_user_login(normalized_email, timestamp)
+    return session_id
+
+
+def delete_session(session_id: str | None) -> None:
+    if not session_id:
+        return
+    backend = _get_backend()
+    with _STORE_LOCK:
+        backend.revoke_session(session_id)
+
+
+def get_session_record(session_id: str | None) -> dict[str, Any] | None:
+    if not session_id:
+        return None
+    backend = _get_backend()
+    with _STORE_LOCK:
+        session = backend.read_session(session_id)
+        if not session:
+            return None
+        if bool(session.get("revoked_at")):
+            return None
+        expires_at = _parse_iso(session.get("expires_at"))
         now = datetime.now(timezone.utc)
-        sanitized: list[dict[str, Any]] = []
-        for session in sessions:
-            expires_at = _parse_iso(session.get("expires_at"))
-            if not include_revoked and (session.get("revoked_at") or not expires_at or expires_at <= now):
-                continue
-            sanitized.append(sanitize_session_record(session))
-        return sanitized
+        if not expires_at or expires_at <= now:
+            backend.revoke_session(session_id, revoked_at=now.isoformat())
+            return None
+        return sanitize_session_record(session)
+
+
+def get_user_by_session(session_id: str | None) -> dict[str, Any] | None:
+    session = get_session_record(session_id)
+    if not session:
+        return None
+    backend = _get_backend()
+    user = backend.read_user(session["email"])
+    if not user or not bool(user.get("is_active", True)):
+        return None
+    return sanitize_user_record(user)
+
+
+def list_sessions(*, email: str | None = None, include_revoked: bool = False) -> list[dict[str, Any]]:
+    backend = _get_backend()
+    normalized_email = _normalize_email(email or "") or None
+    sessions = backend.list_sessions(email=normalized_email, include_revoked=include_revoked)
+    now = datetime.now(timezone.utc)
+    sanitized: list[dict[str, Any]] = []
+    for session in sessions:
+        expires_at = _parse_iso(session.get("expires_at"))
+        if not include_revoked and (session.get("revoked_at") or not expires_at or expires_at <= now):
+            continue
+        sanitized.append(sanitize_session_record(session))
+    return sanitized
 
 
 def revoke_session(*, session_id: str | None = None, email: str | None = None, revoke_all_for_user: bool = False) -> int:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        normalized_email = _normalize_email(email or "")
-        with _STORE_LOCK:
-            if session_id:
-                if not read_auth_session(session_id):
-                    return 0
-                revoke_auth_session(session_id)
-                return 1
-            if revoke_all_for_user and normalized_email:
-                return revoke_auth_sessions_for_email(normalized_email)
-        return 0
+    backend = _get_backend()
+    normalized_email = _normalize_email(email or "")
+    with _STORE_LOCK:
+        if session_id:
+            if not backend.read_session(session_id):
+                return 0
+            backend.revoke_session(session_id)
+            return 1
+        if revoke_all_for_user and normalized_email:
+            return backend.revoke_sessions_for_email(normalized_email)
+    return 0
 
 
 def auth_summary() -> dict[str, int]:
-    with _auth_runtime_db_context():
-        _ensure_auth_storage_ready()
-        return auth_metrics()
+    backend = _get_backend()
+    return backend.metrics()

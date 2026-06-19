@@ -20,10 +20,10 @@ Response time: 48 hours
 - Request IDs are emitted for audit correlation
 - Protected write routes require an authenticated session or configured service token in production
 - Role boundaries are enforced in production for operator and admin surfaces
-- Login/session storage persists in `runtime.db` with one-time migration from legacy `auth_store.json`
+- Login/session storage persists in a dedicated auth database, with local SQLite for tests/dev and Postgres in production
 - Admin controls can create users, activate or deactivate accounts, and revoke sessions
 - Production login attempts are rate-limited in application code
-- Multi-instance deployments should still move auth/session state to a shared database before broad rollout
+- Set `NERAIUM_AUTH_DATABASE_URL` to a shared Postgres database before multi-instance rollout
 
 ### Data Protection
 - HTTPS is enforced in production through HSTS headers
@@ -58,6 +58,6 @@ Response time: 48 hours
 
 ## Version History
 
-- **v1.2** - Runtime-db-backed auth/session storage and CI dependency scanning documented (2026-06-19)
+- **v1.2** - Dedicated auth database storage and CI dependency scanning documented (2026-06-19)
 - **v1.1** - Documentation aligned with currently implemented controls (2026-06-19)
 - **v1.0** - Initial security policy (2026-05-16)
