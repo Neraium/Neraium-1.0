@@ -69,6 +69,8 @@ Required repository variables before running either workflow:
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
+NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
+NERAIUM_BOOTSTRAP_ADMIN_PASSWORD=<pilot-admin-password>
 ```
 
 The active production path is GitHub Actions plus AWS CLI. Terraform is deprecated and should not be used to register or update ECS task definitions. The backend deploy workflow expects the ECS cluster, API service, worker service, and both task-definition families to already exist, and now fails early if they do not.

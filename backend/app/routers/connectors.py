@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from app.connectors.models import ConnectorActionResponse, ConnectorHealthStatus, ConnectorTestRequest, RestConnectorRequest
 from app.connectors.registry import CONNECTOR_CLASSES, build_connector_descriptors, get_connector
 from app.connectors.store import read_health_state, upsert_health_status
-from app.core.security import require_api_access
+from app.core.security import require_admin_role, require_api_access
 
-router = APIRouter(tags=["connectors"], dependencies=[Depends(require_api_access)])
+router = APIRouter(tags=["connectors"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
 
 
 @router.get("/connectors/types")

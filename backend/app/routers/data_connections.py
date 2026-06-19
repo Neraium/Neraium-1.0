@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.security import require_api_access
+from app.core.security import require_admin_role, require_api_access, require_operator_role
 from app.models.api_models import (
     DataConnectionActionResponse,
     DataConnectionsBulkActionResponse,
@@ -33,7 +33,7 @@ def read_data_connections() -> dict[str, Any]:
     return {"connections": list_registered_data_connections()}
 
 
-@router.post("/data-connections", response_model=DataConnectionActionResponse)
+@router.post("/data-connections", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
 def create_or_update_data_connection(payload: DataConnectionUpsertRequest) -> dict[str, Any]:
     connection_id = payload.connection_id or "rest-telemetry-intake"
     try:
@@ -49,7 +49,7 @@ def create_or_update_data_connection(payload: DataConnectionUpsertRequest) -> di
     return {"connection": connection, "message": f"{connection['name']} saved."}
 
 
-@router.post("/data-connections/{connection_id}/test", response_model=DataConnectionActionResponse)
+@router.post("/data-connections/{connection_id}/test", response_model=DataConnectionActionResponse, dependencies=[Depends(require_operator_role)])
 def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
     try:
         existing_connection = read_connection_status(connection_id)
@@ -87,7 +87,7 @@ def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
     }
 
 
-@router.post("/data-connections/{connection_id}/start", response_model=DataConnectionActionResponse)
+@router.post("/data-connections/{connection_id}/start", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
 def start_data_connection(connection_id: str) -> dict[str, Any]:
     try:
         connection = set_connection_polling(connection_id, enabled=True)
@@ -96,7 +96,7 @@ def start_data_connection(connection_id: str) -> dict[str, Any]:
     return {"connection": connection, "message": f"Started polling {connection['name']}."}
 
 
-@router.post("/data-connections/{connection_id}/stop", response_model=DataConnectionActionResponse)
+@router.post("/data-connections/{connection_id}/stop", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
 def stop_data_connection(connection_id: str) -> dict[str, Any]:
     try:
         connection = set_connection_polling(connection_id, enabled=False)
@@ -105,7 +105,7 @@ def stop_data_connection(connection_id: str) -> dict[str, Any]:
     return {"connection": connection, "message": f"Stopped polling {connection['name']}."}
 
 
-@router.post("/data-connections/{connection_id}/poll-once", response_model=DataConnectionActionResponse)
+@router.post("/data-connections/{connection_id}/poll-once", response_model=DataConnectionActionResponse, dependencies=[Depends(require_operator_role)])
 def poll_data_connection(connection_id: str) -> dict[str, Any]:
     try:
         result = poll_data_connection_once(connection_id, actor="operator:poll-once")
@@ -123,7 +123,7 @@ def poll_data_connection(connection_id: str) -> dict[str, Any]:
     }
 
 
-@router.post("/data-connections/{connection_id}/reset-baseline", response_model=DataConnectionActionResponse)
+@router.post("/data-connections/{connection_id}/reset-baseline", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
 def reset_data_connection_baseline(connection_id: str) -> dict[str, Any]:
     try:
         connection = reset_connection_live_baseline(connection_id)
@@ -135,7 +135,7 @@ def reset_data_connection_baseline(connection_id: str) -> dict[str, Any]:
     }
 
 
-@router.post("/data-connections/reset-all", response_model=DataConnectionsBulkActionResponse)
+@router.post("/data-connections/reset-all", response_model=DataConnectionsBulkActionResponse, dependencies=[Depends(require_admin_role)])
 def reset_all_connections() -> dict[str, Any]:
     connections = reset_all_data_connections()
     return {

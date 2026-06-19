@@ -10,7 +10,9 @@ BASELINE_SAMPLE_COUNT = 6
 TEST_DEFAULT_TELEMETRY_URL = ""
 
 
-def build_client(tmp_path) -> TestClient:
+def build_client(tmp_path, monkeypatch=None) -> TestClient:
+    if monkeypatch is not None:
+        monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -20,7 +22,9 @@ def build_client(tmp_path) -> TestClient:
         cors_origin_regex=None,
         runtime_dir=tmp_path,
     )
-    return TestClient(create_app(settings))
+    client = TestClient(create_app(settings))
+    client.headers.update({"X-Neraium-Access-Code": "expected-secret"})
+    return client
 
 
 def payload_for(*, tick: int, timestamp: str, temperature: float, humidity: float, airflow: float, scenario: str = "airflow_drift") -> dict:
@@ -61,10 +65,10 @@ def payload_for(*, tick: int, timestamp: str, temperature: float, humidity: floa
     }
 
 
-def test_data_connections_endpoint_lists_default_rest_connection(tmp_path) -> None:
-    client = build_client(tmp_path)
+def test_data_connections_endpoint_lists_default_rest_connection(monkeypatch, tmp_path) -> None:
+    client = build_client(tmp_path, monkeypatch)
 
-    response = client.get("/api/data-connections")
+    response = client.get("/api/data-connections", headers={"X-Neraium-Access-Code": "expected-secret"})
 
     assert response.status_code == 200
     payload = response.json()
@@ -74,13 +78,13 @@ def test_data_connections_endpoint_lists_default_rest_connection(tmp_path) -> No
 
 
 def test_connection_test_failure_returns_clean_json(monkeypatch, tmp_path) -> None:
-    client = build_client(tmp_path)
+    client = build_client(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "app.services.data_connections.fetch_connection_payload",
         lambda connection, transport=None: (_ for _ in ()).throw(ValueError("External telemetry response did not include any readings.")),
     )
 
-    response = client.post("/api/data-connections/rest-telemetry-intake/test")
+    response = client.post("/api/data-connections/rest-telemetry-intake/test", headers={"X-Neraium-Access-Code": "expected-secret"})
 
     assert response.status_code == 200
     payload = response.json()
@@ -91,7 +95,7 @@ def test_connection_test_failure_returns_clean_json(monkeypatch, tmp_path) -> No
 
 @pytest.mark.slow
 def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tmp_path) -> None:
-    client = build_client(tmp_path)
+    client = build_client(tmp_path, monkeypatch)
     payloads = [
         payload_for(
             tick=10 + index,
@@ -162,7 +166,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
 
 @pytest.mark.slow
 def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monkeypatch, tmp_path) -> None:
-    client = build_client(tmp_path)
+    client = build_client(tmp_path, monkeypatch)
     payloads = [
         payload_for(
             tick=12 + index,
@@ -201,7 +205,7 @@ def test_failed_poll_marks_connection_error_and_preserves_last_valid_state(monke
 
 @pytest.mark.slow
 def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_path) -> None:
-    client = build_client(tmp_path)
+    client = build_client(tmp_path, monkeypatch)
     payloads = [
         payload_for(
             tick=30 + index,
@@ -238,7 +242,7 @@ def test_reset_baseline_restarts_build_and_increments_on_poll(monkeypatch, tmp_p
 
 @pytest.mark.slow
 def test_reset_all_connections_clears_active_source_state(monkeypatch, tmp_path) -> None:
-    client = build_client(tmp_path)
+    client = build_client(tmp_path, monkeypatch)
     payload = payload_for(
         tick=71,
         timestamp="2026-05-10T20:11:04.590Z",

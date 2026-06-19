@@ -118,7 +118,7 @@ def test_write_job_persists_queued_upload_as_latest_visible_summary() -> None:
     assert payload["filename"] == "queued.csv"
 
 
-def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
+def test_upload_requires_authentication_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -131,18 +131,18 @@ def test_upload_does_not_require_shared_secret_in_production(tmp_path) -> None:
 
     response = client.post(
         "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
         files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
     )
 
-    assert response.status_code == 202
-    payload = response.json()
-    assert payload["status"] == "PENDING"
-    assert payload["job_id"]
+    assert response.status_code == 401
+    assert response.json()["error_type"] == "auth"
 
 
 def test_upload_requires_shared_queue_in_split_role_production(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     monkeypatch.delenv("NERAIUM_UPLOAD_STATE_BUCKET", raising=False)
     settings = Settings(
         app_env="production",
@@ -156,6 +156,7 @@ def test_upload_requires_shared_queue_in_split_role_production(monkeypatch, tmp_
 
     response = client.post(
         "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
         files={"file": ("sensor-export.csv", "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58", "text/csv")},
     )
 
@@ -237,6 +238,7 @@ def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(
 
 
 def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -249,6 +251,7 @@ def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
 
     response = client.post(
         "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
         files={"file": ("oversize.csv", "timestamp,value\n2026-05-01,75\n", "text/csv")},
     )
 
@@ -260,6 +263,7 @@ def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
 
 
 def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -273,6 +277,7 @@ def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:
 
     response = client.post(
         "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
         files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
     )
 
@@ -283,7 +288,8 @@ def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:
     assert payload["status"] == "FAILED"
 
 
-def test_upload_accepts_access_header_in_production(tmp_path) -> None:
+def test_upload_accepts_configured_service_token_in_production(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -297,6 +303,32 @@ def test_upload_accepts_access_header_in_production(tmp_path) -> None:
     response = client.post(
         "/api/data/upload",
         headers={"X-Neraium-Access-Code": "expected-secret"},
+        files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status_url"].startswith("/api/data/upload-status/")
+
+
+def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    from app.services.auth_store import create_user
+
+    create_user("operator@example.com", "password123", role="operator")
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+    )
+    client = TestClient(create_app(settings))
+    login = client.post("/api/auth/login", json={"email": "operator@example.com", "password": "password123"})
+    assert login.status_code == 200
+
+    response = client.post(
+        "/api/data/upload",
         files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
     )
 

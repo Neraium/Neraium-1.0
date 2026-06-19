@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from app.core.security import require_api_access
+from app.core.security import require_api_access, require_operator_role
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
 from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
 from app.services.runtime_db import now_iso, record_audit_event
@@ -74,7 +74,7 @@ def export_evidence_run(request: Request, run_id: str, format: str = Query(defau
     )
 
 
-@router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse)
+@router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
 def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFeedbackRequest) -> dict[str, Any]:
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")

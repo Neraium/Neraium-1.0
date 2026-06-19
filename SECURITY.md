@@ -18,9 +18,10 @@ Response time: 48 hours
 ### Authentication & Authorization
 - CORS is restricted to approved origins
 - Request IDs are emitted for audit correlation
-- Shared-token header auth still exists for non-browser tooling and smoke checks
-- Login/session storage is file-backed and not yet production-grade
-- Rate limiting is not yet configured in application code
+- Protected write routes require an authenticated session or configured service token in production
+- Role boundaries are enforced in production for operator and admin surfaces
+- Login/session storage is still file-backed and should move to a durable shared store before broader multi-instance rollout
+- Production login attempts are rate-limited in application code
 
 ### Data Protection
 - HTTPS is enforced in production through HSTS headers

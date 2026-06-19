@@ -12,9 +12,10 @@ import uuid
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+from app.core.security import _strict_auth_mode, require_operator_role
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import read_upload_history, summarize_result
@@ -29,10 +30,46 @@ from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 from app.services.upload_state_repository import read_latest_upload_record, read_replay_payload, read_upload_result_by_job_id, reset_block_persisted_active, reset_upload_state, resolve_upload_artifacts, upload_state_backend
+from app.services.rate_limiter import consume_rate_limit
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
+UPLOAD_RATE_LIMIT = 20
+UPLOAD_RATE_WINDOW_SECONDS = 60
+UPLOAD_STATUS_RATE_LIMIT = 240
+UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
+
+
+def _request_client_ip(request: Request) -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
+    if forwarded_for:
+        return forwarded_for
+    if request.client and request.client.host:
+        return str(request.client.host)
+    return "unknown"
+
+
+def _rate_limit_key(request: Request) -> str:
+    auth_context = getattr(request.state, "auth_context", {})
+    subject = str(auth_context.get("auth_subject") or "").strip()
+    if subject and subject != "readonly":
+        return subject
+    return _request_client_ip(request)
+
+
+def _rate_limit_response(retry_after: int, *, error_type: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        headers={"retry-after": str(retry_after)},
+        content={
+            "status": "FAILED",
+            "error_type": error_type,
+            "message": message,
+        },
+    )
+
+
 def _clear_endpoint_caches() -> None:
     return None
 
@@ -290,8 +327,17 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
     }, job_id)
 
 
-@router.post("/upload", status_code=202)
+@router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])
 async def upload_data(request: Request, file: UploadFile = File(...)):
+    if _strict_auth_mode(request):
+        allowed, retry_after = consume_rate_limit(
+            "data.upload",
+            _rate_limit_key(request),
+            limit=UPLOAD_RATE_LIMIT,
+            window_seconds=UPLOAD_RATE_WINDOW_SECONDS,
+        )
+        if not allowed:
+            return _rate_limit_response(retry_after, error_type="upload_rate_limited", message="Upload rate limit exceeded. Retry shortly.")
     settings = request.app.state.settings
     filename = file.filename or "upload.csv"
     lowered = filename.lower()
@@ -530,7 +576,16 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 
 @router.get("/upload-status/{job_id}")
-async def upload_status(job_id: str):
+async def upload_status(request: Request, job_id: str):
+    if _strict_auth_mode(request):
+        allowed, retry_after = consume_rate_limit(
+            "data.upload_status",
+            _request_client_ip(request),
+            limit=UPLOAD_STATUS_RATE_LIMIT,
+            window_seconds=UPLOAD_STATUS_RATE_WINDOW_SECONDS,
+        )
+        if not allowed:
+            return _rate_limit_response(retry_after, error_type="upload_status_rate_limited", message="Upload status polling rate limit exceeded. Retry shortly.")
     state_backend = upload_state_backend()
     logger.warning("upload_status_request job_id=%s state_backend=%s", job_id, state_backend)
     try:
@@ -761,7 +816,7 @@ async def intake_result(job_id: str):
     }
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(require_operator_role)])
 async def reset_data():
     reset_upload_state()
     _clear_endpoint_caches()

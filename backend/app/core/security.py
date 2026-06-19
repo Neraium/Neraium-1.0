@@ -2,36 +2,86 @@ import os
 import uuid
 
 from fastapi import HTTPException, Request, Response
-from app.services.auth_store import get_user_by_session, session_cookie_name
+
+from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
+
+_PUBLIC_READONLY_PATHS = (
+    "/api/health",
+    "/api/ready",
+    "/api/domain/mode",
+    "/api/intelligence/engine-identity",
+    "/api/data/latest-upload",
+    "/api/data/upload-status/",
+    "/api/data/upload-stream/",
+    "/api/data/replay/",
+    "/api/data/system-interpretation",
+    "/api/facility/systems",
+    "/api/facility/intelligence-status",
+    "/api/facility/cognition-state",
+    "/latest-upload",
+    "/systems",
+)
+_ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
+
+
+def _request_id(request: Request) -> str:
+    return request.headers.get("X-Request-Id") or str(uuid.uuid4())
+
+
+def _is_public_readonly_request(request: Request) -> bool:
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        return False
+    path = request.url.path
+    return any(path.startswith(prefix) for prefix in _PUBLIC_READONLY_PATHS)
+
+
+def _strict_auth_mode(request: Request) -> bool:
+    settings = getattr(request.app.state, "settings", None)
+    app_env = str(getattr(settings, "app_env", os.getenv("APP_ENV", "development")) or "").strip().lower()
+    return app_env in {"prod", "production"}
+
+
+def _configured_token_role() -> str:
+    return normalize_role(os.getenv("NERAIUM_API_TOKEN_ROLE"), "admin")
+
+
+def _client_ip(request: Request) -> str:
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
+    if forwarded_for:
+        return forwarded_for
+    if request.client and request.client.host:
+        return str(request.client.host)
+    return "unknown"
+
+
+def _set_auth_context(request: Request, *, subject: str, role: str, source: str, has_access_header: bool, has_access_cookie: bool, has_auth_session_cookie: bool, authenticated: bool) -> None:
+    request_id = _request_id(request)
+    request.state.request_id = request_id
+    request.state.auth_context = {
+        "auth_subject": subject,
+        "auth_role": normalize_role(role, "viewer"),
+        "auth_source": source,
+        "has_access_header": has_access_header,
+        "has_access_cookie": has_access_cookie,
+        "has_auth_session_cookie": has_auth_session_cookie,
+        "request_id": request_id,
+        "client_ip": _client_ip(request),
+        "authenticated": authenticated,
+    }
 
 
 def require_api_access(request: Request, response: Response) -> None:
-    # Read-only frontend polling endpoints should not require the custom access
-    # header. OPTIONS must also pass so browser preflight never gets blocked.
-    readonly_paths = (
-        "/api/health",
-        "/api/ready",
-        "/api/domain/mode",
-        "/api/intelligence/engine-identity",
-        "/api/data/latest-upload",
-        "/api/facility/systems",
-        "/api/facility/intelligence-status",
-        "/api/facility/cognition-state",
-        "/latest-upload",
-        "/systems",
-    )
-    if request.method in {"GET", "HEAD", "OPTIONS"} and any(request.url.path.startswith(path) for path in readonly_paths):
-        request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
-        request.state.request_id = request_id
-        request.state.auth_context = {
-            "auth_subject": "readonly",
-            "auth_role": "viewer",
-            "auth_source": "public_readonly_get",
-            "has_access_header": False,
-            "has_access_cookie": False,
-            "has_auth_session_cookie": False,
-            "request_id": request_id,
-        }
+    if _is_public_readonly_request(request):
+        _set_auth_context(
+            request,
+            subject="readonly",
+            role="viewer",
+            source="public_readonly_get",
+            has_access_header=False,
+            has_access_cookie=False,
+            has_auth_session_cookie=False,
+            authenticated=False,
+        )
         return
 
     configured_token = os.getenv("NERAIUM_API_TOKEN", "").strip()
@@ -43,23 +93,69 @@ def require_api_access(request: Request, response: Response) -> None:
     resolved_token = access_header or cookie_token
     if not resolved_token and bearer_header.lower().startswith("bearer "):
         resolved_token = bearer_header.split(" ", 1)[1].strip()
-    if configured_token and resolved_token != configured_token and not session_user:
-        raise HTTPException(status_code=401, detail="API access token required.")
-    request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
-    request.state.request_id = request_id
-    user = session_user.get("email") if session_user else (
+
+    if session_user:
+        _set_auth_context(
+            request,
+            subject=session_user.get("email", "operator"),
+            role=session_user.get("role", "operator"),
+            source="session",
+            has_access_header=bool(access_header or bearer_header),
+            has_access_cookie=bool(cookie_token),
+            has_auth_session_cookie=bool(auth_session_cookie),
+            authenticated=True,
+        )
+        return
+
+    if configured_token and resolved_token == configured_token:
+        _set_auth_context(
+            request,
+            subject="service-token",
+            role=_configured_token_role(),
+            source="service_token",
+            has_access_header=bool(access_header or bearer_header),
+            has_access_cookie=bool(cookie_token),
+            has_auth_session_cookie=bool(auth_session_cookie),
+            authenticated=True,
+        )
+        return
+
+    if _strict_auth_mode(request):
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    user = (
         request.headers.get("X-Neraium-User")
         or request.headers.get("X-Authenticated-User")
         or request.headers.get("X-Forwarded-Email")
         or "anonymous"
     )
     role = request.headers.get("X-Neraium-Role", "operator")
-    request.state.auth_context = {
-        "auth_subject": user,
-        "auth_role": role,
-        "auth_source": "session" if session_user else ("header" if resolved_token else "anonymous"),
-        "has_access_header": bool(access_header or bearer_header),
-        "has_access_cookie": bool(cookie_token),
-        "has_auth_session_cookie": bool(auth_session_cookie),
-        "request_id": request_id,
-    }
+    _set_auth_context(
+        request,
+        subject=user,
+        role=role,
+        source="header" if resolved_token else "anonymous",
+        has_access_header=bool(access_header or bearer_header),
+        has_access_cookie=bool(cookie_token),
+        has_auth_session_cookie=bool(auth_session_cookie),
+        authenticated=False,
+    )
+
+
+def _require_minimum_role(request: Request, minimum_role: str) -> None:
+    if not _strict_auth_mode(request):
+        return
+    if not hasattr(request.state, "auth_context"):
+        require_api_access(request, Response())
+    auth_context = getattr(request.state, "auth_context", {})
+    actual_role = normalize_role(auth_context.get("auth_role"), "viewer")
+    if _ROLE_ORDER.get(actual_role, -1) < _ROLE_ORDER.get(minimum_role, 0):
+        raise HTTPException(status_code=403, detail=f"{minimum_role.title()} access required.")
+
+
+def require_operator_role(request: Request) -> None:
+    _require_minimum_role(request, "operator")
+
+
+def require_admin_role(request: Request) -> None:
+    _require_minimum_role(request, "admin")

@@ -279,6 +279,13 @@ The current platform supports read-only telemetry analysis, upload-based workflo
 
 The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and operator reporting.
 
+Current Phase 2 hardening status:
+
+- Protected write routes require an authenticated session or configured service token in production
+- Role boundaries are enforced in production for operator and admin surfaces
+- Bootstrap pilot accounts can be provisioned through environment variables
+- Login attempts are rate-limited in production and auth session events are audited
+
 Current Phase 1 hardening status:
 
 - Frontend requests no longer source a shared API token from `VITE_` build-time environment

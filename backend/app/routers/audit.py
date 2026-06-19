@@ -4,14 +4,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from app.core.security import require_api_access
+from app.core.security import require_admin_role, require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.upload_state_repository import read_current_upload_result
 from audit.operational_audit_engine import OperationalAuditEngine
 from replay.structural_replay_engine import StructuralReplayEngine
 
-router = APIRouter(tags=["audit"], dependencies=[Depends(require_api_access)])
+router = APIRouter(tags=["audit"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
 _audit_engine = OperationalAuditEngine()
 _replay_engine = StructuralReplayEngine()
 

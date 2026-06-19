@@ -5,7 +5,7 @@ from collections import Counter
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 
-from app.core.security import require_api_access
+from app.core.security import require_admin_role, require_api_access
 from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
 from app.services.evidence_store import list_evidence_runs
@@ -16,7 +16,7 @@ from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from app.services.upload_state_repository import read_current_upload_result
 
 
-router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access)]) 
+router = APIRouter(tags=["observability"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
 
 
 def percentile(values: list[float], point: float) -> float | None:
