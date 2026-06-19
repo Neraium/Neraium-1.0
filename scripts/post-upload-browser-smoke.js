@@ -75,10 +75,13 @@ async function seedLocalAuth(page) {
 async function openUploads(page) {
   await page.goto(`${APP_URL}/`, { waitUntil: "load" });
   await page.getByTestId("app-ready-root").waitFor({ state: "visible", timeout: 30000 });
-  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ });
-  await settingsButton.click();
-  await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
-  await page.getByRole("button", { name: /Process Upload/i }).waitFor({ state: "visible", timeout: 30000 });
+  if (await page.getByTestId("upload-workspace").isVisible().catch(() => false)) {
+    return;
+  }
+  await page.getByTestId("workspace-menu-button").click();
+  await page.getByTestId("views-overlay").waitFor({ state: "visible", timeout: 30000 });
+  await page.getByTestId("upload-workspace-entry").click();
+  await page.getByTestId("process-upload-button").waitFor({ state: "visible", timeout: 30000 });
 }
 
 async function main() {
@@ -90,7 +93,7 @@ async function main() {
     console.log(`[smoke] browser=${BROWSER_LABEL} app=${APP_URL}`);
     await openUploads(page);
 
-    const input = page.locator("input#csv-upload");
+    const input = page.getByTestId("csv-upload-input");
     await input.setInputFiles({
       name: `browser-smoke-${Date.now()}.csv`,
       mimeType: "text/csv",
@@ -101,7 +104,7 @@ async function main() {
       (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
       { timeout: 30000 },
     );
-    await page.getByRole("button", { name: "Process Upload" }).click();
+    await page.getByTestId("process-upload-button").click();
     const uploadAccepted = await uploadAcceptedPromise;
     if (!uploadAccepted.ok()) {
       throw new Error(`Upload request failed with status ${uploadAccepted.status()}`);

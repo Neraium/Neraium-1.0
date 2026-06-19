@@ -37,10 +37,12 @@ export default function IntakeFlowPanel({
     : latestUploadSnapshot?.last_filename ?? "No file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
 
+  void uploadTransfer;
+
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
-        <input ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
+        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
         <div className="upload-file-card">
           <div className="upload-file-card__main">
             <strong>{selectedFileLabel}</strong>
@@ -48,7 +50,7 @@ export default function IntakeFlowPanel({
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
             <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
-            <button className="command-button" type="submit" disabled={!selectedFiles?.length}>
+            <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length}>
               {isUploadProcessing(uploadState) ? "Processing" : "Upload Data"}
             </button>
           </div>

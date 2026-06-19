@@ -487,37 +487,54 @@ export default function DataConnectionsWorkspace({
   const propagationLabel = uploadJob?.propagation_label ?? uploadJob?.propagationLabel ?? uploadJob?.propagation_stage ?? "";
   const statusLabel = uploadJob?.progress_label ?? uploadJob?.message ?? uploadStateMessage(uploadState);
   const queuedWorkerDetail = queuedWorkerMessage(uploadJob);
-  const isProcessing = isUploadProcessing(uploadState) || isUploadProcessing(uploadJob?.status) || isUploadProcessing(uploadJob?.processing_state);
-  const latestSummary = latestUploadSnapshot?.summary ?? latestUploadSnapshot ?? null;
+  const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
+    ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
+    : null;
+
+  function handleFileSelection(event) {
+    const files = Array.from(event?.target?.files ?? []);
+    setSelectedFiles(files);
+    setIsResetViewActive(false);
+    setUploadError("");
+    setUploadState(files.length ? "validated" : "idle");
+  }
+
+  function openFilePicker(kind = "csv") {
+    setPendingUploadKind(kind);
+    uploadInputRef.current?.click();
+  }
+
+  function retryCurrentBatch() {
+    void handleUpload();
+  }
 
   return (
-    <div className="data-connections-workspace">
+    <div className="data-connections-workspace" data-testid="upload-workspace">
       <IntakeFlowPanel
-        pendingUploadKind={pendingUploadKind}
-        onKindChange={setPendingUploadKind}
-        selectedFiles={selectedFiles}
-        onFilesChange={(files) => {
-          setSelectedFiles(files);
-          setIsResetViewActive(false);
-          setUploadError("");
-          setUploadState(files.length ? "validated" : "idle");
+        handleUpload={(event) => {
+          event?.preventDefault?.();
+          void handleUpload();
         }}
-        inputRef={uploadInputRef}
-        readiness={readiness}
-        uploadError={uploadError}
+        uploadInputRef={uploadInputRef}
+        handleFileSelection={handleFileSelection}
+        selectedFiles={selectedFiles}
+        latestUploadSnapshot={latestUploadSnapshot}
+        pendingUploadKind={pendingUploadKind}
+        selectedFileSize={formatFileSize(selectedFiles[0]?.size ?? 0)}
+        isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
-        uploadPercent={uploadPercent}
+        openFilePicker={openFilePicker}
+        uploadJob={uploadJob}
+        latestMessage={uploadError || statusLabel || readiness}
+        visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}
-        statusLabel={statusLabel}
-        isProcessing={isProcessing}
-        uploadJob={uploadJob}
-        latestSummary={latestSummary}
+        uploadTransfer={uploadTransfer}
+        uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
-        isResetViewActive={isResetViewActive}
-        onUpload={handleUpload}
-        onClear={clearUploadClientState}
-        onResetDemo={onResetDemo}
+        onRetryFailedUploads={retryCurrentBatch}
+        onReprocessCurrentBatch={retryCurrentBatch}
+        onResetWorkspace={clearUploadClientState}
       />
     </div>
   );

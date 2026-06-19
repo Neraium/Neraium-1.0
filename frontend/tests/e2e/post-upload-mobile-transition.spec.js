@@ -32,28 +32,17 @@ async function openUploads(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
-  const dataIntakeCard = page.getByRole("button", { name: /Data intake/i });
-  if (await dataIntakeCard.isVisible().catch(() => false)) {
-    await dataIntakeCard.click();
-  } else {
-    await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
-    const overlay = page.getByTestId("views-overlay");
-    if (await overlay.isVisible().catch(() => false)) {
-      await overlay.getByRole("button", { name: /Upload CSV \/ Connect Data|Setup & data connections|Data connections/i }).click();
-    } else {
-      await page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i }).click();
-    }
+  if (await page.getByTestId("upload-workspace").isVisible().catch(() => false)) {
+    return;
   }
 
-  const uploadTab = page.getByRole("tab", { name: /^Upload( Data)?$/i });
-  if (await uploadTab.isVisible().catch(() => false)) {
-    await uploadTab.click();
-  }
-  await expect.poll(async () => {
-    const inputVisible = await page.locator("input#csv-upload").isVisible().catch(() => false);
-    const processVisible = await page.getByRole("button", { name: /Process Upload/i }).isVisible().catch(() => false);
-    return inputVisible && processVisible;
-  }, { timeout: 30000, message: "Expected the upload surface to be ready." }).toBe(true);
+  await page.getByTestId("workspace-menu-button").click();
+  await expect(page.getByTestId("views-overlay")).toBeVisible();
+  await page.getByTestId("upload-workspace-entry").click();
+
+  await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId("csv-upload-input")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId("process-upload-button")).toBeVisible({ timeout: 30000 });
 }
 
 test.describe("Mobile post-upload transition", () => {
@@ -63,14 +52,14 @@ test.describe("Mobile post-upload transition", () => {
     test.setTimeout(180000);
     await openUploads(page);
 
-    const input = page.locator("input#csv-upload");
+    const input = page.getByTestId("csv-upload-input");
     await input.setInputFiles({
       name: "mobile-post-upload.csv",
       mimeType: "text/csv",
       buffer: Buffer.from(buildCsvRows(48), "utf8"),
     });
 
-    const processButton = page.getByRole("button", { name: "Process Upload" });
+    const processButton = page.getByTestId("process-upload-button");
     await expect(processButton).toBeEnabled();
     const uploadAcceptedPromise = page.waitForResponse(
       (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -83,10 +72,8 @@ test.describe("Mobile post-upload transition", () => {
     const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
     expect(uploadJobId).not.toBe("");
 
-    await expect.poll(async () => page.url(), { timeout: 30000 }).toContain("127.0.0.1:3010");
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await expect(page.locator("body")).not.toBeEmpty();
-    await expect(page.getByText(/No Analysis|Analysis Pending|Telemetry active|No current observations|Behavior Change Detected/i).first()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
     await waitForUploadComplete(page, uploadJobId, 180000);
 

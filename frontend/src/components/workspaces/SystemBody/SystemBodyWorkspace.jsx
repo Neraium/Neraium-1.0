@@ -217,7 +217,7 @@ export default function SystemBodyWorkspace({
           </div>
           <ul>
             <li>
-              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+              <button data-testid="upload-workspace-entry" type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
                 Upload CSV / Connect Data
               </button>
             </li>
@@ -259,6 +259,7 @@ export default function SystemBodyWorkspace({
         <button
           type="button"
           className="system-gate__settings"
+          data-testid="workspace-menu-button"
           aria-label="Open workspace menu"
           aria-expanded={menuOpen}
           aria-controls="system-body-menu"
@@ -276,6 +277,7 @@ export default function SystemBodyWorkspace({
               <div className="system-gate__hero-actions">
                 <button
                   type="button"
+                  data-testid="primary-upload-entry"
                   className="command-button"
                   onClick={() => navigateWorkspace(finding.exists ? "historical-replay" : (interpretation.hasTelemetry ? "observation-center" : "data-connections"))}
                 >

@@ -23,7 +23,7 @@ export default defineConfig({
     command: "npm run build && npm run preview",
     port: 3010,
     timeout: 240_000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
     env: {
       ...process.env,
       VITE_API_BASE_URL: "http://127.0.0.1:8010",
