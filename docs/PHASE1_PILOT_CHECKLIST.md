@@ -31,7 +31,7 @@ Status legend: `Implemented`, `Partial`, `Missing`
 - [x] API authentication for every endpoint � **Partial** (`require_api_access` on core routers; ensure all externally exposed routes remain protected by policy).
 - [ ] Network isolation/private subnets � **Missing in repo** (deployment-level control not codified as IaC).
 - [x] CSP + security headers � **Implemented/Partial** (CSP, HSTS, nosniff, frame/referrer headers added in middleware).
-- [ ] Dependency scanning in CI � **Missing** (`pip-audit`/Snyk workflow not present).
+- [x] Dependency scanning in CI - **Implemented/Partial** (`pip-audit` for backend dependencies and `npm audit --omit=dev --audit-level=critical` in CI; image scanning still not present).
 - [ ] Read-only verification vs SCADA/BMS write paths � **Missing** formal audit artifact.
 
 ## Observability
@@ -45,7 +45,7 @@ Status legend: `Implemented`, `Partial`, `Missing`
 2. Introduce managed secrets integration and remove direct env-secret assumptions from deployment docs.
 3. Add durable model/baseline persistence to S3 with versioned keys and startup recovery path.
 4. Add ingestion hard limits: max payload size, queue depth thresholds, and explicit load-shed responses.
-5. Add CI security lane: `pip-audit` + image scanning + failing policy on high/critical CVEs.
+5. Extend the CI security lane from dependency scanning to image/container scanning plus broader CVE policy coverage.
 6. Add Prometheus metrics endpoint and alert rules (latency, error rate, queue backlog, inference time, service-down).
 7. Produce a formal SCADA/BMS read-only code audit report with path-level evidence.
 8. Add performance benchmark suite proving sub-50ms inference under production-like load.

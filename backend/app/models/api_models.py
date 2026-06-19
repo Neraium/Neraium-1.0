@@ -156,10 +156,47 @@ class LatestEvidenceResponse(BaseModel):
     run: EvidenceRunResponse | None = None
 
 
+class AuthUserResponse(BaseModel):
+    email: str
+    name: str
+    role: str
+    created_at: str | None = None
+    last_login_at: str | None = None
+    is_active: bool = True
+    deactivated_at: str | None = None
+    bootstrap_managed: bool = False
+
+
+class AuthUsersListResponse(BaseModel):
+    users: list[AuthUserResponse] = Field(default_factory=list)
+
+
+class AuthSessionResponse(BaseModel):
+    session_id: str
+    email: str
+    created_at: str | None = None
+    expires_at: str | None = None
+    last_seen_at: str | None = None
+    revoked_at: str | None = None
+
+
+class AuthSessionsListResponse(BaseModel):
+    sessions: list[AuthSessionResponse] = Field(default_factory=list)
+    summary: dict[str, int] = Field(default_factory=dict)
+
+
+class AuthUserCreateRequest(BaseModel):
+    email: str
+    password: str
+    name: str | None = None
+    role: str = "operator"
+
+
 class ObservabilitySummaryResponse(BaseModel):
     queue: dict[str, int]
     evidence_runs: dict[str, Any]
     audit: dict[str, Any]
+    auth: dict[str, Any]
     alerts: list[dict[str, Any]]
 
 

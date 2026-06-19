@@ -12,16 +12,18 @@ Response time: 48 hours
 
 ### Dependencies
 - Core backend and frontend dependencies are version-pinned in-repo
-- Automated dependency vulnerability scanning is not yet enforced in CI
-- Manual audit commands may be run during release prep, but they are not yet a standing control
+- Automated dependency vulnerability scanning runs in CI for backend and frontend dependencies
+- Current CI policy blocks on reported backend vulnerabilities and critical production-frontend vulnerabilities
 
 ### Authentication & Authorization
 - CORS is restricted to approved origins
 - Request IDs are emitted for audit correlation
 - Protected write routes require an authenticated session or configured service token in production
 - Role boundaries are enforced in production for operator and admin surfaces
-- Login/session storage is still file-backed and should move to a durable shared store before broader multi-instance rollout
+- Login/session storage persists in `runtime.db` with one-time migration from legacy `auth_store.json`
+- Admin controls can create users, activate or deactivate accounts, and revoke sessions
 - Production login attempts are rate-limited in application code
+- Multi-instance deployments should still move auth/session state to a shared database before broad rollout
 
 ### Data Protection
 - HTTPS is enforced in production through HSTS headers
@@ -56,5 +58,6 @@ Response time: 48 hours
 
 ## Version History
 
+- **v1.2** - Runtime-db-backed auth/session storage and CI dependency scanning documented (2026-06-19)
 - **v1.1** - Documentation aligned with currently implemented controls (2026-06-19)
 - **v1.0** - Initial security policy (2026-05-16)

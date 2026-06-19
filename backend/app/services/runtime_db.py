@@ -121,6 +121,30 @@ def init_runtime_db() -> None:
                 payload_json TEXT NOT NULL 
             ); 
 
+            CREATE TABLE IF NOT EXISTS auth_users (
+                email TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_login_at TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                deactivated_at TEXT,
+                bootstrap_managed INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                session_id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_seen_at TEXT,
+                revoked_at TEXT,
+                FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_upload_jobs_updated_at ON upload_jobs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_upload_jobs_status_updated ON upload_jobs(status, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_upload_queue_status_created ON upload_queue(status, created_at ASC);
@@ -130,6 +154,9 @@ def init_runtime_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_latest_payloads_updated_at ON latest_payloads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_data_connections_updated_at ON data_connections(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active);
+            CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC);
             """ 
         ) 
 
@@ -961,6 +988,207 @@ def audit_events_count() -> int:
     with db_connection() as connection:
         row = connection.execute("SELECT COUNT(*) AS count FROM audit_events").fetchone()
     return int(row["count"]) if row else 0
+
+
+def upsert_auth_user(payload: dict[str, Any]) -> None:
+    init_runtime_db()
+    timestamp = now_iso()
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_users (
+                email, name, role, salt, password_hash, created_at, updated_at,
+                last_login_at, is_active, deactivated_at, bootstrap_managed
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                name=excluded.name,
+                role=excluded.role,
+                salt=excluded.salt,
+                password_hash=excluded.password_hash,
+                updated_at=excluded.updated_at,
+                last_login_at=excluded.last_login_at,
+                is_active=excluded.is_active,
+                deactivated_at=excluded.deactivated_at,
+                bootstrap_managed=excluded.bootstrap_managed
+            """,
+            (
+                payload["email"],
+                payload.get("name") or payload["email"],
+                payload.get("role", "operator"),
+                payload.get("salt", ""),
+                payload.get("password_hash", ""),
+                payload.get("created_at") or timestamp,
+                payload.get("updated_at") or timestamp,
+                payload.get("last_login_at"),
+                1 if payload.get("is_active", True) else 0,
+                payload.get("deactivated_at"),
+                1 if payload.get("bootstrap_managed") else 0,
+            ),
+        )
+
+
+def read_auth_user(email: str) -> dict[str, Any] | None:
+    init_runtime_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM auth_users WHERE email = ?",
+            (email,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def list_auth_users(include_inactive: bool = True, limit: int = 500) -> list[dict[str, Any]]:
+    init_runtime_db()
+    query = "SELECT * FROM auth_users"
+    params: list[Any] = []
+    if not include_inactive:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY created_at ASC LIMIT ?"
+    params.append(limit)
+    with db_connection() as connection:
+        rows = connection.execute(query, tuple(params)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_auth_user_login(email: str, logged_in_at: str) -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_users
+            SET last_login_at = ?, updated_at = ?
+            WHERE email = ?
+            """,
+            (logged_in_at, logged_in_at, email),
+        )
+
+
+def set_auth_user_active_status(email: str, *, is_active: bool) -> dict[str, Any] | None:
+    init_runtime_db()
+    timestamp = now_iso()
+    deactivated_at = None if is_active else timestamp
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE auth_users
+            SET is_active = ?, deactivated_at = ?, updated_at = ?
+            WHERE email = ?
+            """,
+            (1 if is_active else 0, deactivated_at, timestamp, email),
+        )
+    return read_auth_user(email)
+
+
+def upsert_auth_session(payload: dict[str, Any]) -> None:
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_sessions (session_id, email, created_at, expires_at, last_seen_at, revoked_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                email=excluded.email,
+                created_at=excluded.created_at,
+                expires_at=excluded.expires_at,
+                last_seen_at=excluded.last_seen_at,
+                revoked_at=excluded.revoked_at
+            """,
+            (
+                payload["session_id"],
+                payload["email"],
+                payload.get("created_at") or now_iso(),
+                payload.get("expires_at") or now_iso(),
+                payload.get("last_seen_at"),
+                payload.get("revoked_at"),
+            ),
+        )
+
+
+def read_auth_session(session_id: str) -> dict[str, Any] | None:
+    init_runtime_db()
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM auth_sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def list_auth_sessions(*, email: str | None = None, include_revoked: bool = False, limit: int = 500) -> list[dict[str, Any]]:
+    init_runtime_db()
+    query = "SELECT * FROM auth_sessions"
+    params: list[Any] = []
+    conditions: list[str] = []
+    if email:
+        conditions.append("email = ?")
+        params.append(email)
+    if not include_revoked:
+        conditions.append("revoked_at IS NULL")
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    with db_connection() as connection:
+        rows = connection.execute(query, tuple(params)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def revoke_auth_session(session_id: str, *, revoked_at: str | None = None) -> None:
+    init_runtime_db()
+    timestamp = revoked_at or now_iso()
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE session_id = ?",
+            (timestamp, session_id),
+        )
+
+
+def revoke_auth_sessions_for_email(email: str, *, revoked_at: str | None = None) -> int:
+    init_runtime_db()
+    timestamp = revoked_at or now_iso()
+    with db_connection() as connection:
+        rowcount = connection.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE email = ? AND revoked_at IS NULL",
+            (timestamp, email),
+        ).rowcount
+    return int(rowcount or 0)
+
+
+def delete_expired_auth_sessions(now_value: str | None = None) -> int:
+    init_runtime_db()
+    cutoff = now_value or now_iso()
+    with db_connection() as connection:
+        rowcount = connection.execute(
+            "DELETE FROM auth_sessions WHERE expires_at <= ?",
+            (cutoff,),
+        ).rowcount
+    return int(rowcount or 0)
+
+
+def auth_metrics() -> dict[str, int]:
+    init_runtime_db()
+    delete_expired_auth_sessions()
+    with db_connection() as connection:
+        users = connection.execute(
+            "SELECT COUNT(*) AS total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active FROM auth_users"
+        ).fetchone()
+        sessions = connection.execute(
+            "SELECT COUNT(*) AS active_sessions FROM auth_sessions WHERE revoked_at IS NULL AND expires_at > ?",
+            (now_iso(),),
+        ).fetchone()
+    total_users = int(users["total"] or 0) if users else 0
+    active_users = int(users["active"] or 0) if users else 0
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "inactive_users": max(total_users - active_users, 0),
+        "active_sessions": int(sessions["active_sessions"] or 0) if sessions else 0,
+    }
 
 
 def upsert_data_connection(payload: dict[str, Any]) -> None:

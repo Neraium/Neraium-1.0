@@ -143,10 +143,10 @@ def require_api_access(request: Request, response: Response) -> None:
 
 
 def _require_minimum_role(request: Request, minimum_role: str) -> None:
-    if not _strict_auth_mode(request):
-        return
     if not hasattr(request.state, "auth_context"):
         require_api_access(request, Response())
+    if not _strict_auth_mode(request):
+        return
     auth_context = getattr(request.state, "auth_context", {})
     actual_role = normalize_role(auth_context.get("auth_role"), "viewer")
     if _ROLE_ORDER.get(actual_role, -1) < _ROLE_ORDER.get(minimum_role, 0):

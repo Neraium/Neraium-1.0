@@ -3,15 +3,30 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from app.core.security import _strict_auth_mode
+from app.core.security import _strict_auth_mode, require_admin_role, require_api_access
+from app.models.api_models import (
+    AuthSessionResponse,
+    AuthSessionsListResponse,
+    AuthUserCreateRequest,
+    AuthUserResponse,
+    AuthUsersListResponse,
+)
 from app.services.auth_store import (
+    activate_user,
     authenticate_user,
+    auth_summary,
     create_session,
+    create_user,
+    deactivate_user,
     delete_session,
+    get_session_record,
     get_user_by_session,
+    list_sessions,
+    list_users,
+    revoke_session,
     session_cookie_name,
 )
 from app.services.rate_limiter import consume_rate_limit, reset_rate_limit
@@ -27,6 +42,12 @@ _LOGIN_EMAIL_WINDOW_SECONDS = 900
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class AuthSessionRevokeRequest(BaseModel):
+    session_id: str | None = None
+    email: str | None = None
+    revoke_all_for_user: bool = False
 
 
 def _apply_session_cookie(response: Response, session_id: str, request: Request) -> None:
@@ -73,6 +94,22 @@ def _record_auth_event(*, actor: str, action: str, request: Request, detail: dic
     )
 
 
+def _record_admin_auth_event(*, actor: str, action: str, request: Request, resource_id: str | None, detail: dict[str, Any]) -> None:
+    record_audit_event(
+        actor=actor,
+        action=action,
+        resource_type="auth_admin",
+        resource_id=resource_id,
+        request_id=request.headers.get("X-Request-Id"),
+        detail=detail,
+    )
+
+
+def _request_actor(request: Request) -> str:
+    auth_context = getattr(request.state, "auth_context", {})
+    return str(auth_context.get("auth_subject") or "admin")
+
+
 def _enforce_login_rate_limit(request: Request, email: str) -> int | None:
     if not _strict_auth_mode(request):
         return None
@@ -106,7 +143,114 @@ def _reset_login_rate_limit(request: Request, email: str) -> None:
 def read_auth_me(request: Request) -> dict[str, Any]:
     session_id = request.cookies.get(session_cookie_name())
     user = get_user_by_session(session_id)
-    return {"authenticated": bool(user), "user": user}
+    session = get_session_record(session_id)
+    return {"authenticated": bool(user), "user": user, "session": session}
+
+
+@router.get(
+    "/auth/users",
+    response_model=AuthUsersListResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def read_auth_users(include_inactive: bool = True) -> AuthUsersListResponse:
+    return AuthUsersListResponse(users=[AuthUserResponse(**user) for user in list_users(include_inactive=include_inactive)])
+
+
+@router.post(
+    "/auth/users",
+    response_model=AuthUserResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def create_auth_user(payload: AuthUserCreateRequest, request: Request) -> AuthUserResponse:
+    try:
+        user = create_user(payload.email, payload.password, name=payload.name, role=payload.role)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    _record_admin_auth_event(
+        actor=_request_actor(request),
+        action="auth.user.created",
+        request=request,
+        resource_id=user["email"],
+        detail={"role": user.get("role"), "client_ip": _client_ip(request)},
+    )
+    return AuthUserResponse(**user)
+
+
+@router.post(
+    "/auth/users/{email}/activate",
+    response_model=AuthUserResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def activate_auth_user(email: str, request: Request) -> AuthUserResponse:
+    user = activate_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    _record_admin_auth_event(
+        actor=_request_actor(request),
+        action="auth.user.activated",
+        request=request,
+        resource_id=user["email"],
+        detail={"client_ip": _client_ip(request)},
+    )
+    return AuthUserResponse(**user)
+
+
+@router.post(
+    "/auth/users/{email}/deactivate",
+    response_model=AuthUserResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def deactivate_auth_user(email: str, request: Request) -> AuthUserResponse:
+    user = deactivate_user(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    _record_admin_auth_event(
+        actor=_request_actor(request),
+        action="auth.user.deactivated",
+        request=request,
+        resource_id=user["email"],
+        detail={"client_ip": _client_ip(request)},
+    )
+    return AuthUserResponse(**user)
+
+
+@router.get(
+    "/auth/sessions",
+    response_model=AuthSessionsListResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def read_auth_sessions(email: str | None = None, include_revoked: bool = False) -> AuthSessionsListResponse:
+    sessions = list_sessions(email=email, include_revoked=include_revoked)
+    return AuthSessionsListResponse(
+        sessions=[AuthSessionResponse(**session) for session in sessions],
+        summary=auth_summary(),
+    )
+
+
+@router.post(
+    "/auth/sessions/revoke",
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def revoke_auth_sessions(payload: AuthSessionRevokeRequest, request: Request) -> dict[str, Any]:
+    revoked = revoke_session(
+        session_id=payload.session_id,
+        email=payload.email,
+        revoke_all_for_user=payload.revoke_all_for_user,
+    )
+    if revoked <= 0:
+        raise HTTPException(status_code=404, detail="Session target not found.")
+    _record_admin_auth_event(
+        actor=_request_actor(request),
+        action="auth.session.revoked",
+        request=request,
+        resource_id=payload.session_id or str(payload.email or ""),
+        detail={
+            "client_ip": _client_ip(request),
+            "revoked": revoked,
+            "revoke_all_for_user": payload.revoke_all_for_user,
+        },
+    )
+    return {"revoked": revoked, "summary": auth_summary()}
 
 
 @router.post("/auth/login")
@@ -124,15 +268,19 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
         )
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     _reset_login_rate_limit(request, payload.email)
-    session_id = create_session(user["email"])
+    try:
+        session_id = create_session(user["email"])
+    except ValueError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
     _apply_session_cookie(response, session_id, request)
+    session = get_session_record(session_id)
     _record_auth_event(
         actor=user["email"],
         action="auth.login.succeeded",
         request=request,
         detail={"client_ip": _client_ip(request), "role": user.get("role", "operator")},
     )
-    return {"authenticated": True, "user": user}
+    return {"authenticated": True, "user": user, "session": session}
 
 
 @router.post("/auth/logout")

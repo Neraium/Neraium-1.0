@@ -262,12 +262,12 @@ Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` 
 
 Current hardening focus areas include:
 
-- Replacing or explicitly constraining file-backed auth for production environments
-- Documenting role and permission boundaries before multi-customer use
 - Confirming runtime database persistence across API and worker restarts
 - Verifying multi-task or multi-worker deployment behavior
+- Moving runtime SQLite auth/session state to a shared production backend when multi-instance scale is required
 - Keeping README/demo screenshots current with the deployed UI
 - Keeping browser clients free of build-time shared API secrets
+- Expanding dependency security policy from critical CVE blocking to broader release governance
 
 ---
 
@@ -277,7 +277,14 @@ Neraium 1.0 is the active production-oriented foundation for system intelligence
 
 The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, CI validation, and cloud deployment preparation.
 
-The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and operator reporting.
+The next major focus areas are broader data connectors, multi-instance shared runtime storage, expanded test coverage, improved replay workflows, and operator reporting.
+
+Current Phase 3 hardening status:
+
+- Auth users and sessions persist in `runtime.db` instead of `auth_store.json`
+- Legacy JSON auth state is migrated forward on first boot into the runtime database
+- Admin APIs can list users/sessions, activate or deactivate users, and revoke sessions
+- Observability now includes auth user/session counts and CI includes dependency security scanning
 
 Current Phase 2 hardening status:
 

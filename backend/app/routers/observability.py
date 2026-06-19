@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse
 from app.core.security import require_admin_role, require_api_access
 from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
+from app.services.auth_store import auth_summary
 from app.services.evidence_store import list_evidence_runs
 from app.services.runtime_db import audit_events_count, queue_metrics, upload_duration_samples
 from app.services.upload_jobs import read_upload_cache_stats
@@ -83,6 +84,7 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
             },
         },
         audit={"event_count": audit_events_count()},
+        auth=auth_summary(),
         alerts=alerts,
     )
 
@@ -129,6 +131,12 @@ def get_observability_metrics() -> PlainTextResponse:
         "# HELP neraium_audit_events_total Runtime audit event count.",
         "# TYPE neraium_audit_events_total gauge",
         f"neraium_audit_events_total {audit_events_count()}",
+        "# HELP neraium_auth_users_active Active authenticated users.",
+        "# TYPE neraium_auth_users_active gauge",
+        f"neraium_auth_users_active {auth_summary().get("active_users", 0)}",
+        "# HELP neraium_auth_sessions_active Active authenticated sessions.",
+        "# TYPE neraium_auth_sessions_active gauge",
+        f"neraium_auth_sessions_active {auth_summary().get("active_sessions", 0)}",
         "# HELP neraium_sparse_upload_rate Share of recent uploads containing at least one sparse-telemetry room.",
         "# TYPE neraium_sparse_upload_rate gauge",
         f"neraium_sparse_upload_rate {round(sparse_upload_rate, 4)}",

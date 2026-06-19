@@ -54,8 +54,9 @@ Use this as the final go or no-go checklist for investor demos, controlled pilot
 - [ ] Login route has rate limiting, WAF protection, or documented temporary mitigation.
 - [ ] Admin-only routes are separated from customer/operator routes.
 - [ ] Role or permission model is documented before multi-customer use.
-- [ ] File-backed auth is either replaced with shared persistent auth storage or explicitly accepted as a temporary controlled-demo limitation.
+- [ ] Runtime-db-backed auth/session storage is enabled and migrated from any legacy `auth_store.json` state before rollout.
 - [ ] Password reset, invite, and user deactivation path are documented or intentionally deferred.
+- [ ] Admin session revocation and user activate/deactivate flows are verified.
 
 ## Runtime Storage
 
@@ -66,6 +67,7 @@ Use this as the final go or no-go checklist for investor demos, controlled pilot
 - [ ] Latest payloads persist or are intentionally ephemeral.
 - [ ] Multi-task or multi-worker behavior is tested, or deployment is constrained to a known-safe topology.
 - [ ] Migration path from SQLite/runtime files to shared production storage is documented.
+- [ ] Runtime auth/session state is included in backup and restore checks.
 - [ ] S3/shared upload state bucket is configured where required.
 
 ## Screenshots And Demo Assets
@@ -104,6 +106,7 @@ Use this as the final go or no-go checklist for investor demos, controlled pilot
 - [ ] Frontend lint runs in CI.
 - [ ] Frontend build runs in CI.
 - [ ] Frontend unit tests run in CI.
+- [ ] Dependency security scan runs in CI.
 - [ ] Failed CI blocks merge or is treated as a release blocker.
 
 ## Deployment Workflow
