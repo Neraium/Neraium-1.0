@@ -2,29 +2,39 @@ const FACILITY_SYSTEMS_DEDUPE_TTL_MS = 4000;
 const facilitySystemsInflight = new Map();
 const facilitySystemsCache = new Map();
 
-export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null }) {
+export function clearFacilitySystemsCache() {
+  facilitySystemsInflight.clear();
+  facilitySystemsCache.clear();
+}
+
+export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null, forceRefresh = false }) {
   const key = `systems:${String(domainMode ?? "")}`;
   const now = Date.now();
-  const cached = facilitySystemsCache.get(key);
-  if (cached && cached.expiresAt > now) {
-    return cached.value;
+  if (forceRefresh) {
+    facilitySystemsInflight.delete(key);
+    facilitySystemsCache.delete(key);
+  } else {
+    const cached = facilitySystemsCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+    const inFlight = facilitySystemsInflight.get(key);
+    if (inFlight) return inFlight;
   }
-  const inFlight = facilitySystemsInflight.get(key);
-  if (inFlight) return inFlight;
 
   const request = (async () => {
-  const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
-  const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, { accessCode });
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw response;
+    const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
+    const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, { accessCode });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw response;
+      }
+      throw new Error(`Unexpected response: ${response.status}`);
     }
-    throw new Error(`Unexpected response: ${response.status}`);
-  }
-  const payload = await response.json();
-  if (!Array.isArray(payload.systems)) {
-    throw new Error("Facility systems payload was incomplete.");
-  }
+    const payload = await response.json();
+    if (!Array.isArray(payload.systems)) {
+      throw new Error("Facility systems payload was incomplete.");
+    }
     facilitySystemsCache.set(key, { expiresAt: Date.now() + FACILITY_SYSTEMS_DEDUPE_TTL_MS, value: payload });
     return payload;
   })();

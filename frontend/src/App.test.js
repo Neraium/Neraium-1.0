@@ -15,6 +15,7 @@ const runtimeMocks = vi.hoisted(() => ({
 const runtimeState = vi.hoisted(() => ({
   latestUploadResult: null,
   latestUploadSnapshot: { status: "empty" },
+  throwGateError: false,
 }));
 
 vi.mock("./config", () => ({
@@ -41,17 +42,25 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/SystemTopologyWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate }) => h(
-    "div",
-    { "data-testid": "gate-workspace" },
-    h("span", { "data-testid": "gate-result" }, liveOps.latestUploadResult?.job_id ?? "empty"),
-    h("span", { "data-testid": "gate-finding-summary" }, liveOps.canonicalFinding?.summary ?? "none"),
-    h("span", { "data-testid": "gate-finding-confidence" }, liveOps.canonicalFinding?.confidence ?? "none"),
-    h("span", { "data-testid": "gate-heartbeat-summary" }, liveOps.connectionSummary ?? "none"),
-    h("span", { "data-testid": "gate-heartbeat-status" }, liveOps.connectionStatusLine ?? "none"),
-    h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
-    h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
-  ),
+  default: ({ liveOps, onWorkspaceNavigate, gateProcessing }) => {
+    if (runtimeState.throwGateError) {
+      throw new Error("gate render failed");
+    }
+    return h(
+      "div",
+      { "data-testid": "gate-workspace" },
+      h("span", { "data-testid": "gate-result" }, liveOps.latestUploadResult?.job_id ?? "empty"),
+      h("span", { "data-testid": "gate-session-job" }, liveOps.currentSession?.sessionJobId ?? "empty"),
+      h("span", { "data-testid": "gate-finding-summary" }, liveOps.canonicalFinding?.summary ?? "none"),
+      h("span", { "data-testid": "gate-finding-confidence" }, liveOps.canonicalFinding?.confidence ?? "none"),
+      h("span", { "data-testid": "gate-heartbeat-summary" }, liveOps.connectionSummary ?? "none"),
+      h("span", { "data-testid": "gate-heartbeat-status" }, liveOps.connectionStatusLine ?? "none"),
+      h("span", { "data-testid": "gate-processing-active" }, String(Boolean(gateProcessing?.active))),
+      h("span", { "data-testid": "gate-processing-label" }, gateProcessing?.label ?? "none"),
+      h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
+      h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
+    );
+  },
 }));
 
 
@@ -81,6 +90,14 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
+        job_id: "pending-job-11",
+        status: "running_sii",
+        message: "Telemetry active. Analysis pending.",
+      }),
+    }, "Finish pending upload"),
+    h("button", {
+      type: "button",
+      onClick: () => onUploadComplete({
         latest_result: { job_id: "restored-job-7", sii_intelligence: { facility_state: "Monitoring" } },
       }, { navigateToGate: false }),
     }, "Restore upload"),
@@ -91,6 +108,7 @@ beforeEach(() => {
   window.localStorage.clear();
   runtimeState.latestUploadResult = null;
   runtimeState.latestUploadSnapshot = { status: "empty" };
+  runtimeState.throwGateError = false;
   Object.values(runtimeMocks).forEach((mock) => mock.mockClear());
 });
 
@@ -126,7 +144,7 @@ describe("App upload completion navigation", () => {
     });
 
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
-    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true });
+    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
   });
 
@@ -137,11 +155,52 @@ describe("App upload completion navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restore upload" }));
 
     await waitFor(() => {
-      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
     });
 
     expect(screen.getByTestId("upload-workspace")).toBeTruthy();
     expect(screen.queryByTestId("gate-workspace")).toBeNull();
+  });
+
+  it("forces a canonical current-upload refetch after upload completion", async () => {
+    render(h(App));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish upload" }));
+
+    await waitFor(() => {
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+    });
+    expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+  });
+
+  it("shows analysis pending instead of a blank screen when canonical state is still settling", async () => {
+    runtimeMocks.loadLatestUploadState.mockResolvedValueOnce(false);
+    runtimeMocks.loadFacilitySystems.mockResolvedValueOnce(true);
+
+    render(h(App));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish pending upload" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+    });
+
+    expect(screen.getByTestId("gate-session-job").textContent).toBe("pending-job-11");
+    expect(screen.getByTestId("gate-processing-active").textContent).toBe("true");
+    expect(screen.getByTestId("gate-processing-label").textContent).toMatch(/analysis pending/i);
+  });
+
+  it("shows a safe fallback when the post-upload route render throws", async () => {
+    runtimeState.throwGateError = true;
+
+    render(h(App));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
+    });
+    expect(screen.getByText(/workspace recovery/i)).toBeTruthy();
   });
 
   it("passes the same canonical finding to Gate and Findings", async () => {

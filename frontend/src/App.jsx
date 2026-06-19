@@ -4,6 +4,7 @@ import { ENABLE_ADMISSION_GATE } from "./config";
 import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
 import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
 import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
+import AppErrorBoundary from "./components/AppErrorBoundary";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import * as uploadStateView from "./viewModels/uploadState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
@@ -42,6 +43,8 @@ function App() {
   const [appReady, setAppReady] = useState(false);
   const [resetGuardActive, setResetGuardActive] = useState(false);
   const [completedUploadOverride, setCompletedUploadOverride] = useState(null);
+  const [postUploadPendingSnapshot, setPostUploadPendingSnapshot] = useState(null);
+  const [postUploadExpectedJobId, setPostUploadExpectedJobId] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
 
@@ -70,8 +73,16 @@ function App() {
     initialAllowPersistedLatest,
   });
 
+  const canonicalLatestUploadJobId = uploadStateView.resolveCurrentUploadJobId({
+    current_upload: latestUploadSnapshot?.current_upload ?? null,
+    latest_result: latestUploadResult ?? null,
+    snapshot: latestUploadSnapshot ?? null,
+  });
+  const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
   const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? latestUploadResult);
-  const guardedLatestUploadSnapshot = resetGuardActive ? uploadStateView.buildEmptyLatestUploadSnapshot() : latestUploadSnapshot;
+  const guardedLatestUploadSnapshot = resetGuardActive
+    ? uploadStateView.buildEmptyLatestUploadSnapshot()
+    : (postUploadPendingSnapshot ?? latestUploadSnapshot);
 
   const hasRealSiiOutput = useMemo(
     () => uploadStateView.hasVerifiedSiiCompletion({
@@ -100,6 +111,25 @@ function App() {
   );
   const hasObservableUploadSession = sessionActivity.hasObservableUploadSession;
   const effectiveSessionIntent = sessionActivity.effectiveIntent;
+  useEffect(() => {
+    if (!postUploadExpectedJobId) return;
+    if (!canonicalLatestUploadJobId || String(canonicalLatestUploadJobId) !== String(postUploadExpectedJobId)) return;
+    console.info("[neraium] current upload refetch result", {
+      expectedJobId: postUploadExpectedJobId,
+      canonicalJobId: canonicalLatestUploadJobId,
+    });
+    setPostUploadPendingSnapshot(null);
+    setPostUploadExpectedJobId(null);
+  }, [canonicalLatestUploadJobId, postUploadExpectedJobId]);
+
+  useEffect(() => {
+    if (!completedUploadOverride) return;
+    const overrideJobId = String(completedUploadOverride?.job_id ?? "").trim();
+    if (!overrideJobId) return;
+    if (!latestUploadResult || !uploadStateView.hasFullUploadResult(latestUploadResult)) return;
+    if (String(latestUploadResult?.job_id ?? "").trim() !== overrideJobId) return;
+    setCompletedUploadOverride(null);
+  }, [completedUploadOverride, latestUploadResult]);
   useEffect(() => {
     if (
       resetGuardActive
@@ -248,21 +278,40 @@ function App() {
     setGateUploadCompleteSeen(true);
     const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload)
       ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
+    const expectedJobId = uploadStateView.resolveCurrentUploadJobId(completedPayload)
+      ?? (String(completedResult?.job_id ?? "").trim() || null);
     if (completedResult) {
       setCompletedUploadOverride(completedResult);
     } else {
       setCompletedUploadOverride(null);
     }
+    if (expectedJobId) {
+      setPostUploadExpectedJobId(expectedJobId);
+      setPostUploadPendingSnapshot(buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId }));
+    } else {
+      setPostUploadExpectedJobId(null);
+      setPostUploadPendingSnapshot(null);
+    }
+    console.info("[neraium] upload success response", {
+      jobId: expectedJobId,
+      status: normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state),
+    });
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
-    await loadLatestUploadState({ includePersisted: true });
+    await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+    console.info("[neraium] current upload refetch requested", {
+      expectedJobId,
+      canonicalJobId: canonicalLatestUploadJobId,
+      pendingJobId: pendingUploadJobId,
+    });
     setSessionIntent("current");
-    await loadFacilitySystems();
+    await loadFacilitySystems({ forceRefresh: true });
     if (options.navigateToGate !== false) {
+      console.info("[neraium] route transition target", { target: "system-body", jobId: expectedJobId });
       setActiveWorkspace("system-body");
     }
-  }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+  }, [canonicalLatestUploadJobId, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
     setResetGuardActive(false);
@@ -270,9 +319,11 @@ function App() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
-    const hasResult = await loadLatestUploadState({ includePersisted: true });
+    const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
     if (!hasResult) {
       setCompletedUploadOverride(null);
+      setPostUploadPendingSnapshot(null);
+      setPostUploadExpectedJobId(null);
       setGateUploadCompleteSeen(false);
     }
     setSessionIntent(hasResult ? "resumed" : "neutral");
@@ -312,6 +363,8 @@ function App() {
     setAllowPersistedLatest(false);
     clearUploadSessionState();
     setCompletedUploadOverride(null);
+    setPostUploadPendingSnapshot(null);
+    setPostUploadExpectedJobId(null);
     setGateUploadCompleteSeen(false);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
@@ -362,27 +415,33 @@ function App() {
   const handleBackToGate = useCallback(async () => {
     setGateUploadCompleteSeen(true);
     setSessionIntent("current");
-    const hasResult = await loadLatestUploadState({ includePersisted: true });
-    if (!hasResult) setCompletedUploadOverride(null);
+    const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+    if (!hasResult) {
+      setCompletedUploadOverride(null);
+      setPostUploadPendingSnapshot(null);
+      setPostUploadExpectedJobId(null);
+    }
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState]);
 
   function renderWithBackControl(content) {
     return (
-      <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
-        <div className="workspace-back-control" aria-label="Workspace navigation">
-          <button
-            type="button"
-            className="system-gate__settings-action"
-            onClick={handleBackToGate}
-            aria-label="Back to Gate"
-          >
-            Back to Gate
-          </button>
+      <AppErrorBoundary>
+        <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
+          <div className="workspace-back-control" aria-label="Workspace navigation">
+            <button
+              type="button"
+              className="system-gate__settings-action"
+              onClick={handleBackToGate}
+              aria-label="Back to Gate"
+            >
+              Back to Gate
+            </button>
+          </div>
+          {content}
         </div>
-        {content}
-      </div>
+      </AppErrorBoundary>
     );
   }
 
@@ -485,8 +544,9 @@ function App() {
   }
 
   return (
-    <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-    <SystemTopologyWorkspace
+    <AppErrorBoundary>
+      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+      <SystemTopologyWorkspace
       liveOps={{
         ...liveOps,
         replayOverlay: historianReplayState.frame ?? null,
@@ -503,9 +563,32 @@ function App() {
       domainMode={domainMode}
       domainDetection={domainDetection}
       gateProcessing={gateProcessing}
-    />
-  </div>
+      />
+    </div>
+    </AppErrorBoundary>
   );
+}
+
+
+function buildPendingUploadSnapshot({ completedPayload = null, completedResult = null, expectedJobId = null } = {}) {
+  if (!expectedJobId) return null;
+  return {
+    ...uploadStateView.buildEmptyLatestUploadSnapshot(),
+    ...(completedPayload ?? {}),
+    status: normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state) || "structural_scoring",
+    processing_state: "structural_scoring",
+    progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? "Telemetry active. Analysis pending.",
+    message: completedPayload?.message ?? completedPayload?.progress_label ?? "Telemetry active. Analysis pending.",
+    percent: Number(completedPayload?.percent ?? completedPayload?.progress) || 86,
+    current_upload: {
+      ...(completedPayload?.current_upload ?? {}),
+      job_id: expectedJobId,
+      result: completedResult ?? null,
+    },
+    latest_result: completedResult ?? null,
+    state_available: true,
+    last_filename: completedResult?.filename ?? completedPayload?.filename ?? null,
+  };
 }
 
 

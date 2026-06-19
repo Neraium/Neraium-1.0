@@ -88,8 +88,10 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["error"] = "sii_completion_missing"
             normalized["message"] = "SII completion artifacts are missing."
             return _with_propagation_fields(normalized, payload, "FAILED")
-        normalized.setdefault("progress_label", "Telemetry processing complete.")
-        normalized.setdefault("message", "Telemetry processing complete.")
+        if str(normalized.get("progress_label") or "").strip() in {"", "Complete."}:
+            normalized["progress_label"] = "Telemetry processing complete."
+        if str(normalized.get("message") or "").strip() in {"", "Complete."}:
+            normalized["message"] = "Telemetry processing complete."
         normalized.setdefault("error", None)
         normalized.setdefault(
             "result_summary",

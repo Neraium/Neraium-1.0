@@ -6,15 +6,25 @@ const LATEST_UPLOAD_DEDUPE_TTL_MS = 4000;
 const latestUploadInflight = new Map();
 const latestUploadCache = new Map();
 
-export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false }) {
+export function clearLatestUploadStateCache() {
+  latestUploadInflight.clear();
+  latestUploadCache.clear();
+}
+
+export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false, forceRefresh = false } = {}) {
   const key = `latest:${includePersisted ? 1 : 0}`;
   const now = Date.now();
-  const cached = latestUploadCache.get(key);
-  if (cached && cached.expiresAt > now) {
-    return cached.value;
+  if (forceRefresh) {
+    latestUploadInflight.delete(key);
+    latestUploadCache.delete(key);
+  } else {
+    const cached = latestUploadCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+    const inFlight = latestUploadInflight.get(key);
+    if (inFlight) return inFlight;
   }
-  const inFlight = latestUploadInflight.get(key);
-  if (inFlight) return inFlight;
 
   const request = (async () => {
     const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });

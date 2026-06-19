@@ -89,6 +89,11 @@ export default function ReplayWorkspace({
         const matchedEvidenceRun = scoped.jobId && reviewReady
           ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId })
           : null;
+        console.info("[neraium] evidence fetch status", {
+          jobId: scoped.jobId ?? sessionJobId ?? null,
+          replayFrames: Array.isArray(scoped.timeline) ? scoped.timeline.length : 0,
+          evidenceReady: Boolean(matchedEvidenceRun),
+        });
         if (cancelled) return;
         const nextTimeline = scoped.timeline;
         const nextMeta = {
@@ -117,6 +122,7 @@ export default function ReplayWorkspace({
         }
       } catch (loadError) {
         if (cancelled) return;
+        console.warn("[neraium] evidence fetch status", { error: buildReplayNotice(loadError, normalizeErrorMessage) });
         setTimeline([]);
         setComparisonTimeline([]);
         setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });

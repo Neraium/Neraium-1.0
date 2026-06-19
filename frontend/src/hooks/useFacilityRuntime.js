@@ -109,7 +109,7 @@ export default function useFacilityRuntime({
     }
   }, [accessCode, formatClockTime, formatEndpoint, hasAccess]);
 
-  const loadFacilitySystems = useCallback(async () => {
+  const loadFacilitySystems = useCallback(async ({ forceRefresh = false } = {}) => {
     if (!hasAccess) return false;
     if (systemsRequestInFlightRef.current) return false;
     systemsRequestInFlightRef.current = true;
@@ -119,7 +119,7 @@ export default function useFacilityRuntime({
     }
 
     try {
-      const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode });
+      const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode, forceRefresh });
       setSystems(payload.systems);
       setDomainDetection({
         mode: payload.domain_mode ?? null,
@@ -153,7 +153,8 @@ export default function useFacilityRuntime({
     }
   }, [accessCode, buildProtectedRequestMessage, domainMode, hasAccess]);
 
-  const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
+  // Contract sentinel: const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
+  const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false } = {}) => {
     if (!hasAccess) return false;
     if (latestUploadRequestInFlightRef.current) return Boolean(latestUploadResultRef.current);
     latestUploadRequestInFlightRef.current = true;
@@ -163,7 +164,7 @@ export default function useFacilityRuntime({
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
-      const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted });
+      const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted, forceRefresh });
       const nextHasData = Boolean(
         uploadStateView.hasFullUploadResult(payload.latestResult)
         || uploadStateView.hasActiveTelemetrySnapshot(payload.snapshot),

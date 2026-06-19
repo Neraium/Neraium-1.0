@@ -442,6 +442,10 @@ export default function DataConnectionsWorkspace({
       return;
     }
     setUploadError("");
+    console.info("[neraium] upload start", {
+      filename: file.name,
+      size: file.size,
+    });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
     setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: "Preparing upload." });
@@ -457,6 +461,10 @@ export default function DataConnectionsWorkspace({
       });
       const payload = uploadResponse.payload;
       const jobId = uploadStateView.resolveCurrentUploadJobId(payload) || payload?.job_id;
+      console.info("[neraium] upload success response", {
+        jobId: jobId ?? null,
+        status: normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state),
+      });
       if (!jobId) {
         markUploadFailed({ message: "Upload was accepted but no processing job was returned. Try again.", errorType: "missing_job_id" });
         return;

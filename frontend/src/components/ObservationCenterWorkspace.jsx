@@ -239,6 +239,7 @@ export default function ObservationCenterWorkspace({
         }
         if (cancelled) return;
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
+        console.info("[neraium] findings fetch status", { count: nextRuns.length });
         const newestRun = nextRuns[0]?.run_id ?? "";
         const pendingRunId = readPendingObservationRunId();
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
@@ -256,6 +257,7 @@ export default function ObservationCenterWorkspace({
         });
       } catch (loadError) {
         if (cancelled) return;
+        console.warn("[neraium] findings fetch status", { error: String(loadError?.message ?? loadError) });
         setError(String(loadError?.message ?? loadError));
       } finally {
         if (!cancelled) setLoading(false);
