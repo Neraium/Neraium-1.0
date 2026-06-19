@@ -104,6 +104,7 @@ async def app_lifespan(app: FastAPI):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    reset_startup_status()
     # Keep service runtime paths aligned with app settings, especially in tests
     # where each app instance may use a dedicated tmp runtime directory.
     configure_runtime_db_dir(settings.runtime_dir)

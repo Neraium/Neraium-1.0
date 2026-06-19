@@ -18,11 +18,10 @@ from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.core.security import _strict_auth_mode, require_operator_role
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
-from app.services.upload_persistence import read_upload_history, summarize_result
+from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from app.services.upload_state import build_empty_latest_upload_record, has_active_session_artifact
 from app.services.upload_status_contract import normalize_upload_status_payload
-from app.services.system_interpretation import build_system_interpretation as _build_system_interpretation
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
@@ -31,6 +30,7 @@ from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_jo
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 from app.services.upload_state_repository import read_latest_upload_record, read_replay_payload, read_upload_result_by_job_id, reset_block_persisted_active, reset_upload_state, resolve_upload_artifacts, upload_state_backend
 from app.services.rate_limiter import consume_rate_limit
+from app.services.latest_upload_state import resolve_latest_upload_payload
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -653,129 +653,7 @@ async def upload_stream(job_id: str):
 
 @router.get("/latest-upload")
 async def latest_upload(include_persisted: int | bool = True):
-    use_persisted = bool(include_persisted)
-    state_backend = upload_state_backend()
-    canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
-    artifacts = resolve_upload_artifacts() if use_persisted else {}
-    if state_backend == "local" and not (UPLOAD_RUNTIME_STATE.runtime_dir / "latest_upload.json").exists():
-        canonical = build_empty_latest_upload_record()
-        artifacts = {}
-    if reset_block_persisted_active():
-        artifacts = {}
-        canonical = build_empty_latest_upload_record()
-
-    if not isinstance(canonical, dict):
-        artifacts = {}
-        canonical = build_empty_latest_upload_record()
-
-    summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
-    record_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
-    active_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
-    canonical_record_job_id = str(canonical.get("job_id") or summary.get("job_id") or "").strip() or None
-    persisted_result = None
-    if isinstance(record_result, dict):
-        persisted_result_job_id = str(record_result.get("job_id") or canonical_record_job_id or "").strip()
-        if persisted_result_job_id and (
-            persisted_result_job_id == str(canonical_record_job_id or "").strip()
-            or str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "").strip().lower() in complete_states
-        ):
-            persisted_result = record_result
-    result = active_result if isinstance(active_result, dict) else (
-        record_result if has_active_session_artifact(record_result, job_id=canonical_record_job_id) else persisted_result
-    )
-    canonical_job_id = str(artifacts.get("job_id") or canonical.get("job_id") or summary.get("job_id") or (result or {}).get("job_id") or "").strip()
-    canonical_status = str(canonical.get("status") or summary.get("processing_state") or summary.get("status") or "empty").strip().lower()
-    processing_states = {
-        "queued", "pending", "processing", "parsing_telemetry", "building_relationship_baselines",
-        "scoring_relationship_drift", "building_propagation_model", "generating_system_interpretation",
-    }
-    complete_states = {"complete", "partial_complete", "active"}
-
-    has_result = bool(result) and has_active_session_artifact(result, job_id=canonical_job_id)
-    has_summary = bool(summary) and (
-        has_active_session_artifact(summary, job_id=canonical_job_id)
-        or canonical_status in processing_states
-        or canonical_status in complete_states
-    )
-
-    if canonical_status in complete_states and not has_result and not persisted_result:
-        canonical = build_empty_latest_upload_record()
-        summary = {}
-        result = None
-        canonical_job_id = ""
-        canonical_status = "empty"
-        has_summary = False
-    elif not has_result and not has_summary:
-        canonical = build_empty_latest_upload_record()
-        summary = {}
-        result = None
-        canonical_job_id = ""
-        canonical_status = "empty"
-
-    history = []
-    if use_persisted and canonical_job_id and (has_result or has_summary):
-        history = [
-            item
-            for item in read_upload_history(
-                UPLOAD_RUNTIME_STATE.runtime_dir,
-                limit=20,
-                current_result=artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None,
-            )
-            if isinstance(item, dict)
-        ]
-        current_history = next((item for item in history if str(item.get("job_id") or "") == canonical_job_id), None)
-        if current_history is None and summary:
-            current_history = dict(summary)
-        remaining = [item for item in history if str(item.get("job_id") or "") != canonical_job_id]
-        history = ([current_history] if current_history else []) + remaining
-
-    frames = artifacts.get("replay", {}).get("timeline") if isinstance(artifacts.get("replay"), dict) else None
-    if not isinstance(frames, list):
-        frames = _extract_timeline(result if isinstance(result, dict) else None, canonical_job_id or None)
-    traceability = canonical.get("traceability") if isinstance(canonical.get("traceability"), dict) else {}
-    state_available = bool(result)
-    snapshot_status = "COMPLETE" if state_available else (summary.get("status") if isinstance(summary, dict) else canonical_status or "empty")
-    snapshot_processing_state = "complete" if state_available else (summary.get("processing_state") if isinstance(summary, dict) else canonical_status or "empty")
-    snapshot = {
-        **(summary if isinstance(summary, dict) else {}),
-        "state_backend": state_backend,
-        "source": "uploaded" if state_available else ("processing" if canonical_job_id and canonical_status in processing_states else "none"),
-        "last_filename": (result or {}).get("filename") or (summary.get("filename") if isinstance(summary, dict) else None),
-        "rows_processed": (result or {}).get("row_count") or (summary.get("rows_processed") if isinstance(summary, dict) else 0) or (summary.get("row_count") if isinstance(summary, dict) else 0) or 0,
-        "columns_detected": (result or {}).get("column_count") or (summary.get("columns_detected") if isinstance(summary, dict) else 0) or (summary.get("column_count") if isinstance(summary, dict) else 0) or 0,
-        "state_available": state_available,
-        "status": snapshot_status,
-        "processing_state": snapshot_processing_state,
-        "result_available": state_available,
-        "sii_completed": bool((result or {}).get("sii_reliable_enough_to_show") is not False and state_available) if state_available else bool((summary or {}).get("sii_completed")),
-        "replay_ready": bool(frames),
-        "replay_frame_count": len(frames or []),
-        "latest_replay_frames": len(frames or []),
-        "replay_source": "persisted" if frames else "empty",
-        "job_id": canonical_job_id or None,
-        "run_id": str(canonical.get("run_id") or (summary.get("run_id") if isinstance(summary, dict) else "") or (result or {}).get("run_id") or canonical_job_id or "") or None,
-        "upload_id": str(canonical.get("upload_id") or (summary.get("upload_id") if isinstance(summary, dict) else "") or (result or {}).get("upload_id") or canonical_job_id or "") or None,
-        "traceability": traceability,
-        "current_upload": canonical,
-    }
-    if state_available or canonical_job_id:
-        system_interpretation = _build_system_interpretation(result if isinstance(result, dict) else None, summary if isinstance(summary, dict) else None, snapshot, frames if isinstance(frames, list) else [])
-    else:
-        system_interpretation = _build_system_interpretation(None, None, {}, [])
-    response_payload = {
-        "snapshot": snapshot,
-        "current_upload": canonical,
-        "current_result": result,
-        "latest_result": result,
-        "latestResult": result,
-        "summary": summary if isinstance(summary, dict) else {},
-        "history": history if state_available or canonical_job_id else [],
-        "adaptive_learning": {},
-        "state_backend": state_backend,
-        "system_interpretation": system_interpretation,
-        **snapshot,
-    }
-    return response_payload
+    return resolve_latest_upload_payload(include_persisted=include_persisted)
 
 
 @router.get("/system-interpretation")
