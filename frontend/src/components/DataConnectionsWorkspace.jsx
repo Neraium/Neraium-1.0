@@ -110,7 +110,6 @@ export default function DataConnectionsWorkspace({
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [batchResults, setBatchResults] = useState([]);
   void uploadResult;
-  const [isResetViewActive, setIsResetViewActive] = useState(false);
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
   const pollFailureCountRef = useRef(0);
@@ -216,7 +215,6 @@ export default function DataConnectionsWorkspace({
     setUploadError("");
     setUploadState("idle");
     setBatchResults([]);
-    setIsResetViewActive(true);
     clearStoredUploadJobId();
     if (uploadInputRef.current) uploadInputRef.current.value = "";
     if (typeof window !== "undefined") {
@@ -494,7 +492,6 @@ export default function DataConnectionsWorkspace({
   function handleFileSelection(event) {
     const files = Array.from(event?.target?.files ?? []);
     setSelectedFiles(files);
-    setIsResetViewActive(false);
     setUploadError("");
     setUploadState(files.length ? "validated" : "idle");
   }

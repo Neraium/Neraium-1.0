@@ -1,6 +1,7 @@
 from app.core.config import (
     DEFAULT_CORS_ORIGIN_REGEX,
     DEFAULT_CORS_ORIGINS,
+    DEFAULT_RUNTIME_DIR,
     get_settings,
     parse_cors_origin_regex,
     parse_cors_origins,
@@ -90,3 +91,26 @@ def test_parse_process_role_accepts_monolith_alias() -> None:
     assert parse_process_role("monolith") == "monolith"
     assert parse_process_role("worker") == "worker"
     assert parse_process_role("invalid") == "all"
+
+
+def test_production_settings_require_explicit_runtime_dir(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("NERAIUM_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    try:
+        get_settings()
+    except ValueError as error:
+        assert str(error) == "NERAIUM_RUNTIME_DIR must be set explicitly in production."
+    else:
+        raise AssertionError("Expected production config validation to fail without NERAIUM_RUNTIME_DIR.")
+
+
+def test_production_settings_accept_explicit_runtime_dir(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+
+    settings = get_settings()
+
+    assert settings.runtime_dir == tmp_path
+    assert settings.runtime_dir != DEFAULT_RUNTIME_DIR

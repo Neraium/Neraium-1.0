@@ -267,6 +267,7 @@ Current hardening focus areas include:
 - Confirming runtime database persistence across API and worker restarts
 - Verifying multi-task or multi-worker deployment behavior
 - Keeping README/demo screenshots current with the deployed UI
+- Keeping browser clients free of build-time shared API secrets
 
 ---
 
@@ -277,6 +278,13 @@ Neraium 1.0 is the active production-oriented foundation for system intelligence
 The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, CI validation, and cloud deployment preparation.
 
 The next major focus areas are broader data connectors, stronger production authentication and authorization, expanded test coverage, improved replay workflows, and operator reporting.
+
+Current Phase 1 hardening status:
+
+- Frontend requests no longer source a shared API token from `VITE_` build-time environment
+- Production startup now requires an explicit `NERAIUM_RUNTIME_DIR`
+- Shared upload-state persistence failures are logged instead of silently swallowed
+- Security documentation has been reduced to match the controls currently implemented
 
 ---
 

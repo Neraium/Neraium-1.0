@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,9 @@ from app.services.upload_state import (
     normalize_upload_identity,
     select_current_upload_result,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def runtime_state() -> UploadRuntimeState:
@@ -85,6 +89,21 @@ def _get_s3_client() -> Any | None:
         return None
 
 
+
+
+def _shared_state_error_code(error: Exception) -> str:
+    response = getattr(error, "response", None)
+    if not isinstance(response, dict):
+        return ""
+    error_payload = response.get("Error")
+    if not isinstance(error_payload, dict):
+        return ""
+    return str(error_payload.get("Code") or "").strip()
+
+
+def _is_missing_shared_state_error(error: Exception) -> bool:
+    return _shared_state_error_code(error) in {"404", "NoSuchKey", "NotFound"}
+
 def read_local_json(name: str) -> dict[str, Any] | None:
     path = runtime_state().runtime_dir / name
     if not path.exists():
@@ -113,15 +132,25 @@ def read_shared_state(name: str) -> dict[str, Any] | None:
                 payload = json.loads(body)
                 if isinstance(payload, dict):
                     return payload
-            except Exception:
-                pass
+            except Exception as error:
+                if not _is_missing_shared_state_error(error):
+                    logger.warning(
+                        "shared_state_read_failed backend=s3 bucket=%s key=%s",
+                        bucket,
+                        _s3_object_key(name),
+                        exc_info=error,
+                    )
     if _runtime_db_latest_enabled():
         try:
             payload = read_latest_payload(_shared_key(name))
             if isinstance(payload, dict):
                 return payload
-        except Exception:
-            pass
+        except Exception as error:
+            logger.warning(
+                "shared_state_read_failed backend=runtime_db key=%s",
+                _shared_key(name),
+                exc_info=error,
+            )
     return None
 
 
@@ -129,8 +158,12 @@ def write_shared_state(name: str, payload: dict[str, Any]) -> None:
     normalized = dict(payload or {})
     try:
         upsert_latest_payload(_shared_key(name), normalized)
-    except Exception:
-        pass
+    except Exception as error:
+        logger.exception(
+            "shared_state_write_failed backend=runtime_db key=%s",
+            _shared_key(name),
+            exc_info=error,
+        )
     bucket = _upload_state_bucket()
     if bucket:
         client = _get_s3_client()
@@ -142,8 +175,13 @@ def write_shared_state(name: str, payload: dict[str, Any]) -> None:
                     Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
                     ContentType="application/json",
                 )
-            except Exception:
-                pass
+            except Exception as error:
+                logger.exception(
+                    "shared_state_write_failed backend=s3 bucket=%s key=%s",
+                    bucket,
+                    _s3_object_key(name),
+                    exc_info=error,
+                )
 
 
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:

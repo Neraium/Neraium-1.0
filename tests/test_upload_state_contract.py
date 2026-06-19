@@ -491,3 +491,13 @@ def test_reset_flow_does_not_preserve_stale_latest_upload_route_state() -> None:
     assert after["job_id"] is None
     assert second_after["current_upload"]["status"] == "empty"
     assert second_after["latest_result"] is None
+
+
+def test_write_shared_state_logs_runtime_db_failures(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(upload_state_repository, "upsert_latest_payload", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("db down")))
+    monkeypatch.setattr(upload_state_repository, "_upload_state_bucket", lambda: "")
+
+    with caplog.at_level("ERROR"):
+        upload_state_repository.write_shared_state("latest_upload_result", {"job_id": "log-runtime-db"})
+
+    assert "shared_state_write_failed backend=runtime_db key=latest_upload_result" in caplog.text

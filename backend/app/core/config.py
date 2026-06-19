@@ -52,7 +52,7 @@ class Settings:
 def get_settings() -> Settings:
     app_env = os.getenv("APP_ENV", DEFAULT_APP_ENV)
     process_role = parse_process_role(os.getenv("NERAIUM_PROCESS_ROLE"))
-    return Settings(
+    settings = Settings(
         app_env=app_env,
         backend_host=os.getenv("BACKEND_HOST", DEFAULT_BACKEND_HOST),
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
@@ -74,6 +74,8 @@ def get_settings() -> Settings:
         smtp_sender=os.getenv("NERAIUM_SMTP_SENDER", "").strip(),
         smtp_use_tls=parse_bool(os.getenv("NERAIUM_SMTP_USE_TLS"), True),
     )
+    validate_settings(settings)
+    return settings
 
 
 def parse_process_role(raw_value: str | None) -> str:
@@ -136,3 +138,13 @@ def parse_csv_list(raw_value: str | None) -> list[str]:
     if raw_value is None or raw_value.strip() == "":
         return []
     return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def validate_settings(settings: Settings) -> None:
+    app_env = str(settings.app_env or "").strip().lower()
+    if app_env not in {"prod", "production"}:
+        return
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
+    if settings.runtime_dir == DEFAULT_RUNTIME_DIR:
+        raise ValueError("NERAIUM_RUNTIME_DIR must be set explicitly in production.")

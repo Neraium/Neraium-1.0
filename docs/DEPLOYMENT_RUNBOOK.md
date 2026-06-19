@@ -32,7 +32,7 @@ NERAIUM_MAX_PARSE_ROWS=120000
 
 This caps parsed rows per upload job and returns results faster while preserving read-only behavior and evidence output. Use only for pilot-speed tuning.
 
-If metrics requires auth:
+If metrics requires auth for CLI smoke checks:
 
 ```bash
 API_BASE_URL=https://api.neraium.com NERAIUM_API_TOKEN=$NERAIUM_API_TOKEN node scripts/smoke-production.js

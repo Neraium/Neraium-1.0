@@ -38,6 +38,7 @@ def test_shared_api_helper_forces_credentials_include() -> None:
     assert "const { accessCode, headers, timeoutMs, ...rest } = options;" in source
     assert "...(headers ?? {})" in source
     assert "Authorization: `Bearer ${resolvedAccessCode}`" not in source
+    assert "VITE_NERAIUM_API_TOKEN" not in source
     assert 'console.log("ACCESS CODE:"' not in source
 
 

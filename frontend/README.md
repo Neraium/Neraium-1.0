@@ -40,6 +40,8 @@ $env:VITE_API_BASE_URL = "http://127.0.0.1:8010"
 
 For AWS Amplify Hosting, set `VITE_API_BASE_URL` to the ECS-generated public HTTPS backend URL in the frontend build environment before running `npm run build`.
 
+Do not inject shared API secrets into frontend build variables. Browser requests should rely on the authenticated session flow rather than a build-time token.
+
 Production routing warning:
 
 - If `https://app.neraium.com/api/*` resolves to static hosting (for example `301` with `server: AmazonS3`), frontend API calls will not reach backend workers.
