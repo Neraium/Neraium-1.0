@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const reuseExistingServer = process.env.CI === "true" || process.env.PLAYWRIGHT_REUSE_SERVER === "1";
+
 const backendCommand = [
   "cd ..",
   "PYTHON_BIN=./.venv/bin/python",
@@ -31,13 +33,13 @@ export default defineConfig({
       command: backendCommand,
       port: 8010,
       timeout: 240_000,
-      reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
+      reuseExistingServer,
     },
     {
       command: "npm run build && npm run preview",
       port: 3010,
       timeout: 240_000,
-      reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
+      reuseExistingServer,
       env: {
         ...process.env,
         VITE_API_BASE_URL: "http://127.0.0.1:8010",
