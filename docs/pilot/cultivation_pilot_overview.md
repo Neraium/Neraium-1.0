@@ -33,7 +33,7 @@ This pilot validates whether structural cognition improves day-to-day environmen
 - Room-level environmental signals and runtime/status signals.
 - Timestamped records with room identifiers.
 
-See [data_requirements.md](/C:/Users/Owner/Documents/Neraium-1.0/docs/pilot/data_requirements.md) for full detail.
+See [data_requirements.md](data_requirements.md) for full detail.
 
 ## Operator Workflow
 1. Facility State
@@ -44,7 +44,7 @@ See [data_requirements.md](/C:/Users/Owner/Documents/Neraium-1.0/docs/pilot/data
 6. Continuation Window
 7. Operator Review
 
-See [operator_workflow.md](/C:/Users/Owner/Documents/Neraium-1.0/docs/pilot/operator_workflow.md).
+See [operator_workflow.md](operator_workflow.md).
 
 ## Weekly Review Cadence
 - Run one structured weekly pilot review session.
@@ -53,4 +53,4 @@ See [operator_workflow.md](/C:/Users/Owner/Documents/Neraium-1.0/docs/pilot/oper
 - Inspect replay evidence and compensation masking context.
 - Record operator observations, open questions, and follow-up checks.
 
-Use [weekly_report_template.md](/C:/Users/Owner/Documents/Neraium-1.0/docs/pilot/weekly_report_template.md) to keep reviews consistent.
+Use [weekly_report_template.md](weekly_report_template.md) to keep reviews consistent.

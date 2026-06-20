@@ -163,7 +163,7 @@ test.describe("Functional verification", () => {
       mimeType: "text/csv",
       buffer: Buffer.from(buildCsvRows(48), "utf8"),
     });
-    const processButton = page.getByRole("button", { name: "Process Upload" });
+    const processButton = page.getByTestId("process-upload-button");
     await expect(processButton).toBeEnabled();
     const uploadAcceptedPromise = page.waitForResponse(
       (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",

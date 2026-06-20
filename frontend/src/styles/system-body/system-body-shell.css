@@ -192,6 +192,7 @@
 
 .system-gate__hero-visual {
   align-content: center;
+  pointer-events: none;
 }
 
 .system-gate__orb-stage {

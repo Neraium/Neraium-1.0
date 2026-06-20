@@ -19,17 +19,25 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  webServer: {
-    command: "npm run build && npm run preview",
-    port: 3010,
-    timeout: 240_000,
-    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
-    env: {
-      ...process.env,
-      VITE_API_BASE_URL: "http://127.0.0.1:8010",
-      VITE_API_FALLBACK_BASE_URL: "",
+  webServer: [
+    {
+      command: "cd .. && PYTHONPATH=backend APP_ENV=test NERAIUM_RUNTIME_DIR=.playwright-runtime NERAIUM_START_BACKGROUND_WORKERS=1 NERAIUM_START_DATA_POLLER=0 ./.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010",
+      port: 8010,
+      timeout: 240_000,
+      reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
     },
-  },
+    {
+      command: "npm run build && npm run preview",
+      port: 3010,
+      timeout: 240_000,
+      reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
+      env: {
+        ...process.env,
+        VITE_API_BASE_URL: "http://127.0.0.1:8010",
+        VITE_API_FALLBACK_BASE_URL: "",
+      },
+    },
+  ],
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],

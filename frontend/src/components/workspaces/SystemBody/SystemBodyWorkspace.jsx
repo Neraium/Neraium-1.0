@@ -29,6 +29,7 @@ export default function SystemBodyWorkspace({
   latestReplayFrame = null,
   canonicalFinding = null,
   telemetrySessionMode = "empty",
+  domainDetection = null,
 }) {
   void dataFreshness;
   void siiVerification;
@@ -144,6 +145,7 @@ export default function SystemBodyWorkspace({
     { label: "Analysis mode", value: "Structural relationship monitoring only." },
     { label: "Data posture", value: interpretation.hasTelemetry ? "Live observation aligned to the active session." : "No telemetry attached yet." },
   ];
+  const domainSummary = buildDomainDetectionSummary(domainDetection);
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -215,9 +217,12 @@ export default function SystemBodyWorkspace({
               Close
             </button>
           </div>
+          {domainSummary ? (
+            <p className="system-gate__settings-message">{domainSummary}</p>
+          ) : null}
           <ul>
             <li>
-              <button data-testid="upload-workspace-entry" type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
+              <button data-testid="upload-workspace-entry" type="button" className="system-gate__settings-action" aria-label="Data connections" onClick={() => navigateWorkspace("data-connections")}>
                 Upload CSV / Connect Data
               </button>
             </li>
@@ -260,7 +265,7 @@ export default function SystemBodyWorkspace({
           type="button"
           className="system-gate__settings"
           data-testid="workspace-menu-button"
-          aria-label="Open workspace menu"
+          aria-label="Open Gate settings"
           aria-expanded={menuOpen}
           aria-controls="system-body-menu"
           onClick={() => setMenuOpen((v) => !v)}
@@ -430,6 +435,19 @@ export default function SystemBodyWorkspace({
   );
 }
 
+
+function buildDomainDetectionSummary(domainDetection) {
+  const rawMode = String(domainDetection?.mode ?? "").trim();
+  if (!rawMode) return "";
+  const label = rawMode
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+  return label ? "Detected data type: " + label : "";
+}
 
 function flattenDataQuality(dataQuality) {
   const groups = dataQuality && typeof dataQuality === "object" ? dataQuality : {};

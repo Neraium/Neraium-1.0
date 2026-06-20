@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SystemBodyWorkspace from "./SystemBodyWorkspace";
 
@@ -46,6 +46,21 @@ afterEach(() => {
 });
 
 describe("SystemBodyWorkspace empty state", () => {
+  it("keeps the Gate settings control reachable by its stable accessible name", () => {
+    renderWorkspace();
+
+    expect(screen.getByRole("button", { name: "Open Gate settings" })).toBeTruthy();
+  });
+
+  it("surfaces detected telemetry domain in the Gate settings menu", () => {
+    renderWorkspace({ domainDetection: { mode: "aquatic", source: "upload_shape", confidence: 0.88 } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Gate settings" }));
+
+    expect(screen.getByText("Detected data type: Aquatic")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Data connections" })).toBeTruthy();
+  });
+
   it("shows the awaiting telemetry state when no analysis exists", () => {
     renderWorkspace();
 

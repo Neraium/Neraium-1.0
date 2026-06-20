@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const settingsButtonName = /Open workspace menu/i;
+const settingsButtonName = /Open Gate settings|Open workspace menu/i;
 
 test.describe("Neraium frontend smoke", () => {
   test("loads operator shell", async ({ page }) => {

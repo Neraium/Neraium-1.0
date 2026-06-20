@@ -18,21 +18,21 @@ async function openDataConnections(page) {
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await page.getByRole("button", { name: "Open Gate settings" }).click();
   await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
-  await expect(page.getByRole("tab", { name: /^Upload$/i })).toBeVisible();
+  await expect(page.getByTestId("upload-workspace")).toBeVisible();
+  await expect(page.getByTestId("csv-upload-input")).toBeVisible();
+  await expect(page.getByTestId("process-upload-button")).toBeVisible();
 }
 
 test.describe("Setup + Upload regression", () => {
   test("opens upload surface without the setup wizard", async ({ page }) => {
     await openDataConnections(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: /^Upload$/i })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: "Upload Data" })).toBeVisible();
   });
 
   test("enables upload processing after file selection", async ({ page }) => {
     await openDataConnections(page);
-    await page.getByRole("tab", { name: /^Upload( Data)?$/i }).click();
-
-    const processButton = page.getByRole("button", { name: "Process Upload" });
+    const processButton = page.getByTestId("process-upload-button");
     await expect(processButton).toBeDisabled();
     await expect(page.getByTestId("onboarding-demo-csv-option")).toBeVisible();
 
@@ -43,7 +43,7 @@ test.describe("Setup + Upload regression", () => {
       buffer: Buffer.from("timestamp,temperature,humidity\n2026-05-01T08:00:00Z,75.2,58\n"),
     });
 
-    await expect(page.getByText("Telemetry export validated.")).toBeVisible();
+    await expect(page.getByText("e2e-sample.csv")).toBeVisible();
     await expect(processButton).toBeEnabled();
   });
 });

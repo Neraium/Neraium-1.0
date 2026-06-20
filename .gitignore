@@ -41,6 +41,7 @@ Thumbs.db
 logs/
 frontend-dev.log
 frontend-dev.err.log
+.playwright-runtime/
 
 # Local tool caches
 .uv-cache/
