@@ -55,12 +55,22 @@ function uploadProgressStage(uploadState, uploadJob) {
   return "Upload status";
 }
 
+function customerUploadMessage({ uploadStage, uploadTransfer, statusLines }) {
+  if (uploadStage === "Uploading" && uploadTransfer?.loaded && uploadTransfer?.total) {
+    return `${uploadTransfer.label || "Uploading file"}`;
+  }
+  if (uploadStage === "Queued") return "Upload received. Waiting for processing to begin.";
+  if (uploadStage === "Processing") return "Analyzing telemetry. This can continue in the background.";
+  if (uploadStage === "Complete") return "Upload complete.";
+  return statusLines[0] || uploadStage;
+}
+
 const meterShellStyle = {
   display: "grid",
-  gap: "8px",
+  gap: "10px",
   width: "100%",
   marginTop: "10px",
-  padding: "12px",
+  padding: "14px",
   border: "1px solid rgba(154, 183, 193, 0.16)",
   borderRadius: "16px",
   background: "rgba(7, 13, 23, 0.42)",
@@ -69,20 +79,32 @@ const meterShellStyle = {
 const meterHeaderStyle = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
+  alignItems: "baseline",
   gap: "12px",
-  fontSize: "0.76rem",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
+};
+
+const meterTitleStyle = {
+  color: "var(--text-primary)",
+  fontSize: "1rem",
+  fontWeight: 800,
+  letterSpacing: "0.01em",
+  textTransform: "none",
+};
+
+const meterPercentStyle = {
+  color: "var(--text-primary)",
+  fontSize: "1.35rem",
+  fontWeight: 900,
+  lineHeight: 1,
 };
 
 const progressTrackStyle = {
   width: "100%",
-  height: "12px",
+  height: "14px",
   overflow: "hidden",
   borderRadius: "999px",
-  background: "rgba(255, 255, 255, 0.08)",
-  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.06)",
+  background: "rgba(255, 255, 255, 0.1)",
+  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.08)",
 };
 
 const progressFillBaseStyle = {
@@ -97,7 +119,7 @@ const progressFillBaseStyle = {
 const meterCopyStyle = {
   margin: 0,
   color: "var(--text-secondary)",
-  fontSize: "0.86rem",
+  fontSize: "0.9rem",
   lineHeight: 1.35,
 };
 
@@ -139,8 +161,9 @@ export default function IntakeFlowPanel({
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadProgressPercent = clampUploadPercent(visibleProgressPercent);
   const uploadStage = uploadProgressStage(uploadState, uploadJob);
-  const uploadStatusLabel = uploadTransfer?.label || statusLines[0] || uploadStage;
   const showUploadProgressBar = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
+  const uploadStatusLabel = customerUploadMessage({ uploadStage, uploadTransfer, statusLines });
+  const fallbackStatusLines = showUploadProgressBar ? statusLines.slice(1) : statusLines;
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -183,20 +206,11 @@ export default function IntakeFlowPanel({
         ) : null}
         {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || batchResults.length > 0 ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
-            {statusLines.map((line, index) => (
-              <span
-                key={`${normalizeStatusText(line)}-${index}`}
-                className={index === 0 ? "intake-flow__progress" : "metadata-text"}
-              >
-                {index === 0 && isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
-                {line}
-              </span>
-            ))}
             {showUploadProgressBar ? (
               <div className="upload-status-meter" style={meterShellStyle} aria-live="polite">
                 <div className="upload-status-meter__header" style={meterHeaderStyle}>
-                  <span>{uploadStage}</span>
-                  <strong>{uploadProgressPercent}%</strong>
+                  <span style={meterTitleStyle}>{uploadStage}</span>
+                  <strong style={meterPercentStyle}>{uploadProgressPercent}%</strong>
                 </div>
                 <div
                   className="upload-progress-meter"
@@ -212,6 +226,15 @@ export default function IntakeFlowPanel({
                 <p style={meterCopyStyle}>{uploadStatusLabel}</p>
               </div>
             ) : null}
+            {fallbackStatusLines.map((line, index) => (
+              <span
+                key={`${normalizeStatusText(line)}-${index}`}
+                className={index === 0 ? "intake-flow__progress" : "metadata-text"}
+              >
+                {index === 0 && isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
+                {line}
+              </span>
+            ))}
             {shouldShowBatchSummary ? (
               <div className="intake-flow__batch-results">
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
