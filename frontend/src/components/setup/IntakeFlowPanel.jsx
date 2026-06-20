@@ -1,5 +1,40 @@
 import { Panel } from "../workspacePrimitives";
 
+function normalizeStatusText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\.{2,}$/g, "")
+    .replace(/[.。]+$/g, "")
+    .toLowerCase();
+}
+
+function buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWorkerDetail }) {
+  const lines = [];
+  const seen = [];
+
+  [primaryProgressText, secondaryProgressText, queuedWorkerDetail].forEach((value) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+
+    const normalized = normalizeStatusText(text);
+    if (!normalized) return;
+
+    const isDuplicate = seen.some((existing) => (
+      existing === normalized
+      || existing.includes(normalized)
+      || normalized.includes(existing)
+    ));
+
+    if (!isDuplicate) {
+      seen.push(normalized);
+      lines.push(text);
+    }
+  });
+
+  return lines;
+}
+
 export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
@@ -31,7 +66,7 @@ export default function IntakeFlowPanel({
   const hasValidationError = uploadState === "validation_error";
   const primaryProgressText = String(uploadJob?.progress_label || latestMessage || "").trim();
   const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || "").trim();
-  const showSecondaryProgressText = secondaryProgressText && secondaryProgressText !== primaryProgressText;
+  const statusLines = buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWorkerDetail });
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : latestUploadSnapshot?.last_filename ?? "No file selected";
@@ -80,9 +115,15 @@ export default function IntakeFlowPanel({
         ) : null}
         {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || batchResults.length > 0 ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
-            {primaryProgressText ? <span className="intake-flow__progress">{isUploadProcessing(uploadState) && <span className="upload-spinner" aria-hidden="true" />}{primaryProgressText}</span> : null}
-            {showSecondaryProgressText ? <span>{secondaryProgressText}</span> : null}
-            {queuedWorkerDetail ? <span className="metadata-text">{queuedWorkerDetail}</span> : null}
+            {statusLines.map((line, index) => (
+              <span
+                key={`${normalizeStatusText(line)}-${index}`}
+                className={index === 0 ? "intake-flow__progress" : "metadata-text"}
+              >
+                {index === 0 && isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
+                {line}
+              </span>
+            ))}
             {visibleProgressPercent !== null ? (
               <div className="upload-progress-meter" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
                 <span style={{ width: `${visibleProgressPercent}%` }} />
