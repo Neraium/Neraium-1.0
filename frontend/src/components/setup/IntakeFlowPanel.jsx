@@ -90,6 +90,18 @@ function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {
   };
 }
 
+const hiddenFileInputStyle = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 const stageWrapStyle = {
   display: "grid",
   gap: "10px",
@@ -169,14 +181,15 @@ export default function IntakeFlowPanel({
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
-  const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob) || visibleProgressPercent !== null;
+  const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
   const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
   const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
+  const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
-        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" onChange={handleFileSelection} />
+        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
         <div className="upload-file-card">
           <div className="upload-file-card__main">
             <strong>{selectedFileLabel}</strong>
@@ -212,7 +225,7 @@ export default function IntakeFlowPanel({
             </div>
           </div>
         ) : null}
-        {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || batchResults.length > 0 ? (
+        {shouldShowStatusBlock ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
             {shouldShowUploadStatus ? (
               <span className="intake-flow__progress" aria-live="polite">
