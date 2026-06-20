@@ -55,6 +55,52 @@ function uploadProgressStage(uploadState, uploadJob) {
   return "Upload status";
 }
 
+const meterShellStyle = {
+  display: "grid",
+  gap: "8px",
+  width: "100%",
+  marginTop: "10px",
+  padding: "12px",
+  border: "1px solid rgba(154, 183, 193, 0.16)",
+  borderRadius: "16px",
+  background: "rgba(7, 13, 23, 0.42)",
+};
+
+const meterHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  fontSize: "0.76rem",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const progressTrackStyle = {
+  width: "100%",
+  height: "12px",
+  overflow: "hidden",
+  borderRadius: "999px",
+  background: "rgba(255, 255, 255, 0.08)",
+  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.06)",
+};
+
+const progressFillBaseStyle = {
+  display: "block",
+  height: "100%",
+  minWidth: "8px",
+  borderRadius: "inherit",
+  background: "linear-gradient(90deg, rgba(197, 146, 60, 0.98), rgba(244, 210, 132, 0.98))",
+  transition: "width 320ms ease",
+};
+
+const meterCopyStyle = {
+  margin: 0,
+  color: "var(--text-secondary)",
+  fontSize: "0.86rem",
+  lineHeight: 1.35,
+};
+
 export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
@@ -147,22 +193,23 @@ export default function IntakeFlowPanel({
               </span>
             ))}
             {showUploadProgressBar ? (
-              <div className="upload-status-meter" aria-live="polite">
-                <div className="upload-status-meter__header">
+              <div className="upload-status-meter" style={meterShellStyle} aria-live="polite">
+                <div className="upload-status-meter__header" style={meterHeaderStyle}>
                   <span>{uploadStage}</span>
                   <strong>{uploadProgressPercent}%</strong>
                 </div>
                 <div
                   className="upload-progress-meter"
+                  style={progressTrackStyle}
                   aria-label={`Upload status: ${uploadProgressPercent}% complete`}
                   aria-valuemin="0"
                   aria-valuemax="100"
                   aria-valuenow={uploadProgressPercent}
                   role="progressbar"
                 >
-                  <span style={{ width: `${uploadProgressPercent}%` }} />
+                  <span style={{ ...progressFillBaseStyle, width: `${uploadProgressPercent}%` }} />
                 </div>
-                <p>{uploadStatusLabel}</p>
+                <p style={meterCopyStyle}>{uploadStatusLabel}</p>
               </div>
             ) : null}
             {shouldShowBatchSummary ? (
