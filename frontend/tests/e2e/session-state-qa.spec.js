@@ -89,6 +89,23 @@ async function stubLatestUpload(page) {
   });
 }
 
+async function stubResetEndpoints(page) {
+  await page.route("**/api/data/reset", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, status: "reset", message: "Workspace reset.", session: emptyLatestUpload }),
+    });
+  });
+  await page.route("**/api/data-connections/reset-all", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, message: "Data connections reset." }),
+    });
+  });
+}
+
 async function openUploadWorkspace(page) {
   await page.getByTestId("workspace-menu-button").click();
   await page.getByTestId("upload-workspace-entry").click();
@@ -143,6 +160,37 @@ test.describe("focused session state QA", () => {
     }));
     expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+  });
+
+
+  test("reset returns empty state from empty, selected file, and loaded latest workspace", async ({ page }) => {
+    await stubLatestUpload(page);
+    await stubResetEndpoints(page);
+    await clearBrowserStorage(page);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    await openUploadWorkspace(page);
+    await page.locator("summary", { hasText: "Workspace options" }).click();
+
+    await page.getByRole("button", { name: "Reset Workspace" }).click();
+    await expect(page.getByText("Workspace reset.")).toBeVisible();
+    await expect(page.getByText("Awaiting file selection").first()).toBeVisible();
+
+    await page.getByTestId("csv-upload-input").setInputFiles({
+      name: "reset-selected.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("timestamp,temp\n2026-06-20T00:00:00Z,72\n"),
+    });
+    await expect(page.getByText("reset-selected.csv")).toBeVisible();
+    await page.getByRole("button", { name: "Reset Workspace" }).click();
+    await expect(page.getByText("reset-selected.csv")).toHaveCount(0);
+    await expect(page.getByTestId("process-upload-button")).toBeDisabled();
+
+    await page.getByRole("button", { name: "Load Latest Workspace" }).click();
+    await expect(page.getByText("restored-workspace.csv").first()).toBeVisible();
+    await page.getByRole("button", { name: "Reset Workspace" }).click();
+    await expect(page.getByText("restored-workspace.csv")).toHaveCount(0);
+    await expect(page.getByText("Awaiting file selection").first()).toBeVisible();
   });
 
   test("load latest workspace is explicit and reports success", async ({ page }) => {
