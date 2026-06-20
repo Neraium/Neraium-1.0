@@ -35,91 +35,24 @@ function buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWo
   return lines;
 }
 
-function clampUploadPercent(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.max(0, Math.min(100, Math.round(numeric)));
-}
-
 function uploadProgressStage(uploadState, uploadJob) {
   const state = String(uploadState || "").toLowerCase();
   const workerState = String(uploadJob?.worker_state || uploadJob?.workerState || "").toLowerCase();
   const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
 
-  if (["complete", "completed", "success"].includes(state) || processingState === "complete") return "Complete";
-  if (["error", "failed", "validation_error"].includes(state)) return "Needs attention";
-  if (state === "uploading") return "Uploading";
-  if (workerState === "starting" || processingState === "queued") return "Queued";
-  if (workerState === "running" || workerState === "active" || state === "running_sii") return "Processing";
-  if (state === "validated") return "Ready";
-  return "Upload status";
+  if (["complete", "completed", "success"].includes(state) || processingState === "complete") return "Upload complete.";
+  if (["error", "failed", "validation_error"].includes(state)) return "Upload needs attention.";
+  if (state === "uploading") return "Uploading.";
+  if (workerState === "starting" || processingState === "queued") return "Upload received. Waiting for processing to begin.";
+  if (workerState === "running" || workerState === "active" || state === "running_sii") return "Analyzing telemetry. This can continue in the background.";
+  if (state === "validated") return "Ready to upload.";
+  return "Upload status unavailable.";
 }
 
-function customerUploadMessage({ uploadStage, uploadTransfer, statusLines }) {
+function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines }) {
   if (uploadTransfer?.label) return uploadTransfer.label;
-  if (uploadStage === "Queued") return "Upload received. Waiting for processing to begin.";
-  if (uploadStage === "Processing") return "Analyzing telemetry. This can continue in the background.";
-  if (uploadStage === "Complete") return "Upload complete.";
-  return statusLines.at(-1) || uploadStage;
+  return statusLines.at(-1) || uploadStageMessage;
 }
-
-const meterShellStyle = {
-  display: "grid",
-  gap: "10px",
-  width: "100%",
-  marginTop: "10px",
-  padding: "14px",
-  border: "1px solid rgba(154, 183, 193, 0.16)",
-  borderRadius: "16px",
-  background: "rgba(7, 13, 23, 0.42)",
-};
-
-const meterHeaderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: "12px",
-};
-
-const meterTitleStyle = {
-  color: "var(--text-primary)",
-  fontSize: "1rem",
-  fontWeight: 800,
-  letterSpacing: "0.01em",
-  textTransform: "none",
-};
-
-const meterPercentStyle = {
-  color: "var(--text-primary)",
-  fontSize: "1.35rem",
-  fontWeight: 900,
-  lineHeight: 1,
-};
-
-const progressTrackStyle = {
-  width: "100%",
-  height: "14px",
-  overflow: "hidden",
-  borderRadius: "999px",
-  background: "rgba(255, 255, 255, 0.1)",
-  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.08)",
-};
-
-const progressFillBaseStyle = {
-  display: "block",
-  height: "100%",
-  minWidth: "8px",
-  borderRadius: "inherit",
-  background: "linear-gradient(90deg, rgba(197, 146, 60, 0.98), rgba(244, 210, 132, 0.98))",
-  transition: "width 320ms ease",
-};
-
-const meterCopyStyle = {
-  margin: 0,
-  color: "var(--text-secondary)",
-  fontSize: "0.9rem",
-  lineHeight: 1.35,
-};
 
 export default function IntakeFlowPanel({
   handleUpload,
@@ -157,11 +90,9 @@ export default function IntakeFlowPanel({
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : latestUploadSnapshot?.last_filename ?? "No file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
-  const uploadProgressPercent = clampUploadPercent(visibleProgressPercent);
-  const uploadStage = uploadProgressStage(uploadState, uploadJob);
-  const showUploadProgressBar = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
-  const uploadStatusLabel = customerUploadMessage({ uploadStage, uploadTransfer, statusLines });
-  const shouldShowPlainStatus = !showUploadProgressBar && statusLines.length > 0;
+  const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
+  const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
+  const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob) || visibleProgressPercent !== null;
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -204,30 +135,10 @@ export default function IntakeFlowPanel({
         ) : null}
         {isUploadProcessing(uploadState) || hasValidationError || hasUploadError || visibleProgressPercent !== null || batchResults.length > 0 ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
-            {showUploadProgressBar ? (
-              <div className="upload-status-meter" style={meterShellStyle} aria-live="polite">
-                <div className="upload-status-meter__header" style={meterHeaderStyle}>
-                  <span style={meterTitleStyle}>{uploadStage}</span>
-                  <strong style={meterPercentStyle}>{uploadProgressPercent}%</strong>
-                </div>
-                <div
-                  className="upload-progress-meter"
-                  style={progressTrackStyle}
-                  aria-label={`Upload status: ${uploadProgressPercent}% complete`}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={uploadProgressPercent}
-                  role="progressbar"
-                >
-                  <span style={{ ...progressFillBaseStyle, width: `${uploadProgressPercent}%` }} />
-                </div>
-                <p style={meterCopyStyle}>{uploadStatusLabel}</p>
-              </div>
-            ) : null}
-            {shouldShowPlainStatus ? (
-              <span className="intake-flow__progress">
+            {shouldShowUploadStatus ? (
+              <span className="intake-flow__progress" aria-live="polite">
                 {isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
-                {statusLines.at(-1)}
+                {uploadStatusLabel}
               </span>
             ) : null}
             {shouldShowBatchSummary ? (
