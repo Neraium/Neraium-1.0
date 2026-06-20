@@ -108,3 +108,133 @@ def test_progressive_degradation_remains_detectable() -> None:
 
     assert result["drift_status"] in {"review", "unstable"} or latest["instability_score"] >= 0.52
     assert latest["regime"] in {"UNSTABLE", "LOCK_IN"} or latest["instability_score"] >= 0.52
+
+
+CHILLED_WATER_COLUMNS = [
+    "timestamp",
+    "chw_supply_temp_f",
+    "chw_return_temp_f",
+    "delta_t_f",
+    "flow_gpm",
+    "pump_speed_pct",
+    "pump_power_kw",
+    "differential_pressure_psi",
+    "chiller_load_pct",
+    "compressor_power_kw",
+    "condenser_water_temp_f",
+    "evaporator_temp_f",
+    "building_cooling_demand_pct",
+    "ambient_temp_f",
+    "energy_consumption_kwh",
+    "alarm_count",
+    "maintenance_event",
+    "operator_override",
+]
+
+
+def _chilled_water_csv(
+    count: int = 240,
+    *,
+    missing_sparse: bool = False,
+    omit_timestamp: bool = False,
+    omit_temps: bool = False,
+    out_of_order: bool = False,
+    duplicate: bool = False,
+    extra_column: bool = False,
+) -> bytes:
+    columns = [column for column in CHILLED_WATER_COLUMNS if not (omit_timestamp and column == "timestamp")]
+    if omit_temps:
+        columns = [column for column in columns if column not in {"chw_supply_temp_f", "chw_return_temp_f"}]
+    if extra_column:
+        columns.append("vendor_unused_status")
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    rows: list[dict[str, str]] = []
+    for index in range(count):
+        supply = 44.0 + math.sin(index / 24.0) * 0.8
+        ret = supply + 10.0 + math.cos(index / 18.0) * 0.6
+        flow = 1200.0 + math.sin(index / 16.0) * 35.0
+        pump_power = 38.0 + math.cos(index / 20.0) * 2.0
+        chiller_load = 55.0 + math.sin(index / 30.0) * 8.0
+        compressor = 210.0 + math.sin(index / 22.0) * 12.0
+        row = {
+            "timestamp": (start + timedelta(minutes=5 * index)).isoformat().replace("+00:00", "Z"),
+            "chw_supply_temp_f": f"{supply:.3f}",
+            "chw_return_temp_f": f"{ret:.3f}",
+            "delta_t_f": f"{ret - supply:.3f}",
+            "flow_gpm": f"{flow:.3f}",
+            "pump_speed_pct": f"{62.0 + math.sin(index / 13.0) * 3.0:.3f}",
+            "pump_power_kw": f"{pump_power:.3f}",
+            "differential_pressure_psi": f"{18.0 + math.cos(index / 17.0):.3f}",
+            "chiller_load_pct": f"{chiller_load:.3f}",
+            "compressor_power_kw": f"{compressor:.3f}",
+            "condenser_water_temp_f": f"{74.0 + math.sin(index / 19.0):.3f}",
+            "evaporator_temp_f": f"{39.0 + math.cos(index / 21.0):.3f}",
+            "building_cooling_demand_pct": f"{58.0 + math.sin(index / 29.0) * 7.0:.3f}",
+            "ambient_temp_f": f"{82.0 + math.sin(index / 35.0) * 9.0:.3f}",
+            "energy_consumption_kwh": f"{95.0 + compressor * 0.05:.3f}",
+            "alarm_count": "0",
+            "maintenance_event": "0",
+            "operator_override": "0",
+            "vendor_unused_status": "ignored",
+        }
+        if missing_sparse and index in {25, 26, 55, 56}:
+            for column in ("chw_supply_temp_f", "flow_gpm", "pump_power_kw", "chiller_load_pct", "compressor_power_kw"):
+                row[column] = ""
+        rows.append(row)
+    if out_of_order and len(rows) > 4:
+        rows[2], rows[3] = rows[3], rows[2]
+    if duplicate and rows:
+        rows.insert(5, dict(rows[4]))
+    return (",".join(columns) + "\n" + "\n".join(",".join(row.get(column, "") for column in columns) for row in rows)).encode()
+
+
+def test_chilled_water_sparse_nulls_do_not_block_analysis() -> None:
+    result = process_csv_content(filename="chilled_water_system_data.csv", content=_chilled_water_csv(missing_sparse=True, extra_column=True))
+
+    quality = result["data_quality"]
+    messages = quality["messages"]
+    assert quality["schema_detection"]["detected"] is True
+    assert quality["analysis_gate_state"] == "DEGRADED_READY"
+    assert quality["readiness"] == "ready"
+    assert "Detected chilled-water telemetry." in messages
+    assert "240 rows loaded." in messages
+    assert "5-minute interval detected." in messages
+    assert any("Sparse missing values detected in supply temp, flow, pump power, chiller load, compressor power" in message for message in messages)
+    assert "Analysis can proceed with confidence warnings." in messages
+    assert result["sii_runner_result"]["latest_state"]["urgency"] != "CRITICAL"
+
+
+def test_chilled_water_missing_timestamp_blocks_analysis_gate() -> None:
+    result = process_csv_content(filename="missing-timestamp.csv", content=_chilled_water_csv(omit_timestamp=True))
+
+    assert result["data_quality"]["analysis_gate_state"] == "PENDING"
+    assert result["data_quality"]["readiness"] == "pending"
+
+
+def test_chilled_water_missing_supply_and_return_temperature_blocks_analysis_gate() -> None:
+    result = process_csv_content(filename="missing-temps.csv", content=_chilled_water_csv(omit_temps=True))
+
+    assert result["data_quality"]["analysis_gate_state"] == "PENDING"
+
+
+def test_chilled_water_out_of_order_timestamps_are_sorted() -> None:
+    result = process_csv_content(filename="unsorted-chilled.csv", content=_chilled_water_csv(out_of_order=True))
+
+    preview_timestamps = [row["timestamp"] for row in result["preview_rows"][:4]]
+    assert preview_timestamps == sorted(preview_timestamps)
+    assert result["data_quality"]["analysis_gate_state"] == "DEGRADED_READY"
+
+
+def test_chilled_water_duplicate_rows_are_dropped() -> None:
+    result = process_csv_content(filename="duplicate-chilled.csv", content=_chilled_water_csv(duplicate=True))
+
+    assert result["row_count"] == 240
+    assert result["ingestion_report"]["drop_reasons"]["exact_duplicate_row"] == 1
+    assert result["data_quality"]["analysis_gate_state"] == "DEGRADED_READY"
+
+
+def test_chilled_water_unknown_extra_columns_are_ignored() -> None:
+    result = process_csv_content(filename="extra-column-chilled.csv", content=_chilled_water_csv(extra_column=True))
+
+    assert "vendor_unused_status" in result["columns"]
+    assert result["data_quality"]["analysis_gate_state"] == "READY"
