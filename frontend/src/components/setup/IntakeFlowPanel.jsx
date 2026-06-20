@@ -41,6 +41,11 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
+function firstFinitePercent(...values) {
+  const value = values.find((candidate) => Number.isFinite(Number(candidate)));
+  return value === undefined ? null : clampPercent(value);
+}
+
 function uploadProgressStage(uploadState, uploadJob) {
   const state = String(uploadState || "").toLowerCase();
   const workerState = String(uploadJob?.worker_state || uploadJob?.workerState || "").toLowerCase();
@@ -60,7 +65,7 @@ function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines
   return statusLines.at(-1) || uploadStageMessage;
 }
 
-function resolveStageProgress({ uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
+function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {
   const state = String(uploadState || "").toLowerCase();
   const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
   const status = String(uploadJob?.status || "").toLowerCase();
@@ -68,8 +73,13 @@ function resolveStageProgress({ uploadState, uploadJob, uploadTransfer, visibleP
   const isProcessing = state === "running_sii" || Boolean(uploadJob);
   const isUploading = state === "uploading";
   const uploadPercent = isProcessing || isComplete ? 100 : clampPercent(uploadTransfer?.percent ?? 0);
-  const backendPercent = clampPercent(visibleProgressPercent ?? uploadJob?.propagation_progress ?? uploadJob?.progress ?? uploadJob?.percent ?? 0);
-  const processingPercent = isComplete ? 100 : isProcessing ? Math.max(1, Math.min(99, backendPercent)) : 0;
+  const backendPercent = firstFinitePercent(
+    uploadJob?.propagation_progress,
+    uploadJob?.propagationProgress,
+    uploadJob?.progress,
+    uploadJob?.percent,
+  );
+  const processingPercent = isComplete ? 100 : isProcessing ? Math.min(99, backendPercent ?? 1) : 0;
   const analysisPercent = isComplete ? 100 : 0;
 
   return {
@@ -160,7 +170,7 @@ export default function IntakeFlowPanel({
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
   const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob) || visibleProgressPercent !== null;
-  const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
+  const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
   const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
 
   return (
