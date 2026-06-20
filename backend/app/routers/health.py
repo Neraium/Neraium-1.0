@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.services.runtime_db import queue_metrics, queue_operational_metrics
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
+from app.services.upload_session_service import resolve_latest_upload_session, session_metrics_snapshot
 from app.services.sii_runner import build_runner_status
 from app.services.upload_state_repository import shared_state_configured, upload_state_backend
 
@@ -30,8 +31,14 @@ def read_ready() -> JSONResponse:
     details: dict[str, object] = {}
 
     snapshot = service_health_snapshot()
+    latest_session = resolve_latest_upload_session(include_persisted=True)
+    session_state = str(latest_session.get("session_state") or "empty")
     if snapshot["status"] != "ok":
         checks["startup"] = "error"
+    if session_state in {"stale", "error"}:
+        checks["upload_session"] = "error"
+    else:
+        checks["upload_session"] = "ok"
 
     try:
         metrics = queue_metrics()
@@ -46,6 +53,12 @@ def read_ready() -> JSONResponse:
 
     try:
         details["runner_status"] = build_runner_status()
+        details["upload_session"] = {
+            "state": session_state,
+            "source": latest_session.get("session_source"),
+            "upload_session_id": latest_session.get("upload_session_id"),
+        }
+        details["upload_session_metrics"] = session_metrics_snapshot(current_state=session_state)
     except Exception:
         checks["inference_path"] = "error"
 

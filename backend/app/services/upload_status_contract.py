@@ -1,48 +1,15 @@
 from __future__ import annotations
 
-
-_PROPAGATION_STAGE_DEFAULTS = {
-    "accepted": (5, "Upload received."),
-    "queued": (10, "Queued."),
-    "parsing_telemetry": (20, "Parsing telemetry."),
-    "building_relationship_baselines": (40, "Building relationship baselines."),
-    "scoring_relationship_drift": (60, "Scoring relationship drift."),
-    "building_propagation_model": (80, "Building propagation model."),
-    "generating_system_interpretation": (90, "Generating interpretation."),
-    "complete": (100, "Complete."),
-}
-
-
-def _infer_propagation_stage(payload: dict, normalized_status: str) -> str:
-    explicit = str(payload.get("propagation_stage") or "").strip().lower()
-    if explicit:
-        return explicit
-    processing_state = str(payload.get("processing_state") or "").strip().lower()
-    if processing_state in _PROPAGATION_STAGE_DEFAULTS:
-        return processing_state
-    message = f"{payload.get('progress_label') or ''} {payload.get('message') or ''}".lower()
-    if normalized_status == "COMPLETE":
-        return "complete"
-    if "baseline" in message:
-        return "building_relationship_baselines"
-    if "drift" in message or "scoring" in message:
-        return "scoring_relationship_drift"
-    if "propagation" in message or "replay" in message:
-        return "building_propagation_model"
-    if "interpretation" in message or "cognition" in message or "writing" in message:
-        return "generating_system_interpretation"
-    if "parsing" in message:
-        return "parsing_telemetry"
-    if normalized_status in {"PENDING", "QUEUED"}:
-        return "queued"
-    if normalized_status in {"PROCESSING", "RUNNING_SII"}:
-        return "parsing_telemetry"
-    return "queued"
+from app.services.upload_lifecycle import (
+    LEGACY_STAGE_DEFAULTS,
+    canonical_stage_payload,
+    infer_legacy_stage,
+)
 
 
 def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
-    stage = _infer_propagation_stage(raw_payload, normalized_status)
-    default_progress, default_label = _PROPAGATION_STAGE_DEFAULTS.get(stage, (0, "Processing telemetry."))
+    stage = infer_legacy_stage(raw_payload, normalized_status)
+    default_progress, default_label = LEGACY_STAGE_DEFAULTS.get(stage, (0, "Processing telemetry."))
     backend_progress = normalized.get("percent", normalized.get("progress", default_progress))
     try:
         backend_progress = int(max(0, min(100, float(backend_progress))))
@@ -51,7 +18,7 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
     if normalized_status == "COMPLETE":
         backend_progress = 100
         stage = "complete"
-        default_label = _PROPAGATION_STAGE_DEFAULTS["complete"][1]
+        default_label = LEGACY_STAGE_DEFAULTS["complete"][1]
     normalized["propagation_stage"] = str(raw_payload.get("propagation_stage") or stage)
     explicit_progress = raw_payload.get("propagation_progress")
     if explicit_progress is None:
@@ -59,6 +26,14 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
     else:
         normalized["propagation_progress"] = int(max(0, min(100, float(explicit_progress))))
     normalized["propagation_label"] = str(raw_payload.get("propagation_label") or default_label)
+    normalized.update(
+        canonical_stage_payload(
+            legacy_stage=normalized["propagation_stage"],
+            status=normalized.get("status"),
+            progress=raw_payload.get("contract_progress", normalized["propagation_progress"]),
+            label=raw_payload.get("contract_label") or normalized["propagation_label"],
+        )
+    )
     return normalized
 
 

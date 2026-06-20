@@ -1,22 +1,9 @@
+import { isUploadProcessingStatus, normalizeUploadStatus } from "./uploadContract";
+
 export function deriveIntelligenceMode({ hasRealSiiOutput, latestUploadSnapshot }) {
   if (hasRealSiiOutput) return "live";
-  const status = String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase();
-  if ([
-    "active",
-    "baseline_active",
-    "queued",
-    "pending",
-    "uploading",
-    "parsing",
-    "baseline_modeling",
-    "running_sii",
-    "cognition_ready",
-    "generating_replay",
-    "generating_evidence",
-    "writing_state",
-    "complete",
-    "building_baseline",
-  ].includes(status)) {
+  const status = normalizeUploadStatus(latestUploadSnapshot?.contract_stage ?? latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "");
+  if (status === "active" || status === "complete" || isUploadProcessingStatus(status)) {
     return "processing";
   }
   return "empty";

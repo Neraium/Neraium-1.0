@@ -22,10 +22,12 @@ from app.services.relationship_baselines import build_relationship_baseline as _
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
 from app.services.upload_parser import json_payload_to_csv_text
+from app.services.upload_pipeline import run_structural_analysis_pipeline
 from app.services.upload_persistence import read_upload_history as read_upload_history_from_runtime
 from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
+from app.services.upload_lifecycle import VISIBLE_UPLOAD_STATES, canonical_stage_payload
 from app.services.upload_state_repository import (
     clear_reset_block_persisted,
     configure_runtime_dir as configure_runtime_state_dir,
@@ -203,6 +205,7 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
         "propagation_progress": int(max(0, min(100, progress))),
         "propagation_label": label,
     }
+    payload.update(canonical_stage_payload(legacy_stage=stage, status=payload["status"], progress=progress, label=label))
     write_job(payload)
 
 
@@ -384,7 +387,10 @@ def _build_csv_result(
     processing_started_at: float | None = None,
 ) -> dict[str, Any]:
     clear_reset_block_persisted()
-    initiated_by = (read_job(job_id) or {}).get("initiated_by", "anonymous")
+    job_context = read_job(job_id) or {}
+    initiated_by = job_context.get("initiated_by", "anonymous")
+    request_id = job_context.get("request_id")
+    upload_session_id = job_context.get("upload_session_id") or job_id
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
     numeric_profiles = []
@@ -488,137 +494,55 @@ def _build_csv_result(
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
 
-    _set_propagation_stage(job_id, stage="building_relationship_baselines", progress=40, label="Building relationship baselines.")
-    relationship_model = _build_relationship_baseline(rows, numeric_columns, total_row_count=row_count_total)
-    _set_propagation_stage(job_id, stage="scoring_relationship_drift", progress=60, label="Scoring relationship drift.")
-    replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model) if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3) else _build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
-    if not replay.get("timeline"):
-        replay = _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
-
-    _set_propagation_stage(job_id, stage="building_propagation_model", progress=80, label="Building propagation model.")
-    frame_count = len(replay.get("timeline", []))
-    now = datetime.now(timezone.utc).isoformat()
-    matrix_rows = matrix_rows_for_profiles
-    timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
-    baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
-    relationship_baseline = relationship_model if isinstance(relationship_model, dict) else {}
-    baseline_analysis = {
-        **baseline_analysis,
-        "top_relationship_changes": relationship_baseline.get("top_relationship_changes", []),
-        "baseline_relationships": relationship_baseline.get("baseline_relationships", []),
-        "sampled_for_baseline": bool(relationship_baseline.get("sampled_for_baseline")),
-    }
-    cultivation_mapping = map_cultivation_columns(columns)
-    ingestion_report = ingestion_report or {}
-    cleaning_warnings = list(ingestion_report.get("warnings") or [])
-    baseline_reliable = (
-        baseline_analysis.get("baseline_window_rows", 0) >= 5
-        and baseline_analysis.get("recent_window_rows", 0) >= 1
-        and baseline_analysis.get("columns_analyzed", 0) >= 1
-    )
-    stuck_sensor_count = sum(1 for profile in numeric_profiles if profile.get("constant_or_stuck"))
-    data_quality = build_data_quality(
-        row_count_total,
-        len(columns),
-        len(numeric_columns),
-        bool(timestamp_column),
-        list(
-            dict.fromkeys(
-                [
-                    *cleaning_warnings,
-                    *timestamp_profile.get("warnings", []),
-                    *baseline_analysis.get("warnings", []),
-                    *cultivation_mapping.get("warnings", []),
-                    *([f"{stuck_sensor_count} numeric sensor(s) appear constant or stuck."] if stuck_sensor_count else []),
-                ]
-            )
-        ),
-        {
-            "rows_received": ingestion_report.get("rows_received", row_count_total),
-            "rows_dropped": ingestion_report.get("rows_dropped", 0),
-            "quality_counts": ingestion_report.get("quality_counts", {}),
-            "stuck_sensor_count": stuck_sensor_count,
-            "irregular_sampling": any("inconsistent" in str(warning).lower() for warning in timestamp_profile.get("warnings", [])),
-            "baseline_reliable": baseline_reliable,
-        },
-    )
-    reliability_warning = None
-    if not baseline_reliable:
-        reliability_warning = "Insufficient baseline: SII findings are not reliable enough to show."
-        warnings = list(data_quality.get("warnings", []))
-        if row_count_total < 5:
-            warnings = [warning for warning in warnings if warning != reliability_warning]
-        else:
-            warnings.append(reliability_warning)
-        data_quality["warnings"] = list(dict.fromkeys(warnings))
-
-    room_assessments = {item["room"]: dict(item) for item in room_intelligence if item.get("room")}
-    primary_room_assessment = next((item for item in room_intelligence if item.get("room") == (room_names[0] if room_names else "")), room_intelligence[0] if room_intelligence else {})
-    engine_result = _build_upload_engine_result(
-        baseline_analysis=baseline_analysis,
-        relationship_model=relationship_baseline,
-        cultivation_mapping=cultivation_mapping,
-        overall_urgency=overall_urgency,
-    )
-    driver_attribution = build_driver_attribution(
-        {
-            "room": primary_room_assessment.get("room") or (room_names[0] if room_names else "State Group A"),
-            "state": primary_room_assessment.get("room_state") or "Baseline-aligned",
-            "severity": "action" if overall_urgency == "unstable" else ("review" if overall_urgency == "review" else "info"),
-        },
-        {
-            "timestamp_profile": timestamp_profile,
-            "data_quality": data_quality,
-            "numeric_profiles": numeric_profiles,
-            "cultivation_mapping": cultivation_mapping,
-            "columns": columns,
-            "telemetry_profile": telemetry_profile,
-            "telemetry_profile_signals": telemetry_profile_signals,
-            "operational_signal_profile": operational_profile,
-            "operational_signal_profile_signals": operational_profile_signals,
-        },
-        {
-            "baseline_analysis": baseline_analysis,
-            "cultivation_mapping": cultivation_mapping,
-        },
-        engine_result,
-    )
-    operator_report = build_operator_report(
-        data_quality,
-        timestamp_profile,
-        numeric_profiles,
-        baseline_analysis,
-        cultivation_mapping,
-    )
-    sii_intelligence = build_upload_intelligence(
+    pipeline = run_structural_analysis_pipeline(
+        job_id=job_id,
         filename=filename,
-        row_count=row_count_total,
-        data_quality=data_quality,
-        baseline_analysis=baseline_analysis,
-        engine_result=engine_result,
-        driver_attribution=driver_attribution,
-        operator_report=operator_report,
-        timestamp_profile=timestamp_profile,
+        columns=columns,
+        rows=rows,
+        numeric_columns=numeric_columns,
+        timestamp_column=timestamp_column,
+        row_count_total=row_count_total,
+        matrix_rows_for_profiles=matrix_rows_for_profiles,
+        numeric_profiles=numeric_profiles,
         room_summary=room_summary,
-        room_assessments=room_assessments,
-        source_metadata={
-            "telemetry_profile": telemetry_profile,
-            "telemetry_profile_confidence": telemetry_profile_confidence,
-            "telemetry_profile_signals": telemetry_profile_signals,
-            "telemetry_modality": "continuous",
-            "operational_signal_profile": operational_profile,
-            "operational_signal_profile_confidence": operational_profile_confidence,
-            "operational_signal_profile_signals": operational_profile_signals,
-            "operational_signal_modality": operational_modality,
-        },
+        room_intelligence=room_intelligence,
+        room_names=room_names,
+        overall_urgency=overall_urgency,
+        telemetry_profile=telemetry_profile,
+        telemetry_profile_confidence=telemetry_profile_confidence,
+        telemetry_profile_signals=telemetry_profile_signals,
+        operational_profile=operational_profile,
+        operational_profile_confidence=operational_profile_confidence,
+        operational_profile_signals=operational_profile_signals,
+        operational_modality=operational_modality,
+        ingestion_report=ingestion_report,
+        chunk_count=chunk_count,
+        memory_estimate_bytes=memory_estimate_bytes,
+        processing_started_at=processing_started_at,
+        build_relationship_baseline=_build_relationship_baseline,
+        build_replay=_build_replay,
+        minimal_replay=_minimal_replay,
+        build_upload_engine_result=_build_upload_engine_result,
+        stage_notifier=_set_propagation_stage,
     )
-    sii_intelligence["runner_module"] = RUNNER_MODULE
-    sii_intelligence["replay_timeline"] = replay
-    processing_time_seconds = round(max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())), 6)
-    processing_trace = {"sii_pipeline_ran": True, "sii_completed": True, "replay_frame_count": frame_count, "rows_processed": row_count_total, "columns_analyzed": len(numeric_columns), "processing_time_seconds": processing_time_seconds, "completed_at": now}
-    _set_propagation_stage(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
-    runner_result = run_sii_runner(columns=columns, rows=matrix_rows, numeric_profiles=numeric_profiles, timestamp_column=timestamp_column, primary_room=(driver_attribution.get("room") or room_names[0] if room_names else "Uploaded telemetry"), driver_attribution=driver_attribution, engine_result=engine_result, processing_trace=processing_trace)
-    latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
+    replay = pipeline["replay"]
+    frame_count = pipeline["frame_count"]
+    now = pipeline["now"]
+    timestamp_profile = pipeline["timestamp_profile"]
+    baseline_analysis = pipeline["baseline_analysis"]
+    cultivation_mapping = pipeline["cultivation_mapping"]
+    baseline_reliable = pipeline["baseline_reliable"]
+    data_quality = pipeline["data_quality"]
+    reliability_warning = pipeline["reliability_warning"]
+    room_assessments = pipeline["room_assessments"]
+    engine_result = pipeline["engine_result"]
+    driver_attribution = pipeline["driver_attribution"]
+    operator_report = pipeline["operator_report"]
+    sii_intelligence = pipeline["sii_intelligence"]
+    processing_time_seconds = pipeline["processing_time_seconds"]
+    processing_trace = pipeline["processing_trace"]
+    runner_result = pipeline["runner_result"]
+    latest_runner_state = pipeline["latest_runner_state"]
 
     result = {
         "job_id": job_id,
@@ -670,6 +594,8 @@ def _build_csv_result(
         "replay_frame_count": frame_count,
         "last_processed_at": now,
         "completed_at": now,
+        "request_id": request_id,
+        "upload_session_id": upload_session_id,
     }
     result["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
@@ -681,7 +607,8 @@ def _build_csv_result(
         result["sii_intelligence"]["projected_time_to_failure_hours"] = latest_runner_state.get("projected_time_to_failure_hours")
     result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
 
-    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Telemetry processing complete."))
     summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
@@ -903,6 +830,7 @@ def write_job(*args) -> None:
         payload["job_id"] = job_id
     payload["run_id"] = job_id
     payload["upload_id"] = job_id
+    payload.setdefault("upload_session_id", job_id)
     payload["session_scope"] = build_session_scope(
         job_id,
         filename=payload.get("filename"),
@@ -911,21 +839,9 @@ def write_job(*args) -> None:
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
-    visible_states = {
-    "queued",
-    "parsing_telemetry",
-    "building_relationship_baselines",
-    "scoring_relationship_drift",
-    "building_propagation_model",
-    "generating_system_interpretation",
-    "partial_complete",
-    "complete",
-    "failed",
-}
-
     if (
         status_text in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE", "FAILED"}
-        or processing_state in visible_states
+        or processing_state in VISIBLE_UPLOAD_STATES
     ):
         latest_summary = dict(payload)
         latest_summary.setdefault("session_scope", build_session_scope(job_id, filename=latest_summary.get("filename"), status=processing_state or status_text.lower() or "active"))
@@ -940,6 +856,14 @@ def write_job(*args) -> None:
         latest_summary.setdefault("propagation_stage", processing_state or "queued")
         latest_summary.setdefault("propagation_progress", latest_summary.get("progress", 0))
         latest_summary.setdefault("propagation_label", latest_summary.get("message") or "Queued.")
+        latest_summary.update(
+            canonical_stage_payload(
+                legacy_stage=latest_summary.get("propagation_stage"),
+                status=latest_summary.get("status"),
+                progress=latest_summary.get("propagation_progress"),
+                label=latest_summary.get("propagation_label"),
+            )
+        )
 
         repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
         UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = latest_summary
@@ -982,6 +906,7 @@ async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv
         "propagation_progress": 10,
         "propagation_label": "Queued.",
     }
+    payload.update(canonical_stage_payload(legacy_stage="queued", status=payload["status"], progress=10, label="Queued."))
     write_job(job_id, payload)
     return payload
 

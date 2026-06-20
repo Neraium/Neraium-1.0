@@ -8,6 +8,7 @@ import AppErrorBoundary from "./components/AppErrorBoundary";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
+import { buildSessionStore } from "./viewModels/sessionState";
 import { logoutUser } from "./services/api/authApi";
 
 const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
@@ -28,6 +29,7 @@ function App() {
     intelligenceStatus,
     latestUploadResult,
     latestUploadSnapshot,
+    sessionStore,
     domainDetection,
     setIsDemoMode,
     loadFacilitySystems,
@@ -45,6 +47,12 @@ function App() {
     buildProtectedRequestMessage,
     initialAllowPersistedLatest,
   });
+
+  const resolvedSessionStore = useMemo(() => sessionStore ?? buildSessionStore({
+    snapshot: latestUploadSnapshot,
+    latest_result: latestUploadResult,
+    session_state: latestUploadSnapshot?.session_state ?? (latestUploadResult ? "verified" : (latestUploadSnapshot?.status ?? "empty")),
+  }, { loaded: true }), [latestUploadResult, latestUploadSnapshot, sessionStore]);
 
   const {
     historianReplayState,
@@ -72,8 +80,7 @@ function App() {
     setActiveWorkspace,
     apiFetch,
     accessCode,
-    latestUploadResult,
-    latestUploadSnapshot,
+    sessionStore: resolvedSessionStore,
     loadFacilitySystems,
     loadLatestUploadState,
     allowPersistedLatest,
@@ -165,12 +172,13 @@ function App() {
       latestUploadSnapshot: effectiveLatestUploadSnapshot,
       currentSession,
       telemetrySession,
+      session: resolvedSessionStore,
       systems,
       systemsState,
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
+  }, [apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
 
   const handleSignOut = useCallback(async () => {
     await logoutUser();

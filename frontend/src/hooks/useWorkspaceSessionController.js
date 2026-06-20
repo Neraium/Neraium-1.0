@@ -3,6 +3,7 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/currentSession";
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
+import { isUploadProcessingStatus, uploadStageLabel, uploadStagePercent } from "../viewModels/uploadContract";
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
@@ -25,8 +26,7 @@ export default function useWorkspaceSessionController({
   setActiveWorkspace,
   apiFetch,
   accessCode,
-  latestUploadResult,
-  latestUploadSnapshot,
+  sessionStore,
   loadFacilitySystems,
   loadLatestUploadState,
   allowPersistedLatest,
@@ -43,16 +43,12 @@ export default function useWorkspaceSessionController({
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
   const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
 
-  const canonicalLatestUploadJobId = uploadStateView.resolveCurrentUploadJobId({
-    current_upload: latestUploadSnapshot?.current_upload ?? null,
-    latest_result: latestUploadResult ?? null,
-    snapshot: latestUploadSnapshot ?? null,
-  });
+  const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
-  const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? latestUploadResult);
+  const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? sessionStore?.latestUploadResult ?? null);
   const guardedLatestUploadSnapshot = resetGuardActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
-    : (postUploadPendingSnapshot ?? latestUploadSnapshot);
+    : (postUploadPendingSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
 
   const hasRealSiiOutput = useMemo(
     () => uploadStateView.hasVerifiedSiiCompletion({
@@ -97,10 +93,11 @@ export default function useWorkspaceSessionController({
     if (!completedUploadOverride) return;
     const overrideJobId = String(completedUploadOverride?.job_id ?? "").trim();
     if (!overrideJobId) return;
-    if (!latestUploadResult || !uploadStateView.hasFullUploadResult(latestUploadResult)) return;
-    if (String(latestUploadResult?.job_id ?? "").trim() !== overrideJobId) return;
+    const sessionResult = sessionStore?.latestUploadResult ?? null;
+    if (!sessionResult || !uploadStateView.hasFullUploadResult(sessionResult)) return;
+    if (String(sessionResult?.job_id ?? "").trim() !== overrideJobId) return;
     setCompletedUploadOverride(null);
-  }, [completedUploadOverride, latestUploadResult]);
+  }, [completedUploadOverride, sessionStore]);
 
   useEffect(() => {
     if (
@@ -343,34 +340,12 @@ function buildPendingUploadSnapshot({ completedPayload = null, completedResult =
 }
 
 function deriveGateProcessing(snapshot) {
-  const rawStatus = String(snapshot?.status ?? snapshot?.processing_state ?? "");
+  const rawStatus = String(snapshot?.contract_stage ?? snapshot?.status ?? snapshot?.processing_state ?? "");
   const status = normalizeUploadStatus(rawStatus);
-  const processingStates = new Set([
-    "uploading",
-    "queued",
-    "validating_schema",
-    "parsing",
-    "baseline_modeling",
-    "structural_scoring",
-    "cognition_ready",
-    "generating_replay",
-    "writing_state",
-  ]);
-  const percentByStage = {
-    uploading: 12,
-    queued: 20,
-    validating_schema: 30,
-    parsing: 45,
-    baseline_modeling: 60,
-    structural_scoring: 75,
-    cognition_ready: 86,
-    generating_replay: 93,
-    writing_state: 97,
-  };
-  const percent = Number(snapshot?.percent ?? snapshot?.progress);
+  const percent = Number(snapshot?.contract_progress ?? snapshot?.percent ?? snapshot?.progress);
   return {
-    active: processingStates.has(status),
-    percent: Number.isFinite(percent) ? Math.max(1, Math.min(99, Math.round(percent))) : (percentByStage[status] ?? 0),
-    label: String(snapshot?.progress_label ?? snapshot?.message ?? uploadStateMessage(status)),
+    active: isUploadProcessingStatus(status),
+    percent: Number.isFinite(percent) ? Math.max(1, Math.min(99, Math.round(percent))) : (uploadStagePercent(status) ?? 0),
+    label: String(snapshot?.contract_label ?? snapshot?.progress_label ?? snapshot?.message ?? uploadStageLabel(status) ?? uploadStateMessage(status)),
   };
 }

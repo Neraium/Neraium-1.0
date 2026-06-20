@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  normalizeUploadJob,
+  uploadStagePercent,
+} from "../viewModels/uploadContract";
 import {
   buildUploadRequestError,
   classifyUploadError,
@@ -53,28 +57,7 @@ function validateTelemetryFile(file, kind) {
 }
 
 function fallbackPercentFromStatus(status) {
-  const normalized = normalizeUploadStatus(status);
-  const stagedPercent = {
-    idle: 0,
-    validated: 3,
-    uploading: 12,
-    upload_started: 12,
-    accepted: 18,
-    queued: 22,
-    pending: 28,
-    validating_schema: 36,
-    parsing: 48,
-    baseline_modeling: 62,
-    structural_scoring: 74,
-    running_sii: 82,
-    cognition_ready: 90,
-    generating_replay: 94,
-    writing_state: 97,
-    complete: 100,
-    failed: 100,
-    error: 100,
-  };
-  return stagedPercent[normalized] ?? null;
+  return uploadStagePercent(status);
 }
 
 function boundedFailureDelay(failureCount) {
@@ -98,6 +81,7 @@ export default function DataConnectionsWorkspace({
   apiFetch,
   latestUploadSnapshot,
   latestUploadResult,
+  sessionStore,
   onUploadComplete,
   onResetDemo,
 }) {
@@ -133,61 +117,34 @@ export default function DataConnectionsWorkspace({
     uploadStateRef.current = uploadState;
   }, [uploadState]);
 
-  const loadLatestUpload = useCallback(async () => {
-    try {
-      const response = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
-      const payload = await readJsonPayload(response);
-      return response.ok ? payload : null;
-    } catch {
-      return null;
-    }
-  }, [accessCode, apiFetch]);
-
+  // Session hydration is centralized in useFacilityRuntime via
+  // apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode }).
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let cancelled = false;
-    const restoreUploadSession = async () => {
-      const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
-      const latestPayload = await loadLatestUpload();
-      if (cancelled) return;
-      const latestJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload);
-      const restoreJobId = latestJobId || storedJobId;
-      const latestStatus = normalizeUploadStatus(latestPayload?.status ?? latestPayload?.snapshot?.status ?? "");
-      const latestResult = uploadStateView.resolveCurrentUploadResult(latestPayload);
-      if (!restoreJobId && !latestResult) return;
-      uploadJobIdRef.current = restoreJobId || null;
-      uploadStatusPathRef.current = normalizeUploadStatusPath(latestPayload?.status_url, restoreJobId);
-      if (restoreJobId) window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, restoreJobId);
-      if (latestResult || ["complete", "active", "running_sii"].includes(latestStatus)) {
-        const restoredPayload = {
-          ...(latestPayload ?? {}),
-          job_id: restoreJobId || latestJobId || null,
-          status: latestResult || latestStatus === "complete" ? "COMPLETE" : "PENDING",
-          processing_state: latestResult || latestStatus === "complete" ? "complete" : "processing",
-          percent: latestResult || latestStatus === "complete" ? 100 : undefined,
-          progress: latestResult || latestStatus === "complete" ? 100 : undefined,
-          result_available: Boolean(latestResult),
-          progress_label: latestResult ? "Telemetry processing complete." : "Restored upload session. Checking processing status.",
-          message: latestResult ? "Telemetry processing complete." : "Restored upload session. Checking processing status.",
-        };
-        setUploadJob(restoredPayload);
-        setUploadResult(latestResult ?? latestPayload ?? null);
-        if (latestResult || latestStatus === "complete") {
-          setUploadState("complete");
-          setUploadProcessingFlag(false);
-          if (typeof onUploadComplete === "function") {
-            await onUploadComplete(latestResult ?? latestPayload, { navigateToGate: false });
-          }
-          return;
-        }
-        setUploadState("running_sii");
-        pollUploadStatus(restoreJobId, latestPayload?.status_url).catch(() => {});
-      }
-    };
-    restoreUploadSession();
-    return () => { cancelled = true; };
+    const sessionJobId = String(sessionStore?.jobId ?? "").trim();
+    if (!sessionJobId) return;
+    const normalizedSessionJob = normalizeUploadJob({
+      ...(sessionStore?.latestUploadSnapshot ?? {}),
+      latest_result: sessionStore?.latestUploadResult ?? null,
+      job_id: sessionJobId,
+    });
+    uploadJobIdRef.current = sessionJobId;
+    uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSessionJob?.status_url, sessionJobId);
+    window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, sessionJobId);
+    setUploadJob(normalizedSessionJob);
+    setUploadResult(sessionStore?.latestUploadResult ?? null);
+    if (["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
+      setUploadState("complete");
+      setUploadProcessingFlag(false);
+      return;
+    }
+    if (["queued", "processing"].includes(String(sessionStore?.uiState ?? ""))) {
+      setUploadState("running_sii");
+      setUploadProcessingFlag(true);
+      pollUploadStatus(sessionJobId, normalizedSessionJob?.status_url).catch(() => {});
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadLatestUpload, onUploadComplete]);
+  }, [sessionStore?.jobId, sessionStore?.uiState, sessionStore?.latestUploadSnapshot, sessionStore?.latestUploadResult]);
 
   useEffect(() => () => {
     pollSessionRef.current += 1;

@@ -3,20 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-
-ACTIVE_UPLOAD_STATUSES = {
-    "queued",
-    "pending",
-    "processing",
-    "parsing_telemetry",
-    "building_relationship_baselines",
-    "scoring_relationship_drift",
-    "building_propagation_model",
-    "generating_system_interpretation",
-    "partial_complete",
-    "complete",
-    "active",
-}
+from app.services.upload_lifecycle import ACTIVE_UPLOAD_STATUSES
 
 
 def build_session_scope(job_id: str | None, *, filename: str | None = None, status: str = "active") -> dict[str, Any]:

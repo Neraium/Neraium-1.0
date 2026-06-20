@@ -26,6 +26,63 @@ export const UPLOAD_PROCESSING_STATUSES = Object.freeze([
   "writing_state",
 ]);
 
+export const UPLOAD_STAGE_PROGRESS = Object.freeze({
+  idle: 0,
+  validated: 3,
+  uploading: 12,
+  accepted: 18,
+  queued: 22,
+  pending: 28,
+  validating_schema: 36,
+  parsing: 48,
+  baseline_modeling: 62,
+  processing: 70,
+  structural_scoring: 74,
+  running_sii: 82,
+  cognition_ready: 90,
+  generating_replay: 94,
+  writing_state: 97,
+  complete: 100,
+  failed: 100,
+  error: 100,
+  validation_error: 100,
+});
+
+export const UPLOAD_STAGE_LABELS = Object.freeze({
+  idle: "Awaiting file selection",
+  validated: "Telemetry export validated",
+  uploading: "Uploading telemetry batch",
+  accepted: "Upload received",
+  queued: "Processing queued",
+  validating_schema: "Validating schema",
+  parsing: "Parsing signal matrix",
+  baseline_modeling: "Learning reference behavior",
+  processing: "Telemetry batch processing in progress",
+  structural_scoring: "Reviewing system behavior change",
+  cognition_ready: "Cognition ready",
+  generating_replay: "Generating replay frames",
+  writing_state: "Writing structural state",
+  complete: "Batch processing complete",
+  error: "Validation needs attention",
+  failed: "Upload failed",
+  validation_error: "Validation needs attention",
+});
+
+export const UPLOAD_STAGE_INDEX = Object.freeze({
+  uploading: 0,
+  accepted: 0,
+  queued: 0,
+  validating_schema: 1,
+  parsing: 2,
+  baseline_modeling: 3,
+  structural_scoring: 4,
+  generating_replay: 5,
+  cognition_ready: 6,
+  writing_state: 6,
+  complete: 7,
+  failed: 6,
+});
+
 export function normalizeUploadStatus(status) {
   const raw = String(status ?? "").trim().toLowerCase();
 
@@ -58,9 +115,29 @@ export function normalizeUploadStatus(status) {
     validation_error: UPLOAD_STATUSES.VALIDATION_ERROR,
     not_found: UPLOAD_STATUSES.ERROR,
     missing: UPLOAD_STATUSES.ERROR,
+    parsing_telemetry: "parsing",
+    building_relationship_baselines: "baseline_modeling",
+    scoring_relationship_drift: "structural_scoring",
+    building_propagation_model: "generating_replay",
+    generating_system_interpretation: "writing_state",
+    partial_complete: "cognition_ready",
   };
 
   return map[raw] ?? raw ?? UPLOAD_STATUSES.IDLE;
+}
+
+export function uploadStagePercent(status) {
+  const normalized = normalizeUploadStatus(status);
+  return UPLOAD_STAGE_PROGRESS[normalized] ?? null;
+}
+
+export function uploadStageLabel(status) {
+  const normalized = normalizeUploadStatus(status);
+  return UPLOAD_STAGE_LABELS[normalized] ?? UPLOAD_STAGE_LABELS.idle;
+}
+
+export function uploadStageIndex(status) {
+  return UPLOAD_STAGE_INDEX[normalizeUploadStatus(status)] ?? 0;
 }
 
 export function normalizeErrorMessage(error) {
@@ -89,8 +166,14 @@ export function hasSupportedSiiClaims(payload = {}) {
 
 export function normalizeUploadJob(payload = {}) {
   const jobId = payload.job_id ?? payload.jobId ?? payload.id ?? null;
-  const status = normalizeUploadStatus(payload.status ?? payload.processing_state ?? payload.stage ?? payload.propagation_stage);
-  const percentRaw = payload.percent ?? payload.progress ?? payload.propagation_progress ?? 0;
+  const status = normalizeUploadStatus(
+    payload.contract_stage
+      ?? payload.status
+      ?? payload.processing_state
+      ?? payload.stage
+      ?? payload.propagation_stage
+  );
+  const percentRaw = payload.contract_progress ?? payload.percent ?? payload.progress ?? payload.propagation_progress ?? uploadStagePercent(status) ?? 0;
   const percent = Number.isFinite(Number(percentRaw))
     ? Math.min(100, Math.max(0, Number(percentRaw)))
     : 0;
@@ -101,6 +184,11 @@ export function normalizeUploadJob(payload = {}) {
     jobId,
     status,
     processing_state: payload.processing_state ?? status,
+    contract_stage: payload.contract_stage ?? status,
+    contract_progress: Number.isFinite(Number(payload.contract_progress))
+      ? Math.min(100, Math.max(0, Number(payload.contract_progress)))
+      : percent,
+    contract_label: payload.contract_label ?? payload.progress_label ?? payload.message ?? uploadStageLabel(status),
     percent,
     progress: percent,
     propagation_stage: payload.propagation_stage ?? null,
@@ -109,7 +197,7 @@ export function normalizeUploadJob(payload = {}) {
       : null,
     propagation_label: payload.propagation_label ?? null,
     filename: payload.filename ?? payload.file_name ?? null,
-    message: payload.message ?? payload.progress_label ?? payload.propagation_label ?? payload.error ?? "",
+    message: payload.message ?? payload.progress_label ?? payload.contract_label ?? payload.propagation_label ?? payload.error ?? "",
     error: payload.error ?? payload.detail ?? null,
     result_available: Boolean(payload.result_available),
     replay_ready: Boolean(payload.replay_ready),

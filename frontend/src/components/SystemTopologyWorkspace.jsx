@@ -27,10 +27,10 @@ export default function SystemTopologyWorkspace({
   gateStateOverride = "",
 }) { 
   const processingActive = Boolean(gateProcessing?.active);
+  const sessionUiState = String(liveOps.session?.uiState ?? "empty");
   const rawUiState = normalizeOperationalState(liveOps.facilityTone);
-  const hasUploadResult = Boolean(liveOps.latestUploadResult);
-  const awaitingSii = (liveOps.intelligenceMode === "empty" || liveOps.intelligenceMode === "processing")
-    && !hasUploadResult;
+  const hasUploadResult = sessionUiState === "verified" || sessionUiState === "restored";
+  const awaitingSii = ["idle", "empty", "queued", "processing"].includes(sessionUiState);
   const uiState = processingActive || awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
   const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
   const governed = deriveGovernedOutput(liveOps, {
@@ -40,7 +40,7 @@ export default function SystemTopologyWorkspace({
   });
   const reviewReady = liveOps.currentSession?.hasReliableOperatorEvidence === true;
   const uploadSignal = deriveUploadSignal(liveOps.latestUploadResult, { reviewReady });
-  const pendingVerification = hasUploadResult && !reviewReady;
+  const pendingVerification = sessionUiState === "verified" && !reviewReady;
 
   const stateLabel = processingActive
     ? "Processing"
@@ -51,7 +51,7 @@ export default function SystemTopologyWorkspace({
         : hasUploadResult
           ? (uploadSignal.label || "Monitoring")
           : awaitingSii
-            ? "No Data"
+            ? "No runtime data"
             : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = pendingVerification
     ? "Telemetry is present, but the evidence packet is not yet verified for operator review."

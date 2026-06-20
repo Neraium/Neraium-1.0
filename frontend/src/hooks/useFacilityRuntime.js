@@ -9,6 +9,7 @@ import {
 } from "../services/api/systemApi";
 import { fetchLatestUploadState } from "../services/api/uploadApi";
 import * as uploadStateView from "../viewModels/uploadState";
+import { buildEmptySessionStore, buildSessionStore } from "../viewModels/sessionState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
@@ -45,6 +46,7 @@ export default function useFacilityRuntime({
   const [latestUploadResult, setLatestUploadResult] = useState(null);
   const [latestUploadSnapshot, setLatestUploadSnapshot] = useState(uploadStateView.buildEmptyLatestUploadSnapshot());
   const [allowPersistedLatest, setAllowPersistedLatest] = useState(Boolean(initialAllowPersistedLatest));
+  const [sessionStore, setSessionStore] = useState(buildEmptySessionStore());
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [domainMode, setDomainModeState] = useState(null);
@@ -60,6 +62,7 @@ export default function useFacilityRuntime({
   const clearUploadSessionState = useCallback(() => {
     setLatestUploadResult(null);
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
+    setSessionStore(buildEmptySessionStore());
     latestUploadResultRef.current = null;
     latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
   }, []);
@@ -187,10 +190,12 @@ export default function useFacilityRuntime({
       }
 
       stability.hasData = nextHasData;
+      const nextSessionStore = buildSessionStore(payload, { loaded: true });
       setLatestUploadSnapshot(payload.snapshot);
       setLatestUploadResult(payload.latestResult);
+      setSessionStore(nextSessionStore);
       latestUploadResultRef.current = payload.latestResult;
-      return Boolean(payload.latestResult || uploadStateView.hasActiveTelemetrySnapshot(payload.snapshot));
+      return Boolean(nextSessionStore.hasRuntimeData);
     } catch {
       if (!shouldIncludePersisted) {
         clearUploadSessionState();
@@ -276,6 +281,7 @@ export default function useFacilityRuntime({
     backendError,
     latestUploadResult,
     latestUploadSnapshot,
+    sessionStore,
     domainDetection,
     demoScenario,
     setDemoScenario,

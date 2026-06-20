@@ -25,12 +25,12 @@ def test_health_endpoint_returns_ok() -> None:
         response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "service": "neraium-api",
-        "startup_complete": True,
-        "failed_modules": [],
-    }
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["service"] == "neraium-api"
+    assert payload["startup_complete"] is True
+    assert payload["failed_modules"] == []
+    assert payload["upload_session_state"] in {"empty", "restored", "verified", "processing", "queued", "stale", "error"}
 
 
 def test_health_endpoint_returns_degraded_when_startup_failed() -> None:
@@ -54,6 +54,7 @@ def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
     assert "upload_state_shared_configured" in payload
     assert "details" in payload
     assert "queue_operational_metrics" in payload["details"]
+    assert "upload_session_metrics" in payload["details"]
     assert payload["checks"]["startup"] == "ok"
 
 

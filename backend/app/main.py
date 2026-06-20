@@ -1,5 +1,6 @@
 import logging
 import re
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -134,11 +135,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(distributed_cognition.router, prefix="/api")
 
     @app.middleware("http")
-    async def add_request_id_header(request: Request, call_next):
+    async def add_request_context(request: Request, call_next):
+        request.state.request_id = str(request.headers.get("X-Request-Id") or uuid.uuid4().hex)
+        inbound_upload_session_id = str(request.headers.get("X-Upload-Session-Id") or "").strip()
+        if inbound_upload_session_id:
+            request.state.upload_session_id = inbound_upload_session_id
         response = await call_next(request)
         request_id = getattr(request.state, "request_id", None)
+        upload_session_id = getattr(request.state, "upload_session_id", None)
         if request_id:
             response.headers["X-Request-Id"] = request_id
+        if upload_session_id:
+            response.headers["X-Upload-Session-Id"] = str(upload_session_id)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")

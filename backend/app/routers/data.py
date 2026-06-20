@@ -28,9 +28,10 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import read_latest_upload_record, read_replay_payload, read_upload_result_by_job_id, reset_block_persisted_active, reset_upload_state, resolve_upload_artifacts, upload_state_backend
+from app.services.upload_state_repository import read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, upload_state_backend
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
+from app.services.upload_session_service import resolve_upload_status
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -417,6 +418,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             )
 
         job_id = uuid.uuid4().hex
+        request_id = getattr(request.state, "request_id", None)
+        request.state.upload_session_id = job_id
         summary = {
             "job_id": job_id,
             "filename": filename,
@@ -436,6 +439,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "file_size_bytes": file_size_bytes,
             "content_type": content_type,
             "initiated_by": actor,
+            "request_id": request_id,
+            "upload_session_id": job_id,
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
@@ -586,63 +591,23 @@ async def upload_status(request: Request, job_id: str):
         )
         if not allowed:
             return _rate_limit_response(retry_after, error_type="upload_status_rate_limited", message="Upload status polling rate limit exceeded. Retry shortly.")
-    state_backend = upload_state_backend()
-    logger.warning("upload_status_request job_id=%s state_backend=%s", job_id, state_backend)
-    try:
-        normalized = _resolve_upload_status_payload(job_id, state_backend)
-        if str(normalized.get("status", "")).upper() == "NOT_FOUND":
-            logger.warning(
-                "upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False",
-                job_id,
-            )
-            logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 404, "NOT_FOUND", False)
-            return JSONResponse(status_code=404, content=normalized)
-
-        if str(normalized.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
-            if str(normalized.get("status", "")).upper() == "COMPLETE":
-                existing = read_evidence_run(str(job_id))
-                if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
-                    now = datetime.now(timezone.utc).isoformat()
-                    upload_result = read_upload_result_by_job_id(job_id) or {}
-                    enriched = build_evidence_record_from_result(
-                        run_id=str(job_id),
-                        filename=str(upload_result.get("filename") or existing.get("source_name") or "upload.csv"),
-                        source_type=str(existing.get("source_type") or "csv_upload"),
-                        result=upload_result,
-                        created_at=str(existing.get("created_at") or now),
-                        completed_at=now,
-                        status="completed",
-                        initiated_by=str(existing.get("initiated_by") or "anonymous"),
-                    )
-                    upsert_evidence_run({**existing, **enriched, "status": "completed", "completed_at": now})
-            if str(normalized.get("status", "")).upper() == "FAILED":
-                existing = read_evidence_run(str(job_id))
-                if isinstance(existing, dict) and str(existing.get("status", "")).lower() == "queued":
-                    now = datetime.now(timezone.utc).isoformat()
-                    upsert_evidence_run(
-                        {
-                            **existing,
-                            "status": "failed",
-                            "completed_at": now,
-                            "errors": existing.get("errors") or [str(normalized.get("error") or "processing_error")],
-                            "observation_status": "failed",
-                        }
-                    )
-        logger.warning("upload_status_response job_id=%s status_code=%s payload_status=%s cached=%s", job_id, 200, str(normalized.get("status", "")).upper(), False)
-        return normalized
-    except Exception:
-        logger.exception("upload_status_error job_id=%s state_backend=%s", job_id, state_backend)
-        raise
+    request_id = getattr(request.state, "request_id", None)
+    request.state.upload_session_id = job_id
+    normalized = resolve_upload_status(job_id, request_id=request_id)
+    if str(normalized.get("status", "")).upper() == "NOT_FOUND":
+        logger.warning("upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False", job_id)
+        return JSONResponse(status_code=404, content=normalized)
+    return normalized
 
 
 @router.get("/upload-stream/{job_id}")
-async def upload_stream(job_id: str):
-    state_backend = upload_state_backend()
+async def upload_stream(job_id: str, request: Request = None):
+    request_id = getattr(request.state, "request_id", None) if request is not None else None
 
     async def event_generator():
         # Stream for up to ~12 minutes with heartbeat-like cadence.
         for _ in range(180):
-            payload = _resolve_upload_status_payload(job_id, state_backend)
+            payload = resolve_upload_status(job_id, request_id=request_id)
             yield f"data: {json.dumps(payload)}\n\n"
             if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
                 break
@@ -652,13 +617,17 @@ async def upload_stream(job_id: str):
 
 
 @router.get("/latest-upload")
-async def latest_upload(include_persisted: int | bool = True):
-    return resolve_latest_upload_payload(include_persisted=include_persisted)
+async def latest_upload(include_persisted: int | bool = True, request: Request = None):
+    request_id = getattr(request.state, "request_id", None) if request is not None else None
+    payload = resolve_latest_upload_payload(include_persisted=include_persisted, request_id=request_id)
+    if request is not None:
+        request.state.upload_session_id = payload.get("upload_session_id")
+    return payload
 
 
 @router.get("/system-interpretation")
-async def system_interpretation_contract(include_persisted: int | bool = True):
-    payload = await latest_upload(include_persisted=include_persisted)
+async def system_interpretation_contract(include_persisted: int | bool = True, request: Request = None):
+    payload = await latest_upload(include_persisted=include_persisted, request=request)
     interpretation = payload.get("system_interpretation") if isinstance(payload, dict) else None
     raw_source = str((payload or {}).get("source") or (payload or {}).get("snapshot", {}).get("source") or "").lower()
     if raw_source in {"uploaded", "latest_upload"}:

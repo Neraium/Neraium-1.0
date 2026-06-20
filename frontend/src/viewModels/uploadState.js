@@ -437,7 +437,7 @@ function normalizeUploadStatus(status) {
 
 function isUploadProcessing(status) {
   const normalized = normalizeUploadStatus(status);
-  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "writing_state"].includes(normalized);
+  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"].includes(normalized);
 }
 
 function normalizeErrorMessage(message) {

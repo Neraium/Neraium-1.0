@@ -2,6 +2,8 @@ import {
   isUploadProcessingStatus,
   normalizeErrorMessage as normalizeUploadContractErrorMessage,
   normalizeUploadStatus as normalizeUploadContractStatus,
+  uploadStageIndex as uploadContractStageIndex,
+  uploadStageLabel as uploadContractStageLabel,
 } from "./uploadContract";
 
 const INTAKE_STAGES = [
@@ -216,56 +218,11 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
 
 export function uploadStateMessage(uploadState) {
   const normalized = normalizeUploadStatus(uploadState);
-  if (normalized === "uploading") {
-    return "Telemetry batch received";
-  }
-  if (normalized === "queued") {
-    return "Processing queued";
-  }
-  if (normalized === "validating_schema") {
-    return "Validating schema";
-  }
-  if (normalized === "parsing") {
-    return "Parsing signal matrix";
-  }
-  if (normalized === "baseline_modeling") {
-    return "Learning reference behavior";
-  }
-  if (normalized === "structural_scoring") {
-    return "Reviewing system behavior change";
-  }
-  if (normalized === "cognition_ready") {
-    return "Cognition ready";
-  }
-  if (normalized === "generating_replay") {
-    return "Generating replay frames";
-  }
-  if (normalized === "writing_state") {
-    return "Writing structural state";
-  }
-  if (normalized === "complete") {
-    return "Batch processing complete";
-  }
-  if (normalized === "error") {
-    return "Validation needs attention";
-  }
-  return "Awaiting file selection";
+  return uploadContractStageLabel(normalized);
 }
 
 function uploadStageIndex(uploadState) {
-  return {
-    uploading: 0,
-    queued: 0,
-    validating_schema: 1,
-    parsing: 2,
-    baseline_modeling: 3,
-    structural_scoring: 4,
-    generating_replay: 5,
-    cognition_ready: 6,
-    writing_state: 6,
-    complete: 7,
-    failed: 6,
-  }[normalizeUploadStatus(uploadState)] ?? 0;
+  return uploadContractStageIndex(uploadState);
 }
 
 function uploadStageDetail(stage, index, job, roomContext) {
