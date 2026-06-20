@@ -102,8 +102,9 @@ export default function SystemBodyWorkspace({
     [fallbackFinding, interpretation, latestReplayFrame, latestUploadResult, latestUploadSnapshot, stabilitySnapshot],
   );
   const finding = assessmentState.finding;
+  const hasAnalysisReady = assessmentState.mode === "analysis_ready";
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
-  const canReviewFindings = assessmentState.mode === "analysis_ready";
+  const canReviewFindings = hasAnalysisReady;
   const navigationItems = [
     {
       id: "data-connections",
@@ -283,23 +284,27 @@ export default function SystemBodyWorkspace({
                 >
                   {interpretation.hasTelemetry ? finding.evidenceButtonLabel : "Upload Data"}
                 </button>
-                <button
-                  type="button"
-                  className="secondary-command-button"
-                  disabled={!canReviewFindings}
-                  onClick={() => navigateWorkspace("observation-center")}
-                >
-                  Review Findings
-                </button>
+                {hasAnalysisReady ? (
+                  <button
+                    type="button"
+                    className="secondary-command-button"
+                    disabled={!canReviewFindings}
+                    onClick={() => navigateWorkspace("observation-center")}
+                  >
+                    Review Findings
+                  </button>
+                ) : null}
               </div>
-              <div className="system-gate__stat-grid">
-                {heroStats.map((item) => (
-                  <article className="system-gate__stat-card" key={item.label}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                  </article>
-                ))}
-              </div>
+              {hasAnalysisReady ? (
+                <div className="system-gate__stat-grid">
+                  {heroStats.map((item) => (
+                    <article className="system-gate__stat-card" key={item.label}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="system-gate__hero-visual">
@@ -389,20 +394,22 @@ export default function SystemBodyWorkspace({
             ) : null}
           </section>
 
-          <section className="system-gate__panel" aria-label="Structural stability snapshot">
-            <div className="system-gate__panel-header">
-              <p className="section-token">Structural stability snapshot</p>
-              <strong>Review baseline</strong>
-            </div>
-            <ul className="system-gate__detail-list system-gate__detail-list--dense">
-              {stabilityRows.map((item) => (
-                <li key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </li>
-              ))}
-            </ul>
-          </section>
+          {hasAnalysisReady ? (
+            <section className="system-gate__panel" aria-label="Structural stability snapshot">
+              <div className="system-gate__panel-header">
+                <p className="section-token">Structural stability snapshot</p>
+                <strong>Review baseline</strong>
+              </div>
+              <ul className="system-gate__detail-list system-gate__detail-list--dense">
+                {stabilityRows.map((item) => (
+                  <li key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="system-gate__panel" aria-label="Workspace navigation">
             <div className="system-gate__panel-header">

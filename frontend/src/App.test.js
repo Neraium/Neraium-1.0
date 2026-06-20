@@ -102,9 +102,14 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete, onResetWorkspace }) => h(
+  default: ({ onUploadComplete, onResetWorkspace, onLoadLatestWorkspace, workspaceStatusMessage }) => h(
     "div",
     { "data-testid": "upload-workspace" },
+    h("span", { "data-testid": "workspace-status-message" }, workspaceStatusMessage || "none"),
+    h("button", {
+      type: "button",
+      onClick: () => onLoadLatestWorkspace(),
+    }, "Load latest workspace"),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -209,6 +214,37 @@ describe("App upload completion navigation", () => {
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
+  });
+
+
+  it("shows an explicit empty state when latest workspace has no active session", async () => {
+    runtimeMocks.loadLatestUploadState.mockResolvedValueOnce(false);
+    runtimeMocks.loadFacilitySystems.mockResolvedValueOnce(true);
+
+    render(h(App));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load latest workspace" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-status-message").textContent).toBe("No latest workspace is available.");
+    });
+    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+    expect(screen.getByTestId("upload-workspace")).toBeTruthy();
+  });
+
+  it("shows an explicit error when latest workspace restore fails", async () => {
+    runtimeMocks.loadLatestUploadState.mockRejectedValueOnce(new Error("Latest workspace unavailable."));
+
+    render(h(App));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load latest workspace" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-status-message").textContent).toBe("Latest workspace unavailable.");
+    });
+    expect(screen.getByTestId("upload-workspace")).toBeTruthy();
   });
 
   it("does not leave Data Connections when an existing upload is restored", async () => {

@@ -35,9 +35,18 @@ export default function IntakeFlowPanel({
   const primaryProgressText = String(uploadJob?.progress_label || latestMessage || "").trim();
   const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || "").trim();
   const showSecondaryProgressText = secondaryProgressText && secondaryProgressText !== primaryProgressText;
+  const loadedWorkspaceCandidate = latestUploadSnapshot?.last_filename
+    ?? latestUploadSnapshot?.current_upload?.result?.filename
+    ?? latestUploadSnapshot?.latest_result?.filename
+    ?? "";
+  const loadedWorkspaceFilename = !hasSelectedFiles
+    && loadedWorkspaceCandidate
+    && (latestUploadSnapshot?.state_available || latestUploadSnapshot?.sii_completed || latestUploadSnapshot?.current_upload?.job_id)
+    ? loadedWorkspaceCandidate
+    : "";
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
-    : latestUploadSnapshot?.last_filename ?? "No file selected";
+    : loadedWorkspaceFilename || "Awaiting file selection";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
 
   void uploadTransfer;
@@ -49,7 +58,7 @@ export default function IntakeFlowPanel({
         <div className="upload-file-card">
           <div className="upload-file-card__main">
             <strong>{selectedFileLabel}</strong>
-            <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a CSV telemetry file to begin."}</p>
+            <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : loadedWorkspaceFilename ? "Latest workspace loaded" : "Awaiting file selection"}</p>
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
             <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>

@@ -65,10 +65,10 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function openDataConnections(page) {
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
   const dataConnectionsHeading = page.getByRole("heading", { name: /^Data Connections$/i });
-  const uploadInput = page.locator("input#csv-upload");
-  const processUploadButton = page.getByRole("button", { name: /Process Upload/i });
-  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
-  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
+  const uploadInput = page.getByTestId("csv-upload-input");
+  const processUploadButton = page.getByTestId("process-upload-button");
+  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i });
+  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings|Open workspace menu/i });
 
   const isDataConnectionsReady = async () => {
     const checks = await Promise.all([
@@ -134,7 +134,7 @@ async function openDataConnections(page) {
 
   await expect(settingsButton).toBeVisible({ timeout: 30000 });
   await settingsButton.click();
-  await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
+  await page.getByTestId("upload-workspace-entry").click();
   await expectDataConnectionsReady();
 }
 
@@ -143,13 +143,13 @@ test.describe("Functional verification", () => {
     test.setTimeout(180000);
     await openDataConnections(page);
 
-    const input = page.locator("input#csv-upload");
+    const input = page.getByTestId("csv-upload-input");
     await input.setInputFiles({
       name: "functional-medium.csv",
       mimeType: "text/csv",
       buffer: Buffer.from(buildCsvRows(48), "utf8"),
     });
-    const processButton = page.getByRole("button", { name: "Process Upload" });
+    const processButton = page.getByTestId("process-upload-button");
     await expect(processButton).toBeEnabled();
     const uploadAcceptedPromise = page.waitForResponse(
       (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -165,9 +165,10 @@ test.describe("Functional verification", () => {
     await waitForUploadComplete(page, uploadJobId, 180000);
 
     await page.getByRole("button", { name: /Back to Gate/i }).click();
-    await expect(page.locator(".system-gate__state")).toBeVisible();
+    await expect(page.locator(".system-gate")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/i })).toBeVisible();
 
-    await page.getByRole("button", { name: "Open Gate settings" }).click();
-    await expect(page.getByRole("button", { name: /Data connections/i })).toBeVisible();
+    await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/i }).click();
+    await expect(page.getByTestId("upload-workspace-entry")).toBeVisible();
   });
 });

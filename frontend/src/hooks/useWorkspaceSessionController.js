@@ -182,23 +182,38 @@ export default function useWorkspaceSessionController({
   }, [canonicalLatestUploadJobId, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
-    setWorkspaceStatusMessage("");
+    setWorkspaceStatusMessage("Loading latest workspace...");
     setResetGuardActive(false);
     setAllowPersistedLatest(true);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
-    const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
-    if (!hasResult) {
+    try {
+      const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+      if (!hasResult) {
+        setCompletedUploadOverride(null);
+        setPostUploadPendingSnapshot(null);
+        setPostUploadExpectedJobId(null);
+        setGateUploadCompleteSeen(false);
+        setSessionIntent("neutral");
+        setWorkspaceStatusMessage("No latest workspace is available.");
+        await loadFacilitySystems();
+        return false;
+      }
+      setSessionIntent("resumed");
+      setWorkspaceStatusMessage("Latest workspace loaded.");
+      await loadFacilitySystems();
+      return true;
+    } catch (error) {
       setCompletedUploadOverride(null);
       setPostUploadPendingSnapshot(null);
       setPostUploadExpectedJobId(null);
       setGateUploadCompleteSeen(false);
+      setSessionIntent("neutral");
+      setWorkspaceStatusMessage(String(error?.message || "Latest workspace could not be loaded."));
+      return false;
     }
-    setSessionIntent(hasResult ? "resumed" : "neutral");
-    await loadFacilitySystems();
-    setActiveWorkspace("system-body");
-  }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
+  }, [loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest]);
 
   const handleResetWorkspace = useCallback(async () => {
     const hasActiveUploadOrProcessing = sessionStore?.isProcessing === true

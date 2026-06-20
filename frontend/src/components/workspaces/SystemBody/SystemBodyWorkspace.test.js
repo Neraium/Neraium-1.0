@@ -52,11 +52,12 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "No Analysis" })).toBeTruthy();
     expect(screen.getAllByText("Upload telemetry to generate an assessment.").length).toBeGreaterThan(0);
-    expect(screen.getByText("Not Assessed")).toBeTruthy();
-    expect(screen.getByText("Unknown")).toBeTruthy();
-    expect(readSnapshotValue("Current operating pattern")).toBe("No telemetry");
-    expect(readSnapshotValue("Behavior has persisted")).toBe("No telemetry");
-    expect(screen.getByRole("button", { name: "Review Findings" }).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
+    expect(screen.queryByLabelText("Structural stability snapshot")).toBeNull();
+    expect(screen.queryByText("Evidence confidence")).toBeNull();
+    expect(screen.queryByText("Operating pattern")).toBeNull();
+    expect(screen.queryByText("Persistence")).toBeNull();
+    expect(screen.queryByText("Active observations")).toBeNull();
   });
 
   it("enables review metrics after a completed analysis exists", () => {
