@@ -40,6 +40,29 @@ def test_aquatic_schema_maps_required_signals() -> None:
     assert mapped["coverage_ratio"] > 0.9
 
 
+def test_aquatic_schema_maps_commercial_water_aliases() -> None:
+    mapped = map_aquatic_schema([
+        "chlorine_ppm",
+        "turbidity",
+        "conductivity",
+        "makeup_water_flow",
+        "chilled_water_supply_temp",
+        "chilled_water_return_temp",
+        "chw_delta_t",
+        "chiller_load_pct",
+        "tower_fan_speed",
+        "basin_temperature",
+        "blowdown_rate",
+    ])
+
+    assert mapped["mapped_signals"]["free_chlorine"] == ["chlorine_ppm"]
+    assert mapped["mapped_signals"]["supply_temperature"] == ["chilled_water_supply_temp"]
+    assert mapped["mapped_signals"]["return_temperature"] == ["chilled_water_return_temp"]
+    assert mapped["mapped_signals"]["loop_delta_t"] == ["chw_delta_t"]
+    assert mapped["mapped_signals"]["tower_fan_speed"] == ["tower_fan_speed"]
+    assert mapped["mapped_column_count"] == 11
+
+
 def test_aquatic_generator_has_daily_and_noise_variation() -> None:
     rows = generate_aquatic_simulated_telemetry(intervals=96, seed=5)
     assert len(rows) == 96

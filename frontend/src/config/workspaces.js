@@ -39,28 +39,28 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "Relationship Cluster A",
-    scope: "Variables that currently move together as one structural pattern.",
+    name: "Commercial pools",
+    scope: "Pool and spa chemistry, turnover, thermal stability, and load response.",
   },
   {
-    name: "Relationship Cluster B",
-    scope: "A second correlation cluster visible in the uploaded telemetry.",
+    name: "Resort water systems",
+    scope: "Makeup water, level recovery, distribution pressure, and multi-asset demand behavior.",
   },
   {
-    name: "Recovery Pattern",
-    scope: "How the system returns to its usual behavior after a disturbance.",
+    name: "Water treatment",
+    scope: "ORP, pH, chlorine, turbidity, conductivity, and feed response.",
   },
   {
-    name: "Relationship Pattern Shift",
-    scope: "Where variable relationships now behave differently than usual.",
+    name: "Chilled water loops",
+    scope: "Supply/return temperature, delta-T, flow, differential pressure, and chiller load.",
   },
   {
-    name: "Change Direction",
-    scope: "Direction and strength of the observed behavior change.",
+    name: "Pumps and filtration",
+    scope: "Pump load, runtime, filter pressure, hydraulic resistance, and low-flow signatures.",
   },
   {
-    name: "Persistence Window",
-    scope: "How long the current structural change has remained active.",
+    name: "Cooling towers",
+    scope: "Future tower coverage for fan response, basin temperature, blowdown, and heat rejection drift.",
   },
 ];
 

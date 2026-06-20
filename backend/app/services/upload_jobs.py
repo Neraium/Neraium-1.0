@@ -705,10 +705,30 @@ def _minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, re
 
 def classify_telemetry_profile(columns: list[str]) -> tuple[str, str, list[str]]:
     lowered = [col.lower() for col in columns]
-    signals: list[str] = []
-    if any("pool" in col or "spa" in col or "orp" in col or "chlorine" in col or "ph_" in col for col in lowered):
-        signals = [col for col in columns if any(token in col.lower() for token in ("pool", "spa", "orp", "chlorine", "ph_"))][:5]
-        return ("pool_hottub_systems", "high", signals or ["pool_water_temp"])
+    water_tokens = (
+        "pool",
+        "spa",
+        "orp",
+        "chlorine",
+        "ph_",
+        "turbidity",
+        "conductivity",
+        "sanitizer",
+        "filter",
+        "filtration",
+        "makeup_water",
+        "chilled_water",
+        "chw_",
+        "delta_t",
+        "chiller",
+        "cooling_tower",
+        "tower",
+        "basin",
+        "blowdown",
+    )
+    if any(token in col for col in lowered for token in water_tokens):
+        signals = [col for col in columns if any(token in col.lower() for token in water_tokens)][:6]
+        return ("commercial_water_systems", "high", signals or ["flow_rate"])
     if any("temp_air" in col or "rh_" in col or "co2" in col or "dehu" in col for col in lowered):
         signals = [col for col in columns if any(token in col.lower() for token in ("temp_air", "rh_", "co2", "dehu"))][:5]
         return ("cultivation_climate", "medium", signals or ["temp_air"])
@@ -726,12 +746,28 @@ def classify_operational_profile(columns: list[str]) -> tuple[str, str, list[str
     if any(token in col for col in lowered for token in ("alarm", "override", "setpoint", "maintenance", "intervention")):
         signals = [col for col in columns if any(token in col.lower() for token in ("alarm", "override", "setpoint", "maintenance", "intervention"))][:5]
         return ("operational_events", "high", signals or ["operator_interventions"], "event")
-    if any(token in col for col in lowered for token in ("pump_amperage", "discharge_pressure", "bearing_temperature", "shaft_vibration", "vfd_frequency")):
+    water_tokens = (
+        "flow_rate",
+        "totalized_flow",
+        "water_pressure",
+        "tank_level",
+        "turnover",
+        "filter_pressure",
+        "differential_pressure",
+        "chilled_water",
+        "chw_",
+        "chiller",
+        "turbidity",
+        "conductivity",
+        "cooling_tower",
+        "blowdown",
+    )
+    if any(token in col for col in lowered for token in water_tokens):
+        signals = [col for col in columns if any(token in col.lower() for token in water_tokens)][:6]
+        return ("commercial_water_systems", "high", signals or ["flow_rate"], "continuous")
+    if any(token in col for col in lowered for token in ("discharge_pressure", "bearing_temperature", "shaft_vibration", "vfd_frequency")):
         signals = [col for col in columns if any(token in col.lower() for token in ("pump", "pressure", "bearing", "vibration", "vfd"))][:5]
         return ("mechanical_systems", "high", signals or ["pump_amperage"], "continuous")
-    if any(token in col for col in lowered for token in ("flow_rate", "totalized_flow", "water_pressure", "tank_level", "turnover")):
-        signals = [col for col in columns if any(token in col.lower() for token in ("flow", "water", "tank", "turnover"))][:5]
-        return ("water_systems", "high", signals or ["flow_rate"], "continuous")
     if any(token in col for col in lowered for token in ("distribution_pressure", "leak_detection", "pump_station", "reservoir", "sewer_flow", "treatment_plant")):
         signals = [col for col in columns if any(token in col.lower() for token in ("distribution", "leak", "pump_station", "reservoir", "sewer", "treatment"))][:5]
         return ("utility_infrastructure", "high", signals or ["distribution_pressure"], "continuous")

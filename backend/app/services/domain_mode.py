@@ -5,7 +5,7 @@ from typing import Any
 from app.services.aquatic_domain import INTEGRATION_STUBS as AQUATIC_INTEGRATION_STUBS
 from app.services.upload_state_repository import read_current_upload_result
 
-DEFAULT_DOMAIN_MODE = "cultivation" 
+DEFAULT_DOMAIN_MODE = "aquatic"
 SUPPORTED_DOMAIN_MODES = {"aquatic", "cultivation"}
 
 AQUATIC_HINTS = (
@@ -14,14 +14,29 @@ AQUATIC_HINTS = (
     "ph",
     "pool",
     "spa",
+    "resort",
+    "aquatic",
     "sanitizer",
+    "treatment",
+    "turbidity",
+    "conductivity",
     "filter",
+    "filtration",
     "pump",
     "valve",
     "water_level",
+    "makeup_water",
     "heater",
     "circulation",
+    "flow",
     "pressure",
+    "chilled_water",
+    "chw_",
+    "chiller",
+    "cooling_tower",
+    "tower",
+    "basin",
+    "blowdown",
 )
 
 CULTIVATION_HINTS = (
@@ -176,25 +191,29 @@ def domain_profile(mode: str) -> dict[str, Any]:
         }
     return {
         "mode": "aquatic",
-        "app_subtitle": "Operational relationship intelligence for hospitality aquatic infrastructure",
-        "app_description": "Neraium helps resort pool and spa operations teams detect and explain persistent relationship instability across telemetry domains.",
+        "app_subtitle": "Commercial water systems intelligence",
+        "app_description": "Neraium helps commercial water operators detect persistent relationship instability across pools, resort water systems, treatment, chilled-water loops, pumps, and filtration.",
         "systems": [
-            {"name": "Circulation", "scope": "Hydraulic flow continuity, pump behavior, and pressure response"},
-            {"name": "Filtration", "scope": "Filter pressure, flow resistance, and cycle stability"},
-            {"name": "Thermal control", "scope": "Pool/spa thermal stability, heater runtime, and heat retention"},
-            {"name": "Water chemistry", "scope": "ORP, pH, and sanitizer feed relationship behavior"},
-            {"name": "Hydraulic routing", "scope": "Valve state transitions and distribution path consistency"},
-            {"name": "Operational context", "scope": "Occupancy load, ambient heat effects, and overnight stabilization"},
+            {"name": "Commercial pools", "scope": "Pool and spa chemistry, turnover, thermal stability, and bather-load response"},
+            {"name": "Resort water systems", "scope": "Makeup water, level recovery, distribution pressure, and multi-asset demand behavior"},
+            {"name": "Water treatment", "scope": "ORP, pH, chlorine, turbidity, conductivity, and chemical feed response"},
+            {"name": "Chilled water loops", "scope": "Supply/return temperature, delta-T, loop flow, differential pressure, and chiller load"},
+            {"name": "Pumps and filtration", "scope": "Pump amperage/runtime, filter pressure, hydraulic resistance, low-flow, and cavitation signatures"},
+            {"name": "Cooling towers", "scope": "Future tower coverage for fan response, basin temperature, blowdown, and heat rejection drift"},
         ],
         "driver_categories": [
             "circulation_degradation",
             "filter_restriction_buildup",
             "pump_cavitation",
+            "water_treatment_instability",
+            "makeup_water_abnormality",
+            "chilled_water_delta_t_degradation",
+            "chiller_hydraulic_mismatch",
+            "cooling_tower_approach_drift",
             "abnormal_thermal_drift",
             "heater_efficiency_degradation",
             "orp_instability",
             "chemical_feed_inconsistencies",
-            "abnormal_overnight_heat_loss",
             "low_flow_conditions",
             "pressure_instability",
             "dead_zone_circulation_patterns",
