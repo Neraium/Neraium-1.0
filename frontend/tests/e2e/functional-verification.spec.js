@@ -65,17 +65,21 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function openDataConnections(page) {
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
   const dataConnectionsHeading = page.getByRole("heading", { name: /^Data Connections$/i });
+  const uploadDataHeading = page.getByRole("heading", { name: /^Upload Data$/i });
   const uploadInput = page.locator("input#csv-upload");
-  const processUploadButton = page.getByRole("button", { name: /Process Upload/i });
-  const directDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections/i });
-  const settingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings/i });
+  const processUploadButton = page.getByRole("button", { name: /Process Upload|Upload Data/i });
+  const primaryUploadEntry = page.getByTestId("primary-upload-entry");
+  const workspaceMenuButton = page.getByTestId("workspace-menu-button");
+  const uploadWorkspaceEntry = page.getByTestId("upload-workspace-entry");
+  const legacyDirectDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data|Upload Data/i });
+  const legacySettingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings|Views/i });
 
   const isDataConnectionsReady = async () => {
     const checks = await Promise.all([
       uploadTab.isVisible().catch(() => false),
       dataConnectionsHeading.isVisible().catch(() => false),
+      uploadDataHeading.isVisible().catch(() => false),
       uploadInput.isVisible().catch(() => false),
-      processUploadButton.isVisible().catch(() => false),
     ]);
     return checks.some(Boolean);
   };
@@ -91,10 +95,12 @@ async function openDataConnections(page) {
     const checks = await Promise.all([
       uploadTab.isVisible().catch(() => false),
       dataConnectionsHeading.isVisible().catch(() => false),
+      uploadDataHeading.isVisible().catch(() => false),
       uploadInput.isVisible().catch(() => false),
-      processUploadButton.isVisible().catch(() => false),
-      directDataConnections.isVisible().catch(() => false),
-      settingsButton.isVisible().catch(() => false),
+      primaryUploadEntry.isVisible().catch(() => false),
+      workspaceMenuButton.isVisible().catch(() => false),
+      legacyDirectDataConnections.isVisible().catch(() => false),
+      legacySettingsButton.isVisible().catch(() => false),
     ]);
     return checks.some(Boolean);
   };
@@ -116,25 +122,33 @@ async function openDataConnections(page) {
   }
   expect(entryReady).toBe(true);
 
-  if (await uploadTab.isVisible().catch(() => false)) {
-    return;
-  }
-  if (await uploadInput.isVisible().catch(() => false)) {
-    return;
-  }
-  if (await processUploadButton.isVisible().catch(() => false)) {
+  if (await isDataConnectionsReady()) {
     return;
   }
 
-  if (await directDataConnections.isVisible().catch(() => false)) {
-    await directDataConnections.click();
+  if (await primaryUploadEntry.isVisible().catch(() => false)) {
+    await primaryUploadEntry.click();
     await expectDataConnectionsReady();
     return;
   }
 
-  await expect(settingsButton).toBeVisible({ timeout: 30000 });
-  await settingsButton.click();
-  await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
+  if (await legacyDirectDataConnections.isVisible().catch(() => false)) {
+    await legacyDirectDataConnections.click();
+    await expectDataConnectionsReady();
+    return;
+  }
+
+  if (await workspaceMenuButton.isVisible().catch(() => false)) {
+    await workspaceMenuButton.click();
+    await expect(uploadWorkspaceEntry).toBeVisible({ timeout: 30000 });
+    await uploadWorkspaceEntry.click();
+    await expectDataConnectionsReady();
+    return;
+  }
+
+  await expect(legacySettingsButton).toBeVisible({ timeout: 30000 });
+  await legacySettingsButton.click();
+  await page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i }).click();
   await expectDataConnectionsReady();
 }
 
@@ -167,7 +181,7 @@ test.describe("Functional verification", () => {
     await page.getByRole("button", { name: /Back to Gate/i }).click();
     await expect(page.locator(".system-gate__state")).toBeVisible();
 
-    await page.getByRole("button", { name: "Open Gate settings" }).click();
-    await expect(page.getByRole("button", { name: /Data connections/i })).toBeVisible();
+    await page.getByTestId("workspace-menu-button").click();
+    await expect(page.getByTestId("upload-workspace-entry")).toBeVisible();
   });
 });
