@@ -130,7 +130,7 @@ export default function useFacilityRuntime({
         confidence: Number(payload.domain_confidence ?? 0),
         evidence: Array.isArray(payload.domain_evidence) ? payload.domain_evidence : [],
       });
-      setDomainModeState(payload.domain_source === "upload_shape" ? (payload.domain_mode ?? null) : null);
+      setDomainModeState(payload.domain_mode ?? null);
       setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("ready");
       setBackendError(API_CONFIG_WARNING);

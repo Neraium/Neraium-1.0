@@ -22,6 +22,18 @@ AQUATIC_TELEMETRY_SIGNALS = [
     "valve_states",
     "occupancy_estimate",
     "ambient_temperature",
+    "turbidity",
+    "conductivity",
+    "free_chlorine",
+    "makeup_water_flow",
+    "differential_pressure",
+    "supply_temperature",
+    "return_temperature",
+    "loop_delta_t",
+    "chiller_load",
+    "tower_fan_speed",
+    "basin_temperature",
+    "blowdown_rate",
 ]
 
 AQUATIC_SIGNAL_ALIASES = {
@@ -39,6 +51,18 @@ AQUATIC_SIGNAL_ALIASES = {
     "valve_states": ("valve_state", "valve_position", "valve_states"),
     "occupancy_estimate": ("occupancy", "bather_load", "occupancy_estimate"),
     "ambient_temperature": ("ambient_temp", "ambient_temperature", "outside_temp"),
+    "turbidity": ("turbidity", "ntu", "clarity"),
+    "conductivity": ("conductivity", "tds", "specific_conductance"),
+    "free_chlorine": ("free_chlorine", "chlorine", "chlorine_ppm", "fac"),
+    "makeup_water_flow": ("makeup_water", "makeup_water_flow", "fill_flow", "refill_rate"),
+    "differential_pressure": ("differential_pressure", "differential_pressure_psi", "dp", "delta_pressure"),
+    "supply_temperature": ("supply_temp", "supply_temperature", "chilled_water_supply_temp", "chw_supply_temp"),
+    "return_temperature": ("return_temp", "return_temperature", "chilled_water_return_temp", "chw_return_temp"),
+    "loop_delta_t": ("delta_t", "loop_delta_t", "chw_delta_t", "approach_temp"),
+    "chiller_load": ("chiller_load", "chiller_load_pct", "compressor_power", "compressor_power_kw"),
+    "tower_fan_speed": ("tower_fan_speed", "fan_speed", "fan_vfd", "fan_vfd_frequency"),
+    "basin_temperature": ("basin_temp", "basin_temperature", "condenser_water_temp", "tower_basin_temp"),
+    "blowdown_rate": ("blowdown", "blowdown_rate", "bleed_rate", "cycles_of_concentration"),
 }
 
 INTEGRATION_STUBS = [
@@ -68,10 +92,15 @@ RULES = [
     _Rule("heater efficiency degradation", "heating subsystem", ("heater_runtime", "pool_temperature", "spa_temperature"), "Heater runtime is rising without proportional water temperature response."),
     _Rule("orp instability", "water chemistry", ("orp", "ph", "sanitizer_feed_rate"), "ORP relationship with pH and feed response is unstable."),
     _Rule("chemical feed inconsistencies", "chemical dosing", ("sanitizer_feed_rate", "orp", "ph"), "Feed activity and chemistry response are intermittently decoupled."),
+    _Rule("water treatment instability", "water treatment", ("orp", "ph", "free_chlorine", "turbidity", "conductivity"), "Treatment response is drifting across sanitizer, clarity, and dissolved solids signals."),
     _Rule("abnormal overnight heat loss", "thermal envelope", ("pool_temperature", "ambient_temperature", "heater_runtime"), "Overnight cooling exceeds expected ambient-coupled profile."),
     _Rule("low-flow conditions", "circulation loop", ("flow_rate", "filter_pressure", "valve_states"), "Observed flow is structurally low relative to pressure/valve relation."),
     _Rule("pressure instability", "filtration", ("filter_pressure", "flow_rate", "pump_runtime"), "Pressure regime is oscillatory relative to steady runtime conditions."),
     _Rule("dead-zone circulation patterns", "hydraulic distribution", ("flow_rate", "valve_states", "occupancy_estimate"), "Circulation signatures imply uneven distribution under load."),
+    _Rule("makeup water abnormality", "resort water system", ("makeup_water_flow", "water_level", "flow_rate"), "Makeup-water behavior is no longer aligned with level recovery and circulation demand."),
+    _Rule("chilled water delta-t degradation", "chilled water loop", ("supply_temperature", "return_temperature", "loop_delta_t", "flow_rate"), "Chilled-water temperature split is degrading relative to loop flow."),
+    _Rule("chiller hydraulic mismatch", "chilled water loop", ("chiller_load", "flow_rate", "differential_pressure", "loop_delta_t"), "Chiller load, pump hydraulics, and thermal pickup are no longer moving together."),
+    _Rule("cooling tower approach drift", "cooling tower", ("basin_temperature", "tower_fan_speed", "ambient_temperature", "blowdown_rate"), "Tower heat rejection response is drifting against fan effort, ambient load, and water management."),
     _Rule("sensor disagreement anomalies", "sensor network", ("orp", "ph", "flow_rate", "pump_runtime"), "Independent sensors disagree in a persistent way."),
 ]
 
@@ -161,6 +190,10 @@ def relationship_map() -> list[dict[str, Any]]:
         {"source": "flow_rate", "target": "filter_pressure", "relationship": "hydraulic_resistance"},
         {"source": "heater_runtime", "target": "pool_temperature", "relationship": "thermal_response"},
         {"source": "ambient_temperature", "target": "pool_temperature", "relationship": "environmental_load"},
+        {"source": "makeup_water_flow", "target": "water_level", "relationship": "makeup_recovery"},
+        {"source": "supply_temperature", "target": "return_temperature", "relationship": "chilled_water_delta_t"},
+        {"source": "chiller_load", "target": "loop_delta_t", "relationship": "thermal_load_response"},
+        {"source": "tower_fan_speed", "target": "basin_temperature", "relationship": "heat_rejection_response"},
     ]
 
 
@@ -238,8 +271,8 @@ def analyze_aquatic_instability(
         "signals": signals,
         "evidence": evidence,
         "recommended_checks": [
-            "Confirm persistent relationship drift across pool, spa, and circulation windows.",
-            "Validate chemistry and hydraulic coupling during high occupancy period.",
+            "Confirm persistent relationship drift across pool, spa, chilled-water, and circulation windows.",
+            "Validate treatment, hydraulic, and thermal coupling during high-load operating periods.",
         ] if admitted else [],
         "integration_stubs": INTEGRATION_STUBS,
         "governance_boundary": {

@@ -1174,7 +1174,7 @@ def test_processing_helper_classifies_pool_and_hot_tub_telemetry_profile() -> No
     )
 
     intelligence = result["sii_intelligence"]
-    assert intelligence["telemetry_profile"] == "pool_hottub_systems"
+    assert intelligence["telemetry_profile"] == "commercial_water_systems"
     assert intelligence["telemetry_profile_confidence"] in {"medium", "high"}
     assert isinstance(intelligence["telemetry_profile_signals"], list)
     assert len(intelligence["telemetry_profile_signals"]) >= 1
@@ -1211,6 +1211,23 @@ def test_processing_helper_classifies_hvac_profile() -> None:
     intelligence = result["sii_intelligence"]
     assert intelligence["telemetry_profile"] == "hvac_systems"
     assert intelligence["telemetry_profile_confidence"] in {"medium", "high"}
+
+
+def test_processing_helper_classifies_chilled_water_loop_profile() -> None:
+    result = process_csv_content(
+        filename="chilled-water-loop.csv",
+        content=(
+            "timestamp,room,chilled_water_supply_temp,chilled_water_return_temp,chw_delta_t,flow_rate,differential_pressure_psi,chiller_load_pct\n"
+            "2026-05-01T08:00:00Z,Plant Loop,44.1,56.2,12.1,820,18.4,64\n"
+            "2026-05-01T08:05:00Z,Plant Loop,44.3,55.9,11.6,824,18.7,67\n"
+            "2026-05-01T08:10:00Z,Plant Loop,44.7,55.6,10.9,828,19.1,70\n"
+            "2026-05-01T08:15:00Z,Plant Loop,45.0,55.4,10.4,831,19.5,73\n"
+        ).encode(),
+    )
+    intelligence = result["sii_intelligence"]
+    assert intelligence["telemetry_profile"] == "commercial_water_systems"
+    assert intelligence["telemetry_profile_confidence"] == "high"
+    assert intelligence["operational_signal_profile"] == "commercial_water_systems"
 
 
 def test_processing_helper_classifies_electrical_profile() -> None:
@@ -1293,7 +1310,7 @@ def test_processing_helper_classifies_operational_water_profile() -> None:
         ).encode(),
     )
     intelligence = result["sii_intelligence"]
-    assert intelligence["operational_signal_profile"] == "water_systems"
+    assert intelligence["operational_signal_profile"] == "commercial_water_systems"
     assert intelligence["operational_signal_profile_confidence"] in {"medium", "high"}
 
 

@@ -105,6 +105,37 @@ def test_domain_mode_detects_aquatic_from_water_treatment_shape() -> None:
     assert facility.json()["domain_mode"] == "aquatic"
 
 
+def test_domain_mode_detects_aquatic_from_chilled_water_shape() -> None:
+    _write_detectable_upload(
+        "chilled-water-upload",
+        columns=[
+            "timestamp",
+            "chilled_water_supply_temp",
+            "chilled_water_return_temp",
+            "chw_delta_t",
+            "flow_rate",
+            "differential_pressure_psi",
+            "chiller_load_pct",
+        ],
+        room_names=["Central Plant"],
+    )
+    client = TestClient(create_app())
+
+    status = client.get("/api/domain/mode")
+
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["mode"] == "aquatic"
+    assert payload["source"] == "upload_shape"
+    assert payload["confidence"] >= 0.55
+    assert any("chilled_water" in item for item in payload["evidence"])
+
+    facility = client.get("/api/facility/systems")
+    assert facility.status_code == 200
+    systems = facility.json()["systems"]
+    assert any(system["name"] == "Chilled water loops" for system in systems)
+
+
 def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> None:
     client = TestClient(
         create_app(
@@ -122,9 +153,11 @@ def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> No
 
     assert status.status_code == 200
     payload = status.json()
+    assert payload["mode"] == "aquatic"
     assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
+    assert "Commercial water systems" in payload["profile"]["subtitle"]
 
 
 def test_domain_mode_ignores_stale_latest_result_without_active_upload_marker(tmp_path) -> None:
@@ -152,6 +185,8 @@ def test_domain_mode_ignores_stale_latest_result_without_active_upload_marker(tm
 
     assert status.status_code == 200
     payload = status.json()
+    assert payload["mode"] == "aquatic"
     assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
+    assert "Commercial water systems" in payload["profile"]["subtitle"]

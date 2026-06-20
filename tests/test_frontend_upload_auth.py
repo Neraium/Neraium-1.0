@@ -247,13 +247,15 @@ def test_frontend_displays_queued_worker_visibility_messages() -> None:
     assert "queuedWorkerDetail" in panel
 
 
-def test_queued_worker_starting_message_path_is_present() -> None:
+def test_queued_worker_status_is_folded_into_single_upload_line() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx")
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
 
     assert "workerState === \"starting\"" in source
     assert "Worker starting..." in source
-    assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" in panel
+    assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" not in panel
+    assert "customerUploadMessage" in panel
+    assert "uploadTransfer?.label" in panel
 
 
 def test_onboarding_storage_redacts_api_token() -> None:
