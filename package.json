@@ -1,7 +1,7 @@
 {
   "name": "neraium-1.0",
   "version": "1.0.0",
-  "description": "Neraium helps cannabis cultivation teams detect and explain environmental drift before it becomes visible crop stress.",
+  "description": "Neraium helps commercial water system operators detect and explain telemetry drift before it becomes operational failure.",
   "main": "index.js",
   "directories": {
     "doc": "docs",

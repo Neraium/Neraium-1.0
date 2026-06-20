@@ -195,6 +195,16 @@ def build_upload_intelligence(
         engine_result=engine_result,
         attribution=driver_attribution,
     )
+    evidence_chain_quality = build_evidence_chain_quality(
+        data_quality=data_quality,
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        attribution=driver_attribution,
+    )
+    regime_context = baseline_analysis.get("regime_context") or classify_regime_from_metadata(timestamp_profile, source_metadata)
+    adaptive_baseline = baseline_analysis.get("adaptive_baseline") or {}
+    drift_trajectory = baseline_analysis.get("drift_trajectory") or {}
+    feedback_calibration = build_feedback_calibration(source_metadata or {}, evidence_chain_quality)
     urgency = urgency_from_upload(
         data_quality=data_quality,
         engine_result=engine_result,
@@ -289,7 +299,14 @@ def build_upload_intelligence(
         "attribution_confidence": primary_room_record.get("attribution_confidence") or driver_attribution.get("attribution_confidence"),
         "supporting_evidence": supporting_evidence,
         "relationship_evidence": relationship_evidence,
+        "relationship_graph": relationship_graph_from_engine(engine_result),
         "structural_explanation": structural_explanation,
+        "regime_context": regime_context,
+        "adaptive_baseline": adaptive_baseline,
+        "drift_trajectory": drift_trajectory,
+        "counterfactual_driver_ranking": driver_attribution.get("counterfactual_driver_ranking", []),
+        "evidence_chain_quality": evidence_chain_quality,
+        "operator_feedback_calibration": feedback_calibration,
         "confidence_basis": primary_room_record["confidence_basis"],
         "confidence_components": top_level_confidence_components,
         "recommended_operator_review": primary_room_record["recommended_operator_review"],
@@ -333,7 +350,12 @@ def build_upload_intelligence(
         },
         "room_summary": room_summary or {},
         "rooms": room_records,
-        "source_metadata": source_metadata or {},
+        "source_metadata": {
+            **(source_metadata or {}),
+            "regime_context": regime_context,
+            "adaptive_baseline_strategy": adaptive_baseline.get("strategy"),
+            "evidence_chain_quality": evidence_chain_quality,
+        },
         **structural_cognition,
     }
     candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
@@ -926,3 +948,99 @@ def state_from_urgency(urgency: str) -> str:
         "review": "Structural drift observed",
         "nominal": "Baseline-aligned",
     }.get(urgency, "Monitoring")
+
+
+
+def relationship_graph_from_engine(engine_result: dict[str, Any]) -> dict[str, Any]:
+    for item in engine_result.get("evidence", []) or []:
+        if isinstance(item, dict) and item.get("type") == "relationship_graph":
+            return {
+                "edge_count": item.get("edge_count", 0),
+                "changed_edge_count": item.get("changed_edge_count", 0),
+                "dominant_subsystems": item.get("dominant_subsystems", []),
+                "deformation_score": item.get("deformation_score", 0),
+                "density": item.get("density", 0),
+                "top_edges": item.get("top_edges", []),
+            }
+    return {
+        "edge_count": 0,
+        "changed_edge_count": 0,
+        "dominant_subsystems": [],
+        "deformation_score": 0,
+        "density": 0,
+        "top_edges": [],
+    }
+
+
+def build_evidence_chain_quality(
+    *,
+    data_quality: dict[str, Any],
+    baseline_analysis: dict[str, Any],
+    engine_result: dict[str, Any],
+    attribution: dict[str, Any],
+) -> dict[str, Any]:
+    quality_metrics = data_quality.get("quality_metrics") or {}
+    relationship_graph = relationship_graph_from_engine(engine_result)
+    signal_profile = summarize_signal_profile(engine_result)
+    baseline_rows = int(baseline_analysis.get("baseline_window_rows") or 0)
+    recent_rows = int(baseline_analysis.get("recent_window_rows") or 0)
+    data_score = 1.0
+    if data_quality.get("readiness") == "needs_review":
+        data_score -= 0.2
+    elif data_quality.get("readiness") == "not_ready":
+        data_score -= 0.45
+    data_score -= min(0.35, float(quality_metrics.get("drop_ratio") or 0.0))
+    baseline_score = min(1.0, (baseline_rows + recent_rows) / 120) if baseline_rows or recent_rows else 0.0
+    relationship_score = min(1.0, float(relationship_graph.get("deformation_score") or 0) + 0.25 * min(2, relationship_graph.get("changed_edge_count", 0)))
+    persistence_score_value = min(1.0, signal_profile["persistent_columns"] / 3)
+    attribution_score = {"high": 1.0, "medium": 0.72, "low": 0.38}.get(str(attribution.get("attribution_confidence") or "low"), 0.38)
+    score = round(max(0.0, min(1.0, (data_score * 0.25) + (baseline_score * 0.2) + (relationship_score * 0.2) + (persistence_score_value * 0.2) + (attribution_score * 0.15))), 3)
+    return {
+        "score": score,
+        "rating": "strong" if score >= 0.75 else "moderate" if score >= 0.5 else "limited",
+        "components": {
+            "data_quality": round(max(0.0, min(1.0, data_score)), 3),
+            "baseline_depth": round(max(0.0, min(1.0, baseline_score)), 3),
+            "relationship_graph": round(max(0.0, min(1.0, relationship_score)), 3),
+            "persistence": round(max(0.0, min(1.0, persistence_score_value)), 3),
+            "driver_attribution": attribution_score,
+        },
+        "limitations": evidence_quality_limitations(data_quality, baseline_analysis, signal_profile),
+    }
+
+
+def evidence_quality_limitations(data_quality: dict[str, Any], baseline_analysis: dict[str, Any], signal_profile: dict[str, Any]) -> list[str]:
+    limitations: list[str] = []
+    if data_quality.get("readiness") != "ready":
+        limitations.append("data quality limits confidence")
+    if int(baseline_analysis.get("baseline_window_rows") or 0) < 25:
+        limitations.append("baseline window is shallow")
+    if signal_profile["persistent_columns"] == 0:
+        limitations.append("persistence is not yet established")
+    return limitations
+
+
+def build_feedback_calibration(source_metadata: dict[str, Any], evidence_quality: dict[str, Any]) -> dict[str, Any]:
+    feedback_summary = source_metadata.get("feedback_summary") if isinstance(source_metadata.get("feedback_summary"), dict) else {}
+    false_positive_count = int(feedback_summary.get("false_positive") or feedback_summary.get("ignore") or 0)
+    confirmed_count = int(feedback_summary.get("confirmed_issue") or feedback_summary.get("useful_warning") or 0)
+    sensitivity_adjustment = max(-0.08, min(0.08, (confirmed_count - false_positive_count) * 0.015))
+    return {
+        "feedback_available": bool(feedback_summary),
+        "sensitivity_adjustment": round(sensitivity_adjustment, 3),
+        "calibration_direction": "more_sensitive" if sensitivity_adjustment > 0 else "less_sensitive" if sensitivity_adjustment < 0 else "neutral",
+        "evidence_quality_rating": evidence_quality.get("rating"),
+        "operator_authority_preserved": True,
+    }
+
+
+def classify_regime_from_metadata(timestamp_profile: dict[str, Any], source_metadata: dict[str, Any] | None) -> dict[str, Any]:
+    profile = str((source_metadata or {}).get("operational_signal_profile") or (source_metadata or {}).get("telemetry_profile") or "unknown")
+    interval = str(timestamp_profile.get("estimated_sample_interval") or "").lower()
+    if "runtime" in profile or "equipment" in profile:
+        regime = "equipment_response"
+    elif "continuous" in interval or interval:
+        regime = "steady_state"
+    else:
+        regime = "unknown"
+    return {"regime": regime, "confidence": "low", "basis": "metadata fallback"}

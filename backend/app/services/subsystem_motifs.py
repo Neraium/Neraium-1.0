@@ -86,7 +86,8 @@ def analyze_subsystem_motifs(
         return None
 
     active_columns = active_columns_from_evidence(baseline_analysis=baseline_analysis, engine_result=engine_result)
-    primary_hits = active_columns & set(motif.primary_signals)
+    primary_signals = {normalize_signal_name(signal) for signal in motif.primary_signals}
+    primary_hits = active_columns & primary_signals
     if not primary_hits:
         return None
 
@@ -100,7 +101,8 @@ def analyze_subsystem_motifs(
 
     matched_secondaries: list[tuple[str, str, set[str]]] = []
     for family_name, phrase, signals in motif.secondary_families:
-        family_hits = active_columns & set(signals)
+        family_signals = {normalize_signal_name(signal) for signal in signals}
+        family_hits = active_columns & family_signals
         if family_hits:
             matched_secondaries.append((family_name, phrase, family_hits))
 

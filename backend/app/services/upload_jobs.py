@@ -613,14 +613,10 @@ def _build_csv_result(
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
-    repository_write_upload_completion(job_id, result=result, summary=summary)
     latest_sii = read_latest_sii_state()
     if isinstance(latest_sii, dict):
         _write_shared_state("latest_sii_state", latest_sii)
 
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
     try:
         from app.services.evidence_store import upsert_evidence_run
         record = upsert_evidence_run(
@@ -647,10 +643,13 @@ def _build_csv_result(
             result["sii_reliable_enough_to_show"] = bool(baseline_reliable and evidence_persisted)
             summary["sii_reliable_enough_to_show"] = result["sii_reliable_enough_to_show"]
             summary["evidence_persisted"] = evidence_persisted
-            repository_write_upload_completion(job_id, result=result, summary=summary)
             dispatch_observation_notification(record)
     except Exception:
         pass
+    repository_write_upload_completion(job_id, result=result, summary=summary)
+    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
+    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
+    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
     return summary
 
 

@@ -17,6 +17,6 @@ COPY . .
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost/health', timeout=5)" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost/health', timeout=5).read()" || exit 1
 
 CMD ["python", "-m", "app.entrypoint"]

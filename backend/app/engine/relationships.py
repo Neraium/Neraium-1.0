@@ -42,6 +42,7 @@ def evaluate_relationships(
     recent_rows = rows[-window_size:]
     column_indexes = {column: columns.index(column) for column in numeric_columns if column in columns}
     attempted_checks = 0
+    graph_edges: list[dict[str, Any]] = []
 
     for first_column, second_column in combinations(column_indexes.keys(), 2):
         attempted_checks += 1
@@ -61,15 +62,17 @@ def evaluate_relationships(
             continue
 
         change = recent_corr - baseline_corr
-        evidence.append(
-            {
-                "type": "relationship_change",
-                "columns": [first_column, second_column],
-                "baseline_correlation": round(baseline_corr, 4),
-                "recent_correlation": round(recent_corr, 4),
-                "change": round(change, 4),
-            }
-        )
+        relationship_record = {
+            "type": "relationship_change",
+            "columns": [first_column, second_column],
+            "baseline_correlation": round(baseline_corr, 4),
+            "recent_correlation": round(recent_corr, 4),
+            "change": round(change, 4),
+            "edge_weight": round(abs(change), 4),
+            "subsystem": subsystem_for_columns(first_column, second_column),
+        }
+        evidence.append(relationship_record)
+        graph_edges.append(relationship_record)
         audit_trace.append(
             "relationships.pair:"
             f"{first_column}:{second_column}:change={round(change, 4)}"
@@ -91,7 +94,19 @@ def evaluate_relationships(
                 f"Compare {display_column(first_column)} and {display_column(second_column)} timing against room activity logs."
             )
 
-    if not evidence:
+    graph_summary = build_relationship_graph_summary(graph_edges)
+    if graph_summary["edge_count"]:
+        evidence.append({"type": "relationship_graph", **graph_summary})
+        audit_trace.append(f"relationship_graph.density:{graph_summary['density']}")
+        if graph_summary["deformation_score"] >= 0.5:
+            signals.append({
+                "type": "relationship_graph_deformation",
+                "level": "review" if graph_summary["deformation_score"] < 0.75 else "elevated",
+                "message": "Multiple signal relationships are deforming together at subsystem level.",
+                "subsystems": graph_summary["dominant_subsystems"],
+            })
+            recommended_checks.append("Review the dominant subsystem relationship cluster before treating this as an isolated sensor issue.")
+    else:
         audit_trace.append("relationships.skipped:no_comparable_pairs")
         audit_trace.append("relationship_checks_skipped:no_comparable_pairs")
 
@@ -145,3 +160,52 @@ def display_column(column: str) -> str:
         "co2": "CO2",
     }
     return aliases.get(normalized, normalized)
+
+
+
+def subsystem_for_columns(first_column: str, second_column: str) -> str:
+    normalized = f"{first_column} {second_column}".lower()
+    if any(token in normalized for token in ["air", "flow", "pressure", "fan", "filter"]):
+        return "flow_distribution"
+    if any(token in normalized for token in ["temp", "heat", "cool", "hvac", "compressor"]):
+        return "thermal_response"
+    if any(token in normalized for token in ["humidity", "moisture", "vpd", "water"]):
+        return "moisture_response"
+    if any(token in normalized for token in ["runtime", "schedule", "light", "energy"]):
+        return "schedule_energy_response"
+    return "general_signal_coupling"
+
+
+def build_relationship_graph_summary(edges: list[dict[str, Any]]) -> dict[str, Any]:
+    comparable = [edge for edge in edges if isinstance(edge.get("edge_weight"), (int, float))]
+    if not comparable:
+        return {
+            "edge_count": 0,
+            "dominant_subsystems": [],
+            "deformation_score": 0.0,
+            "density": 0.0,
+            "top_edges": [],
+        }
+    changed = [edge for edge in comparable if float(edge.get("edge_weight") or 0) >= RELATIONSHIP_CHANGE_THRESHOLD]
+    subsystem_scores: dict[str, float] = {}
+    for edge in changed:
+        subsystem = str(edge.get("subsystem") or "general_signal_coupling")
+        subsystem_scores[subsystem] = subsystem_scores.get(subsystem, 0.0) + float(edge.get("edge_weight") or 0.0)
+    dominant = sorted(subsystem_scores, key=subsystem_scores.get, reverse=True)[:3]
+    top_edges = sorted(comparable, key=lambda edge: float(edge.get("edge_weight") or 0), reverse=True)[:5]
+    deformation = sum(float(edge.get("edge_weight") or 0) for edge in changed) / max(1, len(comparable))
+    return {
+        "edge_count": len(comparable),
+        "changed_edge_count": len(changed),
+        "dominant_subsystems": dominant,
+        "deformation_score": round(min(1.0, deformation), 4),
+        "density": round(len(changed) / max(1, len(comparable)), 4),
+        "top_edges": [
+            {
+                "columns": edge.get("columns", []),
+                "edge_weight": edge.get("edge_weight"),
+                "subsystem": edge.get("subsystem"),
+            }
+            for edge in top_edges
+        ],
+    }

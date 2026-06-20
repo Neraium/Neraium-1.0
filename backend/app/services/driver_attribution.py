@@ -115,6 +115,7 @@ def build_driver_attribution(
     score_relationships(scores, engine_result, column_to_category)
     score_sensor_network(scores, telemetry_context, baseline_analysis, cultivation_mapping)
 
+    ranked = sorted(scores.values(), key=lambda item: item.score, reverse=True)
     subsystem_override = analyze_subsystem_motifs(
         telemetry_context=telemetry_context,
         baseline_analysis=baseline_analysis,
@@ -125,15 +126,17 @@ def build_driver_attribution(
             "room": room_state.get("room") or room_state.get("label") or "Current room",
             "state": room_state.get("state") or room_state.get("status") or "Needs review",
             **subsystem_override,
+            "counterfactual_driver_ranking": counterfactual_driver_ranking(ranked),
         }
 
-    ranked = sorted(scores.values(), key=lambda item: item.score, reverse=True)
     top = ranked[0] if ranked else DriverScore("unknown_system_drift")
     evidence_strength = len(top.evidence)
     has_corrob = top.persistent or top.relationship_change or len(top.signals) >= 2
 
     if top.score < 3 or evidence_strength < 2 or not has_corrob:
-        return unknown_attribution(room_state, telemetry_context, top)
+        attribution = unknown_attribution(room_state, telemetry_context, top)
+        attribution["counterfactual_driver_ranking"] = counterfactual_driver_ranking(ranked)
+        return attribution
 
     return {
         "room": room_state.get("room") or room_state.get("label") or "Current room",
@@ -146,6 +149,7 @@ def build_driver_attribution(
         "next_operator_move": NEXT_MOVES[top.category],
         "severity": severity_from_score(top.score, room_state),
         "attribution_confidence": confidence_from_score(top),
+        "counterfactual_driver_ranking": counterfactual_driver_ranking(ranked),
     }
 
 
@@ -287,6 +291,7 @@ def unknown_attribution(
         "next_operator_move": NEXT_MOVES[driver_category],
         "severity": "review" if readiness != "ready" or has_directional_evidence else "info",
         "attribution_confidence": "low",
+        "counterfactual_driver_ranking": counterfactual_driver_ranking([top]),
     }
 
 
@@ -414,3 +419,36 @@ def readable_warning(warning: str) -> str:
 def mentions_any(value: str, needles: list[str]) -> bool:
     normalized = value.lower()
     return any(needle in normalized for needle in needles)
+
+
+
+def counterfactual_driver_ranking(ranked: list[DriverScore]) -> list[dict[str, Any]]:
+    nonzero = [item for item in ranked if item.score > 0]
+    if not nonzero:
+        return [
+            {
+                "driver_category": "unknown_system_drift",
+                "driver_label": DRIVER_LABELS["unknown_system_drift"],
+                "counterfactual_effect": "unknown",
+                "estimated_relief": 0.0,
+                "evidence": ["No counterfactual driver has enough support yet."],
+            }
+        ]
+    top_score = max(item.score for item in nonzero) or 1.0
+    ranked_payload = []
+    for item in nonzero[:5]:
+        relief = round(max(0.0, min(1.0, item.score / top_score)), 3)
+        ranked_payload.append(
+            {
+                "driver_category": item.category,
+                "driver_label": DRIVER_LABELS.get(item.category, item.category),
+                "counterfactual_effect": (
+                    "high" if relief >= 0.8 else "medium" if relief >= 0.45 else "low"
+                ),
+                "estimated_relief": relief,
+                "signals": sorted(item.signals),
+                "evidence": item.evidence[:3],
+                "operator_check": NEXT_MOVES.get(item.category, NEXT_MOVES["unknown_system_drift"]),
+            }
+        )
+    return ranked_payload

@@ -1,6 +1,6 @@
 # Production Acceptance Checklist
 
-Use this as the final go or no-go checklist for investor demos, controlled pilots, and production/operator use.
+Use this as the final go or no-go checklist for commercial water-system CSV upload workflows, controlled pilots, and production/operator use.
 
 ## Smoke Endpoints
 
@@ -70,9 +70,9 @@ Use this as the final go or no-go checklist for investor demos, controlled pilot
 - [ ] Auth database backup and restore checks are documented and tested.
 - [ ] S3/shared upload state bucket is configured where required.
 
-## Screenshots And Demo Assets
+## Screenshots And Workflow Assets
 
-- [ ] README includes at least one current screenshot or short demo GIF.
+- [ ] README includes at least one current screenshot or short workflow GIF.
 - [ ] Mobile System Health captured.
 - [ ] Mobile Data Connections captured.
 - [ ] Mobile Evidence Trail captured.
@@ -124,5 +124,5 @@ Use this as the final go or no-go checklist for investor demos, controlled pilot
 
 - [ ] Backend safe to deploy.
 - [ ] Frontend safe to deploy.
-- [ ] Operator flow safe to demonstrate.
+- [ ] Operator CSV upload flow safe to operate.
 - [ ] Remaining risks are documented with owner and next action.

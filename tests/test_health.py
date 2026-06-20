@@ -80,12 +80,12 @@ def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert [system["name"] for system in payload["systems"]] == [
-        "HVAC",
-        "Humidity control",
-        "Airflow",
-        "Irrigation",
-        "Lighting",
-        "Sensor network",
+        "Commercial pools",
+        "Resort water systems",
+        "Water treatment",
+        "Chilled water loops",
+        "Pumps and filtration",
+        "Cooling towers",
     ]
     assert payload["intelligence"] is None
     assert payload["intelligence_status"]["source"] == "none"
