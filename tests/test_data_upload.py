@@ -439,6 +439,10 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     assert payload["core_engine"] == CORE_ENGINE
     assert payload["error"] is None
     assert payload["result_summary"]["filename"] == "ready-report.csv"
+    persisted_result = upload_jobs.read_upload_result_by_job_id(job_id)
+    assert persisted_result["evidence_persistence"]["persisted"] is True
+    assert persisted_result["sii_reliable_enough_to_show"] == payload["sii_reliable_enough_to_show"]
+    assert payload["evidence_persisted"] is True
     assert sii_runner.STATE_PATH.exists()
 
 

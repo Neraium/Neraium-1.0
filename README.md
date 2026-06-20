@@ -4,7 +4,7 @@
 
 Neraium is a system intelligence platform for complex, telemetry-driven environments. It analyzes multivariable data to detect drift, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
 
-The platform is designed for environments where many signals interact at once: facilities, equipment, controlled environments, infrastructure, industrial systems, building systems, and other operational networks. Controlled-environment agriculture is one possible application area, but Neraium is not limited to cultivation.
+The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same system-intelligence layer can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
 
 ---
 
@@ -39,23 +39,22 @@ Current capabilities include:
 
 ---
 
-## Demo Path
+## Primary CSV Upload Workflow
 
-A strong demo should show Neraium as an evidence-backed system intelligence workflow, not just a dashboard.
+The core product workflow is uploading telemetry from a commercial water system and turning that file into evidence-backed system intelligence.
 
-Recommended flow:
+Recommended operator flow:
 
 1. Open the system status view.
-2. Upload a telemetry export.
+2. Upload a commercial water-system CSV telemetry export.
 3. Show validation, queued worker visibility, and processing progress.
 4. Open the operator finding or report.
 5. Explain what changed, why it matters, and what the operator should inspect next.
 6. Open Evidence Replay to show the behavior change over time.
 7. Close by explaining that the same intelligence layer applies across telemetry-heavy operational environments.
 
-Demo and screenshot planning docs:
+Workflow and screenshot planning docs:
 
-- `docs/DEMO_SCRIPT.md`
 - `docs/SCREENSHOT_CHECKLIST.md`
 
 ---
@@ -64,17 +63,15 @@ Demo and screenshot planning docs:
 
 Neraium is built for operational environments where drift matters before failure becomes obvious.
 
-Potential domains include:
+Primary commercial water-system contexts include:
 
-- Building automation
-- HVAC and mechanical systems
-- Industrial equipment
-- Manufacturing processes
-- Water systems
-- Energy systems
-- Facility operations
-- Predictive maintenance
-- Controlled environments
+- Aquatic facilities and hospitality water systems
+- Pools, spas, and therapy-water operations
+- Filtration and pump networks
+- Tanks, reservoirs, and recirculation loops
+- Flow, pressure, temperature, and chemistry monitoring
+- Maintenance-heavy mechanical water infrastructure
+- Multi-site facility water operations
 - Sensor-heavy operational networks
 
 The current workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
@@ -258,7 +255,7 @@ Local backend development runs on port `8010`. Local frontend development runs o
 
 ## Production Hardening
 
-Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` for authentication, authorization, runtime storage, CI, screenshot/demo assets, observability, deployment, and operator-flow acceptance checks.
+Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` for authentication, authorization, runtime storage, CI, screenshot/workflow assets, observability, deployment, and operator-flow acceptance checks.
 
 Current hardening focus areas include:
 
@@ -266,7 +263,7 @@ Current hardening focus areas include:
 - Confirming auth/session persistence through the dedicated auth database
 - Verifying multi-task or multi-worker deployment behavior
 - Using Postgres for production auth/session state while keeping SQLite fallback for tests and local development
-- Keeping README/demo screenshots current with the deployed UI
+- Keeping README/workflow screenshots current with the deployed UI
 - Keeping browser clients free of build-time shared API secrets
 - Expanding dependency security policy from critical CVE blocking to broader release governance
 

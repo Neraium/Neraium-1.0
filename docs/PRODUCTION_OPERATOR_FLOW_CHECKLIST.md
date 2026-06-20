@@ -1,6 +1,6 @@
 # Production Operator Flow Checklist
 
-Use this checklist before investor demos, pilot walkthroughs, and operator acceptance sessions. Production outputs must come from backend SII analysis. If output is unavailable, the UI should show "Awaiting SII analysis" instead of a fabricated state.
+Use this checklist before commercial water-system pilot walkthroughs and operator acceptance sessions. Production outputs must come from backend SII analysis. If output is unavailable, the UI should show "Awaiting SII analysis" instead of a fabricated state.
 
 ## Mobile Checklist
 
@@ -25,11 +25,11 @@ Use this checklist before investor demos, pilot walkthroughs, and operator accep
 - Evidence and operational meaning are prioritized over raw telemetry density.
 - Backend health, readiness, and intake state are visible without debug clutter.
 - Keyboard focus states are visible for primary operator controls.
-- Capture screenshots for investor demo deck and deployment records.
+- Capture screenshots for operator review and deployment records.
 
 ## Required Operator Flow
 
-1. Upload CSV.
+1. Upload commercial water-system CSV.
 2. Configure API connection credentials and URL.
 3. Test Connection.
 4. Poll Once.
