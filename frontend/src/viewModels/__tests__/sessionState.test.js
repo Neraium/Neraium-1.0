@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEmptySessionStore, buildSessionStore } from "../sessionState";
+import { buildEmptySessionStore, buildSessionStore, resolveSessionStore } from "../sessionState";
 
 describe("sessionState adapter", () => {
   it("starts in idle before any backend session payload is loaded", () => {
@@ -24,5 +24,15 @@ describe("sessionState adapter", () => {
     });
     expect(session.hasActiveSession).toBe(false);
     expect(session.hasRuntimeData).toBe(false);
+  });
+
+  it("builds a verified fallback store when App only has raw latest-upload payloads", () => {
+    const session = resolveSessionStore({
+      latestUploadSnapshot: { status: "COMPLETE", session_state: "verified", job_id: "job-42" },
+      latestUploadResult: { job_id: "job-42", engine_result: { overall_result: "stable" } },
+    });
+    expect(session.uiState).toBe("verified");
+    expect(session.jobId).toBe("job-42");
+    expect(session.hasActiveSession).toBe(true);
   });
 });

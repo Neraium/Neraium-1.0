@@ -1,20 +1,12 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { apiFetch } from "./config";
-import { ENABLE_ADMISSION_GATE } from "./config";
-import SystemTopologyWorkspace from "./components/SystemTopologyWorkspace";
-import DataConnectionsWorkspace from "./components/DataConnectionsWorkspace";
-import { EmptyState, MetricGrid, Panel } from "./components/workspacePrimitives";
-import AppErrorBoundary from "./components/AppErrorBoundary";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { apiFetch, ENABLE_ADMISSION_GATE } from "./config";
+import AppWorkspaceRouter from "./components/AppWorkspaceRouter";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
-import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
-import { buildSessionStore } from "./viewModels/sessionState";
 import { logoutUser } from "./services/api/authApi";
-
-const StructuralReplayWorkspace = lazy(() => import("./components/StructuralReplayWorkspace"));
-const GovernanceAdminWorkspace = lazy(() => import("./components/GovernanceAdminWorkspace"));
-const ObservationCenterWorkspace = lazy(() => import("./components/ObservationCenterWorkspace"));
-const HelpChangelogWorkspace = lazy(() => import("./components/HelpChangelogWorkspace"));
+import { resolveSessionStore } from "./viewModels/sessionState";
+import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
 function App() {
   const accessCode = "";
@@ -48,11 +40,11 @@ function App() {
     initialAllowPersistedLatest,
   });
 
-  const resolvedSessionStore = useMemo(() => sessionStore ?? buildSessionStore({
-    snapshot: latestUploadSnapshot,
-    latest_result: latestUploadResult,
-    session_state: latestUploadSnapshot?.session_state ?? (latestUploadResult ? "verified" : (latestUploadSnapshot?.status ?? "empty")),
-  }, { loaded: true }), [latestUploadResult, latestUploadSnapshot, sessionStore]);
+  const resolvedSessionStore = useMemo(() => resolveSessionStore({
+    sessionStore,
+    latestUploadSnapshot,
+    latestUploadResult,
+  }), [latestUploadResult, latestUploadSnapshot, sessionStore]);
 
   const {
     historianReplayState,
@@ -184,7 +176,6 @@ function App() {
     await logoutUser();
   }, []);
 
-
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (domainMode) {
@@ -200,150 +191,41 @@ function App() {
     window.__NERAIUM_APP_READY__ = true;
   }, []);
 
-  function renderWithBackControl(content) {
-    return (
-      <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
-        <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
-          <div className="workspace-back-control" aria-label="Workspace navigation">
-            <button
-              type="button"
-              className="system-gate__settings-action"
-              onClick={handleBackToGate}
-              aria-label="Back to Gate"
-            >
-              Back to Gate
-            </button>
-          </div>
-          {content}
-        </div>
-      </AppErrorBoundary>
-    );
-  }
-
-  if (activeWorkspace === "data-connections") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <DataConnectionsWorkspace
-        accessCode={accessCode}
-        apiFetch={apiFetch}
-        apiStatus={apiStatus}
-        latestUploadSnapshot={effectiveLatestUploadSnapshot}
-        latestUploadResult={effectiveLatestUploadResult}
-        hasActiveSession={hasActiveSession}
-        hasResumedSession={hasResumedSession}
-        hasCurrentUploadResult={hasCurrentUploadResult}
-        hasRealSiiOutput={hasRealSiiOutput}
-        roomContext={roomContext}
-        onUploadComplete={handleGateUploadComplete}
-        onResetDemo={handleResetDemo}
-        onResumePreviousSession={handleResumePreviousSession}
-        formatClockTime={formatClockTime}
-      />
-      </div>
-    );
-  }
-
-  if (activeWorkspace === "historical-replay") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Replay" className="span-12"><p className="narrative-text">Preparing replay workspace...</p></Panel></div>}>
-        <StructuralReplayWorkspace
-          apiFetch={apiFetch}
-          accessCode={accessCode}
-          expertMode={false}
-          normalizeErrorMessage={(value) => String(value ?? "")}
-          formatClockTime={formatClockTime}
-          Panel={Panel}
-          MetricGrid={MetricGrid}
-          EmptyState={EmptyState}
-          hasActiveSession={hasActiveSession}
-          hasCurrentUploadResult={hasCurrentUploadResult}
-          hasResumedSession={hasResumedSession}
-          hasRealSiiOutput={hasRealSiiOutput}
-          currentSession={currentSession}
-          canonicalFinding={canonicalFinding}
-          domainMode={domainMode}
-          onReplayFrameChange={handleReplayFrameChange}
-          onReplayModeChange={handleReplayModeChange}
-        />
-      </Suspense>
-      </div>
-    );
-  }
-
-  if (activeWorkspace === "governance-admin") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Governance" className="span-12"><p className="narrative-text">Preparing governance workspace...</p></Panel></div>}>
-        <GovernanceAdminWorkspace
-          apiFetch={apiFetch}
-          accessCode={accessCode}
-          Panel={Panel}
-          EmptyState={EmptyState}
-        onBackToGate={() => setActiveWorkspace("system-body")}
-        />
-      </Suspense>
-      </div>
-    );
-  }
-
-  if (activeWorkspace === "observation-center") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Findings" className="span-12"><p className="narrative-text">Preparing findings...</p></Panel></div>}>
-          <ObservationCenterWorkspace
-            apiFetch={apiFetch}
-            accessCode={accessCode}
-            canonicalFinding={canonicalFinding}
-            currentSession={currentSession}
-            onBackToGate={() => setActiveWorkspace("system-body")}
-            onReviewEvidence={() => setActiveWorkspace("historical-replay")}
-            onWorkspaceNavigate={setActiveWorkspace}
-          />
-        </Suspense>
-      </div>
-    );
-  }
-
-  if (activeWorkspace === "help-changelog") {
-    return renderWithBackControl(
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={<div className="workspace-grid"><Panel title="Loading Help" className="span-12"><p className="narrative-text">Preparing help and changelog workspace...</p></Panel></div>}>
-          <HelpChangelogWorkspace
-            onBackToGate={() => setActiveWorkspace("system-body")}
-            onWorkspaceNavigate={setActiveWorkspace}
-          />
-        </Suspense>
-      </div>
-    );
-  }
-
   return (
-    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
-      <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-      <SystemTopologyWorkspace
-      liveOps={{
-        ...liveOps,
-        replayOverlay: historianReplayState.frame ?? null,
-        canonicalFinding,
-      }}
-      replayFrame={historianReplayState.frame}
-      selectedTarget={null}
-      onSelectTarget={() => {}}
+    <AppWorkspaceRouter
+      activeWorkspace={activeWorkspace}
+      appReady={appReady}
+      errorBoundaryResetKey={errorBoundaryResetKey}
       apiFetch={apiFetch}
       accessCode={accessCode}
-      onWorkspaceNavigate={setActiveWorkspace}
-      onSignOut={handleSignOut}
-      onUploadComplete={handleGateUploadComplete}
+      apiStatus={apiStatus}
+      liveOps={liveOps}
+      historianReplayState={historianReplayState}
+      currentSession={currentSession}
+      canonicalFinding={canonicalFinding}
+      gateProcessing={gateProcessing}
+      effectiveLatestUploadResult={effectiveLatestUploadResult}
+      effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+      hasActiveSession={hasActiveSession}
+      hasCurrentUploadResult={hasCurrentUploadResult}
+      hasResumedSession={hasResumedSession}
+      hasRealSiiOutput={hasRealSiiOutput}
+      roomContext={roomContext}
       domainMode={domainMode}
       domainDetection={domainDetection}
-      gateProcessing={gateProcessing}
-      />
-    </div>
-    </AppErrorBoundary>
+      formatClockTime={formatClockTime}
+      handleBackToGate={handleBackToGate}
+      handleRetryWorkspace={handleRetryWorkspace}
+      handleGateUploadComplete={handleGateUploadComplete}
+      handleResetDemo={handleResetDemo}
+      handleResumePreviousSession={handleResumePreviousSession}
+      handleReplayFrameChange={handleReplayFrameChange}
+      handleReplayModeChange={handleReplayModeChange}
+      handleSignOut={handleSignOut}
+      setActiveWorkspace={setActiveWorkspace}
+    />
   );
 }
-
 
 function deriveUploadTone(result) {
   if (!result) return "stable";

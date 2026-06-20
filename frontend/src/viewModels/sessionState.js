@@ -105,3 +105,22 @@ export function buildSessionStore(payload, { loaded = true } = {}) {
     payload: sourcePayload,
   };
 }
+
+export function resolveSessionStore({
+  sessionStore = null,
+  latestUploadSnapshot = null,
+  latestUploadResult = null,
+} = {}) {
+  if (sessionStore) {
+    return sessionStore;
+  }
+  return buildSessionStore(
+    {
+      snapshot: latestUploadSnapshot,
+      latest_result: latestUploadResult,
+      session_state: latestUploadSnapshot?.session_state
+        ?? (latestUploadResult ? FRONTEND_SESSION_STATES.VERIFIED : (latestUploadSnapshot?.status ?? FRONTEND_SESSION_STATES.EMPTY)),
+    },
+    { loaded: true },
+  );
+}
