@@ -35,6 +35,26 @@ function buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWo
   return lines;
 }
 
+function clampUploadPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function uploadProgressStage(uploadState, uploadJob) {
+  const state = String(uploadState || "").toLowerCase();
+  const workerState = String(uploadJob?.worker_state || uploadJob?.workerState || "").toLowerCase();
+  const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
+
+  if (["complete", "completed", "success"].includes(state) || processingState === "complete") return "Complete";
+  if (["error", "failed", "validation_error"].includes(state)) return "Needs attention";
+  if (state === "uploading") return "Uploading";
+  if (workerState === "starting" || processingState === "queued") return "Queued";
+  if (workerState === "running" || workerState === "active" || state === "running_sii") return "Processing";
+  if (state === "validated") return "Ready";
+  return "Upload status";
+}
+
 export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
@@ -71,8 +91,10 @@ export default function IntakeFlowPanel({
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : latestUploadSnapshot?.last_filename ?? "No file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
-
-  void uploadTransfer;
+  const uploadProgressPercent = clampUploadPercent(visibleProgressPercent);
+  const uploadStage = uploadProgressStage(uploadState, uploadJob);
+  const uploadStatusLabel = uploadTransfer?.label || statusLines[0] || uploadStage;
+  const showUploadProgressBar = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -124,9 +146,23 @@ export default function IntakeFlowPanel({
                 {line}
               </span>
             ))}
-            {visibleProgressPercent !== null ? (
-              <div className="upload-progress-meter" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={visibleProgressPercent} role="progressbar">
-                <span style={{ width: `${visibleProgressPercent}%` }} />
+            {showUploadProgressBar ? (
+              <div className="upload-status-meter" aria-live="polite">
+                <div className="upload-status-meter__header">
+                  <span>{uploadStage}</span>
+                  <strong>{uploadProgressPercent}%</strong>
+                </div>
+                <div
+                  className="upload-progress-meter"
+                  aria-label={`Upload status: ${uploadProgressPercent}% complete`}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow={uploadProgressPercent}
+                  role="progressbar"
+                >
+                  <span style={{ width: `${uploadProgressPercent}%` }} />
+                </div>
+                <p>{uploadStatusLabel}</p>
               </div>
             ) : null}
             {shouldShowBatchSummary ? (
