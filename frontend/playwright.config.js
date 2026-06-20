@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const backendCommand = [
+  "cd ..",
+  "PYTHON_BIN=./.venv/bin/python",
+  "if [ ! -x \"$PYTHON_BIN\" ]; then PYTHON_BIN=$(command -v python3 || command -v python); fi",
+  "PYTHONPATH=backend APP_ENV=test NERAIUM_RUNTIME_DIR=.playwright-runtime NERAIUM_START_BACKGROUND_WORKERS=1 NERAIUM_START_DATA_POLLER=0 \"$PYTHON_BIN\" -m uvicorn app.main:app --host 127.0.0.1 --port 8010",
+].join(" && ");
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 90_000,
@@ -21,7 +28,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "cd .. && PYTHONPATH=backend APP_ENV=test NERAIUM_RUNTIME_DIR=.playwright-runtime NERAIUM_START_BACKGROUND_WORKERS=1 NERAIUM_START_DATA_POLLER=0 ./.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010",
+      command: backendCommand,
       port: 8010,
       timeout: 240_000,
       reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
