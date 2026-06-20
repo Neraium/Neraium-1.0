@@ -133,10 +133,10 @@ def get_observability_metrics() -> PlainTextResponse:
         f"neraium_audit_events_total {audit_events_count()}",
         "# HELP neraium_auth_users_active Active authenticated users.",
         "# TYPE neraium_auth_users_active gauge",
-        f"neraium_auth_users_active {auth_summary().get("active_users", 0)}",
+        f"neraium_auth_users_active {auth_summary().get('active_users', 0)}",
         "# HELP neraium_auth_sessions_active Active authenticated sessions.",
         "# TYPE neraium_auth_sessions_active gauge",
-        f"neraium_auth_sessions_active {auth_summary().get("active_sessions", 0)}",
+        f"neraium_auth_sessions_active {auth_summary().get('active_sessions', 0)}",
         "# HELP neraium_sparse_upload_rate Share of recent uploads containing at least one sparse-telemetry room.",
         "# TYPE neraium_sparse_upload_rate gauge",
         f"neraium_sparse_upload_rate {round(sparse_upload_rate, 4)}",
@@ -147,7 +147,7 @@ def get_observability_metrics() -> PlainTextResponse:
         "# TYPE neraium_unknown_profile_rate gauge",
         f"neraium_unknown_profile_rate {round(unknown_profile_rate, 4)}",
     ]
-    return PlainTextResponse("\n".join(lines) + "\n") 
+    return PlainTextResponse("\n".join(lines) + "\n")
 
 
 @router.get("/observability/performance")
