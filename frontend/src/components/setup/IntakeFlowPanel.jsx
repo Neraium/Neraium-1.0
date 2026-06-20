@@ -35,6 +35,12 @@ function buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWo
   return lines;
 }
 
+function clampPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
 function uploadProgressStage(uploadState, uploadJob) {
   const state = String(uploadState || "").toLowerCase();
   const workerState = String(uploadJob?.worker_state || uploadJob?.workerState || "").toLowerCase();
@@ -53,6 +59,68 @@ function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines
   if (uploadTransfer?.label) return uploadTransfer.label;
   return statusLines.at(-1) || uploadStageMessage;
 }
+
+function resolveStageProgress({ uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
+  const state = String(uploadState || "").toLowerCase();
+  const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
+  const status = String(uploadJob?.status || "").toLowerCase();
+  const isComplete = ["complete", "completed", "success"].includes(state) || processingState === "complete" || status === "complete";
+  const isProcessing = state === "running_sii" || Boolean(uploadJob);
+  const isUploading = state === "uploading";
+  const uploadPercent = isProcessing || isComplete ? 100 : clampPercent(uploadTransfer?.percent ?? 0);
+  const backendPercent = clampPercent(visibleProgressPercent ?? uploadJob?.propagation_progress ?? uploadJob?.progress ?? uploadJob?.percent ?? 0);
+  const processingPercent = isComplete ? 100 : isProcessing ? Math.max(1, Math.min(99, backendPercent)) : 0;
+  const analysisPercent = isComplete ? 100 : 0;
+
+  return {
+    uploadPercent,
+    processingPercent,
+    analysisPercent,
+    activeStage: isComplete ? "complete" : isProcessing ? "processing" : isUploading ? "upload" : "idle",
+  };
+}
+
+const stageWrapStyle = {
+  display: "grid",
+  gap: "10px",
+  width: "100%",
+  marginTop: "10px",
+};
+
+const stageRowStyle = {
+  display: "grid",
+  gap: "6px",
+};
+
+const stageHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  color: "var(--text-secondary)",
+  fontSize: "0.72rem",
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const progressTrackStyle = {
+  width: "100%",
+  height: "10px",
+  overflow: "hidden",
+  borderRadius: "999px",
+  background: "rgba(255, 255, 255, 0.08)",
+  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.06)",
+};
+
+const progressFillStyle = {
+  display: "block",
+  height: "100%",
+  minWidth: "0",
+  borderRadius: "inherit",
+  background: "linear-gradient(90deg, rgba(197, 146, 60, 0.98), rgba(244, 210, 132, 0.98))",
+  transition: "width 320ms ease",
+};
 
 export default function IntakeFlowPanel({
   handleUpload,
@@ -92,6 +160,8 @@ export default function IntakeFlowPanel({
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
   const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob) || visibleProgressPercent !== null;
+  const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
+  const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -139,6 +209,33 @@ export default function IntakeFlowPanel({
                 {isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
                 {uploadStatusLabel}
               </span>
+            ) : null}
+            {shouldShowStageBars ? (
+              <div className="upload-stage-progress" style={stageWrapStyle} aria-label="Upload and processing progress">
+                {[
+                  ["Upload", stageProgress.uploadPercent],
+                  ["Process", stageProgress.processingPercent],
+                  ["Analysis", stageProgress.analysisPercent],
+                ].map(([label, percent]) => (
+                  <div className="upload-stage-progress__row" style={stageRowStyle} key={label}>
+                    <div className="upload-stage-progress__header" style={stageHeaderStyle}>
+                      <span>{label}</span>
+                      <strong>{percent}%</strong>
+                    </div>
+                    <div
+                      className="upload-progress-meter"
+                      style={progressTrackStyle}
+                      aria-label={`${label} ${percent}% complete`}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={percent}
+                      role="progressbar"
+                    >
+                      <span style={{ ...progressFillStyle, width: `${percent}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : null}
             {shouldShowBatchSummary ? (
               <div className="intake-flow__batch-results">
