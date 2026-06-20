@@ -54,6 +54,7 @@ export default function AppWorkspaceRouter({
   currentSession,
   canonicalFinding,
   gateProcessing,
+  sessionStore,
   effectiveLatestUploadResult,
   effectiveLatestUploadSnapshot,
   hasActiveSession,
@@ -63,11 +64,13 @@ export default function AppWorkspaceRouter({
   roomContext,
   domainMode,
   domainDetection,
+  workspaceStatusMessage,
+  workspaceResetRevision,
   formatClockTime,
   handleBackToGate,
   handleRetryWorkspace,
   handleGateUploadComplete,
-  handleResetDemo,
+  handleResetWorkspace,
   handleResumePreviousSession,
   handleReplayFrameChange,
   handleReplayModeChange,
@@ -86,17 +89,14 @@ export default function AppWorkspaceRouter({
           accessCode={accessCode}
           apiFetch={apiFetch}
           apiStatus={apiStatus}
+          sessionStore={sessionStore}
           latestUploadSnapshot={effectiveLatestUploadSnapshot}
           latestUploadResult={effectiveLatestUploadResult}
-          hasActiveSession={hasActiveSession}
-          hasResumedSession={hasResumedSession}
-          hasCurrentUploadResult={hasCurrentUploadResult}
-          hasRealSiiOutput={hasRealSiiOutput}
-          roomContext={roomContext}
           onUploadComplete={handleGateUploadComplete}
-          onResetDemo={handleResetDemo}
-          onResumePreviousSession={handleResumePreviousSession}
-          formatClockTime={formatClockTime}
+          onLoadLatestWorkspace={handleResumePreviousSession}
+          onResetWorkspace={handleResetWorkspace}
+          workspaceStatusMessage={workspaceStatusMessage}
+          workspaceResetRevision={workspaceResetRevision}
         />
       </WorkspaceWithBackControl>
     );

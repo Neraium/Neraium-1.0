@@ -22,13 +22,18 @@ from app.services.upload_state import (
     has_active_session_artifact,
 )
 from app.services.upload_state_repository import (
+    read_latest_upload_result,
     read_latest_upload_record,
+    read_latest_upload_summary,
     read_upload_result_by_job_id,
     read_upload_status,
     resolve_upload_artifacts,
     reset_block_persisted_active,
+    reset_upload_state,
     upload_state_backend,
 )
+from app.services.runtime_db import clear_upload_runtime_tables
+from app.services.sii_runner import reset_latest_sii_state
 from app.services.upload_status_contract import normalize_upload_status_payload
 
 logger = logging.getLogger(__name__)
@@ -210,13 +215,27 @@ def _record_from_history(history_entry: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _resolve_runtime_current_record() -> dict[str, Any]:
+    summary = read_latest_upload_summary()
+    result = read_latest_upload_result()
+    job_id = str(
+        (summary or {}).get("job_id")
+        or (result or {}).get("job_id")
+        or ""
+    ).strip() or None
+    active_result = result if isinstance(result, dict) and has_active_session_artifact(result, job_id=job_id) else None
+    if not isinstance(summary, dict) and not isinstance(active_result, dict):
+        return build_empty_latest_upload_record()
+    return build_latest_upload_record(summary=summary, result=active_result)
+
+
 def resolve_latest_upload_session(*, include_persisted: int | bool = True, request_id: str | None = None) -> dict[str, Any]:
     use_persisted = bool(include_persisted)
     state_backend = upload_state_backend()
     if reset_block_persisted_active():
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
-    canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
+    canonical = read_latest_upload_record() if use_persisted else _resolve_runtime_current_record()
     if state_backend == "local" and use_persisted and not (UPLOAD_RUNTIME_STATE.runtime_dir / "latest_upload.json").exists():
         canonical = build_empty_latest_upload_record()
     if not isinstance(canonical, dict):
@@ -347,6 +366,25 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
     return payload
 
 
+def reset_upload_session(*, request_id: str | None = None) -> dict[str, Any]:
+    reset_upload_state()
+    try:
+        clear_upload_runtime_tables()
+    except Exception:
+        logger.exception("upload_session_reset_runtime_tables_failed")
+    try:
+        reset_latest_sii_state()
+    except Exception:
+        logger.exception("upload_session_reset_sii_state_failed")
+    session = resolve_latest_upload_session(include_persisted=False, request_id=request_id)
+    return {
+        "ok": True,
+        "status": "reset",
+        "message": "Workspace reset.",
+        "session": session,
+    }
+
+
 def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict[str, Any]:
     requested_id = str(job_id or "").strip()
     if not requested_id:
@@ -469,4 +507,3 @@ def session_metrics_snapshot(*, current_state: str | None = None) -> dict[str, A
         "stale_sessions": 1 if current_state == SESSION_STATE_STALE else 0,
         "upload_state_problems": 1 if current_state in {SESSION_STATE_STALE, SESSION_STATE_ERROR} else 0,
     }
-

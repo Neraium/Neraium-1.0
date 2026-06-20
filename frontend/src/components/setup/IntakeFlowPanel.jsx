@@ -21,7 +21,10 @@ export default function IntakeFlowPanel({
   batchResults = [],
   onRetryFailedUploads,
   onReprocessCurrentBatch,
+  onClearSelection,
+  onLoadLatestWorkspace,
   onResetWorkspace,
+  workspaceStatusMessage = "",
 }) {
   const failedCount = batchResults.filter((entry) => entry.status === "failed").length;
   const successCount = batchResults.filter((entry) => entry.status === "success").length;
@@ -111,9 +114,18 @@ export default function IntakeFlowPanel({
             ) : null}
           </div>
         ) : null}
+        {workspaceStatusMessage ? (
+          <div className="intake-flow__status intake-flow__status--idle" role="status" aria-live="polite">
+            <span>{workspaceStatusMessage}</span>
+          </div>
+        ) : null}
         <details className="upload-secondary-actions">
           <summary>Workspace options</summary>
-          <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Clear Upload Workspace</button>
+          <div className="intake-flow__controls">
+            <button type="button" className="secondary-command-button" onClick={onClearSelection}>Clear Selected File</button>
+            <button type="button" className="secondary-command-button" onClick={onLoadLatestWorkspace}>Load Latest Workspace</button>
+            <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Reset Workspace</button>
+          </div>
         </details>
       </form>
     </Panel>

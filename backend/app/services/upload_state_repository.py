@@ -495,7 +495,7 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
 def reset_upload_state() -> None:
     state = runtime_state()
     state.jobs.clear()
-    for path in state.runtime_dir.glob("*upload*"):
+    for path in state.runtime_dir.glob("latest_upload*.json"):
         try:
             path.unlink()
         except OSError:
@@ -504,9 +504,8 @@ def reset_upload_state() -> None:
     state.latest_upload_cache["result"] = None
     state.latest_upload_cache["canonical"] = None
     try:
-        delete_latest_payload_prefix("upload_")
-        delete_latest_payload_prefix("latest_upload_")
         delete_latest_payload_prefix("latest_upload")
+        delete_latest_payload_prefix("latest_upload_")
     except Exception:
         pass
     state.reset_block_persisted = True

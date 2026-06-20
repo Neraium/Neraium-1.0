@@ -4,6 +4,7 @@ import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/curre
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
 import { isUploadProcessingStatus, uploadStageLabel, uploadStagePercent } from "../viewModels/uploadContract";
+import { clearLatestUploadStateCache, resetDemoSession } from "../services/api/uploadApi";
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
@@ -11,14 +12,14 @@ const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
 function readStoredSessionIntent() {
   if (typeof window === "undefined") return "neutral";
   const allowPersisted = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
-  if (allowPersisted === "0") return "neutral";
+  if (allowPersisted !== "1") return "neutral";
   const value = window.localStorage.getItem(SESSION_INTENT_STORAGE_KEY);
   return value === "current" || value === "resumed" ? value : "neutral";
 }
 
 export function readStoredAllowPersistedLatest() {
-  if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) !== "0";
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) === "1";
 }
 
 export default function useWorkspaceSessionController({
@@ -42,6 +43,8 @@ export default function useWorkspaceSessionController({
   const [postUploadExpectedJobId, setPostUploadExpectedJobId] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
   const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
+  const [workspaceStatusMessage, setWorkspaceStatusMessage] = useState("");
+  const [workspaceResetRevision, setWorkspaceResetRevision] = useState(0);
 
   const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
@@ -75,7 +78,6 @@ export default function useWorkspaceSessionController({
     }),
     [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, telemetrySession],
   );
-  const hasObservableUploadSession = sessionActivity.hasObservableUploadSession;
   const effectiveSessionIntent = sessionActivity.effectiveIntent;
 
   useEffect(() => {
@@ -98,21 +100,6 @@ export default function useWorkspaceSessionController({
     if (String(sessionResult?.job_id ?? "").trim() !== overrideJobId) return;
     setCompletedUploadOverride(null);
   }, [completedUploadOverride, sessionStore]);
-
-  useEffect(() => {
-    if (
-      resetGuardActive
-      || !allowPersistedLatest
-      || sessionIntent !== "neutral"
-      || !hasObservableUploadSession
-    ) {
-      return;
-    }
-    setSessionIntent("resumed");
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
-    }
-  }, [allowPersistedLatest, hasObservableUploadSession, resetGuardActive, sessionIntent]);
 
   const hasCurrentUploadResult = sessionActivity.hasCurrentUploadResult;
   const hasResumedSession = sessionActivity.hasResumedSession;
@@ -152,6 +139,7 @@ export default function useWorkspaceSessionController({
   }, []);
 
   const handleGateUploadComplete = useCallback(async (completedPayload = null, options = {}) => {
+    setWorkspaceStatusMessage("");
     setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
@@ -194,6 +182,7 @@ export default function useWorkspaceSessionController({
   }, [canonicalLatestUploadJobId, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
+    setWorkspaceStatusMessage("");
     setResetGuardActive(false);
     setAllowPersistedLatest(true);
     if (typeof window !== "undefined") {
@@ -211,29 +200,29 @@ export default function useWorkspaceSessionController({
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
 
-  const handleResetDemo = useCallback(async () => {
-    const [uploadResetResponse, connectionResetResponse] = await Promise.all([
-      apiFetch("/api/data/reset", {
-        method: "POST",
-        accessCode,
-      }),
+  const handleResetWorkspace = useCallback(async () => {
+    const hasActiveUploadOrProcessing = sessionStore?.isProcessing === true
+      || (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
+    if (hasActiveUploadOrProcessing && typeof window !== "undefined") {
+      const confirmed = window.confirm("An upload or processing job is active. Reset the workspace anyway?");
+      if (!confirmed) return false;
+    }
+
+    const [uploadResetPayload, connectionResetResponse] = await Promise.all([
+      resetDemoSession({ apiFetch, accessCode }),
       apiFetch("/api/data-connections/reset-all", {
         method: "POST",
         accessCode,
       }),
     ]);
 
-    const [uploadResetPayload, connectionResetPayload] = await Promise.all([
-      uploadResetResponse.json().catch(() => ({})),
-      connectionResetResponse.json().catch(() => ({})),
-    ]);
+    const connectionResetPayload = await connectionResetResponse.json().catch(() => ({}));
 
-    if (!uploadResetResponse.ok || !connectionResetResponse.ok) {
+    if (!connectionResetResponse.ok) {
       const detail = uploadResetPayload?.message
-        || uploadResetPayload?.detail
         || connectionResetPayload?.message
         || connectionResetPayload?.detail
-        || "Reset Everything failed.";
+        || "Workspace reset failed.";
       throw new Error(String(detail));
     }
 
@@ -246,6 +235,9 @@ export default function useWorkspaceSessionController({
     setPostUploadPendingSnapshot(null);
     setPostUploadExpectedJobId(null);
     setGateUploadCompleteSeen(false);
+    setWorkspaceStatusMessage("Workspace reset.");
+    setWorkspaceResetRevision((current) => current + 1);
+    clearLatestUploadStateCache();
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
       window.localStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
@@ -254,9 +246,11 @@ export default function useWorkspaceSessionController({
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
-  }, [accessCode, apiFetch, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+    return true;
+  }, [accessCode, apiFetch, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, sessionStore?.isProcessing, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleBackToGate = useCallback(async () => {
+    setWorkspaceStatusMessage("");
     setGateUploadCompleteSeen(true);
     setSessionIntent("current");
     const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
@@ -271,9 +265,10 @@ export default function useWorkspaceSessionController({
 
   const handleRetryWorkspace = useCallback(() => {
     console.info("[neraium] route retry requested", { workspace: activeWorkspace });
+    setWorkspaceStatusMessage("");
     setErrorBoundaryResetKey((current) => current + 1);
     if (activeWorkspace === "system-body") {
-      void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+      void loadLatestUploadState({ includePersisted: false, forceRefresh: true });
       void loadFacilitySystems({ forceRefresh: true });
     }
   }, [activeWorkspace, loadFacilitySystems, loadLatestUploadState]);
@@ -308,11 +303,13 @@ export default function useWorkspaceSessionController({
     canonicalFinding,
     telemetrySession,
     gateProcessing,
+    workspaceStatusMessage,
+    workspaceResetRevision,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
     handleResumePreviousSession,
-    handleResetDemo,
+    handleResetWorkspace,
     handleBackToGate,
     handleRetryWorkspace,
   };

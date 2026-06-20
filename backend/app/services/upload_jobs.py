@@ -764,6 +764,11 @@ def read_upload_cache_stats() -> dict[str, int]:
 def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
     reset_upload_state()
     if purge_job_records:
+        for path in UPLOAD_RUNTIME_STATE.runtime_dir.glob("upload_*.json"):
+            try:
+                path.unlink()
+            except OSError:
+                pass
         try:
             from app.services.runtime_db import clear_upload_runtime_tables
 

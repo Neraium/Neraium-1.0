@@ -485,7 +485,10 @@ def test_reset_flow_does_not_preserve_stale_latest_upload_route_state() -> None:
     second_after = client.get("/api/data/latest-upload?include_persisted=1").json()
 
     assert before["current_upload"]["job_id"] == job_id
-    assert reset == {"ok": True, "status": "reset"}
+    assert reset["ok"] is True
+    assert reset["status"] == "reset"
+    assert reset["message"] == "Workspace reset."
+    assert reset["session"]["session_state"] == "empty"
     assert after["current_upload"]["status"] == "empty"
     assert after["latest_result"] is None
     assert after["job_id"] is None

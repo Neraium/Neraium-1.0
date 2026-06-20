@@ -79,11 +79,14 @@ function queuedWorkerMessage(uploadJob) {
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
+  sessionStore,
   latestUploadSnapshot,
   latestUploadResult,
-  sessionStore,
   onUploadComplete,
-  onResetDemo,
+  onLoadLatestWorkspace,
+  onResetWorkspace,
+  workspaceStatusMessage = "",
+  workspaceResetRevision = 0,
 }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
@@ -153,6 +156,11 @@ export default function DataConnectionsWorkspace({
     pollInFlightRef.current = null;
     pollOwnerJobIdRef.current = null;
   }, []);
+
+  useEffect(() => {
+    clearUploadClientState();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceResetRevision]);
 
   useEffect(() => { setUploadResult(latestUploadResult); }, [latestUploadResult]);
 
@@ -488,7 +496,10 @@ export default function DataConnectionsWorkspace({
         batchResults={batchResults}
         onRetryFailedUploads={retryCurrentBatch}
         onReprocessCurrentBatch={retryCurrentBatch}
-        onResetWorkspace={clearUploadClientState}
+        onClearSelection={clearUploadClientState}
+        onLoadLatestWorkspace={onLoadLatestWorkspace}
+        onResetWorkspace={onResetWorkspace}
+        workspaceStatusMessage={workspaceStatusMessage}
       />
     </div>
   );

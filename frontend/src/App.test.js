@@ -3,6 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { apiFetch } from "./config";
 
 const h = React.createElement;
 const runtimeMocks = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const runtimeMocks = vi.hoisted(() => ({
 const runtimeState = vi.hoisted(() => ({
   latestUploadResult: null,
   latestUploadSnapshot: { status: "empty" },
+  sessionStore: null,
   throwGateError: false,
 }));
 
@@ -58,6 +60,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
     intelligenceStatus: {},
     latestUploadResult: runtimeState.latestUploadResult,
     latestUploadSnapshot: runtimeState.latestUploadSnapshot,
+    sessionStore: runtimeState.sessionStore,
     domainDetection: null,
     allowPersistedLatest: true,
     telemetryTick: 0,
@@ -99,7 +102,7 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete }) => h(
+  default: ({ onUploadComplete, onResetWorkspace }) => h(
     "div",
     { "data-testid": "upload-workspace" },
     h("button", {
@@ -126,6 +129,10 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
         latest_result: { job_id: "restored-job-7", sii_intelligence: { facility_state: "Monitoring" } },
       }, { navigateToGate: false }),
     }, "Restore upload"),
+    h("button", {
+      type: "button",
+      onClick: () => onResetWorkspace(),
+    }, "Reset workspace"),
   ),
 }));
 
@@ -133,8 +140,10 @@ beforeEach(() => {
   window.localStorage.clear();
   runtimeState.latestUploadResult = null;
   runtimeState.latestUploadSnapshot = { status: "empty" };
+  runtimeState.sessionStore = null;
   runtimeState.throwGateError = false;
   Object.values(runtimeMocks).forEach((mock) => mock.mockClear());
+  apiFetch.mockReset();
 });
 
 afterEach(() => {
@@ -153,6 +162,35 @@ it("treats persisted metadata without a heartbeat timestamp as awaiting telemetr
 
   expect(screen.getByTestId("gate-heartbeat-summary").textContent).toBe("none");
   expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Persisted telemetry available");
+});
+
+it("keeps a fresh visit empty when stale upload payloads exist but no session is active", () => {
+  runtimeState.latestUploadResult = {
+    job_id: "stale-job-9",
+    filename: "chilled_water_system_data.csv",
+    sii_intelligence: { facility_state: "Monitoring" },
+  };
+  runtimeState.latestUploadSnapshot = {
+    status: "complete",
+    last_filename: "chilled_water_system_data.csv",
+    last_processed_at: "2026-06-20T00:00:00Z",
+  };
+  runtimeState.sessionStore = {
+    loaded: true,
+    uiState: "empty",
+    backendState: "empty",
+    latestUploadSnapshot: { status: "empty" },
+    latestUploadResult: null,
+    hasActiveSession: false,
+    isProcessing: false,
+    jobId: null,
+  };
+
+  render(h(App));
+
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
+  expect(screen.getByTestId("gate-finding-summary").textContent).not.toMatch(/analysis pending verification/i);
 });
 
 describe("App upload completion navigation", () => {
@@ -254,7 +292,7 @@ describe("App upload completion navigation", () => {
       await waitFor(() => {
         expect(screen.getByTestId("gate-workspace")).toBeTruthy();
       });
-      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false, forceRefresh: true });
       expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
       expectOnlyExpectedRenderErrors(consoleErrorSpy);
     } finally {
@@ -283,6 +321,18 @@ describe("App upload completion navigation", () => {
         run_alignment_verified: true,
       },
     };
+    runtimeState.sessionStore = {
+      loaded: true,
+      uiState: "verified",
+      backendState: "verified",
+      latestUploadSnapshot: runtimeState.latestUploadSnapshot,
+      latestUploadResult: runtimeState.latestUploadResult,
+      hasActiveSession: true,
+      isProcessing: false,
+      jobId: "finding-job-9",
+    };
+    window.localStorage.setItem("neraium.allow_persisted_latest", "1");
+    window.localStorage.setItem("neraium.session_intent", "current");
 
     render(h(App));
 
@@ -314,6 +364,18 @@ describe("App upload completion navigation", () => {
         run_alignment_verified: true,
       },
     };
+    runtimeState.sessionStore = {
+      loaded: true,
+      uiState: "verified",
+      backendState: "verified",
+      latestUploadSnapshot: runtimeState.latestUploadSnapshot,
+      latestUploadResult: runtimeState.latestUploadResult,
+      hasActiveSession: true,
+      isProcessing: false,
+      jobId: "pending-job-3",
+    };
+    window.localStorage.setItem("neraium.allow_persisted_latest", "1");
+    window.localStorage.setItem("neraium.session_intent", "current");
 
     render(h(App));
 

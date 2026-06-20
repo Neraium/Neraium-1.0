@@ -24,7 +24,7 @@ export default function useFacilityRuntime({
   formatClockTime,
   formatEndpoint,
   buildProtectedRequestMessage,
-  initialAllowPersistedLatest = true,
+  initialAllowPersistedLatest = false,
 }) {
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
@@ -195,7 +195,7 @@ export default function useFacilityRuntime({
       setLatestUploadResult(payload.latestResult);
       setSessionStore(nextSessionStore);
       latestUploadResultRef.current = payload.latestResult;
-      return Boolean(nextSessionStore.hasRuntimeData);
+      return Boolean(nextSessionStore.hasActiveSession);
     } catch {
       if (!shouldIncludePersisted) {
         clearUploadSessionState();
@@ -214,7 +214,7 @@ export default function useFacilityRuntime({
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
-      await loadLatestUploadState({ includePersisted: true });
+      await loadLatestUploadState({ includePersisted: false });
       await loadFacilitySystems();
     }
   }, [checkApiHealth, loadFacilitySystems, loadLatestUploadState]);
@@ -249,7 +249,7 @@ export default function useFacilityRuntime({
   useEffect(() => {
     if (!hasAccess) return;
     if (isUploadInProgress() || isUploadJobLocked()) return;
-    loadLatestUploadState({ includePersisted: true });
+    loadLatestUploadState({ includePersisted: false });
     loadFacilitySystems();
   }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
 

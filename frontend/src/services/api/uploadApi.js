@@ -53,6 +53,7 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
 }
 
 export async function resetDemoSession({ apiFetch, accessCode }) {
+  clearLatestUploadStateCache();
   const response = await apiFetch("/api/data/reset", {
     method: "POST",
     accessCode,
@@ -60,7 +61,9 @@ export async function resetDemoSession({ apiFetch, accessCode }) {
   if (!response.ok) {
     throw new Error(`Unexpected response: ${response.status}`);
   }
-  return response.json();
+  const payload = await response.json();
+  clearLatestUploadStateCache();
+  return payload;
 }
 
 function readJsonResponse(xhr) {

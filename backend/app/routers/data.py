@@ -28,10 +28,10 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, upload_state_backend
+from app.services.upload_state_repository import read_replay_payload, read_upload_result_by_job_id, resolve_upload_artifacts, upload_state_backend
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
-from app.services.upload_session_service import resolve_upload_status
+from app.services.upload_session_service import reset_upload_session, resolve_upload_status
 
 router = APIRouter(prefix="/data", tags=["data"])
 logger = logging.getLogger(__name__)
@@ -667,10 +667,10 @@ async def intake_result(job_id: str):
 
 
 @router.post("/reset", dependencies=[Depends(require_operator_role)])
-async def reset_data():
-    reset_upload_state()
+async def reset_data(request: Request):
+    request_id = getattr(request.state, "request_id", None)
     _clear_endpoint_caches()
-    return {"ok": True, "status": "reset"}
+    return reset_upload_session(request_id=request_id)
 
 
 def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, **kwargs):

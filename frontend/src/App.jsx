@@ -60,11 +60,13 @@ function App() {
     canonicalFinding,
     telemetrySession,
     gateProcessing,
+    workspaceStatusMessage,
+    workspaceResetRevision,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
     handleResumePreviousSession,
-    handleResetDemo,
+    handleResetWorkspace,
     handleBackToGate,
     handleRetryWorkspace,
   } = useWorkspaceSessionController({
@@ -204,6 +206,7 @@ function App() {
       currentSession={currentSession}
       canonicalFinding={canonicalFinding}
       gateProcessing={gateProcessing}
+      sessionStore={resolvedSessionStore}
       effectiveLatestUploadResult={effectiveLatestUploadResult}
       effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
       hasActiveSession={hasActiveSession}
@@ -213,11 +216,13 @@ function App() {
       roomContext={roomContext}
       domainMode={domainMode}
       domainDetection={domainDetection}
+      workspaceStatusMessage={workspaceStatusMessage}
+      workspaceResetRevision={workspaceResetRevision}
       formatClockTime={formatClockTime}
       handleBackToGate={handleBackToGate}
       handleRetryWorkspace={handleRetryWorkspace}
       handleGateUploadComplete={handleGateUploadComplete}
-      handleResetDemo={handleResetDemo}
+      handleResetWorkspace={handleResetWorkspace}
       handleResumePreviousSession={handleResumePreviousSession}
       handleReplayFrameChange={handleReplayFrameChange}
       handleReplayModeChange={handleReplayModeChange}

@@ -8,7 +8,7 @@ from app.services.upload_session_service import (
     SESSION_STATE_STALE,
     SESSION_STATE_VERIFIED,
 )
-from app.services.upload_state_repository import write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_state_repository import read_upload_result_by_job_id, write_latest_upload_result, write_latest_upload_summary
 
 
 def _result(job_id: str) -> dict:
@@ -64,6 +64,35 @@ def test_latest_upload_reports_processing_for_active_summary_without_result() ->
     client = TestClient(create_app())
     payload = client.get(f"/api/data/upload-status/{job_id}").json()
     assert payload["session_state"] == SESSION_STATE_PROCESSING
+
+
+def test_latest_upload_excludes_persisted_restore_until_explicit_request() -> None:
+    job_id = "memory-current-session"
+    write_latest_upload_result(job_id, _result(job_id))
+    client = TestClient(create_app())
+
+    without_persisted = client.get("/api/data/latest-upload?include_persisted=0").json()
+    with_persisted = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert without_persisted["session_state"] == SESSION_STATE_VERIFIED
+    assert without_persisted["upload_session_id"] == job_id
+    assert with_persisted["session_state"] in {SESSION_STATE_RESTORED, SESSION_STATE_VERIFIED}
+
+
+def test_reset_clears_active_session_but_preserves_historical_upload_artifacts() -> None:
+    job_id = "reset-preserves-history"
+    write_latest_upload_result(job_id, _result(job_id))
+    client = TestClient(create_app())
+
+    reset_payload = client.post("/api/data/reset").json()
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert reset_payload["ok"] is True
+    assert reset_payload["status"] == "reset"
+    assert reset_payload["message"] == "Workspace reset."
+    assert reset_payload["session"]["session_state"] == SESSION_STATE_EMPTY
+    assert latest_payload["session_state"] == SESSION_STATE_EMPTY
+    assert read_upload_result_by_job_id(job_id)["job_id"] == job_id
 
 
 def test_historical_job_status_is_marked_stale_after_session_switch() -> None:
