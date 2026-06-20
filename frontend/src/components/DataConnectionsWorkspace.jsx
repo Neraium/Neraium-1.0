@@ -23,9 +23,17 @@ const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
 
 function formatTransferSpeed(bytesPerSecond) {
-  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "measuring speed";
-  if (bytesPerSecond >= 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
-  return `${Math.max(bytesPerSecond / 1024, 1).toFixed(1)} KB/s`;
+  const speed = Number(bytesPerSecond);
+  if (!Number.isFinite(speed) || speed <= 0) return null;
+  if (speed >= 1024 * 1024) return `${(speed / (1024 * 1024)).toFixed(1)} MB/s`;
+  return `${Math.max(speed / 1024, 1).toFixed(1)} KB/s`;
+}
+
+function formatUploadTransferLabel(progress) {
+  const loaded = formatFileSize(progress?.loaded ?? 0);
+  const total = formatFileSize(progress?.total ?? 0);
+  const speed = formatTransferSpeed(progress?.speedBytesPerSecond ?? progress?.bytesPerSecond);
+  return speed ? `Uploading ${loaded} of ${total} at ${speed}` : `Uploading ${loaded} of ${total}`;
 }
 
 function formatFileSize(bytes) {
@@ -403,7 +411,7 @@ export default function DataConnectionsWorkspace({
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
-    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: "Preparing upload." });
+    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: `Uploading ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
     try {
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
@@ -411,7 +419,7 @@ export default function DataConnectionsWorkspace({
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
         onProgress: (progress) => {
-          setUploadTransfer({ ...progress, label: `Uploading ${formatFileSize(progress.loaded)} of ${formatFileSize(progress.total)} at ${formatTransferSpeed(progress.bytesPerSecond)}` });
+          setUploadTransfer({ ...progress, label: formatUploadTransferLabel(progress) });
         },
       });
       const payload = uploadResponse.payload;
