@@ -59,7 +59,6 @@ export default function IntakeFlowPanel({
   uploadInputRef,
   handleFileSelection,
   selectedFiles,
-  latestUploadSnapshot,
   pendingUploadKind,
   selectedFileSize,
   isUploadProcessing,
@@ -88,7 +87,7 @@ export default function IntakeFlowPanel({
   const statusLines = buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWorkerDetail });
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
-    : latestUploadSnapshot?.last_filename ?? "No file selected";
+    : "No file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
