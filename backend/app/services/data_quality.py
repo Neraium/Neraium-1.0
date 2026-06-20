@@ -179,6 +179,10 @@ def build_data_quality(
     stuck_sensor_count = int(quality_metrics.get("stuck_sensor_count") or 0)
     irregular_sampling = bool(quality_metrics.get("irregular_sampling"))
     baseline_reliable = bool(quality_metrics.get("baseline_reliable", True))
+    requested_gate_state = str(quality_metrics.get("analysis_gate_state") or "").upper()
+    schema_detection = quality_metrics.get("schema_detection") if isinstance(quality_metrics.get("schema_detection"), dict) else {}
+    quality_messages = [str(item) for item in quality_metrics.get("data_quality_messages", []) if str(item).strip()]
+    imputation_report = quality_metrics.get("imputation_report") if isinstance(quality_metrics.get("imputation_report"), dict) else {}
 
     score = 100
     if not timestamp_detected:
@@ -215,10 +219,23 @@ def build_data_quality(
     }
     blocking_warnings = [warning for warning in warnings if warning not in informational_warnings]
 
-    if row_count == 0 or column_count == 0 or numeric_column_count == 0:
+    if requested_gate_state in {"READY", "DEGRADED_READY", "PENDING", "ERROR"}:
+        analysis_gate_state = requested_gate_state
+    elif row_count == 0 or column_count == 0 or numeric_column_count == 0:
+        analysis_gate_state = "ERROR"
+    elif not timestamp_detected:
+        analysis_gate_state = "PENDING"
+    elif blocking_warnings:
+        analysis_gate_state = "DEGRADED_READY"
+    else:
+        analysis_gate_state = "READY"
+
+    if analysis_gate_state == "ERROR":
         readiness = "not_ready"
-    elif not timestamp_detected or blocking_warnings:
-        readiness = "needs_review"
+    elif analysis_gate_state == "PENDING":
+        readiness = "pending"
+    elif analysis_gate_state == "DEGRADED_READY":
+        readiness = "ready"
     else:
         readiness = "ready"
 
@@ -228,7 +245,11 @@ def build_data_quality(
         "numeric_column_count": numeric_column_count,
         "timestamp_detected": timestamp_detected,
         "warnings": warnings,
+        "messages": quality_messages,
         "readiness": readiness,
+        "analysis_gate_state": analysis_gate_state,
+        "schema_detection": schema_detection,
+        "imputation_report": imputation_report,
         "reliability_rating": reliability_rating,
         "reliability_score": reliability_score,
         "quality_metrics": {

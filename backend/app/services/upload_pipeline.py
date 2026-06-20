@@ -102,6 +102,10 @@ def run_structural_analysis_pipeline(
             "stuck_sensor_count": stuck_sensor_count,
             "irregular_sampling": any("inconsistent" in str(warning).lower() for warning in timestamp_profile.get("warnings", [])),
             "baseline_reliable": baseline_reliable,
+            "schema_detection": ingestion_report.get("schema_detection", {}),
+            "analysis_gate_state": ingestion_report.get("analysis_gate_state"),
+            "data_quality_messages": ingestion_report.get("data_quality_messages", []),
+            "imputation_report": ingestion_report.get("imputation_report", {}),
         },
     )
     reliability_warning = None
