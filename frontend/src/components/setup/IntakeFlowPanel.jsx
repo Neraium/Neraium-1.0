@@ -56,13 +56,11 @@ function uploadProgressStage(uploadState, uploadJob) {
 }
 
 function customerUploadMessage({ uploadStage, uploadTransfer, statusLines }) {
-  if (uploadStage === "Uploading" && uploadTransfer?.loaded && uploadTransfer?.total) {
-    return `${uploadTransfer.label || "Uploading file"}`;
-  }
+  if (uploadTransfer?.label) return uploadTransfer.label;
   if (uploadStage === "Queued") return "Upload received. Waiting for processing to begin.";
   if (uploadStage === "Processing") return "Analyzing telemetry. This can continue in the background.";
   if (uploadStage === "Complete") return "Upload complete.";
-  return statusLines[0] || uploadStage;
+  return statusLines.at(-1) || uploadStage;
 }
 
 const meterShellStyle = {
@@ -163,7 +161,7 @@ export default function IntakeFlowPanel({
   const uploadStage = uploadProgressStage(uploadState, uploadJob);
   const showUploadProgressBar = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStage, uploadTransfer, statusLines });
-  const fallbackStatusLines = showUploadProgressBar ? statusLines.slice(1) : statusLines;
+  const shouldShowPlainStatus = !showUploadProgressBar && statusLines.length > 0;
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -226,15 +224,12 @@ export default function IntakeFlowPanel({
                 <p style={meterCopyStyle}>{uploadStatusLabel}</p>
               </div>
             ) : null}
-            {fallbackStatusLines.map((line, index) => (
-              <span
-                key={`${normalizeStatusText(line)}-${index}`}
-                className={index === 0 ? "intake-flow__progress" : "metadata-text"}
-              >
-                {index === 0 && isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
-                {line}
+            {shouldShowPlainStatus ? (
+              <span className="intake-flow__progress">
+                {isUploadProcessing(uploadState) ? <span className="upload-spinner" aria-hidden="true" /> : null}
+                {statusLines.at(-1)}
               </span>
-            ))}
+            ) : null}
             {shouldShowBatchSummary ? (
               <div className="intake-flow__batch-results">
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
