@@ -46,13 +46,6 @@ def test_settings_read_environment_values(monkeypatch) -> None:
     assert settings.cors_origins == [
         "https://app.example.com",
         "https://admin.example.com",
-        "http://127.0.0.1:3010",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://localhost:3010",
-        "http://localhost:5173",
-        "https://app.neraium.com",
-        "https://www.app.neraium.com",
     ]
 
 
@@ -68,6 +61,10 @@ def test_parse_cors_origins_ignores_empty_values() -> None:
         "https://app.neraium.com",
         "https://www.app.neraium.com",
     ]
+
+
+def test_parse_cors_origins_does_not_add_local_defaults_in_production() -> None:
+    assert parse_cors_origins("https://app.example.com", app_env="production") == ["https://app.example.com"]
 
 
 def test_default_cors_origins_include_local_and_production_frontends() -> None:

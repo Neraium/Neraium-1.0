@@ -56,7 +56,7 @@ def get_settings() -> Settings:
         app_env=app_env,
         backend_host=os.getenv("BACKEND_HOST", DEFAULT_BACKEND_HOST),
         backend_port=parse_port(os.getenv("BACKEND_PORT"), DEFAULT_BACKEND_PORT),
-        cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS")),
+        cors_origins=parse_cors_origins(os.getenv("CORS_ORIGINS"), app_env=app_env),
         process_role=process_role,
         start_background_workers=parse_bool(os.getenv("NERAIUM_START_BACKGROUND_WORKERS"), process_role in {"all", "monolith", "worker"}),
         start_data_connection_poller=parse_bool(os.getenv("NERAIUM_START_DATA_POLLER"), False),
@@ -99,10 +99,12 @@ def parse_port(raw_value: str | None, default: int) -> int:
     return int(raw_value)
 
 
-def parse_cors_origins(raw_value: str | None) -> list[str]:
+def parse_cors_origins(raw_value: str | None, app_env: str = DEFAULT_APP_ENV) -> list[str]:
     if raw_value is None or raw_value.strip() == "":
         return DEFAULT_CORS_ORIGINS.copy()
     origins = [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    if str(app_env or "").strip().lower() in {"prod", "production"}:
+        return origins
     for required_origin in DEFAULT_CORS_ORIGINS:
         if required_origin not in origins:
             origins.append(required_origin)

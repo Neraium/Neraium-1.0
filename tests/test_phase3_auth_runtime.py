@@ -208,6 +208,22 @@ def test_admin_can_manage_users_and_sessions(monkeypatch, tmp_path) -> None:
     assert restored_login.status_code == 200
 
 
+def test_debug_routes_require_admin_in_production(monkeypatch, tmp_path) -> None:
+    clear_rate_limits()
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "admin-debug@example.com")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "password123")
+    client = _production_client(monkeypatch, tmp_path)
+
+    for path in ("/api/startup-status", "/api/routes/debug"):
+        assert client.get(path).status_code == 401
+
+    login = client.post("/api/auth/login", json={"email": "admin-debug@example.com", "password": "password123"})
+    assert login.status_code == 200
+
+    for path in ("/api/startup-status", "/api/routes/debug"):
+        assert client.get(path).status_code == 200
+
+
 def test_observability_summary_includes_auth_metrics(monkeypatch, tmp_path) -> None:
     clear_rate_limits()
     client = _production_client(monkeypatch, tmp_path)

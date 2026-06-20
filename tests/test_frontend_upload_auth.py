@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_JSX = ROOT / "frontend" / "src" / "App.jsx"
 WORKSPACES_CONFIG = ROOT / "frontend" / "src" / "config" / "workspaces.js"
 DATA_CONNECTIONS_WORKSPACE = ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx"
+ONBOARDING_WORKSPACE = ROOT / "frontend" / "src" / "components" / "OnboardingWorkspace.jsx"
 SYSTEM_BODY_WORKSPACE = ROOT / "frontend" / "src" / "components" / "workspaces" / "SystemBody" / "SystemBodyWorkspace.jsx"
 CONFIG_JS = ROOT / "frontend" / "src" / "config.js"
 UPLOAD_FLOW = ROOT / "frontend" / "src" / "viewModels" / "uploadFlow.js"
@@ -253,3 +254,13 @@ def test_queued_worker_starting_message_path_is_present() -> None:
     assert "workerState === \"starting\"" in source
     assert "Worker starting..." in source
     assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" in panel
+
+
+def test_onboarding_storage_redacts_api_token() -> None:
+    source = read_frontend(ONBOARDING_WORKSPACE)
+
+    assert "function storageSafeFlow(flow)" in source
+    assert 'token: "",' in source
+    assert "localStorage.setItem(STORAGE_KEY, JSON.stringify(storageSafeFlow(flow)))" in source
+    assert "localStorage.setItem(STORAGE_KEY, JSON.stringify(flow))" not in source
+    assert "return { ...defaultState(), ...parsed, api: { ...defaultState().api, ...(parsed?.api || {}) } };" not in source

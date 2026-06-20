@@ -4,11 +4,12 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
+from app.core.security import require_admin_role
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
@@ -238,11 +239,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def systems_alias(include_persisted: bool = True, domain_mode: str | None = None):
         return facility.read_facility_systems(include_persisted=include_persisted, domain_mode=domain_mode)
 
-    @app.get("/api/startup-status")
+    @app.get("/api/startup-status", dependencies=[Depends(require_admin_role)])
     def read_startup_status():
         return STARTUP_STATUS
 
-    @app.get("/api/routes/debug")
+    @app.get("/api/routes/debug", dependencies=[Depends(require_admin_role)])
     def read_route_debug():
         return {
             "mounted": True,

@@ -151,10 +151,28 @@ function loadSavedState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    return { ...defaultState(), ...parsed, api: { ...defaultState().api, ...(parsed?.api || {}) } };
+    return {
+      ...defaultState(),
+      ...parsed,
+      api: {
+        ...defaultState().api,
+        ...(parsed?.api || {}),
+        token: "",
+      },
+    };
   } catch {
     return defaultState();
   }
+}
+
+function storageSafeFlow(flow) {
+  return {
+    ...flow,
+    api: {
+      ...(flow?.api || {}),
+      token: "",
+    },
+  };
 }
 
 export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, onUploadComplete, accessCode = "", apiFetch = null }) {
@@ -163,7 +181,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
   const uploadPollAbortRef = useRef(false);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(flow));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storageSafeFlow(flow)));
   }, [flow]);
 
   useEffect(() => () => {
@@ -220,7 +238,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
   function resetWizard() {
     const clean = defaultState();
     setFlow(clean);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storageSafeFlow(clean)));
   }
 
   function handleMockCsvSelect() {

@@ -187,6 +187,7 @@ def build_adaptive_snapshot(result: dict[str, Any], summary: dict[str, Any]) -> 
         if item.get("feedback_category") in FEEDBACK_CATEGORIES
     )
     sensitivity_adjustment = bounded_sensitivity_adjustment(feedback_counts)
+    feedback_profile = build_feedback_calibration_profile(feedback_counts)
     baseline_age = age_summary(site_memory.get("first_seen_at"))
     calibration_confidence = build_calibration_confidence(site_memory, event_memory)
     latest_feedback = [item for item in event_memory if item.get("feedback_category")][:6]
@@ -204,6 +205,7 @@ def build_adaptive_snapshot(result: dict[str, Any], summary: dict[str, Any]) -> 
         },
         "calibration": {
             "sensitivity_adjustment": sensitivity_adjustment,
+            "feedback_profile": feedback_profile,
             "bounded": True,
             "calibration_confidence": calibration_confidence,
             "nuisance_alert_suppression": min(0.25, round((feedback_counts.get("false_positive", 0) + feedback_counts.get("ignore", 0)) * 0.03, 3)),
@@ -228,6 +230,7 @@ def build_adaptive_snapshot(result: dict[str, Any], summary: dict[str, Any]) -> 
                 "event_history": len(event_memory),
                 "operator_feedback": sum(feedback_counts.values()),
                 "bounded_adjustment": sensitivity_adjustment,
+                "feedback_direction": feedback_profile["direction"],
             },
             "opaque_hidden_scoring": False,
             "autonomous_actions": False,
@@ -474,3 +477,28 @@ def slugify(value: Any) -> str:
     text = "".join(character.lower() if character.isalnum() else "-" for character in str(value or ""))
     pieces = [piece for piece in text.split("-") if piece]
     return "-".join(pieces) or "default"
+
+
+
+def build_feedback_calibration_profile(feedback_counts: Counter[str]) -> dict[str, Any]:
+    confirmed = feedback_counts.get("confirmed_issue", 0) + feedback_counts.get("useful_warning", 0)
+    suppressed = feedback_counts.get("false_positive", 0) + feedback_counts.get("ignore", 0) + feedback_counts.get("expected_behavior", 0)
+    maintenance = feedback_counts.get("maintenance_event", 0)
+    total = confirmed + suppressed + maintenance
+    if total == 0:
+        direction = "neutral"
+    elif confirmed > suppressed:
+        direction = "increase_sensitivity"
+    elif suppressed > confirmed:
+        direction = "decrease_sensitivity"
+    else:
+        direction = "hold"
+    return {
+        "total_feedback": total,
+        "confirmed_or_useful": confirmed,
+        "suppressed_or_expected": suppressed,
+        "maintenance_context": maintenance,
+        "direction": direction,
+        "bounded_learning": True,
+        "operator_authority_preserved": True,
+    }

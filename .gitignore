@@ -70,3 +70,11 @@ backend/app/runtime/*
 *.backup-before-ecs.js
 *.patch
 *.jpeg
+
+# Runtime/output artifacts
+backend/runtime/*.json
+backend/runtime/*.db
+backend/runtime/evidence/*.json
+backend/runtime/upload_jobs/*.json
+output/
+frontend/audit-*.png
