@@ -186,7 +186,7 @@ def build_data_quality(
 
     score = 100
     if not timestamp_detected:
-        score -= 18
+        score -= 12
     if row_count < 12:
         score -= 30
     elif row_count < 50:
@@ -202,7 +202,7 @@ def build_data_quality(
     if stuck_sensor_count:
         score -= min(18, stuck_sensor_count * 6)
     if not baseline_reliable:
-        score -= 24
+        score -= 16
     reliability_score = max(0, min(100, score))
 
     if reliability_score >= 82:
@@ -223,9 +223,7 @@ def build_data_quality(
         analysis_gate_state = requested_gate_state
     elif row_count == 0 or column_count == 0 or numeric_column_count == 0:
         analysis_gate_state = "ERROR"
-    elif not timestamp_detected:
-        analysis_gate_state = "PENDING"
-    elif blocking_warnings:
+    elif not timestamp_detected or blocking_warnings:
         analysis_gate_state = "DEGRADED_READY"
     else:
         analysis_gate_state = "READY"
@@ -342,36 +340,34 @@ def estimated_sample_interval(timestamps: list[datetime]) -> str | None:
     return f"{first_interval} seconds"
 
 
+def round_number(value: float | None, digits: int = 3) -> float | None:
+    if value is None:
+        return None
+    return round(value, digits)
+
+
 def variability_flag(values: list[float], average: float) -> str:
-    if len(values) < 2 or min(values) == max(values):
-        return "low"
-
+    if not values:
+        return "unknown"
     variance = sum((value - average) ** 2 for value in values) / len(values)
-    standard_deviation = math.sqrt(variance)
-    baseline = abs(average) if abs(average) > 0.000001 else max(abs(value) for value in values)
-    coefficient = standard_deviation / baseline if baseline else 0
-
-    if coefficient < 0.02:
-        return "low"
-    if coefficient > 0.25:
+    spread = math.sqrt(variance)
+    scale = max(abs(average), 1.0)
+    ratio = spread / scale
+    if ratio > 0.5:
         return "high"
-    return "normal"
+    if ratio > 0.2:
+        return "moderate"
+    return "low"
 
 
 def range_warning(column: str, minimum: float, maximum: float) -> str | None:
-    normalized = column.lower().replace("_", " ")
-    if "humidity" in normalized and (minimum < 0 or maximum > 100):
-        return f"{column} contains values outside the expected 0-100 humidity range."
-    if "temperature" in normalized or normalized in {"temp", "room temp"}:
-        if minimum < -40 or maximum > 140:
-            return f"{column} contains values outside a broad cultivation temperature range."
-    if "co2" in normalized or "carbon dioxide" in normalized:
-        if minimum < 0 or maximum > 10000:
-            return f"{column} contains values outside a broad CO2 sensor range."
-    if minimum < 0 and any(keyword in normalized for keyword in ("vpd", "light", "ec", "ppm")):
-        return f"{column} contains negative values for a measurement that is usually non-negative."
+    lowered = column.lower()
+    if "humidity" in lowered and (minimum < 0 or maximum > 100):
+        return "Humidity values fall outside the expected 0-100 range."
+    if "temp" in lowered and (minimum < -50 or maximum > 160):
+        return "Temperature values fall outside a typical equipment telemetry range."
+    if "co2" in lowered and maximum > 10000:
+        return "CO2 values are unusually high."
+    if "ph" in lowered and (minimum < 0 or maximum > 14):
+        return "pH values fall outside the expected 0-14 range."
     return None
-
-
-def round_number(value: float) -> float:
-    return round(value, 4)
