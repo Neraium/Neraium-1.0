@@ -506,6 +506,39 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
     assert terminal["propagation_label"] == "Complete."
 
 
+def test_upload_status_preserves_explicit_processing_progress_stage() -> None:
+    client = TestClient(create_app())
+    job = {
+        "job_id": "progress-stage-job",
+        "filename": "progress-stage.csv",
+        "status": "PROCESSING",
+        "processing_state": "scoring_relationship_drift",
+        "percent": 60,
+        "progress": 60,
+        "progress_label": "Scoring relationship drift.",
+        "message": "Scoring relationship drift.",
+        "propagation_stage": "scoring_relationship_drift",
+        "propagation_progress": 60,
+        "propagation_label": "Scoring relationship drift.",
+        "started_at": "2026-05-08T00:00:00+00:00",
+        "completed_at": None,
+        "error": None,
+    }
+    write_job(job)
+
+    response = client.get("/api/data/upload-status/progress-stage-job")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "PROCESSING"
+    assert payload["percent"] == 60
+    assert payload["progress"] == 60
+    assert payload["propagation_stage"] == "scoring_relationship_drift"
+    assert payload["propagation_progress"] == 60
+    assert payload["propagation_label"] == "Scoring relationship drift."
+    assert payload["contract_stage"] == "structural_scoring"
+    assert payload["contract_progress"] == 60
+
 def test_upload_status_can_return_failed_state() -> None:
     client = TestClient(create_app())
     job = {

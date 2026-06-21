@@ -518,6 +518,6 @@ function normalizeUploadStatusPath(path, jobId) {
 function normalizeUploadStreamPath(path, jobId) {
   const statusPath = normalizeUploadStatusPath(path, jobId);
   if (!statusPath) return null;
-  if (statusPath.includes("/upload-status-stream/")) return statusPath;
-  return statusPath.replace("/upload-status/", "/upload-status-stream/");
+  if (statusPath.includes("/upload-stream/")) return statusPath;
+  return statusPath.replace("/upload-status/", "/upload-stream/");
 }

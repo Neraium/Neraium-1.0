@@ -61,7 +61,8 @@ function uploadProgressStage(uploadState, uploadJob) {
 }
 
 function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines }) {
-  if (uploadTransfer?.label) return uploadTransfer.label;
+  const transferPercent = Number(uploadTransfer?.percent);
+  if (uploadTransfer?.label && (!Number.isFinite(transferPercent) || transferPercent < 100)) return uploadTransfer.label;
   return statusLines.at(-1) || uploadStageMessage;
 }
 
@@ -80,12 +81,10 @@ function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {
     uploadJob?.percent,
   );
   const processingPercent = isComplete ? 100 : isProcessing ? Math.min(99, backendPercent ?? 1) : 0;
-  const analysisPercent = isComplete ? 100 : 0;
 
   return {
     uploadPercent,
     processingPercent,
-    analysisPercent,
     activeStage: isComplete ? "complete" : isProcessing ? "processing" : isUploading ? "upload" : "idle",
   };
 }
@@ -237,8 +236,7 @@ export default function IntakeFlowPanel({
               <div className="upload-stage-progress" style={stageWrapStyle} aria-label="Upload and processing progress">
                 {[
                   ["Upload", stageProgress.uploadPercent],
-                  ["Process", stageProgress.processingPercent],
-                  ["Analysis", stageProgress.analysisPercent],
+                  ["Processing", stageProgress.processingPercent],
                 ].map(([label, percent]) => (
                   <div className="upload-stage-progress__row" style={stageRowStyle} key={label}>
                     <div className="upload-stage-progress__header" style={stageHeaderStyle}>
