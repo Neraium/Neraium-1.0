@@ -7,6 +7,7 @@ BASELINE_WINDOW_TARGET = 100
 # Backward-compatible export for legacy relationship analysis imports.
 BASELINE_WINDOW_FRACTION = 0.2
 MIN_BASELINE_ROWS = 5
+SPARSE_MISSING_WARNING_THRESHOLD = 0.05
 
 
 def build_baseline_analysis(
@@ -51,10 +52,16 @@ def build_baseline_analysis(
 
         baseline_values, baseline_missing = numeric_window_values(baseline_rows, index)
         recent_values, recent_missing = numeric_window_values(recent_rows, index)
+        baseline_missing_rate = baseline_missing / max(1, len(baseline_rows))
+        recent_missing_rate = recent_missing / max(1, len(recent_rows))
         column_warnings: list[str] = []
+        informational_warnings: list[str] = []
 
         if baseline_missing or recent_missing:
-            column_warnings.append(f"{column} has missing values in baseline or recent windows.")
+            if baseline_missing_rate > SPARSE_MISSING_WARNING_THRESHOLD or recent_missing_rate > SPARSE_MISSING_WARNING_THRESHOLD:
+                column_warnings.append(f"{column} has significant missing values in baseline or recent windows.")
+            else:
+                informational_warnings.append(f"{column} has sparse missing values in baseline or recent windows.")
         if not baseline_values or not recent_values:
             column_warnings.append(f"{column} does not have enough numeric values for baseline comparison.")
             warnings.extend(column_warnings)
@@ -87,7 +94,7 @@ def build_baseline_analysis(
                 "drift_acceleration": velocity["acceleration"],
                 "persistence_score": persistence_score(baseline_values, recent_values, baseline_average),
                 "drift_flag": flag,
-                "warnings": column_warnings,
+                "warnings": column_warnings + informational_warnings,
             }
         )
 
