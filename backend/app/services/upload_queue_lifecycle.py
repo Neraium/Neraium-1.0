@@ -9,6 +9,7 @@ from app.services.runtime_db import (
     claim_next_upload_job,
     complete_upload_queue_job,
     mark_queue_job_failed,
+    read_upload_job,
     touch_upload_queue_job,
 )
 from app.services.upload_runtime_state import UploadRuntimeState
@@ -36,11 +37,26 @@ class UploadQueueLifecycleService:
         self.process_json_payload = process_json_payload
         self.process_csv_file = process_csv_file
 
+    def _read_processing_metadata(self, job_id: str) -> dict[str, Any]:
+        """Return the private processing metadata, including file_path when available.
+
+        The public upload-status artifact can intentionally omit internal fields such as
+        file_path. The queue worker needs the private runtime queue row instead; otherwise
+        a freshly accepted upload can be marked failed even though the file was spooled.
+        """
+        public_metadata = self.read_job(job_id) or {}
+        private_metadata = read_upload_job(job_id) or {}
+        if not isinstance(public_metadata, dict):
+            public_metadata = {}
+        if not isinstance(private_metadata, dict):
+            private_metadata = {}
+        return {**public_metadata, **private_metadata, "job_id": job_id}
+
     def process_next_queued_upload_job(self) -> bool:
         job_id = claim_next_upload_job()
         if not job_id:
             return False
-        metadata = self.read_job(job_id) or {}
+        metadata = self._read_processing_metadata(job_id)
         file_path = metadata.get("file_path")
         if not file_path or not Path(str(file_path)).exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
