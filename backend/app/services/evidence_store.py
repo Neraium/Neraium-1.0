@@ -67,7 +67,17 @@ def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
     return persisted
 
 
-def record_operator_feedback(run_id: str, category: str, note: str | None, actor: str, recorded_at: str) -> dict[str, Any]:
+def record_operator_feedback(
+    run_id: str,
+    category: str,
+    note: str | None,
+    actor: str,
+    recorded_at: str,
+    outcome: str | None = None,
+    action_taken: str | None = None,
+    intervention_at: str | None = None,
+    followup_at: str | None = None,
+) -> dict[str, Any]:
     if category not in FEEDBACK_CATEGORIES:
         raise ValueError("invalid_feedback_category")
     record = read_evidence_run(run_id)
@@ -77,6 +87,10 @@ def record_operator_feedback(run_id: str, category: str, note: str | None, actor
     feedback_entry = {
         "category": category,
         "note": (note or "").strip() or None,
+        "outcome": (outcome or "").strip() or validation_outcome_for_category(category),
+        "action_taken": (action_taken or "").strip() or None,
+        "intervention_at": (intervention_at or "").strip() or None,
+        "followup_at": (followup_at or "").strip() or None,
         "actor": actor,
         "recorded_at": recorded_at,
     }
@@ -96,6 +110,8 @@ def build_evidence_export(record: dict[str, Any]) -> str:
     evidence_summary = record.get("evidence_summary") or []
     archetypes = record.get("structural_archetypes") or []
     feedback_history = record.get("operator_feedback_history") or []
+    validation_history = record.get("validation_event_history") or []
+    before_after = record.get("before_after_intervention") or {}
     lines = [
         f"# Neraium Evidence Report",
         "",
@@ -118,6 +134,8 @@ def build_evidence_export(record: dict[str, Any]) -> str:
         f"- Initiated By: {record.get('initiated_by')}",
         f"- Adaptive Site Key: {record.get('adaptive_site_key')}",
         f"- Latest Feedback Category: {record.get('latest_feedback_category')}",
+        f"- Validation Status: {record.get('validation_status')}",
+        f"- Validation Outcome: {record.get('validation_outcome')}",
         f"- Historical Fact: {record.get('historical_fact')}",
         f"- Observation Type: {record.get('observation_type')}",
         f"- Observation Status: {record.get('observation_status')}",
@@ -147,6 +165,17 @@ def build_evidence_export(record: dict[str, Any]) -> str:
     lines.extend([f"- {item}" for item in archetypes] or ["- None recorded"])
     lines.extend(["", "## Evidence Summary"])
     lines.extend([f"- {item}" for item in evidence_summary] or ["- None recorded"])
+    lines.extend(["", "## Validation Event History"])
+    lines.extend(
+        [f"- {format_validation_history_item(item)}" for item in validation_history]
+        or ["- No validation events recorded"]
+    )
+    lines.extend(["", "## Before/After Intervention"])
+    lines.append(f"- {before_after.get('summary') or 'No prior reviewed intervention is available for comparison.'}")
+    if before_after.get("available"):
+        lines.append(f"- Before Run ID: {before_after.get('before_run_id')}")
+        lines.append(f"- After Run ID: {before_after.get('after_run_id')}")
+        lines.append(f"- Direction: {before_after.get('direction')}")
     lines.extend(["", "## Operator Feedback History"])
     lines.extend(
         [f"- {format_feedback_history_item(item)}" for item in feedback_history]
@@ -189,6 +218,10 @@ def build_evidence_export_csv(record: dict[str, Any]) -> str:
         "evidence_summary": "|".join(str(item) for item in (record.get("evidence_summary") or [])),
         "data_conditions": "|".join(str(item) for item in (record.get("data_conditions") or [])),
         "latest_feedback_category": record.get("latest_feedback_category"),
+        "validation_status": record.get("validation_status"),
+        "validation_outcome": record.get("validation_outcome"),
+        "validation_event_history_json": json.dumps(record.get("validation_event_history") or [], sort_keys=True),
+        "before_after_intervention_json": json.dumps(record.get("before_after_intervention") or {}, sort_keys=True),
         "drift_metrics_json": json.dumps(record.get("drift_metrics") or {}, sort_keys=True),
     }
     columns = list(flat.keys())
@@ -217,6 +250,17 @@ def format_feedback_history_item(item: dict[str, Any]) -> str:
     note = item.get("note")
     note_suffix = f" - {note}" if note else ""
     return f"{recorded_at}: {category} ({actor}){note_suffix}"
+
+
+def format_validation_history_item(item: dict[str, Any]) -> str:
+    recorded_at = item.get("recorded_at")
+    category = item.get("category_label") or item.get("category")
+    status = item.get("status")
+    action_taken = item.get("action_taken")
+    note = item.get("note")
+    details = [str(value) for value in [action_taken, note] if value]
+    detail_suffix = " - " + " | ".join(details) if details else ""
+    return f"{recorded_at}: {category} ({status}){detail_suffix}"
 
 
 def csv_escape(value: Any) -> str:
@@ -255,9 +299,132 @@ def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[s
 
 def _annotate_evidence_record(record: dict[str, Any], prior_records: list[dict[str, Any]]) -> dict[str, Any]:
     historical_fact = build_historical_fact(record, prior_records)
-    if historical_fact:
-        return {**record, "historical_fact": historical_fact}
-    return {**record, "historical_fact": record.get("historical_fact") or None}
+    validation_event_history = build_validation_event_history(record)
+    latest_feedback = validation_event_history[0] if validation_event_history else {}
+    latest_category = str(record.get("latest_feedback_category") or latest_feedback.get("category") or "").strip()
+    validation_status = validation_status_for_category(latest_category) if latest_category else record.get("validation_status")
+    validation_outcome = str(latest_feedback.get("outcome") or record.get("validation_outcome") or "").strip()
+    if not validation_outcome and latest_category:
+        validation_outcome = validation_outcome_for_category(latest_category)
+    return {
+        **record,
+        "historical_fact": historical_fact or record.get("historical_fact") or None,
+        "validation_event_history": validation_event_history,
+        "validation_status": validation_status,
+        "validation_outcome": validation_outcome,
+        "before_after_intervention": build_before_after_intervention(record, prior_records),
+    }
+
+
+def validation_outcome_for_category(category: str) -> str | None:
+    mapping = {
+        "confirmed_issue": "confirmed",
+        "useful_warning": "confirmed",
+        "maintenance_event": "action_taken",
+        "known_operational_change": "explained",
+        "sensor_or_data_problem": "explained",
+        "environmental_cause": "explained",
+        "nothing_meaningful": "false_positive",
+        "expected_behavior": "expected",
+        "false_positive": "false_positive",
+        "ignore": "ignored",
+    }
+    return mapping.get(str(category or "").strip())
+
+
+def validation_status_for_category(category: str) -> str:
+    normalized = str(category or "").strip()
+    if normalized in {"confirmed_issue", "useful_warning", "maintenance_event"}:
+        return "confirmed"
+    if normalized in {"false_positive", "nothing_meaningful", "ignore", "expected_behavior"}:
+        return "dismissed"
+    if normalized in {"known_operational_change", "environmental_cause", "sensor_or_data_problem"}:
+        return "explained"
+    return "reviewed"
+
+
+def build_validation_event_history(record: dict[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for item in record.get("operator_feedback_history") or []:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "").strip()
+        if not category:
+            continue
+        events.append({
+            "type": "operator_feedback",
+            "category": category,
+            "category_label": _feedback_category_label(category),
+            "status": validation_status_for_category(category),
+            "outcome": str(item.get("outcome") or "").strip() or validation_outcome_for_category(category),
+            "action_taken": item.get("action_taken"),
+            "note": item.get("note"),
+            "actor": item.get("actor"),
+            "recorded_at": item.get("recorded_at"),
+            "intervention_at": item.get("intervention_at"),
+            "followup_at": item.get("followup_at"),
+        })
+    return events[:20]
+
+
+def build_before_after_intervention(record: dict[str, Any], prior_records: list[dict[str, Any]]) -> dict[str, Any]:
+    current_variables = {str(variable).strip() for variable in (record.get("variables") or []) if str(variable).strip()}
+    current_type = str(record.get("observation_type") or "").strip()
+    current_strength = _drift_strength(record)
+    candidates: list[dict[str, Any]] = []
+    for prior in prior_records:
+        if str(prior.get("run_id") or "") == str(record.get("run_id") or ""):
+            continue
+        if current_type and str(prior.get("observation_type") or "").strip() != current_type:
+            continue
+        prior_variables = {str(variable).strip() for variable in (prior.get("variables") or []) if str(variable).strip()}
+        if current_variables and prior_variables and current_variables.isdisjoint(prior_variables):
+            continue
+        if not build_validation_event_history(prior):
+            continue
+        candidates.append(prior)
+
+    if not candidates:
+        return {"available": False, "summary": "No prior reviewed intervention is available for comparison."}
+
+    before = sorted(candidates, key=_evidence_sort_key)[-1]
+    before_strength = _drift_strength(before)
+    before_variables = {str(variable).strip() for variable in (before.get("variables") or []) if str(variable).strip()}
+    shared_variables = sorted(current_variables.intersection(before_variables))
+    direction = "unknown"
+    delta = None
+    if before_strength is not None and current_strength is not None:
+        delta = round(current_strength - before_strength, 4)
+        if delta < -0.05:
+            direction = "improved"
+        elif delta > 0.05:
+            direction = "worsened"
+        else:
+            direction = "unchanged"
+    label = direction if direction != "unknown" else "needs more comparable measurements"
+    return {
+        "available": True,
+        "before_run_id": before.get("run_id"),
+        "after_run_id": record.get("run_id"),
+        "shared_variables": shared_variables,
+        "before_strength": before_strength,
+        "after_strength": current_strength,
+        "delta": delta,
+        "direction": direction,
+        "summary": f"Compared with the prior reviewed event, the follow-up signal {label}.",
+    }
+
+
+def _drift_strength(record: dict[str, Any]) -> float | None:
+    metrics = record.get("drift_metrics") if isinstance(record.get("drift_metrics"), dict) else {}
+    value = metrics.get("baseline_distance") if isinstance(metrics, dict) else None
+    if value is None and isinstance(metrics, dict):
+        value = metrics.get("drift_index")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if numeric == numeric else None
 
 
 def _evidence_sort_key(item: dict[str, Any]) -> tuple[str, str]:

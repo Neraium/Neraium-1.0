@@ -79,7 +79,17 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:
-        updated = record_operator_feedback(run_id, payload.category, payload.note, actor, now_iso())
+        updated = record_operator_feedback(
+            run_id,
+            payload.category,
+            payload.note,
+            actor,
+            now_iso(),
+            outcome=payload.outcome,
+            action_taken=payload.action_taken,
+            intervention_at=payload.intervention_at,
+            followup_at=payload.followup_at,
+        )
     except ValueError as error:
         detail = str(error)
         if detail == "evidence_run_not_found":
@@ -94,7 +104,12 @@ def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFee
         resource_type="evidence_run",
         resource_id=run_id,
         request_id=auth_context.get("request_id"),
-        detail={"category": payload.category, "note_present": bool(payload.note)},
+        detail={
+            "category": payload.category,
+            "note_present": bool(payload.note),
+            "outcome": payload.outcome,
+            "action_taken_present": bool(payload.action_taken),
+        },
     )
     data_router.invalidate_latest_upload_cache()
     return updated

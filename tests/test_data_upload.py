@@ -793,6 +793,86 @@ def test_historical_fact_flows_through_api_and_exports() -> None:
     assert detail_payload["historical_fact"] in export_markdown.text
 
 
+def test_operator_validation_history_and_intervention_comparison_flow_through_api_and_exports() -> None:
+    client = TestClient(create_app())
+    seed_record = {
+        "run_id": "validation-seed-run",
+        "source_name": "validation-seed.csv",
+        "source_type": "csv_upload",
+        "status": "completed",
+        "created_at": "2026-05-03T08:00:00Z",
+        "completed_at": "2026-05-03T08:01:00Z",
+        "rows_received": 8,
+        "rows_accepted": 8,
+        "rows_rejected": 0,
+        "sensors_detected": 2,
+        "room": "Uploaded telemetry",
+        "operating_state": "Monitoring",
+        "neraium_score": 58,
+        "drift_status": "watch",
+        "warnings": [],
+        "errors": [],
+        "primary_drivers": ["temperature", "humidity"],
+        "evidence_summary": ["Structural drift observed before maintenance."],
+        "structural_archetypes": ["coupling_change"],
+        "initiated_by": "operator@example.com",
+        "adaptive_site_key": "site::default",
+        "operator_feedback_history": [],
+        "observation_type": "coupling_change",
+        "observation_status": "resolved",
+        "variables": ["temperature", "humidity"],
+        "drift_metrics": {"baseline_distance": 0.82},
+        "data_conditions": [],
+        "regime_label": "State Group A",
+        "structural_state": "Monitoring",
+        "deformation_started_at": "2026-05-03T08:00:00Z",
+    }
+    evidence_store.upsert_evidence_run(seed_record)
+    evidence_store.record_operator_feedback(
+        "validation-seed-run",
+        "maintenance_event",
+        "Coil cleaned after review",
+        "operator@example.com",
+        "2026-05-03T09:00:00Z",
+        outcome="action_taken",
+        action_taken="Cleaned coil and reset airflow schedule",
+    )
+
+    followup_record = {
+        **seed_record,
+        "run_id": "validation-followup-run",
+        "source_name": "validation-followup.csv",
+        "created_at": "2026-05-04T08:00:00Z",
+        "completed_at": "2026-05-04T08:01:00Z",
+        "evidence_summary": ["Follow-up drift after maintenance."],
+        "operator_feedback_history": [],
+        "observation_status": "open",
+        "drift_metrics": {"baseline_distance": 0.60},
+        "deformation_started_at": "2026-05-04T08:00:00Z",
+    }
+    evidence_store.upsert_evidence_run(followup_record)
+
+    seed_detail = client.get("/api/evidence/runs/validation-seed-run")
+    followup_detail = client.get("/api/evidence/runs/validation-followup-run")
+    export_csv = client.get("/api/evidence/export/validation-followup-run?format=csv")
+    export_markdown = client.get("/api/evidence/export/validation-followup-run?format=markdown")
+
+    assert seed_detail.status_code == 200
+    seed_payload = seed_detail.json()
+    assert seed_payload["validation_status"] == "confirmed"
+    assert seed_payload["validation_outcome"] == "action_taken"
+    assert seed_payload["validation_event_history"][0]["action_taken"] == "Cleaned coil and reset airflow schedule"
+
+    assert followup_detail.status_code == 200
+    comparison = followup_detail.json()["before_after_intervention"]
+    assert comparison["available"] is True
+    assert comparison["before_run_id"] == "validation-seed-run"
+    assert comparison["direction"] == "improved"
+    assert comparison["delta"] == -0.22
+    assert "validation_event_history_json" in export_csv.text
+    assert "Before/After Intervention" in export_markdown.text
+
+
 def test_observability_summary_reports_queue_and_audit_counts() -> None:
     client = TestClient(create_app())
     rows = "\n".join(

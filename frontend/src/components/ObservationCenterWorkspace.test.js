@@ -196,4 +196,89 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.getByText(/feedback unlocks after the evidence record is persisted/i)).toBeTruthy();
   });
 
+
+  it("renders validation history, intervention comparison, and submits action feedback", async () => {
+    installLocalStorageMock();
+    const run = {
+      run_id: "validation-run-1",
+      source_type: "csv_upload",
+      source_name: "telemetry.csv",
+      status: "completed",
+      created_at: "2026-06-16T00:00:00Z",
+      observation_type: "trajectory_drift",
+      observation_status: "open",
+      variables: ["temperature", "humidity"],
+      drift_metrics: { baseline_distance: 0.7 },
+      evidence_summary: ["System behavior changed."],
+      validation_event_history: [{
+        category: "maintenance_event",
+        category_label: "maintenance event",
+        status: "confirmed",
+        outcome: "action_taken",
+        action_taken: "Cleaned coil and reset airflow schedule",
+        note: "Observed after maintenance",
+        recorded_at: "2026-06-16T05:00:00Z",
+      }],
+      before_after_intervention: {
+        available: true,
+        summary: "Compared with the prior reviewed event, the follow-up signal improved.",
+        direction: "improved",
+        delta: -0.22,
+      },
+    };
+    const apiFetch = vi.fn(async (url, options = {}) => {
+      if (String(url).includes("/feedback")) {
+        return createResponse({ ...run, run_id: "validation-run-1", latest_feedback_category: "false_positive" });
+      }
+      return createResponse({ runs: [run] });
+    });
+
+    renderWorkspace({
+      apiFetch,
+      canonicalFinding: {
+        exists: true,
+        runId: "validation-run-1",
+        status: "Behavior Change Detected",
+        confidence: "High",
+        summary: "System behavior changed.",
+        whyItMatters: "The observed relationships between system variables have changed.",
+        reviewNext: "Review supporting evidence.",
+        supportingEvidence: ["Affected variables: temperature, humidity."],
+        technicalDetails: [],
+        dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
+        evidenceButtonLabel: "Review Evidence",
+        historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
+        affectedVariables: ["temperature", "humidity"],
+        emptyState: {
+          title: "No current observations.",
+          subtitle: "Telemetry is being monitored.",
+          detail: "No structural changes detected.",
+        },
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText("Labeled event history")).toBeTruthy());
+    expect(screen.getByText(/Cleaned coil and reset airflow schedule/i)).toBeTruthy();
+    expect(screen.getByText("Before/after intervention")).toBeTruthy();
+    expect(screen.getByText(/follow-up signal improved/i)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Feedback category"), { target: { value: "false_positive" } });
+    fireEvent.change(screen.getByLabelText("Validation outcome"), { target: { value: "false_positive" } });
+    fireEvent.change(screen.getByPlaceholderText("Action taken or follow-up"), { target: { value: "Marked as false positive after operator review" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save Review" })[0]);
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(
+      "/api/evidence/runs/validation-run-1/feedback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          category: "false_positive",
+          outcome: "false_positive",
+          action_taken: "Marked as false positive after operator review",
+          note: null,
+        }),
+      }),
+    ));
+  });
+
 });

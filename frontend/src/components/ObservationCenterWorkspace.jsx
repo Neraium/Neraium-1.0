@@ -4,11 +4,25 @@ import SystemStateMark from "./SystemStateMark";
 import { buildCanonicalFindingRun, OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
 const FEEDBACK_OPTIONS = [
-  { id: "confirmed_issue", label: "Confirmed developing issue" },
+  { id: "confirmed_issue", label: "Confirmed issue" },
+  { id: "false_positive", label: "False positive" },
+  { id: "maintenance_event", label: "Maintenance event" },
   { id: "known_operational_change", label: "Known operational change" },
   { id: "sensor_or_data_problem", label: "Sensor or data problem" },
   { id: "environmental_cause", label: "Environmental cause" },
+  { id: "useful_warning", label: "Useful warning" },
+  { id: "expected_behavior", label: "Expected behavior" },
+  { id: "ignore", label: "Ignored" },
   { id: "nothing_meaningful", label: "Nothing meaningful" },
+];
+
+const FEEDBACK_OUTCOME_OPTIONS = [
+  { id: "confirmed", label: "Confirmed" },
+  { id: "false_positive", label: "False positive" },
+  { id: "explained", label: "Explained" },
+  { id: "action_taken", label: "Action taken" },
+  { id: "monitoring", label: "Monitoring" },
+  { id: "ignored", label: "Ignored" },
 ];
 
 const NOTIFICATION_STORAGE_KEY = "neraium.observation_notifications.v1";
@@ -199,6 +213,8 @@ export default function ObservationCenterWorkspace({
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [feedbackCategory, setFeedbackCategory] = useState(FEEDBACK_OPTIONS[0].id);
+  const [feedbackOutcome, setFeedbackOutcome] = useState(FEEDBACK_OUTCOME_OPTIONS[0].id);
+  const [feedbackActionTaken, setFeedbackActionTaken] = useState("");
   const [feedbackNote, setFeedbackNote] = useState("");
   const [feedbackState, setFeedbackState] = useState({ status: "idle", message: "" });
   const [notificationPrefs, setNotificationPrefs] = useState(() => loadJsonStorage(NOTIFICATION_STORAGE_KEY, {
@@ -366,6 +382,8 @@ export default function ObservationCenterWorkspace({
   const hasCurrentFinding = Boolean(activeFinding.exists);
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
+  const selectedRunValidationHistory = Array.isArray(selectedRun?.validation_event_history) ? selectedRun.validation_event_history : [];
+  const selectedRunInterventionComparison = selectedRun?.before_after_intervention ?? {};
   const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
@@ -416,13 +434,19 @@ export default function ObservationCenterWorkspace({
         accessCode,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: feedbackCategory, note: feedbackNote || null }),
+        body: JSON.stringify({
+          category: feedbackCategory,
+          outcome: feedbackOutcome,
+          action_taken: feedbackActionTaken || null,
+          note: feedbackNote || null,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
       }
       setRuns((current) => current.map((run) => (run.run_id === payload.run_id ? payload : run)));
+      setFeedbackActionTaken("");
       setFeedbackNote("");
       setFeedbackState({ status: "saved", message: "Recorded to system memory." });
     } catch (submitError) {
@@ -639,12 +663,40 @@ export default function ObservationCenterWorkspace({
                   </ul>
                 </details>
               ) : null}
+              {selectedRunValidationHistory.length > 0 ? (
+                <details className="compact-list-block" open>
+                  <summary className="section-token">Labeled event history</summary>
+                  <ul className="compact-list">
+                    {selectedRunValidationHistory.map((item, index) => (
+                      <li key={`${item.recorded_at ?? index}-${item.category ?? "event"}`}>
+                        {sanitizeOperatorText(item.category_label ?? item.category ?? "Reviewed")} ({sanitizeOperatorText(item.status ?? item.outcome ?? "reviewed")})
+                        {item.action_taken ? ` - ${sanitizeOperatorText(item.action_taken)}` : ""}
+                        {item.note ? ` - ${sanitizeOperatorText(item.note)}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              {selectedRunInterventionComparison?.available ? (
+                <details className="compact-list-block" open>
+                  <summary className="section-token">Before/after intervention</summary>
+                  <ul className="compact-list">
+                    <li>{sanitizeOperatorText(selectedRunInterventionComparison.summary)}</li>
+                    <li>Direction: {sanitizeOperatorText(selectedRunInterventionComparison.direction)}</li>
+                    {selectedRunInterventionComparison.delta !== null && selectedRunInterventionComparison.delta !== undefined ? <li>Signal change: {selectedRunInterventionComparison.delta}</li> : null}
+                  </ul>
+                </details>
+              ) : null}
               <div className="why-panel__section guidance-checks">
                 <span className="section-token">Review outcome</span>
-                <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)}>
+                <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)} aria-label="Feedback category">
                   {FEEDBACK_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
-                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={4} />
+                <select value={feedbackOutcome} onChange={(event) => setFeedbackOutcome(event.target.value)} aria-label="Validation outcome">
+                  {FEEDBACK_OUTCOME_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                </select>
+                <textarea value={feedbackActionTaken} onChange={(event) => setFeedbackActionTaken(event.target.value)} placeholder="Action taken or follow-up" rows={2} />
+                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
                   {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the evidence record is persisted.</span> : null)}

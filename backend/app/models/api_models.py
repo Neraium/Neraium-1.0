@@ -127,6 +127,10 @@ class EvidenceRunResponse(BaseModel):
     latest_feedback_category: str | None = None
     historical_fact: str | None = None
     operator_feedback_history: list[dict[str, Any]] = Field(default_factory=list)
+    validation_outcome: str | None = None
+    validation_status: str | None = None
+    validation_event_history: list[dict[str, Any]] = Field(default_factory=list)
+    before_after_intervention: dict[str, Any] = Field(default_factory=dict)
     observation_type: str | None = None
     observation_status: str | None = None
     variables: list[str] = Field(default_factory=list)
@@ -144,6 +148,10 @@ class EvidenceRunResponse(BaseModel):
 class OperatorFeedbackRequest(BaseModel):
     category: str
     note: str | None = None
+    outcome: str | None = None
+    action_taken: str | None = None
+    intervention_at: str | None = None
+    followup_at: str | None = None
 
 
 class EvidenceRunsListResponse(BaseModel):
