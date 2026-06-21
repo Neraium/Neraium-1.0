@@ -68,7 +68,7 @@ _build_csv_result:
 
 ### Rows
 
-The upload parser reads CSV-like text using `_stream_csv_snapshot` in `backend/app/services/upload_jobs.py:424`. It samples up to `MAX_ANALYSIS_ROWS`, default `10000`, from `NERAIUM_MAX_ANALYSIS_ROWS` (`upload_jobs.py:35`). Returned `row_count` is the number of rows retained after cleaning, not raw file lines (`upload_jobs.py:600-621`).
+The upload parser reads CSV-like text using `_stream_csv_snapshot`. It streams the file, cleans accepted rows, and passes all cleaned rows into downstream analysis and SII ingestion. Returned `row_count` is the number of rows retained after cleaning, not raw file lines.
 
 Plain English: every downstream calculation works on cleaned accepted rows, not all uploaded rows.
 
@@ -856,7 +856,7 @@ Replay UI loads `/replay/timeline`, `/replay/{job_id}`, or embedded `latestUploa
 - Non-numeric values: invalid numeric cells are blanked; rows remain if at least one usable numeric cell exists (`upload_jobs.py:541-555`).
 - Constant columns: Pearson correlation returns `None` when denominator is zero (`relationship_baselines.py:27-39`), so relationship pair is skipped. Temporal math and runner use floors/pseudoinverse to avoid divide-by-zero.
 - Very small uploads: empty or no usable rows raise errors (`upload_jobs.py:434-467`, `upload_jobs.py:562-563`); less than 20 rows uses minimal replay path but still calls the same replay builder (`upload_jobs.py:1030-1032`, `upload_jobs.py:1407-1410`).
-- Very large uploads: analysis rows are capped by `MAX_ANALYSIS_ROWS=10000` for sample rows (`upload_jobs.py:35`, `upload_jobs.py:567`); relationship columns are capped at 32 and relationship baseline/recent windows at 12000/6000 rows (`relationship_baselines.py:66-98`).
+- Very large uploads: cleaned rows are passed through to SII ingestion without an analysis-row sampling cap; relationship columns are capped at 32 and relationship baseline/recent windows at 12000/6000 rows (`relationship_baselines.py:66-98`).
 
 ## Known Limitations / Assumptions
 

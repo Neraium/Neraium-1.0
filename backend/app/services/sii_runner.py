@@ -400,6 +400,8 @@ def run_sii_runner(
         "runner_module": RUNNER_MODULE,
         "core_engine": CORE_ENGINE,
         "rows_processed": 0,
+        "rows_received": 0,
+        "rows_excluded": 0,
         "columns_used": [],
         "sensor_vector_count": 0,
         "output_summary": {},
@@ -414,6 +416,8 @@ def run_sii_runner(
     vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
     base_result["columns_used"] = vector_rows["columns_used"]
     base_result["sensor_vector_count"] = len(vector_rows["vectors"])
+    base_result["rows_received"] = len(rows)
+    base_result["rows_excluded"] = max(0, len(rows) - len(vector_rows["vectors"]))
     if not vector_rows["vectors"]:
         base_result["errors"].append("No complete numeric sensor vectors were available for SII runner ingestion.")
         return base_result
@@ -454,12 +458,19 @@ def run_sii_runner(
         "sii_runner_module": RUNNER_MODULE,
         "sii_core_engine": CORE_ENGINE,
         "sensor_vector_count": len(states),
+        "sii_vector_rows_processed": len(states),
+        "sii_rows_received": len(rows),
+        "sii_rows_excluded": max(0, len(rows) - len(states)),
+        "sii_columns_used": list(vector_rows["columns_used"]),
     }
 
     base_result.update(
         {
             "runner_used": True,
-            "rows_processed": len(rows),
+            "rows_processed": len(states),
+            "rows_received": len(rows),
+            "rows_excluded": max(0, len(rows) - len(states)),
+            "processing_trace": processing_trace,
             "output_summary": output_summary,
             "latest_state": latest_state,
             "evidence": evidence,

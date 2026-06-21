@@ -1573,9 +1573,31 @@ def test_relationship_drift_multiple_changes_aggregate_scores_and_instability() 
     assert "relationship_divergence.relationship_drift_score" in interpretation["engine_native_fields"]
 
 
+def test_upload_runs_sii_on_all_cleaned_rows_even_when_legacy_limits_are_set(monkeypatch) -> None:
+    monkeypatch.setattr(upload_jobs, "MAX_ANALYSIS_ROWS", 5)
+    monkeypatch.setattr(upload_jobs, "MAX_SII_ROWS", 5)
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Loop,{70 + index * 0.1:.1f},{50 + index * 0.2:.1f},{1.0 + index * 0.01:.2f}"
+        for index in range(12)
+    )
+
+    result = process_csv_content(
+        f"timestamp,room,temperature,humidity,flow\n{rows}",
+        filename="all-cleaned-rows.csv",
+    )
+
+    assert result["row_count"] == 12
+    assert result["processing_stats"]["sampled_rows"] == 12
+    assert result["sii_runner_result"]["runner_used"] is True
+    assert result["sii_runner_result"]["rows_received"] == 12
+    assert result["sii_runner_result"]["rows_processed"] == 12
+    assert result["sii_runner_result"]["rows_excluded"] == 0
+    assert result["processing_trace"]["sii_vector_rows_processed"] == 12
+    assert result["processing_trace"]["sii_rows_excluded"] == 0
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
-    monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     client = TestClient(create_app())
     rows = "\n".join(
         f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
@@ -1621,7 +1643,6 @@ def test_75k_upload_status_polling_completes_with_extended_timeout() -> None:
 
 @pytest.mark.slow
 def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-100k.csv"
     with csv_path.open("w", encoding="utf-8") as output:
         output.write("timestamp,room,temperature,humidity\n")
@@ -1632,13 +1653,12 @@ def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -
 
     assert result["row_count"] == 100_000
     assert result["processing_stats"]["used_streaming"] is True
-    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
+    assert result["processing_stats"]["sampled_rows"] == result["row_count"]
     assert result["processing_stats"]["chunk_count"] == 10
 
 
 @pytest.mark.slow
 def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-300k.csv"
     with csv_path.open("w", encoding="utf-8") as output:
         output.write("timestamp,room,temperature,humidity,airflow\n")
@@ -1650,7 +1670,7 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-300k.csv")
 
     assert result["row_count"] == 300_000
-    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
+    assert result["processing_stats"]["sampled_rows"] == result["row_count"]
     assert result["processing_stats"]["chunk_count"] == 30
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 300_000
@@ -1658,7 +1678,6 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
 
 @pytest.mark.slow
 def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("app.services.upload_jobs.MAX_SII_ROWS", 250)
     csv_path = tmp_path / "telemetry-500k.csv"
     with csv_path.open("w", encoding="utf-8") as output:
         output.write("timestamp,room,temperature,humidity,airflow\n")
@@ -1670,7 +1689,7 @@ def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch,
     result = process_csv_file(file_path=csv_path, filename="telemetry-500k.csv")
 
     assert result["row_count"] == 500_000
-    assert result["processing_stats"]["sampled_rows"] == upload_jobs.MAX_ANALYSIS_ROWS
+    assert result["processing_stats"]["sampled_rows"] == result["row_count"]
     assert result["processing_stats"]["chunk_count"] == 50
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 500_000

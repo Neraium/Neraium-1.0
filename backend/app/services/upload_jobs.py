@@ -70,7 +70,8 @@ JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS = UPLOAD_RUNTIME_STATE.jobs
 LATEST_UPLOAD_CACHE = UPLOAD_RUNTIME_STATE.latest_upload_cache
-MAX_ANALYSIS_ROWS = int(os.getenv("NERAIUM_MAX_ANALYSIS_ROWS", "10000"))
+MAX_ANALYSIS_ROWS = None
+MAX_SII_ROWS = None
 CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
@@ -225,7 +226,7 @@ def _normalized_columns(tokens: list[str], *, header_present: bool) -> list[str]
     return normalized_columns(tokens, header_present=header_present)
 
 
-def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int, job_id: str | None = None) -> dict[str, Any]:
+def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int | None, job_id: str | None = None) -> dict[str, Any]:
     return stream_csv_snapshot(
         path,
         max_analysis_rows=max_analysis_rows,
@@ -975,7 +976,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     try:
         snapshot = _stream_csv_snapshot(
             p,
-            max_analysis_rows=MAX_ANALYSIS_ROWS,
+            max_analysis_rows=None,
             job_id=job_id,
         )
 

@@ -223,11 +223,11 @@ Result:
   - 1,000,000 rows: 38.7544s for a 110.83 MB CSV
 - Memory: RSS deltas were modest in this harness, but this is not a full production memory profile.
 - Confidence behavior: runner confidence stayed `0.94` and runner regime was `LOCK_IN`/`CRITICAL` even for stable files.
-- Failure mode: analysis is capped at 10,000 accepted rows, but the parser still scans the full raw file. The 1M-row case completed in this environment, but the first run with allocation tracing exceeded 9 minutes and had to be stopped.
+- Prior failure mode: analysis used to be capped at 10,000 accepted rows while the parser still scanned the full raw file. Current upload analysis and SII ingestion pass all cleaned rows through; the 1M-row benchmark should be regenerated after this change.
 
 Assessment:
 
-The current parser can ingest large flat CSVs, but performance is not predictably bounded by `MAX_ANALYSIS_ROWS` because raw scanning still covers the full upload. More importantly, stable large datasets still produce positive runner instability, so scale completion does not imply reliable interpretation.
+The current parser can ingest large flat CSVs, and current upload analysis passes all cleaned rows into SII ingestion. Stable large-dataset behavior should still be revalidated, because scale completion does not by itself imply reliable interpretation.
 
 ### 5. Mixed Telemetry
 

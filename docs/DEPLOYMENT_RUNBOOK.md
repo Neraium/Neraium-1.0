@@ -24,13 +24,7 @@ The pilot rehearsal script adds deterministic bad-telemetry fixtures, captures e
 
 ## CSV Throughput Tuning (Pilot)
 
-For large CSV exports where operator turnaround matters more than full-file parsing, set:
-
-```bash
-NERAIUM_MAX_PARSE_ROWS=120000
-```
-
-This caps parsed rows per upload job and returns results faster while preserving read-only behavior and evidence output. Use only for pilot-speed tuning.
+Uploaded CSV analysis and SII ingestion now use every cleaned row from the uploaded dataset. Do not set pilot row caps for production validation; throughput tuning should use upload size, queue depth, worker count, and timeout settings without truncating the dataset.
 
 If metrics requires auth for CLI smoke checks:
 

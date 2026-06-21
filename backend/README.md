@@ -36,8 +36,7 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - `NERAIUM_DEFAULT_TELEMETRY_URL` defaults to an empty value; set it only when a customer REST telemetry source should be polled.
 - `NERAIUM_RUNTIME_DIR` defaults to `backend/app/runtime`.
 - `NERAIUM_UPLOAD_CHUNK_SIZE_ROWS` defaults to `10000`.
-- `NERAIUM_MAX_ANALYSIS_ROWS` defaults to `20000`.
-- `NERAIUM_MAX_SII_ROWS` defaults to `5000`.
+- CSV analysis and SII ingestion use all cleaned rows from the upload; there is no analysis-row or SII-row sampling cap.
 - `NERAIUM_MAX_UPLOAD_SIZE_BYTES` defaults to `262144000` (250 MiB) and is enforced while streaming uploads to disk.
 
 For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=80`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `CORS_ORIGIN_REGEX` to `^https://([a-z0-9-]+\.)?neraium\.com$`, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path. Do not set `NERAIUM_START_DATA_POLLER=true` unless a customer REST telemetry source has been explicitly configured.

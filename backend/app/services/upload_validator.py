@@ -195,7 +195,7 @@ def interpolate_short_numeric_gaps(
 def stream_csv_snapshot(
     path: Path,
     *,
-    max_analysis_rows: int,
+    max_analysis_rows: int | None,
     csv_progress_update_every: int,
     csv_chunk_size_rows: int,
     job_id: str | None = None,
@@ -367,7 +367,7 @@ def stream_csv_snapshot(
                 important_missing_by_column,
                 rows_used,
             )
-        sample_rows = [row for _, row in cleaned[:max_analysis_rows]]
+        sample_rows = [row for _, row in cleaned]
         first_timestamp = cleaned[0][1].get(timestamp_column) if timestamp_column else None
         last_timestamp = cleaned[-1][1].get(timestamp_column) if timestamp_column else None
         memory_estimate_bytes = sum(sum(len(str(value or "")) for value in row.values()) for row in sample_rows)

@@ -204,6 +204,13 @@ def run_structural_analysis_pipeline(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
+    if isinstance(runner_result, dict):
+        processing_trace = dict(runner_result.get("processing_trace") or processing_trace)
+        processing_trace.setdefault("sii_runner_ran", bool(runner_result.get("runner_used")))
+        processing_trace.setdefault("sii_vector_rows_processed", int(runner_result.get("rows_processed") or 0))
+        processing_trace.setdefault("sii_rows_received", int(runner_result.get("rows_received") or row_count_total))
+        processing_trace.setdefault("sii_rows_excluded", int(runner_result.get("rows_excluded") or 0))
+        processing_trace.setdefault("sii_columns_used", list(runner_result.get("columns_used") or []))
     latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
     return {
         "baseline_analysis": baseline_analysis,
