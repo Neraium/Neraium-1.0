@@ -67,6 +67,8 @@ def build_sample_intelligence() -> dict[str, Any]:
             "why_flagged": "The system has shifted away from its baseline relational structure and has not returned.",
             "baseline_comparison": "The active covariance pattern differs from the baseline regime.",
             "observed_persistence": "Observed across 3 monitoring windows",
+            "review_window": "Not inferred in agnostic mode",
+            "review_window_hours": None,
             "projected_time_to_failure": "Not inferred in agnostic mode",
             "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
@@ -100,6 +102,8 @@ def build_sample_intelligence() -> dict[str, Any]:
             "why_flagged": "Current behavior remains inside the baseline regime.",
             "baseline_comparison": "Current behavior is inside the learned baseline regime.",
             "observed_persistence": "Stable across recent monitoring windows",
+            "review_window": "Not inferred in agnostic mode",
+            "review_window_hours": None,
             "projected_time_to_failure": "Not inferred in agnostic mode",
             "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
@@ -157,8 +161,10 @@ def build_sample_intelligence() -> dict[str, Any]:
         "why_flagged": rooms[0]["why_flagged"],
         "baseline_comparison": rooms[0]["baseline_comparison"],
         "observed_persistence": rooms[0]["observed_persistence"],
-        "projected_time_to_failure": rooms[0]["projected_time_to_failure"],
-        "projected_time_to_failure_hours": rooms[0]["projected_time_to_failure_hours"],
+        "review_window": rooms[0].get("review_window") or rooms[0]["projected_time_to_failure"],
+        "review_window_hours": rooms[0].get("review_window_hours") or rooms[0]["projected_time_to_failure_hours"],
+        "projected_time_to_failure": rooms[0].get("review_window") or rooms[0]["projected_time_to_failure"],
+        "projected_time_to_failure_hours": rooms[0].get("review_window_hours") or rooms[0]["projected_time_to_failure_hours"],
         "last_updated": last_updated,
         "rooms": rooms,
         **structural_cognition,
@@ -225,12 +231,12 @@ def build_upload_intelligence(
     intervention_window = window_from_urgency(urgency)
     room = driver_attribution.get("room") or "State Group A"
     room_state = driver_attribution.get("state") or state_from_urgency(urgency)
-    projected_time_to_failure_hours = project_time_to_failure_hours(
+    review_window_hours = project_time_to_failure_hours(
         urgency=urgency,
         engine_result=engine_result,
         driver_attribution=driver_attribution,
     )
-    projected_time_to_failure = format_projected_time_to_failure(projected_time_to_failure_hours)
+    review_window = format_review_window(review_window_hours)
     calibrated_confidence = confidence_number(
         driver_attribution,
         data_quality=data_quality,
@@ -271,8 +277,10 @@ def build_upload_intelligence(
         why_flagged=why_flagged,
         baseline_comparison=baseline_comparison_from_analysis(baseline_analysis),
         observed_persistence=observed_persistence_from_engine(engine_result),
-        projected_time_to_failure=projected_time_to_failure,
-        projected_time_to_failure_hours=projected_time_to_failure_hours,
+        review_window=review_window,
+        review_window_hours=review_window_hours,
+        projected_time_to_failure=review_window,
+        projected_time_to_failure_hours=review_window_hours,
         last_updated=last_updated,
         confidence=calibrated_confidence,
         room_assessments=room_assessments,
@@ -320,8 +328,10 @@ def build_upload_intelligence(
         "reliability_rating": reliability_rating,
         "baseline_comparison": primary_room_record["baseline_comparison"],
         "observed_persistence": primary_room_record["observed_persistence"],
-        "projected_time_to_failure": primary_room_record["projected_time_to_failure"],
-        "projected_time_to_failure_hours": primary_room_record["projected_time_to_failure_hours"],
+        "review_window": primary_room_record["review_window"],
+        "review_window_hours": primary_room_record["review_window_hours"],
+        "projected_time_to_failure": primary_room_record["review_window"],
+        "projected_time_to_failure_hours": primary_room_record["review_window_hours"],
         "last_updated": last_updated,
         "filename": filename,
         "row_count": row_count,
@@ -370,8 +380,8 @@ def build_core_sii_outputs(intelligence: dict[str, Any]) -> dict[str, Any]:
         if isinstance(supporting_evidence, list)
         else []
     )
-    lead_time_hours = intelligence.get("projected_time_to_failure_hours")
-    lead_time_text = intelligence.get("projected_time_to_failure")
+    review_window_hours = intelligence.get("review_window_hours") or intelligence.get("projected_time_to_failure_hours")
+    review_window_text = intelligence.get("review_window") or intelligence.get("projected_time_to_failure")
     return {
         "emerging_instability": {
             "state": intelligence.get("facility_state"),
@@ -382,10 +392,10 @@ def build_core_sii_outputs(intelligence: dict[str, Any]) -> dict[str, Any]:
             "primary": intelligence.get("primary_room") or intelligence.get("priority_room"),
         },
         "contributing_factors": contributing_factors,
-        # Lead time is explicitly an inference product of the three core outputs, not a hard-coded rule.
-        "lead_time_inference": {
-            "hours": lead_time_hours if isinstance(lead_time_hours, (int, float)) else None,
-            "summary": lead_time_text if isinstance(lead_time_text, str) and lead_time_text.strip() else None,
+        # Review window is an operational triage heuristic, not a deterministic failure prediction.
+        "review_window_inference": {
+            "hours": review_window_hours if isinstance(review_window_hours, (int, float)) else None,
+            "summary": review_window_text if isinstance(review_window_text, str) and review_window_text.strip() else None,
             "confidence_basis": intelligence.get("confidence_basis"),
         },
     }
@@ -408,6 +418,8 @@ def build_upload_room_records(
     why_flagged: str,
     baseline_comparison: str,
     observed_persistence: str,
+    review_window: str,
+    review_window_hours: int,
     projected_time_to_failure: str,
     projected_time_to_failure_hours: int,
     last_updated: str,
@@ -522,8 +534,10 @@ def build_upload_room_records(
                 "why_flagged": room_specific_why,
                 "baseline_comparison": baseline_comparison,
                 "observed_persistence": observed_persistence,
-                "projected_time_to_failure": projected_time_to_failure if index == 0 else (assessment.get("projected_time_to_failure") or "Monitoring"),
-                "projected_time_to_failure_hours": projected_time_to_failure_hours if index == 0 else assessment.get("projected_time_to_failure_hours"),
+                "review_window": review_window if index == 0 else (assessment.get("review_window") or assessment.get("projected_time_to_failure") or "Monitoring"),
+                "review_window_hours": review_window_hours if index == 0 else (assessment.get("review_window_hours") or assessment.get("projected_time_to_failure_hours")),
+                "projected_time_to_failure": review_window if index == 0 else (assessment.get("review_window") or assessment.get("projected_time_to_failure") or "Monitoring"),
+                "projected_time_to_failure_hours": review_window_hours if index == 0 else (assessment.get("review_window_hours") or assessment.get("projected_time_to_failure_hours")),
                 "last_updated": last_updated,
                 "confidence": room_confidence,
             }
@@ -581,14 +595,14 @@ def project_time_to_failure_hours(
     return base_hours
 
 
-def format_projected_time_to_failure(hours: int) -> str:
+def format_review_window(hours: int) -> str:
     if hours <= 12:
-        return f"Approximately {hours} hours at current trajectory"
+        return f"Review within approximately {hours} hours if trajectory persists"
     if hours <= 72:
         days = max(1, round(hours / 24))
-        return f"Approximately {days} days at current trajectory"
+        return f"Review within approximately {days} days if trajectory persists"
     weeks = max(1, round(hours / 168))
-    return f"More than {weeks} weeks at current trajectory"
+    return f"Continue monitoring; review within {weeks} weeks if trajectory persists"
 
 
 def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dict[str, Any]:

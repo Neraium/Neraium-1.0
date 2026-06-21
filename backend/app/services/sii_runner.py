@@ -447,8 +447,10 @@ def run_sii_runner(
     latest_state = {
         **latest_state,
         "instability_index": instability_index,
+        "review_window_hours": projected_hours,
+        "review_window": format_review_window_hours(projected_hours),
         "projected_time_to_failure_hours": projected_hours,
-        "projected_time_to_failure": format_projected_time_to_failure_hours(projected_hours),
+        "projected_time_to_failure": format_review_window_hours(projected_hours),
     }
     evidence = build_runner_evidence(latest_state, vector_rows["columns_used"], driver_attribution, engine_result)
     output_summary = summarize_runner_outputs(states)
@@ -587,9 +589,9 @@ def build_runtime_state(
         "why_flagged": evidence[0] if evidence else "SII runner processed uploaded telemetry.",
         "baseline_comparison": f"SII latest structural drift: {output_summary.get('latest_structural_drift', 0.0)}",
         "observed_persistence": f"SII processed {output_summary.get('frames_processed', 0)} telemetry frames.",
-        "projected_time_to_failure": format_projected_time_to_failure_hours(
-            project_time_to_failure_hours_from_state(latest_state)
-        ),
+        "review_window": format_review_window_hours(project_time_to_failure_hours_from_state(latest_state)),
+        "review_window_hours": project_time_to_failure_hours_from_state(latest_state),
+        "projected_time_to_failure": format_review_window_hours(project_time_to_failure_hours_from_state(latest_state)),
         "projected_time_to_failure_hours": project_time_to_failure_hours_from_state(latest_state),
         "last_updated": now_iso(),
         "confidence": round(float(latest_state.get("confidence", 0.0)) * 100),
@@ -621,6 +623,8 @@ def build_runtime_state(
         "why_flagged": room["why_flagged"],
         "baseline_comparison": room["baseline_comparison"],
         "observed_persistence": room["observed_persistence"],
+        "review_window": room["review_window"],
+        "review_window_hours": room["review_window_hours"],
         "projected_time_to_failure": room["projected_time_to_failure"],
         "projected_time_to_failure_hours": room["projected_time_to_failure_hours"],
         "runner_module": RUNNER_MODULE,
@@ -863,9 +867,13 @@ def project_time_to_failure_hours_from_state(latest_state: dict[str, Any]) -> in
     return max(4, scaled)
 
 
-def format_projected_time_to_failure_hours(hours: int) -> str:
+def format_review_window_hours(hours: int) -> str:
     if hours <= 12:
-        return f"Approximately {hours} hours at current trajectory"
+        return f"Review within approximately {hours} hours if trajectory persists"
     if hours <= 72:
-        return f"Approximately {max(1, round(hours / 24))} days at current trajectory"
-    return f"More than {max(1, round(hours / 168))} weeks at current trajectory"
+        return f"Review within approximately {max(1, round(hours / 24))} days if trajectory persists"
+    return f"Continue monitoring; review within {max(1, round(hours / 168))} weeks if trajectory persists"
+
+
+def format_projected_time_to_failure_hours(hours: int) -> str:
+    return format_review_window_hours(hours)

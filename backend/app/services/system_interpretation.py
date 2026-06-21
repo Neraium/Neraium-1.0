@@ -650,7 +650,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
     else:
         fallback_fields.append("relationship_divergence")
 
-    if intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure"):
+    if intelligence.get("review_window") or intelligence.get("review_window_hours") or result.get("review_window") or intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure"):
         engine_native_fields.append("escalation_window")
     else:
         fallback_fields.append("escalation_window")
@@ -695,7 +695,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         "instability_index": instability_index,
         "instability_scale": "0-100",
         "primary_driver": primary_driver_text,
-        "escalation_window": _to_text(intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure") or snapshot.get("last_processed_at") or ""),
+        "escalation_window": _to_text(intelligence.get("review_window") or intelligence.get("review_window_hours") or result.get("review_window") or intelligence.get("projected_time_to_failure") or intelligence.get("projected_time_to_failure_hours") or result.get("projected_time_to_failure") or snapshot.get("last_processed_at") or ""),
         "state_derivation_reason": reason,
         "relationship_divergence": relationship_divergence,
         "finding_evidence_chains": finding_evidence_chains,

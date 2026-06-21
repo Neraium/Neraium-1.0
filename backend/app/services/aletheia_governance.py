@@ -56,7 +56,7 @@ def govern_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
             "trajectory_direction": trajectory_direction,
             "recovery_window_status": recovery_window_status,
             "observed_persistence": candidate.get("observed_persistence"),
-            "projected_time_to_failure_hours": candidate.get("projected_time_to_failure_hours"),
+            "review_window_hours": candidate.get("review_window_hours") or candidate.get("projected_time_to_failure_hours"),
         }
     )
     evidence_summary_hash = _sha256_json(

@@ -138,7 +138,7 @@ export default function DiagnosticsPanel({
     { label: "Evidence focus", value: contributors },
     { label: "Confidence", value: summary.evidenceConfidence },
     { label: "Evidence replay", value: summary.replay },
-    { label: "Lead Time", value: summary.leadTime },
+    { label: "Review Window", value: summary.leadTime },
     { label: "Preview Range", value: summary.previewRange },
   ] : [
     { label: "Replay timeline", value: DASH },
@@ -150,7 +150,7 @@ export default function DiagnosticsPanel({
     { label: "Evidence focus", value: DASH },
     { label: "Confidence", value: DASH },
     { label: "Evidence replay", value: "Unavailable" },
-    { label: "Lead Time", value: DASH },
+    { label: "Review Window", value: DASH },
     { label: "Preview Range", value: DASH },
   ];
 
@@ -158,7 +158,7 @@ export default function DiagnosticsPanel({
     ? {
         topology: latestUploadResult?.sii_intelligence?.facility_state ?? DASH,
         propagation: latestUploadResult?.sii_intelligence?.urgency ?? DASH,
-        recovery: latestUploadResult?.sii_intelligence?.projected_time_to_failure ?? DASH,
+        recovery: latestUploadResult?.sii_intelligence?.review_window ?? latestUploadResult?.sii_intelligence?.intervention_window ?? latestUploadResult?.sii_intelligence?.projected_time_to_failure ?? DASH,
         confidence: latestUploadResult?.sii_intelligence?.confidence_basis ?? DASH,
       }
     : { topology: DASH, propagation: DASH, recovery: DASH, confidence: DASH };
@@ -204,7 +204,7 @@ export default function DiagnosticsPanel({
               metrics={[
                 { label: "System behavior", value: topology.topology },
                 { label: "Change direction", value: topology.propagation },
-                { label: "Recovery signal", value: topology.recovery },
+                { label: "Review window", value: topology.recovery },
                 { label: "Confidence", value: topology.confidence },
               ]}
               compact

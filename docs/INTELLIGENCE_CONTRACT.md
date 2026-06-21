@@ -54,8 +54,10 @@ Each room/system record must include:
 - `next_operator_move`
 - `what_to_check` (list)
 - `why_flagged`
-- `projected_time_to_failure`
-- `projected_time_to_failure_hours`
+- `review_window`
+- `review_window_hours`
+- `projected_time_to_failure` deprecated compatibility alias for `review_window`
+- `projected_time_to_failure_hours` deprecated compatibility alias for `review_window_hours`
 - `confidence`
 
 ## Confidence Components

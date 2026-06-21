@@ -695,9 +695,9 @@ Reference: `sii_runner.py:631-649`.
 
 Plain English: confidence is no longer treated as direct instability. It contributes only as confidence-weighted evidence for the runner's own instability score.
 
-### Projected Time Heuristic
+### Review Window Heuristic
 
-Runner projected hours:
+Runner review-window hours:
 
 ```text
 base_hours = unstable:8, elevated:36, review:72, nominal:504
@@ -708,7 +708,7 @@ hours = max(4, scaled)
 
 Reference: `sii_runner.py:764-772`.
 
-Plain English: this is a hardcoded risk scaling heuristic; it is not a validated failure-time model.
+Plain English: this is a hardcoded operational review-window heuristic; it is not a validated failure-time model.
 
 ### Temporal Math Engine
 
@@ -864,7 +864,7 @@ Replay UI loads `/replay/timeline`, `/replay/{job_id}`, or embedded `latestUploa
 - No interpolation is performed despite time-series terminology.
 - Baselines are early-window heuristics, not operator-confirmed normal periods.
 - Runner confidence measures data completeness/history depth, not clinical/statistical certainty.
-- Projected time to failure is a hardcoded heuristic based on risk score and urgency.
+- Review window is a hardcoded operational heuristic based on risk score and urgency.
 - Per-room state uses an early-vs-recent mean/variance heuristic on up to 4 numeric columns.
 - Relationship detection ignores pairs with baseline correlation below 0.65, so newly emerging relationships from weak baselines can be missed.
 - `sii_reliable_enough_to_show` is always initialized false and becomes true only after evidence persistence confirms and baseline reliability is true.
@@ -874,7 +874,7 @@ Replay UI loads `/replay/timeline`, `/replay/{job_id}`, or embedded `latestUploa
 - Driver category names, likely driver text, next operator move, and evidence sentences (`driver_attribution.py:9-53`, `driver_attribution.py:323-392`).
 - Telemetry profile classification by column-name tokens (`upload_jobs.py:1413-1448`).
 - Room urgency thresholds `0.08` and `0.25` from the early-vs-recent room drift heuristic (`upload_jobs.py:987-1007`).
-- Projected time strings and base hours (`sii_runner.py:764-780`, `sii_intelligence.py:499-533`).
+- Review window strings and base hours (`sii_runner.py:764-780`, `sii_intelligence.py:499-533`).
 - System interpretation state labels such as Cascade Risk and Structural Degradation from compound UI flags (`system_interpretation.py:186-191`, `system_interpretation.py:270-291`).
 - Observation Center summaries are text templates based on observation type (`ObservationCenterWorkspace.jsx:84-102`).
 
@@ -890,7 +890,7 @@ Replay UI loads `/replay/timeline`, `/replay/{job_id}`, or embedded `latestUploa
 ## Claims Not Yet Safe To Make
 
 - It is not safe to claim root cause. Driver attribution is deterministic evidence ranking and templated language.
-- It is not safe to claim true time-to-failure prediction. Projected time is a heuristic.
+- It is not safe to claim true time-to-failure prediction. Review window is an operational triage heuristic.
 - It is not safe to claim interpolation, smoothing, or resampling of telemetry.
 - It is not safe to claim learned normal behavior beyond early-window baseline statistics for the uploaded dataset.
 - It is not safe to claim relationship divergence is causal; it is correlation/covariance movement.

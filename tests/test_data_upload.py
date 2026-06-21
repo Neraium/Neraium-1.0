@@ -1871,7 +1871,9 @@ def _build_interpretation_result_for_state(state: str) -> dict:
         },
         "sii_intelligence": {
             "facility_state": "Monitoring",
-            "projected_time_to_failure": "More than 3 weeks at current trajectory",
+            "review_window": "Continue monitoring; review within 3 weeks if trajectory persists",
+            "review_window_hours": 490,
+            "projected_time_to_failure": "Continue monitoring; review within 3 weeks if trajectory persists",
             "projected_time_to_failure_hours": 490,
             "primary_room": "Room A",
             "primary_driver": "flow_pressure_coupling",
