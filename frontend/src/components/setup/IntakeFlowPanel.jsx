@@ -143,6 +143,19 @@ const progressFillStyle = {
   transition: "width 320ms ease",
 };
 
+const alertLayoutStyle = {
+  display: "grid",
+  gap: "12px",
+  alignItems: "start",
+};
+
+const alertMessageStyle = {
+  display: "block",
+  margin: 0,
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+};
+
 export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
@@ -171,19 +184,25 @@ export default function IntakeFlowPanel({
   const hasSelectedFiles = selectedFiles?.length > 0;
   const hasUploadError = uploadState === "error" || uploadState === "failed";
   const hasValidationError = uploadState === "validation_error";
+  const hasTerminalUploadIssue = hasUploadError || hasValidationError;
   const primaryProgressText = String(uploadJob?.progress_label || latestMessage || "").trim();
   const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || "").trim();
-  const statusLines = buildStatusLines({ primaryProgressText, secondaryProgressText, queuedWorkerDetail });
+  const statusLines = buildStatusLines({
+    primaryProgressText,
+    secondaryProgressText: hasTerminalUploadIssue ? "" : secondaryProgressText,
+    queuedWorkerDetail: hasTerminalUploadIssue ? "" : queuedWorkerDetail,
+  });
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : "No file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
-  const shouldShowUploadStatus = hasSelectedFiles || isUploadProcessing(uploadState) || hasValidationError || hasUploadError || Boolean(uploadJob);
+  const shouldShowUploadStatus = !hasTerminalUploadIssue && (hasSelectedFiles || isUploadProcessing(uploadState) || Boolean(uploadJob));
   const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
   const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
+  const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Upload failed. Select a new file and try again.")).trim();
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -196,15 +215,15 @@ export default function IntakeFlowPanel({
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
             <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
-            <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length}>
+            <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
               {isUploadProcessing(uploadState) ? "Processing" : "Upload Data"}
             </button>
           </div>
         </div>
         {hasValidationError || hasUploadError ? (
-          <div className="upload-partial-alert" role="alert" aria-live="assertive">
+          <div className="upload-partial-alert" role="alert" aria-live="assertive" style={alertLayoutStyle}>
             <strong>{hasValidationError ? "File not ready" : "Upload failed"}</strong>
-            <span>{latestMessage}</span>
+            <p style={alertMessageStyle}>{errorMessage}</p>
             <div className="intake-flow__controls">
               <button
                 type="button"
