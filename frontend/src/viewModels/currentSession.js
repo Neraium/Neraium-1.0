@@ -46,30 +46,47 @@ export function deriveCurrentSession({
   const interpretation = snapshot?.system_interpretation ?? result?.system_interpretation ?? null;
   const sessionJobId = currentUpload?.job_id ?? result?.job_id ?? snapshot?.job_id ?? null;
   const lineageJobId = interpretation?.lineage?.job_id ?? null;
-  const hasAlignedInterpretation = Boolean(
+  const interpretationExplicitlyUnaligned = Boolean(
     interpretation
-    && interpretation?.lineage?.aligned
-    && interpretation?.run_alignment_verified !== false,
+    && (interpretation?.lineage?.aligned === false || interpretation?.run_alignment_verified === false),
   );
+  const interpretationMatchesSession = !sessionJobId || !lineageJobId || String(lineageJobId) === String(sessionJobId);
+  const hasAlignedInterpretation = !interpretationExplicitlyUnaligned && interpretationMatchesSession;
   const resolvedTelemetrySession = telemetrySession ?? deriveTelemetrySessionState({
     latestUploadResult: result,
     latestUploadSnapshot: snapshot,
   });
-  const interpretationMatchesSession = !sessionJobId || !lineageJobId || String(lineageJobId) === String(sessionJobId);
+  const dataGateState = String(
+    result?.data_quality?.analysis_gate_state
+      ?? result?.ingestion_report?.analysis_gate_state
+      ?? "",
+  ).toUpperCase();
+  const dataQualityReady = result?.data_quality?.readiness === "ready" || ["READY", "DEGRADED_READY"].includes(dataGateState);
+  const hasUsableEvidencePayload = Boolean(
+    result?.operator_report
+      || result?.engine_result
+      || result?.sii_intelligence
+      || result?.replay_ready
+      || result?.replay_frame_count
+      || result?.data_quality,
+  );
+  const evidenceReadyForReview = Boolean(
+    result?.sii_reliable_enough_to_show === true
+      || (dataQualityReady && hasUsableEvidencePayload),
+  );
   const hasReliableOperatorEvidence = Boolean(
     hasActiveSession
     && hasRealSiiOutput
-    && result?.sii_reliable_enough_to_show === true
+    && evidenceReadyForReview
     && hasAlignedInterpretation
-    && interpretationMatchesSession
   );
   const reviewReadiness = !hasActiveSession
     ? "no_session"
     : !hasRealSiiOutput
       ? "processing"
-      : result?.sii_reliable_enough_to_show !== true
+      : !evidenceReadyForReview
         ? "quality_gate"
-        : !hasAlignedInterpretation || !interpretationMatchesSession
+        : !hasAlignedInterpretation
           ? "unaligned"
           : "ready";
 
