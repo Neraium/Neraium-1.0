@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
 
@@ -33,8 +32,12 @@ export default function SystemBodyWorkspace({
 }) {
   void dataFreshness;
   void siiVerification;
+  void systemState;
+  void coherence;
+  void orbData;
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeResultSection, setActiveResultSection] = useState("overview");
   const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
   const interpretation = useMemo(() => {
@@ -106,51 +109,29 @@ export default function SystemBodyWorkspace({
   const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, telemetryUsable, telemetrySessionMode);
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
   const canReviewFindings = telemetryUsable && finding.exists;
-  const primaryActionLabel = !interpretation.hasTelemetry
-    ? "Upload Data"
-    : finding.exists
-      ? finding.evidenceButtonLabel
-      : "View Data Intake";
-  const primaryActionTarget = finding.exists ? "historical-replay" : "data-connections";
-  const navigationItems = [
-    {
-      id: "data-connections",
-      label: "Data intake",
-      description: interpretation.hasTelemetry ? "Swap feeds, upload CSV, or reconnect APIs." : "Upload telemetry or connect a live source.",
-    },
-    {
-      id: finding.exists ? "historical-replay" : "observation-center",
-      label: finding.exists ? "Evidence trace" : "Observation review",
-      description: finding.exists ? "Open replay and inspect the evidence chain." : "Review current interpretation and monitoring context.",
-    },
-    {
-      id: "help-changelog",
-      label: "Help and updates",
-      description: "Reference product guidance and recent changes.",
-    },
+  const overviewStatus = formatOverviewStatus(assessmentState.mode);
+  const dataQualityReport = buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findingDataQuality);
+  const evidenceReport = buildEvidenceReport({
+    latestUploadResult,
+    latestUploadSnapshot,
+    latestReplayFrame,
+    assessmentState,
+    finding,
+    stabilitySnapshot,
+  });
+  const technicalReport = buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState });
+  const overviewSummary = buildOverviewSummary(assessmentState.mode);
+  const metricTiles = [
+    { label: "Rows loaded", value: dataQualityReport.rowsLoaded },
+    { label: "Signals detected", value: dataQualityReport.signalsDetected },
+    { label: "Confidence", value: dataQualityReport.qualityLabel || finding.confidence },
   ];
-  const heroStats = [
-    { label: "Observation status", value: finding.status },
-    { label: "Evidence confidence", value: finding.confidence },
-    { label: "Operating pattern", value: assessmentState.stability.regime },
-    { label: "Persistence", value: assessmentState.stability.deformationAge },
-  ];
-  const stabilityRows = [
-    { label: "Current operating pattern", value: assessmentState.stability.regime },
-    { label: "Behavior has persisted", value: assessmentState.stability.deformationAge },
-    { label: "Drift magnitude", value: assessmentState.stability.driftMagnitude },
-    { label: "Active observations", value: String(assessmentState.stability.activeObservations) },
-  ];
-  const insightRows = [
-    { label: "Primary driver", value: interpretation.primaryDriver },
-    { label: "Why it matters", value: finding.whyItMatters },
-    { label: "Review next", value: finding.exists ? finding.reviewNext : finding.emptyState.detail },
-    { label: "Latest update", value: lastUpdate || "Awaiting telemetry" },
-  ];
-  const trustRows = [
-    { label: "Control boundary", value: "Read-only. No actuation or writeback." },
-    { label: "Analysis mode", value: "Structural relationship monitoring only." },
-    { label: "Data posture", value: telemetryUsable ? "Uploaded telemetry is usable for analysis." : assessmentState.dataPosture },
+  const resultSections = [
+    { id: "overview", label: "Overview" },
+    { id: "findings", label: "Findings" },
+    { id: "quality", label: "Data Quality" },
+    { id: "evidence", label: "Evidence" },
+    { id: "technical", label: "Technical" },
   ];
   const domainSummary = buildDomainDetectionSummary(domainDetection);
 
@@ -280,167 +261,333 @@ export default function SystemBodyWorkspace({
           Views
         </button>
 
-        <div className="system-gate__layout">
-          <section className="system-gate__hero" aria-label="System status overview">
-            <div className="system-gate__hero-copy">
-              <p className="system-gate__eyebrow">Live system intelligence</p>
-              <h1>{finding.title}</h1>
-              <p className="system-gate__lede">{finding.summary}</p>
-              <div className="system-gate__hero-actions">
-                <button
-                  type="button"
-                  data-testid="primary-upload-entry"
-                  className="command-button"
-                  onClick={() => navigateWorkspace(primaryActionTarget)}
-                >
-                  {primaryActionLabel}
-                </button>
-                {canReviewFindings ? (
-                  <button
-                    type="button"
-                    className="secondary-command-button"
-                    onClick={() => navigateWorkspace("observation-center")}
-                  >
-                    Review Findings
-                  </button>
-                ) : null}
+        <nav className="result-section-tabs" aria-label="Post-upload result sections">
+          {resultSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={activeResultSection === section.id ? "is-active" : ""}
+              aria-current={activeResultSection === section.id ? "page" : undefined}
+              onClick={() => setActiveResultSection(section.id)}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="post-upload-result" data-testid="post-upload-result">
+          {activeResultSection === "overview" ? (
+            <section className="post-upload-overview" aria-label="Post-upload overview">
+              <div className="post-upload-overview__header">
+                <span className={`post-upload-status post-upload-status--${overviewStatus.tone}`}>{overviewStatus.label}</span>
+                <h1>{overviewSummary}</h1>
+                <p>{assessmentState.dataPosture}</p>
               </div>
-              <div className="system-gate__stat-grid">
-                {heroStats.map((item) => (
-                  <article className="system-gate__stat-card" key={item.label}>
+
+              <div className="post-upload-metrics" aria-label="Upload metrics">
+                {metricTiles.map((item) => (
+                  <article className="post-upload-metric" key={item.label}>
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
                   </article>
                 ))}
               </div>
-            </div>
 
-            <div className="system-gate__hero-visual">
-              <div className="system-gate__orb-stage">
-                <SystemOrbPanel
-                  systemState={systemState}
-                  uiState={uiState}
-                  coherence={coherence}
-                  stateLabel={finding.title}
-                  lastUpdate={interpretation.hasTelemetry ? lastUpdate : null}
-                  focusLabel={interpretation.primaryDriver}
-                  orbData={orbData}
-                  compactPreview
-                />
-              </div>
-              <div className="system-gate__orb-caption">
-                <p className="system-gate__state">{finding.title}</p>
-                <p className="system-gate__orb-note">{finding.whyItMatters}</p>
-              </div>
-            </div>
-          </section>
-
-          <aside className="system-gate__sidebar" aria-label="Current briefing">
-            <section className="system-gate__panel">
-              <div className="system-gate__panel-header">
-                <p className="section-token">Current brief</p>
-                <strong>{assessmentState.headerStatus}</strong>
-              </div>
-              <ul className="system-gate__detail-list">
-                {insightRows.map((item) => (
-                  <li key={item.label}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="system-gate__panel">
-              <div className="system-gate__panel-header">
-                <p className="section-token">Trust boundary</p>
-                <strong>Operator safe</strong>
-              </div>
-              <ul className="system-gate__detail-list">
-                {trustRows.map((item) => (
-                  <li key={item.label}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </aside>
-        </div>
-
-        <div className="system-gate__lower-grid">
-          <section className="system-gate__panel system-gate__panel--wide" aria-label="Operational focus">
-            <div className="system-gate__panel-header">
-              <p className="section-token">Operational focus</p>
-              <strong>{assessmentState.headerStatus}</strong>
-            </div>
-            <ul className="system-gate__detail-list system-gate__detail-list--dense">
-              <li>
-                <span>Observation summary</span>
-                <strong>{assessmentState.mode === "analysis_pending" ? finding.whyItMatters : finding.summary}</strong>
-              </li>
-              <li>
+              <section className="post-upload-review-next" aria-label="Review next">
                 <span>Review next</span>
                 <strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong>
-              </li>
-            </ul>
-            {Array.isArray(finding.supportingEvidence) && finding.supportingEvidence.length > 0 ? (
-              <div className="system-gate__evidence-block" aria-label="Supporting evidence">
-                <p className="section-token">Supporting Evidence</p>
-                <ul className="compact-list">
-                  {finding.supportingEvidence.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </div>
-            ) : null}
-            {findingDataQuality.length > 0 ? (
-              <div className="system-gate__evidence-block">
-                <p className="section-token">Data quality</p>
-                <ul className="compact-list">
-                  {findingDataQuality.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </div>
-            ) : null}
-          </section>
+              </section>
 
-          <section className="system-gate__panel" aria-label="Structural stability snapshot">
-            <div className="system-gate__panel-header">
-              <p className="section-token">Structural stability snapshot</p>
-              <strong>Review baseline</strong>
-            </div>
-            <ul className="system-gate__detail-list system-gate__detail-list--dense">
-              {stabilityRows.map((item) => (
-                <li key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </li>
-              ))}
-            </ul>
-          </section>
+              <div className="post-upload-actions" aria-label="Primary result actions">
+                <button type="button" className="command-button" onClick={() => setActiveResultSection("findings")}>View Findings</button>
+                <button type="button" className="secondary-command-button" onClick={() => setActiveResultSection("quality")}>View Data Quality</button>
+                <button type="button" className="secondary-command-button" onClick={() => setActiveResultSection("evidence")}>View Evidence</button>
+              </div>
+            </section>
+          ) : null}
 
-          <section className="system-gate__panel" aria-label="Workspace navigation">
-            <div className="system-gate__panel-header">
-              <p className="section-token">Workspace navigation</p>
-              <strong>Next actions</strong>
-            </div>
-            <div className="system-gate__nav-list">
-              {navigationItems.map((item) => (
-                <button
-                  type="button"
-                  className="system-gate__nav-card"
-                  key={item.id}
-                  onClick={() => navigateWorkspace(item.id)}
-                >
-                  <span>{item.label}</span>
-                  <strong>{item.description}</strong>
-                </button>
-              ))}
-            </div>
-          </section>
+          {activeResultSection === "findings" ? (
+            <section className="post-upload-section" aria-label="Findings">
+              <div className="post-upload-section__header">
+                <p className="section-token">Findings</p>
+                <h2>{finding.exists ? "Active finding" : "No current findings"}</h2>
+              </div>
+              <article className="finding-card">
+                <div className="finding-card__topline">
+                  <h3>{finding.exists ? finding.title : finding.emptyState.title}</h3>
+                  <span>{finding.status}</span>
+                </div>
+                <dl className="result-detail-grid">
+                  <div>
+                    <dt>Why it matters</dt>
+                    <dd>{finding.whyItMatters}</dd>
+                  </div>
+                  <div>
+                    <dt>Review next</dt>
+                    <dd>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</dd>
+                  </div>
+                  <div>
+                    <dt>Affected variables</dt>
+                    <dd>{evidenceReport.affectedVariables}</dd>
+                  </div>
+                </dl>
+                {canReviewFindings ? (
+                  <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Finding Review</button>
+                ) : null}
+              </article>
+            </section>
+          ) : null}
+
+          {activeResultSection === "quality" ? (
+            <section className="post-upload-section" aria-label="Data Quality">
+              <div className="post-upload-section__header">
+                <p className="section-token">Data Quality</p>
+                <h2>{dataQualityReport.summary}</h2>
+              </div>
+              <dl className="result-detail-grid">
+                {dataQualityReport.rows.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <ResultList title="Warnings" items={dataQualityReport.warnings} empty="No data quality warnings reported." />
+              <ResultList title="Missing values" items={dataQualityReport.missingValues} empty="No missing value notes reported." />
+              <ResultList title="Interpolation and imputation" items={dataQualityReport.imputationNotes} empty="No interpolation or imputation notes reported." />
+            </section>
+          ) : null}
+
+          {activeResultSection === "evidence" ? (
+            <section className="post-upload-section" aria-label="Evidence">
+              <div className="post-upload-section__header">
+                <p className="section-token">Evidence</p>
+                <h2>Evidence packet</h2>
+              </div>
+              <dl className="result-detail-grid">
+                {evidenceReport.rows.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <ResultList title="Traceability" items={evidenceReport.traceability} empty="No traceability notes reported." />
+              <ResultList title="Replay references" items={evidenceReport.replayReferences} empty="No replay references reported." />
+            </section>
+          ) : null}
+
+          {activeResultSection === "technical" ? (
+            <section className="post-upload-section" aria-label="Technical diagnostics">
+              <div className="post-upload-section__header">
+                <p className="section-token">Technical</p>
+                <h2>Operator diagnostics</h2>
+              </div>
+              <dl className="result-detail-grid">
+                {technicalReport.rows.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <ResultList title="Processing trace" items={technicalReport.processingTrace} empty="No processing trace reported." />
+              <ResultList title="Backend warnings" items={technicalReport.backendWarnings} empty="No backend warnings reported." />
+              <details className="technical-details-panel">
+                <summary>Raw metadata</summary>
+                <pre>{technicalReport.rawMetadata}</pre>
+              </details>
+            </section>
+          ) : null}
         </div>
       </section>
       {menuOverlay}
     </PageContainer>
   );
+}
+
+
+function ResultList({ title, items, empty }) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  return (
+    <section className="result-list-block">
+      <h3>{title}</h3>
+      {safeItems.length > 0 ? (
+        <ul className="compact-list">
+          {safeItems.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p>{empty}</p>
+      )}
+    </section>
+  );
+}
+
+function formatOverviewStatus(mode) {
+  if (mode === "analysis_error") return { label: "Error", tone: "error" };
+  if (mode === "analysis_pending") return { label: "Pending", tone: "pending" };
+  if (mode === "analysis_degraded_ready") return { label: "Ready With Warnings", tone: "warning" };
+  if (mode === "analysis_ready") return { label: "Analysis Ready", tone: "ready" };
+  return { label: "Pending", tone: "pending" };
+}
+
+function buildOverviewSummary(mode) {
+  if (mode === "analysis_error") return "Analysis needs attention.";
+  if (mode === "analysis_pending") return "Processing is still running.";
+  if (mode === "analysis_degraded_ready") return "Warnings found, but analysis can proceed.";
+  if (mode === "analysis_ready") return "Usable telemetry is available.";
+  return "Upload telemetry to begin.";
+}
+
+function buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findingDataQuality) {
+  const result = latestUploadResult ?? {};
+  const dataQuality = result.data_quality ?? {};
+  const timestampProfile = result.timestamp_profile ?? {};
+  const rowsLoaded = firstPresent(
+    result.row_count,
+    result.rows_processed,
+    result.rows_loaded,
+    dataQuality.rows_loaded,
+    latestUploadSnapshot?.rows_processed,
+    "0",
+  );
+  const columns = Array.isArray(result.columns) ? result.columns : [];
+  const columnsDetected = firstPresent(
+    result.columns_detected,
+    dataQuality.columns_detected,
+    latestUploadSnapshot?.columns_detected,
+    columns.length || null,
+    "0",
+  );
+  const warnings = dedupeText([
+    ...(Array.isArray(dataQuality.warnings) ? dataQuality.warnings : []),
+    ...(Array.isArray(timestampProfile.warnings) ? timestampProfile.warnings : []),
+  ]);
+  const missingValues = dedupeText([
+    ...(Array.isArray(dataQuality.missing_values) ? dataQuality.missing_values : []),
+    ...(Array.isArray(dataQuality.missing_value_warnings) ? dataQuality.missing_value_warnings : []),
+    ...(Array.isArray(result.missing_values) ? result.missing_values : []),
+    ...(Array.isArray(findingDataQuality) ? findingDataQuality : []),
+  ]);
+  const imputationNotes = dedupeText([
+    ...(Array.isArray(dataQuality.interpolation_notes) ? dataQuality.interpolation_notes : []),
+    ...(Array.isArray(dataQuality.imputation_notes) ? dataQuality.imputation_notes : []),
+    dataQuality.interpolation_note,
+    dataQuality.imputation_note,
+  ]);
+  const timestampMode = timestampProfile.first_timestamp || timestampProfile.last_timestamp
+    ? `${timestampProfile.first_timestamp ?? "Unknown start"} to ${timestampProfile.last_timestamp ?? "Unknown end"}`
+    : (timestampProfile.mode || result.timestamp_mode || "Row-order mode");
+  const droppedRows = firstPresent(dataQuality.dropped_rows, result.dropped_rows, "0");
+  return {
+    rowsLoaded: formatScalar(rowsLoaded),
+    signalsDetected: formatScalar(columnsDetected),
+    qualityLabel: warnings.length > 0 ? "Review" : "Ready",
+    summary: warnings.length > 0 ? "Review data quality before making decisions." : "CSV load is ready for review.",
+    rows: [
+      { label: "Rows loaded", value: formatScalar(rowsLoaded) },
+      { label: "Columns detected", value: formatScalar(columnsDetected) },
+      { label: "Timestamp mode", value: formatScalar(timestampMode) },
+      { label: "Dropped rows", value: formatScalar(droppedRows) },
+    ],
+    warnings,
+    missingValues,
+    imputationNotes,
+  };
+}
+
+function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestReplayFrame, assessmentState, finding, stabilitySnapshot }) {
+  const result = latestUploadResult ?? {};
+  const sii = result.sii_intelligence ?? {};
+  const replay = result.replay_timeline?.timeline ?? sii.replay_timeline?.timeline ?? [];
+  const frame = latestReplayFrame ?? replay?.[replay.length - 1] ?? null;
+  const affectedVariables = dedupeText([
+    ...(Array.isArray(finding?.affectedVariables) ? finding.affectedVariables : []),
+    ...(Array.isArray(finding?.variables) ? finding.variables : []),
+    ...(Array.isArray(result.system_interpretation?.relationship_divergence?.affected_systems) ? result.system_interpretation.relationship_divergence.affected_systems : []),
+    ...(Array.isArray(result.system_interpretation?.relationship_summary?.affected_systems) ? result.system_interpretation.relationship_summary.affected_systems : []),
+    frame?.primary_driver,
+    sii.primary_driver,
+  ]);
+  const traceability = dedupeText([
+    ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
+    ...(Array.isArray(result.operator_report?.evidence_summary) ? result.operator_report.evidence_summary : []),
+  ]);
+  const replayReferences = dedupeText([
+    result.replay_id,
+    result.replay_reference,
+    frame?.frame_id,
+    replay.length ? `${replay.length} replay frames available` : null,
+  ]);
+  const runId = firstPresent(result.run_id, result.job_id, latestUploadSnapshot?.current_upload?.job_id, latestUploadSnapshot?.job_id, "Unavailable");
+  return {
+    affectedVariables: affectedVariables.length > 0 ? affectedVariables.join(", ") : "No affected variables reported.",
+    rows: [
+      { label: "Baseline comparison", value: formatScalar(assessmentState.stability.regime) },
+      { label: "Drift metrics", value: formatScalar(stabilitySnapshot.driftMagnitude) },
+      { label: "Behavior has persisted", value: formatScalar(stabilitySnapshot.deformationAge) },
+      { label: "Active observations", value: formatScalar(assessmentState.stability.activeObservations) },
+      { label: "Evidence confidence", value: formatScalar(finding.confidence) },
+      { label: "Run ID", value: formatScalar(runId) },
+    ],
+    traceability,
+    replayReferences,
+  };
+}
+
+function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState }) {
+  const result = latestUploadResult ?? {};
+  const processingTrace = result.processing_trace && typeof result.processing_trace === "object"
+    ? Object.entries(result.processing_trace).map(([key, value]) => `${formatKey(key)}: ${formatScalar(value)}`)
+    : [];
+  const schemaDetection = result.schema_detection ?? result.detected_schema ?? result.domain_detection ?? null;
+  const runtime = result.runtime_metadata ?? result.processing_stats ?? {};
+  const backendWarnings = dedupeText([
+    ...(Array.isArray(result.warnings) ? result.warnings : []),
+    ...(Array.isArray(result.backend_warnings) ? result.backend_warnings : []),
+    ...(Array.isArray(result.data_quality?.warnings) ? result.data_quality.warnings : []),
+  ]);
+  return {
+    rows: [
+      { label: "Raw analysis gate state", value: formatScalar(result.data_quality?.analysis_gate_state ?? result.analysis_gate_state ?? assessmentState.mode) },
+      { label: "Schema detection", value: formatScalar(schemaDetection ? compactJson(schemaDetection) : "Unavailable") },
+      { label: "Runtime metadata", value: formatScalar(Object.keys(runtime).length ? compactJson(runtime) : "Unavailable") },
+      { label: "Result source", value: formatScalar(latestUploadSnapshot?.result_source ?? result.result_source ?? "Unavailable") },
+    ],
+    processingTrace,
+    backendWarnings,
+    rawMetadata: compactJson({ latestUploadSnapshot, latestUploadResult }, 2),
+  };
+}
+
+function firstPresent(...values) {
+  return values.find((value) => value !== null && value !== undefined && String(value).trim() !== "") ?? "Unavailable";
+}
+
+function dedupeText(items) {
+  return [...new Set(items.filter((item) => item !== null && item !== undefined).map((item) => formatScalar(item)).filter(Boolean))];
+}
+
+function formatScalar(value) {
+  if (value === null || value === undefined || value === "") return "Unavailable";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "Unavailable";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return compactJson(value);
+  return String(value);
+}
+
+function compactJson(value, space = 0) {
+  try {
+    return JSON.stringify(value, null, space);
+  } catch {
+    return "Unavailable";
+  }
+}
+
+function formatKey(value) {
+  return String(value ?? "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 
@@ -595,12 +742,12 @@ function resolveAssessmentState({
   if (!observationsExist || !fallbackFinding.exists) {
     return {
       mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
-      headerStatus: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+      headerStatus: degraded ? "Ready With Warnings" : "Analysis Ready",
       dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
       finding: {
         ...fallbackFinding,
         exists: false,
-        title: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+        title: degraded ? "Ready With Warnings" : "Analysis Ready",
         status: degraded ? "Warnings Present" : "No Findings",
         confidence: normalizeConfidenceLabel(fallbackFinding.confidence),
         summary: degraded ? "Usable telemetry is available with warnings." : "Usable telemetry is available. No findings are currently flagged.",
@@ -609,7 +756,7 @@ function resolveAssessmentState({
           : "The uploaded dataset passed analysis readiness without a flagged structural finding.",
         reviewNext: degraded ? "Review data quality warnings before acting on findings." : "Continue monitoring or upload more telemetry.",
         emptyState: {
-          title: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+          title: degraded ? "Ready With Warnings" : "Analysis Ready",
           subtitle: degraded ? "Usable telemetry has data-quality warnings." : "No findings are currently flagged.",
           detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or upload more telemetry.",
         },
@@ -624,21 +771,11 @@ function resolveAssessmentState({
 
   return {
     mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
-    headerStatus: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+    headerStatus: degraded ? "Ready With Warnings" : "Analysis Ready",
     dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
     finding: fallbackFinding,
     stability: stabilitySnapshot,
   };
-}
-
-function hasCompletedAnalysis({ latestUploadSnapshot, latestUploadResult }) {
-  const gateState = resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult });
-  if (gateState === "READY" || gateState === "DEGRADED_READY") return true;
-  if (latestUploadResult?.processing_trace?.sii_completed === true) return true;
-  if (latestUploadResult?.sii_completed === true) return true;
-  if (String(latestUploadResult?.processing_state ?? latestUploadResult?.status ?? "").toLowerCase() === "complete") return true;
-  if (latestUploadSnapshot?.sii_completed === true) return true;
-  return String(latestUploadSnapshot?.status ?? latestUploadSnapshot?.processing_state ?? "").toLowerCase() === "complete";
 }
 
 function hasCompletedObservations({ latestUploadResult, latestReplayFrame, stabilitySnapshot }) {

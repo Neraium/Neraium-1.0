@@ -15,9 +15,10 @@ vi.mock("../../layout/PageContainer", () => ({
   default: ({ children, className }) => h("div", { className }, children),
 }));
 
-function readSnapshotValue(label) {
-  const snapshot = screen.getByLabelText("Structural stability snapshot");
-  const labelNode = within(snapshot).getByText(label);
+function readResultDetail(label, sectionName = "Evidence") {
+  fireEvent.click(screen.getByRole("button", { name: sectionName }));
+  const section = screen.getByLabelText(sectionName === "Evidence" ? "Evidence" : sectionName);
+  const labelNode = within(section).getByText(label);
   return labelNode.nextElementSibling?.textContent;
 }
 
@@ -66,11 +67,11 @@ describe("SystemBodyWorkspace empty state", () => {
     renderWorkspace();
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "No Analysis" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Upload telemetry to begin." })).toBeTruthy();
     expect(screen.getAllByText("Upload telemetry to generate an assessment.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
-    expect(readSnapshotValue("Current operating pattern")).toBe("No telemetry");
-    expect(readSnapshotValue("Behavior has persisted")).toBe("No telemetry");
+    expect(readResultDetail("Baseline comparison")).toBe("No telemetry");
+    expect(readResultDetail("Behavior has persisted")).toBe("—");
     expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
   });
 
@@ -91,9 +92,9 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(readSnapshotValue("Current operating pattern")).toBe("State Group B");
-    expect(readSnapshotValue("Behavior has persisted")).not.toBe("No telemetry");
-    expect(screen.getByRole("button", { name: "Review Findings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "View Findings" })).toBeTruthy();
+    expect(readResultDetail("Baseline comparison")).toBe("State Group B");
+    expect(readResultDetail("Behavior has persisted")).not.toBe("No telemetry");
   });
 
   it("does not render pending copy for a READY upload result", () => {
@@ -112,7 +113,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getAllByText("Analysis Ready").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Analysis Pending" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
-    expect(readSnapshotValue("Behavior has persisted")).toBe("2d");
+    expect(readResultDetail("Behavior has persisted")).toBe("2d");
     expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
@@ -130,10 +131,11 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getAllByText("Analysis Ready With Warnings").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ready With Warnings").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Analysis Pending" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
-    expect(screen.getByText((text) => text.includes("Sparse missing values detected; short numeric gaps interpolated."))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Data Quality" }));
+    expect(screen.getAllByText((text) => text.includes("Sparse missing values detected; short numeric gaps interpolated.")).length).toBeGreaterThan(0);
   });
 
   it("renders one pending card when backend analysis is actually pending", () => {
@@ -147,8 +149,8 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getAllByRole("heading", { name: "Analysis Pending" })).toHaveLength(1);
-    expect(screen.getAllByText("Backend processing has not finished for this upload.")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Processing is still running." })).toBeTruthy();
+    expect(screen.getAllByText("Telemetry is present, but backend analysis is still pending.")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
@@ -166,7 +168,7 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(readSnapshotValue("Behavior has persisted")).toBe("Not enough history");
+    expect(readResultDetail("Behavior has persisted")).toBe("Not enough history");
     expect(screen.queryByText(/20625d/)).toBeNull();
   });
 
