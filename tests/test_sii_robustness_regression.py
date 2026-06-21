@@ -204,17 +204,19 @@ def test_chilled_water_sparse_nulls_do_not_block_analysis() -> None:
     assert result["sii_runner_result"]["latest_state"]["urgency"] != "CRITICAL"
 
 
-def test_chilled_water_missing_timestamp_blocks_analysis_gate() -> None:
+def test_chilled_water_missing_timestamp_uses_row_index_when_signal_exists() -> None:
     result = process_csv_content(filename="missing-timestamp.csv", content=_chilled_water_csv(omit_timestamp=True))
 
-    assert result["data_quality"]["analysis_gate_state"] == "PENDING"
-    assert result["data_quality"]["readiness"] == "pending"
+    assert result["data_quality"]["analysis_gate_state"] == "DEGRADED_READY"
+    assert result["data_quality"]["readiness"] == "ready"
+    assert "No timestamp column detected; using row-index analysis." in result["data_quality"]["messages"]
 
 
-def test_chilled_water_missing_supply_and_return_temperature_blocks_analysis_gate() -> None:
+def test_chilled_water_missing_supply_and_return_temperature_degrades_confidence() -> None:
     result = process_csv_content(filename="missing-temps.csv", content=_chilled_water_csv(omit_temps=True))
 
-    assert result["data_quality"]["analysis_gate_state"] == "PENDING"
+    assert result["data_quality"]["analysis_gate_state"] in {"READY", "DEGRADED_READY"}
+    assert result["data_quality"]["readiness"] == "ready"
 
 
 def test_chilled_water_out_of_order_timestamps_are_sorted() -> None:

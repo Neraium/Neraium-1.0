@@ -38,6 +38,40 @@ CHILLED_WATER_IMPORTANT_COLUMNS = (
 CHILLED_WATER_FLAG_COLUMNS = {"alarm_count", "maintenance_event", "operator_override"}
 CHILLED_WATER_SPARSE_MISSING_THRESHOLD = 0.05
 SHORT_GAP_LIMIT_ROWS = 6
+LOW_MISSING_WARNING_THRESHOLD = 0.10
+
+DOMAIN_ADAPTERS = (
+    (
+        "chilled_water",
+        "chilled-water telemetry",
+        ("chw_", "chilled", "chiller", "evaporator", "condenser", "delta_t", "cooling_demand"),
+    ),
+    (
+        "hvac",
+        "HVAC telemetry",
+        ("supply_temp", "return_temp", "static_pressure", "airflow", "ahu", "rtu", "compressor", "economizer"),
+    ),
+    (
+        "pumps",
+        "pump telemetry",
+        ("pump", "flow", "gpm", "discharge_pressure", "suction_pressure", "bearing", "vibration", "vfd"),
+    ),
+    (
+        "pool_spa_chemistry",
+        "pool/spa chemistry telemetry",
+        ("pool", "spa", "orp", "chlorine", "ph", "turbidity", "sanitizer", "alkalinity"),
+    ),
+    (
+        "energy_meters",
+        "energy meter telemetry",
+        ("kwh", "kw", "voltage", "current", "power_factor", "meter", "demand"),
+    ),
+    (
+        "generic_equipment",
+        "equipment telemetry",
+        ("asset", "equipment", "machine", "motor", "temperature", "pressure", "speed", "runtime"),
+    ),
+)
 
 
 def detect_delimiter(sample: str) -> str:
@@ -80,6 +114,107 @@ def normalized_columns(tokens: list[str], *, header_present: bool) -> list[str]:
 def normalize_schema_column(column: str) -> str:
     normalized = column.strip().lower().replace(" ", "_").replace("-", "_")
     return "".join(char for char in normalized if char.isalnum() or char == "_")
+
+
+def is_status_or_flag_column(column: str) -> bool:
+    normalized = normalize_schema_column(column)
+    return any(
+        token in normalized
+        for token in (
+            "alarm",
+            "alert",
+            "fault",
+            "status",
+            "state",
+            "mode",
+            "override",
+            "operator",
+            "maintenance",
+            "event",
+            "flag",
+            "enabled",
+            "command",
+        )
+    )
+
+
+def detect_domain_adapter(columns: list[str]) -> dict[str, Any]:
+    normalized_columns = [normalize_schema_column(column) for column in columns]
+    best: tuple[str, str, list[str]] | None = None
+    best_matches: list[str] = []
+    for adapter_id, label, tokens in DOMAIN_ADAPTERS:
+        matches = [
+            column
+            for column, normalized in zip(columns, normalized_columns)
+            if any(token in normalized for token in tokens)
+        ]
+        if len(matches) > len(best_matches):
+            best = (adapter_id, label, list(tokens))
+            best_matches = matches
+    if best is None or len(best_matches) < 2:
+        return {
+            "detected": True,
+            "system_type": "generic_equipment",
+            "label": "generic equipment telemetry",
+            "matched_columns": [],
+            "confidence": "low",
+        }
+    return {
+        "detected": True,
+        "system_type": best[0],
+        "label": best[1],
+        "matched_columns": best_matches[:12],
+        "confidence": "high" if len(best_matches) >= 4 else "medium",
+    }
+
+
+def profile_csv_columns(
+    columns: list[str],
+    rows: list[list[str]],
+    *,
+    timestamp_index: int | None,
+    identity_index: int | None,
+) -> dict[str, Any]:
+    excluded_indexes = {index for index in (timestamp_index, identity_index) if index is not None}
+    row_count = len(rows)
+    empty_columns: list[str] = []
+    numeric_indexes: list[int] = []
+    categorical_indexes: list[int] = []
+    status_indexes: list[int] = []
+    unknown_columns: list[str] = []
+
+    for index, column in enumerate(columns):
+        values = [row[index].strip() if index < len(row) else "" for row in rows]
+        non_empty = [value for value in values if value != ""]
+        if not non_empty:
+            empty_columns.append(column)
+            continue
+        if index in excluded_indexes:
+            continue
+
+        numeric_count = sum(parse_numeric_value(value) is not None for value in non_empty)
+        numeric_ratio = numeric_count / max(1, len(non_empty))
+        distinct_count = len({value.lower() for value in non_empty})
+        status_like = is_status_or_flag_column(column)
+
+        if status_like:
+            status_indexes.append(index)
+            categorical_indexes.append(index)
+        elif numeric_count >= max(3, int(row_count * 0.15)) and numeric_ratio >= 0.4:
+            numeric_indexes.append(index)
+        elif distinct_count <= max(20, int(max(1, row_count) * 0.2)):
+            categorical_indexes.append(index)
+        else:
+            unknown_columns.append(column)
+
+    return {
+        "empty_columns": empty_columns,
+        "numeric_indexes": numeric_indexes,
+        "numeric_columns": [columns[index] for index in numeric_indexes],
+        "categorical_columns": [columns[index] for index in categorical_indexes],
+        "status_columns": [columns[index] for index in status_indexes],
+        "unknown_extra_columns": unknown_columns,
+    }
 
 
 def detect_chilled_water_schema(columns: list[str]) -> dict[str, Any]:
@@ -149,20 +284,15 @@ def detect_interval_seconds(rows: list[tuple[Any, dict[str, Any]]]) -> int | Non
 
 def interpolate_short_numeric_gaps(
     rows: list[tuple[Any, dict[str, Any]]],
-    columns_by_normalized_name: dict[str, str],
+    columns_to_interpolate: list[str],
     missing_by_column: dict[str, int],
     total_rows: int,
 ) -> dict[str, Any]:
     imputed_columns: list[str] = []
     imputed_cells = 0
-    for normalized_name in CHILLED_WATER_IMPORTANT_COLUMNS:
-        if normalized_name in CHILLED_WATER_FLAG_COLUMNS:
-            continue
-        column = columns_by_normalized_name.get(normalized_name)
-        if not column:
-            continue
-        missing_ratio = missing_by_column.get(normalized_name, 0) / max(1, total_rows)
-        if missing_ratio <= 0 or missing_ratio >= CHILLED_WATER_SPARSE_MISSING_THRESHOLD:
+    for column in columns_to_interpolate:
+        missing_ratio = missing_by_column.get(column, 0) / max(1, total_rows)
+        if missing_ratio <= 0 or missing_ratio >= LOW_MISSING_WARNING_THRESHOLD:
             continue
         index = 0
         while index < len(rows):
@@ -185,7 +315,7 @@ def interpolate_short_numeric_gaps(
                 fraction = offset / (gap_size + 1)
                 rows[row_index][1][column] = str(round(previous_value + (next_value - previous_value) * fraction, 6))
                 imputed_cells += 1
-            imputed_columns.append(normalized_name)
+            imputed_columns.append(column)
     return {
         "imputed_cells": imputed_cells,
         "imputed_columns": sorted(set(imputed_columns)),
@@ -260,14 +390,21 @@ def stream_csv_snapshot(
             ),
             None,
         )
-        excluded_indexes = {index for index in (timestamp_index, identity_index) if index is not None}
-        numeric_indexes = [
-            index
-            for index in range(len(columns))
-            if index not in excluded_indexes
-            and sum(parse_numeric_value(row[index]) is not None for row in detection_rows)
-            >= max(3, int(min(len(detection_rows), 1000) * 0.15))
-        ]
+        generic_profile = profile_csv_columns(
+            columns,
+            detection_rows,
+            timestamp_index=timestamp_index,
+            identity_index=identity_index,
+        )
+        numeric_indexes = list(generic_profile["numeric_indexes"])
+        status_columns = set(generic_profile["status_columns"])
+        domain_adapter = detect_domain_adapter(columns)
+        chilled_water_schema = {
+            **chilled_water_schema,
+            **domain_adapter,
+            "chilled_water_adapter": chilled_water_schema,
+            "generic_profile": {key: value for key, value in generic_profile.items() if key != "numeric_indexes"},
+        }
 
         handle.seek(0)
         rows_received = 0
@@ -279,7 +416,8 @@ def stream_csv_snapshot(
         rows_with_missing_values = 0
         rows_with_invalid_numeric = 0
         duplicate_exact_rows = 0
-        important_missing_by_column: dict[str, int] = {}
+        missing_by_column: dict[str, int] = {}
+        invalid_by_column: dict[str, int] = {}
         invalid_numeric_cells = 0
         seen_timestamps: set[str] = set()
         seen_exact_rows: set[tuple[str, ...]] = set()
@@ -331,14 +469,14 @@ def stream_csv_snapshot(
             usable_numeric = 0
             for index in numeric_indexes:
                 raw_value = raw_row[index]
-                normalized_column = normalize_schema_column(columns[index])
                 numeric_value = parse_numeric_value(raw_value)
-                if numeric_value is None and normalized_column in CHILLED_WATER_IMPORTANT_COLUMNS:
-                    important_missing_by_column[normalized_column] = important_missing_by_column.get(normalized_column, 0) + 1
+                column_name = columns[index]
                 if raw_value == "":
+                    missing_by_column[column_name] = missing_by_column.get(column_name, 0) + 1
                     continue
                 if numeric_value is None:
-                    row[columns[index]] = ""
+                    row[column_name] = ""
+                    invalid_by_column[column_name] = invalid_by_column.get(column_name, 0) + 1
                     invalid_numeric_cells += 1
                     invalid_in_row = True
                     continue
@@ -360,11 +498,12 @@ def stream_csv_snapshot(
         cleaned = sorted(raw_rows_in_order, key=lambda item: item[0]) if timestamp_index is not None else raw_rows_in_order
         interval_seconds = detect_interval_seconds(cleaned) if timestamp_index is not None else None
         imputation_report = {"imputed_cells": 0, "imputed_columns": []}
-        if chilled_water_schema["detected"] and timestamp_index is not None:
+        columns_to_interpolate = [column for column in generic_profile["numeric_columns"] if column not in status_columns]
+        if rows_used >= 3:
             imputation_report = interpolate_short_numeric_gaps(
                 cleaned,
-                chilled_water_schema["column_lookup"],
-                important_missing_by_column,
+                columns_to_interpolate,
+                missing_by_column,
                 rows_used,
             )
         sample_rows = [row for _, row in cleaned[:max_analysis_rows]]
@@ -398,40 +537,93 @@ def stream_csv_snapshot(
         timestamps_were_unsorted = timestamp_index is not None and [item[0] for item in raw_rows_in_order] != [item[0] for item in cleaned]
         if timestamps_were_unsorted:
             warnings.append("Timestamps were unsorted and were ordered before analysis.")
-        schema_messages: list[str] = []
-        analysis_gate_state = "READY"
         sparse_missing_columns = [
-            name
-            for name in CHILLED_WATER_IMPORTANT_COLUMNS
-            if 0 < important_missing_by_column.get(name, 0) / max(1, rows_used) < CHILLED_WATER_SPARSE_MISSING_THRESHOLD
+            column
+            for column in generic_profile["numeric_columns"]
+            if 0 < missing_by_column.get(column, 0) / max(1, rows_used) < LOW_MISSING_WARNING_THRESHOLD
         ]
         high_missing_columns = [
-            name
-            for name in CHILLED_WATER_IMPORTANT_COLUMNS
-            if important_missing_by_column.get(name, 0) / max(1, rows_used) >= CHILLED_WATER_SPARSE_MISSING_THRESHOLD
+            column
+            for column in generic_profile["numeric_columns"]
+            if missing_by_column.get(column, 0) / max(1, rows_used) >= LOW_MISSING_WARNING_THRESHOLD
         ]
-        if chilled_water_schema["detected"]:
+        bad_columns = [
+            {
+                "column": column,
+                "missing_count": missing_by_column.get(column, 0),
+                "invalid_count": invalid_by_column.get(column, 0),
+            }
+            for column in generic_profile["numeric_columns"]
+            if (missing_by_column.get(column, 0) + invalid_by_column.get(column, 0)) / max(1, rows_used) >= 0.4
+        ]
+
+        schema_messages: list[str] = [
+            "CSV loaded successfully.",
+            "Detected telemetry-style dataset.",
+            f"Rows loaded: {rows_used:,}.",
+            f"{rows_used:,} rows loaded.",
+        ]
+        adapter_label = str(chilled_water_schema.get("label") or "generic equipment telemetry")
+        if adapter_label == "chilled-water telemetry":
             schema_messages.append("Detected chilled-water telemetry.")
-            schema_messages.append(f"{rows_used:,} rows loaded.")
-            interval_label = format_interval(interval_seconds)
-            if interval_label:
-                schema_messages.append(f"{interval_label} interval detected.")
-            if chilled_water_schema.get("missing_core") or timestamp_index is None:
-                analysis_gate_state = "PENDING"
-            elif high_missing_columns:
-                analysis_gate_state = "DEGRADED_READY"
-            elif sparse_missing_columns or rows_dropped or rows_with_invalid_numeric or rows_with_missing_values or timestamps_were_unsorted:
-                analysis_gate_state = "DEGRADED_READY"
-            if sparse_missing_columns:
-                sparse_labels = ", ".join(display_chilled_water_column(name) for name in sparse_missing_columns)
-                schema_messages.append(f"Sparse missing values detected in {sparse_labels}; short gaps interpolated.")
-                warnings.append(f"Sparse missing values detected in {sparse_labels}; short gaps interpolated.")
-            if analysis_gate_state == "DEGRADED_READY":
-                schema_messages.append("Analysis can proceed with confidence warnings.")
-            elif analysis_gate_state == "READY":
-                schema_messages.append("Analysis can proceed.")
-            elif analysis_gate_state == "PENDING":
-                schema_messages.append("Analysis is pending because timestamp or core chilled-water telemetry is unusable.")
+        else:
+            schema_messages.append(f"Detected {adapter_label}.")
+        if timestamp_column:
+            schema_messages.append(f"Timestamp column detected: {timestamp_column}.")
+        else:
+            schema_messages.append("No timestamp column detected; using row-index analysis.")
+        interval_label = format_interval(interval_seconds)
+        if interval_label:
+            schema_messages.append(f"Likely interval detected: {interval_label.replace('-', ' ')}s.")
+            schema_messages.append(f"{interval_label} interval detected.")
+        schema_messages.append(f"Numeric telemetry columns detected: {len(generic_profile['numeric_columns'])}.")
+        if generic_profile["status_columns"]:
+            schema_messages.append("Status/flag columns detected and excluded from numeric interpolation.")
+        non_signal_columns = [
+            column
+            for column in columns
+            if column != timestamp_column
+            and column not in generic_profile["numeric_columns"]
+            and column not in generic_profile["status_columns"]
+        ]
+        if generic_profile["unknown_extra_columns"] or non_signal_columns:
+            schema_messages.append("Unknown extra columns ignored unless they break parsing.")
+        if imputation_report.get("imputed_cells"):
+            schema_messages.append("Sparse missing values detected; short numeric gaps interpolated.")
+
+        analysis_gate_state = "READY"
+        if rows_used == 0 or len(columns) == 0:
+            analysis_gate_state = "ERROR"
+        elif len(generic_profile["numeric_columns"]) < 2 or rows_used < 5:
+            analysis_gate_state = "PENDING"
+        elif timestamp_index is None:
+            analysis_gate_state = "DEGRADED_READY" if rows_used >= 12 else "PENDING"
+        elif bad_columns or high_missing_columns or sparse_missing_columns or rows_dropped or rows_with_invalid_numeric or rows_with_missing_values or timestamps_were_unsorted:
+            analysis_gate_state = "DEGRADED_READY"
+
+        if sparse_missing_columns:
+            sparse_labels = ", ".join(
+                display_chilled_water_column(normalize_schema_column(column))
+                for column in sparse_missing_columns[:8]
+            )
+            detail = f"Sparse missing values detected in {sparse_labels}; short gaps interpolated."
+            schema_messages.append(detail)
+            warnings.append(detail)
+        if high_missing_columns:
+            warnings.append(f"High missing values detected in {', '.join(high_missing_columns[:8])}; affected columns were degraded individually.")
+        if bad_columns:
+            warnings.append("One or more telemetry columns have poor coverage and were flagged individually.")
+        if analysis_gate_state == "DEGRADED_READY":
+            schema_messages.append("Analysis can proceed with confidence warnings.")
+        elif analysis_gate_state == "READY":
+            schema_messages.append("Analysis can proceed.")
+        elif analysis_gate_state == "PENDING":
+            if len(generic_profile["numeric_columns"]) < 2:
+                schema_messages.append("Analysis is pending because at least two usable numeric telemetry columns are required.")
+            elif rows_used < 5:
+                schema_messages.append("Analysis is pending because at least five usable telemetry rows are required.")
+            else:
+                schema_messages.append("Analysis is pending because usable signal is insufficient.")
 
         if job_id and rows_received >= csv_progress_update_every and on_progress is not None:
             on_progress(job_id, "parsing_telemetry", 20, f"Parsed and cleaned {rows_received:,} rows.")
@@ -449,11 +641,16 @@ def stream_csv_snapshot(
                 "rows_with_missing_values": rows_with_missing_values,
                 "rows_with_invalid_numeric": rows_with_invalid_numeric,
                 "invalid_numeric_cells": invalid_numeric_cells,
-                "important_missing_by_column": dict(important_missing_by_column),
+                "missing_by_column": dict(missing_by_column),
+                "invalid_by_column": dict(invalid_by_column),
                 "interpolated_numeric_cells": int(imputation_report.get("imputed_cells", 0)),
             },
             "cleaning_warnings": warnings,
-            "schema_detection": {**chilled_water_schema, "column_lookup": dict(chilled_water_schema.get("column_lookup") or {})},
+            "schema_detection": {
+                **chilled_water_schema,
+                "column_lookup": dict(chilled_water_schema.get("column_lookup") or {}),
+                "bad_columns": bad_columns,
+            },
             "analysis_gate_state": analysis_gate_state,
             "data_quality_messages": schema_messages,
             "sample_interval_seconds": interval_seconds,
