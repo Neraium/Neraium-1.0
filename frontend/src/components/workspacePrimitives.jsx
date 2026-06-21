@@ -2,6 +2,33 @@ import { formatOperatorActionLabel } from "../viewModels/operationalHelpers";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
 import { EMPTY_VALUE, formatEmptyValue } from "../viewModels/emptyValue";
 
+const STATUS_COPY = {
+  ready: {
+    label: "Ready",
+    explanation: "Evidence is available for operator review.",
+    tone: "ready",
+    icon: "check",
+  },
+  degraded_ready: {
+    label: "Degraded ready",
+    explanation: "Analysis is usable, with reduced confidence or data quality.",
+    tone: "degraded",
+    icon: "warn",
+  },
+  pending: {
+    label: "Pending",
+    explanation: "Telemetry is still being prepared or verified.",
+    tone: "pending",
+    icon: "clock",
+  },
+  error: {
+    label: "Error",
+    explanation: "Action is needed before analysis can continue.",
+    tone: "error",
+    icon: "alert",
+  },
+};
+
 export function Panel({ title, subtitle, className = "", children }) {
   const heading = subtitle || title;
   return (
@@ -12,6 +39,148 @@ export function Panel({ title, subtitle, className = "", children }) {
       </div>
       <div className="ops-panel__body">{children}</div>
     </section>
+  );
+}
+
+
+export function PremiumCard({
+  eyebrow,
+  title,
+  subtitle,
+  tone = "neutral",
+  className = "",
+  actions = null,
+  children,
+}) {
+  return (
+    <section className={`premium-card premium-card--${tone} ${className}`.trim()}>
+      {(eyebrow || title || subtitle || actions) ? (
+        <div className="premium-card__header">
+          <div>
+            {eyebrow ? <p className="section-token">{eyebrow}</p> : null}
+            {title ? <h2>{title}</h2> : null}
+            {subtitle ? <p>{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="premium-card__actions">{actions}</div> : null}
+        </div>
+      ) : null}
+      {children ? <div className="premium-card__body">{children}</div> : null}
+    </section>
+  );
+}
+
+export function StatusBadge({ status = "pending", label, explanation, compact = false }) {
+  const key = normalizeStatusKey(status);
+  const copy = STATUS_COPY[key] ?? STATUS_COPY.pending;
+  return (
+    <span className={`status-badge status-badge--${copy.tone} ${compact ? "status-badge--compact" : ""}`.trim()}>
+      <span className={`status-badge__icon status-badge__icon--${copy.icon}`} aria-hidden="true" />
+      <span className="status-badge__copy">
+        <strong>{displayValue(label ?? copy.label)}</strong>
+        {!compact ? <small>{displayValue(explanation ?? copy.explanation)}</small> : null}
+      </span>
+    </span>
+  );
+}
+
+export function ConfidenceIndicator({ value, label = "Confidence", size = "default" }) {
+  const percent = confidencePercent(value);
+  const band = percent >= 82 ? "high" : percent >= 62 ? "moderate" : percent > 0 ? "low" : "pending";
+  return (
+    <div className={`confidence-indicator confidence-indicator--${band} confidence-indicator--${size}`}>
+      <div className="confidence-indicator__header">
+        <span>{label}</span>
+        <strong>{percent ? `${percent}%` : "Pending"}</strong>
+      </div>
+      <div className="confidence-indicator__track" aria-hidden="true">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export function MetricTile({ label, value, detail, tone = "neutral" }) {
+  return (
+    <article className={`metric-tile metric-tile--${tone}`}>
+      <span>{displayValue(label)}</span>
+      <strong>{displayValue(value)}</strong>
+      {detail ? <p>{displayValue(detail)}</p> : null}
+    </article>
+  );
+}
+
+export function PrimaryActionButton({ children, className = "", ...props }) {
+  return (
+    <button type="button" className={`command-button primary-action-button ${className}`.trim()} {...props}>
+      {children}
+    </button>
+  );
+}
+
+export function SecondaryActionButton({ children, className = "", ...props }) {
+  return (
+    <button type="button" className={`secondary-command-button secondary-action-button ${className}`.trim()} {...props}>
+      {children}
+    </button>
+  );
+}
+
+export function PageHeader({ eyebrow, title, subtitle, status, actions = null }) {
+  return (
+    <header className="page-header">
+      <div className="page-header__copy">
+        {eyebrow ? <p className="section-token">{eyebrow}</p> : null}
+        <h1>{title}</h1>
+        {subtitle ? <p>{subtitle}</p> : null}
+      </div>
+      {(status || actions) ? (
+        <div className="page-header__side">
+          {status ? <StatusBadge {...status} /> : null}
+          {actions ? <div className="page-header__actions">{actions}</div> : null}
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
+export function FindingCard({
+  title,
+  summary,
+  severity = "pending",
+  status = "pending",
+  confidence,
+  evidence = [],
+  nextAction,
+  selected = false,
+  onClick,
+}) {
+  const Wrapper = onClick ? "button" : "article";
+  const props = onClick ? { type: "button", onClick } : {};
+  return (
+    <Wrapper className={`finding-card finding-card--${normalizeStatusKey(severity)} ${selected ? "finding-card--selected" : ""}`} {...props}>
+      <div className="finding-card__header">
+        <StatusBadge status={status} compact />
+        <span className={`finding-card__severity finding-card__severity--${normalizeStatusKey(severity)}`}>
+          {severityLabel(severity)}
+        </span>
+      </div>
+      <strong>{displayValue(title)}</strong>
+      <p>{displayValue(summary)}</p>
+      <ConfidenceIndicator value={confidence} size="compact" />
+      {evidence.length > 0 ? (
+        <div className="finding-card__evidence">
+          {evidence.slice(0, 3).map((item, index) => (
+            <span key={`${item}-${index}`}>{displayValue(item)}</span>
+          ))}
+        </div>
+      ) : null}
+      {nextAction ? (
+        <div className="finding-card__next">
+          <span>Next action</span>
+          <strong>{displayValue(nextAction)}</strong>
+        </div>
+      ) : null}
+    </Wrapper>
   );
 }
 
@@ -677,6 +846,7 @@ export function DataTable({ columns, rows }) {
 export function EmptyState({ title, body, compact = false }) {
   return (
     <div className={`empty-state ${compact ? "empty-state--compact" : ""}`}>
+      <span className="empty-state__icon" aria-hidden="true" />
       <strong>{formatEmptyValue(title) || EMPTY_VALUE}</strong>
       <p>{formatEmptyValue(body) || EMPTY_VALUE}</p>
     </div>
@@ -693,4 +863,43 @@ export function StatusDot({ tone }) {
       <span className="status-dot__core" />
     </span>
   );
+}
+
+
+function displayValue(value) {
+  if (value === null || value === undefined || value === "") return EMPTY_VALUE;
+  return value;
+}
+
+function normalizeStatusKey(value) {
+  const key = String(value ?? "").trim().toLowerCase().replace(/\s+/g, "_").replace(/-/g, "_");
+  if (["ready", "complete", "completed", "success", "verified", "resolved", "recorded", "active", "open"].includes(key)) return "ready";
+  if (["degraded_ready", "degraded", "needs_review", "watch", "warning", "moderate"].includes(key)) return "degraded_ready";
+  if (["error", "failed", "failure", "validation_error"].includes(key)) return "error";
+  if (["high", "alert", "critical", "structural_shift"].includes(key)) return "error";
+  if (["low", "stable", "normal"].includes(key)) return "ready";
+  return "pending";
+}
+
+function confidencePercent(value) {
+  if (typeof value === "string") {
+    const text = value.toLowerCase();
+    if (text.includes("high")) return 90;
+    if (text.includes("moderate")) return 72;
+    if (text.includes("low")) return 44;
+    const numericText = Number.parseFloat(text);
+    if (Number.isFinite(numericText)) return Math.max(0, Math.min(100, Math.round(numericText > 1 ? numericText : numericText * 100)));
+    return 0;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric > 1 ? numeric : numeric * 100)));
+}
+
+function severityLabel(value) {
+  const key = normalizeStatusKey(value);
+  if (key === "error") return "High severity";
+  if (key === "degraded_ready") return "Watch";
+  if (key === "ready") return "Stable";
+  return "Pending";
 }

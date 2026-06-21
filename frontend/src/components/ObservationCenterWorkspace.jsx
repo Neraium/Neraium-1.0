@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
+import { EmptyState, FindingCard, MetricGrid, MetricTile, PageHeader, Panel, StatusBadge, ConfidenceIndicator } from "./workspacePrimitives";
 import SystemStateMark from "./SystemStateMark";
 import { buildCanonicalFindingRun, OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
@@ -138,6 +138,28 @@ function confidenceForFinding(run) {
   if (strength === "High") return "High";
   if (strength === "Moderate") return "Moderate";
   return "Low";
+}
+
+function statusForObservation(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  if (["failed", "error"].includes(normalized)) return "error";
+  if (["processing", "active"].includes(normalized)) return "pending";
+  if (["open"].includes(normalized)) return "degraded_ready";
+  return "ready";
+}
+
+function severityForFinding(finding, run) {
+  if (!finding?.exists) return "pending";
+  const status = String(finding?.status ?? "").toLowerCase();
+  const confidence = confidenceForFinding(run);
+  if (status.includes("action") || status.includes("shift") || confidence === "High") return "error";
+  if (status.includes("review") || confidence === "Moderate") return "degraded_ready";
+  return "ready";
+}
+
+function findingTitle(finding, run) {
+  if (finding?.exists) return finding.status || observationTypeLabel(run?.observation_type);
+  return finding?.emptyState?.title ?? OPERATOR_EMPTY_STATE.title;
 }
 
 function potentialImpactForFinding(run) {
@@ -364,10 +386,16 @@ export default function ObservationCenterWorkspace({
     emptyState: OPERATOR_EMPTY_STATE,
   };
   const hasCurrentFinding = Boolean(activeFinding.exists);
+  const visibleFindingStatus = statusForObservation(hasCurrentFinding ? "active" : "pending");
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
   const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
+  const selectedSeverity = severityForFinding(activeFinding, selectedRun);
+  const selectedStatus = hasCurrentFinding ? statusForObservation(selectedRunStatus) : visibleFindingStatus;
+  const diagnosticEvidence = (activeFinding.supportingEvidence ?? []).length > 0
+    ? activeFinding.supportingEvidence
+    : [activeFinding.whyItMatters, potentialImpactForFinding(selectedRun)].filter(Boolean);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
     const now = Date.now();
@@ -485,35 +513,33 @@ export default function ObservationCenterWorkspace({
   return (
     <section className="workspace-surface observation-center">
       {backControl}
-      <div className="observation-center__hero">
+      <div className="observation-center__hero observation-center__hero--premium">
         <section className="observation-center__snapshot" aria-label="Latest finding snapshot">
           <div className="observation-center__snapshot-orb">
             <SystemStateMark systemState={hasCurrentFinding ? gateOrbState : "stable"} intensity={hasCurrentFinding ? Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18)) : 0.12} />
           </div>
           <div className="observation-center__snapshot-copy">
-            <p className="section-token">Current Status</p>
-            <strong>{activeFinding.status}</strong>
-            <span>{activeFinding.confidence} confidence</span>
+            <StatusBadge status={selectedStatus} />
+            <ConfidenceIndicator value={activeFinding.confidence} />
             <span>{hasCurrentFinding ? activeFinding.reviewNext : activeFinding.emptyState.detail}</span>
           </div>
         </section>
-        <section className="observation-center__summary" aria-label="Current instrument summary">
-          <p className="section-token">Current observation</p>
-          <h1>Findings</h1>
-          <p>{activeFinding.summary}</p>
-          <MetricGrid
-            metrics={[
-              { label: "Confidence", value: activeFinding.confidence },
-              { label: "Why it matters", value: activeFinding.whyItMatters },
-            ]}
-            compact
-          />
-          <div className="intake-flow__controls">
+        <PageHeader
+          eyebrow="Machine diagnostics"
+          title="Findings"
+          subtitle={activeFinding.summary}
+          status={{ status: selectedStatus, label: hasCurrentFinding ? activeFinding.status : "Pending", explanation: hasCurrentFinding ? "Current evidence is ready for review." : activeFinding.emptyState.detail }}
+          actions={(
             <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
               {activeFinding.evidenceButtonLabel}
             </button>
-          </div>
-        </section>
+          )}
+        />
+      </div>
+      <div className="observation-center__diagnostic-strip" aria-label="Finding summary metrics">
+        <MetricTile label="Confidence" value={activeFinding.confidence} detail="Evidence reliability" tone={selectedSeverity} />
+        <MetricTile label="Finding state" value={hasCurrentFinding ? activeFinding.status : "No active finding"} detail={selectedRunStatus || "Pending"} tone={selectedStatus} />
+        <MetricTile label="Impact" value={potentialImpactForFinding(selectedRun)} detail="Operational implication" tone={selectedSeverity} />
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
@@ -558,25 +584,17 @@ export default function ObservationCenterWorkspace({
               <p>{activeFinding.emptyState.detail}</p>
             </div>
           ) : (
-            <div className="feed-list">
-              <button
-                type="button"
-                className="intervention-card intervention-card--selected observation-history-card"
-                style={{ textAlign: "left", width: "100%" }}
-              >
-                <div className="intervention-card__header">
-                  <div>
-                    <span>Current observation</span>
-                    <strong>{activeFinding.status}</strong>
-                  </div>
-                  <span className="observation-history-card__status observation-history-card__status--open">{selectedRunStatus === "processing" ? "processing" : "active"}</span>
-                </div>
-                <p>{activeFinding.summary}</p>
-                <div className="intervention-card__footer">
-                  <span>Confidence {activeFinding.confidence}</span>
-                  <span>{activeFinding.whyItMatters}</span>
-                </div>
-              </button>
+            <div className="observation-diagnostic-list">
+              <FindingCard
+                title={findingTitle(activeFinding, selectedRun)}
+                summary={activeFinding.summary}
+                severity={selectedSeverity}
+                status={selectedStatus}
+                confidence={activeFinding.confidence}
+                evidence={diagnosticEvidence}
+                nextAction={activeFinding.reviewNext}
+                selected
+              />
             </div>
           )}
         </Panel>
@@ -590,10 +608,14 @@ export default function ObservationCenterWorkspace({
             </div>
           ) : (
             <>
-              <div className="observation-detail-callout">
-                <span className="section-token">Observation Summary</span>
+              <div className="observation-detail-callout observation-detail-callout--premium">
+                <div className="observation-detail-callout__header">
+                  <span className="section-token">Observation Summary</span>
+                  <StatusBadge status={selectedStatus} compact />
+                </div>
                 <strong>{activeFinding.summary}</strong>
                 <p>{activeFinding.whyItMatters}</p>
+                <ConfidenceIndicator value={activeFinding.confidence} />
               </div>
               <MetricGrid
                 metrics={[

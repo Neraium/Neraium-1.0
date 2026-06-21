@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import SystemOrbPanel from "./SystemOrbPanel";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
+import { ConfidenceIndicator, StatusBadge } from "../../workspacePrimitives";
 
 export default function SystemBodyWorkspace({
   systemState,
@@ -103,6 +104,7 @@ export default function SystemBodyWorkspace({
     [fallbackFinding, interpretation, latestReplayFrame, latestUploadResult, latestUploadSnapshot, stabilitySnapshot],
   );
   const finding = assessmentState.finding;
+  const gateReadiness = systemReadinessStatus({ assessmentState, finding, interpretation });
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
   const canReviewFindings = assessmentState.mode === "analysis_ready";
   const navigationItems = [
@@ -297,8 +299,16 @@ export default function SystemBodyWorkspace({
                   Review Findings
                 </button>
               </div>
-              <div className="system-gate__stat-grid">
-                {heroStats.map((item) => (
+              <div className="system-gate__stat-grid system-gate__stat-grid--premium">
+                <article className="system-gate__stat-card system-gate__stat-card--readiness">
+                  <span>Analysis status</span>
+                  <StatusBadge {...gateReadiness} />
+                </article>
+                <article className="system-gate__stat-card system-gate__stat-card--confidence">
+                  <span>Evidence confidence</span>
+                  <ConfidenceIndicator value={finding.confidence} />
+                </article>
+                {heroStats.slice(2).map((item) => (
                   <article className="system-gate__stat-card" key={item.label}>
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
@@ -602,6 +612,36 @@ function ageLabel(value) {
   const hours = Math.round(ms / 3600000);
   if (hours < 24) return `${hours}h`;
   return `${Math.round(hours / 24)}d`;
+}
+
+
+function systemReadinessStatus({ assessmentState, finding, interpretation }) {
+  if (!interpretation?.hasTelemetry) {
+    return {
+      status: "pending",
+      label: "PENDING",
+      explanation: "Upload or connect telemetry to activate analysis.",
+    };
+  }
+  if (assessmentState?.mode === "analysis_ready" && finding?.exists) {
+    return {
+      status: "ready",
+      label: "READY",
+      explanation: "Evidence-backed finding is ready for operator review.",
+    };
+  }
+  if (assessmentState?.mode === "analysis_ready") {
+    return {
+      status: "degraded_ready",
+      label: "DEGRADED_READY",
+      explanation: "Telemetry is available. Continue monitoring or review supporting context.",
+    };
+  }
+  return {
+    status: "pending",
+    label: "PENDING",
+    explanation: "Analysis is forming from the current telemetry session.",
+  };
 }
 
 function mapBackendSystemInterpretation(contract, expectedJobId = null, reliableEnoughToShow = false) {

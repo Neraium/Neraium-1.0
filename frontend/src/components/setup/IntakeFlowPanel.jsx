@@ -1,4 +1,4 @@
-import { Panel } from "../workspacePrimitives";
+import { ConfidenceIndicator, MetricTile, Panel, StatusBadge } from "../workspacePrimitives";
 
 function normalizeStatusText(value) {
   return String(value || "")
@@ -58,6 +58,45 @@ function uploadProgressStage(uploadState, uploadJob) {
   if (workerState === "running" || workerState === "active" || state === "running_sii") return "Analyzing telemetry. This can continue in the background.";
   if (state === "validated") return "Ready to upload.";
   return "Upload status unavailable.";
+}
+
+function uploadPremiumStatus(uploadState, uploadJob, hasSelectedFiles) {
+  const state = String(uploadState || "").toLowerCase();
+  const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
+  const status = String(uploadJob?.status || "").toLowerCase();
+  if (["error", "failed", "validation_error"].includes(state) || ["failed", "error"].includes(status)) {
+    return {
+      status: "error",
+      label: "ERROR",
+      explanation: "Upload processing needs operator attention before analysis can continue.",
+    };
+  }
+  if (["complete", "completed", "success"].includes(state) || processingState === "complete" || status === "complete") {
+    return {
+      status: "ready",
+      label: "READY",
+      explanation: "Telemetry has been accepted and analysis output is available.",
+    };
+  }
+  if (["uploading", "running_sii", "queued", "processing"].includes(state) || uploadJob) {
+    return {
+      status: "pending",
+      label: "PENDING",
+      explanation: "Neraium is receiving, processing, or verifying this telemetry batch.",
+    };
+  }
+  if (hasSelectedFiles || state === "validated") {
+    return {
+      status: "degraded_ready",
+      label: "DEGRADED_READY",
+      explanation: "File is selected locally. Submit it to create a verified analysis session.",
+    };
+  }
+  return {
+    status: "pending",
+    label: "PENDING",
+    explanation: "Choose a CSV telemetry export to start analysis.",
+  };
 }
 
 function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines }) {
@@ -185,21 +224,30 @@ export default function IntakeFlowPanel({
   const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
   const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
+  const premiumStatus = uploadPremiumStatus(uploadState, uploadJob, hasSelectedFiles);
 
   return (
     <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
-        <div className="upload-file-card">
+        <div className="upload-file-card upload-file-card--premium">
           <div className="upload-file-card__main">
+            <StatusBadge {...premiumStatus} />
             <strong>{selectedFileLabel}</strong>
             <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a CSV telemetry file to begin."}</p>
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
-            <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
+            <button data-testid="onboarding-demo-csv-option" className="secondary-command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
             <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length}>
               {isUploadProcessing(uploadState) ? "Processing" : "Upload Data"}
             </button>
+          </div>
+        </div>
+        <div className="upload-status-card-grid" aria-label="Upload analysis readiness">
+          <MetricTile label="Readiness" value={premiumStatus.label} detail={premiumStatus.explanation} tone={premiumStatus.status} />
+          <MetricTile label="File size" value={selectedFileSize} detail={hasSelectedFiles ? "Selected batch" : "Awaiting file"} tone={hasSelectedFiles ? "ready" : "pending"} />
+          <div className="metric-tile metric-tile--pending upload-status-card-grid__confidence">
+            <ConfidenceIndicator value={visibleProgressPercent ?? 0} label="Pipeline progress" />
           </div>
         </div>
         {hasValidationError || hasUploadError ? (
