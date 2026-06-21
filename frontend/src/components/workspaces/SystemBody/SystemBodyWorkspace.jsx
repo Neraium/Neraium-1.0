@@ -81,7 +81,6 @@ export default function SystemBodyWorkspace({
       connectionStatus,
     ],
   );
-  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, interpretation.hasTelemetry, telemetrySessionMode);
   const stabilitySnapshot = useMemo(
     () => buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, latestReplayFrame }),
     [latestReplayFrame, latestUploadResult, latestUploadSnapshot],
@@ -103,8 +102,16 @@ export default function SystemBodyWorkspace({
     [fallbackFinding, interpretation, latestReplayFrame, latestUploadResult, latestUploadSnapshot, stabilitySnapshot],
   );
   const finding = assessmentState.finding;
+  const telemetryUsable = assessmentState.mode === "analysis_ready" || assessmentState.mode === "analysis_degraded_ready";
+  const heartbeat = heartbeatStatus(connectionTone, connectionStatus, lastUpdate, telemetryUsable, telemetrySessionMode);
   const findingDataQuality = flattenDataQuality(finding.dataQuality);
-  const canReviewFindings = assessmentState.mode === "analysis_ready";
+  const canReviewFindings = telemetryUsable && finding.exists;
+  const primaryActionLabel = !interpretation.hasTelemetry
+    ? "Upload Data"
+    : finding.exists
+      ? finding.evidenceButtonLabel
+      : "View Data Intake";
+  const primaryActionTarget = finding.exists ? "historical-replay" : "data-connections";
   const navigationItems = [
     {
       id: "data-connections",
@@ -143,7 +150,7 @@ export default function SystemBodyWorkspace({
   const trustRows = [
     { label: "Control boundary", value: "Read-only. No actuation or writeback." },
     { label: "Analysis mode", value: "Structural relationship monitoring only." },
-    { label: "Data posture", value: interpretation.hasTelemetry ? "Live observation aligned to the active session." : "No telemetry attached yet." },
+    { label: "Data posture", value: telemetryUsable ? "Uploaded telemetry is usable for analysis." : assessmentState.dataPosture },
   ];
   const domainSummary = buildDomainDetectionSummary(domainDetection);
 
@@ -284,18 +291,19 @@ export default function SystemBodyWorkspace({
                   type="button"
                   data-testid="primary-upload-entry"
                   className="command-button"
-                  onClick={() => navigateWorkspace(finding.exists ? "historical-replay" : (interpretation.hasTelemetry ? "observation-center" : "data-connections"))}
+                  onClick={() => navigateWorkspace(primaryActionTarget)}
                 >
-                  {interpretation.hasTelemetry ? finding.evidenceButtonLabel : "Upload Data"}
+                  {primaryActionLabel}
                 </button>
-                <button
-                  type="button"
-                  className="secondary-command-button"
-                  disabled={!canReviewFindings}
-                  onClick={() => navigateWorkspace("observation-center")}
-                >
-                  Review Findings
-                </button>
+                {canReviewFindings ? (
+                  <button
+                    type="button"
+                    className="secondary-command-button"
+                    onClick={() => navigateWorkspace("observation-center")}
+                  >
+                    Review Findings
+                  </button>
+                ) : null}
               </div>
               <div className="system-gate__stat-grid">
                 {heroStats.map((item) => (
@@ -369,7 +377,7 @@ export default function SystemBodyWorkspace({
             <ul className="system-gate__detail-list system-gate__detail-list--dense">
               <li>
                 <span>Observation summary</span>
-                <strong>{finding.summary}</strong>
+                <strong>{assessmentState.mode === "analysis_pending" ? finding.whyItMatters : finding.summary}</strong>
               </li>
               <li>
                 <span>Review next</span>
@@ -464,7 +472,7 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
     exists,
     title: exists ? interpretation.structuralState : "Normal",
     status: exists ? interpretation.structuralState : "Normal",
-    confidence: interpretation.confidence === "Pending" ? "Low" : interpretation.confidence,
+    confidence: normalizeConfidenceLabel(interpretation.confidence),
     summary: exists ? interpretation.relationshipSummary.text : "No current observations.",
     whyItMatters: exists ? interpretation.relationshipSummary.text : "Telemetry is being monitored.",
     reviewNext: interpretation.nextStep,
@@ -495,18 +503,21 @@ function resolveAssessmentState({
   fallbackFinding,
   stabilitySnapshot,
 }) {
-  const analysisCompleted = hasCompletedAnalysis({ latestUploadSnapshot, latestUploadResult });
+  const analysisState = resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult });
   const observationsExist = hasCompletedObservations({ latestUploadResult, latestReplayFrame, stabilitySnapshot });
-  if (!interpretation.hasTelemetry || !analysisCompleted || !observationsExist) {
+  const dataConditions = collectDataConditions(latestUploadResult);
+
+  if (!interpretation.hasTelemetry) {
     return {
       mode: "awaiting_telemetry",
       headerStatus: "Awaiting Telemetry",
+      dataPosture: "No telemetry attached yet.",
       finding: {
         ...fallbackFinding,
         exists: false,
         title: "No Analysis",
         status: "Not Assessed",
-        confidence: "Unknown",
+        confidence: "Pending",
         summary: "Upload telemetry to generate an assessment.",
         whyItMatters: "Upload telemetry to generate an assessment.",
         reviewNext: "Upload telemetry to generate an assessment.",
@@ -525,15 +536,104 @@ function resolveAssessmentState({
     };
   }
 
+  if (analysisState === "ERROR") {
+    const errorMessage = String(latestUploadResult?.error ?? latestUploadResult?.message ?? latestUploadSnapshot?.message ?? "").trim();
+    return {
+      mode: "analysis_error",
+      headerStatus: "Analysis Error",
+      dataPosture: "Uploaded telemetry cannot be trusted until the error is resolved.",
+      finding: {
+        ...fallbackFinding,
+        exists: false,
+        title: "Analysis Error",
+        status: "Error",
+        confidence: "Pending",
+        summary: errorMessage || "Analysis could not complete for the uploaded telemetry.",
+        whyItMatters: "The upload cannot be used for operator review until the error is resolved.",
+        reviewNext: "Return to data intake and correct the upload.",
+        emptyState: {
+          title: "Analysis Error",
+          subtitle: "Upload requires attention.",
+          detail: errorMessage || "Return to data intake and correct the upload.",
+        },
+      },
+      stability: {
+        ...stabilitySnapshot,
+        deformationAge: "Not enough history",
+      },
+    };
+  }
+
+  if (analysisState === "PENDING") {
+    return {
+      mode: "analysis_pending",
+      headerStatus: "Analysis Pending",
+      dataPosture: "Telemetry is present, but backend analysis is still pending.",
+      finding: {
+        ...fallbackFinding,
+        exists: false,
+        title: "Analysis Pending",
+        status: "Pending",
+        confidence: "Pending",
+        summary: "Backend processing has not finished for this upload.",
+        whyItMatters: "Findings are blocked until the backend reports READY or DEGRADED_READY.",
+        reviewNext: "Wait for ingestion and analysis to finish.",
+        emptyState: {
+          title: "Analysis Pending",
+          subtitle: "Findings are not available yet.",
+          detail: "Wait for ingestion and analysis to finish.",
+        },
+      },
+      stability: {
+        ...stabilitySnapshot,
+        activeObservations: 0,
+      },
+    };
+  }
+
+  const degraded = analysisState === "DEGRADED_READY";
+  if (!observationsExist || !fallbackFinding.exists) {
+    return {
+      mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
+      headerStatus: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+      dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
+      finding: {
+        ...fallbackFinding,
+        exists: false,
+        title: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+        status: degraded ? "Warnings Present" : "No Findings",
+        confidence: normalizeConfidenceLabel(fallbackFinding.confidence),
+        summary: degraded ? "Usable telemetry is available with warnings." : "Usable telemetry is available. No findings are currently flagged.",
+        whyItMatters: degraded
+          ? "Warnings may limit confidence, but they do not block review of available evidence."
+          : "The uploaded dataset passed analysis readiness without a flagged structural finding.",
+        reviewNext: degraded ? "Review data quality warnings before acting on findings." : "Continue monitoring or upload more telemetry.",
+        emptyState: {
+          title: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+          subtitle: degraded ? "Usable telemetry has data-quality warnings." : "No findings are currently flagged.",
+          detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or upload more telemetry.",
+        },
+        dataQuality: {
+          ...fallbackFinding.dataQuality,
+          missingRecentValues: dataConditions,
+        },
+      },
+      stability: stabilitySnapshot,
+    };
+  }
+
   return {
-    mode: "analysis_ready",
-    headerStatus: "Telemetry active",
+    mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
+    headerStatus: degraded ? "Analysis Ready With Warnings" : "Analysis Ready",
+    dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
     finding: fallbackFinding,
     stability: stabilitySnapshot,
   };
 }
 
 function hasCompletedAnalysis({ latestUploadSnapshot, latestUploadResult }) {
+  const gateState = resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult });
+  if (gateState === "READY" || gateState === "DEGRADED_READY") return true;
   if (latestUploadResult?.processing_trace?.sii_completed === true) return true;
   if (latestUploadResult?.sii_completed === true) return true;
   if (String(latestUploadResult?.processing_state ?? latestUploadResult?.status ?? "").toLowerCase() === "complete") return true;
@@ -571,6 +671,10 @@ function buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, late
   const startedAt = frame?.timestamp_start
     ?? latestUploadResult?.timestamp_profile?.first_timestamp
     ?? null;
+  const endedAt = frame?.timestamp_end
+    ?? frame?.timestamp
+    ?? latestUploadResult?.timestamp_profile?.last_timestamp
+    ?? null;
   const regime = labelOrFallback(sii?.baseline_regime ?? sii?.regime_label, "—");
   const hasObservationPayload = Boolean(
     latestUploadResult?.observation_type
@@ -584,7 +688,7 @@ function buildStabilitySnapshot({ latestUploadSnapshot, latestUploadResult, late
     regime,
     driftMagnitude: Number.isFinite(Number(driftMagnitude)) ? Number(driftMagnitude).toFixed(2) : "—",
     activeObservations: hasObservationPayload && String(latestUploadResult?.drift_status ?? "").toLowerCase() !== "info" ? 1 : 0,
-    deformationAge: ageLabel(startedAt),
+    deformationAge: durationLabel(startedAt, endedAt),
   };
 }
 
@@ -595,13 +699,17 @@ function collectDataConditions(latestUploadResult) {
   return [...new Set([...dataQualityWarnings, ...timestampWarnings].filter(Boolean).map(String))];
 }
 
-function ageLabel(value) {
-  if (!value) return "—";
-  const ms = Date.now() - new Date(value).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "—";
+function durationLabel(startValue, endValue) {
+  if (!startValue || !endValue) return "Not enough history";
+  const start = new Date(startValue).getTime();
+  const end = new Date(endValue).getTime();
+  const ms = end - start;
+  if (!Number.isFinite(ms) || ms <= 0) return "Not enough history";
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return String(minutes) + "m";
   const hours = Math.round(ms / 3600000);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+  if (hours < 48) return String(hours) + "h";
+  return String(Math.round(hours / 24)) + "d";
 }
 
 function mapBackendSystemInterpretation(contract, expectedJobId = null, reliableEnoughToShow = false) {
@@ -683,8 +791,9 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
   ).toLowerCase();
   const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "generating_replay", "cognition_ready", "writing_state"];
   const hasUploadInFlight = processingLike.some((token) => uploadStatus.includes(token));
+  const analysisState = resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult });
 
-  if (hasUploadInFlight) {
+  if (analysisState === "PENDING" || (hasUploadInFlight && analysisState !== "READY" && analysisState !== "DEGRADED_READY")) {
     return {
       structuralState: "Processing data",
       confidence: "Interpretation Unavailable",
@@ -771,7 +880,7 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTeleme
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
   if (text.includes("replay")) return { label: "Replay running", tone: "syncing" };
   if (text.includes("sync")) return { label: "Data stream active", tone: "syncing" };
-  if (lastUpdate) return { tone: "online", label: "Telemetry active" };
+  if (lastUpdate) return { tone: "online", label: "Telemetry usable" };
   if (telemetrySessionMode === "persisted") return { tone: "watch", label: "Persisted telemetry available" };
   return { tone: "pending", label: "Awaiting telemetry" };
 }
@@ -823,11 +932,62 @@ function labelOrFallback(value, fallback = EMPTY_VALUE) {
 }
 
 function formatConfidence(value, { hasDriftState = false } = {}) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text.includes("high")) return "High";
+  if (text.includes("moderate") || text.includes("medium")) return "Medium";
+  if (text.includes("low")) return "Low";
+  if (text.includes("pending") || text.includes("unavailable") || text === EMPTY_VALUE.toLowerCase()) return "Pending";
   const number = Number(value);
   if (!Number.isFinite(number) || (hasDriftState && number <= 0)) return "Pending";
   if (number <= 0) return "Pending";
-  if (number <= 1) return `${Math.round(number * 100)}%`;
-  return `${Math.round(number)}%`;
+  const percent = number <= 1 ? number * 100 : number;
+  if (percent >= 82) return "High";
+  if (percent >= 62) return "Medium";
+  return "Low";
+}
+
+function normalizeConfidenceLabel(value) {
+  return formatConfidence(value);
+}
+
+function resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult }) {
+  const candidates = [
+    latestUploadResult?.data_quality?.analysis_gate_state,
+    latestUploadResult?.analysis_gate_state,
+    latestUploadResult?.operator_report?.data_readiness,
+    latestUploadSnapshot?.latest_result?.data_quality?.analysis_gate_state,
+    latestUploadSnapshot?.data_quality?.analysis_gate_state,
+  ];
+  const explicit = candidates.map(normalizeGateToken).find(Boolean);
+  if (explicit) return explicit;
+
+  const status = normalizeGateToken(
+    latestUploadResult?.processing_state
+      ?? latestUploadResult?.status
+      ?? latestUploadSnapshot?.status
+      ?? latestUploadSnapshot?.processing_state
+      ?? "",
+  );
+  if (status === "ERROR" || status === "PENDING") return status;
+
+  const completed = latestUploadResult?.processing_trace?.sii_completed === true
+    || latestUploadResult?.sii_completed === true
+    || latestUploadSnapshot?.sii_completed === true
+    || status === "READY";
+  if (!completed) return "PENDING";
+
+  const warnings = collectDataConditions(latestUploadResult);
+  return warnings.length > 0 ? "DEGRADED_READY" : "READY";
+}
+
+function normalizeGateToken(value) {
+  const token = String(value ?? "").trim().toUpperCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (!token) return null;
+  if (["READY", "COMPLETE", "COMPLETED", "SUCCESS", "READY_WITH_FINDINGS", "READY_READY"].includes(token)) return "READY";
+  if (["DEGRADED_READY", "NEEDS_REVIEW", "WARNING", "WARNINGS_PRESENT", "READY_WITH_WARNINGS"].includes(token)) return "DEGRADED_READY";
+  if (["PENDING", "QUEUED", "PROCESSING", "RUNNING", "RUNNING_SII", "PARSING", "BASELINE_MODELING", "STRUCTURAL_SCORING", "GENERATING_REPLAY", "COGNITION_READY", "WRITING_STATE"].includes(token)) return "PENDING";
+  if (["ERROR", "FAILED", "FAILURE", "VALIDATION_ERROR", "NOT_READY"].includes(token)) return "ERROR";
+  return null;
 }
 
 function describesDrift(value) {

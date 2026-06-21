@@ -378,7 +378,7 @@
   .system-body--gate {
     max-width: 100%;
     min-height: 100dvh;
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 16px 16px calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .system-gate {
@@ -386,7 +386,7 @@
     padding:
       calc(70px + env(safe-area-inset-top, 0px))
       calc(16px + env(safe-area-inset-right, 0px))
-      calc(16px + env(safe-area-inset-bottom, 0px))
+      calc(72px + env(safe-area-inset-bottom, 0px))
       calc(16px + env(safe-area-inset-left, 0px));
     border-radius: 20px;
   }
