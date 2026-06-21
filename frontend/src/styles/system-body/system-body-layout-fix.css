@@ -128,7 +128,7 @@
     padding:
       calc(64px + env(safe-area-inset-top, 0px))
       calc(10px + env(safe-area-inset-right, 0px))
-      calc(18px + env(safe-area-inset-bottom, 0px))
+      calc(72px + env(safe-area-inset-bottom, 0px))
       calc(10px + env(safe-area-inset-left, 0px));
     overflow-x: clip;
     overflow-y: visible;
