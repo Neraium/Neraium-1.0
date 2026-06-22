@@ -20,12 +20,15 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
         stage = "complete"
         default_label = LEGACY_STAGE_DEFAULTS["complete"][1]
     normalized["propagation_stage"] = str(raw_payload.get("propagation_stage") or stage)
+    raw_label = str(raw_payload.get("propagation_label") or "")
+    if normalized_status == "COMPLETE" and raw_label.strip() in {"", "Complete.", "Complete"}:
+        raw_label = "Analysis ready."
     explicit_progress = raw_payload.get("propagation_progress")
     if explicit_progress is None:
         normalized["propagation_progress"] = int(max(default_progress, backend_progress))
     else:
         normalized["propagation_progress"] = int(max(0, min(100, float(explicit_progress))))
-    normalized["propagation_label"] = str(raw_payload.get("propagation_label") or default_label)
+    normalized["propagation_label"] = raw_label or str(default_label)
     normalized.update(
         canonical_stage_payload(
             legacy_stage=normalized["propagation_stage"],
@@ -63,10 +66,10 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["error"] = "sii_completion_missing"
             normalized["message"] = "SII completion artifacts are missing."
             return _with_propagation_fields(normalized, payload, "FAILED")
-        if str(normalized.get("progress_label") or "").strip() in {"", "Complete."}:
-            normalized["progress_label"] = "Telemetry processing complete."
-        if str(normalized.get("message") or "").strip() in {"", "Complete."}:
-            normalized["message"] = "Telemetry processing complete."
+        if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
+            normalized["progress_label"] = "Analysis ready."
+        if str(normalized.get("message") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
+            normalized["message"] = "Analysis ready."
         normalized.setdefault("error", None)
         normalized.setdefault(
             "result_summary",

@@ -107,6 +107,8 @@ export default function DataConnectionsWorkspace({
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [batchResults, setBatchResults] = useState([]);
+  const [heartbeatTick, setHeartbeatTick] = useState(0);
+  const [lastProgressAt, setLastProgressAt] = useState(() => Date.now());
   void uploadResult;
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
@@ -120,6 +122,7 @@ export default function DataConnectionsWorkspace({
   const uploadInputRef = useRef(null);
   const uploadStateRef = useRef("idle");
   const pollSessionRef = useRef(0);
+  const lastProgressSignatureRef = useRef("");
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -130,6 +133,28 @@ export default function DataConnectionsWorkspace({
   useEffect(() => {
     uploadStateRef.current = uploadState;
   }, [uploadState]);
+
+  useEffect(() => {
+    const active = ["running_sii", "processing", "uploading"].includes(String(uploadState || "").toLowerCase());
+    if (!active || typeof window === "undefined") return undefined;
+    const timer = window.setInterval(() => setHeartbeatTick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [uploadState]);
+
+  useEffect(() => {
+    const signature = [
+      uploadJob?.job_id ?? "",
+      uploadJob?.status ?? "",
+      uploadJob?.processing_state ?? "",
+      uploadJob?.percent ?? uploadJob?.progress ?? "",
+      uploadJob?.propagation_progress ?? "",
+      uploadJob?.progress_label ?? uploadJob?.message ?? "",
+    ].join("|");
+    if (signature && signature !== lastProgressSignatureRef.current) {
+      lastProgressSignatureRef.current = signature;
+      setLastProgressAt(Date.now());
+    }
+  }, [uploadJob?.job_id, uploadJob?.status, uploadJob?.processing_state, uploadJob?.percent, uploadJob?.progress, uploadJob?.propagation_progress, uploadJob?.progress_label, uploadJob?.message]);
 
   // Session hydration is centralized in useFacilityRuntime via
   // apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode }).
@@ -267,7 +292,7 @@ export default function DataConnectionsWorkspace({
             const streamed = await streamUploadStatusOnce({ streamPath, pollingJobId: requestedJobId });
             if (streamed) {
               const streamedStatus = normalizeUploadStatus(streamed.status);
-              if (streamedStatus === "complete" || Boolean(streamed?.result_available) || Boolean(streamed?.replay_ready)) {
+              if (streamedStatus === "complete") {
                 const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "complete", progress_label: streamed?.progress_label || "Telemetry processing complete.", message: streamed?.message || "Telemetry processing complete." };
                 setUploadJob(completedPayload);
                 setUploadState("complete");
@@ -316,9 +341,8 @@ export default function DataConnectionsWorkspace({
           setUploadJob(normalizedPayload);
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
-          const hasResult = Boolean(normalizedPayload.result_available || normalizedPayload.latest_result || normalizedPayload.engine_result || normalizedPayload.operator_report);
           const hasReplay = Boolean(normalizedPayload.replay_ready || normalizedPayload.replay_frame_count || normalizedPayload.latest_replay_frames);
-          if (normalizedStatus === "complete" || hasResult || hasReplay) {
+          if (normalizedStatus === "complete") {
             completeWithoutReplayCount += hasReplay ? 2 : 1;
             if (completeWithoutReplayCount >= 2 || hasReplay) {
               const completePayload = { ...normalizedPayload, status: "COMPLETE", processing_state: "complete", percent: 100, progress: 100, progress_label: normalizedPayload.progress_label || "Telemetry processing complete.", message: normalizedPayload.message || "Telemetry processing complete." };
@@ -471,6 +495,11 @@ export default function DataConnectionsWorkspace({
   const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
   const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? uploadStateMessage(uploadState);
+  const isProcessingQuiet = ["running_sii", "processing"].includes(String(uploadState || "").toLowerCase())
+    && normalizeUploadStatus(progressUploadJob?.status ?? progressUploadJob?.processing_state) !== "complete"
+    && Date.now() - lastProgressAt > 6000
+    && heartbeatTick >= 0;
+  const visibleStatusLabel = isProcessingQuiet ? "Still processing..." : statusLabel;
   const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
@@ -517,7 +546,7 @@ export default function DataConnectionsWorkspace({
         uploadState={uploadState}
         openFilePicker={openFilePicker}
         uploadJob={progressUploadJob}
-        latestMessage={uploadError || statusLabel || readiness}
+        latestMessage={uploadError || visibleStatusLabel || readiness}
         visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}

@@ -56,11 +56,11 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
     assert payload["filename"] == "sensor-export.csv"
-    assert payload["message"] == "Preparing telemetry intake. Upload received and queued for background processing."
+    assert payload["message"] == "Worker starting..."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
-    assert payload["propagation_stage"] == "accepted"
+    assert payload["propagation_stage"] == "queued"
     assert payload["propagation_progress"] == 5
-    assert payload["propagation_label"] == "Upload received."
+    assert payload["propagation_label"] == "Worker starting..."
     assert payload["worker_state"] == "starting"
     assert payload["worker_last_seen_at"]
     assert payload["queue_position"] is None
@@ -428,7 +428,7 @@ def test_upload_status_returns_complete_job_summary_and_writes_state() -> None:
     job_id = upload.json()["job_id"]
     assert payload["job_id"] == job_id
     assert payload["status"] == "COMPLETE"
-    assert payload["progress_label"] == "Telemetry processing complete."
+    assert payload["progress_label"] == "Analysis ready."
     assert payload["propagation_stage"] == "complete"
     assert payload["propagation_progress"] == 100
     assert payload["propagation_label"]
@@ -468,7 +468,7 @@ def test_upload_status_can_return_queued_state() -> None:
     assert payload["status"] == "PENDING"
     assert payload["propagation_stage"] in {"queued", "accepted"}
     assert payload["propagation_progress"] in {5, 10}
-    assert payload.get("propagation_label") in {"Upload received.", "Queued."}
+    assert payload.get("propagation_label") in {"Worker starting...", "Reading uploaded CSV...", "Upload received.", "Queued."}
     assert payload["worker_state"] in {"starting", "running", "stalled", "unknown"}
     assert "worker_last_seen_at" in payload
     assert "queue_position" in payload
@@ -491,7 +491,15 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
     assert first_payload["propagation_stage"] in {
         "accepted",
         "queued",
+        "reading_csv",
         "parsing_telemetry",
+        "detecting_schema_signals",
+        "cleaning_imputing_data",
+        "profiling_data_quality",
+        "building_baseline",
+        "scoring_drift_relationships",
+        "generating_findings_evidence",
+        "writing_result_replay",
         "building_relationship_baselines",
         "scoring_relationship_drift",
         "building_propagation_model",
@@ -503,7 +511,57 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
     assert terminal["status"] == "COMPLETE"
     assert terminal["propagation_stage"] == "complete"
     assert terminal["propagation_progress"] == 100
-    assert terminal["propagation_label"] == "Complete."
+    assert terminal["propagation_label"] == "Analysis ready."
+
+
+def test_upload_processing_persists_intermediate_progress_states(monkeypatch) -> None:
+    from app.services import upload_jobs
+
+    original = upload_jobs.repository_write_upload_status_progress
+    progress_events = []
+
+    def record_progress(job_id, payload, *args, **kwargs):
+        if payload.get("propagation_stage"):
+            progress_events.append({
+                "stage": payload.get("propagation_stage"),
+                "progress": payload.get("progress"),
+                "label": payload.get("progress_label") or payload.get("message"),
+                "status": payload.get("status"),
+            })
+        return original(job_id, payload, *args, **kwargs)
+
+    monkeypatch.setattr(upload_jobs, "repository_write_upload_status_progress", record_progress)
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Room A,{75 + index * 0.1:.1f},{58 + index * 0.2:.1f},{120 + index}"
+        for index in range(24)
+    )
+
+    result = upload_jobs.process_csv_content(
+        f"timestamp,room,temperature,humidity,pressure\n{rows}",
+        filename="progress-stages.csv",
+        job_id="progress-sequence-job",
+    )
+
+    stages = [event["stage"] for event in progress_events]
+    assert result["job_id"] == "progress-sequence-job"
+    assert stages[:2] == ["reading_csv", "detecting_schema_signals"]
+    for expected in [
+        "cleaning_imputing_data",
+        "profiling_data_quality",
+        "building_baseline",
+        "scoring_drift_relationships",
+        "generating_findings_evidence",
+        "writing_result_replay",
+        "complete",
+    ]:
+        assert expected in stages
+
+    nonterminal_progress = [event["progress"] for event in progress_events if event["stage"] != "complete"]
+    assert 5 not in nonterminal_progress or min(nonterminal_progress) >= 5
+    assert max(nonterminal_progress) == 95
+    assert progress_events[-1]["stage"] == "complete"
+    assert progress_events[-1]["progress"] == 100
+    assert progress_events[-1]["label"] == "Analysis ready."
 
 
 def test_upload_status_preserves_explicit_processing_progress_stage() -> None:

@@ -63,7 +63,7 @@ function uploadProgressStage(uploadState, uploadJob) {
 function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines }) {
   const transferPercent = Number(uploadTransfer?.percent);
   if (uploadTransfer?.label && (!Number.isFinite(transferPercent) || transferPercent < 100)) return uploadTransfer.label;
-  return statusLines.at(-1) || uploadStageMessage;
+  return statusLines[0] || uploadStageMessage;
 }
 
 function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {

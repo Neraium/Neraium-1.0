@@ -193,21 +193,50 @@ def _complete_with_partial_result(
 
 def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
     current = read_job(job_id) or read_upload_status(job_id) or {"job_id": job_id}
+    bounded_progress = int(max(0, min(100, progress)))
+    pending_stages = {"queued", "accepted", "reading_csv"}
     payload = {
         **current,
         "job_id": job_id,
-        "status": "PROCESSING" if stage not in {"queued", "accepted", "complete"} else ("PENDING" if stage in {"queued", "accepted"} else "COMPLETE"),
-        "processing_state": stage if stage not in {"accepted"} else "queued",
-        "percent": int(max(0, min(100, progress))),
-        "progress": int(max(0, min(100, progress))),
+        "status": "PROCESSING" if stage not in {*pending_stages, "complete"} else ("PENDING" if stage in pending_stages else "COMPLETE"),
+        "processing_state": stage,
+        "percent": bounded_progress,
+        "progress": bounded_progress,
         "progress_label": label,
         "message": label,
         "propagation_stage": stage,
-        "propagation_progress": int(max(0, min(100, progress))),
+        "propagation_progress": bounded_progress,
         "propagation_label": label,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     payload.update(canonical_stage_payload(legacy_stage=stage, status=payload["status"], progress=progress, label=label))
     write_job(payload)
+
+
+def _progress_label(stage: str, *, row_count: int | None = None, signal_count: int | None = None) -> str:
+    if stage == "reading_csv":
+        return "Reading uploaded CSV..."
+    if stage == "parsing_telemetry":
+        return f"Parsing telemetry... {row_count:,} rows read." if row_count else "Parsing telemetry..."
+    if stage == "detecting_schema_signals":
+        if signal_count is not None:
+            return f"Detected {signal_count} telemetry signal{'s' if signal_count != 1 else ''}."
+        return "Detecting schema and telemetry signals..."
+    if stage == "cleaning_imputing_data":
+        return "Cleaning and imputing data..."
+    if stage == "profiling_data_quality":
+        return "Checking data quality..."
+    if stage == "building_baseline":
+        return "Building baseline..."
+    if stage == "scoring_drift_relationships":
+        return "Scoring operating changes..."
+    if stage == "generating_findings_evidence":
+        return "Preparing findings..."
+    if stage == "writing_result_replay":
+        return "Writing result and replay..."
+    if stage == "complete":
+        return "Analysis ready."
+    return "Still processing..."
 
 
 def _detect_delimiter(sample: str) -> str:
@@ -392,6 +421,7 @@ def _build_csv_result(
     initiated_by = job_context.get("initiated_by", "anonymous")
     request_id = job_context.get("request_id")
     upload_session_id = job_context.get("upload_session_id") or job_id
+    _set_propagation_stage(job_id, stage="cleaning_imputing_data", progress=45, label=_progress_label("cleaning_imputing_data"))
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
     numeric_profiles = []
@@ -405,6 +435,8 @@ def _build_csv_result(
                 "maximum": profile.get("max"),
             }
         )
+
+    _set_propagation_stage(job_id, stage="profiling_data_quality", progress=55, label=_progress_label("profiling_data_quality"))
 
     room_column = next((col for col in columns if col.lower().strip() in {"room", "zone", "location", "area", "group", "system", "asset"}), None)
     room_counts: dict[str, int] = {}
@@ -615,11 +647,13 @@ def _build_csv_result(
         result["sii_intelligence"]["projected_time_to_failure_hours"] = result["sii_intelligence"]["review_window_hours"]
     result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
 
-    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Complete.", "message": "Telemetry processing complete.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
-    summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Telemetry processing complete."))
+    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
     summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
+
+    _set_propagation_stage(job_id, stage="writing_result_replay", progress=95, label=_progress_label("writing_result_replay"))
 
     latest_sii = read_latest_sii_state()
     if isinstance(latest_sii, dict):
@@ -655,6 +689,7 @@ def _build_csv_result(
     except Exception:
         pass
     repository_write_upload_completion(job_id, result=result, summary=summary)
+    _set_propagation_stage(job_id, stage="complete", progress=100, label=_progress_label("complete"))
     UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
@@ -943,13 +978,15 @@ async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv
         "filename": filename,
         "status": "QUEUED",
         "processing_state": "queued",
-        "percent": 0,
-        "progress": 0,
+        "percent": 5,
+        "progress": 5,
+        "progress_label": "Worker starting...",
+        "message": "Worker starting...",
         "propagation_stage": "queued",
-        "propagation_progress": 10,
-        "propagation_label": "Queued.",
+        "propagation_progress": 5,
+        "propagation_label": "Worker starting...",
     }
-    payload.update(canonical_stage_payload(legacy_stage="queued", status=payload["status"], progress=10, label="Queued."))
+    payload.update(canonical_stage_payload(legacy_stage="queued", status=payload["status"], progress=5, label="Worker starting..."))
     write_job(job_id, payload)
     return payload
 
@@ -973,13 +1010,20 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     processing_started_at = time.perf_counter()
 
     if job_id:
-        _set_propagation_stage(job_id, stage="parsing_telemetry", progress=20, label="Parsing telemetry.")
+        _set_propagation_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
 
     try:
         snapshot = _stream_csv_snapshot(
             p,
             max_analysis_rows=None,
             job_id=job_id,
+        )
+
+        _set_propagation_stage(
+            job_id,
+            stage="detecting_schema_signals",
+            progress=35,
+            label=_progress_label("detecting_schema_signals", signal_count=len(snapshot["columns"])),
         )
 
         summary = _build_csv_result(

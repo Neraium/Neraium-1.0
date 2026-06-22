@@ -19,7 +19,7 @@ function renderPanel(overrides = {}) {
     selectedFiles: [],
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "processing"].includes(String(state)),
+    isUploadProcessing: (state) => ["uploading", "processing", "running_sii"].includes(String(state)),
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
@@ -141,5 +141,82 @@ it("previous completed upload does not leak progress into new idle upload screen
   expect(screen.getByText("No file selected")).toBeTruthy();
   expect(screen.getByText("Select a CSV telemetry file to begin.")).toBeTruthy();
   expect(screen.queryByLabelText("Upload 100% complete")).toBeNull();
+  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+});
+
+it("renders backend stage labels ahead of worker status detail", () => {
+  const file = new File(["timestamp,value\n2026-06-22,1\n"], "stage.csv", { type: "text/csv" });
+
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [file],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "stage-job",
+      status: "PROCESSING",
+      processing_state: "scoring_drift_relationships",
+      percent: 75,
+      progress: 75,
+      progress_label: "Scoring operating changes...",
+      propagation_stage: "scoring_drift_relationships",
+      propagation_progress: 75,
+      propagation_label: "Scoring operating changes...",
+      worker_state: "starting",
+    },
+    latestMessage: "Scoring operating changes...",
+    propagationLabel: "Scoring operating changes...",
+    queuedWorkerDetail: "Worker starting...",
+  });
+
+  expect(screen.getByText("Scoring operating changes...")).toBeTruthy();
+  expect(screen.queryByText("Worker starting...")).toBeNull();
+  expect(screen.getByLabelText("Processing 75% complete")).toBeTruthy();
+});
+
+it("renders intermediate backend processing progress without jumping to complete", () => {
+  const file = new File(["timestamp,value\n2026-06-22,1\n"], "progress.csv", { type: "text/csv" });
+
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [file],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "progress-job",
+      status: "PROCESSING",
+      processing_state: "building_baseline",
+      percent: 65,
+      progress: 65,
+      progress_label: "Building baseline...",
+      result_available: false,
+    },
+    latestMessage: "Building baseline...",
+  });
+
+  expect(screen.getByLabelText("Upload 100% complete")).toBeTruthy();
+  expect(screen.getByLabelText("Processing 65% complete")).toBeTruthy();
+  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+});
+
+it("does not show processing 100 until backend status is complete", () => {
+  const file = new File(["timestamp,value\n2026-06-22,1\n"], "not-complete.csv", { type: "text/csv" });
+
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [file],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "not-complete-job",
+      status: "PROCESSING",
+      processing_state: "writing_result_replay",
+      percent: 95,
+      progress: 95,
+      progress_label: "Writing result and replay...",
+      result_available: true,
+      replay_ready: true,
+    },
+    latestMessage: "Writing result and replay...",
+  });
+
+  expect(screen.getByLabelText("Processing 95% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
 });

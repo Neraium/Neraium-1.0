@@ -45,10 +45,10 @@ def run_structural_analysis_pipeline(
     build_upload_engine_result: Callable[..., dict[str, Any]],
     stage_notifier: Callable[..., None],
 ) -> dict[str, Any]:
-    stage_notifier(job_id, stage="building_relationship_baselines", progress=40, label="Building relationship baselines.")
+    stage_notifier(job_id, stage="building_baseline", progress=65, label="Building baseline...")
     relationship_model = build_relationship_baseline(rows, numeric_columns, total_row_count=row_count_total)
 
-    stage_notifier(job_id, stage="scoring_relationship_drift", progress=60, label="Scoring relationship drift.")
+    stage_notifier(job_id, stage="scoring_drift_relationships", progress=75, label="Scoring operating changes...")
     replay = (
         minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
         if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3)
@@ -57,7 +57,7 @@ def run_structural_analysis_pipeline(
     if not replay.get("timeline"):
         replay = minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
-    stage_notifier(job_id, stage="building_propagation_model", progress=80, label="Building propagation model.")
+    stage_notifier(job_id, stage="generating_findings_evidence", progress=85, label="Preparing findings...")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
     matrix_rows = matrix_rows_for_profiles
@@ -193,7 +193,7 @@ def run_structural_analysis_pipeline(
         "processing_time_seconds": processing_time_seconds,
         "completed_at": now,
     }
-    stage_notifier(job_id, stage="generating_system_interpretation", progress=90, label="Generating interpretation.")
+    stage_notifier(job_id, stage="writing_result_replay", progress=95, label="Writing result and replay...")
     runner_result = run_sii_runner(
         columns=columns,
         rows=matrix_rows,
