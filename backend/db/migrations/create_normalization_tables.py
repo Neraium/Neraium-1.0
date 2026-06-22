@@ -58,14 +58,16 @@ def run(conn: Connection[Any]) -> None:
             """
         )
 
-        cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
-        cur.execute(
-            """
-            SELECT create_hypertable(
-                'telemetry_normalized', 'time',
-                if_not_exists => TRUE
-            );
-            """
-        )
+        cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb';")
+        if cur.fetchone():
+            cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
+            cur.execute(
+                """
+                SELECT create_hypertable(
+                    'telemetry_normalized', 'time',
+                    if_not_exists => TRUE
+                );
+                """
+            )
 
     conn.commit()
