@@ -11,6 +11,7 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
+from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
 from app.services.telemetry_normalization import build_normalization_report
 
 
@@ -195,6 +196,7 @@ def run_structural_analysis_pipeline(
     sii_intelligence["runner_module"] = RUNNER_MODULE
     sii_intelligence["replay_timeline"] = replay
     sii_intelligence["telemetry_integrity"] = normalization_report
+    sii_intelligence = apply_telemetry_confidence_adjustment(sii_intelligence, data_quality=data_quality)
     processing_time_seconds = round(max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())), 6)
     processing_trace = {
         "sii_pipeline_ran": True,
@@ -205,6 +207,7 @@ def run_structural_analysis_pipeline(
         "normalization_layer_ran": True,
         "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
         "normalization_source_status": normalization_report.get("status"),
+        "sii_confidence_adjusted_for_telemetry": bool(sii_intelligence.get("telemetry_confidence_adjusted")),
         "processing_time_seconds": processing_time_seconds,
         "completed_at": now,
     }
