@@ -190,6 +190,11 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
       ? normalizeErrorMessage(detail)
       : "Upload processing is unavailable right now.";
   }
+  if (errorType === "upload_status_unavailable") {
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "Upload status remained unavailable after repeated retries.";
+  }
   if (errorType === "upload_too_large" || status === 413) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)

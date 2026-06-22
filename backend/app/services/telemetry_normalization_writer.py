@@ -21,14 +21,16 @@ def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:
     integrity_flags: dict[str, str] = result["integrity_flags"]
     profiles: dict[str, IntegrityProfile] = result["integrity_profiles"]
 
-    telemetry_rows: list[tuple[Any, str, float | None, bool, str | None, str]] = []
+    telemetry_rows: list[tuple[Any, str, str | None, float | None, bool, str | None, str]] = []
     for signal_id, series in normalized.items():
         flag = integrity_flags[signal_id]
         fill = fill_methods[signal_id]
+        source_id = profiles[signal_id].source_id if signal_id in profiles else None
         for ts, value in series.items():
             telemetry_rows.append((
                 ts,
                 signal_id,
+                source_id,
                 None if pd.isna(value) or value == SENTINEL else float(value),
                 fill is not None,
                 fill,
@@ -55,8 +57,8 @@ def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:
             cur.executemany(
                 """
                 INSERT INTO telemetry_normalized
-                    (time, signal_id, value, is_filled, fill_method, integrity_flag)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (time, signal_id, source_id, value, is_filled, fill_method, integrity_flag)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
                 telemetry_rows,

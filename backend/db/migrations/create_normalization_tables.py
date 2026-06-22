@@ -49,25 +49,34 @@ def run(conn: Connection[Any]) -> None:
             CREATE TABLE IF NOT EXISTS telemetry_normalized (
                 time             TIMESTAMPTZ NOT NULL,
                 signal_id        TEXT NOT NULL,
+                source_id        TEXT,
                 value            DOUBLE PRECISION,
                 is_filled        BOOLEAN DEFAULT FALSE,
                 fill_method      TEXT,
                 integrity_flag   TEXT,
                 PRIMARY KEY (time, signal_id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_telemetry_normalized_signal_time
+                ON telemetry_normalized (signal_id, time);
+
+            CREATE INDEX IF NOT EXISTS idx_telemetry_normalized_source_time
+                ON telemetry_normalized (source_id, time);
             """
         )
 
         cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb';")
         if cur.fetchone():
             cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
-            cur.execute(
-                """
-                SELECT create_hypertable(
-                    'telemetry_normalized', 'time',
-                    if_not_exists => TRUE
-                );
-                """
-            )
+            cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'timescaledb';")
+            if cur.fetchone():
+                cur.execute(
+                    """
+                    SELECT create_hypertable(
+                        'telemetry_normalized', 'time',
+                        if_not_exists => TRUE
+                    );
+                    """
+                )
 
     conn.commit()

@@ -374,6 +374,14 @@ export default function SystemBodyWorkspace({
                   </div>
                 ))}
               </dl>
+              <section className="result-list-block" aria-label="Supporting evidence">
+                <h3>Supporting Evidence</h3>
+                <ul className="compact-list">
+                  {evidenceReport.traceability.length > 0
+                    ? evidenceReport.traceability.map((item) => <li key={item}>{item}</li>)
+                    : <li>No supporting evidence reported.</li>}
+                </ul>
+              </section>
               {evidenceReport.hasReplay ? (
                 <div className="post-upload-actions" aria-label="System Story action">
                   <button type="button" className="command-button" onClick={() => navigateWorkspace("system-story")}>View System Story</button>
@@ -1147,9 +1155,9 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     return {
       structuralState: "No data yet",
       primaryDriver: "No data yet",
-      relationshipSummary: { text: "Analyze telemetry to begin." },
+      relationshipSummary: { text: "Upload data to begin." },
       confidence: "Pending",
-      nextStep: "Analyze telemetry.",
+      nextStep: "Upload data to begin.",
       hasTelemetry: false,
     };
   }

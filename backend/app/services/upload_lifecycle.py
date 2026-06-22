@@ -7,7 +7,7 @@ LEGACY_STAGE_DEFAULTS: dict[str, tuple[int, str]] = {
     "queued": (5, "Worker starting..."),
     "accepted": (10, "Reading uploaded CSV..."),
     "reading_csv": (10, "Reading uploaded CSV..."),
-    "parsing_telemetry": (20, "Parsing telemetry..."),
+    "parsing_telemetry": (20, "Parsing telemetry."),
     "detecting_schema_signals": (35, "Detecting schema and telemetry signals..."),
     "cleaning_imputing_data": (45, "Cleaning and imputing data..."),
     "profiling_data_quality": (55, "Checking data quality..."),

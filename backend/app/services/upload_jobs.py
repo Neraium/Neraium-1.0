@@ -217,7 +217,7 @@ def _progress_label(stage: str, *, row_count: int | None = None, signal_count: i
     if stage == "reading_csv":
         return "Reading uploaded CSV..."
     if stage == "parsing_telemetry":
-        return f"Parsing telemetry... {row_count:,} rows read." if row_count else "Parsing telemetry..."
+        return f"Parsing telemetry... {row_count:,} rows read." if row_count else "Parsing telemetry."
     if stage == "detecting_schema_signals":
         if signal_count is not None:
             return f"Detected {signal_count} telemetry signal{'s' if signal_count != 1 else ''}."
@@ -688,8 +688,9 @@ def _build_csv_result(
             dispatch_observation_notification(record)
     except Exception:
         pass
+    summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label=_progress_label("complete")))
     repository_write_upload_completion(job_id, result=result, summary=summary)
-    _set_propagation_stage(job_id, stage="complete", progress=100, label=_progress_label("complete"))
+    repository_write_upload_status_progress(job_id, summary, latest_summary=summary, keep_result=True)
     UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary

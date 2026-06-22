@@ -96,7 +96,7 @@ def profile_numeric_columns(columns: list[str], rows: list[list[str]]) -> list[d
                 "column": column,
                 "min": round_number(minimum),
                 "max": round_number(maximum),
-                "average": round_number(average),
+                "average": round_number(average, digits=4),
                 "missing_count": missing_count,
                 "missing_percent": round_number(missing_percent),
                 "valid_numeric_count": len(values),

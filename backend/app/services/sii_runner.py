@@ -12,6 +12,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
 from app.services.runtime_db import read_latest_payload, upsert_latest_payload
+from app.services.telemetry_normalization import SENTINEL
 
 import numpy as np
 
@@ -510,6 +511,8 @@ def build_sensor_vectors(
             raw_value = row[column_index].strip() if column_index < len(row) else ""
             parsed_value = parse_numeric_value(raw_value)
             if parsed_value is None:
+                values.append(float("nan"))
+            elif parsed_value == SENTINEL:
                 values.append(float("nan"))
             else:
                 values.append(parsed_value)

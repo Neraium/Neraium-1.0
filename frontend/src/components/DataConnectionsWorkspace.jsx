@@ -51,7 +51,7 @@ function uploadReadinessMessage(file) {
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "Telemetry file ready.";
+  return "Telemetry export validated.";
 }
 
 function validateTelemetryFile(file, kind) {
@@ -322,9 +322,9 @@ export default function DataConnectionsWorkspace({
                   {
                     ...payload,
                     error_type: payload?.error_type || "upload_status_unavailable",
-                    message: payload?.message || "Analysis status remained unavailable after repeated retries.",
+                    message: payload?.message || "Upload status remained unavailable after repeated retries.",
                   },
-                  "Analysis status remained unavailable after repeated retries. Try again.",
+                  "poll",
                 );
               }
               const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);

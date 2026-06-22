@@ -423,10 +423,11 @@ def stream_csv_snapshot(
             if interval_label:
                 schema_messages.append(f"{interval_label} interval detected.")
             if chilled_water_schema.get("missing_core"):
-                analysis_gate_state = "DEGRADED_READY"
-                schema_messages.append("Some chilled-water core signals were not present; generic telemetry analysis was used for available signals.")
+                analysis_gate_state = "PENDING"
+                schema_messages.append("Required chilled-water timestamp or supply/return temperature signals were not present.")
             if high_missing_columns:
-                analysis_gate_state = "DEGRADED_READY"
+                if analysis_gate_state != "PENDING":
+                    analysis_gate_state = "DEGRADED_READY"
             if sparse_missing_columns:
                 sparse_labels = ", ".join(display_chilled_water_column(name) for name in sparse_missing_columns)
                 schema_messages.append(f"Sparse missing values detected in {sparse_labels}; short gaps interpolated.")
@@ -436,7 +437,9 @@ def stream_csv_snapshot(
             schema_messages.append(f"{rows_used:,} rows loaded.")
             if timestamp_index is None:
                 schema_messages.append("No timestamp column detected; analysis used row order instead.")
-        if analysis_gate_state == "DEGRADED_READY":
+        if analysis_gate_state == "PENDING":
+            schema_messages.append("Analysis is pending until required telemetry is present.")
+        elif analysis_gate_state == "DEGRADED_READY":
             schema_messages.append("Analysis can proceed with confidence warnings.")
         else:
             schema_messages.append("Analysis can proceed.")

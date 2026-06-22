@@ -146,3 +146,25 @@ def test_build_instability_index_supports_legacy_and_v2_components() -> None:
     assert technical_index["components"]["relationship_degradation"] == 0.6
     assert technical_index["components"]["entropy_growth"] == 0.5
     assert technical_index["components"]["topology_propagation"] == 0.425
+
+
+def test_sii_runner_masks_normalization_sentinel_values():
+    from app.services.sii_runner import build_sensor_vectors
+    from app.services.telemetry_normalization import SENTINEL
+
+    result = build_sensor_vectors(
+        ["timestamp", "flow", "pressure"],
+        [
+            ["2026-01-01T00:00:00Z", "100", "20"],
+            ["2026-01-01T00:01:00Z", str(SENTINEL), "21"],
+        ],
+        [
+            {"column": "flow"},
+            {"column": "pressure"},
+        ],
+    )
+
+    assert len(result["vectors"]) == 2
+    assert result["vectors"][1][0] != SENTINEL
+    assert result["vectors"][1][0] != result["vectors"][1][0]
+    assert result["vectors"][1][1] == 21.0

@@ -216,13 +216,22 @@ export function deriveTimeCoverage(result) {
   };
 }
 
-export function resolveOperatorReviewReadiness({ latestUploadResult = null, latestUploadSnapshot = null } = {}) {
+export function resolveOperatorReviewReadiness({ latestUploadResult = null, latestUploadSnapshot = null, hasRealSiiOutput = false } = {}) {
   const result = latestUploadResult ?? resolveCurrentUploadResult({
     current_upload: latestUploadSnapshot?.current_upload ?? null,
     latest_result: latestUploadSnapshot?.latest_result ?? null,
     snapshot: latestUploadSnapshot ?? null,
   });
-  return result?.sii_reliable_enough_to_show === true;
+  if (result?.sii_reliable_enough_to_show === true) return "ready";
+  const hasOutput = Boolean(
+    hasRealSiiOutput
+    || result?.sii_intelligence
+    || result?.engine_result
+    || result?.operator_report
+    || result?.data_quality
+    || result?.processing_trace
+  );
+  return hasOutput ? "quality_gate" : false;
 }
 
 export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, uploadError, roomContext }) {
@@ -231,7 +240,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
   const baselineStatus = String(latestUploadSnapshot?.baseline_status ?? "none").toLowerCase();
   const baselineSamplesCollected = latestUploadSnapshot?.baseline_samples_collected ?? 0;
   const baselineSamplesRequired = latestUploadSnapshot?.baseline_samples_required ?? 0;
-  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot });
+  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot }) === "ready";
   const baselineDetail = baselineSamplesRequired > 0
     ? `${baselineSamplesCollected}/${baselineSamplesRequired} live samples collected.`
     : "Waiting for live telemetry samples.";
@@ -307,7 +316,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
 
 export function connectionStateLabel(latestStatus, uploadState, uploadError, latestUploadSnapshot = null) {
   const normalizedLatestStatus = String(latestStatus).toLowerCase();
-  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot });
+  const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot }) === "ready";
   if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
     return "Upload failed";
   }

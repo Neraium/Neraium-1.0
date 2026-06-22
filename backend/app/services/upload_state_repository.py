@@ -342,8 +342,12 @@ def persist_latest_upload_state(
     result: dict[str, Any] | None = None,
     keep_result: bool = True,
 ) -> dict[str, Any]:
+    retained_result = result
+    if keep_result and retained_result is None:
+        cached_result = runtime_state().latest_upload_cache.get("result")
+        retained_result = cached_result if isinstance(cached_result, dict) else read_latest_upload_result()
     evidence_record = None
-    job_id, _, _ = normalize_upload_identity(result or summary)
+    job_id, _, _ = normalize_upload_identity(retained_result or summary)
     if job_id:
         try:
             from app.services.evidence_store import read_evidence_run
@@ -353,7 +357,7 @@ def persist_latest_upload_state(
             evidence_record = None
     record = build_latest_upload_record(
         summary=summary,
-        result=result if keep_result else None,
+        result=retained_result if keep_result else None,
         evidence=evidence_record,
     )
     return write_latest_upload_record(record)

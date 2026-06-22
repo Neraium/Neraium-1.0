@@ -4,6 +4,7 @@ from app.services.telemetry_normalization import (
     IntegrityLayer,
     NormalizationLayer,
     NormalizationPipeline,
+    SENTINEL,
     build_normalization_report,
 )
 
@@ -39,7 +40,7 @@ def test_normalizer_preserves_integrity_flag_for_short_drop():
     assert integrity_flag == "degraded"
 
 
-def test_pipeline_marks_correlated_terminal_gap():
+def test_pipeline_keeps_single_dead_sensor_as_terminal_not_source_outage():
     raw = pd.DataFrame(
         {
             "flow": [None, None, None],
@@ -50,9 +51,30 @@ def test_pipeline_marks_correlated_terminal_gap():
 
     result = NormalizationPipeline("SCADA-01", sample_interval_seconds=60).run(raw, raw.index.min(), raw.index.max())
 
-    assert result["integrity_profiles"]["flow"].gap_type == "correlated"
+    assert result["integrity_profiles"]["flow"].gap_type == "terminal"
+    assert result["correlated_signals"] == []
     assert result["integrity_flags"]["flow"] == "missing"
     assert result["window_suppressed"] is True
+
+
+def test_pipeline_marks_overlapping_multi_signal_gap_as_correlated():
+    raw = pd.DataFrame(
+        {
+            "flow": [100.0, None, None, None, 105.0],
+            "pressure": [20.0, None, None, None, 21.0],
+            "temperature": [70.0, 70.2, 70.3, 70.4, 70.5],
+        },
+        index=pd.date_range("2026-01-01", periods=5, freq="60s"),
+    )
+
+    result = NormalizationPipeline("SCADA-01", sample_interval_seconds=60).run(raw, raw.index.min(), raw.index.max())
+
+    assert result["correlated_signals"] == ["flow", "pressure"]
+    assert result["integrity_profiles"]["flow"].gap_type == "correlated"
+    assert result["integrity_profiles"]["pressure"].gap_type == "correlated"
+    assert result["integrity_profiles"]["temperature"].gap_type is None
+    assert result["integrity_flags"]["flow"] == "missing"
+    assert result["normalized"]["flow"].iloc[1] == SENTINEL
 
 
 def test_build_normalization_report_exposes_sii_integrity_context():

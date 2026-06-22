@@ -7,7 +7,7 @@ export const WORKSPACES = [
   },
   {
     id: "data-connections",
-    label: "Analyze System",
+    label: "Upload Data",
     eyebrow: "Telemetry",
     description: "Analyze a telemetry file and build the system story.",
   },

@@ -81,7 +81,24 @@ class IntegrityLayer:
         if df.empty:
             return []
         null_mask = df.isnull()
-        return [str(column) for column in null_mask.columns if bool(null_mask[column].all())]
+        if len(null_mask.columns) < 2:
+            return []
+
+        correlated_columns: set[str] = set()
+        active_counts = null_mask.sum(axis=1)
+        source_gap_rows = active_counts >= 2
+        if not bool(source_gap_rows.any()):
+            return []
+
+        for column in null_mask.columns:
+            column_missing = null_mask[column]
+            overlap = int((column_missing & source_gap_rows).sum())
+            if overlap <= 0:
+                continue
+            missing_total = int(column_missing.sum())
+            if bool(column_missing.all()) or overlap >= max(2, int(missing_total * 0.5)):
+                correlated_columns.add(str(column))
+        return sorted(correlated_columns)
 
     def _is_scheduled(self, start: pd.Timestamp, end: pd.Timestamp) -> bool:
         for mw_start, mw_end in self.maintenance_windows:
@@ -137,9 +154,10 @@ class NormalizationPipeline:
             signal.name = str(column)
             profile = self.integrity.classify(signal, self.source_id, window_start, window_end)
 
-            if column in correlated and profile.gap_type in {"sustained", "terminal"}:
+            if column in correlated and profile.gap_type in {"sustained", "terminal", "short_drop"}:
                 profile.gap_type = "correlated"
                 profile.treatment = "sentinel"
+                profile.suppress_confidence = True
 
             normalized, fill_method, integrity_flag = self.normalizer.normalize(signal, profile)
             profiles[str(column)] = profile
