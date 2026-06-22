@@ -67,7 +67,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
   }),
 }));
 
-vi.mock("./components/SystemTopologyWorkspace", () => ({
+vi.mock("./components/OperationalWorkflowWorkspace", () => ({
   default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, gateProcessing }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
