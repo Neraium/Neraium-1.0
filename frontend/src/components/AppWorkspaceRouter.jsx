@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
 import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
-import SystemTopologyWorkspace from "./SystemTopologyWorkspace";
+import OperationalWorkflowWorkspace from "./OperationalWorkflowWorkspace";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
@@ -30,9 +30,9 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
               type="button"
               className="system-gate__settings-action"
               onClick={handleBackToGate}
-              aria-label="Back to Health"
+              aria-label="Back to Overview"
             >
-              Back to Health
+              Back to Overview
             </button>
           </div>
           {children}
@@ -164,7 +164,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Issues", "Preparing issues...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Insights", "Preparing insights...")}>
           <ObservationCenterWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -200,24 +200,25 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <SystemTopologyWorkspace
+        <OperationalWorkflowWorkspace
           liveOps={{
             ...liveOps,
             replayOverlay: historianReplayState.frame ?? null,
             canonicalFinding,
           }}
           replayFrame={historianReplayState.frame}
-          selectedTarget={null}
-          onSelectTarget={() => {}}
-          apiFetch={apiFetch}
-          accessCode={accessCode}
+          currentSession={currentSession}
+          canonicalFinding={canonicalFinding}
+          effectiveLatestUploadResult={effectiveLatestUploadResult}
+          effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+          roomContext={roomContext}
+          domainMode={domainMode}
+          domainDetection={domainDetection}
+          gateProcessing={gateProcessing}
           onWorkspaceNavigate={setActiveWorkspace}
           onSignOut={handleSignOut}
           onUploadComplete={handleGateUploadComplete}
           onResumePreviousSession={handleResumePreviousSession}
-          domainMode={domainMode}
-          domainDetection={domainDetection}
-          gateProcessing={gateProcessing}
         />
       </div>
     </AppErrorBoundary>
