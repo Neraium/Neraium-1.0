@@ -63,16 +63,45 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getByRole("button", { name: "Data connections" })).toBeTruthy();
   });
 
-  it("shows the awaiting telemetry state when no analysis exists", () => {
+  it("shows the no-upload state when no current session upload exists", () => {
     renderWorkspace();
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Upload telemetry to begin." })).toBeTruthy();
-    expect(screen.getAllByText("Upload telemetry to generate an assessment.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
-    expect(readResultDetail("Baseline comparison")).toBe("No telemetry");
-    expect(readResultDetail("Behavior has persisted")).toBe("—");
-    expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "No telemetry uploaded yet" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Upload Data" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Findings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Findings" })).toBeNull();
+    expect(screen.queryByText("Rows loaded")).toBeNull();
+  });
+
+  it("renders persisted latest upload only as previous upload until resumed", () => {
+    const onResumePreviousUpload = vi.fn();
+    renderWorkspace({
+      persistedLatestUpload: {
+        jobId: "stale-job",
+        filename: "old-upload.csv",
+        processedAt: "2026-06-01T12:00:00Z",
+        result: {
+          job_id: "stale-job",
+          row_count: 51841,
+          data_quality: { analysis_gate_state: "DEGRADED_READY", warnings: ["stale warning"] },
+          sii_intelligence: { facility_state: "Monitoring" },
+        },
+        snapshot: { rows_processed: 51841 },
+      },
+      previousUploadHistory: [{ job_id: "stale-job", filename: "old-upload.csv", rows_processed: 51841 }],
+      onResumePreviousUpload,
+    });
+
+    expect(screen.getByRole("heading", { name: "No telemetry uploaded yet" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Upload Data" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Resume Previous Upload" })).toBeTruthy();
+    expect(screen.getByLabelText("Previous upload").textContent).toContain("old-upload.csv");
+    expect(screen.queryByText("Ready With Warnings")).toBeNull();
+    expect(screen.queryByText("51841")).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Findings" })).toBeNull();
   });
 
   it("enables review metrics after a completed analysis exists", () => {

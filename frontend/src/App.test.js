@@ -3,6 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { apiFetch } from "./config";
 
 const h = React.createElement;
 const runtimeMocks = vi.hoisted(() => ({
@@ -67,7 +68,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/SystemTopologyWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate, gateProcessing }) => {
+  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, gateProcessing }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
     }
@@ -82,6 +83,8 @@ vi.mock("./components/SystemTopologyWorkspace", () => ({
       h("span", { "data-testid": "gate-heartbeat-status" }, liveOps.connectionStatusLine ?? "none"),
       h("span", { "data-testid": "gate-processing-active" }, String(Boolean(gateProcessing?.active))),
       h("span", { "data-testid": "gate-processing-label" }, gateProcessing?.label ?? "none"),
+      h("span", { "data-testid": "gate-previous-upload" }, liveOps.persistedLatestUpload?.jobId ?? "none"),
+      liveOps.persistedLatestUpload ? h("button", { type: "button", onClick: onResumePreviousSession }, "Resume Previous Upload") : null,
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
     );
@@ -99,7 +102,7 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete }) => h(
+  default: ({ onUploadComplete, onResetDemo }) => h(
     "div",
     { "data-testid": "upload-workspace" },
     h("button", {
@@ -126,15 +129,19 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
         latest_result: { job_id: "restored-job-7", sii_intelligence: { facility_state: "Monitoring" } },
       }, { navigateToGate: false }),
     }, "Restore upload"),
+    h("button", { type: "button", onClick: onResetDemo }, "Clear Upload Workspace"),
   ),
 }));
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   runtimeState.latestUploadResult = null;
   runtimeState.latestUploadSnapshot = { status: "empty" };
   runtimeState.throwGateError = false;
   Object.values(runtimeMocks).forEach((mock) => mock.mockClear());
+  apiFetch.mockReset();
+  apiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 });
 
 afterEach(() => {
@@ -143,16 +150,51 @@ afterEach(() => {
 });
 
 
-it("treats persisted metadata without a heartbeat timestamp as awaiting telemetry", () => {
+it("keeps a fresh session empty when a persisted latest upload exists", () => {
+  runtimeState.latestUploadResult = {
+    job_id: "persisted-job-42",
+    row_count: 51841,
+    data_quality: { analysis_gate_state: "DEGRADED_READY", warnings: ["cached warning"] },
+    sii_intelligence: { facility_state: "Monitoring" },
+  };
   runtimeState.latestUploadSnapshot = {
     status: "complete",
     last_filename: "cached-upload.csv",
+    rows_processed: 51841,
+    current_upload: { job_id: "persisted-job-42" },
   };
 
   render(h(App));
 
-  expect(screen.getByTestId("gate-heartbeat-summary").textContent).toBe("none");
-  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Persisted telemetry available");
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-previous-upload").textContent).toBe("persisted-job-42");
+  expect(screen.getByRole("button", { name: "Resume Previous Upload" })).toBeTruthy();
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
+});
+
+it("resumes a persisted upload only after explicit resume", async () => {
+  runtimeState.latestUploadResult = {
+    job_id: "persisted-job-99",
+    sii_reliable_enough_to_show: true,
+    operator_report: { evidence_summary: ["persisted evidence"] },
+    sii_intelligence: { facility_state: "Monitoring" },
+  };
+  runtimeState.latestUploadSnapshot = {
+    status: "complete",
+    sii_completed: true,
+    current_upload: { job_id: "persisted-job-99" },
+  };
+
+  render(h(App));
+
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  fireEvent.click(screen.getByRole("button", { name: "Resume Previous Upload" }));
+
+  await waitFor(() => {
+    expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-99");
+  });
+  expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
 });
 
 describe("App upload completion navigation", () => {
@@ -171,6 +213,18 @@ describe("App upload completion navigation", () => {
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset workspace clears the current upload state", async () => {
+    render(h(App));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Upload Workspace" }));
+
+    await waitFor(() => {
+      expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalledTimes(1);
+    });
+    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false });
   });
 
   it("does not leave Data Connections when an existing upload is restored", async () => {
@@ -284,6 +338,7 @@ describe("App upload completion navigation", () => {
       },
     };
 
+    window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
 
     const gateSummary = screen.getByTestId("gate-finding-summary").textContent;
@@ -315,6 +370,7 @@ describe("App upload completion navigation", () => {
       },
     };
 
+    window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
 
     expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Analysis pending verification.");

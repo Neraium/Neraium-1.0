@@ -12,7 +12,7 @@ function readStoredSessionIntent() {
   if (typeof window === "undefined") return "neutral";
   const allowPersisted = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
   if (allowPersisted === "0") return "neutral";
-  const value = window.localStorage.getItem(SESSION_INTENT_STORAGE_KEY);
+  const value = window.sessionStorage.getItem(SESSION_INTENT_STORAGE_KEY);
   return value === "current" || value === "resumed" ? value : "neutral";
 }
 
@@ -50,14 +50,7 @@ export default function useWorkspaceSessionController({
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : (postUploadPendingSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
 
-  const hasRealSiiOutput = useMemo(
-    () => uploadStateView.hasVerifiedSiiCompletion({
-      latestResult: guardedLatestUploadResult,
-      latestSnapshot: guardedLatestUploadSnapshot,
-    }),
-    [guardedLatestUploadResult, guardedLatestUploadSnapshot],
-  );
-  const telemetrySession = useMemo(
+  const observableTelemetrySession = useMemo(
     () => uploadStateView.deriveTelemetrySessionState({
       latestUploadResult: guardedLatestUploadResult,
       latestUploadSnapshot: guardedLatestUploadSnapshot,
@@ -67,15 +60,14 @@ export default function useWorkspaceSessionController({
   );
   const sessionActivity = useMemo(
     () => deriveSessionActivity({
-      telemetrySession,
+      telemetrySession: observableTelemetrySession,
       sessionIntent,
       gateUploadCompleteSeen,
       hasCompletedUploadOverride: Boolean(completedUploadOverride),
       resetGuardActive,
     }),
-    [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, telemetrySession],
+    [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, observableTelemetrySession],
   );
-  const hasObservableUploadSession = sessionActivity.hasObservableUploadSession;
   const effectiveSessionIntent = sessionActivity.effectiveIntent;
 
   useEffect(() => {
@@ -99,21 +91,6 @@ export default function useWorkspaceSessionController({
     setCompletedUploadOverride(null);
   }, [completedUploadOverride, sessionStore]);
 
-  useEffect(() => {
-    if (
-      resetGuardActive
-      || !allowPersistedLatest
-      || sessionIntent !== "neutral"
-      || !hasObservableUploadSession
-    ) {
-      return;
-    }
-    setSessionIntent("resumed");
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
-    }
-  }, [allowPersistedLatest, hasObservableUploadSession, resetGuardActive, sessionIntent]);
-
   const hasCurrentUploadResult = sessionActivity.hasCurrentUploadResult;
   const hasResumedSession = sessionActivity.hasResumedSession;
   const hasActiveSession = sessionActivity.hasActiveSession;
@@ -123,6 +100,21 @@ export default function useWorkspaceSessionController({
   const effectiveLatestUploadSnapshot = hasActiveSession
     ? guardedLatestUploadSnapshot
     : uploadStateView.buildEmptyLatestUploadSnapshot();
+  const activeHasRealSiiOutput = useMemo(
+    () => uploadStateView.hasVerifiedSiiCompletion({
+      latestResult: effectiveLatestUploadResult,
+      latestSnapshot: effectiveLatestUploadSnapshot,
+    }),
+    [effectiveLatestUploadResult, effectiveLatestUploadSnapshot],
+  );
+  const activeTelemetrySession = useMemo(
+    () => uploadStateView.deriveTelemetrySessionState({
+      latestUploadResult: effectiveLatestUploadResult,
+      latestUploadSnapshot: effectiveLatestUploadSnapshot,
+      latestReplayFrame: hasActiveSession ? historianReplayState.frame : null,
+    }),
+    [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasActiveSession, historianReplayState.frame],
+  );
   const roomContext = useMemo(
     () => uploadStateView.deriveRoomContext(effectiveLatestUploadResult),
     [effectiveLatestUploadResult],
@@ -133,15 +125,27 @@ export default function useWorkspaceSessionController({
     hasActiveSession,
     hasCurrentUploadResult,
     hasResumedSession,
-    hasRealSiiOutput,
-    telemetrySession,
+    hasRealSiiOutput: activeHasRealSiiOutput,
+    telemetrySession: activeTelemetrySession,
     sessionIntent: effectiveSessionIntent,
-  }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, effectiveSessionIntent, hasActiveSession, hasCurrentUploadResult, hasResumedSession, hasRealSiiOutput, telemetrySession]);
+  }), [effectiveLatestUploadResult, effectiveLatestUploadSnapshot, effectiveSessionIntent, hasActiveSession, hasCurrentUploadResult, hasResumedSession, activeHasRealSiiOutput, activeTelemetrySession]);
   const canonicalFinding = useMemo(
     () => deriveCanonicalFinding({ currentSession, latestReplayFrame: historianReplayState.frame }),
     [currentSession, historianReplayState.frame],
   );
   const gateProcessing = useMemo(() => deriveGateProcessing(effectiveLatestUploadSnapshot), [effectiveLatestUploadSnapshot]);
+  const persistedLatestUpload = useMemo(
+    () => buildPersistedLatestUpload({
+      latestUploadResult: guardedLatestUploadResult,
+      latestUploadSnapshot: guardedLatestUploadSnapshot,
+      hasActiveSession,
+    }),
+    [guardedLatestUploadResult, guardedLatestUploadSnapshot, hasActiveSession],
+  );
+  const previousUploadHistory = useMemo(
+    () => Array.isArray(guardedLatestUploadSnapshot?.history) ? guardedLatestUploadSnapshot.history : [],
+    [guardedLatestUploadSnapshot],
+  );
 
   const handleReplayFrameChange = useCallback((frame, meta) => {
     setHistorianReplayState((current) => ({ ...current, frame, meta }));
@@ -248,7 +252,7 @@ export default function useWorkspaceSessionController({
     setGateUploadCompleteSeen(false);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("neraium.last_upload_job_id");
-      window.localStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
+      window.sessionStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "0");
     }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
@@ -257,8 +261,13 @@ export default function useWorkspaceSessionController({
   }, [accessCode, apiFetch, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleBackToGate = useCallback(async () => {
-    setGateUploadCompleteSeen(true);
-    setSessionIntent("current");
+    if (hasActiveSession) {
+      setGateUploadCompleteSeen(hasCurrentUploadResult);
+      setSessionIntent(hasResumedSession ? "resumed" : "current");
+    } else {
+      setGateUploadCompleteSeen(false);
+      setSessionIntent("neutral");
+    }
     const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
     if (!hasResult) {
       setCompletedUploadOverride(null);
@@ -267,7 +276,7 @@ export default function useWorkspaceSessionController({
     }
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
-  }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace]);
+  }, [hasActiveSession, hasCurrentUploadResult, hasResumedSession, loadFacilitySystems, loadLatestUploadState, setActiveWorkspace]);
 
   const handleRetryWorkspace = useCallback(() => {
     console.info("[neraium] route retry requested", { workspace: activeWorkspace });
@@ -280,7 +289,11 @@ export default function useWorkspaceSessionController({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
+    if (effectiveSessionIntent === "neutral") {
+      window.sessionStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
+    } else {
+      window.sessionStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
+    }
   }, [effectiveSessionIntent]);
 
   useEffect(() => {
@@ -302,12 +315,14 @@ export default function useWorkspaceSessionController({
     hasCurrentUploadResult,
     hasResumedSession,
     hasActiveSession,
-    hasRealSiiOutput,
+    hasRealSiiOutput: activeHasRealSiiOutput,
     roomContext,
     currentSession,
     canonicalFinding,
-    telemetrySession,
+    telemetrySession: activeTelemetrySession,
     gateProcessing,
+    persistedLatestUpload,
+    previousUploadHistory,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
@@ -315,6 +330,28 @@ export default function useWorkspaceSessionController({
     handleResetDemo,
     handleBackToGate,
     handleRetryWorkspace,
+  };
+}
+
+function buildPersistedLatestUpload({ latestUploadResult = null, latestUploadSnapshot = null, hasActiveSession = false } = {}) {
+  if (hasActiveSession || !latestUploadSnapshot) return null;
+  const result = latestUploadResult ?? uploadStateView.resolveCurrentUploadResult({
+    current_upload: latestUploadSnapshot?.current_upload ?? null,
+    latest_result: latestUploadSnapshot?.latest_result ?? null,
+    snapshot: latestUploadSnapshot,
+  });
+  const hasPersistedResult = uploadStateView.hasFullUploadResult(result) || uploadStateView.hasActiveTelemetrySnapshot(latestUploadSnapshot);
+  if (!hasPersistedResult) return null;
+  return {
+    jobId: uploadStateView.resolveCurrentUploadJobId({
+      current_upload: latestUploadSnapshot?.current_upload ?? null,
+      latest_result: result,
+      snapshot: latestUploadSnapshot,
+    }),
+    filename: result?.filename ?? latestUploadSnapshot?.last_filename ?? null,
+    processedAt: result?.completed_at ?? latestUploadSnapshot?.last_processed_at ?? latestUploadSnapshot?.last_upload_at ?? null,
+    result,
+    snapshot: latestUploadSnapshot,
   };
 }
 

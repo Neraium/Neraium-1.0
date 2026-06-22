@@ -94,8 +94,8 @@ export default function AppWorkspaceRouter({
           hasRealSiiOutput={hasRealSiiOutput}
           roomContext={roomContext}
           onUploadComplete={handleGateUploadComplete}
+          sessionStore={liveOps.session}
           onResetDemo={handleResetDemo}
-          onResumePreviousSession={handleResumePreviousSession}
           formatClockTime={formatClockTime}
         />
       </WorkspaceWithBackControl>
@@ -214,6 +214,7 @@ export default function AppWorkspaceRouter({
           onWorkspaceNavigate={setActiveWorkspace}
           onSignOut={handleSignOut}
           onUploadComplete={handleGateUploadComplete}
+          onResumePreviousSession={handleResumePreviousSession}
           domainMode={domainMode}
           domainDetection={domainDetection}
           gateProcessing={gateProcessing}

@@ -21,6 +21,7 @@ export default function SystemTopologyWorkspace({
   accessCode,
   onWorkspaceNavigate, 
   onUploadComplete,
+  onResumePreviousSession,
   domainMode = "aquatic",
   domainDetection = null,
   gateProcessing = null,
@@ -132,7 +133,10 @@ export default function SystemTopologyWorkspace({
       apiFetch={apiFetch}
       accessCode={accessCode}
       onWorkspaceNavigate={onWorkspaceNavigate}
-      onUploadComplete={onUploadComplete} 
+      onUploadComplete={onUploadComplete}
+      onResumePreviousUpload={onResumePreviousSession}
+      persistedLatestUpload={liveOps.persistedLatestUpload ?? null}
+      previousUploadHistory={liveOps.previousUploadHistory ?? []}
       domainMode={domainMode}
       domainDetection={domainDetection}
       latestUploadSnapshot={liveOps.latestUploadSnapshot ?? null}

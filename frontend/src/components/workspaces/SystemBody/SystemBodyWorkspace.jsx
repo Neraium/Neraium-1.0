@@ -29,6 +29,9 @@ export default function SystemBodyWorkspace({
   canonicalFinding = null,
   telemetrySessionMode = "empty",
   domainDetection = null,
+  persistedLatestUpload = null,
+  previousUploadHistory = [],
+  onResumePreviousUpload = null,
 }) {
   void dataFreshness;
   void siiVerification;
@@ -134,6 +137,9 @@ export default function SystemBodyWorkspace({
     { id: "technical", label: "Technical" },
   ];
   const domainSummary = buildDomainDetectionSummary(domainDetection);
+  const hasPostUploadDashboard = assessmentState.mode !== "awaiting_telemetry";
+  const previousUploadSummary = buildPreviousUploadSummary(persistedLatestUpload, previousUploadHistory);
+  const canResumePreviousUpload = Boolean(previousUploadSummary && typeof onResumePreviousUpload === "function");
 
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
@@ -261,6 +267,8 @@ export default function SystemBodyWorkspace({
           Views
         </button>
 
+        {hasPostUploadDashboard ? (
+          <>
         <nav className="result-section-tabs" aria-label="Post-upload result sections">
           {resultSections.map((section) => (
             <button
@@ -400,6 +408,29 @@ export default function SystemBodyWorkspace({
             </section>
           ) : null}
         </div>
+          </>
+        ) : (
+          <section className="post-upload-empty" aria-label="No upload state">
+            <div className="post-upload-overview__header">
+              <span className="post-upload-status post-upload-status--pending">No Current Upload</span>
+              <h1>No telemetry uploaded yet</h1>
+              <p>Upload telemetry in this browser session to generate current results.</p>
+            </div>
+            <div className="post-upload-actions" aria-label="Upload actions">
+              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button>
+              {canResumePreviousUpload ? (
+                <button type="button" className="secondary-command-button" onClick={onResumePreviousUpload}>Resume Previous Upload</button>
+              ) : null}
+            </div>
+            {previousUploadSummary ? (
+              <section className="previous-upload-summary" aria-label="Previous upload">
+                <span>Previous upload</span>
+                <strong>{previousUploadSummary.title}</strong>
+                <p>{previousUploadSummary.detail}</p>
+              </section>
+            ) : null}
+          </section>
+        )}
       </section>
       {menuOverlay}
     </PageContainer>
@@ -602,6 +633,20 @@ function buildDomainDetectionSummary(domainDetection) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
   return label ? "Detected data type: " + label : "";
+}
+
+function buildPreviousUploadSummary(persistedLatestUpload, previousUploadHistory = []) {
+  const latest = persistedLatestUpload ?? null;
+  const historyEntry = Array.isArray(previousUploadHistory) ? previousUploadHistory[0] : null;
+  const title = latest?.filename ?? historyEntry?.filename ?? latest?.jobId ?? historyEntry?.job_id ?? "Previous upload available";
+  const processedAt = latest?.processedAt ?? historyEntry?.last_processed_at ?? historyEntry?.processed_at ?? null;
+  if (!latest && !historyEntry) return null;
+  return {
+    title: formatScalar(title),
+    detail: [
+      processedAt ? "Processed " + formatScalar(processedAt) : null,
+    ].filter(Boolean).join(" - ") || "Available from recent history.",
+  };
 }
 
 function flattenDataQuality(dataQuality) {

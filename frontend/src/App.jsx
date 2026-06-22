@@ -60,6 +60,8 @@ function App() {
     canonicalFinding,
     telemetrySession,
     gateProcessing,
+    persistedLatestUpload,
+    previousUploadHistory,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
@@ -164,13 +166,15 @@ function App() {
       latestUploadSnapshot: effectiveLatestUploadSnapshot,
       currentSession,
       telemetrySession,
+      persistedLatestUpload,
+      previousUploadHistory,
       session: resolvedSessionStore,
       systems,
       systemsState,
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
+  }, [apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
 
   const handleSignOut = useCallback(async () => {
     await logoutUser();
@@ -217,8 +221,8 @@ function App() {
       handleBackToGate={handleBackToGate}
       handleRetryWorkspace={handleRetryWorkspace}
       handleGateUploadComplete={handleGateUploadComplete}
-      handleResetDemo={handleResetDemo}
       handleResumePreviousSession={handleResumePreviousSession}
+      handleResetDemo={handleResetDemo}
       handleReplayFrameChange={handleReplayFrameChange}
       handleReplayModeChange={handleReplayModeChange}
       handleSignOut={handleSignOut}

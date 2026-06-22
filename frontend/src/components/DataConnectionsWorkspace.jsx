@@ -168,7 +168,7 @@ export default function DataConnectionsWorkspace({
     if (typeof window !== "undefined") window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
   }
 
-  function clearUploadClientState() {
+  async function clearUploadClientState() {
     stopUploadPolling("reset_upload_client_state");
     uploadJobIdRef.current = null;
     uploadStatusPathRef.current = null;
@@ -185,6 +185,9 @@ export default function DataConnectionsWorkspace({
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_COMPLETE__ = false;
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
+    }
+    if (typeof onResetDemo === "function") {
+      await onResetDemo();
     }
   }
 
@@ -496,7 +499,7 @@ export default function DataConnectionsWorkspace({
         batchResults={batchResults}
         onRetryFailedUploads={retryCurrentBatch}
         onReprocessCurrentBatch={retryCurrentBatch}
-        onResetWorkspace={clearUploadClientState}
+        onResetWorkspace={() => { void clearUploadClientState(); }}
       />
     </div>
   );
