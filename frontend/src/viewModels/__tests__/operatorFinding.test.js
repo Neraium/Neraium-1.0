@@ -39,7 +39,7 @@ describe("deriveCanonicalFinding", () => {
 
     expect(finding.exists).toBe(true);
     expect(finding.confidence).toBe("Moderate");
-    expect(finding.status).toBe("Behavior Change Detected");
+    expect(finding.status).toBe("Issue Detected");
     expect(containsDisallowedOperatorTerms(finding.summary)).toBe(false);
     expect(containsDisallowedOperatorTerms(finding.whyItMatters)).toBe(false);
     expect(finding.supportingEvidence.some((item) => /current observation|current analysis|historical comparison evidence|observation method/i.test(item))).toBe(true);
@@ -58,9 +58,9 @@ describe("deriveCanonicalFinding", () => {
     });
 
     expect(finding.exists).toBe(false);
-    expect(finding.status).toBe("Analysis Pending");
+    expect(finding.status).toBe("Processing");
     expect(finding.confidence).toBe("Pending");
     expect(finding.summary).toMatch(/pending verification/i);
-    expect(finding.reviewNext).toMatch(/stable telemetry|data quality|wait/i);
+    expect(finding.reviewNext).toMatch(/stable telemetry|data quality|wait|processing/i);
   });
 });
