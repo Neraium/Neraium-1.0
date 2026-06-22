@@ -134,7 +134,7 @@ export default function SystemBodyWorkspace({
   const visibleWarnings = showAllWarnings ? dataQualityReport.warnings : dataQualityReport.warnings.slice(0, 3);
   const resultSections = [
     { id: "overview", label: "Overview" },
-    { id: "findings", label: "Findings" },
+    { id: "findings", label: "Issues" },
     { id: "quality", label: "Data Quality" },
     { id: "evidence", label: "Evidence" },
     { id: "technical", label: "Technical" },
@@ -220,29 +220,23 @@ export default function SystemBodyWorkspace({
           <ul>
             <li>
               <button data-testid="upload-workspace-entry" type="button" className="system-gate__settings-action" aria-label="Data connections" onClick={() => navigateWorkspace("data-connections")}>
-                Upload CSV / Connect Data
+                Upload Telemetry
               </button>
             </li>
-            <li>
-              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("data-connections")}>
-                Connect API
-              </button>
-            </li>
-            <li>
-              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("historical-replay")}>
-                Structural Replay
-              </button>
-            </li>
-            <li>
-              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("observation-center")}>
-                Observation Review
-              </button>
-            </li>
-            <li>
-              <button type="button" className="system-gate__settings-action" onClick={() => navigateWorkspace("help-changelog")}>
-                Help / Changelog
-              </button>
-            </li>
+            {resultSections.map((section) => (
+              <li key={section.id}>
+                <button
+                  type="button"
+                  className="system-gate__settings-action"
+                  onClick={() => {
+                    setActiveResultSection(section.id);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {section.label}
+                </button>
+              </li>
+            ))}
           </ul>
         </aside>
       </div>,
@@ -290,7 +284,8 @@ export default function SystemBodyWorkspace({
           {activeResultSection === "overview" ? (
             <section className="post-upload-overview" aria-label="Post-upload overview">
               <div className="post-upload-overview__header">
-                <span className={`post-upload-status post-upload-status--${overviewStatus.tone}`}>{overviewStatus.label}</span>
+                <p className="section-token">System Status</p>
+                <span className={"post-upload-status post-upload-status--" + overviewStatus.tone}>{overviewStatus.label}</span>
                 <h1>{overviewSummary}</h1>
                 <p>{assessmentState.dataPosture}</p>
               </div>
@@ -304,8 +299,8 @@ export default function SystemBodyWorkspace({
                 ))}
               </div>
 
-              <section className="post-upload-review-next" aria-label="Review next">
-                <span>Next action</span>
+              <section className="post-upload-review-next" aria-label="Recommended next checks">
+                <span>Recommended next check</span>
                 <strong>{overviewNextAction.label}</strong>
               </section>
 
@@ -320,20 +315,23 @@ export default function SystemBodyWorkspace({
           {activeResultSection === "findings" ? (
             <section className="post-upload-section" aria-label="Findings">
               <div className="post-upload-section__header">
-                <p className="section-token">Findings</p>
-                <h2>{finding.exists ? "Active finding" : "No urgent findings."}</h2>
+                <p className="section-token">Issues</p>
+                <h2>{finding.exists ? finding.title : "No critical operational issues found."}</h2>
               </div>
               {finding.exists ? (
                 <article className="finding-card">
                   <div className="finding-card__topline">
                     <h3>{finding.title}</h3>
-                    <span>{finding.status}</span>
+                    <span>Severity {finding.status}</span>
                   </div>
                   <dl className="result-detail-grid">
                     {compactRows([
+                      { label: "Affected equipment", value: evidenceReport.affectedVariables },
+                      { label: "Evidence", value: finding.summary },
+                      { label: "Likely cause", value: inferLikelyCause(finding, evidenceReport) },
                       { label: "Why it matters", value: finding.whyItMatters },
-                      { label: "Review next", value: finding.reviewNext },
-                      { label: "Affected variables", value: evidenceReport.affectedVariables },
+                      { label: "Check next", value: finding.reviewNext },
+                      { label: "Confidence", value: finding.confidence },
                     ]).map((item) => (
                       <div key={item.label}>
                         <dt>{item.label}</dt>
@@ -342,13 +340,17 @@ export default function SystemBodyWorkspace({
                     ))}
                   </dl>
                   {canReviewFindings ? (
-                    <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Finding Review</button>
+                    <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Issues</button>
                   ) : null}
                 </article>
               ) : (
                 <article className="finding-empty-state">
-                  <h3>No urgent findings.</h3>
-                  <p>Telemetry is usable. Review data quality warnings before relying on this analysis.</p>
+                  <h3>No critical operational issues found.</h3>
+                  <p>Telemetry analyzed successfully. Check data quality before relying on long-term trend decisions.</p>
+                  <section className="post-upload-review-next" aria-label="Recommended next checks">
+                    <span>Recommended next check</span>
+                    <strong>{dataQualityReport.warnings.length > 0 ? "Review missing sensor values and timestamp quality." : "Continue monitoring normal equipment behavior."}</strong>
+                  </section>
                 </article>
               )}
             </section>
@@ -368,14 +370,18 @@ export default function SystemBodyWorkspace({
                   </div>
                 ))}
               </dl>
-              <ResultList title="Warnings" items={visibleWarnings} empty="No data quality warnings reported." />
+              <ResultList title="Top warnings" items={visibleWarnings} empty="No data quality warnings reported." />
               {dataQualityReport.warnings.length > 3 ? (
                 <button type="button" className="secondary-command-button post-upload-inline-action" onClick={() => setShowAllWarnings((value) => !value)}>
                   {showAllWarnings ? "Show top 3" : `Show all ${dataQualityReport.warnings.length}`}
                 </button>
               ) : null}
-              <ResultList title="Missing values" items={dataQualityReport.missingValues} />
-              <ResultList title="Interpolation and imputation" items={dataQualityReport.imputationNotes} />
+              <ResultList title="Missing data summary" items={dataQualityReport.missingValues} />
+              <ResultList title="Filled gaps" items={dataQualityReport.imputationNotes} />
+              <section className="post-upload-review-next" aria-label="Recommended next checks">
+                <span>Recommended next check</span>
+                <strong>{dataQualityReport.warnings.length > 0 ? "Fix the highest-volume missing telemetry before trend review." : "Use the Issues page to confirm there are no active equipment concerns."}</strong>
+              </section>
             </section>
           ) : null}
 
@@ -383,7 +389,7 @@ export default function SystemBodyWorkspace({
             <section className="post-upload-section" aria-label="Evidence">
               <div className="post-upload-section__header">
                 <p className="section-token">Evidence</p>
-                <h2>Evidence packet</h2>
+                <h2>Useful evidence</h2>
               </div>
               <dl className="result-detail-grid">
                 {evidenceReport.rows.map((item) => (
@@ -395,9 +401,13 @@ export default function SystemBodyWorkspace({
               </dl>
               {evidenceReport.hasReplay ? (
                 <div className="post-upload-actions" aria-label="Evidence replay action">
-                  <button type="button" className="command-button" onClick={() => navigateWorkspace("historical-replay")}>Open Replay</button>
+                  <button type="button" className="command-button" onClick={() => navigateWorkspace("historical-replay")}>Open Evidence Replay</button>
                 </div>
               ) : null}
+              <section className="post-upload-review-next" aria-label="Recommended next checks">
+                <span>Recommended next check</span>
+                <strong>{finding.exists ? finding.reviewNext : "Use evidence only when an issue needs confirmation."}</strong>
+              </section>
             </section>
           ) : null}
 
@@ -405,7 +415,7 @@ export default function SystemBodyWorkspace({
             <section className="post-upload-section" aria-label="Technical diagnostics">
               <div className="post-upload-section__header">
                 <p className="section-token">Technical</p>
-                <h2>Operator diagnostics</h2>
+                <h2>Technical details</h2>
               </div>
               <dl className="result-detail-grid">
                 {technicalReport.rows.map((item) => (
@@ -422,6 +432,10 @@ export default function SystemBodyWorkspace({
                 <summary>Raw metadata</summary>
                 <pre>{technicalReport.rawMetadata}</pre>
               </details>
+              <section className="post-upload-review-next" aria-label="Recommended next checks">
+                <span>Recommended next check</span>
+                <strong>Return to Overview unless a support engineer requested these details.</strong>
+              </section>
             </section>
           ) : null}
         </div>
@@ -431,7 +445,7 @@ export default function SystemBodyWorkspace({
             <div className="post-upload-overview__header">
               <span className="post-upload-status post-upload-status--pending">No Current Upload</span>
               <h1>No telemetry uploaded yet</h1>
-              <p>Upload telemetry in this browser session to generate current results.</p>
+              <p>Upload a telemetry export to see system status, issues, data quality, evidence, and technical details.</p>
             </div>
             <div className="post-upload-actions" aria-label="Upload actions">
               <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button>
@@ -446,6 +460,10 @@ export default function SystemBodyWorkspace({
                 <p>{previousUploadSummary.detail}</p>
               </section>
             ) : null}
+            <section className="post-upload-review-next" aria-label="Recommended next checks">
+              <span>Recommended next check</span>
+              <strong>Upload the latest BAS or historian export from the equipment you want to review.</strong>
+            </section>
           </section>
         )}
       </section>
@@ -470,6 +488,16 @@ function ResultList({ title, items, empty = "" }) {
       )}
     </section>
   );
+}
+
+function inferLikelyCause(finding, evidenceReport) {
+  const text = String([finding?.summary, finding?.whyItMatters, evidenceReport?.affectedVariables].filter(Boolean).join(" ")).toLowerCase();
+  if (text.includes("sensor") || text.includes("missing") || text.includes("timestamp")) return "Possible sensor calibration, offline point, or telemetry gap.";
+  if (text.includes("pump")) return "Pump efficiency or control response changed.";
+  if (text.includes("valve")) return "Valve command, valve position, or actuator response changed.";
+  if (text.includes("flow")) return "Flow instability or operating load changed.";
+  if (text.includes("cool") || text.includes("chw") || text.includes("temperature")) return "Possible chilled-water sensor drift or cooling performance change.";
+  return "Equipment behavior changed from its usual operating pattern.";
 }
 
 function compactRows(rows) {
@@ -501,31 +529,31 @@ function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceR
   if (assessmentState.mode === "analysis_pending") {
     return { label: "Wait for ingestion and analysis to finish.", section: null, button: "" };
   }
-  if (dataQualityReport.warnings.length > 0) {
-    return { label: "Review data quality warnings.", section: "quality", button: "View Data Quality" };
-  }
   if (finding.exists) {
-    return { label: finding.reviewNext, section: "findings", button: "View Findings" };
+    return { label: finding.reviewNext, section: "findings", button: "View Issues" };
+  }
+  if (dataQualityReport.warnings.length > 0) {
+    return { label: "Review missing sensor values before relying on trend analysis.", section: "quality", button: "View Data Quality" };
   }
   if (evidenceReport.hasReplay) {
-    return { label: "Open the replay when you need supporting context.", section: "evidence", button: "View Evidence" };
+    return { label: "Open evidence only if an issue needs confirmation.", section: "evidence", button: "View Evidence" };
   }
-  return { label: "Continue monitoring.", section: null, button: "" };
+  return { label: "Continue monitoring normal equipment behavior.", section: null, button: "" };
 }
 
 function formatOverviewStatus(mode) {
-  if (mode === "analysis_error") return { label: "Error", tone: "error" };
-  if (mode === "analysis_pending") return { label: "Pending", tone: "pending" };
+  if (mode === "analysis_error") return { label: "Needs Attention", tone: "error" };
+  if (mode === "analysis_pending") return { label: "Processing", tone: "pending" };
   if (mode === "analysis_degraded_ready") return { label: "Ready With Warnings", tone: "warning" };
-  if (mode === "analysis_ready") return { label: "Analysis Ready", tone: "ready" };
+  if (mode === "analysis_ready") return { label: "Ready", tone: "ready" };
   return { label: "Pending", tone: "pending" };
 }
 
 function buildOverviewSummary(mode) {
-  if (mode === "analysis_error") return "Analysis needs attention.";
-  if (mode === "analysis_pending") return "Processing is still running.";
-  if (mode === "analysis_degraded_ready") return "Warnings found, but analysis can proceed.";
-  if (mode === "analysis_ready") return "Usable telemetry is available.";
+  if (mode === "analysis_error") return "Telemetry needs attention.";
+  if (mode === "analysis_pending") return "Telemetry is still processing.";
+  if (mode === "analysis_degraded_ready") return "Telemetry analyzed with warnings.";
+  if (mode === "analysis_ready") return "Telemetry analyzed successfully.";
   return "Upload telemetry to begin.";
 }
 
@@ -576,8 +604,8 @@ function buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findin
     summary: warnings.length > 0 ? "Review data quality before making decisions." : "CSV load is ready for review.",
     rows: compactRows([
       { label: "Rows loaded", value: formatScalar(rowsLoaded) },
-      { label: "Columns detected", value: formatScalar(columnsDetected) },
-      { label: "Timestamp mode", value: formatScalar(timestampMode) },
+      { label: "Signals detected", value: formatScalar(columnsDetected) },
+      { label: "Time range", value: formatScalar(timestampMode) },
       { label: "Dropped rows", value: formatScalar(droppedRows) },
     ]),
     warnings,
@@ -736,7 +764,7 @@ function buildPreviousUploadSummary(persistedLatestUpload, previousUploadHistory
 function flattenDataQuality(dataQuality) {
   const groups = dataQuality && typeof dataQuality === "object" ? dataQuality : {};
   return [
-    ...(groups.missingBaselineValues || []).map((item) => `Missing baseline values: ${item}`),
+    ...(groups.missingBaselineValues || []).map((item) => `Missing reference values: ${item}`),
     ...(groups.missingRecentValues || []).map((item) => `Missing recent values: ${item}`),
     ...(groups.unavailableTelemetry || []).map((item) => `Unavailable telemetry: ${item}`),
   ];
@@ -755,9 +783,9 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
     emptyState: {
       title: "No current observations.",
       subtitle: "Telemetry is being monitored.",
-      detail: "No structural changes detected.",
+      detail: "No equipment issues detected.",
     },
-    evidenceButtonLabel: "Review Evidence",
+    evidenceButtonLabel: "View Evidence",
     supportingEvidence: [],
     dataQuality: {
       missingBaselineValues: [],
@@ -1009,7 +1037,7 @@ function mapBackendSystemInterpretation(contract, expectedJobId = null, reliable
     hasTelemetry: true,
     nextStep: reliableEnoughToShow && Array.isArray(value.finding_evidence_chains) && value.finding_evidence_chains.length > 0
       ? "Review evidence."
-      : "Check evidence packet.",
+      : "Check technical details.",
   };
 }
 

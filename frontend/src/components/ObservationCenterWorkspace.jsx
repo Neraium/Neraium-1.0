@@ -162,7 +162,7 @@ function potentialImpactForFinding(run) {
   if (type === "recovery_elongation") return "Recovery behavior differs from historical evidence.";
   if (type === "coupling_change" || type === "covariance_shift") return "The observed relationships between system variables have changed.";
   if (type === "trajectory_drift") return "This indicates the operating pattern differs from historical evidence.";
-  return strength === "Low" ? "No structural changes detected." : "Historical comparison evidence indicates a change from the normal operating pattern.";
+  return strength === "Low" ? "No equipment issues detected." : "Historical comparison evidence indicates a change from the normal operating pattern.";
 }
 
 function readPendingObservationRunId() {

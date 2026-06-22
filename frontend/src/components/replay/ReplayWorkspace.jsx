@@ -55,9 +55,9 @@ export default function ReplayWorkspace({
     confidence: "Low",
     summary: "No current observations.",
     whyItMatters: "Telemetry is being monitored.",
-    reviewNext: "No structural changes detected.",
+    reviewNext: "No equipment issues detected.",
     supportingEvidence: [],
-    emptyState: { detail: "No structural changes detected." },
+    emptyState: { detail: "No equipment issues detected." },
   };
   const reviewReady = currentSession?.hasReliableOperatorEvidence === true;
   const togglePlayback = () => {
@@ -527,7 +527,7 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
   const contributors = Array.isArray(current?.primary_contributors) ? current.primary_contributors.filter(Boolean).slice(0, 3) : [];
   const confidence = formatConfidenceLabel(current?.cognition_state?.confidence_tier);
   const changeStrength = formatChangeStrength(current);
-  const relationshipSupport = dominantPaths.length > 0 ? String(dominantPaths.length) + " relationship pathway" + (dominantPaths.length === 1 ? "" : "s") + " changed together" : "Relationship support not recorded in this frame";
+  const relationshipSupport = dominantPaths.length > 0 ? String(dominantPaths.length) + " operating signal" + (dominantPaths.length === 1 ? "" : "s") + " changed together" : "Supporting signal changes not recorded in this time window";
   const contributorText = contributors.length ? contributors.join(" | ") : "No primary variables listed";
 
   return {

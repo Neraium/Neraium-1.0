@@ -4,13 +4,13 @@ import { hasFullUploadResult } from "./uploadState";
 export const OPERATOR_EMPTY_STATE = {
   title: "No current observations.",
   subtitle: "Telemetry is being monitored.",
-  detail: "No structural changes detected.",
+  detail: "No equipment issues detected.",
 };
 
 export const OPERATOR_PENDING_STATE = {
-  title: "Analysis pending verification.",
+  title: "Telemetry still processing.",
   subtitle: "Telemetry is present, but it is not ready for operator review yet.",
-  detail: "Wait for evidence-backed interpretation before reviewing findings.",
+  detail: "Wait for processing to finish before reviewing issues.",
 };
 
 const DISALLOWED_REPLACEMENTS = [
@@ -75,7 +75,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       id: jobId ? `current-${jobId}` : "current-pending",
       runId: jobId,
       exists: false,
-      status: "Analysis Pending",
+      status: "Processing",
       confidence: "Pending",
       summary: pendingState.title,
       whyItMatters: pendingState.subtitle,
@@ -84,7 +84,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       supportingEvidence: [],
       technicalDetails: [],
       dataQuality,
-      evidenceButtonLabel: "Review Evidence",
+      evidenceButtonLabel: "View Evidence",
       affectedVariables: [],
       historicalComparison: pendingState.detail,
       replayReferences,
@@ -101,14 +101,14 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       confidence,
       summary: OPERATOR_EMPTY_STATE.title,
       whyItMatters: OPERATOR_EMPTY_STATE.subtitle,
-      reviewNext: "Review supporting evidence.",
+      reviewNext: "Check data quality, then continue monitoring.",
       emptyState: OPERATOR_EMPTY_STATE,
       supportingEvidence: [],
       technicalDetails: [],
       dataQuality,
-      evidenceButtonLabel: "Review Evidence",
+      evidenceButtonLabel: "View Evidence",
       affectedVariables: [],
-      historicalComparison: "No structural changes detected.",
+      historicalComparison: "No equipment issues detected.",
       replayReferences,
       sourceName: result?.filename ?? null,
     };
@@ -132,7 +132,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
     id: jobId ? `current-${jobId}` : "current-observation",
     runId: jobId,
     exists: true,
-    status: statusLevel === "critical" ? "Critical Change" : "Behavior Change Detected",
+    status: statusLevel === "critical" ? "High" : "Medium",
     confidence,
     summary,
     whyItMatters,
@@ -141,7 +141,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
     supportingEvidence,
     technicalDetails,
     dataQuality,
-    evidenceButtonLabel: "Review Evidence",
+    evidenceButtonLabel: "View Evidence",
     affectedVariables: variables,
     historicalComparison: sanitizeOperatorText(
       result?.historical_comparison
@@ -165,7 +165,7 @@ export function buildCanonicalFindingRun({ canonicalFinding, currentSession }) {
 
   return {
     run_id: runId,
-    source_name: canonicalFinding.sourceName ?? result?.filename ?? "Current telemetry session",
+    source_name: canonicalFinding.sourceName ?? result?.filename ?? "Current telemetry",
     source_type: "current_session",
     observation_type: result?.observation_type ?? "trajectory_drift",
     observation_status: "open",
@@ -392,21 +392,21 @@ function buildDataQualityGroups(result) {
 export function buildPendingState(reviewReadiness) {
   if (reviewReadiness === "processing") {
     return {
-      title: "Analysis pending verification.",
+      title: "Telemetry still processing.",
       subtitle: "Telemetry is still being processed into an evidence-backed interpretation.",
       detail: "Wait for processing to complete before reviewing findings.",
     };
   }
   if (reviewReadiness === "quality_gate") {
     return {
-      title: "Analysis pending verification.",
+      title: "Telemetry still processing.",
       subtitle: "The current telemetry does not yet meet the reliability threshold for operator review.",
       detail: "Upload more stable telemetry or correct data quality issues before reviewing findings.",
     };
   }
   if (reviewReadiness === "unaligned") {
     return {
-      title: "Analysis pending verification.",
+      title: "Telemetry still processing.",
       subtitle: "The latest interpretation is not aligned to the active upload session.",
       detail: "Refresh telemetry and wait for the evidence packet to realign before reviewing findings.",
     };

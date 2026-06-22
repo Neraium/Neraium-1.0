@@ -49,13 +49,13 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
       `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
       `${result.row_count ?? result.rows_processed ?? 0} rows parsed from the state matrix.`,
-      "Reference behavior learned from the uploaded telemetry.",
+      "Usual equipment behavior learned from the uploaded telemetry.",
       "System behavior review complete.",
-      "Replay/evidence generation complete or available in the evidence workspace.",
-      "Observation layer prepared from the latest uploaded state.",
+      "Evidence is available when confirmation is needed.",
+      "Issue review prepared from the latest telemetry.",
       operatorReviewReady
-        ? "Evidence packet verified and ready for operator review."
-        : "Processing completed, but evidence verification is still pending before operator review.",
+        ? "Evidence ready for operator review."
+        : "Processing completed, but issue review is still preparing.",
     ];
 
     return {

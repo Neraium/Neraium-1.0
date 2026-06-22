@@ -48,7 +48,7 @@ export default function SystemTopologyWorkspace({
     : String(gateStateOverride || "").trim()
       ? String(gateStateOverride).trim()
       : pendingVerification
-        ? "Analysis pending verification"
+        ? "Telemetry still processing"
         : hasUploadResult
           ? (uploadSignal.label || "Monitoring")
           : awaitingSii
@@ -176,7 +176,7 @@ export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = 
   const urgency = String(latestUploadResult?.drift_status ?? latestUploadResult?.sii_intelligence?.urgency ?? "").toLowerCase();
 
   if (!reviewReady) {
-    return { systemState: "unknown", label: "Analysis pending verification", statusLight: "gray" };
+    return { systemState: "unknown", label: "Telemetry still processing", statusLight: "gray" };
   }
   if (!operatingState && !urgency) {
     return { systemState: null, label: "", statusLight: null };
@@ -245,7 +245,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       ?? "Primary relationship scope";
   const evidenceSummary = governance?.why_summary
     ?? finding?.detail
-    ?? "Doctrine-admitted structural relationship evidence satisfied persistence and corroboration requirements.";
+    ?? "Equipment behavior changed and stayed changed long enough to review.";
   const persistenceCount = valueOrEmpty(governance?.persistence_count);
   const trajectoryDirection = normalizeTrajectory(governance?.trajectory_direction);
   const recoveryWindowStatus = governance?.recovery_window_status ?? "RECOVERY_WINDOW_UNCLEAR";
@@ -260,7 +260,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     evidenceBackedOperatorFocus:
       governance?.operator_focus
       ?? intervention?.recommendation
-      ?? "Review admitted structural relationship path and recovery window status.",
+      ?? "Check the affected equipment loop and confirm recovery after intervention.",
     persistenceWindowConfirmation:
       governance?.elapsed_operational_duration
       ?? intervention?.window
@@ -276,7 +276,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       doctrineRulesSatisfied: formatList(governance?.doctrine_rules_satisfied),
       doctrineVersion: governance?.doctrine_version ?? "Unknown doctrine",
       affectedSubsystem,
-      affectedRelationshipPath: relationshipEvidence || "Primary subsystem relationship path",
+      affectedRelationshipPath: relationshipEvidence || "Primary equipment loop",
       operationalMapping: governance?.operational_mapping ?? "Operational loop under admitted finding",
       persistenceCount: persistenceCount || "Confirmed",
       firstAdmittedWindow: governance?.first_admitted_window ?? primaryWindow?.window ?? "First Gate-admitted window",
@@ -292,11 +292,11 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       structuralDriftTrend: governance?.structural_drift_trend ?? trajectoryDirection,
       recoveryWindowStatus,
       interventionSensitivity: governance?.intervention_sensitivity ?? recoveryLanguage(recoveryWindowStatus),
-      structuralRelationshipEvidence: relationshipEvidence || "Primary subsystem relationship path",
+      equipmentEvidence: relationshipEvidence || "Primary equipment loop",
       operatorFocus:
         governance?.operator_focus
         ?? intervention?.recommendation
-        ?? "Review admitted structural relationship path and recovery window status.",
+        ?? "Check the affected equipment loop and confirm recovery after intervention.",
       telemetryWindowReferences:
         governance?.first_admitted_window
         ?? intervention?.window
@@ -376,7 +376,7 @@ function buildStateDescription(layer) {
   if (layer === 4) return "Persistent Drift is corroborated across multiple evidence windows.";
   if (layer === 5) return "Structural Instability is exceeding baseline containment assumptions.";
   if (layer === 6) return "Propagation and recovery degradation indicate a sustained structural shift.";
-  return "Fragmented structural relationships and high propagation pressure remain active.";
+  return "Multiple equipment signals are changing together.";
 }
 
 function deriveEscalationLayer({ awaitingSii, uiState, liveOps }) {

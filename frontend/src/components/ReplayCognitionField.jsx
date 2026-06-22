@@ -161,7 +161,7 @@ function humanizeRelationshipPath(value) {
 function formatReplayConfidence(value) {
   const text = String(value ?? "").trim();
   if (!text) return "Low";
-  if (/baseline[_\s-]*evidence/i.test(text)) return "Baseline evidence";
+  if (/baseline[_\s-]*evidence/i.test(text)) return "Historical comparison";
   return humanizeOperatorValue(normalizeOperatorConfidenceLabel(text));
 }
 

@@ -280,7 +280,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
       title: uploadError
         ? "Upload failed"
         : latestStatus === "active"
-          ? (operatorReviewReady ? "Active Session" : "Analysis pending verification")
+          ? (operatorReviewReady ? "Active Session" : "Telemetry still processing")
           : latestStatus === "baseline_active"
             ? "Live baseline active"
             : "No Active Session",
@@ -321,7 +321,7 @@ export function connectionStateLabel(latestStatus, uploadState, uploadError, lat
     return "Live baseline active";
   }
   if (normalizedLatestStatus === "active") {
-    return operatorReviewReady ? "Active Session" : "Analysis pending verification";
+    return operatorReviewReady ? "Active Session" : "Telemetry still processing";
   }
   return NO_DATA_LABEL;
 }

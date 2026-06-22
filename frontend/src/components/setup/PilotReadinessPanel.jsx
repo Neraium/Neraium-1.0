@@ -24,7 +24,7 @@ export default function PilotReadinessPanel({
   const checks = [
     { label: "Control plane connectivity", ok: String(apiStatus?.label ?? "").toLowerCase() === "online", detail: apiStatus?.label ?? "Unknown" },
     { label: "Latest upload validity", ok: latestStatus === "active" || latestStatus === "complete", detail: latestUploadSnapshot?.last_filename ?? "No recent upload" },
-    { label: "Operator review readiness", ok: operatorReviewReady, detail: operatorReviewReady ? "Evidence packet verified" : "Evidence verification still pending" },
+    { label: "Operator review readiness", ok: operatorReviewReady, detail: operatorReviewReady ? "Evidence ready" : "Evidence still processing" },
     { label: "Reference status", ok: baselineStatus === "active", detail: baselineStatus === "active" ? "Reference active" : "Reference pending" },
     { label: "Analysis freshness", ok: isFresh, detail: lastProcessedAt ? formatClockTime(lastProcessedAt) : "No analysis timestamp" },
     { label: "Read-only boundary", ok: true, detail: "Read-only. No control or actuation paths enabled." },
