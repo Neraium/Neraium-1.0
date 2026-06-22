@@ -183,6 +183,9 @@ def build_data_quality(
     schema_detection = quality_metrics.get("schema_detection") if isinstance(quality_metrics.get("schema_detection"), dict) else {}
     quality_messages = [str(item) for item in quality_metrics.get("data_quality_messages", []) if str(item).strip()]
     imputation_report = quality_metrics.get("imputation_report") if isinstance(quality_metrics.get("imputation_report"), dict) else {}
+    normalization_report = quality_metrics.get("normalization_report") if isinstance(quality_metrics.get("normalization_report"), dict) else {}
+    normalization_warnings = [str(item) for item in normalization_report.get("warnings", []) if str(item).strip()]
+    warnings = list(dict.fromkeys([*warnings, *normalization_warnings]))
 
     score = 100
     if not timestamp_detected:
@@ -202,6 +205,8 @@ def build_data_quality(
     if stuck_sensor_count:
         score -= min(18, stuck_sensor_count * 6)
     if not baseline_reliable:
+        score -= 16
+    if normalization_report.get("window_suppressed"):
         score -= 16
     reliability_score = max(0, min(100, score))
 
@@ -223,7 +228,7 @@ def build_data_quality(
         analysis_gate_state = requested_gate_state
     elif row_count == 0 or column_count == 0 or numeric_column_count == 0:
         analysis_gate_state = "ERROR"
-    elif not timestamp_detected or blocking_warnings:
+    elif normalization_report.get("window_suppressed") or not timestamp_detected or blocking_warnings:
         analysis_gate_state = "DEGRADED_READY"
     else:
         analysis_gate_state = "READY"
@@ -248,6 +253,12 @@ def build_data_quality(
         "analysis_gate_state": analysis_gate_state,
         "schema_detection": schema_detection,
         "imputation_report": imputation_report,
+        "normalization_report": normalization_report,
+        "signal_integrity": normalization_report.get("signal_integrity", []),
+        "source_integrity": normalization_report.get("source_integrity", {}),
+        "missing_values": normalization_report.get("missing_values", []),
+        "integrity_flags": normalization_report.get("integrity_flags", {}),
+        "fill_methods": normalization_report.get("fill_methods", {}),
         "reliability_rating": reliability_rating,
         "reliability_score": reliability_score,
         "quality_metrics": {
@@ -260,6 +271,7 @@ def build_data_quality(
             "stuck_sensor_count": stuck_sensor_count,
             "irregular_sampling": irregular_sampling,
             "baseline_reliable": baseline_reliable,
+            "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
         },
     }
 
