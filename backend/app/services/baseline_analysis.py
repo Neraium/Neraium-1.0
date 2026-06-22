@@ -52,16 +52,11 @@ def build_baseline_analysis(
 
         baseline_values, baseline_missing = numeric_window_values(baseline_rows, index)
         recent_values, recent_missing = numeric_window_values(recent_rows, index)
-        baseline_missing_rate = baseline_missing / max(1, len(baseline_rows))
-        recent_missing_rate = recent_missing / max(1, len(recent_rows))
         column_warnings: list[str] = []
         informational_warnings: list[str] = []
 
         if baseline_missing or recent_missing:
-            if baseline_missing_rate > SPARSE_MISSING_WARNING_THRESHOLD or recent_missing_rate > SPARSE_MISSING_WARNING_THRESHOLD:
-                column_warnings.append(f"{column} has significant missing values in baseline or recent windows.")
-            else:
-                informational_warnings.append(f"{column} has sparse missing values in baseline or recent windows.")
+            informational_warnings.append(f"{column} had missing samples that were skipped during baseline comparison.")
         if not baseline_values or not recent_values:
             column_warnings.append(f"{column} does not have enough numeric values for baseline comparison.")
             warnings.extend(column_warnings)
