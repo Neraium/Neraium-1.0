@@ -10,9 +10,9 @@ from app.services.telemetry_normalization import (
 
 def test_integrity_classifies_short_drop_as_filled():
     signal = pd.Series(
-        [1.0, None, 1.2, 1.3],
+        [1.0, None, 1.2, 1.3, 1.4],
         name="flow",
-        index=pd.date_range("2026-01-01", periods=4, freq="60s"),
+        index=pd.date_range("2026-01-01", periods=5, freq="60s"),
     )
 
     profile = IntegrityLayer(sample_interval_seconds=60).classify(
@@ -24,6 +24,7 @@ def test_integrity_classifies_short_drop_as_filled():
 
     assert profile.gap_type == "short_drop"
     assert profile.treatment == "filled"
+    assert profile.completeness == 0.8
     assert profile.suppress_confidence is False
 
 
