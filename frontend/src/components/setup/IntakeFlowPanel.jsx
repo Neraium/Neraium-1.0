@@ -70,10 +70,11 @@ function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {
   const state = String(uploadState || "").toLowerCase();
   const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
   const status = String(uploadJob?.status || "").toLowerCase();
-  const isComplete = ["complete", "completed", "success"].includes(state) || processingState === "complete" || status === "complete";
-  const isProcessing = state === "running_sii" || Boolean(uploadJob);
+  const isActiveProgressState = ["uploading", "running_sii", "processing", "complete"].includes(state);
   const isUploading = state === "uploading";
-  const uploadPercent = isProcessing || isComplete ? 100 : clampPercent(uploadTransfer?.percent ?? 0);
+  const isComplete = isActiveProgressState && (["complete", "completed", "success"].includes(state) || processingState === "complete" || status === "complete");
+  const isProcessing = isActiveProgressState && !isUploading && !isComplete;
+  const uploadPercent = isProcessing || isComplete ? 100 : isUploading ? clampPercent(uploadTransfer?.percent ?? 0) : 0;
   const backendPercent = firstFinitePercent(
     uploadJob?.propagation_progress,
     uploadJob?.propagationProgress,
@@ -198,9 +199,18 @@ export default function IntakeFlowPanel({
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
-  const shouldShowUploadStatus = !hasTerminalUploadIssue && (hasSelectedFiles || isUploadProcessing(uploadState) || Boolean(uploadJob));
+  const activeUploadProgressState = ["uploading", "running_sii", "processing", "complete"].includes(String(uploadState || "").toLowerCase());
+  const hasCurrentJob = Boolean(uploadJob?.job_id ?? uploadJob?.id ?? uploadJob?.status ?? uploadJob?.processing_state ?? uploadJob?.processingState);
+  const hasActiveTransfer = Boolean(uploadTransfer) && Number.isFinite(Number(uploadTransfer?.percent));
+  const hasCurrentProgressSource = hasCurrentJob || hasActiveTransfer;
+  const shouldShowUploadStatus = !hasTerminalUploadIssue && (hasSelectedFiles || (activeUploadProgressState && hasCurrentProgressSource));
   const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
-  const shouldShowStageBars = shouldShowUploadStatus && !hasValidationError && !hasUploadError;
+  const shouldShowStageBars = !hasTerminalUploadIssue && activeUploadProgressState && hasCurrentProgressSource;
+  const stageProgressRows = stageProgress.activeStage === "upload"
+    ? [["Upload", stageProgress.uploadPercent]]
+    : ["processing", "complete"].includes(stageProgress.activeStage)
+      ? [["Upload", stageProgress.uploadPercent], ["Processing", stageProgress.processingPercent]]
+      : [];
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
   const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Upload failed. Select a new file and try again.")).trim();
 
@@ -253,10 +263,7 @@ export default function IntakeFlowPanel({
             ) : null}
             {shouldShowStageBars ? (
               <div className="upload-stage-progress" style={stageWrapStyle} aria-label="Upload and processing progress">
-                {[
-                  ["Upload", stageProgress.uploadPercent],
-                  ["Processing", stageProgress.processingPercent],
-                ].map(([label, percent]) => (
+                {stageProgressRows.map(([label, percent]) => (
                   <div className="upload-stage-progress__row" style={stageRowStyle} key={label}>
                     <div className="upload-stage-progress__header" style={stageHeaderStyle}>
                       <span>{label}</span>

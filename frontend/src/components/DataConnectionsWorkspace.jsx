@@ -84,11 +84,17 @@ function queuedWorkerMessage(uploadJob) {
   return "";
 }
 
+function isActiveUploadProgressState(uploadState) {
+  return ["uploading", "running_sii", "processing", "complete"].includes(String(uploadState || "").toLowerCase());
+}
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
   latestUploadSnapshot,
   latestUploadResult,
+  hasActiveSession = false,
+  hasResumedSession = false,
   sessionStore,
   onUploadComplete,
   onResetDemo,
@@ -131,6 +137,7 @@ export default function DataConnectionsWorkspace({
     if (typeof window === "undefined") return;
     const sessionJobId = String(sessionStore?.jobId ?? "").trim();
     if (!sessionJobId) return;
+    if (!hasActiveSession && !hasResumedSession) return;
     const normalizedSessionJob = normalizeUploadJob({
       ...(sessionStore?.latestUploadSnapshot ?? {}),
       latest_result: sessionStore?.latestUploadResult ?? null,
@@ -152,7 +159,16 @@ export default function DataConnectionsWorkspace({
       pollUploadStatus(sessionJobId, normalizedSessionJob?.status_url).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStore?.jobId, sessionStore?.uiState, sessionStore?.latestUploadSnapshot, sessionStore?.latestUploadResult]);
+  }, [hasActiveSession, hasResumedSession, sessionStore?.jobId, sessionStore?.uiState, sessionStore?.latestUploadSnapshot, sessionStore?.latestUploadResult]);
+
+  useEffect(() => {
+    if (selectedFiles.length > 0 || hasResumedSession) return;
+    setUploadTransfer(null);
+    setUploadJob(null);
+    if (uploadStateRef.current === "validated") {
+      setUploadState("idle");
+    }
+  }, [hasResumedSession, selectedFiles.length]);
 
   useEffect(() => () => {
     pollSessionRef.current += 1;
@@ -445,20 +461,31 @@ export default function DataConnectionsWorkspace({
   }
 
   const readiness = uploadReadinessMessage(selectedFiles[0]);
-  const uploadTransferPercent = uploadTransfer?.percent;
-  const propagationPercent = uploadJob?.propagation_progress ?? uploadJob?.propagationProgress;
-  const backendPercent = uploadJob?.percent ?? uploadJob?.progress;
-  const statusFallbackPercent = fallbackPercentFromStatus(uploadState);
-  const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? 0;
-  const propagationLabel = uploadJob?.propagation_label ?? uploadJob?.propagationLabel ?? uploadJob?.propagation_stage ?? "";
-  const statusLabel = uploadJob?.progress_label ?? uploadJob?.message ?? uploadStateMessage(uploadState);
-  const queuedWorkerDetail = queuedWorkerMessage(uploadJob);
+  const hasActiveProgress = isActiveUploadProgressState(uploadState);
+  const progressUploadJob = hasActiveProgress ? uploadJob : null;
+  const progressUploadTransfer = hasActiveProgress ? uploadTransfer : null;
+  const uploadTransferPercent = progressUploadTransfer?.percent;
+  const propagationPercent = progressUploadJob?.propagation_progress ?? progressUploadJob?.propagationProgress;
+  const backendPercent = progressUploadJob?.percent ?? progressUploadJob?.progress;
+  const statusFallbackPercent = hasActiveProgress ? fallbackPercentFromStatus(uploadState) : null;
+  const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? null;
+  const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
+  const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? uploadStateMessage(uploadState);
+  const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
     : null;
 
   function handleFileSelection(event) {
     const files = Array.from(event?.target?.files ?? []);
+    stopUploadPolling("file_selection_changed");
+    uploadJobIdRef.current = null;
+    uploadStatusPathRef.current = null;
+    pollFailureCountRef.current = 0;
+    setUploadTransfer(null);
+    setUploadJob(null);
+    setUploadResult(null);
+    clearStoredUploadJobId();
     setSelectedFiles(files);
     setUploadError("");
     setUploadState(files.length ? "validated" : "idle");
@@ -489,12 +516,12 @@ export default function DataConnectionsWorkspace({
         isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
         openFilePicker={openFilePicker}
-        uploadJob={uploadJob}
+        uploadJob={progressUploadJob}
         latestMessage={uploadError || statusLabel || readiness}
         visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}
-        uploadTransfer={uploadTransfer}
+        uploadTransfer={progressUploadTransfer}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
         onRetryFailedUploads={retryCurrentBatch}
