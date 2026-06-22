@@ -39,7 +39,7 @@ function replaySummaryFromFrames(frames) {
       evidenceConfidence: DASH,
       leadTime: DASH,
       previewRange: DASH,
-      replay: "Unavailable",
+      story: "Unavailable",
     };
   }
   const last = frames[frames.length - 1] || {};
@@ -54,7 +54,7 @@ function replaySummaryFromFrames(frames) {
     evidenceConfidence: String(last?.evidence_confidence ?? last?.cognition_state?.confidence_tier ?? DASH),
     leadTime: String(last?.continuation_window?.window ?? DASH),
     previewRange: `${first?.timestamp_range?.start ?? first?.timestamp ?? DASH} -> ${last?.timestamp_range?.end ?? last?.timestamp ?? DASH}`,
-    replay: "Available",
+    story: "Available",
   };
 }
 
@@ -72,7 +72,7 @@ function replaySummaryFromResult(result) {
     previewRange: String(result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
       ? `${result.timestamp_profile.first_timestamp} -> ${result.timestamp_profile.last_timestamp}`
       : DASH),
-    replay: "Unavailable",
+    story: "Unavailable",
   };
 }
 
@@ -109,11 +109,11 @@ export default function DiagnosticsPanel({
         if (cancelled) return;
         const frames = Array.isArray(payload?.timeline) ? payload.timeline : [];
         setReplayFrames(frames);
-        setReplayError(frames.length ? "" : "No replay frames available for this session.");
+        setReplayError(frames.length ? "" : "No System Story timeline is available for this session.");
       } catch {
         if (cancelled) return;
         setReplayFrames([]);
-        setReplayError("No replay frames available for this session.");
+        setReplayError("No System Story timeline is available for this session.");
       }
     }
     loadReplayByJob();
@@ -129,7 +129,7 @@ export default function DiagnosticsPanel({
   const contributors = readPrimaryContributors(latestUploadResult);
 
   const metrics = showAnalysis ? [
-    { label: "Replay timeline", value: summary.frameCount > 0 ? summary.frameCount : "Active session" },
+    { label: "System Story timeline", value: summary.frameCount > 0 ? summary.frameCount : "Active session" },
     { label: "Current Window", value: summary.currentWindow },
     { label: "Change strength", value: summary.baselineSeparation },
     { label: "Change direction", value: summary.driftVelocity },
@@ -137,11 +137,11 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: summary.structuralRead },
     { label: "Evidence focus", value: contributors },
     { label: "Confidence", value: summary.evidenceConfidence },
-    { label: "Evidence replay", value: summary.replay },
+    { label: "System Story", value: summary.replay },
     { label: "Review Window", value: summary.leadTime },
     { label: "Preview Range", value: summary.previewRange },
   ] : [
-    { label: "Replay timeline", value: DASH },
+    { label: "System Story timeline", value: DASH },
     { label: "Current Window", value: DASH },
     { label: "Change strength", value: DASH },
     { label: "Change direction", value: DASH },
@@ -149,7 +149,7 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: DASH },
     { label: "Evidence focus", value: DASH },
     { label: "Confidence", value: DASH },
-    { label: "Evidence replay", value: "Unavailable" },
+    { label: "System Story", value: "Unavailable" },
     { label: "Review Window", value: DASH },
     { label: "Preview Range", value: DASH },
   ];
@@ -194,7 +194,7 @@ export default function DiagnosticsPanel({
   return (
     <Panel title="Evidence Details" className="span-12">
       {!showAnalysis ? (
-        <EmptyState title="No active evidence session" body="Upload telemetry or resume a previous session to generate evidence replay." compact />
+        <EmptyState title="No active evidence session" body="Upload telemetry or resume a previous session to generate System Story." compact />
       ) : (
         <>
           <MetricGrid metrics={metrics} compact />
@@ -273,7 +273,7 @@ export default function DiagnosticsPanel({
             { label: "Change", value: latestUploadResult?.sii_intelligence?.urgency },
             { label: "Timestamp", value: uploadStateView.deriveTimeCoverage(latestUploadResult).summary },
             { label: "Job ID", value: activeJobId ?? DASH },
-            { label: "Replay frames", value: replayFrames.length || DASH },
+            { label: "Story points", value: replayFrames.length || DASH },
           ]}
           compact
         />

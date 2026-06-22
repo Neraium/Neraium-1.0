@@ -84,7 +84,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       supportingEvidence: [],
       technicalDetails: [],
       dataQuality,
-      evidenceButtonLabel: "View Evidence",
+      evidenceButtonLabel: "View System Story",
       affectedVariables: [],
       historicalComparison: pendingState.detail,
       replayReferences,
@@ -106,7 +106,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       supportingEvidence: [],
       technicalDetails: [],
       dataQuality,
-      evidenceButtonLabel: "View Evidence",
+      evidenceButtonLabel: "View System Story",
       affectedVariables: [],
       historicalComparison: "No equipment issues detected.",
       replayReferences,
@@ -141,7 +141,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
     supportingEvidence,
     technicalDetails,
     dataQuality,
-    evidenceButtonLabel: "View Evidence",
+    evidenceButtonLabel: "View System Story",
     affectedVariables: variables,
     historicalComparison: sanitizeOperatorText(
       result?.historical_comparison
@@ -340,7 +340,7 @@ function buildReviewNext({ result, frame, variables }) {
   ).toLowerCase();
   if (raw.includes("histor")) return "Review historical comparison evidence.";
   if (variables.length >= 2) return "Review affected variables.";
-  if (raw.includes("replay")) return "Review replay evidence.";
+  if (raw.includes("replay")) return "Review System Story.";
   return "Review supporting evidence.";
 }
 
@@ -361,7 +361,7 @@ function buildTechnicalDetails({ result, frame, variables, driftMagnitude, durat
     { label: "Affected variables", value: variables.length ? variables.join(", ") : "-" },
     { label: "Historical comparison", value: sanitizeOperatorText(result?.relationship_summary ?? result?.historical_fact ?? "Available in supporting evidence") },
     { label: "Evidence count", value: String(evidenceCount || 0) },
-    { label: "Replay references", value: replayReferences.length ? replayReferences.join("; ") : "-" },
+    { label: "Story references", value: replayReferences.length ? replayReferences.join("; ") : "-" },
     { label: "Current operating pattern", value: sanitizeOperatorText(result?.regime_label ?? result?.sii_intelligence?.regime_label ?? "Historical pattern") },
     { label: "Current analysis", value: sanitizeOperatorText(result?.processing_state ?? result?.status ?? "Complete") },
     { label: "Observation method", value: "Structural change only. No recommendations." },
@@ -408,7 +408,7 @@ export function buildPendingState(reviewReadiness) {
     return {
       title: "Telemetry still processing.",
       subtitle: "The latest interpretation is not aligned to the active upload session.",
-      detail: "Refresh telemetry and wait for the evidence packet to realign before reviewing findings.",
+      detail: "Refresh telemetry and wait for the system story to verify before reviewing issues.",
     };
   }
   return OPERATOR_PENDING_STATE;

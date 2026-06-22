@@ -6,298 +6,166 @@ import ReplayWorkspace from "./ReplayWorkspace";
 
 const h = React.createElement;
 
-vi.mock("../PropagationMap", () => ({ default: () => h("div", { "data-testid": "propagation-map" }) }));
-vi.mock("../StructuralMemoryPanel", () => ({ default: () => h("div", { "data-testid": "structural-memory" }) }));
-vi.mock("../EvidenceLineagePanel", () => ({ default: () => h("div", { "data-testid": "evidence-lineage" }) }));
-vi.mock("../EvidenceInteractionPanel", () => ({ default: () => h("div", { "data-testid": "evidence-interaction" }) }));
-vi.mock("../ReplayCognitionField", () => ({ default: () => h("div", { "data-testid": "replay-cognition" }) }));
-
 function createResponse(payload, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => payload,
-  };
+  return { ok: status >= 200 && status < 300, status, json: async () => payload };
 }
 
 function buildFrames(count = 4) {
   return Array.from({ length: count }, (_, i) => ({
     frame_number: i,
-    timestamp_start: `2026-01-01T00:00:0${i}Z`,
-    timestamp_end: `2026-01-01T00:00:0${i}Z`,
-    status: "ACTIVE",
+    timestamp_start: `2026-01-01T00:0${i}:00Z`,
+    timestamp_end: `2026-01-01T00:0${i}:00Z`,
+    baseline_distance: i / Math.max(count, 1),
+    primary_contributors: ["flow_gpm", "pump_speed_pct"],
+    topology_state: { stability_state: i === 0 ? "stable" : "needs review", drift_index: i / Math.max(count, 1) },
   }));
 }
 
-function createReplayApiFetch(frameCount = 4) {
+function createStoryApiFetch(frameCount = 4) {
   return vi.fn(async (path) => {
-    if (String(path).startsWith("/api/data/upload-status/")) {
-      return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
-    }
-    if (String(path).startsWith("/api/data/replay/")) {
-      return createResponse({ timeline: buildFrames(frameCount), meta: { frame_count: frameCount } });
-    }
+    if (String(path).startsWith("/api/data/upload-status/")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+    if (String(path).startsWith("/api/data/replay/")) return createResponse({ timeline: buildFrames(frameCount), meta: { frame_count: frameCount } });
     if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
     return createResponse({}, 404);
   });
 }
 
-function renderReplayWorkspace(props) {
-  return render(h(ReplayWorkspace, props));
-}
-
 function baseProps({ apiFetch, currentSession } = {}) {
-  const fetchMock = apiFetch ?? createReplayApiFetch();
   const defaultSession = {
     latestUploadResult: { job_id: "job-1" },
     latestUploadSnapshot: null,
     hasReliableOperatorEvidence: true,
     reviewReadiness: "ready",
   };
-
   return {
-    apiFetch: fetchMock,
+    apiFetch: apiFetch ?? createStoryApiFetch(),
     accessCode: "",
-    normalizeErrorMessage: (v) => String(v ?? ""),
+    normalizeErrorMessage: (value) => String(value ?? ""),
     formatClockTime: (value) => String(value ?? ""),
-    Panel: ({ children }) => h("div", null, children),
-    MetricGrid: () => h("div"),
+    Panel: ({ title, children }) => h("section", { "aria-label": title }, children),
     currentSession: currentSession ? { ...defaultSession, ...currentSession } : defaultSession,
     hasActiveSession: true,
   };
 }
 
-function expectFrame(label) {
-  expect(screen.getByText(new RegExp(`Frame ${label}`))).toBeTruthy();
-}
-
-function clickNamedButton(name, index = 0) {
-  fireEvent.click(screen.getAllByRole("button", { name })[index]);
+function renderStory(props) {
+  return render(h(ReplayWorkspace, props));
 }
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
 });
 
-describe("ReplayWorkspace playback stability", () => {
-  it("play advances monotonically and stops at final frame", async () => {
-    renderReplayWorkspace(baseProps());
+describe("System Story workspace", () => {
+  it("renders the flagship story sections without internal graph diagnostics", async () => {
+    renderStory(baseProps());
 
-    await waitFor(() => expectFrame("1/4"));
-    fireEvent.change(screen.getAllByDisplayValue("1x")[0], { target: { value: "4" } });
-
-    clickNamedButton("Play");
-
-    await waitFor(() => expectFrame("4/4"), { timeout: 4000 });
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Play" })[0]).toBeTruthy());
-
-    expectFrame("4/4");
-  });
-
-  it("keeps technical replay diagnostics out of the default view", async () => {
-    renderReplayWorkspace(baseProps());
-
-    await waitFor(() => expectFrame("1/4"));
-    expect(screen.getByText("Current Status")).toBeTruthy();
-    expect(screen.getByText("Supporting Evidence")).toBeTruthy();
-    expect(screen.getByText("Review next")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("System Story")).toBeTruthy());
+    expect(screen.getByLabelText("Why We Believe It")).toBeTruthy();
+    expect(screen.getByLabelText("Likely Causes")).toBeTruthy();
+    expect(screen.getByLabelText("What To Inspect")).toBeTruthy();
+    expect(screen.getByLabelText("How It Developed")).toBeTruthy();
+    expect(screen.getByLabelText("Supporting Trends")).toBeTruthy();
+    expect(screen.getByLabelText("Engineer Notes")).toBeTruthy();
+    expect(screen.getByLabelText("Repair Outcome")).toBeTruthy();
+    expect(screen.queryByTestId("propagation-map")).toBeNull();
     expect(screen.queryByText("Raw change direction")).toBeNull();
-    expect(screen.queryByText("Structural Progression")).toBeNull();
   });
 
-  it("manual next and previous move exactly one frame", async () => {
-    renderReplayWorkspace(baseProps());
+  it("uses the story timeline slider without playback controls", async () => {
+    renderStory(baseProps());
 
-    await waitFor(() => expectFrame("1/4"));
+    await waitFor(() => expect(screen.getByDisplayValue("3")).toBeTruthy());
+    const slider = screen.getByRole("slider", { name: "Story timeline" });
+    fireEvent.change(slider, { target: { value: "1" } });
 
-    clickNamedButton("Next");
-    expectFrame("2/4");
-
-    clickNamedButton("Previous");
-    expectFrame("1/4");
+    expect(screen.getByDisplayValue("1")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
   });
 
-  it("slider selection persists", async () => {
-    renderReplayWorkspace(baseProps());
+  it("starts a new story session at the latest point", async () => {
+    const fetchMock = createStoryApiFetch();
+    const { rerender } = renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-1" } } }));
 
-    await waitFor(() => expectFrame("1/4"));
+    await waitFor(() => expect(screen.getByDisplayValue("3")).toBeTruthy());
+    fireEvent.change(screen.getByRole("slider", { name: "Story timeline" }), { target: { value: "1" } });
+    expect(screen.getByDisplayValue("1")).toBeTruthy();
 
-    const slider = screen.getAllByRole("slider")[0];
-    fireEvent.change(slider, { target: { value: "2" } });
-    expectFrame("3/4");
-
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expectFrame("3/4");
+    rerender(h(ReplayWorkspace, baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-2" } } })));
+    await waitFor(() => expect(screen.getByDisplayValue("3")).toBeTruthy());
   });
 
-  it("timeline refetch with same session does not reset current frame", async () => {
-    const fetchMock = createReplayApiFetch();
-
-    const props = baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-1" }, latestUploadSnapshot: null } });
-    const { rerender } = renderReplayWorkspace(props);
-
-    await waitFor(() => expectFrame("1/4"));
-    clickNamedButton("Next");
-    expectFrame("2/4");
-
-    const nextProps = baseProps({
-      apiFetch: fetchMock,
-      currentSession: {
-        latestUploadResult: { job_id: "job-1", replay_timeline: { timeline: [...buildFrames(4)] } },
-        latestUploadSnapshot: null,
-      },
-    });
-    rerender(h(ReplayWorkspace, nextProps));
-
-    await waitFor(() => expectFrame("2/4"));
-  });
-
-  it("new replay session resets frame index", async () => {
-    const fetchMock = createReplayApiFetch();
-
-    const { rerender } = renderReplayWorkspace(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-1" }, latestUploadSnapshot: null } }));
-    await waitFor(() => expectFrame("1/4"));
-
-    clickNamedButton("Next");
-    expectFrame("2/4");
-
-    rerender(h(ReplayWorkspace, baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-2" }, latestUploadSnapshot: null } })));
-
-    await waitFor(() => expectFrame("1/4"));
-  });
-
-  it("keeps Supporting Evidence empty when no persisted evidence run exists", async () => {
-    renderReplayWorkspace(baseProps({ currentSession: { latestUploadResult: { job_id: "job-1" } } }));
-
-    await waitFor(() => expectFrame("1/4"));
-    expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
-  });
-
-  it("renders telemetry-derived evidence for the matching persisted upload run", async () => {
+  it("renders telemetry-derived evidence in plain English", async () => {
     const fetchMock = vi.fn(async (path) => {
-      if (String(path).startsWith("/api/data/upload-status/job-real")) {
-        return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
-      }
+      if (String(path).startsWith("/api/data/upload-status/job-real")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
       if (String(path).startsWith("/api/data/replay/job-real")) {
-        return createResponse({
-          job_id: "job-real",
-          run_id: "job-real",
-          upload_id: "job-real",
-          timeline: [{
-            ...buildFrames(1)[0],
-            primary_contributors: ["temperature", "humidity"],
-            cognition_state: { confidence_tier: "relationship_evidence_present" },
-            topology_state: { drift_index: 0.73, stability_state: "Needs review" },
-          }],
-          meta: { frame_count: 1, job_id: "job-real", lineage: { aligned: true, job_id: "job-real", run_id: "job-real", upload_id: "job-real" } },
-        });
+        return createResponse({ timeline: [{ ...buildFrames(1)[0], primary_contributors: ["temperature", "humidity"], topology_state: { drift_index: 0.73, stability_state: "Needs review" } }], meta: { frame_count: 1 } });
       }
       if (String(path) === "/api/evidence/runs") {
-        return createResponse({
-          runs: [{
-            run_id: "job-real",
-            status: "completed",
-            source_name: "uploaded-telemetry.csv",
-            variables: ["temperature", "humidity"],
-            evidence_summary: ["Temperature and humidity relationship divergence moved away from State Group A with replay/relationship evidence."],
-            drift_metrics: { baseline_distance: null, drift_index: 0.73, confidence: 0.88 },
-            deformation_started_at: "2026-01-01T00:00:00Z",
-          }],
-        });
+        return createResponse({ runs: [{ run_id: "job-real", status: "completed", variables: ["temperature", "humidity"], evidence_summary: ["Temperature and humidity relationship divergence moved away from State Group A with replay/relationship evidence."], deformation_started_at: "2026-01-01T00:00:00Z" }] });
       }
       return createResponse({}, 404);
     });
 
-    renderReplayWorkspace({
-      ...baseProps({
-        apiFetch: fetchMock,
-        currentSession: {
-          latestUploadResult: {
-            job_id: "job-real",
-            filename: "uploaded-telemetry.csv",
-            sii_intelligence: { source: "uploaded" },
-          },
-        },
-      }),
-      hasRealSiiOutput: true,
-    });
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-real" } } }));
 
-    await waitFor(() => expect(screen.getByText("Source file: uploaded-telemetry.csv")).toBeTruthy());
-    expect(screen.queryByText("Run ID: job-real")).toBeNull();
-    expect(screen.getByText("Variables: temperature | humidity")).toBeTruthy();
-    expect(screen.getByText(/Relationship summary: Temperature and humidity system behavior changed from its normal pattern moved away from current operating pattern with historical comparison evidence\./)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/Temperature and humidity system behavior changed/i)).toBeTruthy());
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
     expect(screen.queryByText(/State Group A/i)).toBeNull();
-    expect(screen.getByText("Change metric: 0.73")).toBeTruthy();
-    expect(screen.getByText("Confidence: 88%")).toBeTruthy();
+    expect(screen.getByText("Sensor drift")).toBeTruthy();
   });
 
-  it("prefers job-scoped replay and does not use global replay as production evidence", async () => {
+  it("prefers the job-scoped story source", async () => {
     const fetchMock = vi.fn(async (path) => {
-      if (String(path).startsWith("/api/data/upload-status/job-scoped")) {
-        return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
-      }
-      if (String(path).startsWith("/api/data/replay/job-scoped")) {
-        return createResponse({ timeline: buildFrames(2), meta: { frame_count: 2, job_id: "job-scoped" } });
-      }
+      if (String(path).startsWith("/api/data/upload-status/job-scoped")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      if (String(path).startsWith("/api/data/replay/job-scoped")) return createResponse({ timeline: buildFrames(2), meta: { frame_count: 2 } });
       if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
-      if (String(path).startsWith("/api/replay/timeline")) {
-        return createResponse({ timeline: buildFrames(9), meta: { frame_count: 9 } });
-      }
+      if (String(path).startsWith("/api/replay/timeline")) return createResponse({ timeline: buildFrames(9) });
       return createResponse({}, 404);
     });
 
-    renderReplayWorkspace({
-      ...baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-scoped" } } }),
-      hasRealSiiOutput: true,
-    });
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-scoped" } } }));
 
-    await waitFor(() => expectFrame("1/2"));
+    await waitFor(() => expect(screen.getByText("2 observation points")).toBeTruthy());
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped"))).toBe(true);
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
-    expect(screen.getByLabelText("Supporting evidence").querySelectorAll("li")).toHaveLength(0);
   });
 
+  it("shows pending verification in story language", async () => {
+    renderStory(baseProps({
+      apiFetch: createStoryApiFetch(2),
+      currentSession: { latestUploadResult: { job_id: "job-pending" }, hasReliableOperatorEvidence: false, reviewReadiness: "quality_gate" },
+    }));
 
-  it("shows replay as pending verification until operator evidence is review-ready", async () => {
-    const fetchMock = createReplayApiFetch(2);
-
-    renderReplayWorkspace({
-      ...baseProps({
-        apiFetch: fetchMock,
-        currentSession: {
-          latestUploadResult: { job_id: "job-pending" },
-          latestUploadSnapshot: null,
-          hasReliableOperatorEvidence: false,
-          reviewReadiness: "quality_gate",
-        },
-      }),
-      hasRealSiiOutput: true,
-    });
-
-    await waitFor(() => expectFrame("1/2"));
-    expect(screen.getAllByText("Analysis pending verification.")[0]).toBeTruthy();
-    expect(screen.getByText("Replay generated, review pending")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Telemetry is present, but the story is waiting for verification.")).toBeTruthy());
     expect(screen.getAllByText(/does not yet meet the reliability threshold/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Upload more stable telemetry/i)).toBeTruthy();
+    expect(screen.getAllByText(/Upload more stable telemetry/i).length).toBeGreaterThan(0);
   });
-});
 
-  it("does not fetch replay from stale history when there is no current upload", async () => {
+  it("records engineer notes and repair outcome labels", async () => {
+    renderStory(baseProps());
+
+    await waitFor(() => expect(screen.getByLabelText("Engineer Notes")).toBeTruthy());
+    fireEvent.change(screen.getByPlaceholderText("Add inspection notes"), { target: { value: "Valve replaced." } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Maintenance event" }));
+
+    expect(screen.getAllByText("Valve replaced.").length).toBeGreaterThan(1);
+    expect(screen.getByText(/Marked as maintenance event/i)).toBeTruthy();
+  });
+
+  it("does not fetch stale history when there is no current upload", async () => {
     const fetchMock = vi.fn(async (path) => {
-      if (String(path) === "/api/data/latest-upload?include_persisted=1") {
-        return createResponse({ latest_result: null, history: [{ job_id: "stale-history-job" }] });
-      }
+      if (String(path) === "/api/data/latest-upload?include_persisted=1") return createResponse({ latest_result: null, history: [{ job_id: "stale-history-job" }] });
       if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
       return createResponse({}, 404);
     });
 
-    renderReplayWorkspace({
-      ...baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: null, latestUploadSnapshot: null } }),
-      hasRealSiiOutput: true,
-    });
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: null, latestUploadSnapshot: null } }));
 
-    await waitFor(() => expect(screen.getByText("No replay is available for the active session.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("System Story is waiting for an active telemetry session.")).toBeTruthy());
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("stale-history-job"))).toBe(false);
   });
+});

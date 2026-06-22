@@ -51,13 +51,13 @@ function uploadProgressStage(uploadState, uploadJob) {
   const workerState = String(uploadJob?.worker_state || uploadJob?.workerState || "").toLowerCase();
   const processingState = String(uploadJob?.processing_state || uploadJob?.processingState || "").toLowerCase();
 
-  if (["complete", "completed", "success"].includes(state) || processingState === "complete") return "Upload complete.";
-  if (["error", "failed", "validation_error"].includes(state)) return "Upload needs attention.";
-  if (state === "uploading") return "Uploading.";
-  if (workerState === "starting" || processingState === "queued") return "Upload received. Waiting for processing to begin.";
-  if (workerState === "running" || workerState === "active" || state === "running_sii") return "Analyzing telemetry. This can continue in the background.";
-  if (state === "validated") return "Ready to upload.";
-  return "Upload status unavailable.";
+  if (["complete", "completed", "success"].includes(state) || processingState === "complete") return "Analysis ready.";
+  if (["error", "failed", "validation_error"].includes(state)) return "Telemetry needs attention.";
+  if (state === "uploading") return "Sending telemetry.";
+  if (workerState === "starting" || processingState === "queued") return "Telemetry received. Waiting for analysis to begin.";
+  if (workerState === "running" || workerState === "active" || state === "running_sii") return "Processing telemetry. Building system story.";
+  if (state === "validated") return "Ready to analyze.";
+  return "Analysis status unavailable.";
 }
 
 function customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines }) {
@@ -195,7 +195,7 @@ export default function IntakeFlowPanel({
   });
   const selectedFileLabel = selectedFiles?.length
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
-    : "No file selected";
+    : "No telemetry file selected";
   const shouldShowBatchSummary = batchResults.length > 1 || failedCount > 0 || siiContractFailed;
   const uploadStageMessage = uploadProgressStage(uploadState, uploadJob);
   const uploadStatusLabel = customerUploadMessage({ uploadStageMessage, uploadTransfer, statusLines });
@@ -207,32 +207,32 @@ export default function IntakeFlowPanel({
   const stageProgress = resolveStageProgress({ uploadState, uploadJob, uploadTransfer });
   const shouldShowStageBars = !hasTerminalUploadIssue && activeUploadProgressState && hasCurrentProgressSource;
   const stageProgressRows = stageProgress.activeStage === "upload"
-    ? [["Upload", stageProgress.uploadPercent]]
+    ? [["Telemetry transfer", stageProgress.uploadPercent]]
     : ["processing", "complete"].includes(stageProgress.activeStage)
-      ? [["Upload", stageProgress.uploadPercent], ["Processing", stageProgress.processingPercent]]
+      ? [["Telemetry transfer", stageProgress.uploadPercent], ["Analysis", stageProgress.processingPercent]]
       : [];
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
-  const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Upload failed. Select a new file and try again.")).trim();
+  const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Analysis failed. Select a new file and try again.")).trim();
 
   return (
-    <Panel title="Upload Data" className="span-7 workspace-hero-panel upload-ops-panel">
+    <Panel title="Analyze System" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
         <div className="upload-file-card">
           <div className="upload-file-card__main">
             <strong>{selectedFileLabel}</strong>
-            <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a CSV telemetry file to begin."}</p>
+            <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a telemetry file to begin."}</p>
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
-            <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose File</button>
+            <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose Telemetry File</button>
             <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
-              {isUploadProcessing(uploadState) ? "Processing" : "Upload Data"}
+              {isUploadProcessing(uploadState) ? "Processing telemetry" : "Analyze System"}
             </button>
           </div>
         </div>
         {hasValidationError || hasUploadError ? (
           <div className="upload-partial-alert" role="alert" aria-live="assertive" style={alertLayoutStyle}>
-            <strong>{hasValidationError ? "File not ready" : "Upload failed"}</strong>
+            <strong>{hasValidationError ? "File not ready" : "Analysis failed"}</strong>
             <p style={alertMessageStyle}>{errorMessage}</p>
             <div className="intake-flow__controls">
               <button
@@ -240,14 +240,14 @@ export default function IntakeFlowPanel({
                 className="secondary-command-button"
                 onClick={() => openFilePicker("csv")}
               >
-                Select New File
+                Select New Telemetry File
               </button>
               {hasSelectedFiles ? (
                 <button
                   type="submit"
                   className="command-button"
                 >
-                  Retry Upload
+                  Retry Analysis
                 </button>
               ) : null}
             </div>
@@ -262,7 +262,7 @@ export default function IntakeFlowPanel({
               </span>
             ) : null}
             {shouldShowStageBars ? (
-              <div className="upload-stage-progress" style={stageWrapStyle} aria-label="Upload and processing progress">
+              <div className="upload-stage-progress" style={stageWrapStyle} aria-label="Telemetry transfer and analysis progress">
                 {stageProgressRows.map(([label, percent]) => (
                   <div className="upload-stage-progress__row" style={stageRowStyle} key={label}>
                     <div className="upload-stage-progress__header" style={stageHeaderStyle}>
@@ -289,7 +289,7 @@ export default function IntakeFlowPanel({
                 <span>{`Batch: ${successCount} succeeded, ${failedCount} failed, ${batchResults.length - successCount - failedCount} pending.`}</span>
                 {failedCount > 0 && (
                   <div className="upload-partial-alert" role="status" aria-live="polite">
-                    <strong>Some files failed</strong>
+                    <strong>Some telemetry files failed</strong>
                     <span>{`${successCount} succeeded, ${failedCount} failed. Retry the failed files.`}</span>
                   </div>
                 )}
@@ -300,7 +300,7 @@ export default function IntakeFlowPanel({
                 )}
                 {siiContractFailed && (
                   <button className="secondary-command-button" type="button" onClick={onReprocessCurrentBatch}>
-                    Reprocess Job
+                    Rebuild System Story
                   </button>
                 )}
               </div>
@@ -308,8 +308,8 @@ export default function IntakeFlowPanel({
           </div>
         ) : null}
         <details className="upload-secondary-actions">
-          <summary>Workspace options</summary>
-          <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Clear Upload Workspace</button>
+          <summary>Analysis options</summary>
+          <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Clear Analysis</button>
         </details>
       </form>
     </Panel>

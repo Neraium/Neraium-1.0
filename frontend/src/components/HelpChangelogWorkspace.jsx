@@ -8,8 +8,8 @@ const CHANGELOG_ENTRIES = [
   },
   {
     date: "2026-06-05",
-    title: "Findings simplified",
-    detail: "Trust boundaries and version history now live in a dedicated help workspace so findings stay focused on what changed.",
+    title: "Issues simplified",
+    detail: "Trust boundaries and version history now live in a dedicated help workspace so issues stay focused on what changed.",
   },
   {
     date: "2026-06-04",
@@ -26,19 +26,19 @@ export default function HelpChangelogWorkspace({
     <section className="workspace-surface help-changelog">
       <div className="observation-center__back-control">
         <button type="button" className="system-gate__settings-action" onClick={() => onBackToGate?.()}>
-          Back to System Status
+          Back to Health
         </button>
         <button type="button" className="system-gate__settings-action" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-          Open Findings
+          Open Issues
         </button>
       </div>
 
       <div className="observation-center__hero">
         <section className="observation-center__summary help-changelog__hero" aria-label="Help and changelog summary">
-          <p className="section-token">Trust Boundary</p>
-          <h1>Help</h1>
+          <p className="section-token">Technical</p>
+          <h1>Technical</h1>
           <p>
-            Neraium observes system behavior change, records evidence, and stays read-only. This page holds the operating boundary and version history so findings stay focused.
+            Neraium observes operating pattern changes, records support details, and stays read-only. This page holds the operating boundary and version history so issues stay focused.
           </p>
           <MetricGrid
             metrics={[
@@ -53,12 +53,12 @@ export default function HelpChangelogWorkspace({
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="What the instrument does" className="span-7 observation-center__panel">
+        <Panel title="What Neraium does" className="span-7 observation-center__panel">
           <ul className="compact-list">
             <li>Ingests multivariate telemetry without requiring domain semantics.</li>
-            <li>Learns a reference behavior pattern and watches for persistent change.</li>
-            <li>Surfaces observations as relational facts, not instructions.</li>
-            <li>Records operator feedback as evidence for future investigations.</li>
+            <li>Compares current telemetry with historical operating patterns.</li>
+            <li>Surfaces issues as operating changes, not control instructions.</li>
+            <li>Records engineer feedback for future comparisons.</li>
           </ul>
         </Panel>
 
@@ -66,8 +66,8 @@ export default function HelpChangelogWorkspace({
           <ul className="compact-list">
             <li>No actuation or setpoint control.</li>
             <li>No severity score, risk rating, or prediction.</li>
-            <li>No root cause analysis.</li>
-            <li>No hidden cross-site sharing unless the operator exports evidence.</li>
+            <li>No automatic root-cause claim.</li>
+            <li>No hidden cross-site sharing unless the operator exports records.</li>
           </ul>
         </Panel>
 

@@ -15,9 +15,9 @@ vi.mock("../../layout/PageContainer", () => ({
   default: ({ children, className }) => h("div", { className }, children),
 }));
 
-function readResultDetail(label, sectionName = "Evidence") {
+function readResultDetail(label, sectionName = "System Story") {
   fireEvent.click(screen.getByRole("button", { name: sectionName }));
-  const section = screen.getByLabelText(sectionName === "Evidence" ? "Evidence" : sectionName);
+  const section = screen.getByLabelText(sectionName === "System Story" ? "System Story" : sectionName);
   const labelNode = within(section).getByText(label);
   return labelNode.nextElementSibling?.textContent;
 }
@@ -67,12 +67,12 @@ describe("SystemBodyWorkspace empty state", () => {
     renderWorkspace();
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "No telemetry uploaded yet" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Upload Data" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Findings" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Analyze a system to begin" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Issues" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "View Findings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "System Story" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
     expect(screen.queryByText("Rows loaded")).toBeNull();
   });
 
@@ -95,13 +95,13 @@ describe("SystemBodyWorkspace empty state", () => {
       onResumePreviousUpload,
     });
 
-    expect(screen.getByRole("heading", { name: "No telemetry uploaded yet" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Upload Data" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Resume Previous Upload" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Analyze a system to begin" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
     expect(screen.getByLabelText("Previous upload").textContent).toContain("old-upload.csv");
-    expect(screen.queryByText("Ready With Warnings")).toBeNull();
+    expect(screen.queryByText("Ready with warnings")).toBeNull();
     expect(screen.queryByText("51841")).toBeNull();
-    expect(screen.queryByRole("button", { name: "View Findings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
   });
 
   it("enables review metrics after a completed analysis exists", () => {
@@ -121,9 +121,9 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: "View Findings" })).toBeTruthy();
-    expect(readResultDetail("Baseline comparison")).toBe("State Group B");
-    expect(screen.queryByText("Behavior has persisted")).toBeNull();
+    expect(screen.getByRole("button", { name: "View Issues" })).toBeTruthy();
+    expect(readResultDetail("Historical comparison")).toBe("State Group B");
+    expect(screen.queryByText("Operating pattern duration")).toBeNull();
   });
 
   it("does not render pending copy for a READY upload result", () => {
@@ -139,12 +139,12 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getAllByText("Analysis Ready").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Analysis Pending" })).toBeNull();
+    expect(screen.getAllByText("Analysis ready").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Analysis running" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
-    expect(readResultDetail("Behavior has persisted")).toBe("2d");
-    expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
+    expect(readResultDetail("Operating pattern duration")).toBe("2d");
+    expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View System Story" })).toBeNull();
   });
 
   it("does not render pending copy for a DEGRADED_READY upload result", () => {
@@ -160,8 +160,8 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getAllByText("Ready With Warnings").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Analysis Pending" })).toBeNull();
+    expect(screen.getAllByText("Ready with warnings").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Analysis running" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Data Quality" }));
     expect(screen.getAllByText((text) => text.includes("Sparse missing values detected; short numeric gaps interpolated.")).length).toBeGreaterThan(0);
@@ -178,10 +178,10 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getByRole("heading", { name: "Processing is still running." })).toBeTruthy();
-    expect(screen.getAllByText("Telemetry is present, but backend analysis is still pending.")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Review Findings" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Telemetry is still processing." })).toBeTruthy();
+    expect(screen.getAllByText("Telemetry is present, but analysis is still running.")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View System Story" })).toBeNull();
   });
 
   it("replaces impossible persistence with a history fallback when only an old start timestamp exists", () => {
@@ -197,8 +197,8 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
-    expect(screen.queryByText("Behavior has persisted")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "System Story" }));
+    expect(screen.queryByText("Operating pattern duration")).toBeNull();
     expect(screen.queryByText(/20625d/)).toBeNull();
   });
 

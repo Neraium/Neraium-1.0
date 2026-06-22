@@ -672,6 +672,52 @@
   margin: 0;
 }
 
+
+.action-checklist-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.action-checklist-group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.action-checklist-group h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.action-note-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-note-field span {
+  color: rgba(201, 214, 222, 0.62);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.action-note-field textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid rgba(154, 183, 193, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 12px;
+  line-height: 1.45;
+}
+
 .technical-details-panel {
   min-width: 0;
   border-top: 1px solid rgba(154, 183, 193, 0.1);

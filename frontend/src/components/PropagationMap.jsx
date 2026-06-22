@@ -7,9 +7,9 @@ function clamp(value) {
 export default function PropagationMap({ frame, comparisonFrame = null }) {
   const nodes = frame?.topology_state ? [
     { id: "origin", label: "Structural Origin", pressure: frame.subsystem_pressure?.pressure_score ?? 0.2 },
-    { id: "topology", label: "Relationship Shift", pressure: frame.topology_state?.drift_index ?? 0.2 },
+    { id: "topology", label: "System Behavior Change", pressure: frame.topology_state?.drift_index ?? 0.2 },
     { id: "propagation", label: "Propagation", pressure: frame.propagation_state?.activation_intensity ?? 0.2 },
-    { id: "cognition", label: "Cognition State", pressure: frame.subsystem_pressure?.volatility_index ?? 0.2 },
+    { id: "cognition", label: "Operating Pattern", pressure: frame.subsystem_pressure?.volatility_index ?? 0.2 },
   ] : [];
 
   const paths = frame?.propagation_state?.dominant_paths ?? [];

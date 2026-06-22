@@ -5,7 +5,7 @@ import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
 import SystemTopologyWorkspace from "./SystemTopologyWorkspace";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
-const StructuralReplayWorkspace = lazy(() => import("./StructuralReplayWorkspace"));
+const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./GovernanceAdminWorkspace"));
 const ObservationCenterWorkspace = lazy(() => import("./ObservationCenterWorkspace"));
 const HelpChangelogWorkspace = lazy(() => import("./HelpChangelogWorkspace"));
@@ -30,9 +30,9 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
               type="button"
               className="system-gate__settings-action"
               onClick={handleBackToGate}
-              aria-label="Back to Gate"
+              aria-label="Back to Health"
             >
-              Back to Gate
+              Back to Health
             </button>
           </div>
           {children}
@@ -102,7 +102,7 @@ export default function AppWorkspaceRouter({
     );
   }
 
-  if (activeWorkspace === "historical-replay") {
+  if (activeWorkspace === "system-story") {
     return (
       <WorkspaceWithBackControl
         appReady={appReady}
@@ -110,8 +110,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Replay", "Preparing replay workspace...")}>
-          <StructuralReplayWorkspace
+        <Suspense fallback={renderLoadingPanel("Loading System Story", "Preparing System Story...")}>
+          <SystemStoryWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
             expertMode={false}
@@ -143,7 +143,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Governance", "Preparing governance workspace...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Technical Admin", "Preparing technical admin workspace...")}>
           <GovernanceAdminWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -164,14 +164,14 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Findings", "Preparing findings...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Issues", "Preparing issues...")}>
           <ObservationCenterWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
             canonicalFinding={canonicalFinding}
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
-            onReviewEvidence={() => setActiveWorkspace("historical-replay")}
+            onReviewEvidence={() => setActiveWorkspace("system-story")}
             onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
@@ -187,7 +187,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Help", "Preparing help and changelog workspace...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Technical", "Preparing technical workspace...")}>
           <HelpChangelogWorkspace
             onBackToGate={() => setActiveWorkspace("system-body")}
             onWorkspaceNavigate={setActiveWorkspace}

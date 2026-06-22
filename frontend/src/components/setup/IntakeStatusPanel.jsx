@@ -28,7 +28,7 @@ export default function IntakeStatusPanel({
   const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? null;
   const baselineReference = activeFilename
     ? `${activeFilename} (internal baseline)`
-    : "Awaiting uploaded telemetry";
+    : "Awaiting telemetry file";
   const queuePending = Number(apiStatus?.queue?.pending ?? 0);
   const queueOldestPendingSeconds = Number(apiStatus?.queue?.oldest_pending_age_seconds ?? NaN);
   const queueOldestPending = Number.isFinite(queueOldestPendingSeconds)
@@ -61,22 +61,22 @@ export default function IntakeStatusPanel({
         />
       </Panel>
       {showAnalysis ? (
-        <Panel title="Latest Analysis" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <Panel title="Latest System Review" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <MetricGrid
             metrics={[
-              { label: "Active Model", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting uploaded telemetry" },
+              { label: "Telemetry file", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting telemetry file" },
               { label: "Reference Source", value: baselineReference },
-              { label: "Score Movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
-              { label: "Structural Read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
+              { label: "Change movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
+              { label: "System read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
             ]}
             compact
           />
         </Panel>
       ) : (
-        <Panel title="No Active Structural Analysis" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
+        <Panel title="No Active System Review" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <div className="intake-flow__controls">
-            <button type="button" className="command-button" onClick={onOpenUpload}>Upload Data</button>
-            <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Session</button>
+            <button type="button" className="command-button" onClick={onOpenUpload}>Analyze System</button>
+            <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
           </div>
         </Panel>
       )}

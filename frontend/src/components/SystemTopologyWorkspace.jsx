@@ -55,7 +55,7 @@ export default function SystemTopologyWorkspace({
             ? "No runtime data"
             : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = pendingVerification
-    ? "Telemetry is present, but the evidence packet is not yet verified for operator review."
+    ? "Telemetry is present, but the system story is still being verified for engineer review."
     : buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
@@ -81,10 +81,10 @@ export default function SystemTopologyWorkspace({
 
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = pendingVerification
-    ? "Evidence Verification Pending"
+    ? "System Story Verification Pending"
     : governed.hasPass
-      ? "Governed PASS Finding"
-      : "Governed Output Pending";
+      ? "System Review Active"
+      : "System Review Pending";
   const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
 
   const metrics = [];
@@ -92,8 +92,8 @@ export default function SystemTopologyWorkspace({
   const evidenceItems = [];
 
   const narrativeItems = compactOperationalItems([
-    { label: "Current Governed System State", value: governed.currentGovernedSystemState, state: uiState },
-    ...(governed.hasPass ? [{ label: "Affected Subsystem", value: concise(governed.affectedSubsystem, 80), state: uiState }] : []),
+    { label: "Current System State", value: governed.currentGovernedSystemState, state: uiState },
+    ...(governed.hasPass ? [{ label: "Affected Equipment", value: concise(governed.affectedSubsystem, 80), state: uiState }] : []),
     { label: "Timestamp", value: governed.timestamp, state: "stable" },
   ]);
 
@@ -151,9 +151,9 @@ export default function SystemTopologyWorkspace({
 } 
 
 export function derivePrimaryMessage({ awaitingSii, pendingVerification, governed, canonicalFinding, uploadSignal }) {
-  if (awaitingSii) return "Upload or connect telemetry to begin monitoring.";
+  if (awaitingSii) return "Analyze or connect telemetry to begin monitoring.";
   if (pendingVerification) {
-    return "Telemetry processing finished, but evidence verification is still pending before operator review.";
+    return "Telemetry processing finished, but the system story is still being verified for engineer review.";
   }
   if (governed.hasPass) {
     return concise(governed.passedFindingSummary, 120);
@@ -182,7 +182,7 @@ export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = 
     return { systemState: null, label: "", statusLight: null };
   }
   if (operatingState.includes("needs action") || urgency === "unstable" || operatingState.includes("unstable")) {
-    return { systemState: "alert", label: "Structural shift", statusLight: "amber" };
+    return { systemState: "alert", label: "System behavior changed", statusLight: "amber" };
   }
   if (operatingState.includes("drift") || urgency === "elevated" || operatingState.includes("degrad")) {
     return { systemState: "watching", label: "Needs review", statusLight: "gray" };
@@ -271,7 +271,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
     detail: {
       admittedState: governedStateFromAdmitted(admittedState),
       why: evidenceSummary,
-      primaryEvidenceFamily: governance?.primary_evidence_family ?? "Structural relationship evidence",
+      primaryEvidenceFamily: governance?.primary_evidence_family ?? "Operating pattern evidence",
       corroboratingEvidenceFamilies: formatList(governance?.corroborating_evidence_families),
       doctrineRulesSatisfied: formatList(governance?.doctrine_rules_satisfied),
       doctrineVersion: governance?.doctrine_version ?? "Unknown doctrine",
@@ -323,7 +323,7 @@ function gateOutcome(governance) {
 
 function governedStateFromAdmitted(admittedState) {
   if (admittedState === "WATCH") return "Watch";
-  if (admittedState === "ALERT") return "Structural shift";
+  if (admittedState === "ALERT") return "System behavior changed";
   return "Stable";
 }
 
@@ -371,11 +371,11 @@ function previewHash(value) {
 }
 
 function buildStateDescription(layer) {
-  if (layer <= 2) return "Structural relationships remain inside baseline containment with active observation.";
-  if (layer === 3) return "Divergence Observed with emerging persistence across recent windows.";
-  if (layer === 4) return "Persistent Drift is corroborated across multiple evidence windows.";
-  if (layer === 5) return "Structural Instability is exceeding baseline containment assumptions.";
-  if (layer === 6) return "Propagation and recovery degradation indicate a sustained structural shift.";
+  if (layer <= 2) return "System behaviors remain inside baseline containment with active observation.";
+  if (layer === 3) return "Behavior change observed across recent windows.";
+  if (layer === 4) return "Persistent change is visible across multiple telemetry windows.";
+  if (layer === 5) return "System behavior is outside the expected operating pattern.";
+  if (layer === 6) return "Propagation and recovery degradation indicate a sustained system behavior changed.";
   return "Multiple equipment signals are changing together.";
 }
 
@@ -403,7 +403,7 @@ function buildOrbData(liveOps, primaryItem, coherence, layer) {
     instabilityDensity: `${instabilityDensity}%`,
     fragmentation,
     containment,
-    evidenceConfidence: evidenceConfidence > 0 ? `${evidenceConfidence}%` : "Evidence Insufficient",
+    evidenceConfidence: evidenceConfidence > 0 ? `${evidenceConfidence}%` : "More telemetry needed",
   };
 }
 

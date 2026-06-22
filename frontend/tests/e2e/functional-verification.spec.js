@@ -65,13 +65,13 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function openDataConnections(page) {
   const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
   const dataConnectionsHeading = page.getByRole("heading", { name: /^Data Connections$/i });
-  const uploadDataHeading = page.getByRole("heading", { name: /^Upload Data$/i });
+  const uploadDataHeading = page.getByRole("heading", { name: /^Analyze System$/i });
   const uploadInput = page.locator("input#csv-upload");
-  const processUploadButton = page.getByRole("button", { name: /Process Upload|Upload Data/i });
+  const processUploadButton = page.getByRole("button", { name: /Analyze System|Processing telemetry/i });
   const primaryUploadEntry = page.getByTestId("primary-upload-entry");
   const workspaceMenuButton = page.getByTestId("workspace-menu-button");
   const uploadWorkspaceEntry = page.getByTestId("upload-workspace-entry");
-  const legacyDirectDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data|Upload Data/i });
+  const legacyDirectDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections|Analyze System|Upload CSV \/ Connect Data/i });
   const legacySettingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings|Views/i });
 
   const isDataConnectionsReady = async () => {
@@ -153,7 +153,7 @@ async function openDataConnections(page) {
 }
 
 test.describe("Functional verification", () => {
-  test("medium upload exposes replay details and replay workspace data", async ({ page }) => {
+  test("medium upload exposes System Story details and workspace data", async ({ page }) => {
     test.setTimeout(180000);
     await openDataConnections(page);
 

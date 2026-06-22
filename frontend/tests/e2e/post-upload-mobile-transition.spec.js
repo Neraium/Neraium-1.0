@@ -77,10 +77,10 @@ test.describe("Mobile post-upload transition", () => {
 
     await waitForUploadComplete(page, uploadJobId, 180000);
 
-    const gateStatus = page.getByText(/Telemetry active|Analysis Pending|Behavior Change Detected|No current observations/i).first();
+    const gateStatus = page.getByText(/Telemetry active|Analysis running|Behavior Change Detected|No current issues/i).first();
     await expect(gateStatus).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText(/Evidence confidence/i)).toBeVisible();
-    await expect(page.getByText(/Persistence/i)).toBeVisible();
+    await expect(page.getByText(/Story readiness/i)).toBeVisible();
+    await expect(page.getByText(/Operating pattern duration|What changed today|Recommended priorities/i)).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });

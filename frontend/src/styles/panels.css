@@ -668,3 +668,268 @@
   grid-template-columns: 1fr;
  }
 }
+
+.system-story-workspace {
+  align-items: start;
+}
+
+.system-story-hero,
+.system-story-card {
+  color: var(--text-primary);
+}
+
+.system-story-hero__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.system-story-hero__layout h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(1.75rem, 3vw, 3rem);
+  line-height: 1.02;
+  letter-spacing: 0;
+  max-width: 980px;
+}
+
+.system-story-hero__facts,
+.system-story-chart-grid,
+.system-story-hypotheses,
+.system-story-checklist,
+.system-story-note-entry,
+.system-story-note-templates,
+.system-story-notes,
+.system-story-learning {
+  display: grid;
+  gap: 12px;
+}
+
+.system-story-hero__facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.system-story-hero__facts div,
+.system-story-hypotheses section,
+.system-story-notes section {
+  border: 1px solid rgba(141, 188, 202, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 14px;
+}
+
+.system-story-hero__facts span,
+.system-story-hypotheses span,
+.system-story-timeline span,
+.system-story-chart__header span,
+.system-story-notes span,
+.system-story-chart__legend span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-story-hero__facts strong,
+.system-story-hypotheses strong,
+.system-story-timeline strong,
+.system-story-chart__header strong,
+.system-story-notes strong {
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.system-story-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.system-story-hypotheses {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.system-story-hypotheses section,
+.system-story-timeline section {
+  display: grid;
+  gap: 6px;
+}
+
+.system-story-hypotheses p,
+.system-story-timeline p,
+.system-story-chart p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.system-story-checklist label {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid rgba(141, 188, 202, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+}
+
+.system-story-checklist input {
+  width: 18px;
+  height: 18px;
+}
+
+.system-story-timeline {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+}
+
+.system-story-timeline section {
+  flex: 0 0 min(72vw, 190px);
+  scroll-snap-align: start;
+  border-left: 2px solid rgba(var(--mode-accent-rgb), 0.55);
+  padding: 0 12px 0 14px;
+  min-height: 116px;
+}
+
+.system-story-scrubber {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.system-story-chart-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.system-story-chart {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(141, 188, 202, 0.14);
+  border-radius: 8px;
+  background: rgba(7, 12, 16, 0.52);
+  padding: 14px;
+}
+
+.system-story-chart__header,
+.system-story-chart__legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.system-story-chart svg {
+  width: 100%;
+  min-height: 150px;
+}
+
+.system-story-chart__axis {
+  stroke: rgba(141, 188, 202, 0.18);
+  stroke-width: 1;
+}
+
+.system-story-chart__historical,
+.system-story-chart__current {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.system-story-chart__historical {
+  stroke: rgba(154, 183, 193, 0.42);
+}
+
+.system-story-chart__current {
+  stroke: rgba(103, 204, 188, 0.9);
+}
+
+.system-story-chart__deviation {
+  fill: rgba(218, 184, 112, 0.2);
+}
+
+.system-story-note-entry textarea {
+  width: 100%;
+  resize: vertical;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(141, 188, 202, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.system-story-note-templates,
+.system-story-learning {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1080px) {
+  .system-story-hero__layout,
+  .system-story-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .system-story-chart svg {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 720px) {
+  .system-story-workspace {
+    gap: 14px;
+  }
+
+  .system-story-hero__layout,
+  .system-story-hero__facts,
+  .system-story-hypotheses,
+  .system-story-note-entry,
+  .system-story-note-templates,
+  .system-story-learning {
+    grid-template-columns: 1fr;
+  }
+
+  .system-story-hero__layout h3 {
+    font-size: 1.75rem;
+    line-height: 1.08;
+  }
+
+  .system-story-card .ops-panel__body,
+  .system-story-hero .ops-panel__body {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .system-story-timeline {
+    margin-left: -4px;
+    padding-left: 4px;
+  }
+
+  .system-story-timeline section {
+    flex-basis: 82vw;
+    min-height: 132px;
+  }
+
+  .system-story-chart {
+    padding: 12px;
+  }
+
+  .system-story-chart svg {
+    min-height: 220px;
+  }
+
+  .system-story-chart__legend {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -72,12 +72,12 @@ function canRecordFeedback(run, persistedRunIds) {
 
 function observationTypeLabel(value) {
   const text = String(value ?? "").replaceAll("_", " ").trim();
-  if (!text) return "Finding";
+  if (!text) return "Issue";
   const normalized = text.toLowerCase();
-  if (normalized === "coupling change") return "Relationship Pattern Shift";
+  if (normalized === "coupling change") return "System Behavior Shift";
   if (normalized === "recovery elongation") return "Slower Recovery";
   if (normalized === "trajectory drift") return "Behavior Change Continuing";
-  if (normalized === "covariance shift") return "Relationship Pattern Shift";
+  if (normalized === "covariance shift") return "System Behavior Shift";
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -109,7 +109,7 @@ function driftToneFor(run) {
 }
 
 function summarizeObservation(run, aliases) {
-  if (!run) return "No finding selected.";
+  if (!run) return "No issue selected.";
   const variables = (run?.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases));
   const type = String(run?.observation_type ?? "");
   const duration = formatDurationFrom(run?.deformation_started_at);
@@ -160,9 +160,9 @@ function potentialImpactForFinding(run) {
   const type = String(run?.observation_type ?? "");
   const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
   if (type === "recovery_elongation") return "Recovery behavior differs from historical evidence.";
-  if (type === "coupling_change" || type === "covariance_shift") return "The observed relationships between system variables have changed.";
+  if (type === "coupling_change" || type === "covariance_shift") return "The observed signals no longer move together as expected.";
   if (type === "trajectory_drift") return "This indicates the operating pattern differs from historical evidence.";
-  return strength === "Low" ? "No equipment issues detected." : "Historical comparison evidence indicates a change from the normal operating pattern.";
+  return strength === "Low" ? "No equipment issues detected." : "Historical comparison indicates a change from the normal operating pattern.";
 }
 
 function readPendingObservationRunId() {
@@ -255,7 +255,7 @@ export default function ObservationCenterWorkspace({
         }
         if (cancelled) return;
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
-        console.info("[neraium] findings fetch status", { count: nextRuns.length });
+        console.info("[neraium] issues fetch status", { count: nextRuns.length });
         const newestRun = nextRuns[0]?.run_id ?? "";
         const pendingRunId = readPendingObservationRunId();
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
@@ -273,7 +273,7 @@ export default function ObservationCenterWorkspace({
         });
       } catch (loadError) {
         if (cancelled) return;
-        console.warn("[neraium] findings fetch status", { error: String(loadError?.message ?? loadError) });
+        console.warn("[neraium] issues fetch status", { error: String(loadError?.message ?? loadError) });
         setError(String(loadError?.message ?? loadError));
       } finally {
         if (!cancelled) setLoading(false);
@@ -376,7 +376,7 @@ export default function ObservationCenterWorkspace({
     supportingEvidence: [],
     technicalDetails: [],
     dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-    evidenceButtonLabel: "Review Evidence",
+    evidenceButtonLabel: "View System Story",
     emptyState: OPERATOR_EMPTY_STATE,
   };
   const hasCurrentFinding = Boolean(activeFinding.exists);
@@ -474,14 +474,14 @@ export default function ObservationCenterWorkspace({
         className="system-gate__settings-action"
         onClick={() => onBackToGate?.()}
       >
-        Back to System Status
+        Back to Health
       </button>
       <button
         type="button"
         className="system-gate__settings-action"
         onClick={() => onWorkspaceNavigate?.("help-changelog")}
       >
-        Help
+        Technical
       </button>
     </div>
   );
@@ -490,7 +490,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <Panel title="Findings" subtitle="Loading findings..." />
+        <Panel title="Issues" subtitle="Loading issues..." />
       </section>
     );
   }
@@ -499,7 +499,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <EmptyState title="Findings Unavailable" body={error} />
+        <EmptyState title="Issues Unavailable" body={error} />
       </section>
     );
   }
@@ -510,7 +510,7 @@ export default function ObservationCenterWorkspace({
     <section className="workspace-surface observation-center">
       {backControl}
       <div className="observation-center__hero">
-        <section className="observation-center__snapshot" aria-label="Latest finding snapshot">
+        <section className="observation-center__snapshot" aria-label="Latest issue snapshot">
           <div className="observation-center__snapshot-orb">
             <SystemStateMark systemState={hasCurrentFinding ? gateOrbState : "stable"} intensity={hasCurrentFinding ? Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18)) : 0.12} />
           </div>
@@ -521,9 +521,9 @@ export default function ObservationCenterWorkspace({
             <span>{hasCurrentFinding ? activeFinding.reviewNext : activeFinding.emptyState.detail}</span>
           </div>
         </section>
-        <section className="observation-center__summary" aria-label="Current instrument summary">
+        <section className="observation-center__summary" aria-label="Current issue summary">
           <p className="section-token">Current observation</p>
-          <h1>Findings</h1>
+          <h1>Issues</h1>
           <p>{activeFinding.summary}</p>
           <MetricGrid
             metrics={[
@@ -534,24 +534,24 @@ export default function ObservationCenterWorkspace({
           />
           <div className="intake-flow__controls">
             <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
-              {activeFinding.evidenceButtonLabel}
+              View System Story
             </button>
           </div>
         </section>
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="Findings" className="span-7 observation-center__panel observation-center__panel--timeline">
+        <Panel title="Issues" className="span-7 observation-center__panel observation-center__panel--timeline">
           <details className="observation-center__filters-toggle">
-            <summary>Filter findings</summary>
-            <div className="observation-center__filters" aria-label="Findings filters">
+            <summary>Filter issues</summary>
+            <div className="observation-center__filters" aria-label="Issues filters">
               <label className="observation-center__field">
-                <span>Search findings</span>
+                <span>Search issues</span>
                 <input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search run ID, variables, or evidence"
+                  placeholder="Search run ID, signals, or evidence"
                 />
               </label>
               <label className="observation-center__field">
@@ -567,7 +567,7 @@ export default function ObservationCenterWorkspace({
                 </select>
               </label>
               <label className="observation-center__field">
-                <span>Finding type</span>
+                <span>Issue type</span>
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
                   <option value="all">All types</option>
                   {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
@@ -605,7 +605,7 @@ export default function ObservationCenterWorkspace({
           )}
         </Panel>
 
-        <Panel title="Review Finding" className="span-5 observation-center__panel observation-center__panel--detail">
+        <Panel title="Review Issue" className="span-5 observation-center__panel observation-center__panel--detail">
           {!hasCurrentFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
@@ -631,10 +631,10 @@ export default function ObservationCenterWorkspace({
                 compact
               />
               <div className="intake-flow__controls">
-                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>{activeFinding.evidenceButtonLabel}</button>
+                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>View System Story</button>
               </div>
               <details className="compact-list-block" open>
-                <summary className="section-token">Supporting Evidence</summary>
+                <summary className="section-token">Why We Believe It</summary>
                 <ul className="compact-list">
                   {(activeFinding.supportingEvidence ?? []).length > 0
                     ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
@@ -655,7 +655,7 @@ export default function ObservationCenterWorkspace({
               </details>
               {selectedRun ? (
                 <details className="compact-list-block">
-                  <summary className="section-token">Historical comparison evidence</summary>
+                  <summary className="section-token">Historical comparison</summary>
                   <ul className="compact-list">
                     <li>{sanitizeOperatorText(selectedRunSummary)}</li>
                     {selectedRunHistoricalFact ? <li>{sanitizeOperatorText(selectedRunHistoricalFact)}</li> : null}
@@ -699,7 +699,7 @@ export default function ObservationCenterWorkspace({
                 <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
-                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the evidence record is persisted.</span> : null)}
+                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the system record is persisted.</span> : null)}
                 </div>
               </div>
             </>
@@ -739,8 +739,8 @@ export default function ObservationCenterWorkspace({
         <Panel title="Notifications" className="span-5 observation-center__panel">
           <MetricGrid
             metrics={[
-              { label: "Findings / 24h", value: silenceHealth.lastDay },
-              { label: "Findings / 7d", value: silenceHealth.lastWeek },
+              { label: "Issues / 24h", value: silenceHealth.lastDay },
+              { label: "Issues / 7d", value: silenceHealth.lastWeek },
               { label: "Instrument state", value: silenceHealth.state },
             ]}
             compact
@@ -773,7 +773,7 @@ export default function ObservationCenterWorkspace({
           </div>
           <div className="observation-trust-note">
             <strong>Default silence is preserved.</strong>
-            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored findings remain open without reminders or escalation.</p>
+            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored issues remain open without reminders or escalation.</p>
           </div>
         </Panel>
 
@@ -800,7 +800,7 @@ export default function ObservationCenterWorkspace({
           </ul>
         </Panel>
 
-        <Panel title="Evidence Sources" className="span-7 observation-center__panel">
+        <Panel title="Technical Sources" className="span-7 observation-center__panel">
           {selectedRun ? (
             <div className="observation-center__export-actions" style={{ marginBottom: 16 }}>
               <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
@@ -838,7 +838,7 @@ function maybeNotifyForObservation(run, prefs, aliases) {
   const body = variables
     ? `${observationTypeLabel(run?.observation_type)} involving ${variables}`
     : `${observationTypeLabel(run?.observation_type)} recorded`;
-  const notification = new Notification("Neraium finding", { body });
+  const notification = new Notification("Neraium issue", { body });
   notification.onclick = () => {
     try {
       window.localStorage.setItem(PENDING_OBSERVATION_STORAGE_KEY, String(run?.run_id ?? ""));

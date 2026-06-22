@@ -206,7 +206,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         </div>
       </div>
 
-      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="System behavior change, relationship pattern, and recovery trajectory">
+      <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="System behavior change, operating pattern, and recovery trajectory">
         <defs>
           <radialGradient id="replayFieldGlow" cx="50%" cy="48%" r="58%">
             <stop offset="0%" stopColor="rgba(138, 184, 196, 0.28)" />
@@ -266,7 +266,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         {!inactive ? <circle cx={model.nodes[2].x} cy={model.nodes[2].y} r={54 + model.propagation * 46} className="replay-cognition-field__structural-pulse" /> : null}
       </svg>
 
-      <section className="replay-cognition-field__mobile-summary" aria-label="Replay evidence summary">
+      <section className="replay-cognition-field__mobile-summary" aria-label="System story summary">
         <div><span>Status</span><strong>{status}</strong></div>
         <div><span>Change strength</span><strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>

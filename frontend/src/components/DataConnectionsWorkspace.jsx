@@ -33,7 +33,7 @@ function formatUploadTransferLabel(progress) {
   const loaded = formatFileSize(progress?.loaded ?? 0);
   const total = formatFileSize(progress?.total ?? 0);
   const speed = formatTransferSpeed(progress?.speedBytesPerSecond ?? progress?.bytesPerSecond);
-  return speed ? `Uploading ${loaded} of ${total} at ${speed}` : `Uploading ${loaded} of ${total}`;
+  return speed ? `Sending telemetry ${loaded} of ${total} at ${speed}` : `Sending telemetry ${loaded} of ${total}`;
 }
 
 function formatFileSize(bytes) {
@@ -51,16 +51,16 @@ function uploadReadinessMessage(file) {
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "Telemetry export validated.";
+  return "Telemetry file ready.";
 }
 
 function validateTelemetryFile(file, kind) {
-  if (!file) return "Choose a CSV file to upload.";
+  if (!file) return "Choose a telemetry file to analyze.";
   if (file.size > MAX_UPLOAD_BYTES) return `High-volume export above ${formatFileSize(MAX_UPLOAD_BYTES)}. Use partitioned export or enterprise batch intake.`;
   const filename = String(file.name ?? "").toLowerCase();
   const mime = String(file.type ?? "").toLowerCase();
   const looksCsv = filename.endsWith(".csv") || mime.includes("csv") || mime === "text/plain" || mime === "";
-  if (kind === "csv" && !looksCsv) return "Choose a CSV file.";
+  if (kind === "csv" && !looksCsv) return "Choose a CSV telemetry file.";
   return "";
 }
 
@@ -267,7 +267,7 @@ export default function DataConnectionsWorkspace({
   async function pollUploadStatus(jobId, statusUrl = null) {
     const requestedJobId = String(jobId ?? "").trim();
     if (!requestedJobId) {
-      markUploadFailed({ message: "Upload session was not created. Try uploading again.", errorType: "missing_job_id" });
+      markUploadFailed({ message: "Analysis session was not created. Try again.", errorType: "missing_job_id" });
       return null;
     }
     if (pollInFlightRef.current && pollOwnerJobIdRef.current === requestedJobId) return pollInFlightRef.current;
@@ -293,7 +293,7 @@ export default function DataConnectionsWorkspace({
             if (streamed) {
               const streamedStatus = normalizeUploadStatus(streamed.status);
               if (streamedStatus === "complete") {
-                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "complete", progress_label: streamed?.progress_label || "Telemetry processing complete.", message: streamed?.message || "Telemetry processing complete." };
+                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "complete", progress_label: streamed?.progress_label || "Analysis ready.", message: streamed?.message || "Analysis ready." };
                 setUploadJob(completedPayload);
                 setUploadState("complete");
                 setUploadProcessingFlag(false);
@@ -322,9 +322,9 @@ export default function DataConnectionsWorkspace({
                   {
                     ...payload,
                     error_type: payload?.error_type || "upload_status_unavailable",
-                    message: payload?.message || "Upload status remained unavailable after repeated retries.",
+                    message: payload?.message || "Analysis status remained unavailable after repeated retries.",
                   },
-                  "Upload status remained unavailable after repeated retries. Try uploading again.",
+                  "Analysis status remained unavailable after repeated retries. Try again.",
                 );
               }
               const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);
@@ -332,7 +332,7 @@ export default function DataConnectionsWorkspace({
               await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });
               continue;
             }
-            throw buildUploadRequestError(response, payload, payload?.message || "Upload status could not be checked.");
+            throw buildUploadRequestError(response, payload, payload?.message || "Analysis status could not be checked.");
           }
           statusEndpointFailureCountRef.current = 0;
           const normalizedPayload = normalizeStatusPayload(payload, requestedJobId);
@@ -345,7 +345,7 @@ export default function DataConnectionsWorkspace({
           if (normalizedStatus === "complete") {
             completeWithoutReplayCount += hasReplay ? 2 : 1;
             if (completeWithoutReplayCount >= 2 || hasReplay) {
-              const completePayload = { ...normalizedPayload, status: "COMPLETE", processing_state: "complete", percent: 100, progress: 100, progress_label: normalizedPayload.progress_label || "Telemetry processing complete.", message: normalizedPayload.message || "Telemetry processing complete." };
+              const completePayload = { ...normalizedPayload, status: "COMPLETE", processing_state: "complete", percent: 100, progress: 100, progress_label: normalizedPayload.progress_label || "Analysis ready.", message: normalizedPayload.message || "Analysis ready." };
               setUploadJob(completePayload);
               setUploadState("complete");
               setUploadProcessingFlag(false);
@@ -383,7 +383,7 @@ export default function DataConnectionsWorkspace({
       })
       .catch((error) => {
         const classified = classifyUploadError(error);
-        markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry upload failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false });
+        markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false });
         return null;
       })
       .finally(() => {
@@ -438,7 +438,7 @@ export default function DataConnectionsWorkspace({
 
   async function handleUpload() {
     if (!selectedFiles.length) {
-      setUploadError("Choose a telemetry file before uploading.");
+      setUploadError("Choose a telemetry file before analysis.");
       return;
     }
     const file = selectedFiles[0];
@@ -454,7 +454,7 @@ export default function DataConnectionsWorkspace({
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
-    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: `Uploading ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
+    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
     try {
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
@@ -472,7 +472,7 @@ export default function DataConnectionsWorkspace({
         status: normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state),
       });
       if (!jobId) {
-        markUploadFailed({ message: "Upload was accepted but no processing job was returned. Try again.", errorType: "missing_job_id" });
+        markUploadFailed({ message: "Telemetry was accepted but no analysis job was returned. Try again.", errorType: "missing_job_id" });
         return;
       }
       setUploadJob(normalizeStatusPayload(payload, jobId));
@@ -480,7 +480,7 @@ export default function DataConnectionsWorkspace({
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
       const classified = classifyUploadError(error);
-      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry upload failed."), errorType: classified.errorType });
+      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType });
     }
   }
 

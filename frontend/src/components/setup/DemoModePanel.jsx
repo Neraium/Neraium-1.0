@@ -32,14 +32,14 @@ export const DEMO_STEPS = [
     workspace: "system-body",
   },
   {
-    title: "Evidence Review",
-    message: "Engineering teams can inspect replay and supporting details.",
-    workspace: "historical-replay",
+    title: "System Story",
+    message: "Engineering teams can read the operating narrative and inspection plan.",
+    workspace: "system-story",
   },
   {
-    title: "Replay Timeline",
-    message: "Uploaded telemetry can replay movement from usual behavior into a change or recovery.",
-    workspace: "historical-replay",
+    title: "Story Timeline",
+    message: "Uploaded telemetry becomes a clear timeline from normal behavior to the current observation.",
+    workspace: "system-story",
   },
 ];
 

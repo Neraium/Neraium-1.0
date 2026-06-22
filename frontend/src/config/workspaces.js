@@ -1,39 +1,39 @@
 export const WORKSPACES = [
   {
     id: "system-body",
-    label: "System Status",
-    eyebrow: "Operator View",
+    label: "Health",
+    eyebrow: "System Health",
     description: "What changed, why it matters, and what to review next.",
   },
   {
     id: "data-connections",
-    label: "Upload Data",
-    eyebrow: "Intake",
-    description: "Upload telemetry and track processing.",
+    label: "Analyze System",
+    eyebrow: "Telemetry",
+    description: "Analyze a telemetry file and build the system story.",
   },
   {
-    id: "historical-replay",
-    label: "Evidence Replay",
-    eyebrow: "Evidence",
-    description: "Review what changed, why it matters, and the supporting evidence.",
+    id: "system-story",
+    label: "System Story",
+    eyebrow: "Story",
+    description: "Explain what happened, why we believe it, what likely caused it, and what to inspect next.",
   },
   {
     id: "observation-center",
-    label: "Findings",
-    eyebrow: "Evidence",
-    description: "Review what changed, confidence, possible impact, and supporting evidence.",
+    label: "Issues",
+    eyebrow: "Review",
+    description: "Review operational concerns, confidence, impact, and recommended checks.",
   },
   {
     id: "help-changelog",
-    label: "Help",
-    eyebrow: "Trust",
-    description: "Read the instrument boundary, version notes, and operator-facing review rules.",
+    label: "Technical",
+    eyebrow: "Support",
+    description: "Review support notes and operator-facing review rules.",
   },
   {
     id: "governance-admin",
-    label: "Governance Admin",
+    label: "Technical Admin",
     eyebrow: "Admin",
-    description: "Internal Aletheia Gate custody records (PASS and NO_PASS EVP receipts).",
+    description: "Internal custody records and backend review details.",
   },
 ];
 
@@ -65,17 +65,17 @@ export const FALLBACK_SYSTEMS = [
 ];
 
 export const INTAKE_STAGES = [
-  "Batch receipt",
+  "Telemetry received",
   "Variable and timestamp detection",
-  "Reference behavior learning",
+  "Historical comparison",
   "System behavior review",
-  "Observation and state write",
+  "System story write",
   "Complete",
 ];
 
 export const REPORT_TEMPLATES = [
   "System Change Summary",
-  "Relationship Shift Review",
+  "System Behavior Review",
   "Observation Feedback Record",
 ];
 

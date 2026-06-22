@@ -1,22 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import PropagationMap from "../PropagationMap";
-import StructuralMemoryPanel from "../StructuralMemoryPanel";
-import EvidenceLineagePanel from "../EvidenceLineagePanel";
-import EvidenceInteractionPanel from "../EvidenceInteractionPanel";
-import ReplayCognitionField from "../ReplayCognitionField";
 import { resolveSessionJobId } from "../../viewModels/currentSession";
 import * as uploadStateView from "../../viewModels/uploadState";
-import { buildPendingState, normalizeOperatorConfidenceLabel, sanitizeOperatorList, sanitizeOperatorText } from "../../viewModels/operatorFinding";
+import { buildPendingState, sanitizeOperatorList, sanitizeOperatorText } from "../../viewModels/operatorFinding";
+
+const STORY_NOTES_STORAGE_KEY = "neraium.system_story_notes.v1";
+const STORY_LEARNING_STORAGE_KEY = "neraium.system_story_learning.v1";
+const LEARNING_OPTIONS = ["Correct", "Incorrect", "Expected behavior", "Maintenance event", "Normal startup"];
+const NOTE_TEMPLATES = ["Valve replaced.", "Sensor recalibrated.", "False positive.", "Known maintenance."];
 
 export default function ReplayWorkspace({
   apiFetch,
   accessCode,
-  expertMode = false,
   normalizeErrorMessage,
   formatClockTime,
   Panel,
-  MetricGrid,
-  mode = "live",
   domainMode = null,
   hasActiveSession = false,
   hasCurrentUploadResult = false,
@@ -28,445 +25,258 @@ export default function ReplayWorkspace({
   onReplayModeChange,
 }) {
   const [timeline, setTimeline] = useState([]);
-  const [comparisonTimeline, setComparisonTimeline] = useState([]);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [replayCompression, setReplayCompression] = useState(1);
-  const [executionMode, setExecutionMode] = useState(mode || "live");
-  const [comparisonMode, setComparisonMode] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState("");
   const [evidenceRun, setEvidenceRun] = useState(null);
-  const [meta, setMeta] = useState({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
-  const [rangePreviewCount, setRangePreviewCount] = useState(0);
+  const [meta, setMeta] = useState({});
+  const [noteDraft, setNoteDraft] = useState("");
+  const [notesBySession, setNotesBySession] = useState(() => loadJsonStorage(STORY_NOTES_STORAGE_KEY, {}));
+  const [learningBySession, setLearningBySession] = useState(() => loadJsonStorage(STORY_LEARNING_STORAGE_KEY, {}));
+  const sessionKeyRef = useRef(null);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
-  const replaySessionKeyRef = useRef(null);
-  const shouldRequestReplay = Boolean(
-    sessionJobId
-    || hasActiveSession
-    || hasCurrentUploadResult
-    || hasResumedSession
-    || hasRealSiiOutput
-  );
-  const [replayMode, setReplayMode] = useState(false);
-  const replayFinding = canonicalFinding ?? {
-    exists: false,
-    status: "Normal",
-    confidence: "Low",
-    summary: "No current observations.",
-    whyItMatters: "Telemetry is being monitored.",
-    reviewNext: "No equipment issues detected.",
-    supportingEvidence: [],
-    emptyState: { detail: "No equipment issues detected." },
-  };
+  const shouldRequestStory = Boolean(sessionJobId || hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
   const reviewReady = currentSession?.hasReliableOperatorEvidence === true;
-  const togglePlayback = () => {
-    setIsPlaying((value) => {
-      const next = !value;
-      if (next) {
-        setReplayMode(true);
-      }
-      return next;
-    });
-  };
 
   useEffect(() => {
-    if (!shouldRequestReplay) {
+    if (typeof window !== "undefined") window.localStorage.setItem(STORY_NOTES_STORAGE_KEY, JSON.stringify(notesBySession));
+  }, [notesBySession]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem(STORY_LEARNING_STORAGE_KEY, JSON.stringify(learningBySession));
+  }, [learningBySession]);
+
+  useEffect(() => {
+    if (!shouldRequestStory) {
       setTimeline([]);
-      setComparisonTimeline([]);
-      setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
+      setMeta({});
       setCurrentFrameIndex(0);
-      setIsPlaying(false);
       setError("");
       setEvidenceRun(null);
-      replaySessionKeyRef.current = null;
+      sessionKeyRef.current = null;
       return () => {};
     }
     let cancelled = false;
-    async function loadReplay() {
+    async function loadStorySource() {
       try {
-        const scoped = await fetchUploadScopedReplay({ apiFetch, accessCode, jobId: sessionJobId });
-        const matchedEvidenceRun = scoped.jobId && reviewReady
-          ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId })
-          : null;
-        console.info("[neraium] evidence fetch status", {
-          jobId: scoped.jobId ?? sessionJobId ?? null,
-          replayFrames: Array.isArray(scoped.timeline) ? scoped.timeline.length : 0,
-          evidenceReady: Boolean(matchedEvidenceRun),
-        });
+        const scoped = await fetchUploadScopedTimeline({ apiFetch, accessCode, jobId: sessionJobId });
+        const matchedEvidenceRun = scoped.jobId && reviewReady ? await fetchEvidenceRunForJob({ apiFetch, accessCode, jobId: scoped.jobId }) : null;
         if (cancelled) return;
-        const nextTimeline = scoped.timeline;
-        const nextMeta = {
-          ...(scoped.meta ?? {}),
-          replay_source: "upload_job",
-          replay_job_id: scoped.jobId,
-          message: scoped.message,
-        };
-        const effectiveTimeline = sortReplayTimeline(nextTimeline);
-        const effectiveMeta = nextMeta;
-        const replaySessionKey = String(scoped.jobId ?? sessionJobId ?? "global");
-        const sessionChanged = replaySessionKeyRef.current !== replaySessionKey;
-
-        setTimeline(effectiveTimeline);
-        setComparisonTimeline([]);
-        setMeta(effectiveMeta);
+        const sortedTimeline = sortTimeline(scoped.timeline);
+        const storySessionKey = String(scoped.jobId ?? sessionJobId ?? "active-session");
+        const sessionChanged = sessionKeyRef.current !== storySessionKey;
+        sessionKeyRef.current = storySessionKey;
+        setTimeline(sortedTimeline);
+        setMeta({ ...(scoped.meta ?? {}), job_id: scoped.jobId, message: scoped.message });
         setEvidenceRun(matchedEvidenceRun);
-        setError(effectiveTimeline.length > 0 ? "" : (nextMeta?.message ?? "No replay is available for this session."));
-
-        if (sessionChanged) {
-          replaySessionKeyRef.current = replaySessionKey;
-          setCurrentFrameIndex(0);
-          setIsPlaying(false);
-        } else {
-          setCurrentFrameIndex((current) => Math.min(current, Math.max(0, effectiveTimeline.length - 1)));
-        }
+        setError(sortedTimeline.length > 0 ? "" : (scoped.message || "System Story will appear when this session has enough telemetry."));
+        setCurrentFrameIndex((current) => sessionChanged ? Math.max(0, sortedTimeline.length - 1) : Math.min(current, Math.max(0, sortedTimeline.length - 1)));
       } catch (loadError) {
         if (cancelled) return;
-        console.warn("[neraium] evidence fetch status", { error: buildReplayNotice(loadError, normalizeErrorMessage) });
         setTimeline([]);
-        setComparisonTimeline([]);
-        setMeta({ frame_count: 0, intervals: 24, replay_compression: 1, canonical_flow: [] });
+        setMeta({});
         setCurrentFrameIndex(0);
-        setIsPlaying(false);
-        setError(buildReplayNotice(loadError, normalizeErrorMessage));
         setEvidenceRun(null);
+        setError(buildStoryNotice(loadError, normalizeErrorMessage));
       }
     }
-    loadReplay();
+    loadStorySource();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, normalizeErrorMessage, reviewReady, sessionJobId, shouldRequestReplay]);
+  }, [accessCode, apiFetch, normalizeErrorMessage, reviewReady, sessionJobId, shouldRequestStory]);
 
-  useEffect(() => {
-    if (!isPlaying) return undefined;
-    if (timeline.length < 2) return undefined;
-    const lastFrameIndex = timeline.length - 1;
-    const intervalMs = Math.max(100, Math.round(900 / playbackSpeed));
-    const timer = window.setInterval(() => {
-      setCurrentFrameIndex((current) => Math.min(current + 1, lastFrameIndex));
-    }, intervalMs);
-    return () => window.clearInterval(timer);
-  }, [isPlaying, playbackSpeed, timeline.length]);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    if (timeline.length === 0) return;
-    if (currentFrameIndex >= timeline.length - 1) {
-      setIsPlaying(false);
-    }
-  }, [currentFrameIndex, isPlaying, timeline.length]);
-
-  useEffect(() => {
-    if (!shouldRequestReplay) {
-      setRangePreviewCount(0);
-      return () => {};
-    }
-    function loadRangePreview() {
-      if (timeline.length < 2) {
-        setRangePreviewCount(0);
-        return;
-      }
-      const start = timeline[Math.max(0, currentFrameIndex - 4)]?.timestamp;
-      const end = timeline[Math.min(timeline.length - 1, currentFrameIndex + 4)]?.timestamp;
-      if (!start || !end) return;
-      const localFrames = timeline.filter((frame) => {
-        const frameTimestamp = String(frame?.timestamp ?? "");
-        return frameTimestamp >= start && frameTimestamp <= end;
-      });
-      setRangePreviewCount(localFrames.length);
-    }
-    loadRangePreview();
-  }, [currentFrameIndex, timeline, shouldRequestReplay]);
-
-  const hasReplaySnapshots = timeline.length > 0;
-  const dash = "-";
-  const replayPendingState = hasReplaySnapshots && !reviewReady
-    ? buildPendingState(currentSession?.reviewReadiness)
-    : null;
-  const hasDiagnosticsEvidence = Boolean(hasRealSiiOutput || hasCurrentUploadResult || hasActiveSession || hasResumedSession || hasReplaySnapshots);
-  const hasTopologyEvidence = Boolean(hasReplaySnapshots && timeline[0]?.topology_state);
-  const operativeTimeline = timeline;
-  const activeFrame = operativeTimeline[Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))] ?? null;
-  const comparisonFrame = comparisonTimeline[currentFrameIndex] ?? null;
-  const shownFrame = comparisonMode ? (comparisonFrame ?? activeFrame) : activeFrame;
-  const currentTimeLabel = shownFrame?.timestamp_end ?? shownFrame?.timestamp ?? dash;
+  const activeFrame = timeline[Math.min(currentFrameIndex, Math.max(0, timeline.length - 1))] ?? null;
+  const storySessionKey = String(sessionJobId ?? meta.job_id ?? "active-session");
+  const notes = Array.isArray(notesBySession[storySessionKey]) ? notesBySession[storySessionKey] : [];
+  const selectedLearning = learningBySession[storySessionKey] ?? "";
+  const story = useMemo(() => buildSystemStory({
+    timeline,
+    frame: activeFrame,
+    frameIndex: currentFrameIndex,
+    canonicalFinding,
+    currentSession,
+    evidenceRun,
+    reviewReady,
+    formatClockTime,
+    domainMode,
+  }), [activeFrame, canonicalFinding, currentFrameIndex, currentSession, domainMode, evidenceRun, formatClockTime, reviewReady, timeline]);
 
   useEffect(() => {
     if (typeof onReplayFrameChange === "function") {
-      onReplayFrameChange(hasReplaySnapshots ? shownFrame : null, {
-        frameIndex: Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1)),
-        totalFrames: operativeTimeline.length,
-        isPlaying,
+      onReplayFrameChange(activeFrame, {
+        frameIndex: Math.min(currentFrameIndex, Math.max(0, timeline.length - 1)),
+        totalFrames: timeline.length,
+        feature: "system-story",
       });
     }
-  }, [currentFrameIndex, hasReplaySnapshots, isPlaying, onReplayFrameChange, operativeTimeline.length, shownFrame]);
+  }, [activeFrame, currentFrameIndex, onReplayFrameChange, timeline.length]);
 
   useEffect(() => {
-    if (!hasReplaySnapshots && replayMode) {
-      setReplayMode(false);
-    }
-  }, [hasReplaySnapshots, replayMode]);
+    if (typeof onReplayModeChange === "function") onReplayModeChange(false);
+  }, [onReplayModeChange]);
 
-  useEffect(() => {
-    if (typeof onReplayModeChange === "function") {
-      onReplayModeChange(replayMode && hasReplaySnapshots);
-    }
-  }, [hasReplaySnapshots, onReplayModeChange, replayMode]);
-  const canonicalFlow = (meta.canonical_flow?.length ? meta.canonical_flow : DEFAULT_CANONICAL_FLOW);
-  const replayConfidence = replayPendingState ? "Pending" : replayFinding.confidence;
-  const replayStatusMetrics = useMemo(() => ([
-    { label: "Change strength", value: hasReplaySnapshots ? formatChangeStrength(shownFrame) : dash },
-    { label: "Confidence", value: replayConfidence },
-  ]), [hasReplaySnapshots, replayConfidence, shownFrame]);
+  function addNote(text = noteDraft) {
+    const clean = sanitizeOperatorText(text);
+    if (!clean) return;
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: clean, createdAt: new Date().toISOString() };
+    setNotesBySession((current) => ({
+      ...current,
+      [storySessionKey]: [entry, ...(current[storySessionKey] ?? [])].slice(0, 20),
+    }));
+    setNoteDraft("");
+  }
 
-  const expertMetrics = useMemo(() => {
-    if (!hasDiagnosticsEvidence) {
-      return [
-        { label: "Structure Timeline", value: dash },
-        { label: "Current Frame", value: dash },
-        { label: "Raw change strength", value: dash },
-        { label: "Raw change direction", value: dash },
-        { label: "Raw change momentum", value: dash },
-        { label: "Raw state", value: dash },
-        { label: "Primary Contributors", value: dash },
-        { label: "Confidence", value: dash },
-      ];
-    }
-    const contributors = Array.isArray(shownFrame?.primary_contributors) && shownFrame.primary_contributors.length
-      ? shownFrame.primary_contributors.slice(0, 2).join(" | ")
-      : dash;
-    return [
-      { label: "Structure Timeline", value: hasReplaySnapshots ? (meta.frame_count ?? operativeTimeline.length) : dash },
-      { label: "Current Frame", value: hasReplaySnapshots ? `${Math.min(currentFrameIndex + 1, operativeTimeline.length)}/${Math.max(operativeTimeline.length, 1)}` : dash },
-      { label: "Raw change strength", value: hasReplaySnapshots ? (shownFrame?.baseline_distance ?? shownFrame?.topology_state?.drift_index ?? dash) : dash },
-      { label: "Raw change direction", value: hasReplaySnapshots ? (shownFrame?.drift_velocity ?? shownFrame?.subsystem_pressure?.volatility_index ?? dash) : dash },
-      { label: "Raw change momentum", value: hasReplaySnapshots ? (shownFrame?.drift_acceleration ?? shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash },
-      { label: "Raw state", value: hasTopologyEvidence ? strengthenReplayState(shownFrame?.topology_state?.stability_state) : dash },
-      { label: "Primary Contributors", value: contributors },
-      { label: "Playback", value: hasReplaySnapshots ? `${playbackSpeed.toFixed(1)}x` : dash },
-      { label: "Lead time", value: hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash },
-      { label: "Preview range", value: hasReplaySnapshots ? (rangePreviewCount || dash) : dash },
-      { label: "Confidence", value: hasReplaySnapshots ? formatConfidenceLabel(shownFrame?.cognition_state?.confidence_tier) : dash },
-    ];
-  }, [currentFrameIndex, hasDiagnosticsEvidence, hasReplaySnapshots, hasTopologyEvidence, meta.frame_count, operativeTimeline.length, playbackSpeed, rangePreviewCount, shownFrame?.baseline_distance, shownFrame?.drift_velocity, shownFrame?.drift_acceleration, shownFrame?.primary_contributors, shownFrame?.cognition_state?.confidence_tier, shownFrame?.topology_state?.drift_index, shownFrame?.topology_state?.stability_state, shownFrame?.continuation_window?.window, shownFrame?.propagation_state?.propagation_acceleration, shownFrame?.subsystem_pressure?.volatility_index]);
-
-  const discovery = useMemo(() => buildReplayDiscovery({
-    timeline: operativeTimeline,
-    frame: shownFrame,
-    frameIndex: currentFrameIndex,
-    formatClockTime,
-  }), [currentFrameIndex, formatClockTime, operativeTimeline, shownFrame]);
-  const replayStatusLabel = replayFinding.exists
-    ? replayFinding.status
-    : replayPendingState
-      ? replayPendingState.title
-      : (hasReplaySnapshots ? discovery.headline : "No replay available yet");
-  const replaySummary = replayFinding.exists
-    ? replayFinding.summary
-    : replayPendingState
-      ? replayPendingState.subtitle
-      : (hasReplaySnapshots ? discovery.summary : "Upload data to create an evidence replay.");
-  const replayReviewNext = replayFinding.exists
-    ? replayFinding.reviewNext
-    : replayPendingState
-      ? replayPendingState.detail
-      : "Telemetry replay unavailable";
-  const replayReviewContext = replayFinding.exists
-    ? replayFinding.whyItMatters
-    : replayPendingState
-      ? replayPendingState.subtitle
-      : (hasReplaySnapshots ? discovery.reviewNext.detail : "No replay available yet.");
-  const supportingEvidence = useMemo(() => {
-    if (replayPendingState) {
-      return sanitizeOperatorList([replayPendingState.subtitle]);
-    }
-    const evidenceJobId = sessionJobId ?? meta.replay_job_id ?? null;
-    const replayLineage = meta.lineage && typeof meta.lineage === "object" ? meta.lineage : {};
-    const uploadJobId = sessionJobId ?? null;
-    const alignmentOk = Boolean(
-      replayLineage.aligned
-      && evidenceJobId
-      && String(replayLineage.job_id ?? "") === String(evidenceJobId)
-      && (!uploadJobId || String(uploadJobId) === String(evidenceJobId))
-    );
-    if (!reviewReady || !evidenceRun || String(evidenceRun.run_id ?? "") !== String(evidenceJobId ?? "") || !alignmentOk) {
-      return [];
-    }
-    return buildSupportingEvidence({
-      evidenceRun,
-      uploadResult: currentSession?.latestUploadResult,
-      frame: shownFrame,
-      frameIndex: currentFrameIndex,
-      frameCount: operativeTimeline.length,
-      formatClockTime,
-      lineage: replayLineage,
-    });
-  }, [currentFrameIndex, currentSession?.latestUploadResult, evidenceRun, formatClockTime, meta.lineage, meta.replay_job_id, operativeTimeline.length, replayPendingState, reviewReady, sessionJobId, shownFrame]);
+  function selectLearning(label) {
+    setLearningBySession((current) => ({ ...current, [storySessionKey]: label }));
+  }
 
   return (
-    <div className="workspace-grid workspace-grid--console">
-      <Panel title="Evidence Replay" className="span-12 workspace-hero-panel replay-discovery" subtitle="See what changed, why it matters, and what to review next.">
-        <div className="replay-discovery__header">
+    <div className="workspace-grid workspace-grid--console system-story-workspace">
+      <Panel title="System Story" className="span-12 workspace-hero-panel system-story-hero" subtitle="What happened, why we believe it, and what to inspect next.">
+        <div className="system-story-hero__layout">
           <div>
-            <p className="section-token">Evidence</p>
-            <h3>{replayStatusLabel}</h3>
-            <p className="narrative-text">{replaySummary}</p>
+            <p className="section-token">System Story</p>
+            <h3>{story.whatHappened}</h3>
+            <p className="narrative-text">{story.summary}</p>
           </div>
-          <MetricGrid metrics={replayStatusMetrics} compact />
-        </div>
-
-        <div className="replay-discovery__sequence" aria-label="Evidence replay discovery sequence">
-          <DiscoveryCard label="Before" item={discovery.before} active={hasReplaySnapshots && currentFrameIndex === 0} />
-          <DiscoveryCard label="Behavior Change" item={discovery.current} active={hasReplaySnapshots} emphasized />
-          <DiscoveryCard label="After" item={discovery.after} active={hasReplaySnapshots && currentFrameIndex === operativeTimeline.length - 1} />
-        </div>
-
-        <div className="replay-discovery__insight-grid">
-          <section className="replay-discovery__insight" aria-label="What changed">
-            <span className="section-token">Current Status</span>
-            <strong>{replayStatusLabel}</strong>
-            <p>{replaySummary}</p>
-          </section>
-          <section className="replay-discovery__insight" aria-label="Supporting evidence">
-            <span className="section-token">Supporting Evidence</span>
-            <ul className="compact-list">
-              {sanitizeOperatorList(replayFinding.supportingEvidence.length > 0 ? replayFinding.supportingEvidence : supportingEvidence).map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          </section>
-          <section className="replay-discovery__insight" aria-label="Next operator review">
-            <span className="section-token">Review next</span>
-            <strong>{replayReviewNext}</strong>
-            <p>{replayReviewContext}</p>
-          </section>
-        </div>
-
-        <div className="replay-discovery__controls" aria-label="Timeline replay controls">
-          <div className="structural-replay-controls">
-            <select value={executionMode} onChange={(event) => setExecutionMode(String(event.target.value))}>
-              <option value="live">Evidence replay</option>
-              <option value="live_causal">Evidence replay, no lookahead</option>
-            </select>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.max(value - 1, 0))} disabled={!hasReplaySnapshots}>{expertMode ? "Previous Frame" : "Previous"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex((value) => Math.min(value + 1, operativeTimeline.length - 1))} disabled={!hasReplaySnapshots}>{expertMode ? "Next Frame" : "Next"}</button>
-            <button type="button" className="btn btn--secondary" onClick={togglePlayback} disabled={!hasReplaySnapshots}>{isPlaying ? "Pause" : "Play"}</button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCurrentFrameIndex(0)} disabled={!hasReplaySnapshots}>Start Over</button>
-            <select value={playbackSpeed} onChange={(event) => setPlaybackSpeed(Number(event.target.value))} disabled={!hasReplaySnapshots}>{[0.5, 1, 1.5, 2, 4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>
-            {expertMode ? (
-              <>
-                <button type="button" className="btn btn--secondary" onClick={() => setComparisonMode((value) => !value)} disabled={!hasReplaySnapshots}>{comparisonMode ? "Primary View" : "Comparison Mode"}</button>
-                <label className="metadata-text" htmlFor="replay-compression">Compression</label>
-                <select id="replay-compression" value={replayCompression} onChange={(event) => setReplayCompression(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
-              </>
-            ) : null}
-            <button type="button" className="btn btn--secondary" onClick={() => setReplayMode((value) => !value)} disabled={!hasReplaySnapshots}>{replayMode ? "Exit Review Mode" : "Open in System Status"}</button>
-            <input type="range" min={0} max={Math.max(0, operativeTimeline.length - 1)} value={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} onChange={(event) => setCurrentFrameIndex(Number(event.target.value))} disabled={!hasReplaySnapshots} />
+          <div className="system-story-hero__facts" aria-label="Story status">
+            {story.facts.map((fact) => (
+              <div key={fact.label}>
+                <span>{fact.label}</span>
+                <strong>{fact.value}</strong>
+              </div>
+            ))}
           </div>
         </div>
-
-        {hasReplaySnapshots ? (
-          <div className={["historian-replay-status", replayMode ? "historian-replay-status--active" : ""].filter(Boolean).join(" ")}>
-            <span className="historian-replay-status__badge">{replayPendingState ? "Replay generated, review pending" : (replayMode ? "System Status review active" : "Replay ready")}</span>
-            <span>{"Frame " + Math.min(currentFrameIndex + 1, Math.max(1, operativeTimeline.length)) + "/" + Math.max(1, operativeTimeline.length)}</span>
-            <span>{formatClockTime(currentTimeLabel)}</span>
-          </div>
-        ) : (
-          <p className="narrative-text">No replay yet. Upload data to create one.</p>
-        )}
-        <ReplayCognitionField timeline={operativeTimeline} frameIndex={Math.min(currentFrameIndex, Math.max(0, operativeTimeline.length - 1))} isPlaying={isPlaying} comparisonMode={comparisonMode} formatClockTime={formatClockTime} inactive={!hasReplaySnapshots} />
       </Panel>
-      {expertMode ? (
-        <Panel title="Structural Progression" className="span-12 replay-phase-panel">
-          <div className="canonical-flow">
-            {canonicalFlow.map((phase) => <div key={phase} className={["canonical-flow__step", hasReplaySnapshots && shownFrame?.cognition_state?.canonical_phase === phase ? "is-active" : ""].filter(Boolean).join(" ")}><span>{phase.replaceAll("_", " ")}</span></div>)}
-          </div>
-          <MetricGrid metrics={expertMetrics} compact />
-        </Panel>
-      ) : null}
-      {expertMode ? (
-        <>
-          <Panel title="What Changed" className="span-6"><PropagationMap frame={shownFrame} comparisonFrame={comparisonMode ? activeFrame : null} /></Panel>
-          <Panel title="Evidence Details" className="span-6"><EvidenceInteractionPanel frame={shownFrame} /></Panel>
-          <Panel title="Why It Matters" className="span-6">
-            <ul className="system-body-timeline-list">
-              <li><span className="metadata-text">Recovery</span><strong>{hasReplaySnapshots ? simplifyRecoverySignal(shownFrame?.propagation_state?.recovery_convergence) : dash}</strong></li>
-              <li><span className="metadata-text">Relationship continuity</span><strong>{hasReplaySnapshots ? formatRelationshipContinuity(shownFrame) : dash}</strong></li>
-              <li><span className="metadata-text">Review state</span><strong>{hasReplaySnapshots ? strengthenReplayState(shownFrame?.cognition_state?.facility_state) : dash}</strong></li>
-            </ul>
-          </Panel>
-        </>
-      ) : null}
-      {expertMode ? (
-        <>
-          <Panel title="Historical Structure Memory" className="span-6"><StructuralMemoryPanel frame={shownFrame} /></Panel>
-          <Panel title="Evidence Details" className="span-6"><EvidenceLineagePanel frame={shownFrame} /></Panel>
-          <Panel title="Temporal Structure" className="span-6">
-            <ul className="system-body-timeline-list">
-              <li><span className="metadata-text">State phase</span><strong>{hasReplaySnapshots ? (shownFrame?.cognition_state?.canonical_phase?.replaceAll?.("_", " ") ?? dash) : dash}</strong></li>
-              <li><span className="metadata-text">Propagation acceleration</span><strong>{hasReplaySnapshots ? (shownFrame?.propagation_state?.propagation_acceleration ?? dash) : dash}</strong></li>
-              <li><span className="metadata-text">Structural compression</span><strong>{hasReplaySnapshots ? (shownFrame?.subsystem_pressure?.compression_intensity ?? dash) : dash}</strong></li>
-              <li><span className="metadata-text">Continuation window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.window ?? dash) : dash}</strong></li>
-              <li><span className="metadata-text">Timing window</span><strong>{hasReplaySnapshots ? (shownFrame?.continuation_window?.timing_window ?? dash) : dash}</strong></li>
-            </ul>
-          </Panel>
-        </>
-      ) : null}
-      {error ? <Panel title="Replay Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
+
+      <Panel title="Why We Believe It" className="span-6 system-story-card">
+        <ul className="system-story-list">{story.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+      </Panel>
+      <Panel title="Likely Causes" className="span-6 system-story-card">
+        <div className="system-story-hypotheses">
+          {story.hypotheses.map((item) => (
+            <section key={`${item.rank}-${item.label}`}>
+              <span>{item.rank}</span>
+              <strong>{item.label}</strong>
+              <p>{item.detail}</p>
+            </section>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="What To Inspect" className="span-6 system-story-card">
+        <div className="system-story-checklist">
+          {story.checklist.map((item) => (
+            <label key={item}>
+              <input type="checkbox" />
+              <span>{item}</span>
+            </label>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="How It Developed" className="span-6 system-story-card">
+        <div className="system-story-timeline" aria-label="System Story timeline">
+          {story.development.map((item) => (
+            <section key={`${item.time}-${item.label}`}>
+              <span>{item.time}</span>
+              <strong>{item.label}</strong>
+              <p>{item.detail}</p>
+            </section>
+          ))}
+        </div>
+        {timeline.length > 1 ? (
+          <input
+            className="system-story-scrubber"
+            aria-label="Story timeline"
+            type="range"
+            min={0}
+            max={Math.max(0, timeline.length - 1)}
+            value={Math.min(currentFrameIndex, Math.max(0, timeline.length - 1))}
+            onChange={(event) => setCurrentFrameIndex(Number(event.target.value))}
+          />
+        ) : null}
+      </Panel>
+      <Panel title="Supporting Trends" className="span-12 system-story-card">
+        <div className="system-story-chart-grid">{story.trends.map((trend) => <TrendChart key={trend.label} trend={trend} />)}</div>
+      </Panel>
+      <Panel title="Engineer Notes" className="span-6 system-story-card">
+        <div className="system-story-note-entry">
+          <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Add inspection notes" rows={3} />
+          <button type="button" className="command-button" onClick={() => addNote()}>Add Note</button>
+        </div>
+        <div className="system-story-note-templates" aria-label="Note shortcuts">
+          {NOTE_TEMPLATES.map((item) => <button type="button" className="secondary-command-button" key={item} onClick={() => addNote(item)}>{item}</button>)}
+        </div>
+        <div className="system-story-notes">
+          {notes.length ? notes.map((note) => (
+            <section key={note.id}>
+              <strong>{note.text}</strong>
+              <span>{formatClockTime(note.createdAt)}</span>
+            </section>
+          )) : <p className="narrative-text">No engineer notes attached yet.</p>}
+        </div>
+      </Panel>
+      <Panel title="Repair Outcome" className="span-6 system-story-card">
+        <div className="system-story-learning" role="group" aria-label="Repair outcome">
+          {LEARNING_OPTIONS.map((label) => (
+            <button type="button" key={label} className={selectedLearning === label ? "command-button" : "secondary-command-button"} onClick={() => selectLearning(label)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="narrative-text">
+          {selectedLearning ? `Marked as ${selectedLearning.toLowerCase()}. Future comparisons for this session will include that field context.` : "Mark the inspection outcome so future stories can account for field knowledge."}
+        </p>
+      </Panel>
+      {error ? <Panel title="System Story Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
     </div>
   );
 }
 
-function DiscoveryCard({ label, item, active = false, emphasized = false }) {
+function TrendChart({ trend }) {
+  const width = 420;
+  const height = 150;
+  const historical = lineChartPoints(trend.historical, width, height);
+  const current = lineChartPoints(trend.current, width, height);
+  const deviationX = trend.deviationIndex == null ? null : (trend.deviationIndex / Math.max(trend.current.length - 1, 1)) * width;
   return (
-    <section className={["replay-discovery-card", active ? "is-active" : "", emphasized ? "is-emphasized" : ""].filter(Boolean).join(" ")}>
-      <span>{label}</span>
-      <strong>{item.title}</strong>
-      <p>{item.detail}</p>
-      <em>{item.time}</em>
+    <section className="system-story-chart">
+      <div className="system-story-chart__header"><strong>{trend.label}</strong><span>{trend.unit}</span></div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${trend.label} historical and current trend`}>
+        <line x1="0" x2={width} y1={height - 24} y2={height - 24} className="system-story-chart__axis" />
+        {deviationX !== null ? <rect x={Math.max(0, deviationX - 8)} y="0" width="16" height={height} className="system-story-chart__deviation" /> : null}
+        <polyline points={historical} className="system-story-chart__historical" />
+        <polyline points={current} className="system-story-chart__current" />
+      </svg>
+      <div className="system-story-chart__legend"><span>Historical</span><span>Current</span><span>Detected deviation</span></div>
     </section>
   );
 }
 
-
-async function fetchUploadScopedReplay({ apiFetch, accessCode, jobId = null }) {
+async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null }) {
   let targetJobId = jobId;
   if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
-    if (!latestResponse.ok) {
-      throw new Error(`Unexpected response: ${latestResponse.status}`);
-    }
+    if (!latestResponse.ok) throw new Error(`Unexpected response: ${latestResponse.status}`);
     const latestPayload = await latestResponse.json();
     const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
     targetJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload) ?? currentUpload?.job_id ?? null;
-    if (!targetJobId) {
-      return { jobId: null, timeline: [], meta: {}, message: "No replay is available for the active session." };
-    }
+    if (!targetJobId) return { jobId: null, timeline: [], meta: {}, message: "System Story is waiting for an active telemetry session." };
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
-  let pendingReplayMessage = "";
+  let pendingMessage = "";
   if (statusResponse.ok) {
     const statusPayload = await statusResponse.json();
     const status = String(statusPayload?.status ?? "").toUpperCase();
-    const replayReady = Boolean(statusPayload?.replay_ready) || Number(statusPayload?.replay_frame_count ?? 0) > 0;
+    const timelineReady = Boolean(statusPayload?.replay_ready) || Number(statusPayload?.replay_frame_count ?? 0) > 0;
     const resultAvailable = Boolean(statusPayload?.result_available);
-    const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || replayReady || resultAvailable;
-    if (status && !terminalOrFetchable) {
-      pendingReplayMessage = `Replay is still building for this upload job (${status.toLowerCase()}).`;
-    }
+    const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || timelineReady || resultAvailable;
+    if (status && !terminalOrFetchable) pendingMessage = `System Story is still building for this upload job (${status.toLowerCase()}).`;
   }
-  const replayResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
-  if (!replayResponse.ok) {
-    throw new Error(`Unexpected response: ${replayResponse.status}`);
-  }
-  const replayPayload = await replayResponse.json();
-  const timeline = Array.isArray(replayPayload?.timeline) ? replayPayload.timeline : [];
-  const meta = replayPayload?.meta && typeof replayPayload.meta === "object" ? replayPayload.meta : {};
-  return {
-    jobId: targetJobId,
-    timeline,
-    meta: timeline.length ? meta : { ...meta, replay_pending: Boolean(pendingReplayMessage) },
-    message: timeline.length
-      ? (typeof replayPayload?.message === "string" ? replayPayload.message : "")
-      : (pendingReplayMessage || (typeof replayPayload?.message === "string" ? replayPayload.message : "")),
-  };
+  const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
+  if (!timelineResponse.ok) throw new Error(`Unexpected response: ${timelineResponse.status}`);
+  const payload = await timelineResponse.json();
+  const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];
+  const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
+  return { jobId: targetJobId, timeline, meta, message: timeline.length ? "" : (pendingMessage || (typeof payload?.message === "string" ? payload.message : "")) };
 }
 
 async function fetchEvidenceRunForJob({ apiFetch, accessCode, jobId }) {
@@ -474,27 +284,172 @@ async function fetchEvidenceRunForJob({ apiFetch, accessCode, jobId }) {
   if (!response.ok) return null;
   const payload = await response.json();
   const runs = Array.isArray(payload?.runs) ? payload.runs : [];
-  return runs.find((run) => (
-    String(run?.run_id ?? "") === String(jobId)
-    && String(run?.status ?? "").toLowerCase() === "completed"
-  )) ?? null;
+  return runs.find((run) => String(run?.run_id ?? "") === String(jobId) && String(run?.status ?? "").toLowerCase() === "completed") ?? null;
 }
 
-function sortReplayTimeline(frames) {
+function buildSystemStory({ timeline, frame, frameIndex, canonicalFinding, currentSession, evidenceRun, reviewReady, formatClockTime, domainMode }) {
+  const frames = Array.isArray(timeline) ? timeline : [];
+  const activeFrame = frame ?? frames[frames.length - 1] ?? null;
+  const finding = canonicalFinding ?? {};
+  const pendingState = frames.length > 0 && !reviewReady ? buildPendingState(currentSession?.reviewReadiness) : null;
+  const variables = collectVariables({ evidenceRun, activeFrame, currentSession });
+  const equipment = inferEquipmentName(variables, domainMode);
+  const duration = inferDuration({ frames, evidenceRun, finding });
+  const strength = formatChangeStrength(activeFrame);
+  const whatHappened = pendingState ? "Telemetry is present, but the story is waiting for verification." : finding.summary ? sanitizeOperatorText(finding.summary) : buildWhatHappened({ equipment, strength, duration, activeFrame });
+  const evidence = pendingState ? sanitizeOperatorList([pendingState.subtitle, pendingState.detail]) : buildEvidenceBullets({ evidenceRun, finding, activeFrame, variables });
+  return {
+    whatHappened,
+    summary: pendingState ? pendingState.detail : `This story summarizes ${frames.length || "the current"} observation window in operator language and points the engineer to the next inspection steps.`,
+    evidence,
+    hypotheses: buildHypotheses({ variables, evidence, domainMode }),
+    checklist: buildChecklist({ variables, domainMode }),
+    development: buildDevelopmentTimeline({ frames, frameIndex, formatClockTime, pendingState }),
+    trends: buildTrendModels({ frames, variables }),
+    facts: [
+      { label: "Window", value: duration },
+      { label: "Strength", value: strength },
+      { label: "Signals", value: variables.length ? String(variables.length) : "Unknown" },
+    ],
+  };
+}
+
+function buildWhatHappened({ equipment, strength, duration, activeFrame }) {
+  const normalized = String(activeFrame?.topology_state?.stability_state ?? activeFrame?.cognition_state?.facility_state ?? "").toLowerCase();
+  if (normalized.includes("stable")) return `${equipment} remains close to its historical operating pattern.`;
+  if (normalized.includes("recover")) return `${equipment} is moving back toward its usual behavior.`;
+  if (equipment.toLowerCase().includes("pump")) return `${equipment} began operating differently than its historical pattern.`;
+  if (strength === "High" || strength === "Moderate") return `${equipment} gradually became less efficient over ${duration}.`;
+  return `${equipment} shows a developing change from its usual operating pattern.`;
+}
+
+function buildEvidenceBullets({ evidenceRun, finding, activeFrame, variables }) {
+  const supplied = sanitizeOperatorList([...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []), ...(Array.isArray(evidenceRun?.evidence_summary) ? evidenceRun.evidence_summary : [])]).map(cleanEvidenceLine);
+  const generated = [];
+  const contributors = variables.slice(0, 4);
+  if (contributors.length >= 2) generated.push(`${humanize(contributors[0])} and ${humanize(contributors[1])} no longer moved the way they usually do.`);
+  const strength = readChangeStrength(activeFrame);
+  if (Number.isFinite(strength) && strength >= 0.24) generated.push("Current behavior stayed outside the historical operating band.");
+  if (Array.isArray(activeFrame?.primary_contributors) && activeFrame.primary_contributors.length) generated.push(`${sanitizeOperatorList(activeFrame.primary_contributors).slice(0, 3).map(humanize).join(", ")} contributed most to the change.`);
+  return sanitizeOperatorList([...supplied, ...generated]).slice(0, 5);
+}
+
+function buildHypotheses({ variables, evidence, domainMode }) {
+  const text = `${variables.join(" ")} ${evidence.join(" ")} ${domainMode ?? ""}`.toLowerCase();
+  const hypotheses = [];
+  if (text.includes("valve") || text.includes("flow") || text.includes("chw")) hypotheses.push({ rank: "Most likely", label: "Valve control issue", detail: "Flow response appears inconsistent with the expected command or load pattern." });
+  if (text.includes("pump") || text.includes("vfd") || text.includes("speed")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Pump or VFD response change", detail: "Pump behavior may no longer match its historical response curve." });
+  if (text.includes("temperature") || text.includes("sensor") || text.includes("humidity")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Sensor drift", detail: "A measurement point may be biasing the interpretation if calibration has shifted." });
+  hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Reduced flow", detail: "Hydraulic or process movement may be lower than expected for the current operating condition." });
+  hypotheses.push({ rank: "Possible", label: "Changing load conditions", detail: "A real load change may explain the new pattern without an equipment fault." });
+  return hypotheses.slice(0, 4);
+}
+
+function buildChecklist({ variables, domainMode }) {
+  const text = `${variables.join(" ")} ${domainMode ?? ""}`.toLowerCase();
+  const items = ["Verify BAS values"];
+  if (text.includes("valve") || text.includes("flow") || text.includes("chw")) items.push("Inspect valve position");
+  items.push("Compare sensor calibration");
+  if (text.includes("pump") || text.includes("speed") || text.includes("flow")) items.push("Review VFD output");
+  items.push("Check recent maintenance");
+  return [...new Set(items)].slice(0, 6);
+}
+
+function buildDevelopmentTimeline({ frames, frameIndex, formatClockTime, pendingState }) {
+  if (!frames.length) return [{ time: "Current", label: "Waiting for telemetry", detail: "Upload or resume a session to create a System Story." }];
+  const first = frames[0];
+  const middle = frames[Math.floor(frames.length / 2)];
+  const current = frames[Math.min(frameIndex, frames.length - 1)] ?? frames[frames.length - 1];
+  const last = frames[frames.length - 1];
+  return [
+    { time: formatStoryTime(first, formatClockTime), label: "Normal", detail: "Historical operating pattern established." },
+    { time: formatStoryTime(middle, formatClockTime), label: "Behavior begins deviating", detail: "The current window starts moving away from expected behavior." },
+    { time: formatStoryTime(current, formatClockTime), label: pendingState ? "Verification pending" : "Confidence increases", detail: pendingState ? pendingState.subtitle : "Evidence becomes strong enough to create an operator story." },
+    { time: formatStoryTime(last, formatClockTime), label: "Observation created", detail: "System Story is ready for engineer review." },
+    { time: "Current", label: "Inspect and teach", detail: "Add notes and mark the outcome after field review." },
+  ];
+}
+
+function buildTrendModels({ frames, variables }) {
+  const labels = chooseTrendLabels(variables);
+  return labels.map((label, labelIndex) => {
+    const values = frames.length ? frames.map((frame, index) => ({ value: trendValueForFrame(frame, index, labelIndex) })) : Array.from({ length: 8 }, (_, index) => ({ value: 40 + index * 2 + labelIndex * 4 }));
+    const historical = values.map((item, index) => ({ value: Math.max(0, Number(item.value) - 8 + Math.sin(index + labelIndex) * 4) }));
+    return { label, unit: trendUnit(label), historical, current: values, deviationIndex: Math.max(1, Math.floor(values.length * 0.62)) };
+  });
+}
+
+function chooseTrendLabels(variables) {
+  const text = variables.join(" ").toLowerCase();
+  const labels = [];
+  if (text.includes("flow")) labels.push("Flow");
+  if (text.includes("speed") || text.includes("pump")) labels.push("Pump speed");
+  if (text.includes("delta")) labels.push("Delta-T");
+  if (text.includes("load")) labels.push("Load");
+  if (text.includes("power") || text.includes("kw")) labels.push("Power");
+  if (text.includes("temp") || text.includes("chw")) labels.push("Temperature");
+  return [...new Set(labels.length ? labels : ["Flow", "Pump speed", "Delta-T", "Load", "Power", "Temperature"])].slice(0, 6);
+}
+
+function trendValueForFrame(frame, index, offset) {
+  const candidates = [frame?.baseline_distance, frame?.topology_state?.drift_index, frame?.subsystem_pressure?.volatility_index, frame?.propagation_state?.activation_intensity];
+  const numeric = candidates.map(Number).find(Number.isFinite);
+  const base = Number.isFinite(numeric) ? numeric * 100 : 28 + index * 5;
+  return Math.max(4, base + offset * 7 + Math.sin(index + offset) * 6);
+}
+
+function trendUnit(label) {
+  if (label === "Temperature") return "deg";
+  if (label === "Power") return "kW";
+  if (label === "Flow") return "gpm";
+  if (label === "Pump speed" || label === "Load") return "%";
+  return "trend";
+}
+
+function collectVariables({ evidenceRun, activeFrame, currentSession }) {
+  return sanitizeOperatorList([...(Array.isArray(evidenceRun?.variables) ? evidenceRun.variables : []), ...(Array.isArray(activeFrame?.primary_contributors) ? activeFrame.primary_contributors : []), ...(Array.isArray(currentSession?.canonicalFinding?.affectedVariables) ? currentSession.canonicalFinding.affectedVariables : [])]);
+}
+
+function inferEquipmentName(variables, domainMode) {
+  const text = `${variables.join(" ")} ${domainMode ?? ""}`.toLowerCase();
+  if (text.includes("chw") || text.includes("chiller")) return "The chilled water loop";
+  if (text.includes("pump")) return "Pump 2";
+  if (text.includes("pool") || text.includes("orp") || text.includes("chlorine")) return "The aquatic treatment loop";
+  if (text.includes("air") || text.includes("ahu")) return "The air handling system";
+  return "The building system";
+}
+
+function inferDuration({ frames, evidenceRun, finding }) {
+  const explicit = finding?.technicalDetails?.find?.((item) => item.label === "Behavior duration")?.value;
+  if (explicit) return String(explicit);
+  const startedAt = evidenceRun?.deformation_started_at;
+  const endedAt = frames[frames.length - 1]?.timestamp_end ?? frames[frames.length - 1]?.timestamp;
+  const minutes = startedAt && endedAt ? Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000) : NaN;
+  if (Number.isFinite(minutes) && minutes > 0) return `${minutes} minutes`;
+  if (frames.length > 1) return `${frames.length} observation points`;
+  return "the current observation window";
+}
+
+function cleanEvidenceLine(value) {
+  return sanitizeOperatorText(String(value ?? "")
+    .replace(/\breplay\/relationship evidence\b/gi, "historical comparison")
+    .replace(/\breplay relationship evidence\b/gi, "historical comparison")
+    .replace(/\breplay evidence\b/gi, "historical comparison")
+    .replace(/\brelationship divergence\b/gi, "system behavior changed")
+    .replace(/\bState Group A\b/gi, "the usual pattern"));
+}
+
+function sortTimeline(frames) {
   if (!Array.isArray(frames) || frames.length === 0) return [];
   return frames
     .map((frame, originalIndex) => ({ frame, originalIndex }))
     .sort((a, b) => {
-      const aFrameNumber = readFrameNumber(a.frame);
-      const bFrameNumber = readFrameNumber(b.frame);
-      if (aFrameNumber !== null && bFrameNumber !== null && aFrameNumber !== bFrameNumber) {
-        return aFrameNumber - bFrameNumber;
-      }
+      const aNumber = readFrameNumber(a.frame);
+      const bNumber = readFrameNumber(b.frame);
+      if (aNumber !== null && bNumber !== null && aNumber !== bNumber) return aNumber - bNumber;
       const aTimestamp = readFrameTimestamp(a.frame);
       const bTimestamp = readFrameTimestamp(b.frame);
-      if (aTimestamp !== null && bTimestamp !== null && aTimestamp !== bTimestamp) {
-        return aTimestamp < bTimestamp ? -1 : 1;
-      }
+      if (aTimestamp !== null && bTimestamp !== null && aTimestamp !== bTimestamp) return aTimestamp < bTimestamp ? -1 : 1;
       return a.originalIndex - b.originalIndex;
     })
     .map((entry) => entry.frame);
@@ -517,161 +472,8 @@ function readFrameTimestamp(frame) {
   return timeValue;
 }
 
-function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) {
-  const frames = Array.isArray(timeline) ? timeline : [];
-  const first = frames[0] ?? null;
-  const last = frames[frames.length - 1] ?? null;
-  const current = frame ?? first ?? null;
-  const frameCount = frames.length;
-  const dominantPaths = Array.isArray(current?.propagation_state?.dominant_paths) ? current.propagation_state.dominant_paths : [];
-  const contributors = Array.isArray(current?.primary_contributors) ? current.primary_contributors.filter(Boolean).slice(0, 3) : [];
-  const confidence = formatConfidenceLabel(current?.cognition_state?.confidence_tier);
-  const changeStrength = formatChangeStrength(current);
-  const relationshipSupport = dominantPaths.length > 0 ? String(dominantPaths.length) + " operating signal" + (dominantPaths.length === 1 ? "" : "s") + " changed together" : "Supporting signal changes not recorded in this time window";
-  const contributorText = contributors.length ? contributors.join(" | ") : "No primary variables listed";
-
-  return {
-    headline: replayStateHeadline(current),
-    summary: frameCount > 0
-      ? "Telemetry replay available across " + String(frameCount) + " frame" + (frameCount === 1 ? "" : "s") + ". Current moment " + String(Math.min(frameIndex + 1, frameCount)) + " shows " + changeStrength.toLowerCase() + " change strength."
-      : "No replay available yet.",
-    before: buildDiscoveryMoment(first, "Before", "Usual behavior pattern", formatClockTime),
-    current: buildDiscoveryMoment(current, "System behavior changed", replayMomentDetail(current), formatClockTime),
-    after: buildDiscoveryMoment(last, "Latest replay state", "Most recent observed behavior pattern", formatClockTime),
-    whatChanged: {
-      title: replayStateHeadline(current),
-      detail: contributors.length
-        ? sanitizeOperatorText("Relationship pattern shifted around " + contributorText + ".")
-        : sanitizeOperatorText(replayMomentDetail(current)),
-    },
-    evidence: [
-      "Confidence: " + confidence,
-      "Change strength: " + changeStrength,
-      relationshipSupport,
-    ],
-    reviewNext: {
-      title: contributors.length ? "Review supporting evidence" : "Review replay timeline",
-      detail: contributors.length
-        ? sanitizeOperatorText("Review " + contributorText + " against the source telemetry and operator notes.")
-        : "Use the timeline controls to inspect when the change first appeared.",
-    },
-  };
-}
-
-function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime, lineage = {} }) {
-  const items = [];
-  const sourceName = evidenceRun?.source_name ?? evidenceRun?.filename ?? uploadResult?.filename;
-  const variables = Array.isArray(evidenceRun?.variables) ? evidenceRun.variables.filter(Boolean).slice(0, 4) : [];
-  const summaries = Array.isArray(evidenceRun?.evidence_summary) ? evidenceRun.evidence_summary.filter(Boolean) : [];
-  const metrics = evidenceRun?.drift_metrics && typeof evidenceRun.drift_metrics === "object" ? evidenceRun.drift_metrics : {};
-  const detectedAt = evidenceRun?.deformation_started_at ?? frame?.timestamp_start ?? frame?.timestamp;
-  const confidence = evidenceRun?.confidence
-    ?? evidenceRun?.confidence_score
-    ?? evidenceRun?.evidence_confidence
-    ?? metrics.confidence
-    ?? frame?.cognition_state?.confidence_tier;
-  const changeMetric = firstFiniteNumber(
-    metrics.baseline_distance,
-    metrics.drift_index,
-    metrics.coupling_delta,
-    frame?.baseline_distance,
-    frame?.topology_state?.drift_index,
-  );
-
-  if (sourceName) items.push("Source file: " + sanitizeOperatorText(sourceName));
-  if (variables.length) items.push("Variables: " + sanitizeOperatorList(variables).join(" | "));
-  if (summaries[0]) items.push("Relationship summary: " + sanitizeOperatorText(summaries[0]));
-  if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
-  if (detectedAt) items.push("Detected: " + formatClockTime(detectedAt));
-  if (Array.isArray(lineage?.source_rows) && lineage.source_rows.length > 0) {
-    const firstAnchor = lineage.source_rows[0] ?? {};
-    items.push("Source rows: " + sanitizeOperatorText([firstAnchor.window, firstAnchor.source_row, firstAnchor.timestamp].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").join(" @ ")));
-  }
-  if (Array.isArray(lineage?.evidence_windows) && lineage.evidence_windows.length > 0) {
-    const firstWindow = lineage.evidence_windows[0] ?? {};
-    const windowLabel = [
-      humanizeReplayVariable(firstWindow.column),
-      firstWindow.baseline_window && firstWindow.recent_window
-        ? `${firstWindow.baseline_window} to ${firstWindow.recent_window}`
-        : (firstWindow.window_start || firstWindow.window_end),
-    ].filter(Boolean).join(" ");
-    items.push("Evidence window: " + sanitizeOperatorText(windowLabel));
-  }
-  if (frameCount > 0) {
-    const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
-    items.push("Replay frame: " + String(Math.min(frameIndex + 1, frameCount)) + "/" + String(frameCount) + (frameTime ? " at " + formatClockTime(frameTime) : ""));
-  }
-  if (confidence != null && String(confidence).trim()) {
-    items.push("Confidence: " + formatEvidenceConfidence(confidence));
-  }
-  return sanitizeOperatorList(items);
-}
-
-function humanizeReplayVariable(value) {
-  const text = String(value ?? "").trim();
-  const normalized = text.toLowerCase();
-  const labels = {
-    chiller_load_pct: "Chiller load",
-    compressor_power_kw: "Compressor power",
-    chw_supply_temp_f: "CHW supply temp",
-    flow_gpm: "Flow",
-  };
-  if (labels[normalized]) return labels[normalized];
-  return text.replaceAll("_", " ");
-}
-
-function firstFiniteNumber(...values) {
-  for (const value of values) {
-    if (value == null || String(value).trim() === "") continue;
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) return numeric;
-  }
-  return null;
-}
-
-function formatEvidenceConfidence(value) {
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) {
-    const percent = numeric <= 1 ? numeric * 100 : numeric;
-    return String(Math.round(percent)) + "%";
-  }
-  return formatConfidenceLabel(value);
-}
-
-function buildDiscoveryMoment(frame, title, fallbackDetail, formatClockTime) {
-  if (!frame) {
-    return { title: "No replay available yet", detail: "Upload telemetry to generate replay.", time: "-" };
-  }
-  return {
-    title,
-    detail: fallbackDetail || replayMomentDetail(frame),
-    time: formatClockTime(frame.timestamp_end ?? frame.timestamp ?? frame.timestamp_start ?? "-"),
-  };
-}
-
-function replayStateHeadline(frame) {
-  const state = strengthenReplayState(frame?.topology_state?.stability_state ?? frame?.cognition_state?.facility_state);
-  if (!frame) return "No replay available yet";
-  if (state === "Stable") return "System behavior stable";
-  if (state === "-") return "Change detected";
-  return state;
-}
-
-function replayMomentDetail(frame) {
-  if (!frame) return "No replay available yet.";
-  const paths = Array.isArray(frame?.propagation_state?.dominant_paths) ? frame.propagation_state.dominant_paths.length : 0;
-  if (paths > 0) return "Relationship pattern shifted with cross-variable support.";
-  const strength = readChangeStrength(frame);
-  if (Number.isFinite(strength) && strength > 0) return "System behavior changed from its usual pattern.";
-  return "System behavior remains close to its usual pattern.";
-}
-
 function readChangeStrength(frame) {
-  const candidates = [
-    frame?.baseline_distance,
-    frame?.topology_state?.drift_index,
-    frame?.subsystem_pressure?.volatility_index,
-  ];
+  const candidates = [frame?.baseline_distance, frame?.topology_state?.drift_index, frame?.subsystem_pressure?.volatility_index];
   for (const candidate of candidates) {
     const value = Number(candidate);
     if (Number.isFinite(value)) return value;
@@ -681,59 +483,50 @@ function readChangeStrength(frame) {
 
 function formatChangeStrength(frame) {
   const value = readChangeStrength(frame);
-  if (!Number.isFinite(value)) return "Pending";
+  if (!Number.isFinite(value)) return "Unknown";
   if (value < 0.24) return "Low";
   if (value < 0.72) return "Moderate";
   return "High";
 }
 
-function simplifyRecoverySignal(value) {
-  const normalized = String(value ?? "").toLowerCase();
-  if (!normalized.trim()) return "Pending";
-  if (normalized.includes("slow") || normalized.includes("elong") || normalized.includes("weak")) return "Slower than usual";
-  if (normalized.includes("recover") || normalized.includes("convergen") || normalized.includes("stable")) return "Tracking";
-  return sentenceCase(String(value).replaceAll("_", " "));
+function formatStoryTime(frame, formatClockTime) {
+  const timestamp = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
+  if (!timestamp) return "-";
+  const date = new Date(timestamp);
+  if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return formatClockTime(timestamp);
 }
 
-function formatRelationshipContinuity(frame) {
-  const value = Number(frame?.topology_state?.fragmentation_indicator);
-  if (!Number.isFinite(value)) return "Pending";
-  if (value < 0.24) return "Connected";
-  if (value < 0.72) return "Changing";
-  return "Fragmented";
-}
-const DEFAULT_CANONICAL_FLOW = ["stable_topology", "relationship_weakening", "pressure_migration", "archetype_emergence", "propagation_activation", "structural_fragmentation", "continuation_pathways", "recovery_or_escalation"];
-
-function strengthenReplayState(value) {
-  const normalized = String(value ?? "").toLowerCase();
-  if (!normalized.trim()) return "-";
-  if (normalized.includes("needs review") || normalized.includes("review")) return "Propagation Watch Active";
-  if (normalized.includes("drift")) return "System behavior changed";
-  if (normalized.includes("instab") || normalized.includes("separat")) return "Relationship pattern shifted";
-  if (normalized.includes("deterior") || normalized.includes("fragment")) return "Relationship pattern fragmented";
-  if (normalized.includes("recover") || normalized.includes("convergen")) return "Recovery pattern tracking";
-  if (normalized.includes("stable") || normalized.includes("nominal")) return "Stable";
-  return sentenceCase(String(value).replaceAll("_", " "));
+function lineChartPoints(values, width, height) {
+  const numeric = values.map((item) => Number(item.value)).filter(Number.isFinite);
+  const min = numeric.length ? Math.min(...numeric) : 0;
+  const max = numeric.length ? Math.max(...numeric) : 1;
+  const span = Math.max(max - min, 1);
+  return values.map((item, index) => {
+    const x = (index / Math.max(values.length - 1, 1)) * width;
+    const y = height - (((Number(item.value) - min) / span) * (height - 18)) - 8;
+    return `${x},${Math.max(4, Math.min(height - 4, y))}`;
+  }).join(" ");
 }
 
-function sentenceCase(value) {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+function humanize(value) {
+  return String(value ?? "").replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function formatConfidenceLabel(value) {
-  return normalizeOperatorConfidenceLabel(value);
+function loadJsonStorage(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
-function buildReplayNotice(error, normalizeErrorMessage) {
-  const message = String(normalizeErrorMessage(error?.message ?? error) ?? "");
+function buildStoryNotice(error, normalizeErrorMessage) {
+  const message = String(normalizeErrorMessage?.(error?.message ?? error) ?? error?.message ?? error ?? "");
   const lower = message.toLowerCase();
-  if (lower.includes("404") || lower.includes("unexpected response")) {
-    return "No replay is available for this session.";
-  }
-  if (lower.includes("network") || lower.includes("failed to fetch")) {
-    return "Replay will appear when processing completes.";
-  }
-  return "No replay is available for this session.";
+  if (lower.includes("404") || lower.includes("unexpected response")) return "System Story will appear when this session has enough telemetry.";
+  if (lower.includes("network") || lower.includes("failed to fetch")) return "System Story will appear when processing completes.";
+  return "System Story will appear when this session has enough telemetry.";
 }

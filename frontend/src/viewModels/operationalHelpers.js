@@ -273,7 +273,7 @@ function decisionLabelFromTone(tone, index = 0) {
 }
 
 function humanizeDriverCategory(value) {
-  if (!value) return "Structural Relationship Shift";
+  if (!value) return "System Behavior Change";
   return value
     .split("_")
     .map((token) => token.charAt(0).toUpperCase() + token.slice(1))

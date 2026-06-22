@@ -125,18 +125,17 @@ export default function SystemBodyWorkspace({
   });
   const technicalReport = buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState });
   const overviewSummary = buildOverviewSummary(assessmentState.mode);
-  const metricTiles = compactRows([
-    { label: "Rows loaded", value: dataQualityReport.rowsLoaded },
-    { label: "Signals detected", value: dataQualityReport.signalsDetected },
-    { label: "Confidence", value: evidenceReport.confidence },
-  ]);
+  const healthMetrics = buildHealthMetrics({ assessmentState, finding });
+  const whatChangedToday = buildWhatChangedToday({ finding, assessmentState, evidenceReport });
+  const actionGroups = buildActionGroups({ finding, evidenceReport });
   const overviewNextAction = buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceReport, finding });
   const visibleWarnings = showAllWarnings ? dataQualityReport.warnings : dataQualityReport.warnings.slice(0, 3);
   const resultSections = [
-    { id: "overview", label: "Overview" },
+    { id: "overview", label: "Health" },
     { id: "findings", label: "Issues" },
+    { id: "story", label: "System Story" },
+    { id: "actions", label: "Actions" },
     { id: "quality", label: "Data Quality" },
-    { id: "evidence", label: "Evidence" },
     { id: "technical", label: "Technical" },
   ];
   const domainSummary = buildDomainDetectionSummary(domainDetection);
@@ -290,8 +289,8 @@ export default function SystemBodyWorkspace({
                 <p>{assessmentState.dataPosture}</p>
               </div>
 
-              <div className="post-upload-metrics" aria-label="Upload metrics">
-                {metricTiles.map((item) => (
+              <div className="post-upload-metrics" aria-label="Building and system health">
+                {healthMetrics.map((item) => (
                   <article className="post-upload-metric" key={item.label}>
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
@@ -299,8 +298,13 @@ export default function SystemBodyWorkspace({
                 ))}
               </div>
 
-              <section className="post-upload-review-next" aria-label="Recommended next checks">
-                <span>Recommended next check</span>
+              <section className="post-upload-review-next" aria-label="What changed today">
+                <span>What changed today?</span>
+                <strong>{whatChangedToday}</strong>
+              </section>
+
+              <section className="post-upload-review-next" aria-label="Recommended priorities">
+                <span>Recommended priorities</span>
                 <strong>{overviewNextAction.label}</strong>
               </section>
 
@@ -313,24 +317,24 @@ export default function SystemBodyWorkspace({
           ) : null}
 
           {activeResultSection === "findings" ? (
-            <section className="post-upload-section" aria-label="Findings">
+            <section className="post-upload-section" aria-label="Issues">
               <div className="post-upload-section__header">
                 <p className="section-token">Issues</p>
-                <h2>{finding.exists ? finding.title : "No critical operational issues found."}</h2>
+                <h2>{finding.exists ? finding.title : "No operational issues found."}</h2>
               </div>
               {finding.exists ? (
                 <article className="finding-card">
                   <div className="finding-card__topline">
                     <h3>{finding.title}</h3>
-                    <span>Severity {finding.status}</span>
+                    <span>Severity {formatIssueSeverity(finding.status)}</span>
                   </div>
                   <dl className="result-detail-grid">
                     {compactRows([
                       { label: "Affected equipment", value: evidenceReport.affectedVariables },
-                      { label: "Evidence", value: finding.summary },
+                      { label: "What changed", value: finding.summary },
                       { label: "Likely cause", value: inferLikelyCause(finding, evidenceReport) },
                       { label: "Why it matters", value: finding.whyItMatters },
-                      { label: "Check next", value: finding.reviewNext },
+                      { label: "Recommended checks", value: finding.reviewNext },
                       { label: "Confidence", value: finding.confidence },
                     ]).map((item) => (
                       <div key={item.label}>
@@ -340,19 +344,77 @@ export default function SystemBodyWorkspace({
                     ))}
                   </dl>
                   {canReviewFindings ? (
-                    <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Issues</button>
+                    <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>View Issues</button>
                   ) : null}
                 </article>
               ) : (
                 <article className="finding-empty-state">
-                  <h3>No critical operational issues found.</h3>
-                  <p>Telemetry analyzed successfully. Check data quality before relying on long-term trend decisions.</p>
+                  <h3>No operational issues found.</h3>
+                  <p>Telemetry analyzed successfully. Data-quality warnings are available separately if an engineer needs them.</p>
                   <section className="post-upload-review-next" aria-label="Recommended next checks">
                     <span>Recommended next check</span>
                     <strong>{dataQualityReport.warnings.length > 0 ? "Review missing sensor values and timestamp quality." : "Continue monitoring normal equipment behavior."}</strong>
                   </section>
                 </article>
               )}
+            </section>
+          ) : null}
+
+          {activeResultSection === "story" ? (
+            <section className="post-upload-section" aria-label="System Story">
+              <div className="post-upload-section__header">
+                <p className="section-token">System Story</p>
+                <h2>{finding.exists ? "View the operating story behind this issue." : "View the system story for this telemetry window."}</h2>
+              </div>
+              <dl className="result-detail-grid">
+                {evidenceReport.rows.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {evidenceReport.hasReplay ? (
+                <div className="post-upload-actions" aria-label="System Story action">
+                  <button type="button" className="command-button" onClick={() => navigateWorkspace("system-story")}>View System Story</button>
+                </div>
+              ) : null}
+              <section className="post-upload-review-next" aria-label="Recommended next checks">
+                <span>What to inspect next</span>
+                <strong>{finding.exists ? finding.reviewNext : "Use System Story when an engineer needs the full operating narrative."}</strong>
+              </section>
+            </section>
+          ) : null}
+
+          {activeResultSection === "actions" ? (
+            <section className="post-upload-section" aria-label="Actions">
+              <div className="post-upload-section__header">
+                <p className="section-token">Actions</p>
+                <h2>Inspection checklist</h2>
+              </div>
+              <div className="action-checklist-groups">
+                {actionGroups.map((group) => (
+                  <section className="action-checklist-group" key={group.equipment}>
+                    <h3>{group.equipment}</h3>
+                    <div className="system-story-checklist">
+                      {group.items.map((item) => (
+                        <label key={item}>
+                          <input type="checkbox" />
+                          <span>{item}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+              <label className="action-note-field">
+                <span>Inspection notes</span>
+                <textarea rows={4} placeholder="Add field notes or repair outcome" />
+              </label>
+              <section className="post-upload-review-next" aria-label="Did the repair fix it">
+                <span>Did the repair fix it?</span>
+                <strong>After inspection, analyze a new telemetry file and compare the operating pattern.</strong>
+              </section>
             </section>
           ) : null}
 
@@ -385,32 +447,6 @@ export default function SystemBodyWorkspace({
             </section>
           ) : null}
 
-          {activeResultSection === "evidence" ? (
-            <section className="post-upload-section" aria-label="Evidence">
-              <div className="post-upload-section__header">
-                <p className="section-token">Evidence</p>
-                <h2>Useful evidence</h2>
-              </div>
-              <dl className="result-detail-grid">
-                {evidenceReport.rows.map((item) => (
-                  <div key={item.label}>
-                    <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              {evidenceReport.hasReplay ? (
-                <div className="post-upload-actions" aria-label="Evidence replay action">
-                  <button type="button" className="command-button" onClick={() => navigateWorkspace("historical-replay")}>Open Evidence Replay</button>
-                </div>
-              ) : null}
-              <section className="post-upload-review-next" aria-label="Recommended next checks">
-                <span>Recommended next check</span>
-                <strong>{finding.exists ? finding.reviewNext : "Use evidence only when an issue needs confirmation."}</strong>
-              </section>
-            </section>
-          ) : null}
-
           {activeResultSection === "technical" ? (
             <section className="post-upload-section" aria-label="Technical diagnostics">
               <div className="post-upload-section__header">
@@ -434,7 +470,7 @@ export default function SystemBodyWorkspace({
               </details>
               <section className="post-upload-review-next" aria-label="Recommended next checks">
                 <span>Recommended next check</span>
-                <strong>Return to Overview unless a support engineer requested these details.</strong>
+                <strong>Return to Health unless a support engineer requested these details.</strong>
               </section>
             </section>
           ) : null}
@@ -443,14 +479,14 @@ export default function SystemBodyWorkspace({
         ) : (
           <section className="post-upload-empty" aria-label="No upload state">
             <div className="post-upload-overview__header">
-              <span className="post-upload-status post-upload-status--pending">No Current Upload</span>
-              <h1>No telemetry uploaded yet</h1>
-              <p>Upload a telemetry export to see system status, issues, data quality, evidence, and technical details.</p>
+              <span className="post-upload-status post-upload-status--pending">No telemetry file</span>
+              <h1>Analyze a system to begin</h1>
+              <p>Select a telemetry file to see health, issues, system story, actions, data quality, and technical details.</p>
             </div>
             <div className="post-upload-actions" aria-label="Upload actions">
-              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Upload Data</button>
+              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Analyze System</button>
               {canResumePreviousUpload ? (
-                <button type="button" className="secondary-command-button" onClick={onResumePreviousUpload}>Resume Previous Upload</button>
+                <button type="button" className="secondary-command-button" onClick={onResumePreviousUpload}>Resume Previous Analysis</button>
               ) : null}
             </div>
             {previousUploadSummary ? (
@@ -462,7 +498,7 @@ export default function SystemBodyWorkspace({
             ) : null}
             <section className="post-upload-review-next" aria-label="Recommended next checks">
               <span>Recommended next check</span>
-              <strong>Upload the latest BAS or historian export from the equipment you want to review.</strong>
+              <strong>Analyze the latest BAS or historian export from the equipment you want to review.</strong>
             </section>
           </section>
         )}
@@ -498,6 +534,58 @@ function inferLikelyCause(finding, evidenceReport) {
   if (text.includes("flow")) return "Flow instability or operating load changed.";
   if (text.includes("cool") || text.includes("chw") || text.includes("temperature")) return "Possible chilled-water sensor drift or cooling performance change.";
   return "Equipment behavior changed from its usual operating pattern.";
+}
+
+function buildHealthMetrics({ assessmentState, finding }) {
+  const issueCount = finding?.exists ? 1 : 0;
+  const criticalCount = issueCount && /critical|alert|error|unstable|needs action/i.test(String(finding?.status ?? "")) ? 1 : 0;
+  const reviewCount = issueCount && criticalCount === 0 ? 1 : 0;
+  const normalCount = Math.max(0, 1 - issueCount);
+  return compactRows([
+    { label: "Systems normal", value: String(normalCount) },
+    { label: "Need review", value: String(reviewCount) },
+    { label: "Critical issues", value: String(criticalCount) },
+    { label: "Health status", value: formatOverviewStatus(assessmentState.mode).label },
+  ]);
+}
+
+function buildWhatChangedToday({ finding, assessmentState, evidenceReport }) {
+  if (assessmentState.mode === "analysis_error") return "Telemetry could not be analyzed for this system.";
+  if (assessmentState.mode === "analysis_pending") return "Processing telemetry and building the system story.";
+  if (finding?.exists) return finding.summary || finding.title || "Operating behavior changed from historical behavior.";
+  if (evidenceReport?.affectedVariables) return `${evidenceReport.affectedVariables} remained inside the expected operating pattern.`;
+  return "Telemetry analyzed successfully. No operational issue was detected.";
+}
+
+function formatIssueSeverity(status) {
+  const text = String(status ?? "").trim();
+  if (!text) return "Review";
+  if (/critical|alert|unstable|needs action|error/i.test(text)) return "Critical";
+  if (/warning|degraded|watch|review|change/i.test(text)) return "Review";
+  if (/normal|stable|no findings/i.test(text)) return "Normal";
+  return text;
+}
+
+function buildActionGroups({ finding, evidenceReport }) {
+  const equipmentText = String(evidenceReport?.affectedVariables || finding?.title || "Building system");
+  const equipment = inferEquipmentLabel(equipmentText);
+  const text = `${equipmentText} ${finding?.summary ?? ""} ${finding?.reviewNext ?? ""}`.toLowerCase();
+  const checks = ["Compare BAS values", "Verify sensor calibration"];
+  if (text.includes("valve")) checks.push("Review valve position");
+  if (text.includes("pump") || text.includes("speed") || text.includes("flow")) checks.push("Check pump speed vs flow");
+  if (text.includes("filter") || text.includes("pressure")) checks.push("Inspect filter pressure");
+  checks.push("Review recent maintenance");
+  return [{ equipment, items: [...new Set(checks)] }];
+}
+
+function inferEquipmentLabel(text) {
+  const value = String(text ?? "").toLowerCase();
+  if (value.includes("pump")) return "Pumps";
+  if (value.includes("valve")) return "Valves";
+  if (value.includes("filter")) return "Filters";
+  if (value.includes("chw") || value.includes("chiller") || value.includes("temperature")) return "Chilled water loop";
+  if (value.includes("flow")) return "Flow loop";
+  return "Building system";
 }
 
 function compactRows(rows) {
@@ -536,7 +624,7 @@ function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceR
     return { label: "Review missing sensor values before relying on trend analysis.", section: "quality", button: "View Data Quality" };
   }
   if (evidenceReport.hasReplay) {
-    return { label: "Open evidence only if an issue needs confirmation.", section: "evidence", button: "View Evidence" };
+    return { label: "Open System Story when an engineer needs the full operating narrative.", section: "story", button: "View System Story" };
   }
   return { label: "Continue monitoring normal equipment behavior.", section: null, button: "" };
 }
@@ -544,7 +632,7 @@ function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceR
 function formatOverviewStatus(mode) {
   if (mode === "analysis_error") return { label: "Needs Attention", tone: "error" };
   if (mode === "analysis_pending") return { label: "Processing", tone: "pending" };
-  if (mode === "analysis_degraded_ready") return { label: "Ready With Warnings", tone: "warning" };
+  if (mode === "analysis_degraded_ready") return { label: "Ready with warnings", tone: "warning" };
   if (mode === "analysis_ready") return { label: "Ready", tone: "ready" };
   return { label: "Pending", tone: "pending" };
 }
@@ -554,7 +642,7 @@ function buildOverviewSummary(mode) {
   if (mode === "analysis_pending") return "Telemetry is still processing.";
   if (mode === "analysis_degraded_ready") return "Telemetry analyzed with warnings.";
   if (mode === "analysis_ready") return "Telemetry analyzed successfully.";
-  return "Upload telemetry to begin.";
+  return "Analyze telemetry to begin.";
 }
 
 function buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findingDataQuality) {
@@ -601,7 +689,7 @@ function buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findin
     rowsLoaded: formatScalar(rowsLoaded),
     signalsDetected: formatScalar(columnsDetected),
     qualityLabel: warnings.length > 0 ? "Review" : "Ready",
-    summary: warnings.length > 0 ? "Review data quality before making decisions." : "CSV load is ready for review.",
+    summary: warnings.length > 0 ? "Review data quality before making decisions." : "Telemetry file is ready for review.",
     rows: compactRows([
       { label: "Rows loaded", value: formatScalar(rowsLoaded) },
       { label: "Signals detected", value: formatScalar(columnsDetected) },
@@ -643,10 +731,10 @@ function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestR
     traceability,
     replayFrameCount: replay.length,
     rows: compactRows([
-      { label: "Baseline comparison", value: formatScalar(assessmentState.stability.regime) },
-      { label: "Drift metrics", value: formatScalar(stabilitySnapshot.driftMagnitude) },
-      { label: "Behavior has persisted", value: formatScalar(stabilitySnapshot.deformationAge) },
-      { label: "Evidence confidence", value: confidence },
+      { label: "Historical comparison", value: formatScalar(assessmentState.stability.regime) },
+      { label: "Change strength", value: formatScalar(stabilitySnapshot.driftMagnitude) },
+      { label: "Operating pattern duration", value: formatScalar(stabilitySnapshot.deformationAge) },
+      { label: "Story readiness", value: confidence },
     ]),
   };
 }
@@ -675,11 +763,11 @@ function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assess
   return {
     rows: compactRows([
       { label: "Run ID", value: formatScalar(runId) },
-      { label: "Raw analysis gate state", value: formatScalar(result.data_quality?.analysis_gate_state ?? result.analysis_gate_state ?? assessmentState.mode) },
+      { label: "Raw data readiness state", value: formatScalar(result.data_quality?.analysis_gate_state ?? result.analysis_gate_state ?? assessmentState.mode) },
       { label: "Schema detection", value: formatScalar(schemaDetection ? compactJson(schemaDetection) : "Unavailable") },
       { label: "Runtime metadata", value: formatScalar(Object.keys(runtime).length ? compactJson(runtime) : "Unavailable") },
       { label: "Result source", value: formatScalar(latestUploadSnapshot?.result_source ?? result.result_source ?? "Unavailable") },
-      { label: "Raw replay frame count", value: replay.length ? String(replay.length) : "" },
+      { label: "Raw story frame count", value: replay.length ? String(replay.length) : "" },
     ]),
     traceability,
     processingTrace,
@@ -777,15 +865,15 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
     title: exists ? interpretation.structuralState : "Normal",
     status: exists ? interpretation.structuralState : "Normal",
     confidence: normalizeConfidenceLabel(interpretation.confidence),
-    summary: exists ? interpretation.relationshipSummary.text : "No current observations.",
+    summary: exists ? interpretation.relationshipSummary.text : "No current issues.",
     whyItMatters: exists ? interpretation.relationshipSummary.text : "Telemetry is being monitored.",
     reviewNext: interpretation.nextStep,
     emptyState: {
-      title: "No current observations.",
+      title: "No current issues.",
       subtitle: "Telemetry is being monitored.",
       detail: "No equipment issues detected.",
     },
-    evidenceButtonLabel: "View Evidence",
+    evidenceButtonLabel: "View System Story",
     supportingEvidence: [],
     dataQuality: {
       missingBaselineValues: [],
@@ -793,8 +881,8 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
       unavailableTelemetry: [],
     },
     technicalDetails: [
-      { label: "Drift magnitude", value: stabilitySnapshot.driftMagnitude },
-      { label: "Behavior duration", value: stabilitySnapshot.deformationAge },
+      { label: "Change strength", value: stabilitySnapshot.driftMagnitude },
+      { label: "Operating pattern duration", value: stabilitySnapshot.deformationAge },
     ],
   };
 }
@@ -819,16 +907,16 @@ function resolveAssessmentState({
       finding: {
         ...fallbackFinding,
         exists: false,
-        title: "No Analysis",
+        title: "No analysis",
         status: "Not Assessed",
         confidence: "Pending",
-        summary: "Upload telemetry to generate an assessment.",
-        whyItMatters: "Upload telemetry to generate an assessment.",
-        reviewNext: "Upload telemetry to generate an assessment.",
+        summary: "Analyze telemetry to generate a system review.",
+        whyItMatters: "Analyze telemetry to generate a system review.",
+        reviewNext: "Analyze telemetry to generate a system review.",
         emptyState: {
-          title: "No Analysis",
-          subtitle: "Upload telemetry to generate an assessment.",
-          detail: "Upload telemetry to generate an assessment.",
+          title: "No analysis",
+          subtitle: "Analyze telemetry to generate a system review.",
+          detail: "Analyze telemetry to generate a system review.",
         },
       },
       stability: {
@@ -871,20 +959,20 @@ function resolveAssessmentState({
   if (analysisState === "PENDING") {
     return {
       mode: "analysis_pending",
-      headerStatus: "Analysis Pending",
-      dataPosture: "Telemetry is present, but backend analysis is still pending.",
+      headerStatus: "Analysis running",
+      dataPosture: "Telemetry is present, but analysis is still running.",
       finding: {
         ...fallbackFinding,
         exists: false,
-        title: "Analysis Pending",
+        title: "Analysis running",
         status: "Pending",
         confidence: "Pending",
         summary: "Backend processing has not finished for this upload.",
-        whyItMatters: "Findings are blocked until the backend reports READY or DEGRADED_READY.",
+        whyItMatters: "Issues appear when data readiness is complete.",
         reviewNext: "Wait for ingestion and analysis to finish.",
         emptyState: {
-          title: "Analysis Pending",
-          subtitle: "Findings are not available yet.",
+          title: "Analysis running",
+          subtitle: "Issues are not available yet.",
           detail: "Wait for ingestion and analysis to finish.",
         },
       },
@@ -899,23 +987,23 @@ function resolveAssessmentState({
   if (!observationsExist || !fallbackFinding.exists) {
     return {
       mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
-      headerStatus: degraded ? "Ready With Warnings" : "Analysis Ready",
-      dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
+      headerStatus: degraded ? "Ready with warnings" : "Analysis ready",
+      dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is ready for review.",
       finding: {
         ...fallbackFinding,
         exists: false,
-        title: degraded ? "Ready With Warnings" : "Analysis Ready",
-        status: degraded ? "Warnings Present" : "No Findings",
+        title: degraded ? "Ready with warnings" : "Analysis ready",
+        status: degraded ? "Warnings Present" : "No issues",
         confidence: normalizeConfidenceLabel(fallbackFinding.confidence),
-        summary: degraded ? "Usable telemetry is available with warnings." : "Usable telemetry is available. No findings are currently flagged.",
+        summary: degraded ? "Usable telemetry is available with warnings." : "Usable telemetry is available. No operational issues are currently flagged.",
         whyItMatters: degraded
-          ? "Warnings may limit confidence, but they do not block review of available evidence."
-          : "The uploaded dataset passed analysis readiness without a flagged structural finding.",
-        reviewNext: degraded ? "Review data quality warnings before acting on findings." : "Continue monitoring or upload more telemetry.",
+          ? "Warnings may limit confidence, but they do not block review of available operating patterns."
+          : "The telemetry file is ready and no operational issue is flagged.",
+        reviewNext: degraded ? "Review data quality warnings before acting on issues." : "Continue monitoring or analyze more telemetry.",
         emptyState: {
-          title: degraded ? "Ready With Warnings" : "Analysis Ready",
-          subtitle: degraded ? "Usable telemetry has data-quality warnings." : "No findings are currently flagged.",
-          detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or upload more telemetry.",
+          title: degraded ? "Ready with warnings" : "Analysis ready",
+          subtitle: degraded ? "Usable telemetry has data-quality warnings." : "No operational issues are currently flagged.",
+          detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or analyze more telemetry.",
         },
         dataQuality: {
           ...fallbackFinding.dataQuality,
@@ -928,8 +1016,8 @@ function resolveAssessmentState({
 
   return {
     mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
-    headerStatus: degraded ? "Ready With Warnings" : "Analysis Ready",
-    dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is usable for analysis.",
+    headerStatus: degraded ? "Ready with warnings" : "Analysis ready",
+    dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is ready for review.",
     finding: fallbackFinding,
     stability: stabilitySnapshot,
   };
@@ -1036,7 +1124,7 @@ function mapBackendSystemInterpretation(contract, expectedJobId = null, reliable
       : [],
     hasTelemetry: true,
     nextStep: reliableEnoughToShow && Array.isArray(value.finding_evidence_chains) && value.finding_evidence_chains.length > 0
-      ? "Review evidence."
+      ? "View System Story."
       : "Check technical details.",
   };
 }
@@ -1059,9 +1147,9 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     return {
       structuralState: "No data yet",
       primaryDriver: "No data yet",
-      relationshipSummary: { text: "Upload data to begin." },
+      relationshipSummary: { text: "Analyze telemetry to begin." },
       confidence: "Pending",
-      nextStep: "Upload data.",
+      nextStep: "Analyze telemetry.",
       hasTelemetry: false,
     };
   }
@@ -1123,7 +1211,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
       ?? sii?.dominant_driver
       ?? latestUploadResult?.primary_driver
       ?? fallback.focusLabel,
-    "Structural relationship",
+    "System behavior",
   );
   const hasDriftState = describesDrift(structuralState) || describesDrift(driver);
   const relationship = buildRelationshipSummary({ latestUploadResult, latestReplayFrame, sii, fallback, hasDriftState });
@@ -1144,7 +1232,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     relationshipSummary: relationship,
     confidence,
     findingEvidenceChains: [],
-    nextStep: canShowEvidenceBackedFinding ? "Review evidence." : (hasDriftState ? "Check evidence traceability." : "Continue monitoring."),
+    nextStep: canShowEvidenceBackedFinding ? "View System Story." : (hasDriftState ? "Check the System Story." : "Continue monitoring."),
     hasTelemetry: true,
   };
 }

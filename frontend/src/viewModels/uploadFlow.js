@@ -10,9 +10,9 @@ const INTAKE_STAGES = [
   "Uploading telemetry batch",
   "Detecting variables",
   "Parsing state matrix",
-  "Learning reference behavior",
+  "Building historical comparison",
   "Reviewing system behavior change",
-  "Generating replay frames",
+  "Building system story",
   "Preparing observations",
   "Operator review ready",
 ];
@@ -199,7 +199,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return "Upload processing interrupted.";
   }
   if (errorType === "sii_processing_failure") {
-    return detail ? `SII processing failure: ${normalizeErrorMessage(detail)}` : "SII processing failure.";
+    return detail ? `Analysis processing failure: ${normalizeErrorMessage(detail)}` : "Analysis processing failure.";
   }
   if (status === 408 || status === 425 || status === 429 || status >= 500) {
     return phase === "poll"
@@ -241,8 +241,8 @@ function uploadStageDetail(stage, index, job, roomContext) {
     jobStatus === "parsing" ? job.progress_label : "Parser will stream the state matrix without loading the full export into memory.",
     jobStatus === "baseline_modeling" ? job.progress_label : "Neraium is learning reference behavior from the uploaded telemetry.",
     jobStatus === "structural_scoring" ? job.progress_label : "System behavior review starts after reference modeling.",
-    jobStatus === "generating_replay" ? job.progress_label : "Replay frames are deferred until first cognition state is ready.",
-    ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Observations become usable before all downstream artifacts finish.",
+    jobStatus === "generating_replay" ? job.progress_label : "System story is deferred until the first operating pattern is ready.",
+    ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Issues can become usable before all technical artifacts finish.",
     "Completion will refresh the structural state view.",
   ];
   return details[index] ?? stage;

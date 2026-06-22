@@ -17,7 +17,7 @@ async function openDataConnections(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await page.getByRole("button", { name: "Open Gate settings" }).click();
-  await page.getByRole("button", { name: /Setup & data connections|Data connections/i }).click();
+  await page.getByRole("button", { name: /Setup & data connections|Data connections|Analyze System/i }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible();
   await expect(page.getByTestId("csv-upload-input")).toBeVisible();
   await expect(page.getByTestId("process-upload-button")).toBeVisible();
@@ -27,7 +27,7 @@ test.describe("Setup + Upload regression", () => {
   test("opens upload surface without the setup wizard", async ({ page }) => {
     await openDataConnections(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Upload Data" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Analyze System" })).toBeVisible();
   });
 
   test("enables upload processing after file selection", async ({ page }) => {
