@@ -8,7 +8,7 @@ describe("SystemTopologyWorkspace operator trust mapping", () => {
       sii_intelligence: { facility_state: "stable" },
     }, { reviewReady: false })).toEqual({
       systemState: "unknown",
-      label: "Analysis pending verification",
+      label: "Telemetry still processing",
       statusLight: "gray",
     });
   });
