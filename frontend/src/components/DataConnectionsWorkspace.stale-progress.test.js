@@ -11,6 +11,24 @@ vi.mock("../services/api/uploadApi", () => ({
   uploadTelemetryFileWithProgress: vi.fn(),
 }));
 
+const legacyUploadCompleteLabels = [
+  "Upload 100% complete",
+  "Telemetry transfer 100% complete",
+];
+const legacyProcessingCompleteLabels = [
+  "Processing 100% complete",
+  "Analysis 100% complete",
+];
+
+function expectNoCompleteProgressBars() {
+  for (const label of legacyUploadCompleteLabels) {
+    expect(screen.queryByLabelText(label)).toBeNull();
+  }
+  for (const label of legacyProcessingCompleteLabels) {
+    expect(screen.queryByLabelText(label)).toBeNull();
+  }
+}
+
 function renderPanel(overrides = {}) {
   return render(h(IntakeFlowPanel, {
     handleUpload: vi.fn((event) => event?.preventDefault?.()),
@@ -23,12 +41,12 @@ function renderPanel(overrides = {}) {
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
-    latestMessage: "Awaiting file selection",
+    latestMessage: "Choose a telemetry file to begin.",
     visibleProgressPercent: null,
     propagationLabel: "",
     queuedWorkerDetail: "",
     uploadTransfer: null,
-    uploadStateMessage: (state) => state === "idle" ? "Awaiting file selection" : "Telemetry export validated",
+    uploadStateMessage: (state) => state === "idle" ? "Choose a telemetry file to begin." : "Telemetry file ready.",
     batchResults: [],
     onRetryFailedUploads: vi.fn(),
     onReprocessCurrentBatch: vi.fn(),
@@ -46,7 +64,7 @@ function completedSessionStore() {
       processing_state: "complete",
       percent: 100,
       progress: 100,
-      progress_label: "Telemetry processing complete.",
+      progress_label: "Analysis ready.",
     },
     latestUploadResult: { job_id: "completed-job-1", filename: "old.csv" },
   };
@@ -58,6 +76,8 @@ function renderWorkspace(props = {}) {
     apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
     latestUploadSnapshot: { status: "empty" },
     latestUploadResult: null,
+    hasActiveSession: false,
+    hasResumedSession: false,
     sessionStore: null,
     onUploadComplete: vi.fn(),
     onResetDemo: vi.fn(async () => ({})),
@@ -71,26 +91,27 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("idle no-file state does not render Upload 100%", () => {
+it("idle no-file state does not render stale complete upload progress", () => {
   renderPanel({
     uploadState: "idle",
     selectedFiles: [],
     uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
   });
 
-  expect(screen.getByText("No file selected")).toBeTruthy();
-  expect(screen.getByText("Select a CSV telemetry file to begin.")).toBeTruthy();
-  expect(screen.queryByLabelText("Upload 100% complete")).toBeNull();
+  expect(screen.getByText(/No telemetry file selected|No file selected/i)).toBeTruthy();
+  expect(screen.getByText(/Select a telemetry file to begin|Select a CSV telemetry file to begin/i)).toBeTruthy();
+  expectNoCompleteProgressBars();
 });
 
-it("idle no-file state does not render Processing 100%", () => {
+it("idle no-file state does not render stale complete processing progress", () => {
   renderPanel({
     uploadState: "idle",
     selectedFiles: [],
     uploadJob: { job_id: "old-job", status: "complete", progress: 100, processing_state: "complete" },
   });
 
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expectNoCompleteProgressBars();
+  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
 it("selecting a file clears stale complete progress", async () => {
@@ -106,8 +127,7 @@ it("selecting a file clears stale complete progress", async () => {
   await waitFor(() => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
-  expect(screen.queryByLabelText("Upload 100% complete")).toBeNull();
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expectNoCompleteProgressBars();
 });
 
 it("reset workspace hides progress bars", async () => {
@@ -119,16 +139,15 @@ it("reset workspace hides progress bars", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByLabelText("Upload 100% complete")).toBeTruthy();
+    expect(screen.getByLabelText(/Telemetry transfer 100% complete|Upload 100% complete/i)).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Clear Upload Workspace" }));
+  fireEvent.click(screen.getByRole("button", { name: /Clear Analysis|Clear Upload Workspace/i }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);
   });
-  expect(screen.queryByLabelText("Upload 100% complete")).toBeNull();
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expectNoCompleteProgressBars();
 });
 
 it("previous completed upload does not leak progress into new idle upload screen", () => {
@@ -138,10 +157,9 @@ it("previous completed upload does not leak progress into new idle upload screen
     sessionStore: completedSessionStore(),
   });
 
-  expect(screen.getByText("No file selected")).toBeTruthy();
-  expect(screen.getByText("Select a CSV telemetry file to begin.")).toBeTruthy();
-  expect(screen.queryByLabelText("Upload 100% complete")).toBeNull();
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expect(screen.getByText(/No telemetry file selected|No file selected/i)).toBeTruthy();
+  expect(screen.getByText(/Select a telemetry file to begin|Select a CSV telemetry file to begin/i)).toBeTruthy();
+  expectNoCompleteProgressBars();
 });
 
 it("renders backend stage labels ahead of worker status detail", () => {
@@ -170,7 +188,7 @@ it("renders backend stage labels ahead of worker status detail", () => {
 
   expect(screen.getByText("Scoring operating changes...")).toBeTruthy();
   expect(screen.queryByText("Worker starting...")).toBeNull();
-  expect(screen.getByLabelText("Processing 75% complete")).toBeTruthy();
+  expect(screen.getByLabelText(/Analysis 75% complete|Processing 75% complete/i)).toBeTruthy();
 });
 
 it("renders intermediate backend processing progress without jumping to complete", () => {
@@ -192,9 +210,9 @@ it("renders intermediate backend processing progress without jumping to complete
     latestMessage: "Building baseline...",
   });
 
-  expect(screen.getByLabelText("Upload 100% complete")).toBeTruthy();
-  expect(screen.getByLabelText("Processing 65% complete")).toBeTruthy();
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expect(screen.getByLabelText(/Telemetry transfer 100% complete|Upload 100% complete/i)).toBeTruthy();
+  expect(screen.getByLabelText(/Analysis 65% complete|Processing 65% complete/i)).toBeTruthy();
+  expect(screen.queryByLabelText(/Analysis 100% complete|Processing 100% complete/i)).toBeNull();
 });
 
 it("does not show processing 100 until backend status is complete", () => {
@@ -217,6 +235,6 @@ it("does not show processing 100 until backend status is complete", () => {
     latestMessage: "Writing result and replay...",
   });
 
-  expect(screen.getByLabelText("Processing 95% complete")).toBeTruthy();
-  expect(screen.queryByLabelText("Processing 100% complete")).toBeNull();
+  expect(screen.getByLabelText(/Analysis 95% complete|Processing 95% complete/i)).toBeTruthy();
+  expect(screen.queryByLabelText(/Analysis 100% complete|Processing 100% complete/i)).toBeNull();
 });
