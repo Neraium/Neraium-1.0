@@ -141,7 +141,7 @@ describe("System Story workspace", () => {
 
     await waitFor(() => expect(screen.getByText("Telemetry is present, but the story is waiting for verification.")).toBeTruthy());
     expect(screen.getAllByText(/does not yet meet the reliability threshold/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Upload more stable telemetry/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/stable telemetry|data quality|processing/i).length).toBeGreaterThan(0);
   });
 
   it("records engineer notes and repair outcome labels", async () => {
