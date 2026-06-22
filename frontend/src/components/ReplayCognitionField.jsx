@@ -116,8 +116,62 @@ function buildFieldModel(timeline, frameIndex) {
 }
 
 function display(value, fallback = "-") {
-  const raw = String(value ?? "").replaceAll("_", " ").trim();
+  const raw = humanizeOperatorValue(value);
   return sanitizeOperatorText(raw || fallback);
+}
+
+function humanizeOperatorValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const variableMap = new Map([
+    ["chiller_load_pct", "Chiller load"],
+    ["chiller load pct", "Chiller load"],
+    ["compressor_power_kw", "Compressor power"],
+    ["compressor power kw", "Compressor power"],
+    ["chw_supply_temp_f", "CHW supply temp"],
+    ["chw supply temp f", "CHW supply temp"],
+    ["flow_gpm", "Flow"],
+    ["flow gpm", "Flow"],
+  ]);
+  const normalized = text.toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  if (variableMap.has(text) || variableMap.has(normalized)) return variableMap.get(text) ?? variableMap.get(normalized);
+  return normalized.split(" ").filter(Boolean).map((part) => {
+    if (part === "chw") return "CHW";
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }).join(" ");
+}
+
+function humanizeRelationshipPath(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === "-") return "";
+  const pieces = text.split(/\s*(?:->|\/|>)\s*/).filter(Boolean);
+  const useful = pieces
+    .filter((piece) => !/relationship|weakening|strengthening|propagation/i.test(piece))
+    .map((piece) => humanizeOperatorValue(piece))
+    .filter(Boolean);
+  if (useful.length === 0) return "";
+  if (useful.length === 1) return useful[0];
+  const signal = useful[useful.length - 1];
+  if (useful.length >= 3 && /^(Pct|Kw|F|Gpm)$/i.test(signal)) {
+    return humanizeOperatorValue(useful.slice(0, -1).join(" "));
+  }
+  return useful.join(" to ");
+}
+
+function formatReplayConfidence(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "Low";
+  if (/baseline[_\s-]*evidence/i.test(text)) return "Baseline evidence";
+  return humanizeOperatorValue(normalizeOperatorConfidenceLabel(text));
+}
+
+function formatReplayTimestamp(value, formatClockTime) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date).replace(",", " at");
+  }
+  return formatClockTime(value);
 }
 
 export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, comparisonMode, formatClockTime, inactive = false }) {
@@ -125,8 +179,9 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
   const frame = model.activeFrame;
   const status = inactive ? "-" : display(frame?.topology_state?.stability_state, "-");
   const phase = inactive ? "-" : display(frame?.cognition_state?.canonical_phase ?? frame?.topology_state?.phase, "-");
-  const confidence = inactive ? "-" : normalizeOperatorConfidenceLabel(frame?.cognition_state?.confidence_tier);
-  const pathLabel = inactive ? "-" : sanitizeOperatorText(model.dominantPaths?.[0]?.replaceAll?.("_", " -> ") ?? "-");
+  const confidence = inactive ? "-" : formatReplayConfidence(frame?.cognition_state?.confidence_tier);
+  const pathLabel = inactive ? "" : humanizeRelationshipPath(model.dominantPaths?.[0] ?? "");
+  const timestamp = frame?.timestamp ? formatReplayTimestamp(frame.timestamp, formatClockTime) : "-";
 
   return (
     <section
@@ -143,7 +198,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         <div>
           <p className="section-token">Evidence replay</p>
           <h3>{status}</h3>
-          <span>{phase} / {pathLabel}</span>
+          <span>{[phase, pathLabel].filter((item) => item && item !== "-").join(" - ") || "Replay context"}</span>
         </div>
         <div className="replay-cognition-field__state">
           <strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong>
@@ -211,12 +266,19 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         {!inactive ? <circle cx={model.nodes[2].x} cy={model.nodes[2].y} r={54 + model.propagation * 46} className="replay-cognition-field__structural-pulse" /> : null}
       </svg>
 
+      <section className="replay-cognition-field__mobile-summary" aria-label="Replay evidence summary">
+        <div><span>Status</span><strong>{status}</strong></div>
+        <div><span>Change strength</span><strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong></div>
+        <div><span>Confidence</span><strong>{confidence}</strong></div>
+        <div><span>Timestamp</span><strong>{timestamp}</strong></div>
+      </section>
+
       <div className="replay-cognition-field__footer">
         <div><span>Change state</span><strong>{inactive ? "-" : display(frame?.topology_state?.fragmentation_indicator, "-")}</strong></div>
         <div><span>Coupling pressure</span><strong>{inactive ? "-" : display(frame?.propagation_state?.propagation_acceleration, "-")}</strong></div>
         <div><span>Return path</span><strong>{inactive ? "-" : display(frame?.propagation_state?.recovery_convergence, "-")}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>
-        <div><span>Timestamp</span><strong>{frame?.timestamp ? formatClockTime(frame.timestamp) : "-"}</strong></div>
+        <div><span>Timestamp</span><strong>{timestamp}</strong></div>
       </div>
     </section>
   );

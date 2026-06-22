@@ -41,6 +41,7 @@ export default function SystemBodyWorkspace({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeResultSection, setActiveResultSection] = useState("overview");
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
   const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
   const interpretation = useMemo(() => {
@@ -124,11 +125,13 @@ export default function SystemBodyWorkspace({
   });
   const technicalReport = buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState });
   const overviewSummary = buildOverviewSummary(assessmentState.mode);
-  const metricTiles = [
+  const metricTiles = compactRows([
     { label: "Rows loaded", value: dataQualityReport.rowsLoaded },
     { label: "Signals detected", value: dataQualityReport.signalsDetected },
-    { label: "Confidence", value: dataQualityReport.qualityLabel || finding.confidence },
-  ];
+    { label: "Confidence", value: evidenceReport.confidence },
+  ]);
+  const overviewNextAction = buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceReport, finding });
+  const visibleWarnings = showAllWarnings ? dataQualityReport.warnings : dataQualityReport.warnings.slice(0, 3);
   const resultSections = [
     { id: "overview", label: "Overview" },
     { id: "findings", label: "Findings" },
@@ -302,15 +305,15 @@ export default function SystemBodyWorkspace({
               </div>
 
               <section className="post-upload-review-next" aria-label="Review next">
-                <span>Review next</span>
-                <strong>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</strong>
+                <span>Next action</span>
+                <strong>{overviewNextAction.label}</strong>
               </section>
 
-              <div className="post-upload-actions" aria-label="Primary result actions">
-                <button type="button" className="command-button" onClick={() => setActiveResultSection("findings")}>View Findings</button>
-                <button type="button" className="secondary-command-button" onClick={() => setActiveResultSection("quality")}>View Data Quality</button>
-                <button type="button" className="secondary-command-button" onClick={() => setActiveResultSection("evidence")}>View Evidence</button>
-              </div>
+              {overviewNextAction.section ? (
+                <div className="post-upload-actions" aria-label="Primary result action">
+                  <button type="button" className="command-button" onClick={() => setActiveResultSection(overviewNextAction.section)}>{overviewNextAction.button}</button>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -318,31 +321,36 @@ export default function SystemBodyWorkspace({
             <section className="post-upload-section" aria-label="Findings">
               <div className="post-upload-section__header">
                 <p className="section-token">Findings</p>
-                <h2>{finding.exists ? "Active finding" : "No current findings"}</h2>
+                <h2>{finding.exists ? "Active finding" : "No urgent findings."}</h2>
               </div>
-              <article className="finding-card">
-                <div className="finding-card__topline">
-                  <h3>{finding.exists ? finding.title : finding.emptyState.title}</h3>
-                  <span>{finding.status}</span>
-                </div>
-                <dl className="result-detail-grid">
-                  <div>
-                    <dt>Why it matters</dt>
-                    <dd>{finding.whyItMatters}</dd>
+              {finding.exists ? (
+                <article className="finding-card">
+                  <div className="finding-card__topline">
+                    <h3>{finding.title}</h3>
+                    <span>{finding.status}</span>
                   </div>
-                  <div>
-                    <dt>Review next</dt>
-                    <dd>{finding.exists ? finding.reviewNext : finding.emptyState.detail}</dd>
-                  </div>
-                  <div>
-                    <dt>Affected variables</dt>
-                    <dd>{evidenceReport.affectedVariables}</dd>
-                  </div>
-                </dl>
-                {canReviewFindings ? (
-                  <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Finding Review</button>
-                ) : null}
-              </article>
+                  <dl className="result-detail-grid">
+                    {compactRows([
+                      { label: "Why it matters", value: finding.whyItMatters },
+                      { label: "Review next", value: finding.reviewNext },
+                      { label: "Affected variables", value: evidenceReport.affectedVariables },
+                    ]).map((item) => (
+                      <div key={item.label}>
+                        <dt>{item.label}</dt>
+                        <dd>{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {canReviewFindings ? (
+                    <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>Open Finding Review</button>
+                  ) : null}
+                </article>
+              ) : (
+                <article className="finding-empty-state">
+                  <h3>No urgent findings.</h3>
+                  <p>Telemetry is usable. Review data quality warnings before relying on this analysis.</p>
+                </article>
+              )}
             </section>
           ) : null}
 
@@ -360,9 +368,14 @@ export default function SystemBodyWorkspace({
                   </div>
                 ))}
               </dl>
-              <ResultList title="Warnings" items={dataQualityReport.warnings} empty="No data quality warnings reported." />
-              <ResultList title="Missing values" items={dataQualityReport.missingValues} empty="No missing value notes reported." />
-              <ResultList title="Interpolation and imputation" items={dataQualityReport.imputationNotes} empty="No interpolation or imputation notes reported." />
+              <ResultList title="Warnings" items={visibleWarnings} empty="No data quality warnings reported." />
+              {dataQualityReport.warnings.length > 3 ? (
+                <button type="button" className="secondary-command-button post-upload-inline-action" onClick={() => setShowAllWarnings((value) => !value)}>
+                  {showAllWarnings ? "Show top 3" : `Show all ${dataQualityReport.warnings.length}`}
+                </button>
+              ) : null}
+              <ResultList title="Missing values" items={dataQualityReport.missingValues} />
+              <ResultList title="Interpolation and imputation" items={dataQualityReport.imputationNotes} />
             </section>
           ) : null}
 
@@ -380,8 +393,11 @@ export default function SystemBodyWorkspace({
                   </div>
                 ))}
               </dl>
-              <ResultList title="Traceability" items={evidenceReport.traceability} empty="No traceability notes reported." />
-              <ResultList title="Replay references" items={evidenceReport.replayReferences} empty="No replay references reported." />
+              {evidenceReport.hasReplay ? (
+                <div className="post-upload-actions" aria-label="Evidence replay action">
+                  <button type="button" className="command-button" onClick={() => navigateWorkspace("historical-replay")}>Open Replay</button>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -399,6 +415,7 @@ export default function SystemBodyWorkspace({
                   </div>
                 ))}
               </dl>
+              <ResultList title="Traceability" items={technicalReport.traceability} />
               <ResultList title="Processing trace" items={technicalReport.processingTrace} empty="No processing trace reported." />
               <ResultList title="Backend warnings" items={technicalReport.backendWarnings} empty="No backend warnings reported." />
               <details className="technical-details-panel">
@@ -438,8 +455,9 @@ export default function SystemBodyWorkspace({
 }
 
 
-function ResultList({ title, items, empty }) {
-  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+function ResultList({ title, items, empty = "" }) {
+  const safeItems = Array.isArray(items) ? items.filter((item) => !isPlaceholderValue(item)) : [];
+  if (safeItems.length === 0 && !empty) return null;
   return (
     <section className="result-list-block">
       <h3>{title}</h3>
@@ -452,6 +470,47 @@ function ResultList({ title, items, empty }) {
       )}
     </section>
   );
+}
+
+function compactRows(rows) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => row && !isPlaceholderValue(row.value));
+}
+
+function isPlaceholderValue(value) {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  const text = String(value).trim();
+  if (!text) return true;
+  const normalized = text.toLowerCase();
+  return normalized === "-"
+    || normalized === "--"
+    || normalized === "—"
+    || normalized === "null"
+    || normalized === "undefined"
+    || normalized === "pending"
+    || normalized === "unavailable"
+    || normalized === "no traceability notes reported"
+    || normalized === "no affected variables reported."
+    || normalized === "not enough history";
+}
+
+function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceReport, finding }) {
+  if (assessmentState.mode === "analysis_error") {
+    return { label: "Return to data intake and correct the upload.", section: null, button: "" };
+  }
+  if (assessmentState.mode === "analysis_pending") {
+    return { label: "Wait for ingestion and analysis to finish.", section: null, button: "" };
+  }
+  if (dataQualityReport.warnings.length > 0) {
+    return { label: "Review data quality warnings.", section: "quality", button: "View Data Quality" };
+  }
+  if (finding.exists) {
+    return { label: finding.reviewNext, section: "findings", button: "View Findings" };
+  }
+  if (evidenceReport.hasReplay) {
+    return { label: "Open the replay when you need supporting context.", section: "evidence", button: "View Evidence" };
+  }
+  return { label: "Continue monitoring.", section: null, button: "" };
 }
 
 function formatOverviewStatus(mode) {
@@ -515,12 +574,12 @@ function buildDataQualityReport(latestUploadResult, latestUploadSnapshot, findin
     signalsDetected: formatScalar(columnsDetected),
     qualityLabel: warnings.length > 0 ? "Review" : "Ready",
     summary: warnings.length > 0 ? "Review data quality before making decisions." : "CSV load is ready for review.",
-    rows: [
+    rows: compactRows([
       { label: "Rows loaded", value: formatScalar(rowsLoaded) },
       { label: "Columns detected", value: formatScalar(columnsDetected) },
       { label: "Timestamp mode", value: formatScalar(timestampMode) },
       { label: "Dropped rows", value: formatScalar(droppedRows) },
-    ],
+    ]),
     warnings,
     missingValues,
     imputationNotes,
@@ -544,25 +603,23 @@ function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestR
     ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
     ...(Array.isArray(result.operator_report?.evidence_summary) ? result.operator_report.evidence_summary : []),
   ]);
-  const replayReferences = dedupeText([
-    result.replay_id,
-    result.replay_reference,
-    frame?.frame_id,
-    replay.length ? `${replay.length} replay frames available` : null,
-  ]);
-  const runId = firstPresent(result.run_id, result.job_id, latestUploadSnapshot?.current_upload?.job_id, latestUploadSnapshot?.job_id, "Unavailable");
+  const confidence = normalizeReadyConfidence({
+    value: finding.confidence,
+    fallback: frame?.confidence ?? frame?.evidence_state?.confidence ?? sii.confidence ?? result.confidence ?? result.drift_metrics?.confidence,
+    mode: assessmentState.mode,
+  });
   return {
-    affectedVariables: affectedVariables.length > 0 ? affectedVariables.join(", ") : "No affected variables reported.",
-    rows: [
+    affectedVariables: affectedVariables.length > 0 ? affectedVariables.join(", ") : "",
+    confidence,
+    hasReplay: replay.length > 0,
+    traceability,
+    replayFrameCount: replay.length,
+    rows: compactRows([
       { label: "Baseline comparison", value: formatScalar(assessmentState.stability.regime) },
       { label: "Drift metrics", value: formatScalar(stabilitySnapshot.driftMagnitude) },
       { label: "Behavior has persisted", value: formatScalar(stabilitySnapshot.deformationAge) },
-      { label: "Active observations", value: formatScalar(assessmentState.stability.activeObservations) },
-      { label: "Evidence confidence", value: formatScalar(finding.confidence) },
-      { label: "Run ID", value: formatScalar(runId) },
-    ],
-    traceability,
-    replayReferences,
+      { label: "Evidence confidence", value: confidence },
+    ]),
   };
 }
 
@@ -573,22 +630,49 @@ function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assess
     : [];
   const schemaDetection = result.schema_detection ?? result.detected_schema ?? result.domain_detection ?? null;
   const runtime = result.runtime_metadata ?? result.processing_stats ?? {};
+  const sii = result.sii_intelligence ?? {};
+  const replay = result.replay_timeline?.timeline ?? sii.replay_timeline?.timeline ?? [];
+  const runId = firstPresent(result.run_id, result.job_id, latestUploadSnapshot?.current_upload?.job_id, latestUploadSnapshot?.job_id, "Unavailable");
   const backendWarnings = dedupeText([
     ...(Array.isArray(result.warnings) ? result.warnings : []),
     ...(Array.isArray(result.backend_warnings) ? result.backend_warnings : []),
     ...(Array.isArray(result.data_quality?.warnings) ? result.data_quality.warnings : []),
   ]);
+  const traceability = dedupeText([
+    ...(Array.isArray(result.operator_report?.evidence_summary) ? result.operator_report.evidence_summary : []),
+    ...(Array.isArray(result.finding_evidence_chains) ? result.finding_evidence_chains : []),
+    result.replay_id ? `Replay ID: ${result.replay_id}` : null,
+    result.replay_reference ? `Replay reference: ${result.replay_reference}` : null,
+  ]);
   return {
-    rows: [
+    rows: compactRows([
+      { label: "Run ID", value: formatScalar(runId) },
       { label: "Raw analysis gate state", value: formatScalar(result.data_quality?.analysis_gate_state ?? result.analysis_gate_state ?? assessmentState.mode) },
       { label: "Schema detection", value: formatScalar(schemaDetection ? compactJson(schemaDetection) : "Unavailable") },
       { label: "Runtime metadata", value: formatScalar(Object.keys(runtime).length ? compactJson(runtime) : "Unavailable") },
       { label: "Result source", value: formatScalar(latestUploadSnapshot?.result_source ?? result.result_source ?? "Unavailable") },
-    ],
+      { label: "Raw replay frame count", value: replay.length ? String(replay.length) : "" },
+    ]),
+    traceability,
     processingTrace,
     backendWarnings,
     rawMetadata: compactJson({ latestUploadSnapshot, latestUploadResult }, 2),
   };
+}
+
+function normalizeReadyConfidence({ value, fallback, mode }) {
+  const selected = !isPlaceholderValue(value) ? value : fallback;
+  const numeric = Number(selected);
+  if (Number.isFinite(numeric)) {
+    const normalized = numeric > 1 ? numeric / 100 : numeric;
+    if (normalized >= 0.82) return "High";
+    if (normalized >= 0.62) return "Moderate";
+    return "Low";
+  }
+  const text = String(selected ?? "").trim();
+  if (!isPlaceholderValue(text)) return normalizeConfidenceLabel(text);
+  if (mode === "analysis_ready" || mode === "analysis_degraded_ready") return "Low";
+  return "Pending";
 }
 
 function firstPresent(...values) {
@@ -1116,7 +1200,7 @@ function labelOrFallback(value, fallback = EMPTY_VALUE) {
 function formatConfidence(value, { hasDriftState = false } = {}) {
   const text = String(value ?? "").trim().toLowerCase();
   if (text.includes("high")) return "High";
-  if (text.includes("moderate") || text.includes("medium")) return "Medium";
+  if (text.includes("moderate") || text.includes("medium")) return "Moderate";
   if (text.includes("low")) return "Low";
   if (text.includes("pending") || text.includes("unavailable") || text === EMPTY_VALUE.toLowerCase()) return "Pending";
   const number = Number(value);
@@ -1124,7 +1208,7 @@ function formatConfidence(value, { hasDriftState = false } = {}) {
   if (number <= 0) return "Pending";
   const percent = number <= 1 ? number * 100 : number;
   if (percent >= 82) return "High";
-  if (percent >= 62) return "Medium";
+  if (percent >= 62) return "Moderate";
   return "Low";
 }
 

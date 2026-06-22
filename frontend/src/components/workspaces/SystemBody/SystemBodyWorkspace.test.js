@@ -123,7 +123,7 @@ describe("SystemBodyWorkspace empty state", () => {
 
     expect(screen.getByRole("button", { name: "View Findings" })).toBeTruthy();
     expect(readResultDetail("Baseline comparison")).toBe("State Group B");
-    expect(readResultDetail("Behavior has persisted")).not.toBe("No telemetry");
+    expect(screen.queryByText("Behavior has persisted")).toBeNull();
   });
 
   it("does not render pending copy for a READY upload result", () => {
@@ -197,7 +197,8 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(readResultDetail("Behavior has persisted")).toBe("Not enough history");
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    expect(screen.queryByText("Behavior has persisted")).toBeNull();
     expect(screen.queryByText(/20625d/)).toBeNull();
   });
 

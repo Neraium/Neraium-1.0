@@ -509,7 +509,8 @@
 
 .post-upload-overview,
 .post-upload-section,
-.finding-card {
+.finding-card,
+.finding-empty-state {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -530,6 +531,7 @@
 .post-upload-overview__header,
 .post-upload-section__header,
 .finding-card,
+.finding-empty-state,
 .result-list-block {
   display: grid;
   gap: 10px;
@@ -538,7 +540,8 @@
 
 .post-upload-overview__header h1,
 .post-upload-section__header h2,
-.finding-card h3 {
+.finding-card h3,
+.finding-empty-state h3 {
   margin: 0;
   color: var(--text-primary);
   letter-spacing: 0;
@@ -557,6 +560,7 @@
 }
 
 .post-upload-overview__header p,
+.finding-empty-state p,
 .result-list-block p,
 .result-detail-grid dd {
   margin: 0;
@@ -633,8 +637,23 @@
   max-width: 100%;
 }
 
-.finding-card {
+.finding-card,
+.finding-empty-state {
   padding: 16px;
+}
+
+.finding-empty-state {
+  max-width: 620px;
+  box-shadow: none;
+}
+
+.finding-empty-state h3 {
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.post-upload-inline-action {
+  justify-self: start;
 }
 
 .finding-card__topline {
@@ -678,14 +697,29 @@
 }
 
 @media (max-width: 760px) {
+  .system-gate {
+    padding-top: calc(54px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
   .result-section-tabs {
-    top: calc(58px + env(safe-area-inset-top, 0px));
-    margin-bottom: 12px;
+    top: calc(48px + env(safe-area-inset-top, 0px));
+    gap: 5px;
+    margin-bottom: 10px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+
+  .result-section-tabs button {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 10px;
+    font-size: 0.68rem;
   }
 
   .post-upload-result {
     max-width: 100%;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .post-upload-overview,

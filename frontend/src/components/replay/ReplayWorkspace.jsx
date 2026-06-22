@@ -561,7 +561,6 @@ function buildReplayDiscovery({ timeline, frame, frameIndex, formatClockTime }) 
 function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex, frameCount, formatClockTime, lineage = {} }) {
   const items = [];
   const sourceName = evidenceRun?.source_name ?? evidenceRun?.filename ?? uploadResult?.filename;
-  const runId = evidenceRun?.run_id;
   const variables = Array.isArray(evidenceRun?.variables) ? evidenceRun.variables.filter(Boolean).slice(0, 4) : [];
   const summaries = Array.isArray(evidenceRun?.evidence_summary) ? evidenceRun.evidence_summary.filter(Boolean) : [];
   const metrics = evidenceRun?.drift_metrics && typeof evidenceRun.drift_metrics === "object" ? evidenceRun.drift_metrics : {};
@@ -580,8 +579,6 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
   );
 
   if (sourceName) items.push("Source file: " + sanitizeOperatorText(sourceName));
-  if (runId) items.push("Run ID: " + runId);
-  if (lineage?.upload_id) items.push("Upload ID: " + String(lineage.upload_id));
   if (variables.length) items.push("Variables: " + sanitizeOperatorList(variables).join(" | "));
   if (summaries[0]) items.push("Relationship summary: " + sanitizeOperatorText(summaries[0]));
   if (changeMetric !== null) items.push("Change metric: " + String(changeMetric));
@@ -592,7 +589,13 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
   }
   if (Array.isArray(lineage?.evidence_windows) && lineage.evidence_windows.length > 0) {
     const firstWindow = lineage.evidence_windows[0] ?? {};
-    items.push("Evidence window: " + sanitizeOperatorText([firstWindow.column, firstWindow.baseline_window && firstWindow.recent_window ? `${firstWindow.baseline_window} -> ${firstWindow.recent_window}` : (firstWindow.window_start || firstWindow.window_end)].filter(Boolean).join(" ")));
+    const windowLabel = [
+      humanizeReplayVariable(firstWindow.column),
+      firstWindow.baseline_window && firstWindow.recent_window
+        ? `${firstWindow.baseline_window} to ${firstWindow.recent_window}`
+        : (firstWindow.window_start || firstWindow.window_end),
+    ].filter(Boolean).join(" ");
+    items.push("Evidence window: " + sanitizeOperatorText(windowLabel));
   }
   if (frameCount > 0) {
     const frameTime = frame?.timestamp_end ?? frame?.timestamp ?? frame?.timestamp_start;
@@ -602,6 +605,19 @@ function buildSupportingEvidence({ evidenceRun, uploadResult, frame, frameIndex,
     items.push("Confidence: " + formatEvidenceConfidence(confidence));
   }
   return sanitizeOperatorList(items);
+}
+
+function humanizeReplayVariable(value) {
+  const text = String(value ?? "").trim();
+  const normalized = text.toLowerCase();
+  const labels = {
+    chiller_load_pct: "Chiller load",
+    compressor_power_kw: "Compressor power",
+    chw_supply_temp_f: "CHW supply temp",
+    flow_gpm: "Flow",
+  };
+  if (labels[normalized]) return labels[normalized];
+  return text.replaceAll("_", " ");
 }
 
 function firstFiniteNumber(...values) {

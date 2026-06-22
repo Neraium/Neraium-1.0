@@ -224,7 +224,7 @@ describe("ReplayWorkspace playback stability", () => {
     });
 
     await waitFor(() => expect(screen.getByText("Source file: uploaded-telemetry.csv")).toBeTruthy());
-    expect(screen.getByText("Run ID: job-real")).toBeTruthy();
+    expect(screen.queryByText("Run ID: job-real")).toBeNull();
     expect(screen.getByText("Variables: temperature | humidity")).toBeTruthy();
     expect(screen.getByText(/Relationship summary: Temperature and humidity system behavior changed from its normal pattern moved away from current operating pattern with historical comparison evidence\./)).toBeTruthy();
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
