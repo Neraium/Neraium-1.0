@@ -56,7 +56,7 @@ describe("uploadState normalization", () => {
     })).toBe(false);
   });
 
-  it("labels an active upload as pending verification until review evidence is ready", () => {
+  it("labels an active upload as processing until review evidence is ready", () => {
     expect(connectionStateLabel("active", "complete", "", {
       status: "active",
       current_upload: {
@@ -66,7 +66,7 @@ describe("uploadState normalization", () => {
           engine_result: { overall_result: "drift" },
         },
       },
-    })).toBe("Analysis pending verification");
+    })).toBe("Telemetry still processing");
   });
 
   it("keeps the active session label once operator review evidence is ready", () => {
@@ -117,48 +117,22 @@ describe("uploadState normalization", () => {
     });
   });
 
+  it("prefers latest_result when status payload wraps the current upload", () => {
+    const result = resolveCurrentUploadResult({
+      latest_result: { job_id: "nested-job", replay_ready: true },
+      job_id: "status-job",
+    });
+    expect(result.job_id).toBe("nested-job");
+  });
 
-  it("reads operator review readiness from the canonical current upload result", () => {
+  it("keeps operator review pending until the reliability flag is true", () => {
     expect(resolveOperatorReviewReadiness({
-      latestUploadSnapshot: {
-        current_upload: {
-          result: {
-            job_id: "job-review-ready",
-            sii_reliable_enough_to_show: true,
-          },
-        },
-      },
-    })).toBe(true);
-  });
-
-  it("prefers current_upload.result over legacy latest_result when both are present", () => {
-    const resolved = resolveCurrentUploadResult({
-      current_upload: {
-        result: {
-          job_id: "current-upload-job",
-          engine_result: { overall_result: "stable" },
-        },
-      },
-      latest_result: {
-        job_id: "legacy-latest-job",
-        engine_result: { overall_result: "stale" },
-      },
-    });
-
-    expect(resolved?.job_id).toBe("current-upload-job");
-  });
-
-  it("falls back to legacy latest_result when canonical current_upload.result is absent", () => {
-    const resolved = resolveCurrentUploadResult({
-      current_upload: {
-        result: null,
-      },
-      latest_result: {
-        job_id: "legacy-latest-job",
-        engine_result: { overall_result: "stable" },
-      },
-    });
-
-    expect(resolved?.job_id).toBe("legacy-latest-job");
+      latestUploadResult: { job_id: "pending", sii_reliable_enough_to_show: false },
+      hasRealSiiOutput: true,
+    })).toBe("quality_gate");
+    expect(resolveOperatorReviewReadiness({
+      latestUploadResult: { job_id: "ready", sii_reliable_enough_to_show: true },
+      hasRealSiiOutput: true,
+    })).toBe("ready");
   });
 });
