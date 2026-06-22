@@ -8,7 +8,7 @@ export const OPERATOR_EMPTY_STATE = {
 };
 
 export const OPERATOR_PENDING_STATE = {
-  title: "Telemetry still processing.",
+  title: "Analysis pending verification.",
   subtitle: "Telemetry is present, but it is not ready for operator review yet.",
   detail: "Wait for processing to finish before reviewing issues.",
 };
@@ -132,7 +132,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
     id: jobId ? `current-${jobId}` : "current-observation",
     runId: jobId,
     exists: true,
-    status: statusLevel === "critical" ? "High" : "Medium",
+    status: statusLevel === "critical" ? "Critical Issue" : "Issue Detected",
     confidence,
     summary,
     whyItMatters,
@@ -165,7 +165,7 @@ export function buildCanonicalFindingRun({ canonicalFinding, currentSession }) {
 
   return {
     run_id: runId,
-    source_name: canonicalFinding.sourceName ?? result?.filename ?? "Current telemetry",
+    source_name: canonicalFinding.sourceName ?? result?.filename ?? "Current telemetry session",
     source_type: "current_session",
     observation_type: result?.observation_type ?? "trajectory_drift",
     observation_status: "open",
@@ -340,7 +340,7 @@ function buildReviewNext({ result, frame, variables }) {
   ).toLowerCase();
   if (raw.includes("histor")) return "Review historical comparison evidence.";
   if (variables.length >= 2) return "Review affected variables.";
-  if (raw.includes("replay")) return "Review System Story.";
+  if (raw.includes("replay")) return "Review system story.";
   return "Review supporting evidence.";
 }
 
@@ -361,10 +361,10 @@ function buildTechnicalDetails({ result, frame, variables, driftMagnitude, durat
     { label: "Affected variables", value: variables.length ? variables.join(", ") : "-" },
     { label: "Historical comparison", value: sanitizeOperatorText(result?.relationship_summary ?? result?.historical_fact ?? "Available in supporting evidence") },
     { label: "Evidence count", value: String(evidenceCount || 0) },
-    { label: "Story references", value: replayReferences.length ? replayReferences.join("; ") : "-" },
+    { label: "System story references", value: replayReferences.length ? replayReferences.join("; ") : "-" },
     { label: "Current operating pattern", value: sanitizeOperatorText(result?.regime_label ?? result?.sii_intelligence?.regime_label ?? "Historical pattern") },
     { label: "Current analysis", value: sanitizeOperatorText(result?.processing_state ?? result?.status ?? "Complete") },
-    { label: "Observation method", value: "Structural change only. No recommendations." },
+    { label: "Observation method", value: "System behavior change only. No automatic control." },
     { label: "Source", value: result?.filename ?? "-" },
     { label: "Run ID", value: result?.job_id ?? "-" },
     { label: "Observed at", value: sanitizeOperatorText(frame?.timestamp_end ?? result?.completed_at ?? result?.last_processed_at ?? "-") },
@@ -392,23 +392,23 @@ function buildDataQualityGroups(result) {
 export function buildPendingState(reviewReadiness) {
   if (reviewReadiness === "processing") {
     return {
-      title: "Telemetry still processing.",
+      title: "Analysis pending verification.",
       subtitle: "Telemetry is still being processed into an evidence-backed interpretation.",
-      detail: "Wait for processing to complete before reviewing findings.",
+      detail: "Wait for processing to complete before reviewing issues.",
     };
   }
   if (reviewReadiness === "quality_gate") {
     return {
-      title: "Telemetry still processing.",
+      title: "Analysis pending verification.",
       subtitle: "The current telemetry does not yet meet the reliability threshold for operator review.",
-      detail: "Upload more stable telemetry or correct data quality issues before reviewing findings.",
+      detail: "Collect more stable telemetry or correct data quality issues before reviewing issues.",
     };
   }
   if (reviewReadiness === "unaligned") {
     return {
-      title: "Telemetry still processing.",
+      title: "Analysis pending verification.",
       subtitle: "The latest interpretation is not aligned to the active upload session.",
-      detail: "Refresh telemetry and wait for the system story to verify before reviewing issues.",
+      detail: "Refresh telemetry and wait for the system story to realign before reviewing issues.",
     };
   }
   return OPERATOR_PENDING_STATE;
