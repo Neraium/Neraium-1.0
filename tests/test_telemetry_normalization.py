@@ -1,6 +1,6 @@
 import pandas as pd
 
-from backend.app.services.telemetry_normalization import (
+from app.services.telemetry_normalization import (
     IntegrityLayer,
     NormalizationLayer,
     NormalizationPipeline,
