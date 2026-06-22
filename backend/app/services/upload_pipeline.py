@@ -11,6 +11,7 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
+from app.services.telemetry_normalization import build_normalization_report
 
 
 def run_structural_analysis_pipeline(
@@ -63,6 +64,12 @@ def run_structural_analysis_pipeline(
     matrix_rows = matrix_rows_for_profiles
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
     baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
+    normalization_report = build_normalization_report(
+        rows=rows,
+        numeric_columns=numeric_columns,
+        timestamp_column=timestamp_column,
+        source_id=filename or job_id,
+    )
     relationship_baseline = relationship_model if isinstance(relationship_model, dict) else {}
     baseline_analysis = {
         **baseline_analysis,
@@ -77,6 +84,7 @@ def run_structural_analysis_pipeline(
         baseline_analysis.get("baseline_window_rows", 0) >= 5
         and baseline_analysis.get("recent_window_rows", 0) >= 1
         and baseline_analysis.get("columns_analyzed", 0) >= 1
+        and not normalization_report.get("window_suppressed")
     )
     stuck_sensor_count = sum(1 for profile in numeric_profiles if profile.get("constant_or_stuck"))
     data_quality = build_data_quality(
@@ -91,6 +99,7 @@ def run_structural_analysis_pipeline(
                     *timestamp_profile.get("warnings", []),
                     *baseline_analysis.get("warnings", []),
                     *cultivation_mapping.get("warnings", []),
+                    *normalization_report.get("warnings", []),
                     *([f"{stuck_sensor_count} numeric sensor(s) appear constant or stuck."] if stuck_sensor_count else []),
                 ]
             )
@@ -106,6 +115,7 @@ def run_structural_analysis_pipeline(
             "analysis_gate_state": ingestion_report.get("analysis_gate_state"),
             "data_quality_messages": ingestion_report.get("data_quality_messages", []),
             "imputation_report": ingestion_report.get("imputation_report", {}),
+            "normalization_report": normalization_report,
         },
     )
     reliability_warning = None
@@ -179,10 +189,12 @@ def run_structural_analysis_pipeline(
             "operational_signal_profile_confidence": operational_profile_confidence,
             "operational_signal_profile_signals": operational_profile_signals,
             "operational_signal_modality": operational_modality,
+            "telemetry_integrity": normalization_report.get("source_integrity", {}),
         },
     )
     sii_intelligence["runner_module"] = RUNNER_MODULE
     sii_intelligence["replay_timeline"] = replay
+    sii_intelligence["telemetry_integrity"] = normalization_report
     processing_time_seconds = round(max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())), 6)
     processing_trace = {
         "sii_pipeline_ran": True,
@@ -190,6 +202,9 @@ def run_structural_analysis_pipeline(
         "replay_frame_count": frame_count,
         "rows_processed": row_count_total,
         "columns_analyzed": len(numeric_columns),
+        "normalization_layer_ran": True,
+        "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
+        "normalization_source_status": normalization_report.get("status"),
         "processing_time_seconds": processing_time_seconds,
         "completed_at": now,
     }
@@ -232,6 +247,7 @@ def run_structural_analysis_pipeline(
         "runner_result": runner_result,
         "sii_intelligence": sii_intelligence,
         "timestamp_profile": timestamp_profile,
+        "normalization_report": normalization_report,
         "chunk_count": chunk_count,
         "memory_estimate_bytes": memory_estimate_bytes,
     }
