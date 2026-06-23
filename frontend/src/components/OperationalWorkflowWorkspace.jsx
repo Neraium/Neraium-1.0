@@ -11,11 +11,32 @@ const NAV_ITEMS = [
   { id: "history", label: "History" },
 ];
 
+const MOBILE_PRIMARY_NAV = [
+  { id: "overview", label: "Overview" },
+  { id: "insights", label: "Insights" },
+  { id: "systems", label: "Systems" },
+];
+
+const MOBILE_MORE_NAV = [
+  { id: "telemetry", label: "Telemetry" },
+  { id: "history", label: "History" },
+];
+
 const INVESTIGATION_STATUSES = ["Open", "Acknowledged", "Under Investigation", "Resolved"];
 const AWAITING_ANALYSIS = {
   label: "Awaiting Analysis",
   tone: "unknown",
-  detail: "SII has not completed analysis for this system yet.",
+  detail: "SII has not completed analysis yet.",
+};
+const TELEMETRY_AVAILABLE = {
+  label: "Telemetry Available",
+  tone: "unknown",
+  detail: "Telemetry has been received, but SII analysis has not been completed yet.",
+};
+const NO_BASELINE_AVAILABLE = {
+  label: "No Baseline Available",
+  tone: "unknown",
+  detail: "No operating fingerprint has been established yet.",
 };
 
 export default function OperationalWorkflowWorkspace({
@@ -34,6 +55,7 @@ export default function OperationalWorkflowWorkspace({
   onSignOut,
 }) {
   const [activeSection, setActiveSection] = useState("overview");
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [selectedInsightId, setSelectedInsightId] = useState(null);
   const [insightStatuses, setInsightStatuses] = useState({});
   const [operatorNotes, setOperatorNotes] = useState({});
@@ -61,14 +83,16 @@ export default function OperationalWorkflowWorkspace({
   ]);
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
+  const mobileMoreActive = MOBILE_MORE_NAV.some((item) => item.id === activeSection);
 
   function navigate(sectionId) {
     setActiveSection(sectionId);
+    setMobileMoreOpen(false);
   }
 
   function openInsight(insightId) {
     setSelectedInsightId(insightId);
-    setActiveSection("insights");
+    navigate("insights");
   }
 
   function setInsightStatus(insightId, status) {
@@ -83,6 +107,10 @@ export default function OperationalWorkflowWorkspace({
     if (typeof onWorkspaceNavigate === "function") {
       onWorkspaceNavigate("data-connections");
     }
+  }
+
+  function viewSystems() {
+    navigate("systems");
   }
 
   return (
@@ -107,7 +135,7 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
         <div className="operational-sidebar__footer">
-          <StatusBadge label={model.telemetryIntegrity.label} tone={model.telemetryIntegrity.tone} />
+          <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
           <small>Last analysis: {model.lastAnalysis}</small>
           {typeof onSignOut === "function" ? (
             <button type="button" className="operational-link-button" onClick={onSignOut}>Sign out</button>
@@ -122,26 +150,59 @@ export default function OperationalWorkflowWorkspace({
             <h1>{sectionTitle(activeSection)}</h1>
           </div>
           <div className="operational-topbar__status">
-            <StatusBadge label={model.overallStatus.label} tone={model.overallStatus.tone} />
-            <StatusBadge label={`Telemetry ${model.telemetryIntegrity.label}`} tone={model.telemetryIntegrity.tone} />
+            <StatusBadge label={model.heroStatus.label} tone={model.heroStatus.tone} />
+            <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
           </div>
         </header>
 
         <div className="operational-mobile-nav" aria-label="Mobile workflow navigation">
-          {NAV_ITEMS.map((item) => (
+          {MOBILE_PRIMARY_NAV.map((item) => (
             <button
               key={item.id}
               type="button"
               className={activeSection === item.id ? "is-active" : ""}
+              aria-current={activeSection === item.id ? "page" : undefined}
               onClick={() => navigate(item.id)}
             >
               {item.label}
             </button>
           ))}
+          <div className="operational-mobile-nav__more-wrap">
+            <button
+              type="button"
+              className={mobileMoreActive ? "is-active" : ""}
+              aria-expanded={mobileMoreOpen}
+              aria-haspopup="menu"
+              onClick={() => setMobileMoreOpen((value) => !value)}
+            >
+              More
+            </button>
+            {mobileMoreOpen ? (
+              <div className="operational-mobile-nav__menu" role="menu" aria-label="More navigation">
+                {MOBILE_MORE_NAV.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    className={activeSection === item.id ? "is-active" : ""}
+                    onClick={() => navigate(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {activeSection === "overview" ? (
-          <OverviewSection model={model} onOpenInsight={openInsight} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} />
+          <OverviewSection
+            model={model}
+            onOpenInsight={openInsight}
+            onAnalyzeSystem={analyzeSystem}
+            onResumePreviousSession={onResumePreviousSession}
+            onViewSystems={viewSystems}
+          />
         ) : null}
 
         {activeSection === "insights" ? (
@@ -175,53 +236,61 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession }) {
+function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="System health overview">
-        <PanelHeader eyebrow="Overview" title="System Health" subtitle="Current behavioral status across monitored systems." />
-        <div className="system-health-grid">
-          {model.systemCards.map((system) => (
-            <article className={`system-health-card system-health-card--${system.tone}`} key={system.id}>
-              <div>
-                <span className="section-token">{system.name}</span>
-                <h3>{system.status}</h3>
-              </div>
-              <p>{system.summary}</p>
-              <div className="system-health-card__footer">
-                <span>{system.lastAnalysis}</span>
-                <strong>{system.insightSummary}</strong>
-              </div>
-            </article>
-          ))}
+      <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
+        <div className="operational-hero">
+          <div className="operational-panel__header operational-panel__header--tight">
+            <span className="section-token">Overview</span>
+            <h2>{model.heroStatus.label}</h2>
+            <p>{model.heroStatus.detail}</p>
+          </div>
+          <div className="operational-hero__meta">
+            <span>Last analysis: {model.lastAnalysis}</span>
+            <span>{model.baselineStatus.label}</span>
+          </div>
+          <div className="operational-actions operational-actions--hero">
+            <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze Telemetry</button>
+            <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
+            {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
+              <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="System fingerprint drift">
-        <PanelHeader eyebrow="SII" title="Fingerprint Drift" subtitle="Current behavior compared with historical baseline." />
-        <FingerprintIndicator drift={model.fingerprintDrift} />
-      </section>
-
-      <section className="operational-panel" aria-label="Telemetry integrity">
-        <PanelHeader eyebrow="Data" title="Telemetry Integrity" subtitle="Confidence in the inputs behind the current view." />
-        <StatusBadge label={model.telemetryIntegrity.label} tone={model.telemetryIntegrity.tone} />
-        <p className="operational-copy">{model.telemetryIntegrity.detail}</p>
-        <small>Last analysis: {model.lastAnalysis}</small>
+      <section className="operational-panel operational-panel--wide" aria-label="Operational status summary">
+        <div className="status-rack">
+          {model.statusTiles.map((tile) => <CompactStatusTile key={tile.label} tile={tile} />)}
+        </div>
       </section>
 
       <section className="operational-panel operational-panel--wide" aria-label="Active insights summary">
-        <PanelHeader eyebrow="Insights" title="Active Insights" subtitle="Current investigation priorities across monitored systems." />
+        <PanelHeader eyebrow="Insights" title="Active Insights" subtitle="Top operational observations only." />
         <InsightList
-          insights={model.insights.slice(0, 5)}
-          empty={model.analysisComplete ? "No active insights. Analyze telemetry to generate operational understanding." : "Awaiting Analysis. Analyze telemetry to generate operational understanding."}
-          emptyTitle={model.analysisComplete ? "No active insights" : "Awaiting Analysis"}
+          insights={model.insights.slice(0, 3)}
+          empty={model.analysisComplete
+            ? "No current observations."
+            : "Run analysis to compare current behavior against the operating fingerprint."}
+          emptyTitle={model.analysisComplete ? "No current observations" : "Awaiting Analysis"}
           onOpenInsight={onOpenInsight}
         />
-        <div className="operational-actions">
-          <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze System</button>
-          {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
-            <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-          ) : null}
+      </section>
+
+      <section className="operational-panel operational-panel--compact" aria-label="Fingerprint status">
+        <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison stays compact here." />
+        <FingerprintStatus drift={model.fingerprintDrift} />
+      </section>
+
+      <section className="operational-panel operational-panel--compact" aria-label="Systems summary">
+        <PanelHeader eyebrow="Systems" title="Systems" subtitle={model.systemSummaryLabel} />
+        <div className="systems-summary">
+          <div>
+            <strong>{model.systemsMonitoredCount}</strong>
+            <span>systems monitored</span>
+          </div>
+          <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems →</button>
         </div>
       </section>
     </div>
@@ -244,7 +313,7 @@ function InsightsSection({
         <PanelHeader eyebrow="Insights" title="Insight Feed" subtitle="Open, acknowledged, and resolved findings." />
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No insights yet. Analyze telemetry to generate findings." : "Awaiting Analysis. Analyze telemetry to generate findings."}
+          empty={model.analysisComplete ? "No insights yet." : "Awaiting Analysis."}
           emptyTitle={model.analysisComplete ? "No insights yet" : "Awaiting Analysis"}
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}
@@ -316,32 +385,42 @@ function InsightsSection({
 function SystemsSection({ model, onOpenInsight }) {
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="System selector">
-        <PanelHeader eyebrow="Systems" title="Monitored Systems" subtitle="Per-system behavior and current investigation status." />
-        <div className="system-health-grid">
+      <section className="operational-panel operational-panel--wide" aria-label="Monitored systems">
+        <PanelHeader eyebrow="Systems" title="Monitored Systems" subtitle="Subsystem detail belongs here, not on Overview." />
+        <div className="systems-list">
           {model.systemCards.map((system) => (
-            <button className={`system-health-card system-health-card--${system.tone}`} key={system.id} type="button">
-              <span className="section-token">{system.name}</span>
-              <h3>{system.status}</h3>
-              <p>{system.summary}</p>
-              <small>{system.lastAnalysis}</small>
-            </button>
+            <article className="system-summary-row" key={system.id}>
+              <div>
+                <strong>{system.name}</strong>
+                <p>{system.status}</p>
+              </div>
+              <div className="system-summary-row__meta">
+                <span>{system.lastAnalysis}</span>
+                <span>{system.insightSummary}</span>
+                {system.primaryInsightId && typeof onOpenInsight === "function" ? (
+                  <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open insight</button>
+                ) : null}
+              </div>
+            </article>
           ))}
         </div>
       </section>
+
       <section className="operational-panel" aria-label="Fingerprint panel">
-        <PanelHeader eyebrow="Fingerprint" title="Current vs. Historical" subtitle="Behavioral baseline comparison." />
-        <FingerprintIndicator drift={model.fingerprintDrift} />
+        <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison remains lightweight." />
+        <FingerprintStatus drift={model.fingerprintDrift} />
       </section>
+
       <section className="operational-panel" aria-label="Signal relationship summary">
         <PanelHeader eyebrow="Relationships" title="Signal Relationship Summary" subtitle="Relationships with the largest behavior shift." />
         <RelationshipList rows={model.relationshipRows} />
       </section>
+
       <section className="operational-panel operational-panel--wide" aria-label="System insights">
         <PanelHeader eyebrow="Insights" title="Active System Insights" subtitle="Findings tied to the selected or primary system." />
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No active system insights." : "Awaiting Analysis. Analyze telemetry to generate system insights."}
+          empty={model.analysisComplete ? "No active system insights." : "Awaiting Analysis."}
           emptyTitle={model.analysisComplete ? "No active system insights" : "Awaiting Analysis"}
           onOpenInsight={onOpenInsight}
         />
@@ -355,7 +434,7 @@ function TelemetrySection({ model, onAnalyzeSystem }) {
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel" aria-label="Source status">
         <PanelHeader eyebrow="Telemetry" title="Source Status" subtitle="Current data source and analysis heartbeat." />
-        <StatusBadge label={model.telemetryIntegrity.label} tone={model.telemetryIntegrity.tone} />
+        <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
         <DetailGrid rows={[
           ["Source", model.sourceLabel],
           ["Last analysis", model.lastAnalysis],
@@ -364,7 +443,7 @@ function TelemetrySection({ model, onAnalyzeSystem }) {
       </section>
       <section className="operational-panel" aria-label="Signal browser">
         <PanelHeader eyebrow="Signals" title="Signal Browser" subtitle="Detected telemetry signals and integrity state." />
-        <SignalList signals={model.signals} integrity={model.telemetryIntegrity} />
+        <SignalList signals={model.signals} integrity={model.telemetryStatus} />
       </section>
       <section className="operational-panel operational-panel--wide" aria-label="Data quality warnings">
         <PanelHeader eyebrow="Integrity" title="Data Quality" subtitle="Warnings, missing values, and timestamp conditions." />
@@ -372,7 +451,7 @@ function TelemetrySection({ model, onAnalyzeSystem }) {
         <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : "Awaiting Analysis."} />
         <QualityList title="Timestamp quality" items={model.timestampNotes} empty={model.analysisComplete ? "Timestamp quality is acceptable or not yet reported." : "Awaiting Analysis."} />
         <div className="operational-actions">
-          <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze New Telemetry</button>
+          <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze Telemetry</button>
         </div>
       </section>
     </div>
@@ -390,7 +469,7 @@ function HistorySection({ model, onResumePreviousSession }) {
         <PanelHeader eyebrow="Archive" title="Insight Archive" subtitle="Resolved and historical findings." />
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No insight archive yet." : "Awaiting Analysis. Insight history will appear after SII analysis completes."}
+          empty={model.analysisComplete ? "No insight archive yet." : "Awaiting Analysis."}
           emptyTitle={model.analysisComplete ? "No insight archive yet" : "Awaiting Analysis"}
         />
       </section>
@@ -411,16 +490,18 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const snapshot = effectiveLatestUploadSnapshot ?? liveOps?.latestUploadSnapshot ?? {};
   const relationshipRows = Array.isArray(liveOps?.relationshipRows) ? liveOps.relationshipRows : [];
   const quality = collectQuality(result, snapshot);
+  const telemetryAvailable = hasTelemetry(result, snapshot, liveOps, replayFrame);
   const analysisComplete = hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps });
-  const telemetryIntegrity = deriveTelemetryIntegrity({ result, snapshot, quality, liveOps, analysisComplete });
   const finding = canonicalFinding ?? liveOps?.canonicalFinding ?? null;
   const hasFinding = analysisComplete && Boolean(finding?.exists || liveOps?.findings?.length);
   const primarySystem = firstText(roomContext?.primary, liveOps?.primaryWindow?.label, result?.system_name, "Primary Water System");
-  const overallStatus = deriveOverallStatus({ hasFinding, telemetryIntegrity, gateProcessing, result, liveOps, analysisComplete });
-  const lastAnalysis = firstText(liveOps?.connectionSummary, snapshot?.processed_at, snapshot?.last_processed_at, result?.processed_at, result?.timestamp_profile?.last_timestamp, "Awaiting analysis");
-  const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete });
-  const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryIntegrity, lastAnalysis }) : [];
-  const systemCards = buildSystemCards({ systems: liveOps?.systems, primarySystem, overallStatus, lastAnalysis, insights, fingerprintDrift, analysisComplete });
+  const baselineAvailable = analysisComplete && hasBaseline({ result, snapshot, relationshipRows, liveOps });
+  const telemetryStatus = deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisComplete, telemetryAvailable });
+  const heroStatus = deriveHeroStatus({ analysisComplete, telemetryAvailable, hasFinding, baselineAvailable, telemetryStatus, gateProcessing, result, liveOps });
+  const lastAnalysis = firstText(liveOps?.connectionSummary, snapshot?.processed_at, snapshot?.last_processed_at, result?.processed_at, result?.timestamp_profile?.last_timestamp, analysisComplete ? "Analysis complete" : "Awaiting analysis");
+  const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable });
+  const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis }) : [];
+  const systemCards = buildSystemCards({ systems: liveOps?.systems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift });
   const signals = buildSignals(result);
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, analysisComplete });
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
@@ -429,13 +510,17 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     siteLabel: firstText(result?.facility_name, snapshot?.facility_name, "Current Site"),
     domainLabel,
     sourceLabel: firstText(result?.result_source, snapshot?.result_source, liveOps?.telemetrySession?.sessionMode, "Operational data"),
-    overallStatus,
+    heroStatus,
+    baselineStatus: baselineAvailable ? { label: "Baseline Established", tone: "normal" } : NO_BASELINE_AVAILABLE,
+    telemetryStatus,
     lastAnalysis,
-    telemetryIntegrity,
     analysisComplete,
     fingerprintDrift,
     systemCards,
+    systemsMonitoredCount: systemCards.length,
+    systemSummaryLabel: `${systemCards.length} systems monitored`,
     insights,
+    statusTiles: buildStatusTiles({ telemetryStatus, baselineAvailable, insights, analysisComplete }),
     relationshipRows,
     signals,
     historyItems,
@@ -447,7 +532,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   };
 }
 
-function buildInsights({ finding, liveOps, result, primarySystem, telemetryIntegrity, lastAnalysis }) {
+function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis }) {
   const rawFindings = [];
   if (finding?.exists || finding?.summary || finding?.title) rawFindings.push(finding);
   if (Array.isArray(liveOps?.findings)) rawFindings.push(...liveOps.findings);
@@ -467,40 +552,45 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryInteg
         severity: normalizeSeverity(item.confidence ?? result?.drift_status),
         summary,
         whatChanged: summary,
-        whyItMatters: firstText(item.whyItMatters, "The system is no longer matching its normal operating pattern and may require investigation."),
+        whyItMatters: firstText(item.whyItMatters, "The system is no longer matching its operating pattern and may require review."),
         systemBehavior: firstText(item.baselineContext, item.change, "Current behavior is being compared against the historical operating fingerprint."),
         investigationPriorities: priorities.length ? priorities : ["Verify supporting measurements", "Inspect affected equipment", "Compare current operation with recent maintenance activity"],
         supportingObservations: supporting.length ? supporting : ["Behavior changed from historical baseline", "Telemetry was analyzed for relationship changes"],
-        telemetryNote: telemetryIntegrity.detail,
+        telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
       };
     });
 
   if (insights.length > 0) return dedupeInsights(insights).slice(0, 8);
-
   return [];
 }
 
-function buildSystemCards({ systems, primarySystem, overallStatus, lastAnalysis, insights, fingerprintDrift, analysisComplete }) {
+function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) {
   const safeSystems = Array.isArray(systems) && systems.length > 0
     ? systems.slice(0, 6).map((system, index) => ({ id: system.id ?? system.name ?? `system-${index}`, name: system.name ?? system.label ?? `System ${index + 1}` }))
     : [{ id: "primary", name: primarySystem }];
 
   return safeSystems.map((system) => {
-    const activeInsightCount = insights.filter((item) => item.system === system.name || safeSystems.length === 1).length;
+    const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
     return {
       id: system.id,
       name: system.name,
-      status: overallStatus.label,
-      tone: overallStatus.tone,
+      status: heroStatus.label,
+      tone: heroStatus.tone,
       summary: fingerprintDrift.detail,
       lastAnalysis,
-      activeInsightCount,
-      insightSummary: analysisComplete
-        ? `${activeInsightCount} active insight${activeInsightCount === 1 ? "" : "s"}`
-        : AWAITING_ANALYSIS.label,
+      insightSummary: `${relatedInsights.length} active insight${relatedInsights.length === 1 ? "" : "s"}`,
+      primaryInsightId: relatedInsights[0]?.id ?? null,
     };
   });
+}
+
+function buildStatusTiles({ telemetryStatus, baselineAvailable, insights, analysisComplete }) {
+  return [
+    { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },
+    { label: "Baseline", value: baselineAvailable ? "Available" : "Not Available", detail: baselineAvailable ? "Fingerprint comparison is available." : NO_BASELINE_AVAILABLE.detail, tone: baselineAvailable ? "normal" : "unknown" },
+    { label: "Insights", value: analysisComplete ? String(insights.length) : "0", detail: analysisComplete ? `${insights.length} active insight${insights.length === 1 ? "" : "s"}` : "Awaiting analysis.", tone: insights.length > 0 ? "changed" : "unknown" },
+  ];
 }
 
 function collectQuality(result, snapshot) {
@@ -526,50 +616,53 @@ function collectQuality(result, snapshot) {
   return { warnings, missingValues, timestampNotes };
 }
 
-function deriveTelemetryIntegrity({ result, snapshot, quality, liveOps, analysisComplete }) {
+function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisComplete, telemetryAvailable }) {
   if (!analysisComplete) {
-    return {
-      ...AWAITING_ANALYSIS,
-      detail: "Telemetry integrity will be classified after SII completes analysis.",
-    };
+    return telemetryAvailable ? TELEMETRY_AVAILABLE : AWAITING_ANALYSIS;
   }
   const text = `${quality.warnings.join(" ")} ${quality.missingValues.join(" ")} ${liveOps?.connectionStatusLine ?? ""}`.toLowerCase();
-  if (!result && !snapshot) return { label: "Missing", tone: "unknown", detail: "No telemetry has been analyzed yet." };
-  if (text.includes("missing")) return { label: "Missing", tone: "warning", detail: "Some telemetry values or sources are missing." };
-  if (text.includes("inconsistent") || text.includes("timestamp")) return { label: "Inconsistent", tone: "warning", detail: "Telemetry timing or source consistency needs review." };
+  if (!result && !snapshot) return { label: "Telemetry Missing", tone: "unknown", detail: "No telemetry has been analyzed yet." };
+  if (text.includes("missing")) return { label: "Telemetry Missing", tone: "warning", detail: "Some telemetry values or sources are missing." };
+  if (text.includes("inconsistent") || text.includes("timestamp")) return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry timing or source consistency needs review." };
   if (quality.warnings.length > 0 || quality.missingValues.length > 0 || String(liveOps?.connectionTone ?? "").includes("degraded")) {
-    return { label: "Degraded", tone: "warning", detail: "Telemetry is usable, but one or more quality conditions should be reviewed." };
+    return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry is usable, but one or more quality conditions should be reviewed." };
   }
-  return { label: "Good", tone: "normal", detail: "Telemetry integrity appears acceptable for operational review." };
+  return { label: "Telemetry Verified", tone: "normal", detail: "Telemetry integrity is acceptable for operational review." };
 }
 
-function deriveOverallStatus({ hasFinding, telemetryIntegrity, gateProcessing, result, liveOps, analysisComplete }) {
+function deriveHeroStatus({ analysisComplete, telemetryAvailable, hasFinding, baselineAvailable, telemetryStatus, gateProcessing, result, liveOps }) {
   if (!analysisComplete) return AWAITING_ANALYSIS;
-  if (gateProcessing?.active) return { label: "Monitoring", tone: "unknown" };
+  if (gateProcessing?.active) return { label: "Monitoring", tone: "unknown", detail: "SII is still processing the latest telemetry." };
   const text = `${result?.operating_state ?? ""} ${result?.drift_status ?? ""} ${liveOps?.facilityTone ?? ""}`.toLowerCase();
-  if (text.includes("action") || text.includes("unstable") || text.includes("critical")) return { label: "Investigate", tone: "investigate" };
-  if (hasFinding || text.includes("drift") || text.includes("changed") || text.includes("degrad")) return { label: "Changed", tone: "changed" };
-  if (telemetryIntegrity.label === "Missing") return { label: "Monitoring", tone: "unknown" };
-  return { label: "Normal", tone: "normal" };
+  if (hasFinding || text.includes("drift") || text.includes("changed") || text.includes("degrad") || text.includes("unstable") || text.includes("critical")) {
+    return { label: "Investigate", tone: "investigate", detail: "Behavioral changes require review." };
+  }
+  if (!baselineAvailable) return { label: NO_BASELINE_AVAILABLE.label, tone: NO_BASELINE_AVAILABLE.tone, detail: NO_BASELINE_AVAILABLE.detail };
+  if (telemetryStatus.tone === "warning") return { label: "Review", tone: "changed", detail: telemetryStatus.detail };
+  if (telemetryAvailable) return { label: "Normal", tone: "normal", detail: "No significant behavioral changes detected." };
+  return AWAITING_ANALYSIS;
 }
 
-function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete }) {
+function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable }) {
+  if (!baselineAvailable) {
+    return {
+      ...NO_BASELINE_AVAILABLE,
+      detail: "No operating fingerprint has been established yet.",
+    };
+  }
   if (!analysisComplete) {
     return {
       ...AWAITING_ANALYSIS,
-      detail: "Fingerprint drift will be classified after SII completes analysis.",
+      detail: "Fingerprint comparison will populate after SII completes analysis.",
     };
   }
   const magnitudes = relationshipRows.map((row) => Math.abs(Number(row.percent_change ?? row.absolute_change ?? row.pair_weight ?? row.change ?? 0))).filter(Number.isFinite);
   const max = magnitudes.length ? Math.max(...magnitudes) : 0;
   if (max > 30 || hasFinding || String(result?.drift_status ?? "").toLowerCase().includes("unstable")) {
-    return { label: "Significant change", tone: "investigate", detail: "Current behavior is materially different from the historical baseline." };
+    return { label: "Significant Change", tone: "investigate", detail: "Current behavior is materially different from the historical baseline." };
   }
   if (max > 10 || String(result?.drift_status ?? "").toLowerCase().includes("review")) {
     return { label: "Drifting", tone: "changed", detail: "Current behavior is moving away from the historical baseline." };
-  }
-  if (relationshipRows.length === 0 && !result?.baseline_analysis && !result?.sii_intelligence) {
-    return { label: "Waiting for baseline comparison", tone: "unknown", detail: "Analyze telemetry to compare current behavior with the operating fingerprint." };
   }
   return { label: "Stable", tone: "normal", detail: "Current behavior remains close to the historical operating fingerprint." };
 }
@@ -684,9 +777,19 @@ function DetailGrid({ rows }) {
   );
 }
 
-function FingerprintIndicator({ drift }) {
+function CompactStatusTile({ tile }) {
   return (
-    <div className={`fingerprint-indicator fingerprint-indicator--${drift.tone}`}>
+    <article className={`status-tile status-tile--${tile.tone}`}>
+      <span>{tile.label}</span>
+      <strong>{tile.value}</strong>
+      <small>{tile.detail}</small>
+    </article>
+  );
+}
+
+function FingerprintStatus({ drift }) {
+  return (
+    <div className={`fingerprint-status fingerprint-status--${drift.tone}`}>
       <strong>{drift.label}</strong>
       <p>{drift.detail}</p>
     </div>
@@ -714,7 +817,7 @@ function EmptyOperationalState({ title, body }) {
 function sectionTitle(section) {
   if (section === "insights") return "Insights";
   if (section === "systems") return "Systems";
-  if (section === "telemetry") return "Telemetry Integrity";
+  if (section === "telemetry") return "Telemetry";
   if (section === "history") return "History";
   return "Overview";
 }
@@ -786,6 +889,36 @@ function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) 
     || liveOps?.siiVerification?.verified === true
   );
   return hasIntelligenceData && completed;
+}
+
+function hasTelemetry(result, snapshot, liveOps, replayFrame) {
+  return Boolean(
+    result?.processed_at
+    || result?.timestamp_profile?.last_timestamp
+    || result?.columns?.length
+    || result?.detected_columns?.length
+    || snapshot?.processed_at
+    || snapshot?.last_processed_at
+    || snapshot?.status
+    || snapshot?.current_upload
+    || liveOps?.telemetrySession
+    || liveOps?.connectionSummary
+    || liveOps?.previousUploadHistory?.length
+    || replayFrame
+  );
+}
+
+function hasBaseline({ result, snapshot, relationshipRows, liveOps }) {
+  return Boolean(
+    relationshipRows.length > 0
+    || result?.baseline_analysis
+    || result?.baseline_profile
+    || result?.sii_intelligence
+    || result?.sii_intelligence?.baseline
+    || result?.sii_intelligence?.historical_baseline
+    || snapshot?.baseline_status === "active"
+    || liveOps?.baseline?.active
+  );
 }
 
 function formatDomainLabel(value) {

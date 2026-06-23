@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("OperationalWorkflowWorkspace analysis gating", () => {
-  it("shows Awaiting Analysis instead of health defaults before SII analysis completes", () => {
+  it("shows honest pre-analysis states instead of health defaults", () => {
     renderWorkspace({
       liveOps: {
         systems: [{ id: "system-1", name: "Chilled Water Loop" }],
@@ -47,16 +47,17 @@ describe("OperationalWorkflowWorkspace analysis gating", () => {
       currentSession: { hasReliableOperatorEvidence: false },
     });
 
-    expect(screen.getAllByText("Awaiting Analysis").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText("Awaiting Analysis").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Telemetry Available").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No Baseline Available").length).toBeGreaterThan(0);
     expect(screen.queryByText("Normal")).toBeNull();
     expect(screen.queryByText("Stable")).toBeNull();
-    expect(screen.queryByText("Good")).toBeNull();
+    expect(screen.queryByText("Telemetry Verified")).toBeNull();
     expect(screen.queryByText("Healthy")).toBeNull();
-    expect(screen.queryByText(/0 active insights/i)).toBeNull();
-    expect(screen.queryByText(/No active insights/i)).toBeNull();
+    expect(screen.queryByText("Good")).toBeNull();
   });
 
-  it("allows health labels after verified SII intelligence exists", () => {
+  it("allows operational labels after verified SII intelligence exists", () => {
     renderWorkspace({
       liveOps: {
         systems: [{ id: "system-1", name: "Chilled Water Loop" }],
@@ -68,8 +69,8 @@ describe("OperationalWorkflowWorkspace analysis gating", () => {
         sii_reliable_enough_to_show: true,
         sii_completed: true,
         processed_at: "2026-06-23T12:00:00Z",
-        sii_intelligence: { facility_state: "stable" },
-        baseline_analysis: {},
+        sii_intelligence: { facility_state: "stable", baseline: { state: "stable" } },
+        baseline_analysis: { status: "available" },
         data_quality: { warnings: [] },
       },
       effectiveLatestUploadSnapshot: {
@@ -83,7 +84,7 @@ describe("OperationalWorkflowWorkspace analysis gating", () => {
 
     expect(screen.getAllByText("Normal").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Stable").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Good").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/0 active insights/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Telemetry Verified").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No Baseline Available")).toBeNull();
   });
 });
