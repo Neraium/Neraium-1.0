@@ -141,7 +141,7 @@ def _score_domain(items: list[str], hints: tuple[str, ...], extra: Any = None) -
     if isinstance(extra, dict):
         mapped_count = extra.get("mapped_column_count")
         if isinstance(mapped_count, int) and mapped_count > 0:
-            evidence.append("aquatic schema")
+            evidence.append("water infrastructure schema")
             evidence.append(f"mapped_columns:{min(mapped_count, 5)}")
 
     unique_evidence = list(dict.fromkeys(evidence))
@@ -191,33 +191,29 @@ def domain_profile(mode: str) -> dict[str, Any]:
         }
     return {
         "mode": "aquatic",
-        "app_subtitle": "Commercial water systems intelligence",
-        "app_description": "Neraium helps commercial water operators detect persistent relationship instability across pools, resort water systems, treatment, chilled-water loops, pumps, and filtration.",
+        "app_subtitle": "Water infrastructure intelligence",
+        "app_description": "Neraium helps water infrastructure teams understand changes in system behavior across source, treatment, pumping, distribution, storage, thermal, and process-loop operations.",
         "systems": [
-            {"name": "Commercial pools", "scope": "Pool and spa chemistry, turnover, thermal stability, and bather-load response"},
-            {"name": "Resort water systems", "scope": "Makeup water, level recovery, distribution pressure, and multi-asset demand behavior"},
-            {"name": "Water treatment", "scope": "ORP, pH, chlorine, turbidity, conductivity, and chemical feed response"},
-            {"name": "Chilled water loops", "scope": "Supply/return temperature, delta-T, loop flow, differential pressure, and chiller load"},
-            {"name": "Pumps and filtration", "scope": "Pump amperage/runtime, filter pressure, hydraulic resistance, low-flow, and cavitation signatures"},
-            {"name": "Cooling towers", "scope": "Future tower coverage for fan response, basin temperature, blowdown, and heat rejection drift"},
+            {"name": "Source / Intake", "scope": "Incoming supply, source availability, inlet pressure, and upstream demand conditions"},
+            {"name": "Treatment", "scope": "Treatment performance, chemistry, quality indicators, and process response"},
+            {"name": "Pumping", "scope": "Pump load, runtime, flow response, pressure response, and equipment behavior"},
+            {"name": "Distribution", "scope": "Distribution pressure, flow balance, downstream demand, and system recovery behavior"},
+            {"name": "Storage / Level", "scope": "Tank, reservoir, basin, or vessel level behavior and refill/recovery patterns"},
+            {"name": "Chilled water loops", "scope": "Supply/return temperature, delta-T, loop flow, differential pressure, and load response"},
+            {"name": "Telemetry Integrity", "scope": "Signal completeness, timestamp quality, source availability, and confidence impact"},
         ],
         "driver_categories": [
-            "circulation_degradation",
-            "filter_restriction_buildup",
-            "pump_cavitation",
-            "water_treatment_instability",
-            "makeup_water_abnormality",
+            "source_or_intake_instability",
+            "treatment_process_instability",
+            "pumping_performance_degradation",
+            "distribution_pressure_instability",
+            "storage_or_level_recovery_shift",
+            "abnormal_water_loss_pattern",
             "chilled_water_delta_t_degradation",
-            "chiller_hydraulic_mismatch",
+            "process_loop_hydraulic_mismatch",
             "cooling_tower_approach_drift",
-            "abnormal_thermal_drift",
-            "heater_efficiency_degradation",
-            "orp_instability",
-            "chemical_feed_inconsistencies",
-            "low_flow_conditions",
-            "pressure_instability",
-            "dead_zone_circulation_patterns",
             "sensor_disagreement_anomalies",
+            "telemetry_integrity_degradation",
         ],
         "integration_stubs": AQUATIC_INTEGRATION_STUBS,
         "replay_demo_mode": "aquatic_demo",
