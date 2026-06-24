@@ -18,6 +18,10 @@ const LIVE_REFRESH_INTERVAL_MS = 45000;
 const DATA_PROMOTION_STREAK_REQUIRED = 2;
 const EMPTY_DEMOTION_STREAK_REQUIRED = 3;
 
+function displayDomainMode(mode) {
+  return mode === "aquatic" ? "water_infrastructure" : mode;
+}
+
 export default function useFacilityRuntime({
   hasAccess,
   accessCode,
@@ -123,14 +127,15 @@ export default function useFacilityRuntime({
 
     try {
       const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode, forceRefresh });
+      const rawDomainMode = payload.domain_mode ?? null;
       setSystems(payload.systems);
       setDomainDetection({
-        mode: payload.domain_mode ?? null,
+        mode: displayDomainMode(rawDomainMode),
         source: payload.domain_source ?? "default",
         confidence: Number(payload.domain_confidence ?? 0),
         evidence: Array.isArray(payload.domain_evidence) ? payload.domain_evidence : [],
       });
-      setDomainModeState(payload.domain_mode ?? null);
+      setDomainModeState(rawDomainMode);
       setIntelligenceStatus(payload.intelligence_status ?? uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("ready");
       setBackendError(API_CONFIG_WARNING);
@@ -235,13 +240,14 @@ export default function useFacilityRuntime({
     if (!hasAccess) return;
     fetchDomainMode({ apiFetch, accessCode })
       .then((payload) => {
+        const rawDomainMode = payload.mode ?? null;
         setDomainDetection({
-          mode: payload.mode ?? null,
+          mode: displayDomainMode(rawDomainMode),
           source: payload.source ?? "default",
           confidence: Number(payload.confidence ?? 0),
           evidence: Array.isArray(payload.evidence) ? payload.evidence : [],
         });
-        setDomainModeState(payload.source === "upload_shape" ? (payload.mode ?? null) : null);
+        setDomainModeState(payload.source === "upload_shape" ? rawDomainMode : null);
       })
       .catch(() => {});
   }, [accessCode, hasAccess]);
