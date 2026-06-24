@@ -39,28 +39,32 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "Commercial pools",
-    scope: "Pool and spa chemistry, turnover, thermal stability, and load response.",
+    name: "Source / Intake",
+    scope: "Incoming supply, source availability, inlet pressure, and upstream demand conditions.",
   },
   {
-    name: "Resort water systems",
-    scope: "Makeup water, level recovery, distribution pressure, and multi-asset demand behavior.",
+    name: "Treatment",
+    scope: "Treatment performance, chemistry, quality indicators, and process response.",
   },
   {
-    name: "Water treatment",
-    scope: "ORP, pH, chlorine, turbidity, conductivity, and feed response.",
+    name: "Pumping",
+    scope: "Pump load, runtime, flow response, pressure response, and equipment behavior.",
   },
   {
-    name: "Chilled water loops",
-    scope: "Supply/return temperature, delta-T, flow, differential pressure, and chiller load.",
+    name: "Distribution",
+    scope: "Distribution pressure, flow balance, downstream demand, and system recovery behavior.",
   },
   {
-    name: "Pumps and filtration",
-    scope: "Pump load, runtime, filter pressure, hydraulic resistance, and low-flow signatures.",
+    name: "Storage / Level",
+    scope: "Tank, reservoir, basin, or vessel level behavior and refill/recovery patterns.",
   },
   {
-    name: "Cooling towers",
-    scope: "Future tower coverage for fan response, basin temperature, blowdown, and heat rejection drift.",
+    name: "Thermal / Process Loop",
+    scope: "Chilled water, cooling, process-loop response, delta-T, and load behavior where applicable.",
+  },
+  {
+    name: "Telemetry Integrity",
+    scope: "Signal completeness, timestamp quality, source availability, and confidence impact.",
   },
 ];
 
