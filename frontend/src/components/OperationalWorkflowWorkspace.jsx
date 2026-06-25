@@ -180,7 +180,7 @@ export default function OperationalWorkflowWorkspace({
       <main className="operational-main" aria-label="Neraium operational workspace">
         <header className="operational-topbar">
           <div>
-            <p className="section-token">Neraium Operational Understanding</p>
+            <p className="section-token">Neraium Systemic Infrastructure Intelligence</p>
             <h1>{sectionTitle(activeSection)}</h1>
             <p className="operational-topbar__context">{model.contextLabel}</p>
           </div>
