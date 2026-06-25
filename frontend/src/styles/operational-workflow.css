@@ -610,6 +610,14 @@ button.insight-card {
   line-height: 1.12;
 }
 
+.operational-result-summary {
+  max-width: 760px;
+}
+
+.operational-result-summary .operational-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
 .operational-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -770,6 +778,20 @@ button.insight-card {
   color: var(--ops-teal-dark);
 }
 
+.command-button:disabled,
+.secondary-command-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+  transform: none;
+  box-shadow: none;
+}
+
+.command-button:disabled:hover,
+.secondary-command-button:disabled:hover {
+  background: var(--ops-teal);
+  color: #ffffff;
+}
+
 .operational-timeline li {
   display: grid;
   gap: 5px;
@@ -882,6 +904,13 @@ button.insight-card {
 
   .operational-mobile-nav button small {
     font-size: 0.62rem;
+  }
+
+  .operational-mobile-nav button span,
+  .operational-mobile-nav button small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .operational-hero__aside {
