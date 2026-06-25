@@ -131,6 +131,13 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
                 "result_available": False,
             })
             upload_jobs.write_job(failed)
+            _upsert_failed_evidence_record(
+                job_id=worker_job_id,
+                filename=str(failed.get("filename") or "upload.csv"),
+                source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
+                error_message=str(exc) or exc.__class__.__name__,
+                initiated_by=str(failed.get("initiated_by") or "anonymous"),
+            )
 
 
 def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
@@ -187,8 +194,59 @@ def _process_upload_inline(job_id: str, status: dict) -> dict:
             "result_available": False,
         }
         upload_jobs.write_job(failed)
+        _upsert_failed_evidence_record(
+            job_id=job_id,
+            filename=str(failed.get("filename") or "upload.csv"),
+            source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
+            error_message=str(exc) or exc.__class__.__name__,
+            initiated_by=str(failed.get("initiated_by") or "anonymous"),
+        )
         return failed
 
+
+
+def _upsert_failed_evidence_record(
+    *,
+    job_id: str,
+    filename: str,
+    source_type: str,
+    error_message: str,
+    initiated_by: str = "anonymous",
+) -> None:
+    failed_at = datetime.now(timezone.utc).isoformat()
+    upsert_evidence_run(
+        {
+            "run_id": job_id,
+            "source_name": filename,
+            "source_type": source_type,
+            "status": "failed",
+            "created_at": failed_at,
+            "completed_at": failed_at,
+            "rows_received": 0,
+            "rows_accepted": 0,
+            "rows_rejected": 0,
+            "sensors_detected": 0,
+            "room": "Uploaded telemetry",
+            "operating_state": "error",
+            "drift_status": "error",
+            "warnings": [],
+            "errors": [error_message],
+            "primary_drivers": [],
+            "evidence_summary": [],
+            "structural_archetypes": [],
+            "initiated_by": initiated_by,
+            "adaptive_site_key": "site::default",
+            "operator_feedback_history": [],
+            "observation_type": "data_condition",
+            "observation_status": "failed",
+            "variables": [],
+            "drift_metrics": {},
+            "data_conditions": [error_message],
+            "regime_label": None,
+            "structural_state": "Error",
+            "deformation_started_at": None,
+        }
+    )
 
 
 

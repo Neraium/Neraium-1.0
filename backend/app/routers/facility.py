@@ -20,16 +20,17 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
     profile = domain_profile(selected_mode)
     latest_result = read_current_upload_result() if include_persisted else None
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
+    has_active_analysis = has_active_session_artifact(latest_result)
     return {
-        "systems": profile["systems"],
-        "driver_categories": profile["driver_categories"],
+        "systems": profile["systems"] if has_active_analysis else [],
+        "driver_categories": profile["driver_categories"] if has_active_analysis else [],
         "domain_mode": selected_mode,
         "domain_source": detection["source"],
         "domain_confidence": detection["confidence"],
         "domain_evidence": detection["evidence"],
         "intelligence": intelligence,
         "adaptive_learning": {},
-        "integration_stubs": profile["integration_stubs"],
+        "integration_stubs": profile["integration_stubs"] if has_active_analysis else [],
         "intelligence_status": build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status(),
     }
 

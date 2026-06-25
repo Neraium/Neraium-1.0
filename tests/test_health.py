@@ -79,14 +79,7 @@ def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert [system["name"] for system in payload["systems"]] == [
-        "Commercial pools",
-        "Resort water systems",
-        "Water treatment",
-        "Chilled water loops",
-        "Pumps and filtration",
-        "Cooling towers",
-    ]
+    assert payload["systems"] == []
     assert payload["intelligence"] is None
     assert payload["intelligence_status"]["source"] == "none"
     assert payload["intelligence_status"]["mode"] == "empty"
@@ -397,7 +390,7 @@ def test_facility_systems_allows_requests_without_shared_secret_in_production(tm
     response = client.get("/api/facility/systems")
 
     assert response.status_code == 200
-    assert response.json()["systems"]
+    assert response.json()["systems"] == []
 
 
 def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
@@ -416,7 +409,7 @@ def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["systems"]
+    assert response.json()["systems"] == []
 
 
 def test_access_header_is_ignored_without_refreshing_auth_cookie(tmp_path) -> None:
@@ -476,7 +469,7 @@ def test_wrong_bearer_code_does_not_block_production_requests(tmp_path, caplog) 
     )
 
     assert response.status_code == 200
-    assert response.json()["systems"]
+    assert response.json()["systems"] == []
     log_text = caplog.text
     assert "wrong-secret" not in log_text
     assert "expected-secret" not in log_text
