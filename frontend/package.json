@@ -10,7 +10,8 @@
     "lint": "npm exec eslint -- src --ext .jsx,.js",
     "lint:ci": "npm exec eslint -- src --ext .jsx,.js --max-warnings=0",
     "test": "vitest --environment jsdom",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify": "npm run lint:ci && npm run build && npm test -- --run"
   },
   "dependencies": {
     "react": "^18.2.0",
