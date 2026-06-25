@@ -23,15 +23,21 @@ const MOBILE_MORE_NAV = [
 ];
 
 const INVESTIGATION_STATUSES = ["Open", "Acknowledged", "Under Investigation", "Resolved"];
-const NO_TELEMETRY_STATUS = {
-  label: "No Telemetry Loaded",
-  tone: "unknown",
+const EMPTY_TELEMETRY_COPY = {
+  label: "Start with telemetry",
   detail: "Upload or connect telemetry to begin analysis.",
+  cta: "Upload or Connect Telemetry",
+  headerStatus: "Waiting for telemetry",
+};
+const NO_TELEMETRY_STATUS = {
+  label: EMPTY_TELEMETRY_COPY.label,
+  tone: "unknown",
+  detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const WAITING_FOR_TELEMETRY_STATUS = {
-  label: "Waiting for Telemetry",
+  label: EMPTY_TELEMETRY_COPY.headerStatus,
   tone: "unknown",
-  detail: "Upload or connect telemetry to begin analysis.",
+  detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const READY_TO_ANALYZE_STATUS = {
   label: "Ready to Analyze",
@@ -110,7 +116,7 @@ export default function OperationalWorkflowWorkspace({
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
   const mobileMoreActive = MOBILE_MORE_NAV.some((item) => item.id === activeSection);
   const navMetrics = {
-    overview: model.heroStatus.label,
+    overview: model.overviewTabMetric,
     insights: String(model.insights.length),
     systems: model.systemsTabMetric,
     telemetry: String(model.signals.length),
@@ -169,7 +175,7 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
         <div className="operational-sidebar__footer">
-          <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
+          {model.showSidebarStatus ? <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} /> : null}
           <small>Last analysis: {model.lastAnalysis}</small>
           {typeof onSignOut === "function" ? (
             <button type="button" className="operational-link-button" onClick={onSignOut}>Sign out</button>
@@ -180,12 +186,12 @@ export default function OperationalWorkflowWorkspace({
       <main className="operational-main" aria-label="Neraium operational workspace">
         <header className="operational-topbar">
           <div>
-            <p className="section-token">Neraium Systemic Infrastructure Intelligence</p>
+            <p className="section-token">{model.headerEyebrow}</p>
             <h1>{sectionTitle(activeSection)}</h1>
-            <p className="operational-topbar__context">{model.contextLabel}</p>
+            <p className="operational-topbar__context">{model.headerSubtitle}</p>
           </div>
           <div className="operational-topbar__status">
-            <StatusBadge label={model.heroStatus.label} tone={model.heroStatus.tone} />
+            {model.showHeroStatusBadge ? <StatusBadge label={model.heroStatus.label} tone={model.heroStatus.tone} /> : null}
             <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
           </div>
         </header>
@@ -285,7 +291,7 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
               <p>{model.heroStatus.detail}</p>
             </div>
             <div className="operational-hero__meta">
-              <span>{model.storyProgressLabel}</span>
+              {model.showStoryProgress ? <span>{model.storyProgressLabel}</span> : null}
               {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
             </div>
             {model.resultSummaryRows.length ? (
@@ -308,7 +314,7 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
             <DetailGrid rows={[
               ["Site", model.siteLabel],
               ["Data source", model.sourceLabel],
-              ["Status", model.sourceStatusLabel],
+              model.showSourceStatus ? ["Status", model.sourceStatusLabel] : null,
               model.showSystemClaims ? ["Systems", model.systemSummaryLabel] : null,
             ]} />
           </div>
@@ -327,8 +333,8 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
           insights={model.insights.slice(0, 3)}
           empty={model.analysisComplete
             ? "No current observations."
-            : model.uiState.status.detail}
-          emptyTitle={model.analysisComplete ? "No current observations" : model.uiState.status.label}
+            : "Insights appear after telemetry analysis."}
+          emptyTitle={model.analysisComplete ? "No current observations" : "No active insights"}
           onOpenInsight={onOpenInsight}
         />
       </section>
@@ -574,6 +580,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, analysisComplete });
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const siteLabel = firstText(result?.facility_name, snapshot?.facility_name, "Current Site");
+  const isEmptyTelemetryState = uiState.key === "noTelemetry";
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
   const resultSummaryRows = buildResultSummaryRows({ analysisComplete, identifiedSystemCount, relationshipRows, result, liveOps, finding });
@@ -583,6 +590,13 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     domainLabel,
     sourceLabel,
     contextLabel,
+    headerEyebrow: isEmptyTelemetryState ? "NERAIUM SII" : "Neraium Systemic Infrastructure Intelligence",
+    headerSubtitle: isEmptyTelemetryState ? siteLabel : contextLabel,
+    overviewTabMetric: isEmptyTelemetryState ? "Start" : heroStatus.label,
+    showHeroStatusBadge: !isEmptyTelemetryState,
+    showStoryProgress: !isEmptyTelemetryState,
+    showSourceStatus: !isEmptyTelemetryState,
+    showSidebarStatus: !isEmptyTelemetryState,
     sourceStatusLabel: uiState.sourceStatusLabel,
     storyProgressLabel: uiState.storyProgressLabel,
     primaryCtaLabel: uiState.primaryCtaLabel,
@@ -636,9 +650,9 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     return {
       key: "noTelemetry",
       status: NO_TELEMETRY_STATUS,
-      sourceStatusLabel: "Waiting for Telemetry",
-      storyProgressLabel: "No analysis yet",
-      primaryCtaLabel: "Upload or Connect Telemetry",
+      sourceStatusLabel: EMPTY_TELEMETRY_COPY.headerStatus,
+      storyProgressLabel: "",
+      primaryCtaLabel: EMPTY_TELEMETRY_COPY.cta,
     };
   }
   if (analysisComplete && telemetryConnected) {
@@ -669,7 +683,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
 }
 
 function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
-  if (uiState.key === "noTelemetry") return "No telemetry uploaded";
+  if (uiState.key === "noTelemetry") return "None";
   return firstMeaningfulText(
     result?.result_source,
     snapshot?.result_source,
@@ -845,6 +859,14 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
 }
 
 function buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insights, analysisComplete, identifiedSystemCount }) {
+  if (uiState.key === "noTelemetry") {
+    return [
+      { label: "Telemetry", value: "None", detail: "Connect a source to populate this workspace.", tone: "unknown" },
+      { label: "Systems", value: SYSTEMS_PENDING.countLabel, detail: SYSTEMS_PENDING.summary, tone: "unknown" },
+      { label: "Fingerprint", value: "Pending", detail: NO_BASELINE_AVAILABLE.detail, tone: "unknown" },
+    ];
+  }
+
   if (!analysisComplete) {
     return [
       { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },

@@ -64,11 +64,15 @@ describe("OperationalWorkflowWorkspace product story states", () => {
   it("shows a truthful empty state before telemetry is loaded", () => {
     renderWorkspace();
 
-    expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
-    expect(screen.getByText("Site: Current Site | Data source: No telemetry uploaded")).toBeTruthy();
-    expect(screen.getByText("No telemetry uploaded")).toBeTruthy();
-    expect(screen.getAllByText("Waiting for Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Upload or connect telemetry to begin analysis.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
+    expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
+    expect(screen.queryByText("No telemetry uploaded")).toBeNull();
+    expect(screen.getByText("NERAIUM SII")).toBeTruthy();
+    expect(screen.getAllByText("Waiting for telemetry")).toHaveLength(1);
+    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
+    expect(screen.getByText("Upload or connect telemetry to begin analysis.")).toBeTruthy();
+    expect(screen.getByText("Data source")).toBeTruthy();
+    expect(screen.getAllByText("None").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Upload or Connect Telemetry" })).toBeTruthy();
     expect(screen.getAllByText("Systems Pending").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Run analysis to identify systems and relationships.").length).toBeGreaterThan(0);
@@ -84,9 +88,12 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       effectiveLatestUploadSnapshot: { status: "empty", current_upload: null },
     });
 
-    expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Waiting for Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByText("Site: Current Site | Data source: No telemetry uploaded")).toBeTruthy();
+    expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
+    expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
+    expect(screen.queryByText("No telemetry uploaded")).toBeNull();
+    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
+    expect(screen.getByText("Data source")).toBeTruthy();
+    expect(screen.getAllByText("None").length).toBeGreaterThan(0);
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("Ready to Analyze")).toBeNull();
   });
@@ -97,7 +104,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       effectiveLatestUploadSnapshot: { status: "complete", current_upload: null },
     });
 
-    expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
+    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
     expect(screen.queryByText("Ready to Analyze")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
   });
