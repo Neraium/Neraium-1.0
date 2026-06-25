@@ -84,6 +84,13 @@ export default function OperationalWorkflowWorkspace({
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
   const mobileMoreActive = MOBILE_MORE_NAV.some((item) => item.id === activeSection);
+  const navMetrics = {
+    overview: model.heroStatus.label,
+    insights: String(model.insights.length),
+    systems: String(model.systemsMonitoredCount),
+    telemetry: String(model.signals.length),
+    history: String(model.historyItems.length),
+  };
 
   function navigate(sectionId) {
     setActiveSection(sectionId);
@@ -130,7 +137,8 @@ export default function OperationalWorkflowWorkspace({
               aria-current={activeSection === item.id ? "page" : undefined}
               onClick={() => navigate(item.id)}
             >
-              {item.label}
+              <span>{item.label}</span>
+              <small>{navMetrics[item.id]}</small>
             </button>
           ))}
         </nav>
@@ -148,6 +156,7 @@ export default function OperationalWorkflowWorkspace({
           <div>
             <p className="section-token">Operational Understanding</p>
             <h1>{sectionTitle(activeSection)}</h1>
+            <p className="operational-topbar__context">{model.siteLabel} / {model.sourceLabel}</p>
           </div>
           <div className="operational-topbar__status">
             <StatusBadge label={model.heroStatus.label} tone={model.heroStatus.tone} />
@@ -164,7 +173,8 @@ export default function OperationalWorkflowWorkspace({
               aria-current={activeSection === item.id ? "page" : undefined}
               onClick={() => navigate(item.id)}
             >
-              {item.label}
+              <span>{item.label}</span>
+              <small>{navMetrics[item.id]}</small>
             </button>
           ))}
           <div className="operational-mobile-nav__more-wrap">
@@ -175,7 +185,7 @@ export default function OperationalWorkflowWorkspace({
               aria-haspopup="menu"
               onClick={() => setMobileMoreOpen((value) => !value)}
             >
-              More
+              <span>More</span>
             </button>
             {mobileMoreOpen ? (
               <div className="operational-mobile-nav__menu" role="menu" aria-label="More navigation">
@@ -187,7 +197,8 @@ export default function OperationalWorkflowWorkspace({
                     className={activeSection === item.id ? "is-active" : ""}
                     onClick={() => navigate(item.id)}
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    <small>{navMetrics[item.id]}</small>
                   </button>
                 ))}
               </div>
@@ -241,21 +252,32 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
         <div className="operational-hero">
-          <div className="operational-panel__header operational-panel__header--tight">
-            <span className="section-token">Overview</span>
-            <h2>{model.heroStatus.label}</h2>
-            <p>{model.heroStatus.detail}</p>
+          <div className="operational-hero__summary">
+            <div className="operational-panel__header operational-panel__header--tight">
+              <span className="section-token">Overview</span>
+              <h2>{model.heroStatus.label}</h2>
+              <p>{model.heroStatus.detail}</p>
+            </div>
+            <div className="operational-hero__meta">
+              <span>Last analysis: {model.lastAnalysis}</span>
+              <span>{model.baselineStatus.label}</span>
+            </div>
+            <div className="operational-actions operational-actions--hero">
+              <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze Telemetry</button>
+              <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
+              {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
+                <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
+              ) : null}
+            </div>
           </div>
-          <div className="operational-hero__meta">
-            <span>Last analysis: {model.lastAnalysis}</span>
-            <span>{model.baselineStatus.label}</span>
-          </div>
-          <div className="operational-actions operational-actions--hero">
-            <button type="button" className="command-button" onClick={onAnalyzeSystem}>Analyze Telemetry</button>
-            <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
-            {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
-              <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-            ) : null}
+          <div className="operational-hero__aside" aria-label="Current operating picture">
+            <span className="section-token">Current Picture</span>
+            <DetailGrid rows={[
+              ["Site", model.siteLabel],
+              ["Source", model.sourceLabel],
+              ["Telemetry", model.telemetryStatus.label],
+              ["Systems", model.systemSummaryLabel],
+            ]} />
           </div>
         </div>
       </section>
@@ -290,7 +312,7 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
             <strong>{model.systemsMonitoredCount}</strong>
             <span>systems monitored</span>
           </div>
-          <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems →</button>
+          <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
         </div>
       </section>
     </div>
