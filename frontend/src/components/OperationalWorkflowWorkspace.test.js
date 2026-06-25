@@ -26,6 +26,8 @@ function telemetryResult(overrides = {}) {
     job_id: "telemetry-job",
     processed_at: "2026-06-23T12:00:00Z",
     columns: ["flow", "temperature"],
+    result_source: "uploaded telemetry.csv",
+    row_count: 120,
     data_quality: { warnings: [] },
     ...overrides,
   };
@@ -49,7 +51,7 @@ function completeSnapshot(overrides = {}) {
     status: "complete",
     sii_completed: true,
     processed_at: "2026-06-23T12:00:00Z",
-    current_upload: { job_id: "ready-job" },
+    current_upload: { job_id: "ready-job", filename: "uploaded telemetry.csv", row_count: 120 },
     ...overrides,
   };
 }
@@ -65,7 +67,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
     expect(screen.getByText("Site: Current Site | Data source: No telemetry uploaded")).toBeTruthy();
     expect(screen.getByText("No telemetry uploaded")).toBeTruthy();
-    expect(screen.getByText("Waiting for telemetry")).toBeTruthy();
+    expect(screen.getAllByText("Waiting for Telemetry").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Upload or connect telemetry to begin analysis.").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Upload or Connect Telemetry" })).toBeTruthy();
     expect(screen.getAllByText("Systems Pending").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Run analysis to identify systems and relationships.").length).toBeGreaterThan(0);
@@ -73,6 +76,43 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
     expect(screen.queryByText(/systems identified/i)).toBeNull();
     expect(screen.queryByText("Baseline Established")).toBeNull();
+  });
+
+  it("does not treat an empty data source as loaded telemetry", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult({ result_source: "empty" }),
+      effectiveLatestUploadSnapshot: { status: "empty", current_upload: null },
+    });
+
+    expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Waiting for Telemetry").length).toBeGreaterThan(0);
+    expect(screen.getByText("Site: Current Site | Data source: No telemetry uploaded")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Loaded")).toBeNull();
+    expect(screen.queryByText("Ready to Analyze")).toBeNull();
+  });
+
+  it("does not show ready to analyze when upload metadata is missing", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult({ job_id: undefined, upload_id: undefined }),
+      effectiveLatestUploadSnapshot: { status: "complete", current_upload: null },
+    });
+
+    expect(screen.getAllByText("No Telemetry Loaded").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Ready to Analyze")).toBeNull();
+    expect(screen.queryByText("Telemetry Loaded")).toBeNull();
+  });
+
+  it("shows telemetry loaded for a valid upload before analysis", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult(),
+      effectiveLatestUploadSnapshot: {
+        status: "complete",
+        current_upload: { job_id: "telemetry-job", filename: "uploaded telemetry.csv", row_count: 120 },
+      },
+    });
+
+    expect(screen.getAllByText("Telemetry Loaded").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
   });
 
   it("shows telemetry loaded but not analyzed as ready to analyze", () => {

@@ -26,7 +26,12 @@ const INVESTIGATION_STATUSES = ["Open", "Acknowledged", "Under Investigation", "
 const NO_TELEMETRY_STATUS = {
   label: "No Telemetry Loaded",
   tone: "unknown",
-  detail: "Waiting for telemetry.",
+  detail: "Upload or connect telemetry to begin analysis.",
+};
+const WAITING_FOR_TELEMETRY_STATUS = {
+  label: "Waiting for Telemetry",
+  tone: "unknown",
+  detail: "Upload or connect telemetry to begin analysis.",
 };
 const READY_TO_ANALYZE_STATUS = {
   label: "Ready to Analyze",
@@ -175,7 +180,7 @@ export default function OperationalWorkflowWorkspace({
       <main className="operational-main" aria-label="Neraium operational workspace">
         <header className="operational-topbar">
           <div>
-            <p className="section-token">Operational Understanding</p>
+            <p className="section-token">Neraium Operational Understanding</p>
             <h1>{sectionTitle(activeSection)}</h1>
             <p className="operational-topbar__context">{model.contextLabel}</p>
           </div>
@@ -549,7 +554,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const telemetryAvailable = hasTelemetry(result, snapshot, liveOps, replayFrame);
   const telemetryConnected = isTelemetryConnected(liveOps);
   const analysisRunning = isAnalysisRunning({ gateProcessing, result, snapshot, currentSession, liveOps });
-  const completedSiiAnalysis = hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps });
+  const completedSiiAnalysis = telemetryAvailable && hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps });
   const uiState = deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysisComplete: completedSiiAnalysis, telemetryConnected });
   const analysisComplete = uiState.key === "analysisComplete" || uiState.key === "monitoringLive";
   const finding = canonicalFinding ?? liveOps?.canonicalFinding ?? null;
@@ -627,6 +632,15 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       primaryCtaLabel: "Building Fingerprint",
     };
   }
+  if (!telemetryAvailable && !telemetryConnected) {
+    return {
+      key: "noTelemetry",
+      status: NO_TELEMETRY_STATUS,
+      sourceStatusLabel: "Waiting for Telemetry",
+      storyProgressLabel: "No analysis yet",
+      primaryCtaLabel: "Upload or Connect Telemetry",
+    };
+  }
   if (analysisComplete && telemetryConnected) {
     return {
       key: "monitoringLive",
@@ -645,27 +659,30 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       primaryCtaLabel: "Analyze Telemetry",
     };
   }
-  if (telemetryAvailable || telemetryConnected) {
-    return {
-      key: "readyToAnalyze",
-      status: READY_TO_ANALYZE_STATUS,
-      sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
-      storyProgressLabel: "Telemetry loaded; analysis not run",
-      primaryCtaLabel: "Analyze Telemetry",
-    };
-  }
   return {
-    key: "noTelemetry",
-    status: NO_TELEMETRY_STATUS,
-    sourceStatusLabel: "Waiting for telemetry",
-    storyProgressLabel: "No analysis yet",
-    primaryCtaLabel: "Upload or Connect Telemetry",
+    key: "readyToAnalyze",
+    status: READY_TO_ANALYZE_STATUS,
+    sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
+    storyProgressLabel: "Telemetry loaded; analysis not run",
+    primaryCtaLabel: "Analyze Telemetry",
   };
 }
 
 function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
   if (uiState.key === "noTelemetry") return "No telemetry uploaded";
-  return firstText(result?.result_source, snapshot?.result_source, liveOps?.telemetrySession?.sessionMode, uiState.key === "monitoringLive" ? "Live telemetry" : "Uploaded telemetry");
+  return firstMeaningfulText(
+    result?.result_source,
+    snapshot?.result_source,
+    result?.source,
+    snapshot?.source,
+    result?.filename,
+    snapshot?.filename,
+    snapshot?.current_upload?.filename,
+    snapshot?.current_upload?.source,
+    liveOps?.telemetrySession?.source,
+    liveOps?.telemetrySession?.sessionMode,
+    uiState.key === "monitoringLive" ? "Live telemetry" : "Uploaded telemetry"
+  );
 }
 
 function deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result }) {
@@ -874,7 +891,7 @@ function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisCom
     if (telemetryConnected) return { label: "Telemetry Connected", tone: "normal", detail: "Live telemetry is connected; run analysis to identify systems and relationships." };
     return telemetryAvailable
       ? { label: "Telemetry Loaded", tone: "unknown", detail: READY_TO_ANALYZE_STATUS.detail }
-      : { label: "No Telemetry Loaded", tone: "unknown", detail: "No telemetry uploaded." };
+      : WAITING_FOR_TELEMETRY_STATUS;
   }
   const text = `${quality.warnings.join(" ")} ${quality.missingValues.join(" ")} ${liveOps?.connectionStatusLine ?? ""}`.toLowerCase();
   if (!result && !snapshot) return { label: "Telemetry Missing", tone: "unknown", detail: "No telemetry has been analyzed yet." };
@@ -1121,6 +1138,17 @@ function firstText(...values) {
   return value === undefined ? "" : String(value);
 }
 
+function firstMeaningfulText(...values) {
+  const value = values.find((item) => !isPlaceholderValue(item));
+  return value === undefined ? "" : String(value);
+}
+
+function isPlaceholderValue(value) {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim().toLowerCase();
+  return !text || ["empty", "none", "null", "undefined", "no_data", "no data", "n/a", "na"].includes(text);
+}
+
 function isTelemetryConnected(liveOps) {
   const text = `${liveOps?.connectionTone ?? ""} ${liveOps?.connectionStatusLine ?? ""} ${liveOps?.connectionSummary ?? ""} ${liveOps?.telemetrySession?.sessionMode ?? ""}`.toLowerCase();
   return Boolean(
@@ -1171,21 +1199,64 @@ function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) 
 }
 
 function hasTelemetry(result, snapshot, liveOps, replayFrame) {
-  const snapshotStatus = String(snapshot?.status ?? "").toLowerCase();
-  const hasMeaningfulSnapshotStatus = Boolean(snapshotStatus && !["empty", "idle", "pending"].includes(snapshotStatus));
-  return Boolean(
+  if (replayFrame) return true;
+  if (isTelemetryConnected(liveOps)) return true;
+
+  const snapshotStatus = String(snapshot?.status ?? "").trim().toLowerCase();
+  const resultStatus = String(result?.status ?? result?.processing_state ?? "").trim().toLowerCase();
+  const validUploadStatuses = new Set(["complete", "completed", "uploaded", "ready", "valid", "success", "processed"]);
+  const invalidUploadStatuses = new Set(["", "empty", "idle", "pending", "none", "null", "undefined", "failed", "error", "cleared", "reset"]);
+  const uploadStatusValid = validUploadStatuses.has(snapshotStatus) || validUploadStatuses.has(resultStatus);
+  const uploadStatusInvalid = invalidUploadStatuses.has(snapshotStatus) && invalidUploadStatuses.has(resultStatus);
+  const currentUpload = snapshot?.current_upload ?? result?.current_upload ?? liveOps?.currentUpload ?? null;
+  const hasUpload = Boolean(
+    currentUpload
+    || !isPlaceholderValue(result?.job_id)
+    || !isPlaceholderValue(snapshot?.job_id)
+    || !isPlaceholderValue(result?.upload_id)
+    || !isPlaceholderValue(snapshot?.upload_id)
+  );
+  const hasSource = Boolean(firstMeaningfulText(
+    result?.result_source,
+    snapshot?.result_source,
+    result?.source,
+    snapshot?.source,
+    result?.filename,
+    snapshot?.filename,
+    currentUpload?.filename,
+    currentUpload?.source,
+    liveOps?.telemetrySession?.source,
+    liveOps?.telemetrySession?.sessionMode
+  ));
+  const hasRowsIfReported = [
+    result?.row_count,
+    result?.rows,
+    result?.record_count,
+    result?.records,
+    snapshot?.row_count,
+    snapshot?.rows,
+    snapshot?.record_count,
+    snapshot?.records,
+    currentUpload?.row_count,
+    currentUpload?.rows,
+    currentUpload?.record_count,
+    currentUpload?.records,
+  ].every((value) => value === null || value === undefined || Number(value) > 0);
+  const hasDetectedTelemetry = Boolean(
     result?.processed_at
     || result?.timestamp_profile?.last_timestamp
     || result?.columns?.length
     || result?.detected_columns?.length
     || snapshot?.processed_at
     || snapshot?.last_processed_at
-    || hasMeaningfulSnapshotStatus
-    || snapshot?.current_upload
-    || liveOps?.telemetrySession
-    || liveOps?.connectionSummary
-    || liveOps?.previousUploadHistory?.length
-    || replayFrame
+  );
+
+  return Boolean(
+    hasUpload
+    && hasSource
+    && hasRowsIfReported
+    && !uploadStatusInvalid
+    && (uploadStatusValid || hasDetectedTelemetry)
   );
 }
 
