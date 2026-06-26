@@ -1,5 +1,6 @@
 import pytest
 
+from app.services.analysis_explanations import build_analysis_explanation
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
 from app.services.cultivation_mapping import map_cultivation_columns
@@ -534,3 +535,62 @@ def test_driver_attribution_elevates_utility_infrastructure_narrative_from_opera
     assert "reservoir refill divergence" in attribution["likely_driver"]
     assert "leak or downstream demand divergence" in attribution["likely_driver"]
     assert attribution["attribution_confidence"] in {"medium", "high"}
+
+
+def test_analysis_explanation_builds_decision_outputs_from_upload_result() -> None:
+    result = {
+        "operating_state": "Structural drift observed",
+        "timestamp_profile": {
+            "first_timestamp": "2026-06-23T09:00:00Z",
+            "last_timestamp": "2026-06-24T21:00:00Z",
+        },
+        "baseline_analysis": {
+            "overall_assessment": "needs_review",
+            "baseline_window_rows": 18,
+            "recent_window_rows": 18,
+            "columns_analyzed": 3,
+            "column_drift": [
+                {
+                    "column": "pressure",
+                    "direction": "up",
+                    "drift_flag": "review",
+                    "baseline_average": 50,
+                    "recent_average": 59,
+                    "absolute_change": 9,
+                    "percent_change": 18,
+                }
+            ],
+        },
+        "relationship_model": {
+            "top_relationship_changes": [
+                {
+                    "relationship": "pressure <-> flow",
+                    "baseline_correlation": 0.91,
+                    "recent_correlation": -0.2,
+                    "correlation_delta": 1.11,
+                    "baseline_sample_size": 18,
+                    "recent_sample_size": 18,
+                    "summary": "Coupling shift in pressure vs flow: baseline=0.910, recent=-0.200, delta=1.110.",
+                }
+            ]
+        },
+        "operator_report": {
+            "recommended_operator_checks": ["Review pressure readings against facility logs for the uploaded period."],
+        },
+        "sii_intelligence": {"facility_state": "drift", "primary_room": "Pump room", "confidence": 0.88},
+        "engine_result": {
+            "persistence_assessment": {
+                "persistent_columns": ["pressure"],
+                "details": [{"column": "pressure", "persistent": True, "recent_values_checked": 18, "support_percent": 83.3}],
+            }
+        },
+    }
+
+    explanation = build_analysis_explanation(result)
+
+    assert explanation["executive_summary"]["overall_operational_status"] == "Structural drift observed"
+    assert explanation["executive_summary"]["highest_priority_finding"] == "Relationship shift: pressure / flow"
+    assert explanation["insights"][0]["evidence"][0]["confidence"] == "high"
+    assert "Correlation delta: 1.11" in explanation["insights"][0]["evidence"][0]["relevant_metric_changes"]
+    assert explanation["systems"][0]["health_status"] == "Structural drift observed"
+    assert "operating fingerprint is changing" in explanation["fingerprint"]["meaning"]

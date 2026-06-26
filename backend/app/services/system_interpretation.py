@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.analysis_explanations import build_analysis_explanation
 from app.services.upload_state import has_active_session_artifact
 
 
@@ -687,6 +688,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         driver=primary_driver_text,
         summary_text=relationship_summary_text,
     )
+    analysis_explanation = result.get("analysis_explanation") if isinstance(result.get("analysis_explanation"), dict) else build_analysis_explanation(result)
 
     return {
         "facility_state_enum": enum,
@@ -699,6 +701,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         "state_derivation_reason": reason,
         "relationship_divergence": relationship_divergence,
         "finding_evidence_chains": finding_evidence_chains,
+        "analysis_explanation": analysis_explanation,
         "relationship_events": _timeline_events_from_frames(frames, snapshot, result),
         "compound_systems_score": compound_systems_score,
         "propagation_scope": propagation_scope,

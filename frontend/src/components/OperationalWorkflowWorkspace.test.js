@@ -77,7 +77,6 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Active Insights")).toBeNull();
     expect(screen.queryByText("Systems Pending")).toBeNull();
     expect(screen.queryByText("Fingerprint Status")).toBeNull();
-    expect(screen.queryByText("No Operating Fingerprint Yet")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
     expect(screen.queryByText(/systems identified/i)).toBeNull();
     expect(screen.queryByText("Baseline Established")).toBeNull();
@@ -137,7 +136,6 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Upload is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Analyze CSV" })).toBeTruthy();
     expect(screen.queryByText("Systems Pending")).toBeNull();
-    expect(screen.queryByText("No Operating Fingerprint Yet")).toBeNull();
     expect(screen.queryByText("1 system identified")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
   });
@@ -181,17 +179,12 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Analysis Complete").length).toBeGreaterThan(0);
     expect(screen.getByText("Analysis based on uploaded telemetry")).toBeTruthy();
     expect(screen.getByText("Historical telemetry analyzed.")).toBeTruthy();
-    expect(screen.getByText("Systems identified")).toBeTruthy();
-    expect(screen.getAllByText("6").length).toBeGreaterThan(0);
-    expect(screen.getByText("Insights found")).toBeTruthy();
-    expect(screen.getByText("Fingerprint status")).toBeTruthy();
-    expect(screen.getByText("Stable")).toBeTruthy();
-    expect(screen.getByText("Top recommendation")).toBeTruthy();
+    expect(screen.getByText("Overall operational status")).toBeTruthy();
+    expect(screen.getByText("Recommended action")).toBeTruthy();
     expect(screen.getAllByText("Continue monitoring").length).toBeGreaterThan(0);
     expect(screen.queryByText("Relationships mapped")).toBeNull();
     expect(screen.queryByText("Baseline confidence")).toBeNull();
     expect(screen.queryByText("Top risk")).toBeNull();
-    expect(screen.queryByText("Recommended action")).toBeNull();
     expect(screen.queryByText("Active Insights")).toBeNull();
     expect(screen.queryByText("Fingerprint Status")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
@@ -213,8 +206,78 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Live telemetry connected").length).toBeGreaterThan(0);
-    expect(screen.getByText("Systems identified")).toBeTruthy();
+    expect(screen.getByText("Overall operational status")).toBeTruthy();
     expect(screen.queryByText("systems monitored")).toBeNull();
+  });
+
+  it("renders explanatory analysis outputs with evidence and hides unavailable fields", () => {
+    const analysisExplanation = {
+      executive_summary: {
+        overall_operational_status: "Structural drift observed",
+        highest_priority_finding: "Pressure and flow relationship shifted",
+        biggest_emerging_risk: "Pump cycling may increase",
+        recommended_action: "Check pump schedule and valve position",
+      },
+      insights: [{
+        id: "pressure-flow",
+        title: "Pressure and flow relationship shifted",
+        severity: "high",
+        explanation: "Pressure increased while flow decreased in the recent window.",
+        likely_cause: "The signals stopped moving together like the baseline window.",
+        possible_consequence: "Pump cycling may increase",
+        recommended_action: "Check pump schedule and valve position",
+        operator_check: "Inspect pump runtime and downstream valve position.",
+        confidence: "high",
+        system: "Flow and pressure system",
+        evidence: [{
+          confidence: "high",
+          supporting_signals: ["Pressure increased 18%", "Flow decreased 9%"],
+          relevant_metric_changes: ["Pump runtime increased 14%"],
+          time_window: "2026-06-23T09:00:00Z to 2026-06-24T21:00:00Z",
+          persistence_duration: "Pattern persisted for 36 hours",
+        }],
+      }],
+      systems: [{
+        id: "flow-pressure",
+        name: "Flow and pressure system",
+        health_status: "Needs review",
+        confidence: "high",
+        key_behaviors: ["Pressure is rising while flow is falling."],
+        what_changed: ["Pressure/flow coupling diverged from baseline."],
+        relationships: ["Pressure / flow relationship changed."],
+      }],
+      fingerprint: {
+        status: "changed",
+        meaning: "The operating fingerprint is changing. The largest deviation is increased pump cycling beginning around 09:30.",
+        largest_deviation: "increased pump cycling",
+        confidence: "high",
+      },
+    };
+
+    renderWorkspace({
+      liveOps: { relationshipRows: [{ columns: ["pressure", "flow"], summary: "Pressure / flow relationship changed." }] },
+      effectiveLatestUploadResult: completeResult({
+        operating_state: "Structural drift observed",
+        analysis_explanation: analysisExplanation,
+      }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Overall operational status")).toBeTruthy();
+    expect(screen.getByText("Pressure and flow relationship shifted")).toBeTruthy();
+    expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
+    expect(screen.getAllByText("Check pump schedule and valve position").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Systems identified")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getByText("Why Neraium thinks it happened")).toBeTruthy();
+    expect(screen.getByText("The signals stopped moving together like the baseline window.")).toBeTruthy();
+    expect(screen.getByText("What could happen next")).toBeTruthy();
+    expect(screen.getByText("Evidence (high)")).toBeTruthy();
+    expect(screen.getByText("Pressure increased 18%")).toBeTruthy();
+    expect(screen.getByText("Pattern persisted for 36 hours")).toBeTruthy();
+    expect(screen.queryByText("Maintenance correlation will appear when maintenance history is connected.")).toBeNull();
   });
 
   it("keeps the Systems section pending before analysis", () => {
