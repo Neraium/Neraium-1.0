@@ -2,16 +2,37 @@ import { formatOperatorActionLabel } from "../viewModels/operationalHelpers";
 import { normalizeOperationalState } from "../viewModels/operationalUiState";
 import { EMPTY_VALUE, formatEmptyValue } from "../viewModels/emptyValue";
 
+export function Card({ as: Component = "section", className = "", children, ...props }) {
+  return (
+    <Component className={`ui-card ${className}`.trim()} {...props}>
+      {children}
+    </Component>
+  );
+}
+
+export function Button({ variant = "primary", className = "", children, ...props }) {
+  const variantClass = variant === "secondary" ? "secondary-command-button" : "command-button";
+  return (
+    <button className={`${variantClass} ui-button ui-button--${variant} ${className}`.trim()} type="button" {...props}>
+      {children}
+    </button>
+  );
+}
+
+export function TextInput({ className = "", ...props }) {
+  return <input className={`ui-input ${className}`.trim()} {...props} />;
+}
+
 export function Panel({ title, subtitle, className = "", children }) {
   const heading = subtitle || title;
   return (
-    <section className={`ops-panel ${className}`.trim()}>
+    <Card className={`ops-panel ${className}`.trim()}>
       <div className="ops-panel__header">
         {subtitle && title ? <p className="section-token">{title}</p> : null}
         <h2>{heading}</h2>
       </div>
       <div className="ops-panel__body">{children}</div>
-    </section>
+    </Card>
   );
 }
 

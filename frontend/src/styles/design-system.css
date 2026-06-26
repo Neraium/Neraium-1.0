@@ -1,0 +1,427 @@
+/* Shared Neraium UI design system. Keep component classes mapped here so page CSS inherits one visual contract. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(900px 420px at 50% -160px, rgba(37, 99, 235, 0.16), transparent 70%),
+    linear-gradient(180deg, var(--bg-app) 0%, #050812 100%);
+  color: var(--text-primary);
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.section-token,
+.section-label,
+.workspace-header__kicker,
+.metadata-text,
+.operational-detail-grid dt,
+.data-table th {
+  color: var(--text-muted);
+  font-size: var(--type-label-xs);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ui-card,
+.ops-panel,
+.operational-panel,
+.section-card,
+.hero-panel,
+.metric-cell,
+.zone-summary-card,
+.telemetry-card,
+.workflow-step,
+.feed-item,
+.timeline-item,
+.empty-state,
+.table-shell,
+.status-tile,
+.fingerprint-status,
+.system-summary-row,
+.insight-card,
+.operational-empty,
+.operational-block,
+.operational-timeline li,
+.observation-center__snapshot,
+.observation-center__summary,
+.observation-detail-callout,
+.observation-trust-note,
+.observation-pair-visual,
+.upload-file-card,
+.onboarding-card,
+.onboarding-header,
+.auth-panel,
+.system-gate__panel,
+.system-gate__hero,
+.system-gate__stat-card,
+.system-gate__nav-card,
+.post-upload-overview,
+.post-upload-section,
+.finding-card,
+.finding-empty-state,
+.post-upload-metric,
+.post-upload-review-next,
+.result-detail-grid div,
+.replay-discovery-card,
+.replay-discovery__insight,
+.system-story-chart,
+.system-story-hero__facts div,
+.system-story-hypotheses section,
+.system-story-notes section,
+.cultivation-top-summary-card,
+.cultivation-report-operator,
+.cultivation-report-collapsed-shell {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: var(--surface-b);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+}
+
+.ops-panel::before,
+.ops-panel::after,
+.section-card::before,
+.hero-panel::before,
+.operational-panel--hero::after {
+  content: none;
+}
+
+.ops-panel__header,
+.operational-panel__header {
+  border-bottom-color: var(--surface-divider);
+}
+
+.ops-panel__header h2,
+.operational-panel__header h2,
+.workspace-header__title,
+.panel-title,
+.operational-topbar h1,
+.operational-hero .operational-panel__header h2,
+.observation-center__summary h1,
+.post-upload-overview__header h1,
+.post-upload-section__header h2,
+.insight-detail h2 {
+  color: var(--text-primary);
+  letter-spacing: 0;
+}
+
+.ops-panel p,
+.operational-panel__header p,
+.operational-copy,
+.operational-empty p,
+.insight-card p,
+.system-summary-row p,
+.operational-block p,
+.operational-timeline li p,
+.workspace-header__description,
+.workspace-header__subtitle,
+.narrative-text,
+.empty-state p,
+.feed-item p,
+.timeline-item p,
+.workflow-step p,
+.zone-summary-card p,
+.telemetry-card p {
+  color: var(--text-secondary);
+}
+
+.ui-button,
+.command-button,
+.secondary-command-button,
+.btn,
+.operational-link-button,
+.system-summary-row__action,
+.workspace-menu-button,
+.workspace-drawer__close,
+.system-gate__settings,
+.system-gate__settings-close,
+.system-gate__settings-action,
+.result-section-tabs button,
+.onboarding-choice,
+.cultivation-tab,
+.operator-action-button,
+.operator-status-controls button,
+.auth-submit,
+.auth-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height);
+  min-width: 0;
+  padding: 0 var(--control-padding-x);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--control-radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  box-shadow: none;
+  font-size: var(--type-body-sm);
+  font-weight: 650;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: none;
+  transition: transform 140ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.command-button,
+.auth-submit {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-neutral-0);
+  box-shadow: var(--shadow-sm);
+}
+
+.command-button:hover:enabled,
+.auth-submit:hover:enabled {
+  border-color: var(--color-brand-strong);
+  background: var(--color-brand-strong);
+}
+
+.secondary-command-button:hover:enabled,
+.btn:hover:enabled,
+.system-gate__settings-action:hover:not(:disabled),
+.onboarding-choice:hover,
+.cultivation-tab:hover,
+.operator-status-controls button:hover,
+.operational-nav button:hover,
+.operational-mobile-nav button:hover,
+.system-summary-row__action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.14);
+  color: var(--text-primary);
+}
+
+.command-button:disabled,
+.secondary-command-button:disabled,
+.btn:disabled {
+  opacity: 0.56;
+  transform: none;
+  box-shadow: none;
+}
+
+.ui-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea,
+.auth-form input,
+.operator-note-field textarea,
+.action-note-field textarea,
+.system-story-note-entry textarea,
+.observation-center__field input,
+.observation-center__field select,
+.setup-grid input,
+.setup-grid select,
+.why-panel__section select,
+.why-panel__section textarea,
+.onboarding-form-grid input,
+.onboarding-form-grid select,
+.onboarding-section textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--control-radius);
+  background: rgba(7, 13, 23, 0.9);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 0;
+  box-shadow: var(--shadow-focus);
+}
+
+.operational-workflow {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.operational-sidebar,
+.operational-topbar,
+.operational-mobile-nav,
+.mobile-status-bar,
+.top-status,
+.workspace-drawer,
+.system-gate__settings-panel,
+.system-gate__detail {
+  border-color: var(--surface-border);
+  background: rgba(9, 16, 26, 0.88);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
+}
+
+.operational-sidebar {
+  border-right: 1px solid var(--surface-border);
+}
+
+.operational-sidebar__brand,
+.operational-sidebar__footer,
+.operational-topbar {
+  border-color: var(--surface-divider);
+}
+
+.operational-nav button,
+.operational-mobile-nav button {
+  border-radius: var(--nav-radius);
+  color: var(--text-secondary);
+}
+
+.operational-nav button.is-active,
+.operational-mobile-nav button.is-active,
+.result-section-tabs button.is-active,
+.onboarding-choice.is-selected,
+.cultivation-tab.is-active,
+.operator-status-controls button.is-active,
+.operator-action-button--active {
+  border-color: rgba(96, 165, 250, 0.46);
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--text-primary);
+}
+
+.operational-status {
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.operational-status--normal {
+  border-color: rgba(8, 116, 67, 0.42);
+  color: #86efac;
+}
+
+.operational-status--changed,
+.operational-status--warning {
+  border-color: rgba(217, 119, 6, 0.46);
+  color: #fbbf24;
+}
+
+.operational-status--investigate {
+  border-color: rgba(220, 38, 38, 0.42);
+  color: #fca5a5;
+}
+
+.operational-status--unknown {
+  color: var(--text-muted);
+}
+
+.operational-detail-grid div,
+.compact-list li,
+.operational-list li,
+.data-table th,
+.data-table td {
+  border-color: var(--surface-divider);
+}
+
+.operational-detail-grid dd,
+.status-tile strong,
+.fingerprint-status strong,
+.insight-card strong,
+.system-summary-row strong,
+.operational-empty strong,
+.operational-timeline li strong {
+  color: var(--text-primary);
+}
+
+.operational-detail-grid dt,
+.status-tile span,
+.status-tile small,
+.system-summary-row__meta span,
+.operational-timeline li span,
+.insight-card small,
+.system-summary-row small,
+.operator-note-field span {
+  color: var(--text-muted);
+}
+
+.fingerprint-status p,
+.operational-timeline li p {
+  color: var(--text-secondary);
+}
+
+.system-gate,
+.auth-shell {
+  background:
+    radial-gradient(900px 420px at 50% -120px, rgba(37, 99, 235, 0.16), transparent 70%),
+    linear-gradient(180deg, rgba(11, 15, 23, 0.99), rgba(7, 11, 18, 0.99));
+}
+
+.system-gate,
+.workspace-header {
+  border-radius: var(--radius-lg);
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-lg);
+}
+
+.result-section-tabs {
+  border-radius: var(--nav-radius);
+  border-color: var(--surface-border);
+  background: rgba(9, 16, 26, 0.9);
+}
+
+.onboarding-shell {
+  color: var(--text-primary);
+}
+
+.onboarding-header h1,
+.onboarding-section h2,
+.auth-panel h1 {
+  color: var(--text-primary);
+  letter-spacing: 0;
+}
+
+.onboarding-header p,
+.auth-copy,
+.auth-form label {
+  color: var(--text-secondary);
+}
+
+.auth-switch {
+  width: fit-content;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-cyan);
+}
+
+@media (max-width: 760px) {
+  .command-button,
+  .secondary-command-button,
+  .btn,
+  .operational-link-button,
+  .system-summary-row__action,
+  .workspace-menu-button,
+  .workspace-drawer__close,
+  .system-gate__settings-action,
+  .onboarding-choice,
+  .operator-status-controls button {
+    min-height: 44px;
+  }
+}
