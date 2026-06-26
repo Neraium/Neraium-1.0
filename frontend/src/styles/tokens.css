@@ -1,27 +1,27 @@
 :root {
-  --bg-app: #07111a;
-  --bg-sidebar: #0d1724;
-  --bg-sidebar-alt: #132033;
-  --bg-panel: rgba(10, 18, 29, 0.94);
-  --bg-panel-alt: rgba(15, 28, 45, 0.92);
-  --bg-panel-soft: rgba(21, 34, 53, 0.8);
-  --border-soft: rgba(136, 153, 170, 0.14);
-  --border-strong: rgba(136, 153, 170, 0.28);
+  --bg-app: #0b0f17;
+  --bg-sidebar: #111827;
+  --bg-sidebar-alt: #182230;
+  --bg-panel: rgba(17, 24, 39, 0.94);
+  --bg-panel-alt: rgba(24, 34, 48, 0.92);
+  --bg-panel-soft: rgba(31, 41, 55, 0.8);
+  --border-soft: rgba(148, 163, 184, 0.14);
+  --border-strong: rgba(148, 163, 184, 0.28);
   --text-primary: #f3f7fb;
   --text-secondary: #c6d2dd;
   --text-muted: #90a1b1;
-  --accent-green: #1b4a4f;
-  --accent-cyan: #5f98aa;
-  --accent-amber: #c4a55a;
-  --accent-red: #b86e3a;
-  --accent-red-deep: #8d5a34;
-  --accent-brand: #2f5e6d;
-  --brand-thread: rgba(59, 122, 140, 0.18);
+  --accent-green: #087443;
+  --accent-cyan: #60a5fa;
+  --accent-amber: #d97706;
+  --accent-red: #dc2626;
+  --accent-red-deep: #991b1b;
+  --accent-brand: #2563eb;
+  --brand-thread: rgba(37, 99, 235, 0.14);
   --shadow-panel: 0 18px 40px rgba(0, 0, 0, 0.24);
   --shadow-lux: 0 28px 72px rgba(0, 0, 0, 0.34);
   --shadow-rail: 16px 0 48px rgba(0, 0, 0, 0.26);
-  --glow-green: 0 0 0 1px rgba(27, 74, 79, 0.24);
-  --glow-cyan: 0 0 0 1px rgba(59, 122, 140, 0.18);
+  --glow-green: 0 0 0 1px rgba(8, 116, 67, 0.18);
+  --glow-cyan: 0 0 0 1px rgba(37, 99, 235, 0.16);
   --glow-amber: 0 0 0 1px rgba(197, 146, 60, 0.22);
   --glow-red: 0 0 0 1px rgba(184, 110, 58, 0.18);
   --space-2: 0.125rem;
@@ -59,20 +59,20 @@
   --surface-padding-tight: var(--space-16);
   --surface-gap: var(--space-16);
   --surface-gap-wide: var(--space-24);
-  --mode-accent-rgb: 59, 122, 140;
-  --mode-accent-soft-rgb: 136, 153, 170;
-  --mode-bg-tint: rgba(59, 122, 140, 0.08);
+  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-soft-rgb: 148, 163, 184;
+  --mode-bg-tint: rgba(37, 99, 235, 0.06);
   --mode-label: "agnostic";
 }
 
 :root[data-domain-mode="aquatic"] {
-  --mode-accent-rgb: 59, 122, 140;
-  --mode-accent-soft-rgb: 136, 153, 170;
-  --mode-bg-tint: rgba(59, 122, 140, 0.08);
+  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-soft-rgb: 148, 163, 184;
+  --mode-bg-tint: rgba(37, 99, 235, 0.06);
 }
 
 :root[data-domain-mode="cultivation"] {
-  --mode-accent-rgb: 59, 122, 140;
-  --mode-accent-soft-rgb: 136, 153, 170;
-  --mode-bg-tint: rgba(59, 122, 140, 0.08);
+  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-soft-rgb: 148, 163, 184;
+  --mode-bg-tint: rgba(37, 99, 235, 0.06);
 }

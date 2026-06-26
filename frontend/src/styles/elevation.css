@@ -1,11 +1,11 @@
 :root {
-  --surface-border: rgba(138, 184, 196, 0.12);
-  --surface-border-strong: rgba(138, 184, 196, 0.22);
-  --surface-divider: rgba(138, 184, 196, 0.08);
-  --surface-a: linear-gradient(180deg, rgba(18, 25, 30, 0.96), rgba(10, 15, 18, 0.95));
-  --surface-b: linear-gradient(180deg, rgba(15, 22, 27, 0.94), rgba(9, 13, 16, 0.94));
-  --surface-c: linear-gradient(180deg, rgba(20, 28, 33, 0.82), rgba(11, 16, 20, 0.84));
-  --surface-d: linear-gradient(180deg, rgba(25, 34, 39, 0.52), rgba(12, 18, 22, 0.6));
+  --surface-border: rgba(148, 163, 184, 0.14);
+  --surface-border-strong: rgba(148, 163, 184, 0.24);
+  --surface-divider: rgba(148, 163, 184, 0.1);
+  --surface-a: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(11, 18, 32, 0.95));
+  --surface-b: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(11, 18, 32, 0.94));
+  --surface-c: linear-gradient(180deg, rgba(24, 34, 48, 0.82), rgba(15, 23, 42, 0.84));
+  --surface-d: linear-gradient(180deg, rgba(31, 41, 55, 0.52), rgba(15, 23, 42, 0.6));
   --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.2);
   --shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.24);
   --shadow-float: 0 20px 46px rgba(0, 0, 0, 0.28);
@@ -55,7 +55,7 @@
 .section-card:hover,
 .hero-panel:hover,
 .status-chip:hover {
-  border-color: rgba(138, 184, 196, 0.18);
+  border-color: rgba(148, 163, 184, 0.2);
   box-shadow: var(--shadow-hover);
   transform: translateY(-1px);
 }

@@ -89,11 +89,10 @@ body {
   min-width: 0;
   padding: var(--surface-padding);
   border: 1px solid rgba(136, 153, 170, 0.14);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background:
-    radial-gradient(circle at top left, rgba(59, 122, 140, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(19, 32, 51, 0.94), rgba(11, 21, 35, 0.98));
-  box-shadow: 0 22px 48px rgba(3, 8, 14, 0.34);
+    linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(11, 18, 32, 0.98));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 14px 36px rgba(0, 0, 0, 0.18);
   overflow: hidden;
 }
 
@@ -210,7 +209,7 @@ body {
 .timeline-item__time {
   color: var(--text-muted);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -273,7 +272,7 @@ body {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 12px;
-  font-weight: 700;
+  font-weight: 600;
   transition:
     transform var(--motion-quiet, 420ms cubic-bezier(0.22, 1, 0.36, 1)),
     box-shadow var(--motion-quiet, 420ms cubic-bezier(0.22, 1, 0.36, 1)),
@@ -284,15 +283,15 @@ body {
 
 .command-button {
   min-width: 156px;
-  border: 1px solid rgba(88, 184, 208, 0.22);
-  background: linear-gradient(180deg, rgba(32, 74, 90, 0.98), rgba(18, 42, 55, 0.99));
+  border: 1px solid #2563eb;
+  background: #2563eb;
   color: var(--text-primary);
   box-shadow: var(--glow-cyan);
 }
 
 .secondary-command-button {
   border: 1px solid rgba(136, 153, 170, 0.12);
-  background: linear-gradient(180deg, rgba(20, 31, 44, 0.9), rgba(13, 22, 35, 0.94));
+  background: rgba(17, 24, 39, 0.78);
   color: var(--text-secondary);
   box-shadow: none;
 }
@@ -369,7 +368,7 @@ body {
   min-height: 26px;
   padding: 0 10px;
   border: 1px solid rgba(136, 153, 170, 0.18);
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(9, 16, 27, 0.62);
   color: var(--text-muted);
   font-size: 0.68rem;
@@ -443,7 +442,7 @@ body {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(136, 153, 170, 0.14);
-  border-radius: 24px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 50% 14%, rgba(59, 122, 140, 0.14), transparent 38%),
     linear-gradient(180deg, rgba(19, 32, 51, 0.96), rgba(11, 21, 35, 0.98));
@@ -546,7 +545,7 @@ body {
 .observation-center__field span {
   color: var(--text-muted);
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -697,7 +696,7 @@ body {
 .data-table th {
   color: var(--text-muted);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -767,10 +766,8 @@ body {
 /* Shared premium surface overrides */
 body {
   background:
-    radial-gradient(circle at top, rgba(88, 152, 170, 0.18), transparent 26%),
-    radial-gradient(circle at 20% 0%, rgba(196, 170, 108, 0.09), transparent 18%),
-    linear-gradient(180deg, #08111b 0%, #050b14 100%);
-  font-family: "Avenir Next", "Segoe UI", "IBM Plex Sans", sans-serif;
+    linear-gradient(180deg, #0b0f17 0%, #070b12 100%);
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 .ops-panel,
@@ -790,23 +787,23 @@ body {
 }
 
 .ops-panel {
-  border-radius: 24px;
+  border-radius: 8px;
 }
 
 .command-button,
 .secondary-command-button {
-  min-height: 48px;
+  min-height: 40px;
   padding: 0 18px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 0.84rem;
   letter-spacing: 0.04em;
 }
 
 .command-button {
-  border-color: rgba(196, 170, 108, 0.28);
-  background: linear-gradient(135deg, rgba(197, 146, 60, 0.96), rgba(126, 92, 38, 0.98));
-  color: #f7f1e5;
-  box-shadow: 0 16px 30px rgba(90, 58, 20, 0.28);
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 18px rgba(37, 99, 235, 0.18);
 }
 
 .secondary-command-button {
@@ -817,7 +814,7 @@ body {
 
 .command-button:hover:enabled,
 .secondary-command-button:hover:enabled {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 @keyframes surfaceFadeUp {
