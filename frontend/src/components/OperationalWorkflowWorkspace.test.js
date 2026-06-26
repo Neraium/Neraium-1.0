@@ -70,13 +70,14 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("NERAIUM SII")).toBeTruthy();
     expect(screen.getAllByText("Waiting for telemetry")).toHaveLength(1);
     expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
-    expect(screen.getByText("Upload or connect telemetry to begin analysis.")).toBeTruthy();
-    expect(screen.getByText("Data source")).toBeTruthy();
-    expect(screen.getAllByText("None").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Upload or Connect Telemetry" })).toBeTruthy();
-    expect(screen.getAllByText("Systems Pending").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Run analysis to identify systems and relationships.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("No Operating Fingerprint Yet").length).toBeGreaterThan(0);
+    expect(screen.getByText("Upload a CSV to begin analysis.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Upload CSV" })).toBeTruthy();
+    expect(screen.queryByText("Current Picture")).toBeNull();
+    expect(screen.queryByText("Data source")).toBeNull();
+    expect(screen.queryByText("Active Insights")).toBeNull();
+    expect(screen.queryByText("Systems Pending")).toBeNull();
+    expect(screen.queryByText("Fingerprint Status")).toBeNull();
+    expect(screen.queryByText("No Operating Fingerprint Yet")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
     expect(screen.queryByText(/systems identified/i)).toBeNull();
     expect(screen.queryByText("Baseline Established")).toBeNull();
@@ -92,10 +93,10 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
     expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
-    expect(screen.getByText("Data source")).toBeTruthy();
-    expect(screen.getAllByText("None").length).toBeGreaterThan(0);
+    expect(screen.getByText("Upload a CSV to begin analysis.")).toBeTruthy();
+    expect(screen.queryByText("Data source")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
-    expect(screen.queryByText("Ready to Analyze")).toBeNull();
+    expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
   });
 
   it("does not show ready to analyze when upload metadata is missing", () => {
@@ -106,7 +107,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
     expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
-    expect(screen.queryByText("Ready to Analyze")).toBeNull();
+    expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
   });
 
@@ -132,11 +133,11 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       },
     });
 
-    expect(screen.getAllByText("Ready to Analyze").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Telemetry is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Analyze Telemetry" })).toBeTruthy();
-    expect(screen.getAllByText("Systems Pending").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("No Operating Fingerprint Yet").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CSV loaded / Ready to analyze").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Upload is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Analyze CSV" })).toBeTruthy();
+    expect(screen.queryByText("Systems Pending")).toBeNull();
+    expect(screen.queryByText("No Operating Fingerprint Yet")).toBeNull();
     expect(screen.queryByText("1 system identified")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
   });
@@ -179,17 +180,20 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.getAllByText("Analysis Complete").length).toBeGreaterThan(0);
     expect(screen.getByText("Analysis based on uploaded telemetry")).toBeTruthy();
-    expect(screen.getByText("Historical telemetry analyzed")).toBeTruthy();
+    expect(screen.getByText("Historical telemetry analyzed.")).toBeTruthy();
     expect(screen.getByText("Systems identified")).toBeTruthy();
     expect(screen.getAllByText("6").length).toBeGreaterThan(0);
-    expect(screen.getByText("Relationships mapped")).toBeTruthy();
-    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
-    expect(screen.getByText("Baseline confidence")).toBeTruthy();
-    expect(screen.getByText("82%")).toBeTruthy();
-    expect(screen.getByText("Top risk")).toBeTruthy();
-    expect(screen.getByText("No major risk detected")).toBeTruthy();
-    expect(screen.getByText("Recommended action")).toBeTruthy();
+    expect(screen.getByText("Insights found")).toBeTruthy();
+    expect(screen.getByText("Fingerprint status")).toBeTruthy();
+    expect(screen.getByText("Stable")).toBeTruthy();
+    expect(screen.getByText("Top recommendation")).toBeTruthy();
     expect(screen.getAllByText("Continue monitoring").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Relationships mapped")).toBeNull();
+    expect(screen.queryByText("Baseline confidence")).toBeNull();
+    expect(screen.queryByText("Top risk")).toBeNull();
+    expect(screen.queryByText("Recommended action")).toBeNull();
+    expect(screen.queryByText("Active Insights")).toBeNull();
+    expect(screen.queryByText("Fingerprint Status")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
   });
 
@@ -209,8 +213,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Live telemetry connected").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("1 system monitored").length).toBeGreaterThan(0);
-    expect(screen.getByText("systems monitored")).toBeTruthy();
+    expect(screen.getByText("Systems identified")).toBeTruthy();
+    expect(screen.queryByText("systems monitored")).toBeNull();
   });
 
   it("keeps the Systems section pending before analysis", () => {

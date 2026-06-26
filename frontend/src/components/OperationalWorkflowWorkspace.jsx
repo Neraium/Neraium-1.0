@@ -7,26 +7,21 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-  { id: "telemetry", label: "Telemetry" },
-  { id: "history", label: "History" },
+  { id: "more", label: "More" },
 ];
 
 const MOBILE_PRIMARY_NAV = [
   { id: "overview", label: "Overview" },
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-];
-
-const MOBILE_MORE_NAV = [
-  { id: "telemetry", label: "Telemetry" },
-  { id: "history", label: "History" },
+  { id: "more", label: "More" },
 ];
 
 const INVESTIGATION_STATUSES = ["Open", "Acknowledged", "Under Investigation", "Resolved"];
 const EMPTY_TELEMETRY_COPY = {
   label: "Start with telemetry",
-  detail: "Upload or connect telemetry to begin analysis.",
-  cta: "Upload or Connect Telemetry",
+  detail: "Upload a CSV to begin analysis.",
+  cta: "Upload CSV",
   headerStatus: "Waiting for telemetry",
 };
 const NO_TELEMETRY_STATUS = {
@@ -40,9 +35,9 @@ const WAITING_FOR_TELEMETRY_STATUS = {
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const READY_TO_ANALYZE_STATUS = {
-  label: "Ready to Analyze",
+  label: "CSV loaded / Ready to analyze",
   tone: "unknown",
-  detail: "Telemetry is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.",
+  detail: "Upload is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.",
 };
 const ANALYZING_STATUS = {
   label: "Building Operating Fingerprint",
@@ -86,7 +81,6 @@ export default function OperationalWorkflowWorkspace({
   onSignOut,
 }) {
   const [activeSection, setActiveSection] = useState("overview");
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [selectedInsightId, setSelectedInsightId] = useState(null);
   const [insightStatuses, setInsightStatuses] = useState({});
   const [operatorNotes, setOperatorNotes] = useState({});
@@ -114,18 +108,15 @@ export default function OperationalWorkflowWorkspace({
   ]);
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
-  const mobileMoreActive = MOBILE_MORE_NAV.some((item) => item.id === activeSection);
   const navMetrics = {
     overview: model.overviewTabMetric,
     insights: String(model.insights.length),
     systems: model.systemsTabMetric,
-    telemetry: String(model.signals.length),
-    history: String(model.historyItems.length),
+    more: model.moreTabMetric,
   };
 
   function navigate(sectionId) {
     setActiveSection(sectionId);
-    setMobileMoreOpen(false);
   }
 
   function openInsight(insightId) {
@@ -209,33 +200,6 @@ export default function OperationalWorkflowWorkspace({
               <small>{navMetrics[item.id]}</small>
             </button>
           ))}
-          <div className="operational-mobile-nav__more-wrap">
-            <button
-              type="button"
-              className={mobileMoreActive ? "is-active" : ""}
-              aria-expanded={mobileMoreOpen}
-              aria-haspopup="menu"
-              onClick={() => setMobileMoreOpen((value) => !value)}
-            >
-              <span>More</span>
-            </button>
-            {mobileMoreOpen ? (
-              <div className="operational-mobile-nav__menu" role="menu" aria-label="More navigation">
-                {MOBILE_MORE_NAV.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    className={activeSection === item.id ? "is-active" : ""}
-                    onClick={() => navigate(item.id)}
-                  >
-                    <span>{item.label}</span>
-                    <small>{navMetrics[item.id]}</small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
         </div>
 
         {activeSection === "overview" ? (
@@ -265,12 +229,8 @@ export default function OperationalWorkflowWorkspace({
           <SystemsSection model={model} onOpenInsight={openInsight} />
         ) : null}
 
-        {activeSection === "telemetry" ? (
-          <TelemetrySection model={model} onAnalyzeSystem={analyzeSystem} />
-        ) : null}
-
-        {activeSection === "history" ? (
-          <HistorySection model={model} onResumePreviousSession={onResumePreviousSession} />
+        {activeSection === "more" ? (
+          <MoreSection model={model} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} />
         ) : null}
 
         {typeof onUploadComplete === "function" ? null : null}
@@ -279,11 +239,63 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
+function OverviewSection({ model, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
+  if (model.overviewState === "noCsvUploaded") {
+    return (
+      <div className="operational-grid operational-grid--command-center">
+        <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
+          <div className="operational-hero operational-hero--solo">
+            <div className="operational-hero__summary">
+              <div className="operational-panel__header operational-panel__header--tight">
+                <span className="section-token">Overview</span>
+                <h2>{EMPTY_TELEMETRY_COPY.label}</h2>
+                <p>{EMPTY_TELEMETRY_COPY.detail}</p>
+              </div>
+              <div className="operational-actions operational-actions--hero">
+                <button type="button" className="command-button" onClick={onAnalyzeSystem}>{EMPTY_TELEMETRY_COPY.cta}</button>
+                {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
+                  <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (model.overviewState === "analysisComplete") {
+    return (
+      <div className="operational-grid operational-grid--command-center">
+        <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Executive summary">
+          <div className="operational-hero operational-hero--solo">
+            <div className="operational-hero__summary">
+              <div className="operational-panel__header operational-panel__header--tight">
+                <span className="section-token">Overview</span>
+                <h2>{model.heroStatus.label}</h2>
+                <p>{model.heroStatus.detail}</p>
+              </div>
+              <div className="operational-hero__meta">
+                <span>{model.storyProgressLabel}</span>
+                {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
+              </div>
+              <div className="operational-result-summary" aria-label="Executive summary">
+                <DetailGrid rows={model.executiveSummaryRows} />
+              </div>
+              <div className="operational-actions operational-actions--hero">
+                <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="operational-grid operational-grid--overview">
+    <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
-        <div className="operational-hero">
+        <div className="operational-hero operational-hero--solo">
           <div className="operational-hero__summary">
             <div className="operational-panel__header operational-panel__header--tight">
               <span className="section-token">Overview</span>
@@ -291,69 +303,23 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
               <p>{model.heroStatus.detail}</p>
             </div>
             <div className="operational-hero__meta">
-              {model.showStoryProgress ? <span>{model.storyProgressLabel}</span> : null}
-              {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
+              <span>{model.storyProgressLabel}</span>
+              <span>{model.sourceLabel}</span>
             </div>
-            {model.resultSummaryRows.length ? (
-              <div className="operational-result-summary" aria-label="Analysis results summary">
-                <DetailGrid rows={model.resultSummaryRows} />
-              </div>
-            ) : null}
+            <div className="operational-result-summary" aria-label="Source summary">
+              <DetailGrid rows={[
+                ["Source", model.sourceLabel],
+                ["Status", model.sourceStatusLabel],
+                ["Rows", model.sourceRowCount],
+              ]} />
+            </div>
             <div className="operational-actions operational-actions--hero">
               <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
-              {model.showSystemClaims ? (
-                <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
-              ) : null}
               {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
                 <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
               ) : null}
             </div>
           </div>
-          <div className="operational-hero__aside" aria-label="Current operating picture">
-            <span className="section-token">Current Picture</span>
-            <DetailGrid rows={[
-              ["Site", model.siteLabel],
-              ["Data source", model.sourceLabel],
-              model.showSourceStatus ? ["Status", model.sourceStatusLabel] : null,
-              model.showSystemClaims ? ["Systems", model.systemSummaryLabel] : null,
-            ]} />
-          </div>
-        </div>
-      </section>
-
-      <section className="operational-panel operational-panel--wide" aria-label="Operational status summary">
-        <div className="status-rack">
-          {model.statusTiles.map((tile) => <CompactStatusTile key={tile.label} tile={tile} />)}
-        </div>
-      </section>
-
-      <section className="operational-panel operational-panel--wide" aria-label="Active insights summary">
-        <PanelHeader eyebrow="Insights" title="Active Insights" subtitle="Top operational observations only." />
-        <InsightList
-          insights={model.insights.slice(0, 3)}
-          empty={model.analysisComplete
-            ? "No current observations."
-            : "Insights appear after telemetry analysis."}
-          emptyTitle={model.analysisComplete ? "No current observations" : "No active insights"}
-          onOpenInsight={onOpenInsight}
-        />
-      </section>
-
-      <section className="operational-panel operational-panel--compact" aria-label="Fingerprint status">
-        <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison stays compact here." />
-        <FingerprintStatus drift={model.fingerprintDrift} />
-      </section>
-
-      <section className="operational-panel operational-panel--compact" aria-label="Systems summary">
-        <PanelHeader eyebrow="Systems" title={model.systemSummaryTitle} subtitle={model.systemSummaryLabel} />
-        <div className="systems-summary">
-          <div>
-            <strong>{model.systemSummaryCountLabel}</strong>
-            <span>{model.systemSummaryDescriptor}</span>
-          </div>
-          {model.showSystemClaims ? (
-            <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
-          ) : null}
         </div>
       </section>
     </div>
@@ -473,32 +439,23 @@ function SystemsSection({ model, onOpenInsight }) {
         )}
       </section>
 
-      <section className="operational-panel" aria-label="Fingerprint panel">
-        <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison remains lightweight." />
-        <FingerprintStatus drift={model.fingerprintDrift} />
-      </section>
-
       <section className="operational-panel" aria-label="Signal relationship summary">
         <PanelHeader eyebrow="Relationships" title="Signal Relationship Summary" subtitle="Relationships with the largest behavior shift." />
         <RelationshipList rows={model.relationshipRows} />
-      </section>
-
-      <section className="operational-panel operational-panel--wide" aria-label="System insights">
-        <PanelHeader eyebrow="Insights" title="Active System Insights" subtitle="Findings tied to the selected or primary system." />
-        <InsightList
-          insights={model.insights}
-          empty={model.analysisComplete ? "No active system insights." : model.uiState.status.detail}
-          emptyTitle={model.analysisComplete ? "No active system insights" : model.uiState.status.label}
-          onOpenInsight={onOpenInsight}
-        />
       </section>
     </div>
   );
 }
 
-function TelemetrySection({ model, onAnalyzeSystem }) {
+function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
   return (
     <div className="operational-grid operational-grid--overview">
+      <section className="operational-panel operational-panel--wide" aria-label="Advanced status">
+        <PanelHeader eyebrow="Status" title="Advanced Status" subtitle="Detailed source, analysis, systems, and fingerprint state." />
+        <div className="status-rack">
+          {model.statusTiles.map((tile) => <CompactStatusTile key={tile.label} tile={tile} />)}
+        </div>
+      </section>
       <section className="operational-panel" aria-label="Source status">
         <PanelHeader eyebrow="Telemetry" title="Source Status" subtitle="Current data source and analysis heartbeat." />
         <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
@@ -521,13 +478,11 @@ function TelemetrySection({ model, onAnalyzeSystem }) {
           <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
         </div>
       </section>
-    </div>
-  );
-}
+      <section className="operational-panel" aria-label="Fingerprint panel">
+        <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison and operating fingerprint detail." />
+        <FingerprintStatus drift={model.fingerprintDrift} />
+      </section>
 
-function HistorySection({ model, onResumePreviousSession }) {
-  return (
-    <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--wide" aria-label="Behavioral timeline">
         <PanelHeader eyebrow="History" title="Behavioral Timeline" subtitle="Operational record across analyses." />
         <Timeline items={model.historyItems} />
@@ -583,7 +538,17 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const isEmptyTelemetryState = uiState.key === "noTelemetry";
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
-  const resultSummaryRows = buildResultSummaryRows({ analysisComplete, identifiedSystemCount, relationshipRows, result, liveOps, finding });
+  const sourceRowCount = deriveSourceRowCount({ result, snapshot });
+  const overviewState = deriveOverviewState(uiState.key);
+  const executiveSummaryRows = buildExecutiveSummaryRows({
+    analysisComplete,
+    identifiedSystemCount,
+    insights,
+    fingerprintDrift,
+    result,
+    liveOps,
+    finding,
+  });
 
   return {
     siteLabel,
@@ -592,18 +557,18 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     contextLabel,
     headerEyebrow: isEmptyTelemetryState ? "NERAIUM SII" : "Neraium Systemic Infrastructure Intelligence",
     headerSubtitle: isEmptyTelemetryState ? siteLabel : contextLabel,
+    overviewState,
     overviewTabMetric: isEmptyTelemetryState ? "Start" : heroStatus.label,
+    moreTabMetric: "Details",
     showHeroStatusBadge: !isEmptyTelemetryState,
-    showStoryProgress: !isEmptyTelemetryState,
-    showSourceStatus: !isEmptyTelemetryState,
     showSidebarStatus: !isEmptyTelemetryState,
     sourceStatusLabel: uiState.sourceStatusLabel,
+    sourceRowCount,
     storyProgressLabel: uiState.storyProgressLabel,
     primaryCtaLabel: uiState.primaryCtaLabel,
     analyzeDisabled: uiState.key === "analyzing",
     showBaselineClaim: baselineAvailable,
-    showSystemClaims: analysisComplete,
-    resultSummaryRows,
+    executiveSummaryRows,
     uiState,
     heroStatus,
     baselineStatus: baselineAvailable ? { label: "Baseline Established", tone: "normal" } : NO_BASELINE_AVAILABLE,
@@ -616,10 +581,6 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     fingerprintDrift,
     systemCards,
     systemsTabMetric: systemSummary.tabMetric,
-    systemSummaryTitle: systemSummary.title,
-    systemSummaryLabel: systemSummary.label,
-    systemSummaryCountLabel: systemSummary.countLabel,
-    systemSummaryDescriptor: systemSummary.descriptor,
     systemsSectionTitle: systemSummary.sectionTitle,
     systemsSectionSubtitle: systemSummary.sectionSubtitle,
     insights,
@@ -635,6 +596,31 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   };
 }
 
+
+function deriveOverviewState(uiStateKey) {
+  if (uiStateKey === "noTelemetry") return "noCsvUploaded";
+  if (uiStateKey === "readyToAnalyze") return "csvUploadedReady";
+  if (uiStateKey === "analyzing") return "analyzing";
+  return "analysisComplete";
+}
+
+function deriveSourceRowCount({ result, snapshot }) {
+  const currentUpload = snapshot?.current_upload ?? result?.current_upload ?? null;
+  return firstText(
+    result?.row_count,
+    result?.rows,
+    result?.record_count,
+    result?.records,
+    snapshot?.row_count,
+    snapshot?.rows,
+    snapshot?.record_count,
+    snapshot?.records,
+    currentUpload?.row_count,
+    currentUpload?.rows,
+    currentUpload?.record_count,
+    currentUpload?.records
+  );
+}
 
 function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysisComplete, telemetryConnected }) {
   if (analysisRunning) {
@@ -661,7 +647,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Analyze Telemetry",
+      primaryCtaLabel: "Analyze CSV",
     };
   }
   if (analysisComplete) {
@@ -670,7 +656,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Historical telemetry analyzed",
       storyProgressLabel: "Analysis based on uploaded telemetry",
-      primaryCtaLabel: "Analyze Telemetry",
+      primaryCtaLabel: "Analyze CSV",
     };
   }
   return {
@@ -678,7 +664,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Analyze Telemetry",
+    primaryCtaLabel: "Analyze CSV",
   };
 }
 
@@ -736,17 +722,9 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
   };
 }
 
-function buildResultSummaryRows({ analysisComplete, identifiedSystemCount, relationshipRows, result, liveOps, finding }) {
+function buildExecutiveSummaryRows({ analysisComplete, identifiedSystemCount, insights, fingerprintDrift, result, liveOps, finding }) {
   if (!analysisComplete) return [];
-  const baselineConfidence = firstText(
-    result?.baseline_confidence,
-    result?.baseline_analysis?.confidence,
-    result?.baseline_profile?.confidence,
-    result?.sii_intelligence?.baseline?.confidence,
-    liveOps?.baseline?.confidence
-  );
-  const topRisk = deriveTopRisk({ result, liveOps, finding });
-  const recommendedAction = firstText(
+  const topRecommendation = firstText(
     result?.recommended_action,
     result?.recommendation,
     result?.operator_report?.recommended_action,
@@ -758,31 +736,10 @@ function buildResultSummaryRows({ analysisComplete, identifiedSystemCount, relat
   );
   return [
     ["Systems identified", String(identifiedSystemCount)],
-    relationshipRows.length > 0 ? ["Relationships mapped", String(relationshipRows.length)] : null,
-    baselineConfidence ? ["Baseline confidence", formatConfidence(baselineConfidence)] : null,
-    ["Top risk", topRisk],
-    ["Recommended action", recommendedAction],
+    ["Insights found", String(insights.length)],
+    ["Fingerprint status", fingerprintDrift.label],
+    ["Top recommendation", topRecommendation],
   ];
-}
-
-function deriveTopRisk({ result, liveOps, finding }) {
-  return firstText(
-    result?.top_risk,
-    result?.risk_summary,
-    result?.operator_report?.top_risk,
-    finding?.summary,
-    finding?.title,
-    liveOps?.topRisk,
-    "No major risk detected"
-  );
-}
-
-function formatConfidence(value) {
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) {
-    return (numeric <= 1 ? Math.round(numeric * 100) : Math.round(numeric)) + "%";
-  }
-  return String(value);
 }
 
 function collectIdentifiedSystems({ liveOps, result, primarySystem }) {
@@ -1099,8 +1056,7 @@ function EmptyOperationalState({ title, body }) {
 function sectionTitle(section) {
   if (section === "insights") return "Insights";
   if (section === "systems") return "Systems";
-  if (section === "telemetry") return "Telemetry";
-  if (section === "history") return "History";
+  if (section === "more") return "More";
   return "Overview";
 }
 

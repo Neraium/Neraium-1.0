@@ -266,6 +266,10 @@
   grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
 }
 
+.operational-grid--command-center {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .operational-grid--split {
   grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr);
 }
@@ -373,6 +377,11 @@
 .operational-hero__summary,
 .operational-hero__aside {
   min-width: 0;
+}
+
+.operational-hero--solo {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 860px;
 }
 
 .operational-hero__summary {
@@ -803,6 +812,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--command-center,
   .operational-grid--split {
     grid-template-columns: 1fr;
   }
@@ -849,6 +859,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--command-center,
   .operational-grid--split,
   .status-rack,
   .operational-detail-grid {
