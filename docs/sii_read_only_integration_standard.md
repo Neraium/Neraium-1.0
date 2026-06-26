@@ -18,4 +18,4 @@ All partner adapters are interface-first and explicitly read-only:
 - Autonomous action generation.
 
 ## Enforcement
-`backend/safety/read_only_guard.py` rejects payloads containing control or actuation intent and is required in runtime and adapter boundary checks.
+Runtime readiness is evaluated through `backend/runtime/runtime_contracts.py`. Adapter boundary checks must keep payloads read-only and reject control or actuation intent before data enters the analysis path.

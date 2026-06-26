@@ -27,14 +27,14 @@ from app.services.sii_runner import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 VALIDATION_PROVENANCE = {
-    "cmapss_supported": True,
-    "known_validation_result": "707 units, 687 detected, 97.2% coverage, average lead time 198.4 cycles",
-    "validation_source": "legacy validation harness metadata only",
-    "same_engine_family": True,
+    "cmapss_supported": False,
+    "known_validation_result": None,
+    "validation_source": "legacy validation harness removed",
+    "same_engine_family": False,
     "same_exact_validation_runner": False,
     "note": (
         "Production runtime uses the in-repo backend SII runner. "
-        "Legacy FD004 validation remains isolated from production imports."
+        "Legacy FD004 validation code has been removed from the production tree."
     ),
 }
 
@@ -53,7 +53,7 @@ def build_engine_identity() -> dict[str, Any]:
         "engine_class_or_function": RUNNER_CALLABLE,
         "git_commit": git_commit(),
         "deployment_mode": "production",
-        "validation_engine_path_present": True,
+        "validation_engine_path_present": False,
         "cmapss_validation_supported": VALIDATION_PROVENANCE["cmapss_supported"],
         "driver_attribution_supported": callable(build_driver_attribution),
         "sii_pipeline_supported": available,
@@ -64,11 +64,11 @@ def build_engine_identity() -> dict[str, Any]:
         "core_engine_file": real_runner_identity["core_engine_file"],
         "validation_runner_file": real_runner_identity["validation_runner_file"],
         "runner_available": available,
-        "same_engine_family_as_validation": True,
+        "same_engine_family_as_validation": False,
         "same_exact_fd004_validation_runner": False,
         "note": (
             "Production runtime uses the in-repo backend SII runner. "
-            "Legacy FD004 validation remains isolated from production imports."
+            "Legacy FD004 validation code has been removed from the production tree."
         ),
         "import_error": runner_import_error(),
         "actual_imports": {
@@ -82,11 +82,7 @@ def build_engine_identity() -> dict[str, Any]:
             "facility_status": callable_identity(build_intelligence_status),
             "sample_facility_intelligence": callable_identity(build_sample_intelligence),
             "driver_attribution": attribution_callable,
-            "validation_runner": {
-                "module": VALIDATION_RUNNER.rsplit(".", 1)[0],
-                "callable": VALIDATION_RUNNER.rsplit(".", 1)[1],
-                "file": real_runner_identity["validation_runner_file"],
-            },
+            "validation_runner": None,
         },
         "validation_provenance": VALIDATION_PROVENANCE,
     }

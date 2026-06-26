@@ -11,7 +11,6 @@ import { fetchLatestUploadState } from "../services/api/uploadApi";
 import * as uploadStateView from "../viewModels/uploadState";
 import { buildEmptySessionStore, buildSessionStore } from "../viewModels/sessionState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
-import { FALLBACK_SYSTEMS } from "../config/workspaces";
 
 const OPERATIONAL_CADENCE_MS = 45000;
 const LIVE_REFRESH_INTERVAL_MS = 45000;
@@ -43,7 +42,7 @@ export default function useFacilityRuntime({
     message: "",
     queue: null,
   });
-  const [systems, setSystems] = useState(FALLBACK_SYSTEMS);
+  const [systems, setSystems] = useState([]);
   const [systemsState, setSystemsState] = useState("loading");
   const [intelligenceStatus, setIntelligenceStatus] = useState(uploadStateView.buildEmptyIntelligenceStatus());
   const [backendError, setBackendError] = useState(API_CONFIG_WARNING);
@@ -147,7 +146,7 @@ export default function useFacilityRuntime({
         return false;
       }
       const normalizedMessage = normalizeErrorMessage(error?.message ?? error);
-      setSystems(FALLBACK_SYSTEMS);
+      setSystems([]);
       setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
       setSystemsState("fallback");
       setBackendError((current) => {

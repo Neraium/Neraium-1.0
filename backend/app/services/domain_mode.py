@@ -194,7 +194,7 @@ def domain_profile(mode: str) -> dict[str, Any]:
         "app_subtitle": "Commercial water systems intelligence",
         "app_description": "Neraium helps water infrastructure teams understand changes in system behavior across source, treatment, pumping, distribution, storage, thermal, and process-loop operations.",
         "systems": [
-            {"name": "Source / Intake", "scope": "Incoming supply, source availability, inlet pressure, and upstream demand conditions"},
+            {"name": "Supply Conditions", "scope": "Upstream availability, inlet pressure, and demand conditions"},
             {"name": "Treatment", "scope": "Treatment performance, chemistry, quality indicators, and process response"},
             {"name": "Pumping", "scope": "Pump load, runtime, flow response, pressure response, and equipment behavior"},
             {"name": "Distribution", "scope": "Distribution pressure, flow balance, downstream demand, and system recovery behavior"},

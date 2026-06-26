@@ -39,8 +39,8 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "Source / Intake",
-    scope: "Incoming supply, source availability, inlet pressure, and upstream demand conditions.",
+    name: "Supply Conditions",
+    scope: "Upstream availability, inlet pressure, and demand conditions.",
   },
   {
     name: "Treatment",

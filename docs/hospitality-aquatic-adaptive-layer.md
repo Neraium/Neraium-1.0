@@ -37,7 +37,6 @@ This change adapts existing Neraium SII architecture for commercial resort pool/
 ## Files Added/Updated
 - Added:
   - `backend/app/services/aquatic_domain.py`
-  - `backend/demo/aquatic_replay_payload.py`
   - `docs/hospitality-aquatic-adaptive-layer.md`
 - Updated:
   - `backend/app/services/upload_jobs.py`

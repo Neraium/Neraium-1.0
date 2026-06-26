@@ -20,12 +20,8 @@ import numpy as np
 RUNNER_MODULE = "app.services.sii_runner.BackendSiiRunner"
 RUNNER_CALLABLE = "app.services.sii_runner.BackendSiiRunner.ingest"
 CORE_ENGINE = "app.engine.analysis.run_engine_analysis"
-VALIDATION_RUNNER = "legacy.validation.fd004.FD004ValidationRunner"
+VALIDATION_RUNNER = None
 STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
-LEGACY_VALIDATION_FILE = next(
-    (path for path in Path(__file__).resolve().parents[2].glob("*/sii_fd004_validation.py") if path.is_file()),
-    None,
-)
 STATE_REQUIRED_FIELDS = {
     "facility_state",
     "rooms",
@@ -352,11 +348,11 @@ def build_runner_status() -> dict[str, Any]:
         "state_timestamp_valid": last_processed_at is None or parsed_last_processed_at is not None,
         "state_age_seconds": state_age_seconds,
         "source": state.get("source") if state else "none",
-        "same_engine_family_as_validation": True,
+        "same_engine_family_as_validation": False,
         "same_exact_fd004_validation_runner": False,
         "note": (
             "Production uploads use the backend-native SII runner. "
-            "Legacy FD004 validation remains isolated from production imports."
+            "Legacy FD004 validation code has been removed from the production tree."
         ),
         "import_error": runner_import_error(),
     }
@@ -371,8 +367,6 @@ def runner_identity() -> dict[str, str | None]:
             core_file = inspect.getsourcefile(BackendSiiRunner)
         except Exception:
             core_file = None
-    if LEGACY_VALIDATION_FILE is not None and LEGACY_VALIDATION_FILE.exists():
-        validation_file = str(LEGACY_VALIDATION_FILE)
     return {
         "runner_module": RUNNER_MODULE,
         "runner_callable": RUNNER_CALLABLE,

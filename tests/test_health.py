@@ -113,18 +113,18 @@ def test_engine_identity_endpoint_returns_actual_engine_metadata() -> None:
     assert payload["engine_class_or_function"] == RUNNER_CALLABLE
     assert payload["git_commit"]
     assert payload["deployment_mode"] == "production"
-    assert payload["validation_engine_path_present"] is True
-    assert payload["cmapss_validation_supported"] is True
+    assert payload["validation_engine_path_present"] is False
+    assert payload["cmapss_validation_supported"] is False
     assert payload["driver_attribution_supported"] is True
     assert payload["sii_pipeline_supported"] is True
     assert payload["production_runner"] == RUNNER_CALLABLE
     assert payload["core_engine"] == CORE_ENGINE
     assert payload["validation_runner"] == VALIDATION_RUNNER
-    assert payload["same_engine_family_as_validation"] is True
+    assert payload["same_engine_family_as_validation"] is False
     assert payload["same_exact_fd004_validation_runner"] is False
     assert payload["actual_imports"]["upload_processing"]["module"] == RUNNER_MODULE
     assert payload["actual_imports"]["driver_attribution"]["callable"] == "build_driver_attribution"
-    assert payload["validation_provenance"]["same_engine_family"] is True
+    assert payload["validation_provenance"]["same_engine_family"] is False
     assert payload["validation_provenance"]["same_exact_validation_runner"] is False
 
 
@@ -139,7 +139,7 @@ def test_runner_status_endpoint_reports_real_adapter() -> None:
     assert payload["runner_module"] == RUNNER_MODULE
     assert payload["core_engine"] == CORE_ENGINE
     assert payload["validation_runner"] == VALIDATION_RUNNER
-    assert payload["same_engine_family_as_validation"] is True
+    assert payload["same_engine_family_as_validation"] is False
     assert payload["same_exact_fd004_validation_runner"] is False
     assert payload["source"] == "none"
     assert payload["state_available"] is False

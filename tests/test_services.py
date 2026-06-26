@@ -29,7 +29,7 @@ def test_sii_runner_import_status_reports_real_modules() -> None:
     assert status["runner_module"] == RUNNER_MODULE
     assert status["core_engine"] == CORE_ENGINE
     assert status["validation_runner"] == VALIDATION_RUNNER
-    assert status["same_engine_family_as_validation"] is True
+    assert status["same_engine_family_as_validation"] is False
     assert status["same_exact_fd004_validation_runner"] is False
 
 

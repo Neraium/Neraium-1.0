@@ -122,7 +122,6 @@ scripts/
   dev/
     start-backend.ps1
     start-frontend.ps1
-    start-local-monolith.sh
   test/
     test-backend.ps1
     build-frontend.ps1

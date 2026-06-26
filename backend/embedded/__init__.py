@@ -1,2 +1,0 @@
-"""Embedded SII cognition modules."""
-
