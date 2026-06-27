@@ -964,7 +964,7 @@ def read_job(job_id: str) -> dict[str, Any] | None:
 
 
 async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv", **kwargs) -> dict[str, Any]:
-    max_size_bytes = int(kwargs.get("max_size_bytes", 250 * 1024 * 1024))
+    max_size_bytes = int(kwargs.get("max_size_bytes", 600 * 1024 * 1024))
     if upload_file is not None and hasattr(upload_file, "read"):
         file_name = getattr(upload_file, "filename", None) or filename
         total = 0

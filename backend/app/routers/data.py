@@ -420,7 +420,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             },
         )
 
-    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 250 * 1024 * 1024))
+    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 600 * 1024 * 1024))
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
         return JSONResponse(

@@ -204,7 +204,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "upload_too_large" || status === 413) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "File too large. Maximum supported size is 250 MB.";
+      : "File too large. Maximum supported size is 600 MB.";
   }
   if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408) {
     return phase === "poll"

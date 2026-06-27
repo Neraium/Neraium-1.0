@@ -16,7 +16,7 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
-const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 600 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
