@@ -496,14 +496,20 @@ def _build_csv_result(
                 else f"{name}: Multiple variables are drifting away from the baseline regime."
             ]
             structural_explanation = [f"{name}: Persistent multi-variable drift indicates a deformation in the system's baseline relational structure."]
+            next_operator_move = "Review the drifting variables against source system logs and recent operating changes"
+            why_flagged = f"{name} is flagged because multiple telemetry signals shifted persistently away from the learned baseline."
         elif room_drift > 0.08:
             urgency = "review"; driver_category = "structural_drift"; attribution_confidence = "medium"; signal_strength = "medium"; room_state = "Structural drift observed"
             relationship_evidence = [f"{name}: Variable relationships show moderate movement away from the baseline regime."]
             structural_explanation = [f"{name}: Multi-variable drift warrants review, but the evidence does not yet indicate instability."]
+            next_operator_move = "Compare the affected variables with facility logs for the same window"
+            why_flagged = f"{name} is flagged because its recent telemetry moved moderately away from the learned baseline."
         else:
             urgency = "nominal"; driver_category = "stable_monitoring"; attribution_confidence = "medium"; signal_strength = "low"; room_state = "Baseline-aligned"
             relationship_evidence = [f"{name}: Variable relationships remain inside the baseline regime."]
             structural_explanation = [f"{name}: Structural observations remain aligned with the learned baseline."]
+            next_operator_move = "Continue monitoring"
+            why_flagged = f"{name} remains inside the learned baseline regime."
         if room_urgency_rank[urgency] > room_urgency_rank[max_room_urgency]:
             max_room_urgency = urgency
         max_room_drift = max(max_room_drift, room_drift)
@@ -513,12 +519,12 @@ def _build_csv_result(
             "urgency": urgency,
             "driver_category": driver_category,
             "attribution_confidence": attribution_confidence,
-            "next_operator_move": "Collect more telemetry before interpreting this segment" if sparse else "Continue monitoring",
+            "next_operator_move": "Collect more telemetry before interpreting this segment" if sparse else next_operator_move,
             "confidence_components": {"data_sufficiency": "low" if sparse else "high", "signal_strength": signal_strength, "relationship_support": "low" if sparse else "high", "persistence": "low" if sparse else "high"},
             "relationship_evidence": relationship_evidence,
             "structural_explanation": structural_explanation,
             "confidence_basis": f"{name}: Confidence components: data sufficiency, signal strength, relationship support, persistence.",
-            "why_flagged": f"{name} is flagged because telemetry coverage is currently sparse." if sparse else f"{name} remains inside the learned baseline regime.",
+            "why_flagged": f"{name} is flagged because telemetry coverage is currently sparse." if sparse else why_flagged,
             "last_updated": datetime.now(timezone.utc).isoformat(),
         })
 

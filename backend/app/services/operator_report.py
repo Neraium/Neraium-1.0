@@ -209,9 +209,9 @@ def report_limitations(
     baseline_analysis: dict[str, Any],
 ) -> list[str]:
     limitations = [
-        "This report uses only the uploaded CSV profile and simple baseline comparison.",
-        "No data is stored permanently and the Neraium engine has not been run.",
-        "This report does not identify root cause or predict downstream operational impact.",
+        "This report uses the uploaded telemetry profile, baseline comparison, relationship evidence, and SII runner output available for this analysis.",
+        "Findings identify likely structural contributors for operator review; they are not a root-cause determination.",
+        "Projected review windows are decision-support estimates, not guaranteed failure predictions.",
     ]
     if data_quality["readiness"] != "ready":
         limitations.append("Evidence is limited because the upload has data quality items requiring review.")

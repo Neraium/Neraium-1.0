@@ -177,6 +177,27 @@ def test_relationship_findings_persist_source_rows_and_windows() -> None:
     assert evidence["drift_metrics"]["coupling_delta"] is not None
 
 
+def test_drifted_upload_room_guidance_is_dataset_specific() -> None:
+    baseline_rows = [
+        f"2026-05-01T08:{index:02d}:00Z,AHU-1,{70 + index * 0.1:.2f},{50 + index * 0.05:.2f},{400 + index * 0.2:.2f}"
+        for index in range(18)
+    ]
+    recent_rows = [
+        f"2026-05-01T09:{index:02d}:00Z,AHU-1,{92 + index * 0.4:.2f},{74 + index * 0.3:.2f},{250 - index * 1.5:.2f}"
+        for index in range(18)
+    ]
+    result = process_csv_content(
+        filename="drifted-room-guidance.csv",
+        content=("timestamp,room,temp,humidity,airflow\n" + "\n".join(baseline_rows + recent_rows)).encode(),
+    )
+
+    room = result["sii_intelligence"]["rooms"][0]
+    assert room["urgency"] in {"review", "unstable"}
+    assert room["next_operator_move"] != "Continue monitoring"
+    assert "logs" in room["next_operator_move"].lower() or "facility" in room["next_operator_move"].lower()
+    assert not any("engine has not been run" in item for item in result["operator_report"]["limitations"])
+
+
 def test_constant_sensor_and_sparse_upload_lower_reliability_and_confidence() -> None:
     rows = "\n".join(
         f"2026-05-01T08:{index:02d}:00Z,72,50,{400 + index}"

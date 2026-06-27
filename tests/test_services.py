@@ -154,6 +154,8 @@ def test_operator_report_uses_existing_sections() -> None:
         "baseline_analysis",
     ]
     assert "usable for initial review" in report["summary"]
+    assert not any("engine has not been run" in item for item in report["limitations"])
+    assert any("SII runner output" in item for item in report["limitations"])
 
 
 def test_cultivation_mapping_maps_core_categories() -> None:
