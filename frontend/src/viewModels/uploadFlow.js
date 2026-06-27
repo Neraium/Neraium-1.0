@@ -139,7 +139,7 @@ export function classifyUploadError(error, phase) {
       errorType: error?.name === "ApiTimeoutError" ? "timeout" : "network",
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-        : "Secure telemetry ingestion unavailable.",
+        : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
     };
   }
   if (error instanceof TypeError) {
@@ -150,7 +150,7 @@ export function classifyUploadError(error, phase) {
       errorType: "network",
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-        : "Secure telemetry ingestion unavailable.",
+        : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
     };
   }
   return {
@@ -211,7 +211,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : (typeof detail === "string" && detail.trim()
         ? normalizeErrorMessage(detail)
-        : "Secure telemetry ingestion unavailable.");
+        : "Upload processing is unavailable right now.");
   }
   if (phase === "poll") {
     return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";

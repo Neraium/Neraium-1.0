@@ -332,7 +332,7 @@ export default function DataConnectionsWorkspace({
               await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });
               continue;
             }
-            throw buildUploadRequestError(response, payload, payload?.message || "Analysis status could not be checked.");
+            throw buildUploadRequestError(response, payload, "poll");
           }
           statusEndpointFailureCountRef.current = 0;
           const normalizedPayload = normalizeStatusPayload(payload, requestedJobId);
@@ -356,7 +356,7 @@ export default function DataConnectionsWorkspace({
             completeWithoutReplayCount = 0;
           }
           if (["failed", "error", "validation_error", "cancelled"].includes(normalizedStatus)) {
-            throw buildUploadRequestError({ status: 500 }, normalizedPayload, normalizedPayload.message || normalizedPayload.error || "Telemetry processing failed.");
+            throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
           setUploadState("running_sii");
           if (typeof progressPercent === "number") {
@@ -382,7 +382,7 @@ export default function DataConnectionsWorkspace({
         return completedPayload;
       })
       .catch((error) => {
-        const classified = classifyUploadError(error);
+        const classified = classifyUploadError(error, "poll");
         markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false });
         return null;
       })
@@ -479,7 +479,7 @@ export default function DataConnectionsWorkspace({
       setUploadState("running_sii");
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
-      const classified = classifyUploadError(error);
+      const classified = classifyUploadError(error, "upload");
       markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType });
     }
   }

@@ -139,7 +139,7 @@ def test_upload_requires_authentication_in_production(tmp_path) -> None:
     assert response.json()["error_type"] == "auth"
 
 
-def test_upload_requires_shared_queue_in_split_role_production(monkeypatch, tmp_path) -> None:
+def test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
     monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
@@ -160,17 +160,15 @@ def test_upload_requires_shared_queue_in_split_role_production(monkeypatch, tmp_
         files={"file": ("sensor-export.csv", "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58", "text/csv")},
     )
 
-    assert response.status_code == 503
+    assert response.status_code == 202
     payload = response.json()
-    assert payload["status"] == "FAILED"
-    assert payload["error_type"] == "shared_upload_queue_not_configured"
+    assert payload["status"] == "PENDING"
     assert payload["job_id"]
 
-    status_response = client.get(payload["status_url"])
-    assert status_response.status_code == 200
-    status_payload = status_response.json()
-    assert status_payload["status"] == "FAILED"
-    assert status_payload["error_type"] == "shared_upload_queue_not_configured"
+    status_payload = wait_for_terminal_upload_status(client, payload["status_url"])
+    assert status_payload["status"] == "COMPLETE"
+    assert status_payload["result_available"] is True
+    assert status_payload["job_id"] == payload["job_id"]
 
 
 def test_create_upload_job_enforces_streaming_size_limit() -> None:

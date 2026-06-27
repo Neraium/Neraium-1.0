@@ -472,7 +472,6 @@ def _queue_operational_metrics_from_records(records: list[dict[str, Any]]) -> di
 
 
 def enqueue_upload_job(job_id: str) -> None:
-    _ensure_shared_upload_queue_backend()
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
@@ -511,7 +510,6 @@ def enqueue_upload_job(job_id: str) -> None:
 
 
 def claim_next_upload_job() -> str | None:
-    _ensure_shared_upload_queue_backend()
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
@@ -584,7 +582,6 @@ def claim_next_upload_job() -> str | None:
 
 
 def peek_next_upload_job_for_worker() -> str | None:
-    _ensure_shared_upload_queue_backend()
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()

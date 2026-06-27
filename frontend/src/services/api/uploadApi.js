@@ -87,7 +87,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
     }
 
     const startedAt = Date.now();
-    const uploadUrls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: false });
+    const uploadUrls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: true });
 
     onProgress?.({
       stage: "upload_started",
@@ -123,6 +123,26 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
       Object.entries(buildAccessHeaders(accessCode)).forEach(([key, value]) => {
         xhr.setRequestHeader(key, value);
       });
+
+      onProgress?.({
+        stage: "uploading",
+        loaded: 0,
+        total: file.size,
+        percent: file.size > 0 ? 1 : 0,
+        speedBytesPerSecond: 0,
+        message: "Connecting to telemetry ingestion.",
+      });
+
+      xhr.upload.onloadstart = () => {
+        onProgress?.({
+          stage: "uploading",
+          loaded: 0,
+          total: file.size,
+          percent: file.size > 0 ? 1 : 0,
+          speedBytesPerSecond: 0,
+          message: "Connecting to telemetry ingestion.",
+        });
+      };
 
       xhr.upload.onprogress = (event) => {
         const loaded = event.loaded ?? 0;

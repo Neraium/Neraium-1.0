@@ -266,3 +266,17 @@ def test_onboarding_storage_redacts_api_token() -> None:
     assert "localStorage.setItem(STORAGE_KEY, JSON.stringify(storageSafeFlow(flow)))" in source
     assert "localStorage.setItem(STORAGE_KEY, JSON.stringify(flow))" not in source
     assert "return { ...defaultState(), ...parsed, api: { ...defaultState().api, ...(parsed?.api || {}) } };" not in source
+
+
+def test_upload_request_keeps_same_origin_ingestion_fallback() -> None:
+    source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
+
+    assert "buildApiCandidateUrls(\"/api/data/upload\", { method: \"POST\", allowSameOriginFallback: true })" in source
+
+
+def test_upload_attempt_reports_nonzero_connecting_progress() -> None:
+    source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
+
+    assert "xhr.open(\"POST\", uploadUrls[index], true);" in source
+    assert "percent: file.size > 0 ? 1 : 0" in source
+    assert "Connecting to telemetry ingestion." in source
