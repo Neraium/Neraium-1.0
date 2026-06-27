@@ -28,14 +28,14 @@ describe("uploadFlow poll error classification", () => {
   });
 
   it("shows the concrete upload network failure during the upload phase", () => {
-    const error = new Error("Upload network error before server accepted the file. Failed URL: https://api.neraium.com/api/data/upload");
+    const error = new Error("Upload network error before server accepted the file. Failed URL: /api/data/upload");
     error.name = "ApiNetworkError";
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
       state: "error",
       retryable: false,
       errorType: "network",
-      message: "Upload network error before server accepted the file. Failed URL: https://api.neraium.com/api/data/upload",
+      message: "Upload network error before server accepted the file. Failed URL: /api/data/upload",
     });
   });
 

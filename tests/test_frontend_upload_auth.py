@@ -271,7 +271,7 @@ def test_onboarding_storage_redacts_api_token() -> None:
 def test_upload_request_targets_real_api_ingestion_route() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
 
-    assert "buildApiCandidateUrls(\"/api/data/upload\", { method: \"POST\", allowSameOriginFallback: false })" in source
+    assert "buildApiCandidateUrls(\"/api/data/upload\", { method: \"POST\", allowSameOriginFallback: true })" in source
 
 
 def test_upload_attempt_reports_nonzero_connecting_progress() -> None:

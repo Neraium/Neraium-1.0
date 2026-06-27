@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildApiUrl } from "../../config";
+import { buildApiCandidateUrls, buildApiUrl } from "../../config";
 
 describe("api path normalization", () => {
   it("keeps canonical api paths unchanged", () => {
     const url = buildApiUrl("/api/data/latest-upload?include_persisted=1");
     expect(url).toContain("/api/data/latest-upload?include_persisted=1");
+  });
+
+  it("uses the same-origin upload route as an API candidate", () => {
+    const urls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: true });
+    expect(urls).toContain("/api/data/upload");
+    const staleHost = ["api", "neraium", "com"].join(".");
+    expect(urls.some((url) => url.includes(staleHost))).toBe(false);
   });
 
   it("normalizes legacy latest-upload shorthand", () => {

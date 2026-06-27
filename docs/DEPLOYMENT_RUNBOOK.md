@@ -15,7 +15,7 @@ python scripts/pilot_rehearsal_check.py
 For production smoke tests:
 
 ```bash
-API_BASE_URL=https://api.neraium.com node scripts/smoke-production.js
+BASE_URL=https://app.neraium.com node scripts/smoke-production.js
 BASE_URL=https://app.neraium.com python scripts/pilot_rehearsal_check.py
 ```
 
@@ -29,7 +29,7 @@ Uploaded CSV analysis and SII ingestion now use every cleaned row from the uploa
 If metrics requires auth for CLI smoke checks:
 
 ```bash
-API_BASE_URL=https://api.neraium.com NERAIUM_API_TOKEN=$NERAIUM_API_TOKEN node scripts/smoke-production.js
+BASE_URL=https://app.neraium.com NERAIUM_API_TOKEN=$NERAIUM_API_TOKEN node scripts/smoke-production.js
 ```
 
 ## GitHub Workflow Discovery

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const DEFAULT_API_BASE_URL = "https://api.neraium.com";
-const API_BASE_URL = (process.env.API_BASE_URL || process.env.BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
+const DEFAULT_BASE_URL = "https://app.neraium.com";
+const API_BASE_URL = (process.env.API_BASE_URL || process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
 const TOKEN = process.env.NERAIUM_API_TOKEN || process.env.API_TOKEN || "";
 const UPLOAD_TIMEOUT_MS = Number(process.env.SMOKE_UPLOAD_TIMEOUT_MS || 45000);
 const POLL_INTERVAL_MS = Number(process.env.SMOKE_POLL_INTERVAL_MS || 1000);

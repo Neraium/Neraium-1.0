@@ -1,34 +1,31 @@
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
-const configuredFallbackApiBaseUrl = import.meta.env.VITE_API_FALLBACK_BASE_URL?.trim().replace(/\/+$/, "");
+const STALE_API_HOST = ["api", "neraium", "com"].join(".");
+
+function normalizeConfiguredApiBaseUrl(value = "") {
+  let normalized = String(value ?? "").trim();
+  while (normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
+  }
+  if (!normalized) return "";
+
+  try {
+    const url = new URL(normalized);
+    return url.hostname === STALE_API_HOST ? "" : normalized;
+  } catch {
+    return normalized;
+  }
+}
+
+const configuredApiBaseUrl = normalizeConfiguredApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+const configuredFallbackApiBaseUrl = normalizeConfiguredApiBaseUrl(import.meta.env.VITE_API_FALLBACK_BASE_URL);
 const isProductionBuild = import.meta.env.PROD;
 const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? "45000");
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiTimeoutMs > 0
   ? configuredApiTimeoutMs
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 300000);
-const PRODUCTION_API_FALLBACK = "https://api.neraium.com";
-const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? PRODUCTION_API_FALLBACK : "http://127.0.0.1:8010");
+const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
-
-function appSiblingApiBaseUrl() {
-  if (typeof window === "undefined" || !isProductionBuild) {
-    return "";
-  }
-
-  const { protocol, hostname } = window.location;
-  if (protocol !== "https:" || !hostname) {
-    return "";
-  }
-  if (hostname === "app.neraium.com") {
-    return PRODUCTION_API_FALLBACK;
-  }
-  if (hostname.endsWith(".neraium.com")) {
-    return `https://api.${hostname.split(".").slice(-2).join(".")}`;
-  }
-  return "";
-}
-
 function isUnsafeMixedContentTarget(apiBaseUrl) {
   if (typeof window === "undefined" || !apiBaseUrl) {
     return false;
@@ -49,35 +46,30 @@ function shouldIncludeSameOriginFallback(path, method = "GET") {
   if (!isProductionBuild) {
     return true;
   }
+  if (normalizedPath.startsWith("/api/") || normalizedPath === "/api") {
+    return true;
+  }
   if (["GET", "HEAD"].includes(normalizedMethod)) {
     return true;
   }
-  return !normalizedPath.startsWith("/api/");
+  return false;
 }
 
 function apiBaseCandidates(path = "/api/health", method = "GET", allowSameOriginFallback = null) {
-  const siblingApi = appSiblingApiBaseUrl();
-  const productionFallback = isProductionBuild ? PRODUCTION_API_FALLBACK : "";
   const configuredPrimary = API_BASE_URL;
   const configuredFallback = configuredFallbackApiBaseUrl;
   const includeSameOriginFallback = allowSameOriginFallback ?? shouldIncludeSameOriginFallback(path, method);
 
-  // In production, never let mutating API requests fall through to the
-  // static app origin. Upload/reset endpoints must target a real API host so
-  // route mismatches surface once instead of generating same-origin 404 noise.
   const candidates = isProductionBuild
     ? [
-      configuredPrimary || null,
-      productionFallback || null,
-      siblingApi || null,
-      configuredFallback || null,
       includeSameOriginFallback ? "" : null,
+      configuredPrimary || null,
+      configuredFallback || null,
     ]
     : [
       configuredPrimary,
       configuredFallback,
-      siblingApi,
-      productionFallback,
+      includeSameOriginFallback ? "" : null,
     ];
 
   const seen = new Set();
@@ -302,7 +294,7 @@ export async function apiFetch(path, options = {}) {
 export const API_CONFIG_WARNING = configuredApiBaseUrl
   ? ""
   : isProductionBuild
-    ? "VITE_API_BASE_URL is not configured for this production build. Using HTTPS Neraium API fallback."
+    ? ""
     : "VITE_API_BASE_URL is not configured. Using local development API.";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
