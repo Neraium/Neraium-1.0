@@ -200,11 +200,23 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
           return;
         }
         const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
-        const errorType = payload?.error_type ? ` (${payload.error_type})` : "";
-        const error = new Error(detail ? `${detail}${errorType}` : `Unexpected response: ${xhr.status}`);
+        const errorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
+        console.error("Upload HTTP error", {
+          url: uploadUrls[index],
+          attempt: index + 1,
+          status: xhr.status,
+          errorType,
+          payload,
+          responseText: xhr.responseText,
+        });
+        const error = new Error(detail ? String(detail) : `Unexpected response: ${xhr.status}`);
         error.name = "UploadRequestError";
         error.status = xhr.status;
+        error.errorType = errorType;
+        error.detail = detail;
         error.payload = payload;
+        error.responseText = xhr.responseText;
+        error.apiBaseUrl = uploadUrls[index];
         reject(error);
       };
 

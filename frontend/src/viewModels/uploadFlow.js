@@ -113,20 +113,24 @@ export function buildUploadRequestError(response, payload, phase) {
 
 export function classifyUploadError(error, phase) {
   if (error?.name === "UploadRequestError") {
+    const payloadErrorType = error?.payload?.error_type ?? error?.payload?.detail?.error_type ?? null;
+    const payloadDetail = error?.payload?.message ?? error?.payload?.detail?.message ?? error?.payload?.detail ?? error?.payload?.error ?? null;
+    const requestErrorType = error.errorType ?? payloadErrorType;
+    const requestDetail = error.detail ?? payloadDetail ?? error.message;
     const isAuthDuringPolling = phase === "poll" && (error.status === 401 || error.status === 403);
-    const isMissingStatusDuringPoll = phase === "poll" && error.status === 404 && error.errorType === "upload_session_missing";
+    const isMissingStatusDuringPoll = phase === "poll" && error.status === 404 && requestErrorType === "upload_session_missing";
     return {
       state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error",
       retryable: phase === "poll" && error.retryable,
       status: error.status,
-      errorType: error.errorType,
+      errorType: requestErrorType,
       finalMessage: isMissingStatusDuringPoll
         ? "Upload status unavailable. The backend may have restarted or another ECS task may be serving polling."
         : null,
       message: operatorUploadMessage({
         status: error.status,
-        errorType: error.errorType,
-        detail: error.detail,
+        errorType: requestErrorType,
+        detail: requestDetail,
         phase,
       }),
     };
@@ -139,7 +143,9 @@ export function classifyUploadError(error, phase) {
       errorType: error?.name === "ApiTimeoutError" ? "timeout" : "network",
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-        : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
+        : error?.name === "ApiTimeoutError"
+          ? "Upload timed out."
+          : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
     };
   }
   if (error instanceof TypeError) {
@@ -198,15 +204,23 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "upload_too_large" || status === 413) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "Upload exceeds the maximum allowed file size.";
+      : "File too large. Maximum supported size is 250 MB.";
   }
-  if (errorType === "job_not_found" || status === 404) {
-    return "Upload processing interrupted.";
+  if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408) {
+    return phase === "poll"
+      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
+      : "Upload timed out.";
+  }
+  if (errorType === "csv_parse_error" || errorType === "processing_error") {
+    return detail ? `CSV could not be parsed: ${normalizeErrorMessage(detail)}` : "CSV could not be parsed.";
+  }
+  if (errorType === "job_not_found" || status === 404 || status === 405) {
+    return phase === "upload" ? "Upload endpoint unavailable." : "Upload status unavailable.";
   }
   if (errorType === "sii_processing_failure") {
     return detail ? `Analysis processing failure: ${normalizeErrorMessage(detail)}` : "Analysis processing failure.";
   }
-  if (status === 408 || status === 425 || status === 429 || status >= 500) {
+  if (status === 425 || status === 429 || status >= 500) {
     return phase === "poll"
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : (typeof detail === "string" && detail.trim()

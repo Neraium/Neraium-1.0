@@ -42,6 +42,15 @@ UPLOAD_STATUS_RATE_LIMIT = 240
 UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
 
 
+def format_upload_capacity(size_bytes: int) -> str:
+    size = max(int(size_bytes or 0), 0)
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.0f} MB"
+    if size >= 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size} bytes"
+
+
 def _request_client_ip(request: Request) -> str:
     forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
     if forwarded_for:
@@ -406,6 +415,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             content={
                 "status": "FAILED",
                 "processing_state": "failed",
+                "error_type": "unsupported_file_type",
                 "message": "Only .csv, .txt, and .json telemetry files are supported.",
             },
         )
@@ -424,6 +434,13 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         )
 
     content_type = (file.content_type or "").lower()
+    logger.info(
+        "upload_request_started filename=%s content_type=%s content_length=%s max_upload_size_bytes=%s",
+        filename,
+        content_type or "unknown",
+        request.headers.get("content-length"),
+        max_size_bytes,
+    )
     auth_context = getattr(request.state, "auth_context", {})
     actor = (
         auth_context.get("auth_subject")
@@ -454,7 +471,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                         content={
                             "status": "FAILED",
                             "error_type": "upload_too_large",
-                            "message": f"Upload exceeds maximum allowed size of {max_size_bytes} bytes.",
+                            "message": f"File too large. Maximum supported size is {format_upload_capacity(max_size_bytes)}.",
+                            "max_upload_size_bytes": max_size_bytes,
+                            "received_size_bytes": file_size_bytes,
                         },
                     )
                 if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
@@ -471,9 +490,12 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 content={
                     "status": "FAILED",
                     "processing_state": "failed",
-                    "message": "CSV file is empty.",
+                    "error_type": "csv_parse_error",
+                    "message": "CSV could not be parsed. The file is empty.",
                 },
             )
+
+        logger.info("upload_request_bytes_received filename=%s size_bytes=%s content_type=%s", filename, file_size_bytes, content_type or "unknown")
 
         job_id = uuid.uuid4().hex
         request_id = getattr(request.state, "request_id", None)
