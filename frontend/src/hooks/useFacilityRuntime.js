@@ -41,6 +41,7 @@ export default function useFacilityRuntime({
     endpoint: formatEndpoint(API_BASE_URL),
     message: "",
     queue: null,
+    diagnostics: null,
   });
   const [systems, setSystems] = useState([]);
   const [systemsState, setSystemsState] = useState("loading");
@@ -84,6 +85,7 @@ export default function useFacilityRuntime({
       const queueMetrics = healthPayload?.ready?.queue_operational_metrics
         ?? healthPayload?.ready?.details?.queue_operational_metrics
         ?? null;
+      const diagnostics = healthPayload?.ready?.diagnostics ?? healthPayload?.diagnostics ?? null;
       apiStateRef.current = "online";
       setApiStatus({
         state: "online",
@@ -94,6 +96,7 @@ export default function useFacilityRuntime({
         endpoint: formatEndpoint(API_BASE_URL),
         message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
         queue: queueMetrics,
+        diagnostics,
       });
       return true;
     } catch {
@@ -107,6 +110,7 @@ export default function useFacilityRuntime({
         endpoint: formatEndpoint(API_BASE_URL),
         message: "Backend connection unavailable. System data could not be loaded.",
         queue: null,
+        diagnostics: null,
       });
       setBackendError("Backend connection unavailable. System data could not be loaded.");
       return false;

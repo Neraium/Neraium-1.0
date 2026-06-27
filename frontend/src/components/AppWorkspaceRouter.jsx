@@ -189,6 +189,7 @@ export default function AppWorkspaceRouter({
       >
         <Suspense fallback={renderLoadingPanel("Loading Technical", "Preparing technical workspace...")}>
           <HelpChangelogWorkspace
+            apiStatus={apiStatus}
             onBackToGate={() => setActiveWorkspace("system-body")}
             onWorkspaceNavigate={setActiveWorkspace}
           />

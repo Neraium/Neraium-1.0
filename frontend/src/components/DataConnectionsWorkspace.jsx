@@ -13,7 +13,7 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
-import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -525,8 +525,30 @@ export default function DataConnectionsWorkspace({
     uploadInputRef.current?.click();
   }
 
-  function retryCurrentBatch() {
-    void handleUpload();
+  async function retryCurrentBatch() {
+    const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
+    if (!currentJobId) {
+      await handleUpload();
+      return;
+    }
+    setUploadError("");
+    setUploadState("running_sii");
+    setUploadProcessingFlag(true);
+    try {
+      const retryResponse = await retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode });
+      const payload = retryResponse.payload;
+      const jobId = uploadStateView.resolveCurrentUploadJobId(payload) || payload?.job_id || currentJobId;
+      setUploadJob(normalizeStatusPayload(payload, jobId));
+      await pollUploadStatus(jobId, payload?.status_url);
+    } catch (error) {
+      const status = Number(error?.status ?? 0);
+      if ((status === 404 || status === 410) && selectedFiles.length) {
+        await handleUpload();
+        return;
+      }
+      const classified = classifyUploadError(error, "upload");
+      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: currentJobId, keepStoredJobId: true });
+    }
   }
 
   return (
@@ -553,8 +575,8 @@ export default function DataConnectionsWorkspace({
         uploadTransfer={progressUploadTransfer}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
-        onRetryFailedUploads={retryCurrentBatch}
-        onReprocessCurrentBatch={retryCurrentBatch}
+        onRetryFailedUploads={() => { void retryCurrentBatch(); }}
+        onReprocessCurrentBatch={() => { void retryCurrentBatch(); }}
         onResetWorkspace={() => { void clearUploadClientState(); }}
       />
     </div>

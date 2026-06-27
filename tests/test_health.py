@@ -58,6 +58,57 @@ def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
     assert payload["checks"]["startup"] == "ok"
 
 
+
+
+def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path) -> None:
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+        process_role="api",
+    )
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/api/ready")
+
+    assert response.status_code == 200
+    payload = response.json()
+    diagnostics = payload["diagnostics"]
+    assert diagnostics["api"]["upload_endpoint"] == "/api/data/upload"
+    assert diagnostics["upload"]["queue_backend"] in {"runtime_db", "s3"}
+    assert diagnostics["upload"]["upload_state_backend"] in {"local", "runtime_db", "s3"}
+    assert diagnostics["worker"]["configured_start_background_workers"] is False
+    assert diagnostics["deployment"]["build_sha"]
+    assert "split_role_shared_upload_state_not_configured" in payload["config_warnings"]
+
+
+def test_health_endpoint_exposes_last_upload_failure_diagnostic(tmp_path) -> None:
+    settings = Settings(
+        app_env="development",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["*"],
+        runtime_dir=tmp_path,
+    )
+    with TestClient(create_app(settings)) as client:
+        from app.services.upload_jobs import write_job
+
+        write_job({
+            "job_id": "diagnostic-failure",
+            "status": "FAILED",
+            "processing_state": "failed",
+            "error_type": "csv_validation_error",
+            "message": "CSV file is empty.",
+        })
+        response = client.get("/api/health")
+
+    assert response.status_code == 503
+    upload = response.json()["diagnostics"]["upload"]
+    assert upload["latest_upload_session_id"] == "diagnostic-failure"
+    assert upload["latest_upload_error_type"] == "csv_validation_error"
+    assert upload["latest_upload_message"] == "CSV file is empty."
+
 def test_ready_endpoint_returns_not_ready_when_startup_failed() -> None:
     with TestClient(create_app()) as client:
         STARTUP_STATUS["startup_complete"] = True

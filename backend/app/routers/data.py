@@ -643,6 +643,73 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     }
 
 
+@router.post("/upload/{job_id}/retry", status_code=202, dependencies=[Depends(require_operator_role)])
+async def retry_upload_analysis(request: Request, job_id: str):
+    requested_job_id = str(job_id or "").strip()
+    if not UPLOAD_JOB_ID_PATTERN.match(requested_job_id):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "FAILED",
+                "error_type": "invalid_upload_job",
+                "message": "Upload job id is invalid.",
+            },
+        )
+
+    status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
+    file_path = status_payload.get("file_path")
+    if not status_payload or not file_path or not Path(str(file_path)).exists():
+        return JSONResponse(
+            status_code=404,
+            content={
+                "job_id": requested_job_id,
+                "status": "FAILED",
+                "error_type": "upload_source_missing",
+                "message": "The uploaded source file is no longer available. Select the CSV again.",
+                "status_url": f"/api/data/upload-status/{requested_job_id}",
+            },
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    retried = {
+        **status_payload,
+        "job_id": requested_job_id,
+        "status": "PENDING",
+        "processing_state": "queued",
+        "percent": 5,
+        "progress": 5,
+        "progress_label": "Retry queued.",
+        "message": "Retry queued.",
+        "error": None,
+        "error_type": None,
+        "result_available": False,
+        "first_usable_available": False,
+        "sii_completed": False,
+        "replay_ready": False,
+        "propagation_stage": "queued",
+        "propagation_progress": 5,
+        "propagation_label": "Retry queued.",
+        "retry_requested_at": now,
+        "worker_state": "starting",
+        "worker_last_seen_at": now,
+    }
+    upload_jobs.write_job(retried)
+    enqueue_upload_job(requested_job_id)
+    _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+    return {
+        "job_id": requested_job_id,
+        "status": "PENDING",
+        "processing_state": "queued",
+        "percent": 5,
+        "progress": 5,
+        "progress_label": "Retry queued.",
+        "message": "Retry queued.",
+        "status_url": f"/api/data/upload-status/{requested_job_id}",
+        "worker_state": "starting",
+        "worker_last_seen_at": now,
+    }
+
+
 @router.get("/upload-status/{job_id}")
 async def upload_status(request: Request, job_id: str):
     if _strict_auth_mode(request):

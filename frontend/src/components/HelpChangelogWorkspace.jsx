@@ -18,10 +18,39 @@ const CHANGELOG_ENTRIES = [
   },
 ];
 
+function displayValue(value) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value === null || value === undefined || value === "") return "Unknown";
+  return String(value);
+}
+
+function diagnosticsRows(diagnostics) {
+  if (!diagnostics) return [];
+  return [
+    ["API host", `${displayValue(diagnostics.api?.backend_host)}:${displayValue(diagnostics.api?.backend_port)}`],
+    ["Upload route", displayValue(diagnostics.api?.upload_endpoint)],
+    ["Build", displayValue(diagnostics.deployment?.build_sha)],
+    ["Environment", displayValue(diagnostics.deployment?.app_env)],
+    ["Process role", displayValue(diagnostics.deployment?.process_role)],
+    ["Upload state", displayValue(diagnostics.upload?.upload_state_backend)],
+    ["Queue", displayValue(diagnostics.upload?.queue_backend)],
+    ["Shared state", displayValue(diagnostics.upload?.upload_state_shared_configured)],
+    ["Worker", displayValue(diagnostics.worker?.startup_worker_started || diagnostics.worker?.configured_start_background_workers)],
+    ["Latest upload", displayValue(diagnostics.upload?.latest_upload_session_id)],
+    ["Latest status", displayValue(diagnostics.upload?.latest_upload_status || diagnostics.upload?.latest_upload_state)],
+    ["Latest error", displayValue(diagnostics.upload?.latest_upload_error_type || diagnostics.upload?.latest_upload_message)],
+  ];
+}
+
 export default function HelpChangelogWorkspace({
+  apiStatus = null,
   onBackToGate = null,
   onWorkspaceNavigate = null,
 }) {
+  const diagnostics = apiStatus?.diagnostics ?? null;
+  const rows = diagnosticsRows(diagnostics);
+  const warnings = Array.isArray(diagnostics?.warnings) ? diagnostics.warnings : [];
   return (
     <section className="workspace-surface help-changelog">
       <div className="observation-center__back-control">
@@ -69,6 +98,29 @@ export default function HelpChangelogWorkspace({
             <li>No automatic root-cause claim.</li>
             <li>No hidden cross-site sharing unless the operator exports records.</li>
           </ul>
+        </Panel>
+
+        <Panel title="Production diagnostics" className="span-12 observation-center__panel">
+          {rows.length === 0 ? (
+            <EmptyState title="Diagnostics unavailable" body="Backend diagnostics will appear after the next health check." compact />
+          ) : (
+            <>
+              <ul className="compact-list" data-testid="production-diagnostics">
+                {rows.map(([label, value]) => (
+                  <li key={label}>
+                    <span className="metadata-text">{label}</span>
+                    <strong>{value}</strong>
+                  </li>
+                ))}
+              </ul>
+              {warnings.length > 0 ? (
+                <div className="upload-partial-alert" role="status">
+                  <strong>Deployment warnings</strong>
+                  <p>{warnings.join(", ")}</p>
+                </div>
+              ) : null}
+            </>
+          )}
         </Panel>
 
         <Panel title="Version history" className="span-12 observation-center__panel">

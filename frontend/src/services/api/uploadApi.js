@@ -285,3 +285,25 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 10
     uploadAttempt(0, 0);
   });
 }
+
+
+export async function retryUploadAnalysisJob({ jobId, apiFetch, accessCode } = {}) {
+  const cleanJobId = String(jobId ?? "").trim();
+  if (!cleanJobId) {
+    throw new Error("No uploaded telemetry job is available to retry.");
+  }
+  const response = await apiFetch(`/api/data/upload/${encodeURIComponent(cleanJobId)}/retry`, {
+    method: "POST",
+    accessCode,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
+    const error = new Error(detail || `Unexpected response: ${response.status}`);
+    error.name = "UploadRequestError";
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+  return { ok: true, status: response.status, payload: normalizeUploadJob(payload) };
+}

@@ -171,6 +171,55 @@ def test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
     assert status_payload["job_id"] == payload["job_id"]
 
 
+
+def test_retry_upload_analysis_requeues_current_uploaded_dataset(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "a" * 32
+    source_path = tmp_path / "retry-source.csv"
+    source_path.write_text("timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Plant,74,55\n2026-05-01T08:05:00Z,Plant,75,56\n", encoding="utf-8")
+    write_job({
+        "job_id": job_id,
+        "filename": "retry-source.csv",
+        "file_path": str(source_path),
+        "status": "FAILED",
+        "processing_state": "failed",
+        "error_type": "processing_error",
+        "message": "Previous analysis failed.",
+    })
+
+    response = client.post(f"/api/data/upload/{job_id}/retry")
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["job_id"] == job_id
+    assert payload["status"] == "PENDING"
+    status_payload = wait_for_terminal_upload_status(client, payload["status_url"])
+    assert status_payload["status"] == "COMPLETE"
+    assert status_payload["result_available"] is True
+
+
+def test_retry_upload_analysis_requires_existing_source_file(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "b" * 32
+    write_job({
+        "job_id": job_id,
+        "filename": "missing.csv",
+        "file_path": str(tmp_path / "missing.csv"),
+        "status": "FAILED",
+        "processing_state": "failed",
+        "error_type": "processing_error",
+        "message": "Previous analysis failed.",
+    })
+
+    response = client.post(f"/api/data/upload/{job_id}/retry")
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error_type"] == "upload_source_missing"
+    assert "Select the CSV again" in payload["message"]
+
 def test_create_upload_job_enforces_streaming_size_limit() -> None:
     class FakeUploadFile:
         filename = "oversize.csv"

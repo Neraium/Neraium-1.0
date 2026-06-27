@@ -280,3 +280,31 @@ def test_upload_attempt_reports_nonzero_connecting_progress() -> None:
     assert "xhr.open(\"POST\", uploadUrls[index], true);" in source
     assert "percent: file.size > 0 ? 1 : 0" in source
     assert "Connecting to telemetry ingestion." in source
+
+
+def test_frontend_surfaces_backend_runtime_diagnostics() -> None:
+    runtime_source = read_frontend(USE_FACILITY_RUNTIME)
+    router_source = read_frontend(ROOT / "frontend" / "src" / "components" / "AppWorkspaceRouter.jsx")
+    technical_source = read_frontend(ROOT / "frontend" / "src" / "components" / "HelpChangelogWorkspace.jsx")
+
+    assert "const diagnostics = healthPayload?.ready?.diagnostics ?? healthPayload?.diagnostics ?? null;" in runtime_source
+    assert "diagnostics," in runtime_source
+    assert "apiStatus={apiStatus}" in router_source
+    assert "Production diagnostics" in technical_source
+    assert 'data-testid="production-diagnostics"' in technical_source
+    assert "Deployment warnings" in technical_source
+    assert "latest_upload_error_type" in technical_source
+
+
+def test_retry_analysis_targets_current_uploaded_job() -> None:
+    upload_api_source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
+    workspace_source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
+    panel_source = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
+
+    assert "export async function retryUploadAnalysisJob" in upload_api_source
+    assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
+    assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
+    assert "await handleUpload();" in workspace_source
+    assert "File selected. Upload is required before analysis." in panel_source
+    assert "Upload and Analyze" in panel_source
+    assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

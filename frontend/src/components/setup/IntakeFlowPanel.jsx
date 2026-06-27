@@ -56,7 +56,7 @@ function uploadProgressStage(uploadState, uploadJob) {
   if (state === "uploading") return "Sending telemetry.";
   if (workerState === "starting" || processingState === "queued") return "Telemetry received. Waiting for analysis to begin.";
   if (workerState === "running" || workerState === "active" || state === "running_sii") return "Processing telemetry. Building system story.";
-  if (state === "validated") return "Ready to analyze.";
+  if (state === "validated") return "File selected. Upload is required before analysis.";
   return "Analysis status unavailable.";
 }
 
@@ -226,7 +226,7 @@ export default function IntakeFlowPanel({
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
             <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose Telemetry File</button>
             <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!selectedFiles?.length || isUploadProcessing(uploadState)}>
-              {isUploadProcessing(uploadState) ? "Processing telemetry" : "Analyze System"}
+              {isUploadProcessing(uploadState) ? "Processing telemetry" : hasSelectedFiles ? "Upload and Analyze" : "Analyze System"}
             </button>
           </div>
         </div>
@@ -244,8 +244,9 @@ export default function IntakeFlowPanel({
               </button>
               {hasSelectedFiles ? (
                 <button
-                  type="submit"
+                  type="button"
                   className="command-button"
+                  onClick={() => onRetryFailedUploads?.()}
                 >
                   Retry Analysis
                 </button>

@@ -1,7 +1,10 @@
-from fastapi import APIRouter, status
+import os
+
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.services.runtime_db import queue_metrics, queue_operational_metrics
+from app.core.config import get_settings
+from app.services.runtime_db import queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
 from app.services.upload_session_service import resolve_latest_upload_session, session_metrics_snapshot
 from app.services.sii_runner import build_runner_status
@@ -10,10 +13,79 @@ from app.services.upload_state_repository import shared_state_configured, upload
 router = APIRouter(tags=["health"])
 
 
+def _build_sha() -> str:
+    for key in ("NERAIUM_BUILD_SHA", "GIT_SHA", "RENDER_GIT_COMMIT", "VERCEL_GIT_COMMIT_SHA", "HEROKU_SLUG_COMMIT"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value[:12]
+    return "unknown"
+
+
+def _production_config_warnings(settings, *, state_shared: bool, queue_backend: str) -> list[str]:
+    warnings: list[str] = []
+    app_env = str(settings.app_env or "").strip().lower()
+    if app_env not in {"prod", "production"}:
+        return warnings
+    if not any("app.neraium.com" in str(origin) for origin in settings.cors_origins) and not settings.cors_origin_regex:
+        warnings.append("production_cors_origin_missing")
+    if str(settings.process_role or "").lower() in {"api", "worker"} and not state_shared:
+        warnings.append("split_role_shared_upload_state_not_configured")
+    if queue_backend == "runtime_db" and str(settings.process_role or "").lower() == "api" and not settings.start_background_workers:
+        warnings.append("api_runtime_db_queue_requires_local_worker_or_poll_processing")
+    if not os.access(settings.runtime_dir, os.W_OK):
+        warnings.append("runtime_dir_not_writable")
+    return warnings
+
+
+def runtime_diagnostics(settings=None) -> dict[str, object]:
+    settings = settings or get_settings()
+    state_backend = upload_state_backend()
+    state_shared = shared_state_configured()
+    queue_backend = upload_queue_backend()
+    latest_session = resolve_latest_upload_session(include_persisted=True)
+    snapshot = latest_session.get("snapshot") if isinstance(latest_session.get("snapshot"), dict) else {}
+    warnings = _production_config_warnings(settings, state_shared=state_shared, queue_backend=queue_backend)
+    return {
+        "deployment": {
+            "app_env": settings.app_env,
+            "process_role": settings.process_role,
+            "build_sha": _build_sha(),
+            "runtime_dir": str(settings.runtime_dir),
+            "runtime_dir_writable": os.access(settings.runtime_dir, os.W_OK),
+        },
+        "api": {
+            "backend_host": settings.backend_host,
+            "backend_port": settings.backend_port,
+            "upload_endpoint": "/api/data/upload",
+            "upload_status_endpoint": "/api/data/upload-status/{job_id}",
+            "cors_origins": settings.cors_origins,
+            "cors_origin_regex": settings.cors_origin_regex,
+        },
+        "upload": {
+            "upload_state_backend": state_backend,
+            "upload_state_shared_configured": state_shared,
+            "queue_backend": queue_backend,
+            "max_upload_size_bytes": settings.max_upload_size_bytes,
+            "max_pending_upload_jobs": settings.max_pending_upload_jobs,
+            "latest_upload_session_id": latest_session.get("upload_session_id"),
+            "latest_upload_state": latest_session.get("session_state"),
+            "latest_upload_status": snapshot.get("status") or snapshot.get("processing_state"),
+            "latest_upload_error_type": snapshot.get("error_type"),
+            "latest_upload_message": snapshot.get("message") or snapshot.get("error"),
+        },
+        "worker": {
+            "configured_start_background_workers": settings.start_background_workers,
+            "startup_worker_started": STARTUP_STATUS.get("upload_worker_started", False),
+            "data_poller_started": STARTUP_STATUS.get("data_poller_started", False),
+        },
+        "warnings": warnings,
+    }
+
+
 @router.get("/health")
-def read_health() -> JSONResponse:
+def read_health(request: Request) -> JSONResponse:
     snapshot = service_health_snapshot()
-    payload = {**snapshot, "service": "neraium-api"}
+    payload = {**snapshot, "service": "neraium-api", "diagnostics": runtime_diagnostics(request.app.state.settings)}
     return JSONResponse(
         status_code=status.HTTP_200_OK if snapshot["status"] == "ok" else status.HTTP_503_SERVICE_UNAVAILABLE,
         content=payload,
@@ -21,7 +93,7 @@ def read_health() -> JSONResponse:
 
 
 @router.get("/ready")
-def read_ready() -> JSONResponse:
+def read_ready(request: Request) -> JSONResponse:
     checks: dict[str, str] = {
         "startup": "ok",
         "runtime_db": "ok",
@@ -63,6 +135,7 @@ def read_ready() -> JSONResponse:
         checks["inference_path"] = "error"
 
     is_ready = all(value == "ok" for value in checks.values())
+    diagnostics = runtime_diagnostics(request.app.state.settings)
     payload = {
         "status": "ready" if is_ready else "not_ready",
         "service": "neraium-api",
@@ -76,6 +149,8 @@ def read_ready() -> JSONResponse:
         "data_poller_started": STARTUP_STATUS.get("data_poller_started", False),
         "upload_state_backend": upload_state_backend(),
         "upload_state_shared_configured": shared_state_configured(),
+        "diagnostics": diagnostics,
+        "config_warnings": diagnostics.get("warnings", []),
     }
     return JSONResponse(
         status_code=status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE,
