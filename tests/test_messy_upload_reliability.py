@@ -164,6 +164,13 @@ def test_relationship_findings_persist_source_rows_and_windows() -> None:
     assert {anchor["window"] for anchor in first["source_rows"]} >= {"baseline_start", "recent_end"}
     assert all(ref.get("baseline_window") and ref.get("recent_window") for ref in first["evidence_refs"])
 
+    analysis = result["analysis"]
+    assert analysis == result["analysis_explanation"]
+    assert analysis["relationships"]
+    assert analysis["relationships"][0]["source_rows"]
+    assert analysis["evidence"]
+    assert analysis["recommendations"]
+
     evidence = read_evidence_run(result["job_id"])
     assert evidence["variables"]
     assert evidence["source_rows"]

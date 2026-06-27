@@ -593,4 +593,10 @@ def test_analysis_explanation_builds_decision_outputs_from_upload_result() -> No
     assert explanation["insights"][0]["evidence"][0]["confidence"] == "high"
     assert "Correlation delta: 1.11" in explanation["insights"][0]["evidence"][0]["relevant_metric_changes"]
     assert explanation["systems"][0]["health_status"] == "Structural drift observed"
+    assert explanation["relationships"][0]["columns"] == ["pressure", "flow"]
+    assert explanation["relationships"][0]["confidence"] == "high"
+    assert explanation["evidence"][0]["what_happened"]
+    assert explanation["evidence"][0]["why_neraium_believes_this"]
+    assert explanation["recommendations"][0]["recommendation"]
+    assert {"executive_summary", "systems", "relationships", "insights", "fingerprint", "evidence", "recommendations"}.issubset(explanation)
     assert "operating fingerprint is changing" in explanation["fingerprint"]["meaning"]
