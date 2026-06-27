@@ -44,6 +44,8 @@ UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
 
 def format_upload_capacity(size_bytes: int) -> str:
     size = max(int(size_bytes or 0), 0)
+    if size >= 1024 * 1024 * 1024:
+        return f"{size / (1024 * 1024 * 1024):.0f} GB"
     if size >= 1024 * 1024:
         return f"{size / (1024 * 1024):.0f} MB"
     if size >= 1024:
@@ -420,7 +422,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             },
         )
 
-    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 600 * 1024 * 1024))
+    max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 10 * 1024 * 1024 * 1024))
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
         return JSONResponse(

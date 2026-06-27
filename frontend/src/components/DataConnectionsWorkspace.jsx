@@ -16,9 +16,9 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
-const MAX_UPLOAD_BYTES = 600 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
-const UPLOAD_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
 
@@ -38,6 +38,7 @@ function formatUploadTransferLabel(progress) {
 
 function formatFileSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "Awaiting file";
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(bytes / 1024, 1).toFixed(1)} KB`;
 }

@@ -45,7 +45,7 @@ describe("uploadFlow poll error classification", () => {
     error.status = 413;
     error.payload = {
       error_type: "upload_too_large",
-      message: "File too large. Maximum supported size is 600 MB.",
+      message: "File too large. Maximum supported size is 10 GB.",
     };
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
@@ -53,7 +53,7 @@ describe("uploadFlow poll error classification", () => {
       retryable: false,
       status: 413,
       errorType: "upload_too_large",
-      message: "File too large. Maximum supported size is 600 MB.",
+      message: "File too large. Maximum supported size is 10 GB.",
     });
   });
 

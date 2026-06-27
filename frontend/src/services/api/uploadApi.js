@@ -75,11 +75,11 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   const size = Number(fileSizeBytes) || 0;
   const base = Number(baseTimeoutMs) || 0;
   const mobileMinimumMs = 90 * 1000;
-  const largeFileMinimumMs = size >= 25 * 1024 * 1024 ? 3 * 60 * 1000 : mobileMinimumMs;
-  return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 10 * 60 * 1000);
+  const largeFileMinimumMs = size >= 1024 * 1024 * 1024 ? 30 * 60 * 1000 : size >= 25 * 1024 * 1024 ? 3 * 60 * 1000 : mobileMinimumMs;
+  return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 10 * 60 * 1000, onProgress, accessCode } = {}) {
+export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
