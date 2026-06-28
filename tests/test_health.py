@@ -52,9 +52,9 @@ def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
     payload = response.json()
     assert "upload_state_backend" in payload
     assert "upload_state_shared_configured" in payload
-    assert "details" in payload
-    assert "queue_operational_metrics" in payload["details"]
-    assert "upload_session_metrics" in payload["details"]
+    assert payload["details"]["mode"] == "lightweight"
+    assert "queue_operational_metrics" not in payload["details"]
+    assert "upload_session_metrics" not in payload["details"]
     assert payload["checks"]["startup"] == "ok"
 
 
@@ -70,9 +70,9 @@ def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path) -> None:
         process_role="api",
     )
     with TestClient(create_app(settings)) as client:
-        response = client.get("/api/ready")
+        response = client.get("/api/ready?verbose=true")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     payload = response.json()
     diagnostics = payload["diagnostics"]
     assert diagnostics["api"]["upload_endpoint"] == "/api/data/upload"
@@ -80,6 +80,9 @@ def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path) -> None:
     assert diagnostics["upload"]["upload_state_backend"] in {"local", "runtime_db", "s3"}
     assert diagnostics["worker"]["configured_start_background_workers"] is False
     assert diagnostics["deployment"]["build_sha"]
+    assert payload["status"] == "not_ready"
+    assert payload["checks"]["shared_upload_state"] == "error"
+    assert payload["details"]["mode"] == "verbose"
     assert "split_role_shared_upload_state_not_configured" in payload["config_warnings"]
 
 

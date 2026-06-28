@@ -27,6 +27,8 @@ class UploadQueueLifecycleService:
         write_job: Callable[[dict[str, Any]], None],
         process_json_payload: Callable[..., dict[str, Any]],
         process_csv_file: Callable[..., dict[str, Any]],
+        restore_upload_source: Callable[[str, str], Path],
+        delete_upload_source: Callable[[str | None], None],
     ) -> None:
         self.runtime_state = runtime_state
         self.logger = logger
@@ -36,6 +38,8 @@ class UploadQueueLifecycleService:
         self.write_job = write_job
         self.process_json_payload = process_json_payload
         self.process_csv_file = process_csv_file
+        self.restore_upload_source = restore_upload_source
+        self.delete_upload_source = delete_upload_source
 
     def _read_processing_metadata(self, job_id: str) -> dict[str, Any]:
         """Return the private processing metadata, including file_path when available.
@@ -52,13 +56,32 @@ class UploadQueueLifecycleService:
             private_metadata = {}
         return {**public_metadata, **private_metadata, "job_id": job_id}
 
+    def _resolve_processing_path(self, job_id: str, metadata: dict[str, Any]) -> Path | None:
+        file_path = metadata.get("file_path")
+        path = Path(str(file_path)) if file_path else None
+        if path and path.exists():
+            return path
+
+        source_key = str(metadata.get("shared_upload_source_key") or "").strip()
+        if not source_key:
+            return None
+
+        restored = self.restore_upload_source(job_id, source_key)
+        metadata["file_path"] = str(restored)
+        self.write_job({**metadata, "job_id": job_id, "file_path": str(restored)})
+        return restored
+
     def process_next_queued_upload_job(self) -> bool:
         job_id = claim_next_upload_job()
         if not job_id:
             return False
         metadata = self._read_processing_metadata(job_id)
-        file_path = metadata.get("file_path")
-        if not file_path or not Path(str(file_path)).exists():
+        try:
+            path = self._resolve_processing_path(job_id, metadata)
+        except Exception:
+            self.logger.exception("upload_source_restore_failed job_id=%s filename=%s", job_id, metadata.get("filename"))
+            path = None
+        if path is None or not path.exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
             existing_status = self.read_upload_status(job_id) or {}
             if existing_result or str(existing_status.get("status", "")).upper() == "COMPLETE":
@@ -78,11 +101,11 @@ class UploadQueueLifecycleService:
             )
             return False
         try:
-            path = Path(str(file_path))
             self.write_job(
                 {
                     **metadata,
                     "job_id": job_id,
+                    "file_path": str(path),
                     "status": "PROCESSING",
                     "processing_state": "parsing_telemetry",
                     "percent": 20,
@@ -137,6 +160,7 @@ class UploadQueueLifecycleService:
                 path.unlink(missing_ok=True)
             except OSError:
                 pass
+            self.delete_upload_source(metadata.get("shared_upload_source_key"))
             return bool(result)
         except Exception as exc:
             self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, metadata.get("filename"))

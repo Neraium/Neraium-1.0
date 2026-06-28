@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.services.runtime_db import queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
-from app.services.upload_session_service import resolve_latest_upload_session, session_metrics_snapshot
 from app.services.sii_runner import build_runner_status
+from app.services.upload_session_service import resolve_latest_upload_session, session_metrics_snapshot
 from app.services.upload_state_repository import shared_state_configured, upload_state_backend
 
 router = APIRouter(tags=["health"])
@@ -82,6 +82,29 @@ def runtime_diagnostics(settings=None) -> dict[str, object]:
     }
 
 
+def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
+    checks: dict[str, str] = {
+        "startup": "ok",
+        "runtime_db": "ok",
+        "default_connection": "ok",
+        "shared_upload_state": "ok",
+    }
+    failed_modules = list(STARTUP_STATUS.get("failed_modules") or [])
+    if failed_modules or not STARTUP_STATUS.get("startup_complete", False):
+        checks["startup"] = "error"
+    if not STARTUP_STATUS.get("runtime_db_ready", False):
+        checks["runtime_db"] = "error"
+    if not STARTUP_STATUS.get("default_connection_ready", False):
+        checks["default_connection"] = "error"
+    if (
+        str(settings.app_env or "").strip().lower() in {"prod", "production"}
+        and str(settings.process_role or "").strip().lower() in {"api", "worker"}
+        and not shared_state_configured()
+    ):
+        checks["shared_upload_state"] = "error"
+    return checks, failed_modules
+
+
 @router.get("/health")
 def read_health(request: Request) -> JSONResponse:
     snapshot = service_health_snapshot()
@@ -93,56 +116,48 @@ def read_health(request: Request) -> JSONResponse:
 
 
 @router.get("/ready")
-def read_ready(request: Request) -> JSONResponse:
-    checks: dict[str, str] = {
-        "startup": "ok",
-        "runtime_db": "ok",
-        "queue": "ok",
-        "inference_path": "ok",
+def read_ready(request: Request, verbose: bool = False) -> JSONResponse:
+    settings = request.app.state.settings
+    checks, failed_modules = readiness_snapshot(settings)
+    diagnostics = runtime_diagnostics(settings)
+    details: dict[str, object] = {
+        "mode": "verbose" if verbose else "lightweight",
     }
-    details: dict[str, object] = {}
 
-    snapshot = service_health_snapshot()
-    latest_session = resolve_latest_upload_session(include_persisted=True)
-    session_state = str(latest_session.get("session_state") or "empty")
-    if snapshot["status"] != "ok":
-        checks["startup"] = "error"
-    if session_state in {"stale", "error"}:
-        checks["upload_session"] = "error"
-    else:
-        checks["upload_session"] = "ok"
-
-    try:
-        metrics = queue_metrics()
-        details["queue_metrics"] = metrics
-        try:
-            details["queue_operational_metrics"] = queue_operational_metrics()
-        except Exception:
-            details["queue_operational_metrics"] = {}
-    except Exception:
-        checks["runtime_db"] = "error"
-        checks["queue"] = "error"
-
-    try:
-        details["runner_status"] = build_runner_status()
+    if verbose:
+        snapshot = service_health_snapshot()
+        latest_session = resolve_latest_upload_session(include_persisted=True)
+        session_state = str(latest_session.get("session_state") or "empty")
+        if snapshot["status"] != "ok":
+            checks["startup"] = "error"
         details["upload_session"] = {
             "state": session_state,
             "source": latest_session.get("session_source"),
             "upload_session_id": latest_session.get("upload_session_id"),
         }
         details["upload_session_metrics"] = session_metrics_snapshot(current_state=session_state)
-    except Exception:
-        checks["inference_path"] = "error"
+        try:
+            details["queue_metrics"] = queue_metrics()
+        except Exception:
+            checks["runtime_db"] = "error"
+            details["queue_metrics"] = {}
+        try:
+            details["queue_operational_metrics"] = queue_operational_metrics()
+        except Exception:
+            details["queue_operational_metrics"] = {}
+        try:
+            details["runner_status"] = build_runner_status()
+        except Exception:
+            details["runner_status"] = {"runner_available": False}
 
     is_ready = all(value == "ok" for value in checks.values())
-    diagnostics = runtime_diagnostics(request.app.state.settings)
     payload = {
         "status": "ready" if is_ready else "not_ready",
         "service": "neraium-api",
         "checks": checks,
         "details": details,
-        "startup_complete": snapshot["startup_complete"],
-        "failed_modules": snapshot["failed_modules"],
+        "startup_complete": bool(STARTUP_STATUS.get("startup_complete", False)),
+        "failed_modules": failed_modules,
         "runtime_db_ready": STARTUP_STATUS.get("runtime_db_ready", False),
         "default_connection_ready": STARTUP_STATUS.get("default_connection_ready", False),
         "upload_worker_started": STARTUP_STATUS.get("upload_worker_started", False),

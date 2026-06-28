@@ -28,7 +28,7 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, upload_state_backend
+from app.services.upload_state_repository import persist_upload_source, read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, shared_state_configured, upload_state_backend
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
@@ -502,6 +502,14 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         job_id = uuid.uuid4().hex
         request_id = getattr(request.state, "request_id", None)
         request.state.upload_session_id = job_id
+        shared_upload_source_key = None
+        if shared_state_configured():
+            shared_upload_source_key = persist_upload_source(
+                job_id,
+                temp_path,
+                filename=filename,
+                content_type=content_type or None,
+            )
         summary = {
             "job_id": job_id,
             "filename": filename,
@@ -519,6 +527,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,
             "file_path": temp_path,
+            "shared_upload_source_key": shared_upload_source_key,
             "file_size_bytes": file_size_bytes,
             "content_type": content_type,
             "initiated_by": actor,
@@ -682,7 +691,9 @@ async def retry_upload_analysis(request: Request, job_id: str):
 
     status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
     file_path = status_payload.get("file_path")
-    if not status_payload or not file_path or not Path(str(file_path)).exists():
+    shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
+    has_local_file = bool(file_path and Path(str(file_path)).exists())
+    if not status_payload or (not has_local_file and not shared_upload_source_key):
         return JSONResponse(
             status_code=404,
             content={

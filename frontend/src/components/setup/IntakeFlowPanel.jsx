@@ -173,6 +173,7 @@ export default function IntakeFlowPanel({
   propagationLabel,
   queuedWorkerDetail = "",
   uploadTransfer,
+  uploadDebug,
   uploadStateMessage,
   batchResults = [],
   onRetryFailedUploads,
@@ -213,6 +214,7 @@ export default function IntakeFlowPanel({
       : [];
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
   const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Analysis failed. Select a new file and try again.")).trim();
+  const showUploadDebug = import.meta.env.DEV;
 
   return (
     <Panel title="Analyze System" className="span-7 workspace-hero-panel upload-ops-panel">
@@ -306,6 +308,30 @@ export default function IntakeFlowPanel({
                 )}
               </div>
             ) : null}
+          </div>
+        ) : null}
+        {showUploadDebug ? (
+          <div
+            className="upload-debug-panel"
+            style={{
+              display: "grid",
+              gap: "6px",
+              marginTop: "10px",
+              padding: "10px 12px",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "8px",
+              background: "rgba(255, 255, 255, 0.03)",
+              fontSize: "0.78rem",
+              overflowWrap: "anywhere",
+            }}
+          >
+            <strong>Upload Debug</strong>
+            <span><strong>apiBaseConfig:</strong> {uploadDebug?.apiBaseConfig || "(same-origin)"}</span>
+            <span><strong>runtimeApiBase:</strong> {uploadDebug?.runtimeApiBaseUrl || "(same-origin)"}</span>
+            <span><strong>routeMode:</strong> {uploadDebug?.routeMode || "same-origin"}</span>
+            <span><strong>uploadUrl:</strong> {uploadDebug?.uploadUrl || "n/a"}</span>
+            <span><strong>response status:</strong> {uploadDebug?.responseStatus ?? "n/a"}</span>
+            <span><strong>response body/error:</strong> {uploadDebug?.responseBodyOrError || "n/a"}</span>
           </div>
         ) : null}
         <details className="upload-secondary-actions">

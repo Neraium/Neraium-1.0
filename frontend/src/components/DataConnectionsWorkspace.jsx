@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
 import {
   normalizeUploadJob,
   uploadStagePercent,
@@ -16,7 +17,7 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
@@ -107,6 +108,14 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
+  const [uploadDebug, setUploadDebug] = useState({
+    apiBaseConfig: CONFIGURED_API_BASE_URL || "",
+    runtimeApiBaseUrl: API_BASE_URL || "",
+    routeMode: API_ROUTE_MODE,
+    uploadUrl: "",
+    responseStatus: null,
+    responseBodyOrError: "",
+  });
   const [batchResults, setBatchResults] = useState([]);
   const [heartbeatTick, setHeartbeatTick] = useState(0);
   const [lastProgressAt, setLastProgressAt] = useState(() => Date.now());
@@ -465,6 +474,12 @@ export default function DataConnectionsWorkspace({
         onProgress: (progress) => {
           setUploadTransfer({ ...progress, label: formatUploadTransferLabel(progress) });
         },
+        onDebug: (debug) => {
+          setUploadDebug((current) => ({
+            ...current,
+            ...debug,
+          }));
+        },
       });
       const payload = uploadResponse.payload;
       const jobId = uploadStateView.resolveCurrentUploadJobId(payload) || payload?.job_id;
@@ -574,6 +589,7 @@ export default function DataConnectionsWorkspace({
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}
         uploadTransfer={progressUploadTransfer}
+        uploadDebug={uploadDebug}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
         onRetryFailedUploads={() => { void retryCurrentBatch(); }}

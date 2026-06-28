@@ -4,6 +4,7 @@ import json
 import os
 import logging
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from app.services.runtime_db import (
@@ -72,6 +73,70 @@ def _shared_key(name: str) -> str:
 
 def _s3_object_key(name: str) -> str:
     return f"{_upload_state_prefix()}{_shared_key(name)}.json"
+
+
+def _upload_source_object_key(job_id: str, filename: str | None = None) -> str:
+    suffix = Path(str(filename or "upload.csv")).suffix or ".csv"
+    return f"{_upload_state_prefix()}upload-sources/{job_id}{suffix}"
+
+
+def persist_upload_source(job_id: str, source_path: str | os.PathLike[str], *, filename: str, content_type: str | None = None) -> str:
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket:
+        raise RuntimeError("shared_upload_source_client_unavailable")
+    key = _upload_source_object_key(job_id, filename)
+    extra_args = {"ContentType": content_type} if content_type else None
+    with Path(source_path).open("rb") as handle:
+        if hasattr(client, "upload_fileobj"):
+            kwargs = {"Fileobj": handle, "Bucket": bucket, "Key": key}
+            if extra_args:
+                kwargs["ExtraArgs"] = extra_args
+            client.upload_fileobj(**kwargs)
+        else:
+            client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=handle.read(),
+                ContentType=content_type or "application/octet-stream",
+            )
+    return key
+
+
+def restore_upload_source(job_id: str, source_key: str, *, filename: str | None = None) -> Path:
+    del job_id
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket:
+        raise RuntimeError("shared_upload_source_client_unavailable")
+    suffix = Path(str(filename or source_key)).suffix or ".csv"
+    with NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+        temp_path = Path(temp.name)
+    try:
+        with temp_path.open("wb") as handle:
+            if hasattr(client, "download_fileobj"):
+                client.download_fileobj(bucket, source_key, handle)
+            else:
+                response = client.get_object(Bucket=bucket, Key=source_key)
+                handle.write(response["Body"].read())
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    return temp_path
+
+
+def delete_upload_source(source_key: str | None) -> None:
+    if not source_key:
+        return
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket:
+        return
+    try:
+        if hasattr(client, "delete_object"):
+            client.delete_object(Bucket=bucket, Key=source_key)
+    except Exception:
+        logger.exception("shared_upload_source_delete_failed bucket=%s key=%s", bucket, source_key)
 
 
 def _get_s3_client() -> Any | None:

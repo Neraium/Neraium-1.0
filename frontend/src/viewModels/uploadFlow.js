@@ -214,8 +214,11 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "csv_parse_error" || errorType === "processing_error") {
     return detail ? `CSV could not be parsed: ${normalizeErrorMessage(detail)}` : "CSV could not be parsed.";
   }
-  if (errorType === "job_not_found" || status === 404 || status === 405) {
+  if (status === 404 || status === 405) {
     return phase === "upload" ? "Upload endpoint unavailable." : "Upload status unavailable.";
+  }
+  if (errorType === "job_not_found") {
+    return "Upload status unavailable.";
   }
   if (errorType === "sii_processing_failure") {
     return detail ? `Analysis processing failure: ${normalizeErrorMessage(detail)}` : "Analysis processing failure.";

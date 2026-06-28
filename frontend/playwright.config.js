@@ -43,7 +43,6 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_API_BASE_URL: "http://127.0.0.1:8010",
-        VITE_API_FALLBACK_BASE_URL: "",
       },
     },
   ],

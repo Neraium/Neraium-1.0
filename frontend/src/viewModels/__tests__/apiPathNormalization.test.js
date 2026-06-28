@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildApiCandidateUrls, buildApiUrl } from "../../config";
+import { buildApiCandidateUrls, buildApiDebugState, buildApiUrl } from "../../config";
 
 describe("api path normalization", () => {
   it("keeps canonical api paths unchanged", () => {
@@ -7,11 +7,18 @@ describe("api path normalization", () => {
     expect(url).toContain("/api/data/latest-upload?include_persisted=1");
   });
 
-  it("uses the same-origin upload route as an API candidate", () => {
-    const urls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: true });
-    expect(urls).toContain("/api/data/upload");
+  it("uses the canonical upload route without stale fallbacks", () => {
+    const urls = buildApiCandidateUrls("/api/data/upload");
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("/api/data/upload");
     const staleHost = ["api", "neraium", "com"].join(".");
     expect(urls.some((url) => url.includes(staleHost))).toBe(false);
+  });
+
+  it("reports same-origin upload routing in production builds", () => {
+    const debug = buildApiDebugState("/api/data/upload");
+    expect(debug.resolvedUrl).toContain("/api/data/upload");
+    expect(debug.configuredApiBaseUrl.includes(["api", "neraium", "com"].join("."))).toBe(false);
   });
 
   it("normalizes legacy latest-upload shorthand", () => {

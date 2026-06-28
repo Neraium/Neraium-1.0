@@ -32,6 +32,7 @@ from app.services.upload_lifecycle import VISIBLE_UPLOAD_STATES, canonical_stage
 from app.services.upload_state_repository import (
     clear_reset_block_persisted,
     configure_runtime_dir as configure_runtime_state_dir,
+    delete_upload_source,
     persist_latest_upload_state,
     read_current_upload_result,
     read_latest_upload_record,
@@ -43,6 +44,7 @@ from app.services.upload_state_repository import (
     read_upload_result_by_job_id,
     read_upload_status as repository_read_upload_status,
     reset_block_persisted_active,
+    restore_upload_source,
     reset_upload_state,
     shared_state_configured,
     upload_state_backend,
@@ -1089,4 +1091,6 @@ UPLOAD_QUEUE_LIFECYCLE = UploadQueueLifecycleService(
     write_job=write_job,
     process_json_payload=process_json_payload,
     process_csv_file=process_csv_file,
+    restore_upload_source=restore_upload_source,
+    delete_upload_source=delete_upload_source,
 )

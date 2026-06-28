@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildApiCandidateUrls } from "../config";
+import { buildApiUrl } from "../config";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import * as uploadStateView from "../viewModels/uploadState";
 
@@ -266,23 +266,14 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
     if (typeof apiFetch === "function") {
       return apiFetch(path, { accessCode, ...options });
     }
-    const urls = buildApiCandidateUrls(path);
-    let lastError = null;
-    for (const url of urls) {
-      try {
-        return await fetch(url, {
-          credentials: "include",
-          ...options,
-          headers: {
-            ...(options.headers || {}),
-            ...(accessCode ? { "X-Neraium-Access-Code": accessCode } : {}),
-          },
-        });
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError ?? new Error("Network request failed.");
+    return fetch(buildApiUrl(path), {
+      credentials: "include",
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(accessCode ? { "X-Neraium-Access-Code": accessCode } : {}),
+      },
+    });
   }
 
   async function pollUploadUntilTerminal(jobId) {

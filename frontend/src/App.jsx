@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiFetch, ENABLE_ADMISSION_GATE } from "./config";
+
 import AppWorkspaceRouter from "./components/AppWorkspaceRouter";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
@@ -9,7 +10,7 @@ import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
 function App() {
-  const accessCode = "";
+  const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
   const [activeWorkspace, setActiveWorkspace] = useState("system-body");
   const [appReady, setAppReady] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();

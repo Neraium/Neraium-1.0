@@ -1,8 +1,10 @@
 from app.main import create_app
 from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
 from app.services.upload_jobs import UPLOAD_QUEUE_LIFECYCLE, process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
+from app.services.upload_state_repository import persist_upload_source
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from fastapi.testclient import TestClient
+from pathlib import Path
 import json
 
 
@@ -86,6 +88,16 @@ class _FakeS3Client:
     def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None) -> None:
         self.objects[(Bucket, Key)] = Body
 
+    def upload_fileobj(self, Fileobj, Bucket: str, Key: str, ExtraArgs: dict | None = None) -> None:
+        del ExtraArgs
+        self.objects[(Bucket, Key)] = Fileobj.read()
+
+    def download_fileobj(self, Bucket: str, Key: str, Fileobj) -> None:
+        Fileobj.write(self.objects[(Bucket, Key)])
+
+    def delete_object(self, *, Bucket: str, Key: str) -> None:
+        self.objects.pop((Bucket, Key), None)
+
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, _FakeS3Body]:
         payload = self.objects[(Bucket, Key)]
         return {"Body": _FakeS3Body(payload)}
@@ -165,6 +177,56 @@ def test_shared_upload_queue_backend_ignores_non_mapping_s3_payload(monkeypatch)
 
     assert read_upload_queue_job("list-job") is None
     assert queue_metrics() == {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+
+
+def test_shared_upload_queue_worker_restores_shared_upload_source(monkeypatch, tmp_path) -> None:
+    reset_latest_upload_state(purge_job_records=True)
+    fake_s3 = _FakeS3Client()
+    source_path = tmp_path / "shared-upload.csv"
+    source_path.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
+    monkeypatch.setattr("app.services.runtime_db._get_s3_client", lambda: fake_s3)
+    monkeypatch.setattr("app.services.upload_state_repository._get_s3_client", lambda: fake_s3)
+
+    shared_key = persist_upload_source("restore-job", source_path, filename="shared-upload.csv", content_type="text/csv")
+
+    captured: dict[str, object] = {}
+
+    def fake_process_csv_file(path, **kwargs):
+        captured["path"] = str(path)
+        captured["exists"] = Path(path).exists()
+        write_job({
+            "job_id": kwargs["job_id"],
+            "filename": kwargs.get("filename") or Path(path).name,
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "message": "Telemetry processing complete.",
+            "progress_label": "Telemetry processing complete.",
+        })
+        return {"job_id": kwargs["job_id"]}
+
+    monkeypatch.setattr("app.services.upload_jobs.process_csv_file", fake_process_csv_file)
+
+    write_job(
+        {
+            "job_id": "restore-job",
+            "filename": "shared-upload.csv",
+            "file_path": "/definitely/missing.csv",
+            "shared_upload_source_key": shared_key,
+            "status": "PENDING",
+            "processing_state": "queued",
+        }
+    )
+    enqueue_upload_job("restore-job")
+
+    assert process_next_queued_upload_job() is True
+
+    assert captured["exists"] is True
+    assert read_job("restore-job")["status"] == "COMPLETE"
+    assert ("shared-upload-state", shared_key) not in fake_s3.objects
 
 
 def test_queue_lifecycle_uses_explicit_runtime_state() -> None:

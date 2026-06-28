@@ -3,6 +3,19 @@ import { classifyUploadError } from "../uploadFlow";
 
 
 describe("uploadFlow poll error classification", () => {
+  it("keeps upload job-not-found errors distinct from endpoint misses", () => {
+    const error = new Error("Upload job missing");
+    error.name = "UploadRequestError";
+    error.errorType = "job_not_found";
+
+    expect(classifyUploadError(error, "upload")).toMatchObject({
+      state: "error",
+      retryable: false,
+      errorType: "job_not_found",
+      message: "Upload status unavailable.",
+    });
+  });
+
   it("keeps polling on API timeout errors", () => {
     const error = new Error("API request timed out after 45000ms while calling /api/upload-status/job-123.");
     error.name = "ApiTimeoutError";

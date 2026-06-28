@@ -271,13 +271,15 @@ def test_onboarding_storage_redacts_api_token() -> None:
 def test_upload_request_targets_real_api_ingestion_route() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
 
-    assert "buildApiCandidateUrls(\"/api/data/upload\", { method: \"POST\", allowSameOriginFallback: true })" in source
+    assert "const uploadUrl = buildApiUrl(\"/api/data/upload\");" in source
+    assert "apiBaseConfig: CONFIGURED_API_BASE_URL || \"\"," in source
+    assert "routeMode: API_ROUTE_MODE," in source
 
 
 def test_upload_attempt_reports_nonzero_connecting_progress() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
 
-    assert "xhr.open(\"POST\", uploadUrls[index], true);" in source
+    assert "xhr.open(\"POST\", uploadUrl, true);" in source
     assert "percent: file.size > 0 ? 1 : 0" in source
     assert "Connecting to telemetry ingestion." in source
 

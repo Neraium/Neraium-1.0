@@ -1,4 +1,11 @@
-import { buildAccessHeaders, buildApiCandidateUrls } from "../../config";
+import {
+  API_BASE_URL,
+  API_ROUTE_MODE,
+  CONFIGURED_API_BASE_URL,
+  buildAccessHeaders,
+  buildApiDebugState,
+  buildApiUrl,
+} from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
 
@@ -79,7 +86,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, accessCode } = {}) {
+export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -87,7 +94,22 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
     }
 
     const startedAt = Date.now();
-    const uploadUrls = buildApiCandidateUrls("/api/data/upload", { method: "POST", allowSameOriginFallback: true });
+    const uploadUrl = buildApiUrl("/api/data/upload");
+    const debugState = buildApiDebugState("/api/data/upload");
+    console.info("[neraium] upload endpoint", {
+      uploadUrl,
+      apiBaseConfig: CONFIGURED_API_BASE_URL || "",
+      runtimeApiBaseUrl: API_BASE_URL || "",
+      routeMode: API_ROUTE_MODE,
+    });
+    onDebug?.({
+      uploadUrl,
+      apiBaseConfig: CONFIGURED_API_BASE_URL || "",
+      runtimeApiBaseUrl: API_BASE_URL || "",
+      routeMode: API_ROUTE_MODE,
+      responseStatus: null,
+      responseBodyOrError: "",
+    });
 
     onProgress?.({
       stage: "upload_started",
@@ -98,13 +120,12 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
       message: "Upload started.",
     });
 
-    const shouldRetryStatus = (status) => status >= 500 || status === 404 || status === 405 || status === 408 || status === 425 || status === 429;
     const MAX_SAME_URL_RETRIES = 2;
     const RESPONSE_GRACE_TIMEOUT_MS = getUploadResponseTimeoutMs(file.size, timeoutMs);
     const scheduleTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
     const cancelTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
 
-    const uploadAttempt = (index, retryCount = 0) => {
+    const uploadAttempt = (retryCount = 0) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       let responseGraceTimer = null;
@@ -116,7 +137,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         }
       };
       formData.append("file", file);
-      xhr.open("POST", uploadUrls[index], true);
+      xhr.open("POST", uploadUrl, true);
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;
 
@@ -157,9 +178,6 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           speedBytesPerSecond: loaded / elapsedSeconds,
           message: percent === 100 ? "Upload transferred. Waiting for server confirmation." : "Uploading telemetry export.",
         });
-        // Mobile browsers can finish sending bytes well before the API has
-        // written the temp file, created the queue job, and returned 202.
-        // Keep the XHR open for large CSVs instead of aborting after 8s.
         if (!responseSettled && total > 0 && loaded >= total && !responseGraceTimer) {
           responseGraceTimer = scheduleTimer(() => {
             if (responseSettled || xhr.readyState === 4) return;
@@ -183,6 +201,11 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         clearResponseGraceTimer();
         const payload = normalizeUploadJob(readJsonResponse(xhr));
         const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
+        onDebug?.({
+          ...debugState,
+          responseStatus: xhr.status,
+          responseBodyOrError: xhr.responseText || JSON.stringify(payload || {}),
+        });
         if (response.ok) {
           onProgress?.({
             stage: "accepted",
@@ -195,15 +218,11 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           resolve(response);
           return;
         }
-        if (index < uploadUrls.length - 1 && shouldRetryStatus(xhr.status)) {
-          uploadAttempt(index + 1);
-          return;
-        }
         const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
         const errorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
         console.error("Upload HTTP error", {
-          url: uploadUrls[index],
-          attempt: index + 1,
+          url: uploadUrl,
+          attempt: retryCount + 1,
           status: xhr.status,
           errorType,
           payload,
@@ -216,74 +235,73 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         error.detail = detail;
         error.payload = payload;
         error.responseText = xhr.responseText;
-        error.apiBaseUrl = uploadUrls[index];
+        error.uploadUrl = uploadUrl;
         reject(error);
       };
 
       xhr.onerror = () => {
         responseSettled = true;
         clearResponseGraceTimer();
+        onDebug?.({
+          ...debugState,
+          responseStatus: xhr.status || null,
+          responseBodyOrError: xhr.responseText || `Network error while calling ${uploadUrl}`,
+        });
         console.error("Upload network error", {
-          url: uploadUrls[index],
-          attempt: index + 1,
+          url: uploadUrl,
+          attempt: retryCount + 1,
           readyState: xhr.readyState,
           status: xhr.status,
           responseText: xhr.responseText,
-          attemptedUrls: uploadUrls.slice(0, index + 1),
         });
 
-        if (index < uploadUrls.length - 1) {
-          uploadAttempt(index + 1, 0);
-          return;
-        }
-
         if (retryCount < MAX_SAME_URL_RETRIES) {
-          uploadAttempt(index, retryCount + 1);
+          uploadAttempt(retryCount + 1);
           return;
         }
 
         const error = new Error(
-          `Upload network error before server accepted the file. Failed URL: ${uploadUrls[index]}`
+          `Upload network error before server accepted the file. Failed URL: ${uploadUrl}`
         );
         error.name = "ApiNetworkError";
-        error.apiBaseUrl = uploadUrls[index];
-        error.attempt = index + 1;
+        error.apiBaseUrl = uploadUrl;
+        error.attempt = retryCount + 1;
         error.status = xhr.status;
         error.responseText = xhr.responseText;
-        error.attemptedUrls = uploadUrls.slice(0, index + 1);
+        error.uploadUrl = uploadUrl;
         reject(error);
       };
 
       xhr.ontimeout = () => {
         responseSettled = true;
         clearResponseGraceTimer();
+        onDebug?.({
+          ...debugState,
+          responseStatus: xhr.status || 408,
+          responseBodyOrError: xhr.responseText || `Timeout while calling ${uploadUrl}`,
+        });
         console.error("Upload timeout", {
-          url: uploadUrls[index],
-          attempt: index + 1,
+          url: uploadUrl,
+          attempt: retryCount + 1,
           timeoutMs,
           readyState: xhr.readyState,
           status: xhr.status,
           responseText: xhr.responseText,
-          attemptedUrls: uploadUrls.slice(0, index + 1),
         });
 
-        if (index < uploadUrls.length - 1) {
-          uploadAttempt(index + 1, 0);
-          return;
-        }
-
         if (retryCount < MAX_SAME_URL_RETRIES) {
-          uploadAttempt(index, retryCount + 1);
+          uploadAttempt(retryCount + 1);
           return;
         }
 
         const error = new Error(
-          `Upload request timed out before server accepted the file. Failed URL: ${uploadUrls[index]}`
+          `Upload request timed out before server accepted the file. Failed URL: ${uploadUrl}`
         );
         error.name = "ApiTimeoutError";
         error.timeoutMs = timeoutMs;
         error.status = xhr.status;
         error.responseText = xhr.responseText;
+        error.uploadUrl = uploadUrl;
         reject(error);
       };
 
@@ -294,7 +312,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
       xhr.send(formData);
     };
 
-    uploadAttempt(0, 0);
+    uploadAttempt(0);
   });
 }
 
