@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import pandas as pd
+
 
 def _to_float(value: Any) -> float | None:
     if value is None:
@@ -117,71 +119,64 @@ def build_relationship_baseline(
     if column_limited:
         sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
+    baseline_frame = pd.DataFrame(baseline_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
+    recent_frame = pd.DataFrame(recent_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
+    baseline_corr_matrix = baseline_frame.corr(min_periods=3)
+    recent_corr_matrix = recent_frame.corr(min_periods=3)
+    baseline_counts = baseline_frame.notna().astype(int).T.dot(baseline_frame.notna().astype(int))
+    recent_counts = recent_frame.notna().astype(int).T.dot(recent_frame.notna().astype(int))
+    source_rows = _relationship_source_rows(baseline_rows, recent_rows)
 
     for idx, left_col in enumerate(selected_numeric_columns):
         for right_col in selected_numeric_columns[idx + 1 :]:
-            left_base: list[float] = []
-            right_base: list[float] = []
-            left_recent: list[float] = []
-            right_recent: list[float] = []
-            for row in baseline_rows:
-                lv = _to_float(row.get(left_col))
-                rv = _to_float(row.get(right_col))
-                if lv is None or rv is None:
-                    continue
-                left_base.append(lv)
-                right_base.append(rv)
-            for row in recent_rows:
-                lv = _to_float(row.get(left_col))
-                rv = _to_float(row.get(right_col))
-                if lv is None or rv is None:
-                    continue
-                left_recent.append(lv)
-                right_recent.append(rv)
-
-            baseline_corr = _pearson_corr(left_base, right_base)
-            recent_corr = _pearson_corr(left_recent, right_recent)
-            if baseline_corr is None or recent_corr is None:
+            baseline_corr = baseline_corr_matrix.at[left_col, right_col] if left_col in baseline_corr_matrix.index and right_col in baseline_corr_matrix.columns else None
+            recent_corr = recent_corr_matrix.at[left_col, right_col] if left_col in recent_corr_matrix.index and right_col in recent_corr_matrix.columns else None
+            if baseline_corr is None or recent_corr is None or pd.isna(baseline_corr) or pd.isna(recent_corr):
                 continue
 
-            baseline_strength = abs(baseline_corr)
+            baseline_sample_size = int(baseline_counts.at[left_col, right_col]) if left_col in baseline_counts.index and right_col in baseline_counts.columns else 0
+            recent_sample_size = int(recent_counts.at[left_col, right_col]) if left_col in recent_counts.index and right_col in recent_counts.columns else 0
+            if baseline_sample_size < 3 or recent_sample_size < 3:
+                continue
+
+            baseline_strength = abs(float(baseline_corr))
             if baseline_strength < 0.65:
                 continue
 
-            drift = abs(recent_corr - baseline_corr)
+            drift = abs(float(recent_corr) - float(baseline_corr))
             if drift < 0.25:
                 continue
 
             candidates.append(
                 {
                     "relationship": f"{left_col} <-> {right_col}",
-                    "baseline_correlation": round(baseline_corr, 6),
-                    "recent_correlation": round(recent_corr, 6),
-                    "correlation_delta": round(drift, 6),
-                    "coupling_strength": round(baseline_strength, 6),
-                    "baseline_sample_size": len(left_base),
-                    "recent_sample_size": len(left_recent),
+                    "baseline_correlation": round(float(baseline_corr), 6),
+                    "recent_correlation": round(float(recent_corr), 6),
+                    "correlation_delta": round(float(drift), 6),
+                    "coupling_strength": round(float(baseline_strength), 6),
+                    "baseline_sample_size": baseline_sample_size,
+                    "recent_sample_size": recent_sample_size,
                     "sampled_for_baseline": sampled_for_baseline,
                     "evidence_refs": [
                         {
                             "column": left_col,
                             "role": "left_variable",
-                            "baseline_window": {"rows": len(left_base), "correlation": round(baseline_corr, 6)},
-                            "recent_window": {"rows": len(left_recent), "correlation": round(recent_corr, 6)},
-                            "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
+                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
+                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
+                            "source_rows": source_rows,
                         },
                         {
                             "column": right_col,
                             "role": "right_variable",
-                            "baseline_window": {"rows": len(right_base), "correlation": round(baseline_corr, 6)},
-                            "recent_window": {"rows": len(right_recent), "correlation": round(recent_corr, 6)},
-                            "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
+                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
+                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
+                            "source_rows": source_rows,
                         },
                     ],
-                    "source_rows": _relationship_source_rows(baseline_rows, recent_rows),
+                    "source_rows": source_rows,
                     "summary": (
                         f"Coupling shift in {left_col} vs {right_col}: "
-                        f"baseline={baseline_corr:.3f}, recent={recent_corr:.3f}, delta={drift:.3f}."
+                        f"baseline={float(baseline_corr):.3f}, recent={float(recent_corr):.3f}, delta={float(drift):.3f}."
                     ),
                 }
             )

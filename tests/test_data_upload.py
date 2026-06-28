@@ -35,7 +35,7 @@ def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout
         response = client.get(status_url)
         assert response.status_code == 200
         last_payload = response.json()
-        if last_payload["status"] in {"COMPLETE", "FAILED"}:
+        if last_payload["status"] in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
             return last_payload
         time.sleep(0.05)
     raise AssertionError(f"Upload did not reach a terminal state. Last payload: {last_payload}")
@@ -515,7 +515,7 @@ def test_upload_status_can_return_queued_state() -> None:
     assert payload["status"] == "PENDING"
     assert payload["propagation_stage"] in {"queued", "accepted"}
     assert payload["propagation_progress"] in {5, 10}
-    assert payload.get("propagation_label") in {"Worker starting...", "Reading uploaded CSV...", "Upload received.", "Queued."}
+    assert payload.get("propagation_label") in {"Worker starting...", "Validating CSV...", "Upload received.", "Queued."}
     assert payload["worker_state"] in {"starting", "running", "stalled", "unknown"}
     assert "worker_last_seen_at" in payload
     assert "queue_position" in payload
@@ -545,6 +545,7 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
         "profiling_data_quality",
         "building_baseline",
         "scoring_drift_relationships",
+        "building_fingerprint",
         "generating_findings_evidence",
         "writing_result_replay",
         "building_relationship_baselines",
@@ -556,6 +557,9 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
 
     terminal = wait_for_terminal_upload_status(client, status_url)
     assert terminal["status"] == "COMPLETE"
+    queue_entry = read_upload_queue_job(upload.json()["job_id"])
+    assert isinstance(queue_entry, dict)
+    assert queue_entry["status"] == "completed"
     assert terminal["propagation_stage"] == "complete"
     assert terminal["propagation_progress"] == 100
     assert terminal["propagation_label"] == "Analysis ready."
@@ -597,6 +601,7 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
         "profiling_data_quality",
         "building_baseline",
         "scoring_drift_relationships",
+        "building_fingerprint",
         "generating_findings_evidence",
         "writing_result_replay",
         "complete",
@@ -1939,7 +1944,7 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     assert payload["rows_processed"] == 300_000
     assert payload["propagation_stage"] == "parsing_telemetry"
     assert payload["propagation_progress"] == 20
-    assert payload["propagation_label"] == "Parsing telemetry."
+    assert payload["propagation_label"] == "Normalizing telemetry..."
     assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
 

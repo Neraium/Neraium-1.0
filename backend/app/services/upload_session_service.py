@@ -46,7 +46,7 @@ SESSION_SOURCE_PERSISTED = "persisted_canonical_current_upload"
 SESSION_SOURCE_HISTORY = "historical_artifacts"
 SESSION_SOURCE_EMPTY = "no_session_fallback"
 
-VISIBLE_ERROR_STATUSES = {"failed", "error", "validation_error", "not_found", "missing"}
+VISIBLE_ERROR_STATUSES = {"failed", "error", "validation_error", "timeout", "cancelled", "not_found", "missing"}
 
 
 def _parse_iso(value: Any) -> datetime | None:

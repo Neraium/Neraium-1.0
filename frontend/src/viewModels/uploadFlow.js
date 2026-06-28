@@ -8,13 +8,13 @@ import {
 
 const INTAKE_STAGES = [
   "Uploading telemetry batch",
-  "Detecting variables",
-  "Parsing state matrix",
-  "Building historical comparison",
-  "Reviewing system behavior change",
-  "Building system story",
-  "Preparing observations",
-  "Operator review ready",
+  "Validating CSV",
+  "Normalizing telemetry",
+  "Identifying systems",
+  "Mapping relationships",
+  "Building fingerprint",
+  "Generating insights",
+  "Saving result",
 ];
 
 export function buildIntakeStages(result, uploadState, roomContext, job = null) {
@@ -22,15 +22,16 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
   const operatorReviewReady = result?.sii_reliable_enough_to_show === true;
   const finalStageIndex = INTAKE_STAGES.length - 1;
   return INTAKE_STAGES.map((stage, index) => {
-    if (job || [...["failed"], ...["uploading", "queued", "validating_schema", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"]].includes(normalizeUploadStatus(uploadState))) {
+    if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "generating_replay"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
+      const terminalFailure = ["failed", "cancelled", "timeout"].includes(normalizedStatus);
       return {
         title: stage,
         detail: uploadStageDetail(stage, index, job, roomContext),
-        state: normalizedStatus === "failed"
+        state: terminalFailure
           ? index <= activeIndex ? "failed" : "queued"
           : index < activeIndex ? "complete" : index === activeIndex ? "active" : "queued",
-        tone: normalizedStatus === "failed" && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
+        tone: terminalFailure && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
       };
     }
 
@@ -47,15 +48,15 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
 
     const details = [
       `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
-      `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers detected across the uploaded batch.`,
-      `${result.row_count ?? result.rows_processed ?? 0} rows parsed from the state matrix.`,
-      "Usual equipment behavior learned from the uploaded telemetry.",
-      "System behavior review complete.",
-      "Evidence is available when confirmation is needed.",
-      "Issue review prepared from the latest telemetry.",
+      `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers validated from the uploaded batch.`,
+      `${result.row_count ?? result.rows_processed ?? 0} telemetry rows normalized for analysis.`,
+      "System groups and primary operating patterns were identified.",
+      "Cross-signal relationships were mapped against baseline behavior.",
+      "Structural fingerprint built from the normalized telemetry.",
+      "Insights generated from the latest telemetry evidence.",
       operatorReviewReady
-        ? "Evidence ready for operator review."
-        : "Processing completed, but issue review is still preparing.",
+        ? "Core result saved and ready for review."
+        : "Core result saved; final report details may still be finalizing.",
     ];
 
     return {
@@ -249,7 +250,7 @@ function uploadStageIndex(uploadState) {
 
 function uploadStageDetail(stage, index, job, roomContext) {
   const jobStatus = normalizeUploadStatus(job?.status);
-  if (jobStatus === "failed" && index === uploadStageIndex("failed")) {
+  if (["failed", "cancelled", "timeout"].includes(jobStatus) && index === uploadStageIndex("failed")) {
     return job.error ?? "Telemetry processing failed.";
   }
   if (jobStatus === "complete") {
@@ -259,12 +260,13 @@ function uploadStageDetail(stage, index, job, roomContext) {
   }
   const details = [
     job?.message ?? "Telemetry batch upload starts after operator confirmation.",
-    jobStatus === "validating_schema" ? job.progress_label : "Waiting for variable and schema detection.",
-    jobStatus === "parsing" ? job.progress_label : "Parser will stream the state matrix without loading the full export into memory.",
-    jobStatus === "baseline_modeling" ? job.progress_label : "Neraium is learning reference behavior from the uploaded telemetry.",
-    jobStatus === "structural_scoring" ? job.progress_label : "System behavior review starts after reference modeling.",
-    jobStatus === "generating_replay" ? job.progress_label : "System story is deferred until the first operating pattern is ready.",
-    ["cognition_ready", "writing_state"].includes(jobStatus) ? job.progress_label : "Issues can become usable before all technical artifacts finish.",
+    ["accepted", "queued", "validating_schema"].includes(jobStatus) ? job.progress_label : "CSV structure and key telemetry fields are being validated.",
+    ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized without loading the full export into memory.",
+    jobStatus === "baseline_modeling" ? job.progress_label : "System groupings and baseline patterns are being identified.",
+    jobStatus === "structural_scoring" ? job.progress_label : "Cross-signal relationships are being mapped against baseline behavior.",
+    jobStatus === "building_fingerprint" ? job.progress_label : "A structural fingerprint is being assembled from the normalized telemetry.",
+    jobStatus === "writing_state" ? job.progress_label : "Insights are being generated from the mapped system behavior.",
+    ["cognition_ready", "generating_replay"].includes(jobStatus) ? job.progress_label : "The core result can complete before optional report finalization finishes.",
     "Completion will refresh the structural state view.",
   ];
   return details[index] ?? stage;

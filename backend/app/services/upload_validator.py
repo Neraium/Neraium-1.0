@@ -353,7 +353,7 @@ def stream_csv_snapshot(
                 rows_with_invalid_numeric += 1
             raw_rows_in_order.append((parsed_ts, row))
             if job_id and on_progress is not None and rows_received % max(1, csv_progress_update_every) == 0:
-                on_progress(job_id, "parsing_telemetry", 20, f"Parsing telemetry... {rows_received:,} rows read.")
+                on_progress(job_id, "parsing_telemetry", 20, f"Normalizing telemetry... {rows_received:,} rows read.")
 
         if not raw_rows_in_order:
             raise ValueError("CSV contains no usable telemetry rows after cleaning.")
@@ -445,7 +445,7 @@ def stream_csv_snapshot(
             schema_messages.append("Analysis can proceed.")
 
         if job_id and rows_received >= csv_progress_update_every and on_progress is not None:
-            on_progress(job_id, "parsing_telemetry", 20, f"Parsing telemetry... {rows_received:,} rows read.")
+            on_progress(job_id, "parsing_telemetry", 20, f"Normalizing telemetry... {rows_received:,} rows read.")
 
         return {
             "columns": columns,

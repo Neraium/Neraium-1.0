@@ -774,7 +774,7 @@ async def upload_stream(job_id: str, request: Request = None):
         for _ in range(180):
             payload = resolve_upload_status(job_id, request_id=request_id)
             yield f"data: {json.dumps(payload)}\n\n"
-            if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED"}:
+            if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
                 break
             await asyncio.sleep(4)
 

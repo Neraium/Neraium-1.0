@@ -75,7 +75,7 @@ function normalizeOnboardingUploadStage(value) {
   if (["validated", "upload_started"].includes(normalized)) return "validating";
   if (["pending", "queued", "accepted"].includes(normalized)) return "queued";
   if (["complete"].includes(normalized)) return "complete";
-  if (["failed", "error", "not_found"].includes(normalized)) return "failed";
+  if (["failed", "error", "not_found", "cancelled", "timeout"].includes(normalized)) return "failed";
   return "processing";
 }
 

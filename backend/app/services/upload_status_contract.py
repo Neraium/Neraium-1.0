@@ -47,6 +47,8 @@ def normalize_upload_status_payload(payload: dict) -> dict:
         "QUEUE": "PENDING",
         "FAILED": "FAILED",
         "FAILURE": "FAILED",
+        "CANCELLED": "CANCELLED",
+        "TIMEOUT": "TIMEOUT",
     }.get(raw_status, raw_status)
     normalized = dict(payload)
     normalized["status"] = status
@@ -55,6 +57,9 @@ def normalize_upload_status_payload(payload: dict) -> dict:
     normalized.setdefault("progress", int(payload.get("percent", payload.get("progress", 0)) or 0))
     if status in {"RUNNING_SII", "PROCESSING", "PENDING", "QUEUED"}:
         normalized.setdefault("message", "Telemetry batch processing in progress.")
+    if status in {"TIMEOUT", "CANCELLED"}:
+        normalized.setdefault("error", str(normalized.get("message") or status.title()))
+        return _with_propagation_fields(normalized, payload, status)
     if status == "COMPLETE":
         artifacts = payload.get("sii_completion_artifacts") or (payload.get("result_summary") or {}).get("sii_completion_artifacts") or {}
         sii_completed = bool(payload.get("sii_completed") or (payload.get("result_summary") or {}).get("sii_completed"))

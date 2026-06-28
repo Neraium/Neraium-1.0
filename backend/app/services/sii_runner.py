@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import time
 from collections import deque
 from dataclasses import asdict, is_dataclass
@@ -40,6 +41,8 @@ COVARIANCE_REGULARIZATION_FLOOR = 1e-3
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
+MAX_RUNNER_VECTOR_ROWS = max(0, int(os.getenv("NERAIUM_SII_MAX_VECTOR_ROWS", "4096") or "0"))
+RECENT_VECTOR_TAIL = max(100, int(os.getenv("NERAIUM_SII_RECENT_VECTOR_TAIL", "512") or "512"))
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
     global STATE_PATH
@@ -52,7 +55,8 @@ class BackendSiiRunner:
     def __init__(self, *, baseline_window: int = 12, recent_window: int = 12) -> None:
         self.baseline_window = max(2, baseline_window)
         self.recent_window = max(2, recent_window)
-        self._history: list[np.ndarray] = []
+        self._history: deque[np.ndarray] = deque(maxlen=self.baseline_window + self.recent_window)
+        self._history_count = 0
         self._instability_history: deque[float] = deque(maxlen=20)
         self._velocity_history: deque[float] = deque(maxlen=20)
         self._distance_history: deque[float] = deque(maxlen=20)
@@ -69,6 +73,7 @@ class BackendSiiRunner:
     ) -> dict[str, Any]:
         vector = np.asarray(sensor_vector, dtype=float)
         self._history.append(vector)
+        self._history_count += 1
 
         baseline_vectors, recent_vectors = self._windowed_history()
         baseline_mean = _nanmean_columns(baseline_vectors)
@@ -221,8 +226,8 @@ class BackendSiiRunner:
         }
         velocity = instability_score - (self._instability_history[-1] if self._instability_history else instability_score)
 
-        regime, urgency = classify_state(len(self._history), instability_score, transition_pressure)
-        confidence = confidence_from_history(len(self._history), vector, recent_vectors=recent_vectors)
+        regime, urgency = classify_state(self._history_count, instability_score, transition_pressure)
+        confidence = confidence_from_history(self._history_count, vector, recent_vectors=recent_vectors)
 
         self._instability_history.append(instability_score)
         self._velocity_history.append(float(velocity))
@@ -247,16 +252,17 @@ class BackendSiiRunner:
         }
 
     def _windowed_history(self) -> tuple[np.ndarray, np.ndarray]:
-        if len(self._history) == 1:
-            only = np.vstack(self._history)
+        history = list(self._history)
+        if len(history) == 1:
+            only = np.vstack(history)
             return only, only
 
-        recent_count = min(self.recent_window, len(self._history))
-        recent_vectors = np.vstack(self._history[-recent_count:])
-        baseline_source = self._history[:-recent_count]
+        recent_count = min(self.recent_window, len(history))
+        recent_vectors = np.vstack(history[-recent_count:])
+        baseline_source = history[:-recent_count]
         if not baseline_source:
-            split_index = max(1, len(self._history) // 2)
-            baseline_source = self._history[:split_index]
+            split_index = max(1, len(history) // 2)
+            baseline_source = history[:split_index]
         baseline_vectors = np.vstack(baseline_source[-self.baseline_window :])
         return baseline_vectors, recent_vectors
 
@@ -409,15 +415,20 @@ def run_sii_runner(
         return base_result
 
     vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
+    source_vector_count = len(vector_rows["vectors"])
+    vector_rows = limit_runner_vectors(vector_rows)
+    retained_vector_count = len(vector_rows["vectors"])
     base_result["columns_used"] = vector_rows["columns_used"]
-    base_result["sensor_vector_count"] = len(vector_rows["vectors"])
+    base_result["sensor_vector_count"] = retained_vector_count
+    base_result["sensor_vector_source_count"] = source_vector_count
+    base_result["sampling_applied"] = bool(vector_rows.get("sampling_applied"))
     base_result["rows_received"] = len(rows)
-    base_result["rows_excluded"] = max(0, len(rows) - len(vector_rows["vectors"]))
+    base_result["rows_excluded"] = max(0, len(rows) - source_vector_count)
     if not vector_rows["vectors"]:
         base_result["errors"].append("No complete numeric sensor vectors were available for SII runner ingestion.")
         return base_result
 
-    baseline_window = min(50, max(2, min(48, len(vector_rows["vectors"]) // 2 or 2)))
+    baseline_window = min(50, max(2, min(48, retained_vector_count // 2 or 2)))
     adapter = _SII_ENGINE_ADAPTER(baseline_window=baseline_window, recent_window=baseline_window)
     states: list[dict[str, Any]] = []
     run_id = f"upload-{datetime.now(UTC).timestamp()}"
@@ -455,9 +466,12 @@ def run_sii_runner(
         "sii_runner_module": RUNNER_MODULE,
         "sii_core_engine": CORE_ENGINE,
         "sensor_vector_count": len(states),
+        "sensor_vector_source_count": source_vector_count,
+        "sii_sampling_applied": bool(vector_rows.get("sampling_applied")),
         "sii_vector_rows_processed": len(states),
+        "sii_vector_rows_source_count": source_vector_count,
         "sii_rows_received": len(rows),
-        "sii_rows_excluded": max(0, len(rows) - len(states)),
+        "sii_rows_excluded": max(0, len(rows) - source_vector_count),
         "sii_columns_used": list(vector_rows["columns_used"]),
     }
 
@@ -466,7 +480,9 @@ def run_sii_runner(
             "runner_used": True,
             "rows_processed": len(states),
             "rows_received": len(rows),
-            "rows_excluded": max(0, len(rows) - len(states)),
+            "rows_excluded": max(0, len(rows) - source_vector_count),
+            "sensor_vector_source_count": source_vector_count,
+            "sampling_applied": bool(vector_rows.get("sampling_applied")),
             "processing_trace": processing_trace,
             "output_summary": output_summary,
             "latest_state": latest_state,
@@ -517,6 +533,42 @@ def build_sensor_vectors(
         "columns_used": numeric_columns,
         "vectors": vectors,
         "row_indexes": row_indexes,
+    }
+
+
+def limit_runner_vectors(vector_rows: dict[str, Any]) -> dict[str, Any]:
+    vectors = list(vector_rows.get("vectors") or [])
+    row_indexes = list(vector_rows.get("row_indexes") or [])
+    total_vectors = len(vectors)
+    if MAX_RUNNER_VECTOR_ROWS <= 0 or total_vectors <= MAX_RUNNER_VECTOR_ROWS:
+        return {
+            **vector_rows,
+            "sampling_applied": False,
+            "source_vector_count": total_vectors,
+            "retained_vector_count": total_vectors,
+        }
+
+    retained_tail = min(total_vectors, max(100, min(RECENT_VECTOR_TAIL, MAX_RUNNER_VECTOR_ROWS // 2 or 100)))
+    prefix_count = max(0, total_vectors - retained_tail)
+    prefix_budget = max(0, MAX_RUNNER_VECTOR_ROWS - retained_tail)
+
+    if prefix_budget <= 0 or prefix_count <= 0:
+        retained_indexes = list(range(max(0, total_vectors - MAX_RUNNER_VECTOR_ROWS), total_vectors))
+    elif prefix_budget >= prefix_count:
+        retained_indexes = list(range(total_vectors))
+    else:
+        prefix_indexes = np.linspace(0, prefix_count - 1, num=prefix_budget, dtype=int).tolist()
+        retained_indexes = list(dict.fromkeys(prefix_indexes + list(range(prefix_count, total_vectors))))
+
+    sampled_vectors = [vectors[index] for index in retained_indexes]
+    sampled_row_indexes = [row_indexes[index] for index in retained_indexes]
+    return {
+        **vector_rows,
+        "vectors": sampled_vectors,
+        "row_indexes": sampled_row_indexes,
+        "sampling_applied": True,
+        "source_vector_count": total_vectors,
+        "retained_vector_count": len(sampled_vectors),
     }
 
 

@@ -47,10 +47,10 @@ def run_structural_analysis_pipeline(
     build_upload_engine_result: Callable[..., dict[str, Any]],
     stage_notifier: Callable[..., None],
 ) -> dict[str, Any]:
-    stage_notifier(job_id, stage="building_baseline", progress=65, label="Building baseline...")
+    stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
     relationship_model = build_relationship_baseline(rows, numeric_columns, total_row_count=row_count_total)
 
-    stage_notifier(job_id, stage="scoring_drift_relationships", progress=75, label="Scoring operating changes...")
+    stage_notifier(job_id, stage="scoring_drift_relationships", progress=72, label="Mapping relationships...")
     replay = (
         minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
         if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3)
@@ -59,7 +59,7 @@ def run_structural_analysis_pipeline(
     if not replay.get("timeline"):
         replay = minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
 
-    stage_notifier(job_id, stage="generating_findings_evidence", progress=85, label="Preparing findings...")
+    stage_notifier(job_id, stage="building_fingerprint", progress=84, label="Building fingerprint...")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
     matrix_rows = matrix_rows_for_profiles
@@ -211,7 +211,7 @@ def run_structural_analysis_pipeline(
         "processing_time_seconds": processing_time_seconds,
         "completed_at": now,
     }
-    stage_notifier(job_id, stage="writing_result_replay", progress=95, label="Writing result and replay...")
+    stage_notifier(job_id, stage="generating_findings_evidence", progress=90, label="Generating insights...")
     runner_result = run_sii_runner(
         columns=columns,
         rows=matrix_rows,
@@ -222,6 +222,7 @@ def run_structural_analysis_pipeline(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
+    stage_notifier(job_id, stage="writing_result_replay", progress=95, label="Saving result...")
     if isinstance(runner_result, dict):
         processing_trace = dict(runner_result.get("processing_trace") or processing_trace)
         processing_trace.setdefault("sii_runner_ran", bool(runner_result.get("runner_used")))

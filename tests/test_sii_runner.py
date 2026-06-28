@@ -168,3 +168,35 @@ def test_sii_runner_masks_normalization_sentinel_values():
     assert result["vectors"][1][0] != SENTINEL
     assert result["vectors"][1][0] != result["vectors"][1][0]
     assert result["vectors"][1][1] == 21.0
+
+
+def test_run_sii_runner_samples_large_vector_sets_while_preserving_recent_tail(monkeypatch) -> None:
+    from app.services import sii_runner
+
+    monkeypatch.setattr(sii_runner, "MAX_RUNNER_VECTOR_ROWS", 32)
+    monkeypatch.setattr(sii_runner, "RECENT_VECTOR_TAIL", 12)
+
+    columns = ["timestamp", "temp", "pressure"]
+    rows = [
+        [f"2026-05-01T00:{index:02d}:00Z", f"{70.0 + index * 0.1:.3f}", f"{1.0 + index * 0.01:.3f}"]
+        for index in range(200)
+    ]
+    result = sii_runner.run_sii_runner(
+        columns=columns,
+        rows=rows,
+        numeric_profiles=[{"column": "temp"}, {"column": "pressure"}],
+        timestamp_column="timestamp",
+        primary_room="Loop A",
+        driver_attribution={},
+        engine_result={},
+        processing_trace={},
+    )
+
+    assert result["runner_used"] is True
+    assert result["sampling_applied"] is True
+    assert result["sensor_vector_source_count"] == 200
+    assert result["sensor_vector_count"] <= 32
+    assert result["rows_processed"] <= 32
+    assert result["processing_trace"]["sii_vector_rows_source_count"] == 200
+    assert result["processing_trace"]["sii_sampling_applied"] is True
+    assert result["latest_state"]["timestamp"] > 0

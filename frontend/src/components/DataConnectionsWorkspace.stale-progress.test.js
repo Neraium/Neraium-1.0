@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
+import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 
 const h = React.createElement;
 
@@ -162,6 +163,44 @@ it("previous completed upload does not leak progress into new idle upload screen
   expectNoCompleteProgressBars();
 });
 
+it("treats the first complete payload with a saved result as terminal even if replay is still finalizing", async () => {
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: { job_id: "job-complete", status_url: "/api/data/upload-status/job-complete", status: "queued", message: "Upload accepted." },
+  });
+
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-status/job-complete")) {
+      return {
+        ok: true,
+        json: async () => ({
+          job_id: "job-complete",
+          status: "COMPLETE",
+          processing_state: "complete",
+          result_available: true,
+          replay_ready: false,
+          progress_label: "Analysis ready.",
+          message: "Analysis ready.",
+        }),
+      };
+    }
+    return { ok: true, json: async () => ({}) };
+  });
+  const onUploadComplete = vi.fn(async () => {});
+
+  renderWorkspace({ apiFetch, onUploadComplete });
+
+  const input = screen.getByTestId("csv-upload-input");
+  const file = new File(["timestamp,value\n2026-06-22,1\n"], "fresh.csv", { type: "text/csv" });
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
+  });
+});
+
 it("renders backend stage labels ahead of worker status detail", () => {
   const file = new File(["timestamp,value\n2026-06-22,1\n"], "stage.csv", { type: "text/csv" });
 
@@ -175,18 +214,18 @@ it("renders backend stage labels ahead of worker status detail", () => {
       processing_state: "scoring_drift_relationships",
       percent: 75,
       progress: 75,
-      progress_label: "Scoring operating changes...",
+      progress_label: "Mapping relationships...",
       propagation_stage: "scoring_drift_relationships",
       propagation_progress: 75,
-      propagation_label: "Scoring operating changes...",
+      propagation_label: "Mapping relationships...",
       worker_state: "starting",
     },
-    latestMessage: "Scoring operating changes...",
-    propagationLabel: "Scoring operating changes...",
+    latestMessage: "Mapping relationships...",
+    propagationLabel: "Mapping relationships...",
     queuedWorkerDetail: "Worker starting...",
   });
 
-  expect(screen.getByText("Scoring operating changes...")).toBeTruthy();
+  expect(screen.getByText("Mapping relationships...")).toBeTruthy();
   expect(screen.queryByText("Worker starting...")).toBeNull();
   expect(screen.getByLabelText(/Analysis 75% complete|Processing 75% complete/i)).toBeTruthy();
 });
@@ -204,10 +243,10 @@ it("renders intermediate backend processing progress without jumping to complete
       processing_state: "building_baseline",
       percent: 65,
       progress: 65,
-      progress_label: "Building baseline...",
+      progress_label: "Identifying systems...",
       result_available: false,
     },
-    latestMessage: "Building baseline...",
+    latestMessage: "Identifying systems...",
   });
 
   expect(screen.getByLabelText(/Telemetry transfer 100% complete|Upload 100% complete/i)).toBeTruthy();
@@ -228,11 +267,11 @@ it("does not show processing 100 until backend status is complete", () => {
       processing_state: "writing_result_replay",
       percent: 95,
       progress: 95,
-      progress_label: "Writing result and replay...",
+      progress_label: "Saving result...",
       result_available: true,
       replay_ready: true,
     },
-    latestMessage: "Writing result and replay...",
+    latestMessage: "Saving result...",
   });
 
   expect(screen.getByLabelText(/Analysis 95% complete|Processing 95% complete/i)).toBeTruthy();

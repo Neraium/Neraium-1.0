@@ -293,7 +293,6 @@ export default function DataConnectionsWorkspace({
     if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, requestedJobId);
     const runPoll = async () => {
       let attempts = 0;
-      let completeWithoutReplayCount = 0;
       while (shouldContinuePolling(requestedJobId) && pollSessionRef.current === pollSessionId) {
         attempts += 1;
         try {
@@ -351,21 +350,24 @@ export default function DataConnectionsWorkspace({
           setUploadJob(normalizedPayload);
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
-          const hasReplay = Boolean(normalizedPayload.replay_ready || normalizedPayload.replay_frame_count || normalizedPayload.latest_replay_frames);
-          if (normalizedStatus === "complete") {
-            completeWithoutReplayCount += hasReplay ? 2 : 1;
-            if (completeWithoutReplayCount >= 2 || hasReplay) {
-              const completePayload = { ...normalizedPayload, status: "COMPLETE", processing_state: "complete", percent: 100, progress: 100, progress_label: normalizedPayload.progress_label || "Analysis ready.", message: normalizedPayload.message || "Analysis ready." };
-              setUploadJob(completePayload);
-              setUploadState("complete");
-              setUploadProcessingFlag(false);
-              clearStoredUploadJobId();
-              return completePayload;
-            }
-          } else {
-            completeWithoutReplayCount = 0;
+          const terminalSuccess = normalizedStatus === "complete" || Boolean(normalizedPayload.result_available || normalizedPayload.first_usable_available);
+          if (terminalSuccess) {
+            const completePayload = {
+              ...normalizedPayload,
+              status: "COMPLETE",
+              processing_state: "complete",
+              percent: 100,
+              progress: 100,
+              progress_label: normalizedPayload.progress_label || "Analysis ready.",
+              message: normalizedPayload.message || "Analysis ready.",
+            };
+            setUploadJob(completePayload);
+            setUploadState("complete");
+            setUploadProcessingFlag(false);
+            clearStoredUploadJobId();
+            return completePayload;
           }
-          if (["failed", "error", "validation_error", "cancelled"].includes(normalizedStatus)) {
+          if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalizedStatus)) {
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
           setUploadState("running_sii");

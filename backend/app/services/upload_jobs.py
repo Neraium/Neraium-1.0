@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -194,6 +195,103 @@ def _complete_with_partial_result(
 
     return summary
 
+
+def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
+    repository_write_upload_completion(job_id, result=result, summary=summary)
+    repository_write_upload_status_progress(job_id, summary, latest_summary=summary, keep_result=True)
+    try:
+        complete_upload_queue_job(job_id, "completed")
+    except Exception:
+        pass
+    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
+    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
+    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
+
+
+def _finalize_completed_upload(
+    *,
+    job_id: str,
+    filename: str,
+    now: str,
+    initiated_by: str,
+    baseline_reliable: bool,
+    row_count_total: int,
+    result: dict[str, Any],
+    summary: dict[str, Any],
+) -> None:
+    finalized_result = dict(result)
+    finalized_summary = dict(summary)
+    finalization = {
+        "state": "running",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "label": "Finalizing report...",
+        "non_blocking": True,
+        "errors": [],
+    }
+    finalized_result["report_finalization"] = dict(finalization)
+    finalized_summary["report_finalization"] = dict(finalization)
+
+    try:
+        latest_sii = read_latest_sii_state()
+        if isinstance(latest_sii, dict):
+            _write_shared_state("latest_sii_state", latest_sii)
+    except Exception as exc:
+        finalization["errors"].append(f"latest_sii_state: {exc}")
+
+    evidence_persisted = False
+    try:
+        from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+
+        record = upsert_evidence_run(
+            build_evidence_record_from_result(
+                run_id=job_id,
+                filename=filename,
+                source_type="csv_upload",
+                result=finalized_result,
+                created_at=now,
+                completed_at=now,
+                status="completed",
+                initiated_by=initiated_by,
+                rows_received=finalized_result["ingestion_report"]["rows_received"],
+                rows_accepted=row_count_total,
+                rows_rejected=finalized_result["ingestion_report"]["rows_dropped"],
+            )
+        )
+        persisted_record = read_evidence_run(job_id)
+        evidence_persisted = bool(persisted_record and persisted_record.get("run_id") == job_id)
+        finalized_result["evidence_persistence"] = {
+            **dict(finalized_result.get("evidence_persistence") or {}),
+            "persisted": evidence_persisted,
+            "record_status": persisted_record.get("status") if persisted_record else None,
+        }
+        finalized_summary["evidence_persisted"] = evidence_persisted
+        if isinstance(record, dict):
+            dispatch_observation_notification(record)
+    except Exception as exc:
+        finalization["errors"].append(f"evidence_persistence: {exc}")
+
+    finalization["completed_at"] = datetime.now(timezone.utc).isoformat()
+    finalization["state"] = "complete" if not finalization["errors"] else "degraded"
+    finalized_result["report_finalization"] = dict(finalization)
+    finalized_summary["report_finalization"] = dict(finalization)
+    finalized_result["sii_reliable_enough_to_show"] = bool(baseline_reliable)
+    finalized_summary["sii_reliable_enough_to_show"] = bool(baseline_reliable)
+    _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
+
+
+def _start_optional_upload_finalization(**kwargs: Any) -> None:
+    if os.getenv("PYTEST_CURRENT_TEST") is not None:
+        _finalize_completed_upload(**kwargs)
+        return
+    thread = threading.Thread(
+        target=_finalize_completed_upload,
+        kwargs=kwargs,
+        daemon=True,
+        name=f"neraium-upload-finalize-{str(kwargs.get('job_id') or '')[:8]}",
+    )
+    thread.start()
+
+
 def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
     current = read_job(job_id) or read_upload_status(job_id) or {"job_id": job_id}
     bounded_progress = int(max(0, min(100, progress)))
@@ -218,25 +316,27 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
 
 def _progress_label(stage: str, *, row_count: int | None = None, signal_count: int | None = None) -> str:
     if stage == "reading_csv":
-        return "Reading uploaded CSV..."
+        return "Validating CSV..."
     if stage == "parsing_telemetry":
-        return f"Parsing telemetry... {row_count:,} rows read." if row_count else "Parsing telemetry."
+        return f"Normalizing telemetry... {row_count:,} rows read." if row_count else "Normalizing telemetry..."
     if stage == "detecting_schema_signals":
-        if signal_count is not None:
-            return f"Detected {signal_count} telemetry signal{'s' if signal_count != 1 else ''}."
-        return "Detecting schema and telemetry signals..."
+        return "Validating CSV..."
     if stage == "cleaning_imputing_data":
-        return "Cleaning and imputing data..."
+        return "Normalizing telemetry..."
     if stage == "profiling_data_quality":
-        return "Checking data quality..."
+        return "Normalizing telemetry..."
     if stage == "building_baseline":
-        return "Building baseline..."
+        return "Identifying systems..."
     if stage == "scoring_drift_relationships":
-        return "Scoring operating changes..."
+        return "Mapping relationships..."
+    if stage == "building_fingerprint":
+        return "Building fingerprint..."
     if stage == "generating_findings_evidence":
-        return "Preparing findings..."
+        return "Generating insights..."
     if stage == "writing_result_replay":
-        return "Writing result and replay..."
+        return "Saving result..."
+    if stage == "finalizing_report":
+        return "Finalizing report..."
     if stage == "complete":
         return "Analysis ready."
     return "Still processing..."
@@ -652,53 +752,32 @@ def _build_csv_result(
     result["analysis_explanation"] = build_analysis_explanation(result)
     result["analysis"] = result["analysis_explanation"]
 
-    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": False, "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}}
+    result["sii_reliable_enough_to_show"] = bool(baseline_reliable)
+    result["report_finalization"] = {
+        "state": "pending",
+        "label": _progress_label("finalizing_report"),
+        "non_blocking": True,
+    }
+
+    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": bool(baseline_reliable), "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}, "evidence_persisted": False, "report_finalization": dict(result["report_finalization"]) }
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
     summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
     _set_propagation_stage(job_id, stage="writing_result_replay", progress=95, label=_progress_label("writing_result_replay"))
-
-    latest_sii = read_latest_sii_state()
-    if isinstance(latest_sii, dict):
-        _write_shared_state("latest_sii_state", latest_sii)
-
-    try:
-        from app.services.evidence_store import upsert_evidence_run
-        record = upsert_evidence_run(
-            build_evidence_record_from_result(
-                run_id=job_id,
-                filename=filename,
-                source_type="csv_upload",
-                result=result,
-                created_at=now,
-                completed_at=now,
-                status="completed",
-                initiated_by=initiated_by,
-                rows_received=result["ingestion_report"]["rows_received"],
-                rows_accepted=row_count_total,
-                rows_rejected=result["ingestion_report"]["rows_dropped"],
-            )
-        )
-        if isinstance(record, dict):
-            from app.services.evidence_store import read_evidence_run
-            persisted_record = read_evidence_run(job_id)
-            evidence_persisted = bool(persisted_record and persisted_record.get("run_id") == job_id)
-            result["evidence_persistence"]["persisted"] = evidence_persisted
-            result["evidence_persistence"]["record_status"] = persisted_record.get("status") if persisted_record else None
-            result["sii_reliable_enough_to_show"] = bool(baseline_reliable and evidence_persisted)
-            summary["sii_reliable_enough_to_show"] = result["sii_reliable_enough_to_show"]
-            summary["evidence_persisted"] = evidence_persisted
-            dispatch_observation_notification(record)
-    except Exception:
-        pass
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label=_progress_label("complete")))
-    repository_write_upload_completion(job_id, result=result, summary=summary)
-    repository_write_upload_status_progress(job_id, summary, latest_summary=summary, keep_result=True)
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
+    _persist_completed_upload(job_id, result=result, summary=summary)
+    _start_optional_upload_finalization(
+        job_id=job_id,
+        filename=filename,
+        now=now,
+        initiated_by=initiated_by,
+        baseline_reliable=baseline_reliable,
+        row_count_total=row_count_total,
+        result=result,
+        summary=summary,
+    )
     return summary
 
 

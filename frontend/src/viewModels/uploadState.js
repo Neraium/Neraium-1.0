@@ -317,7 +317,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
 export function connectionStateLabel(latestStatus, uploadState, uploadError, latestUploadSnapshot = null) {
   const normalizedLatestStatus = String(latestStatus).toLowerCase();
   const operatorReviewReady = resolveOperatorReviewReadiness({ latestUploadSnapshot }) === "ready";
-  if (uploadError || normalizeUploadStatus(uploadState) === "failed") {
+  if (uploadError || ["failed", "cancelled", "timeout"].includes(normalizeUploadStatus(uploadState))) {
     return "Upload failed";
   }
   if (isUploadProcessing(uploadState)) {
@@ -446,7 +446,7 @@ function normalizeUploadStatus(status) {
 
 function isUploadProcessing(status) {
   const normalized = normalizeUploadStatus(status);
-  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "cognition_ready", "generating_replay", "writing_state"].includes(normalized);
+  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "building_fingerprint", "cognition_ready", "generating_replay", "writing_state"].includes(normalized);
 }
 
 function normalizeErrorMessage(message) {

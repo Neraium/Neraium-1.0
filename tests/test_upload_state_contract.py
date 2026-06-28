@@ -170,7 +170,7 @@ def test_upload_jobs_write_job_delegates_progress_persistence_to_repository(monk
             "status": "PROCESSING",
             "processing_state": "parsing_telemetry",
             "progress": 20,
-            "message": "Parsing telemetry.",
+            "message": "Normalizing telemetry...",
         }
     )
 

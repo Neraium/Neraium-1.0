@@ -57,7 +57,7 @@ def test_latest_upload_reports_processing_for_active_summary_without_result() ->
             "status": "PROCESSING",
             "processing_state": "parsing_telemetry",
             "progress": 42,
-            "message": "Parsing telemetry.",
+            "message": "Normalizing telemetry...",
             "session_scope": {"active": True, "status": "processing", "job_id": job_id, "run_id": job_id, "upload_id": job_id},
         },
     )

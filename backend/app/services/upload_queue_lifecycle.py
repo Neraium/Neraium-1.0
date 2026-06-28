@@ -156,12 +156,37 @@ class UploadQueueLifecycleService:
                 completed["propagation_stage"] = "complete"
                 completed["propagation_progress"] = 100
                 completed["propagation_label"] = "Complete."
+            self.write_job(completed)
+            complete_upload_queue_job(job_id, "completed")
             try:
                 path.unlink(missing_ok=True)
             except OSError:
                 pass
             self.delete_upload_source(metadata.get("shared_upload_source_key"))
             return bool(result)
+        except TimeoutError as exc:
+            self.logger.exception("upload_queue_job_timed_out job_id=%s filename=%s", job_id, metadata.get("filename"))
+            mark_queue_job_failed(job_id, str(exc) or exc.__class__.__name__)
+            complete_upload_queue_job(job_id, "failed", str(exc) or exc.__class__.__name__)
+            self.write_job(
+                {
+                    **metadata,
+                    "job_id": job_id,
+                    "status": "TIMEOUT",
+                    "processing_state": "timeout",
+                    "error_type": "processing_timeout",
+                    "error": str(exc) or exc.__class__.__name__,
+                    "message": f"Telemetry processing timed out: {str(exc) or exc.__class__.__name__}",
+                    "progress_label": "Telemetry processing timed out.",
+                    "result_available": False,
+                    "first_usable_available": False,
+                    "replay_ready": False,
+                    "replay_frame_count": 0,
+                    "propagation_stage": "failed",
+                    "propagation_label": "Timed out.",
+                }
+            )
+            return False
         except Exception as exc:
             self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, metadata.get("filename"))
             current = self.read_upload_status(job_id) or {}
