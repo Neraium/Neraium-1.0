@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
 import "../styles/operational-workflow.css";
@@ -88,26 +88,36 @@ export default function OperationalWorkflowWorkspace({
   const [insightStatuses, setInsightStatuses] = useState({});
   const [operatorNotes, setOperatorNotes] = useState({});
 
+  const deferredLiveOps = useDeferredValue(liveOps);
+  const deferredCanonicalFinding = useDeferredValue(canonicalFinding);
+  const deferredCurrentSession = useDeferredValue(currentSession);
+  const deferredLatestUploadResult = useDeferredValue(effectiveLatestUploadResult);
+  const deferredLatestUploadSnapshot = useDeferredValue(effectiveLatestUploadSnapshot);
+  const deferredRoomContext = useDeferredValue(roomContext);
+  const deferredDomainDetection = useDeferredValue(domainDetection);
+  const deferredGateProcessing = useDeferredValue(gateProcessing);
+  const deferredReplayFrame = useDeferredValue(replayFrame);
+
   const model = useMemo(() => buildOperationalModel({
-    liveOps,
-    canonicalFinding,
-    currentSession,
-    effectiveLatestUploadResult,
-    effectiveLatestUploadSnapshot,
-    roomContext,
-    domainDetection,
-    gateProcessing,
-    replayFrame,
+    liveOps: deferredLiveOps,
+    canonicalFinding: deferredCanonicalFinding,
+    currentSession: deferredCurrentSession,
+    effectiveLatestUploadResult: deferredLatestUploadResult,
+    effectiveLatestUploadSnapshot: deferredLatestUploadSnapshot,
+    roomContext: deferredRoomContext,
+    domainDetection: deferredDomainDetection,
+    gateProcessing: deferredGateProcessing,
+    replayFrame: deferredReplayFrame,
   }), [
-    liveOps,
-    canonicalFinding,
-    currentSession,
-    effectiveLatestUploadResult,
-    effectiveLatestUploadSnapshot,
-    roomContext,
-    domainDetection,
-    gateProcessing,
-    replayFrame,
+    deferredLiveOps,
+    deferredCanonicalFinding,
+    deferredCurrentSession,
+    deferredLatestUploadResult,
+    deferredLatestUploadSnapshot,
+    deferredRoomContext,
+    deferredDomainDetection,
+    deferredGateProcessing,
+    deferredReplayFrame,
   ]);
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
@@ -247,91 +257,220 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
-  if (model.overviewState === "noCsvUploaded") {
+function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
+  const heroRows = buildOverviewHeroRows(model);
+  const brief = buildOverviewBrief(model);
+  const checklistItems = buildOverviewChecklist(model);
+  const historyItems = model.historyItems.slice(0, 4);
+  const fallbackOutputs = buildOverviewOutputs(model);
+  const primaryInsight = model.insights[0] ?? null;
+  const showSystemsAction = model.analysisComplete && model.identifiedSystemCount > 0;
+  const showSupportGrid = model.analysisComplete || model.overviewState === "analyzing";
+
+  function renderPrimaryAction() {
+    if (model.analysisComplete && primaryInsight) {
+      return <button type="button" className="command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open Top Insight</button>;
+    }
     return (
-      <div className="operational-grid operational-grid--command-center">
-        <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
-          <div className="operational-hero operational-hero--solo">
-            <div className="operational-hero__summary">
-              <div className="operational-panel__header operational-panel__header--tight">
-                <span className="section-token">Overview</span>
-                <h2>{EMPTY_TELEMETRY_COPY.label}</h2>
-                <p>{EMPTY_TELEMETRY_COPY.detail}</p>
-              </div>
-              <div className="operational-actions operational-actions--hero">
-                <button type="button" className="command-button" onClick={onAnalyzeSystem}>{EMPTY_TELEMETRY_COPY.cta}</button>
-                {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
-                  <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
+      <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>
+        {model.overviewState === "noCsvUploaded" ? EMPTY_TELEMETRY_COPY.cta : model.primaryCtaLabel}
+      </button>
     );
   }
 
-  if (model.overviewState === "analysisComplete") {
-    return (
-      <div className="operational-grid operational-grid--command-center">
-        <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Executive summary">
-          <div className="operational-hero operational-hero--solo">
-            <div className="operational-hero__summary">
-              <div className="operational-panel__header operational-panel__header--tight">
-                <span className="section-token">Overview</span>
-                <h2>{model.heroStatus.label}</h2>
-                <p>{model.heroStatus.detail}</p>
-              </div>
-              <div className="operational-hero__meta">
-                <span>{model.storyProgressLabel}</span>
-                {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
-              </div>
-              <div className="operational-result-summary" aria-label="Executive summary">
-                <DetailGrid rows={model.executiveSummaryRows} />
-              </div>
-              <div className="operational-actions operational-actions--hero">
-                <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    );
+  function renderSecondaryAction() {
+    if (showSystemsAction) {
+      return <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>;
+    }
+    if (model.canResumePrevious && typeof onResumePreviousSession === "function") {
+      return <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>;
+    }
+    return null;
   }
 
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
-        <div className="operational-hero operational-hero--solo">
+        <div className="operational-hero">
           <div className="operational-hero__summary">
             <div className="operational-panel__header operational-panel__header--tight">
               <span className="section-token">Overview</span>
-              <h2>{model.heroStatus.label}</h2>
-              <p>{model.heroStatus.detail}</p>
+              <h2>{model.overviewState === "noCsvUploaded" ? EMPTY_TELEMETRY_COPY.label : model.heroStatus.label}</h2>
+              <p>{model.overviewState === "noCsvUploaded" ? EMPTY_TELEMETRY_COPY.detail : model.heroStatus.detail}</p>
             </div>
-            <div className="operational-hero__meta">
-              <span>{model.storyProgressLabel}</span>
-              <span>{model.sourceLabel}</span>
-            </div>
-            <div className="operational-result-summary" aria-label="Source summary">
-              <DetailGrid rows={[
-                ["Source", model.sourceLabel],
-                ["Status", model.sourceStatusLabel],
-                ["Rows", model.sourceRowCount],
-              ]} />
-            </div>
+            {model.overviewState === "noCsvUploaded" ? null : (
+              <div className="operational-hero__meta">
+                <span>{model.storyProgressLabel || "Awaiting telemetry"}</span>
+                <span>{model.sourceLabel}</span>
+                <span>{model.telemetryStatus.label}</span>
+                {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
+              </div>
+            )}
+            {model.analysisComplete ? (
+              <div className="operational-result-summary" aria-label="Executive summary">
+                <DetailGrid rows={model.executiveSummaryRows} />
+              </div>
+            ) : (
+              <div className="operational-result-summary" aria-label="Source summary">
+                <DetailGrid rows={model.overviewState === "noCsvUploaded" ? [
+                  ["Source", model.sourceLabel],
+                  ["Status", "Awaiting upload"],
+                  ["Rows", model.sourceRowCount],
+                  ["Telemetry", "No CSV yet"],
+                ] : [
+                  ["Source", model.sourceLabel],
+                  ["Status", model.sourceStatusLabel],
+                  ["Rows", model.sourceRowCount],
+                  ["Telemetry", model.telemetryStatus.label],
+                ]} />
+              </div>
+            )}
             <div className="operational-actions operational-actions--hero">
-              <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
-              {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
-                <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-              ) : null}
+              {renderPrimaryAction()}
+              {renderSecondaryAction()}
             </div>
           </div>
+          <aside className="operational-hero__aside" aria-label="Overview quick facts">
+            <span className="section-token">Command pulse</span>
+            <DetailGrid rows={heroRows} />
+          </aside>
         </div>
       </section>
+
+      {showSupportGrid ? (
+        <div className="overview-support-grid">
+          <section className="operational-panel" aria-label="Status at a glance">
+            <PanelHeader eyebrow="Command Pulse" title="Status At A Glance" subtitle="Immediate telemetry, fingerprint, and system posture." />
+            <div className="status-rack status-rack--dense">
+              {model.statusTiles.map((tile) => <CompactStatusTile key={tile.label} tile={tile} />)}
+            </div>
+          </section>
+
+          <section className="operational-panel" aria-label="Operator brief">
+            <PanelHeader eyebrow="Operator Brief" title={brief.title} subtitle={brief.subtitle} />
+            <ul className="operational-list operational-list--stacked overview-checklist">
+              {checklistItems.map((item) => (
+                <li key={item}>
+                  <strong>{item}</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="operational-actions operational-actions--overview">
+              {model.analysisComplete && primaryInsight ? (
+                <button type="button" className="secondary-command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Inspect Finding</button>
+              ) : null}
+              {showSystemsAction ? (
+                <button type="button" className="secondary-command-button" onClick={onViewSystems}>Open Systems</button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="operational-panel operational-panel--wide" aria-label="Recent analysis activity">
+            <PanelHeader eyebrow="Activity" title={historyItems.length ? "Recent Analysis Activity" : "What This Run Returns"} subtitle={historyItems.length ? "Latest analysis and historical context." : "What the operator receives when analysis completes."} />
+            {historyItems.length ? (
+              <Timeline items={historyItems} />
+            ) : (
+              <ul className="operational-list operational-list--stacked overview-checklist">
+                {fallbackOutputs.map((item) => (
+                  <li key={item}>
+                    <strong>{item}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function buildOverviewHeroRows(model) {
+  const primaryInsight = model.insights[0] ?? null;
+  if (model.overviewState === "noCsvUploaded") {
+    return [
+      ["Telemetry", "Awaiting upload"],
+      ["Systems", SYSTEMS_PENDING.countLabel],
+      ["Fingerprint", "Pending"],
+      ["Last analysis", model.lastAnalysis],
+    ];
+  }
+
+  return [
+    ["Telemetry", model.telemetryStatus.label],
+    ["Systems", model.analysisComplete ? String(model.identifiedSystemCount) : SYSTEMS_PENDING.countLabel],
+    ["Fingerprint", model.analysisComplete ? model.fingerprintDrift.label : NO_BASELINE_AVAILABLE.label],
+    ["Top insight", primaryInsight?.system ?? (model.analysisComplete ? "No active insight" : "Pending")],
+    ["Source", model.sourceLabel],
+    ["Last analysis", model.lastAnalysis],
+  ];
+}
+
+function buildOverviewBrief(model) {
+  if (model.overviewState === "noCsvUploaded") {
+    return {
+      title: "Start With A Telemetry Export",
+      subtitle: "Upload a CSV and Neraium will turn it into a systems view, operating fingerprint, and operator-ready brief.",
+    };
+  }
+  if (model.overviewState === "analyzing") {
+    return {
+      title: "Analysis Is In Motion",
+      subtitle: "The pipeline is validating telemetry, building the fingerprint, and translating the result into operator language.",
+    };
+  }
+  if (model.analysisComplete) {
+    return {
+      title: "Use The Result To Decide What To Check Next",
+      subtitle: "Focus first on the highest-risk system, then confirm the telemetry conditions before acting.",
+    };
+  }
+  return {
+    title: "Telemetry Is Loaded And Ready",
+    subtitle: "Run analysis to identify systems, map relationships, and establish the operating fingerprint.",
+  };
+}
+
+function buildOverviewChecklist(model) {
+  if (model.overviewState === "noCsvUploaded") {
+    return [
+      "Choose a timestamped telemetry CSV from the system you want to review.",
+      "Run analysis to identify systems, relationships, and baseline behavior.",
+      "Open Insights and Systems after the run completes to inspect what changed.",
+    ];
+  }
+  if (model.overviewState === "analyzing") {
+    return [
+      "Validation and normalization are running first so the result stays trustworthy.",
+      "The fingerprint pass compares current behavior with the learned baseline before insights are published.",
+      "When saving completes, results appear immediately even if final report artifacts keep processing in the background.",
+    ];
+  }
+  if (model.analysisComplete) {
+    const topInsight = model.insights[0]?.summary ?? "Review the highest-priority system change first.";
+    return [
+      `Primary focus: ${topInsight}`,
+      `Telemetry posture: ${model.telemetryStatus.detail}`,
+      `Fingerprint readout: ${model.fingerprintDrift.detail}`,
+    ];
+  }
+  return [
+    "The CSV is available and ready for the analysis pipeline.",
+    "Neraium will identify systems, map relationships, and build the operating fingerprint from this export.",
+    "Use the result to move from raw telemetry to specific operator checks.",
+  ];
+}
+
+function buildOverviewOutputs(model) {
+  const outputs = [
+    "Identified systems and affected equipment groups.",
+    "Mapped signal relationships and system-level drift.",
+    "An operating fingerprint with insight summaries and recommended checks.",
+  ];
+  if (model.overviewState !== "noCsvUploaded") {
+    outputs.push("Telemetry quality warnings so the operator knows how much to trust the result.");
+  }
+  return outputs;
 }
 
 function InsightsSection({
@@ -917,7 +1056,7 @@ function buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insight
   if (!analysisComplete) {
     return [
       { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },
-      { label: "Status", value: uiState.status.label, detail: uiState.status.detail, tone: uiState.status.tone },
+      { label: "Status", value: uiState.status.label, detail: analysisComplete ? "Result saved and ready for review." : uiState.status.detail, tone: uiState.status.tone },
       { label: "Systems", value: SYSTEMS_PENDING.title, detail: SYSTEMS_PENDING.summary, tone: "unknown" },
       { label: "Fingerprint", value: NO_BASELINE_AVAILABLE.label, detail: NO_BASELINE_AVAILABLE.detail, tone: "unknown" },
     ];
@@ -925,7 +1064,7 @@ function buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insight
 
   return [
     { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },
-    { label: "Status", value: uiState.status.label, detail: uiState.status.detail, tone: uiState.status.tone },
+    { label: "Status", value: uiState.status.label, detail: analysisComplete ? "Result saved and ready for review." : uiState.status.detail, tone: uiState.status.tone },
     { label: "Systems", value: String(identifiedSystemCount), detail: identifiedSystemCount + " " + (identifiedSystemCount === 1 ? "system" : "systems") + " identified by SII analysis.", tone: "normal" },
     { label: "Insights", value: String(insights.length), detail: insights.length + " active " + (insights.length === 1 ? "insight" : "insights"), tone: insights.length > 0 ? "changed" : "unknown" },
     baselineAvailable ? { label: "Fingerprint", value: "Established", detail: "Fingerprint comparison is available.", tone: "normal" } : null,
@@ -1027,7 +1166,7 @@ function buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, a
       id: "current-analysis",
       title: insights.length ? "Current insight generated" : "Current analysis completed",
       time: snapshot?.processed_at ?? result?.processed_at ?? "Current period",
-      detail: insights[0]?.summary ?? "Current telemetry was analyzed for system behavior changes.",
+      detail: insights[0]?.summary ? `Top finding: ${insights[0].summary}` : "Current telemetry was analyzed for system behavior changes.",
     });
   }
   return items;

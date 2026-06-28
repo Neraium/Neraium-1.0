@@ -411,6 +411,231 @@ button:focus-visible {
   color: var(--accent-cyan);
 }
 
+.intake-flow--ops {
+  display: grid;
+  gap: 16px;
+}
+
+.intake-flow__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(15, 23, 42, 0.9));
+}
+
+.intake-flow__hero-copy h3,
+.intake-flow__support-header h3 {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.intake-flow__hero-copy p,
+.intake-flow__support-header p,
+.intake-flow__fact p,
+.intake-stage-list__item p,
+.intake-output-list li {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.intake-flow__hero-badge {
+  display: grid;
+  gap: 4px;
+  min-width: 108px;
+  padding: 12px 14px;
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  border-radius: var(--card-radius);
+  background: rgba(7, 13, 23, 0.74);
+  text-align: right;
+}
+
+.intake-flow__hero-badge strong {
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.intake-flow__hero-badge span,
+.intake-stage-rail__item span,
+.intake-flow__fact span,
+.intake-stage-list__status {
+  color: var(--text-muted);
+  font-size: var(--type-label-xs);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-file-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+}
+
+.upload-file-card__main strong,
+.intake-flow__fact strong,
+.intake-stage-list__heading strong {
+  color: var(--text-primary);
+}
+
+.upload-file-card__main strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+
+.upload-file-card__main p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.intake-stage-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.intake-stage-rail__item,
+.intake-flow__support-card,
+.intake-flow__fact,
+.intake-stage-list__item {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.intake-stage-rail__item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.intake-stage-rail__item strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.intake-stage-rail__index,
+.intake-stage-list__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.intake-stage-rail__item--complete,
+.intake-stage-list__item--complete {
+  border-color: rgba(34, 197, 94, 0.32);
+  background: rgba(8, 116, 67, 0.14);
+}
+
+.intake-stage-rail__item--active,
+.intake-stage-list__item--active {
+  border-color: rgba(96, 165, 250, 0.38);
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.intake-stage-list__item--failed {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.intake-flow__workflow-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 12px;
+}
+
+.intake-flow__support-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.intake-flow__support-card--wide {
+  grid-column: span 2;
+}
+
+.intake-flow__support-header {
+  display: grid;
+  gap: 6px;
+}
+
+.intake-flow__fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.intake-flow__fact {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.intake-flow__fact strong {
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.intake-stage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.intake-stage-list__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+}
+
+.intake-stage-list__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.intake-stage-list__status {
+  white-space: nowrap;
+}
+
+.intake-output-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intake-output-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--surface-divider);
+}
+
+.intake-output-list li:last-child {
+  border-bottom: 0;
+}
+
 @media (max-width: 760px) {
   .command-button,
   .secondary-command-button,

@@ -349,6 +349,31 @@
     min-height: -webkit-fill-available;
   }
 
+  .intake-flow__hero,
+  .upload-file-card,
+  .intake-flow__workflow-grid,
+  .intake-flow__fact-grid,
+  .intake-stage-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .intake-flow__hero {
+    padding: 14px;
+  }
+
+  .intake-flow__hero-badge {
+    text-align: left;
+  }
+
+  .intake-flow__support-card--wide {
+    grid-column: auto;
+  }
+
+  .intake-stage-list__heading {
+    display: grid;
+    justify-content: flex-start;
+  }
+
   .upload-file-card__actions--responsive {
     display: flex;
     flex-wrap: wrap;

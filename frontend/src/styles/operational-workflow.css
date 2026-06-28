@@ -429,6 +429,37 @@
   font-weight: 400;
 }
 
+.overview-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-support-grid .operational-panel--wide {
+  grid-column: span 2;
+}
+
+.status-rack--dense {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.operational-list--stacked li,
+.overview-checklist li {
+  display: grid;
+  justify-content: flex-start;
+  gap: 6px;
+  align-items: start;
+}
+
+.overview-checklist li strong {
+  color: var(--ops-ink);
+  line-height: 1.5;
+}
+
+.operational-actions--overview {
+  margin-top: 12px;
+}
+
 .status-rack {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -864,6 +895,7 @@ button.insight-card {
   .operational-grid--overview,
   .operational-grid--command-center,
   .operational-grid--split,
+  .overview-support-grid,
   .status-rack,
   .operational-detail-grid {
     grid-template-columns: 1fr;

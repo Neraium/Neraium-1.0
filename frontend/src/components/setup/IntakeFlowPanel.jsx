@@ -1,3 +1,4 @@
+import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
 import { Panel } from "../workspacePrimitives";
 
 function normalizeStatusText(value) {
@@ -90,6 +91,116 @@ function resolveStageProgress({ uploadState, uploadJob, uploadTransfer }) {
   };
 }
 
+function formatLifecycleHeadline(value, fallback) {
+  const normalized = normalizeUploadLifecycle(value);
+  const labels = {
+    idle: "Awaiting upload",
+    validated: "Ready to upload",
+    uploading: "Uploading telemetry",
+    accepted: "Validating CSV",
+    queued: "Queued for analysis",
+    validating_schema: "Validating CSV",
+    parsing: "Normalizing telemetry",
+    baseline_modeling: "Identifying systems",
+    processing: "Normalizing telemetry",
+    structural_scoring: "Mapping relationships",
+    building_fingerprint: "Building fingerprint",
+    writing_state: "Generating insights",
+    cognition_ready: "Saving result",
+    generating_replay: "Finalizing report",
+    complete: "Ready to review",
+    failed: "Needs attention",
+    error: "Needs attention",
+    validation_error: "Validation issue",
+    cancelled: "Cancelled",
+    timeout: "Timed out",
+  };
+  return labels[normalized] ?? String(fallback || "Awaiting upload").replace(/\.\.\.$/, "");
+}
+
+function buildWorkflowRail({ hasSelectedFiles, stageProgress }) {
+  const activeStage = stageProgress.activeStage;
+  const stages = [
+    { id: "select", label: "Select file" },
+    { id: "upload", label: "Upload" },
+    { id: "analyze", label: "Analyze" },
+    { id: "review", label: "Review" },
+  ];
+
+  return stages.map((stage, index) => {
+    let state = "pending";
+    if (index === 0) {
+      state = hasSelectedFiles || ["upload", "processing", "complete"].includes(activeStage) ? "complete" : "active";
+    }
+    if (index === 1) {
+      if (activeStage === "upload") state = "active";
+      if (["processing", "complete"].includes(activeStage)) state = "complete";
+    }
+    if (index === 2) {
+      if (activeStage === "processing") state = "active";
+      if (activeStage === "complete") state = "complete";
+    }
+    if (index === 3) {
+      if (activeStage === "complete") state = "active";
+    }
+    return {
+      ...stage,
+      state,
+    };
+  });
+}
+
+function formatRowCount(value) {
+  const count = Number(value);
+  if (!Number.isFinite(count) || count <= 0) return "Rows pending";
+  return `${count.toLocaleString()} rows`;
+}
+
+function buildSupportFacts({ selectedFiles, selectedFileLabel, selectedFileSize, pendingUploadKind, uploadStatusLabel, latestUploadSnapshot, uploadJob }) {
+  const currentUpload = latestUploadSnapshot?.current_upload ?? null;
+  const latestRows = currentUpload?.row_count ?? currentUpload?.rows_received ?? uploadJob?.rows_received ?? 0;
+  return [
+    {
+      label: selectedFiles?.length ? "Selected file" : "Next step",
+      value: selectedFiles?.length ? "CSV selected" : currentUpload?.filename ?? "Choose telemetry CSV",
+      detail: selectedFiles?.length ? `${String(pendingUploadKind || "csv").toUpperCase()} ready • ${selectedFileSize}` : "Pick a telemetry export to start the pipeline.",
+    },
+    {
+      label: "Current stage",
+      value: formatLifecycleHeadline(uploadJob?.processing_state ?? uploadJob?.status ?? null, uploadStatusLabel),
+      detail: "Progress reflects backend milestones instead of placeholder timers.",
+    },
+    {
+      label: "Latest accepted batch",
+      value: formatRowCount(latestRows),
+      detail: currentUpload?.filename ?? "No completed upload saved yet.",
+    },
+    {
+      label: "Result readiness",
+      value: uploadJob?.result_available || normalizeUploadLifecycle(uploadJob?.status ?? uploadJob?.processing_state) === "complete" ? "Ready to review" : "Awaiting analysis",
+      detail: uploadJob?.result_available
+        ? "Core result can be opened even if final report artifacts continue in the background."
+        : "Systems, fingerprint, and insight generation complete before review opens.",
+    },
+  ];
+}
+
+function buildRunOutputs({ latestUploadSnapshot, hasSelectedFiles }) {
+  const rowCount = latestUploadSnapshot?.current_upload?.row_count ?? latestUploadSnapshot?.latest_result?.row_count ?? 0;
+  const outputs = [
+    "Identified systems and grouped operating behaviors.",
+    "Relationship mapping and fingerprint drift summary.",
+    "Operator-ready insights with recommended checks.",
+    "Data quality and completeness context so the result stays trustworthy.",
+  ];
+  if (rowCount > 0) {
+    outputs.push(`The latest accepted batch includes ${Number(rowCount).toLocaleString()} telemetry rows.`);
+  } else if (hasSelectedFiles) {
+    outputs.push("The selected file becomes the baseline for the next analysis run.");
+  }
+  return outputs;
+}
+
 const hiddenFileInputStyle = {
   position: "absolute",
   width: "1px",
@@ -162,6 +273,7 @@ export default function IntakeFlowPanel({
   uploadInputRef,
   handleFileSelection,
   selectedFiles,
+  latestUploadSnapshot,
   pendingUploadKind,
   selectedFileSize,
   isUploadProcessing,
@@ -215,15 +327,34 @@ export default function IntakeFlowPanel({
   const shouldShowStatusBlock = shouldShowUploadStatus || shouldShowBatchSummary;
   const errorMessage = String(latestMessage || (hasValidationError ? "Select a valid telemetry file." : "Analysis failed. Select a new file and try again.")).trim();
   const showUploadDebug = import.meta.env.DEV;
+  const workflowRail = buildWorkflowRail({ hasSelectedFiles, stageProgress });
+  const pipelineStages = buildIntakeStages(latestUploadSnapshot?.latest_result ?? null, uploadJob?.processing_state ?? uploadJob?.status ?? uploadState, null, uploadJob);
+  const supportFacts = buildSupportFacts({ selectedFiles, selectedFileLabel, selectedFileSize, pendingUploadKind, uploadStatusLabel, latestUploadSnapshot, uploadJob });
+  const runOutputs = buildRunOutputs({ latestUploadSnapshot, hasSelectedFiles });
 
   return (
-    <Panel title="Analyze System" className="span-7 workspace-hero-panel upload-ops-panel">
+    <Panel title="Analyze System" subtitle="Upload telemetry and generate an operator-ready system report" className="span-7 workspace-hero-panel upload-ops-panel">
       <form className="intake-flow intake-flow--ops" onSubmit={handleUpload}>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
+
+        <div className="intake-flow__hero">
+          <div className="intake-flow__hero-copy">
+            <span className="section-token">Operational intake</span>
+            <h3>Move from CSV to system-level findings</h3>
+            <p>Upload a telemetry export and Neraium will validate it, map systems, build the operating fingerprint, and return an operator-ready result without forcing manual column-by-column interpretation.</p>
+          </div>
+          {visibleProgressPercent !== null && Number.isFinite(Number(visibleProgressPercent)) ? (
+            <div className="intake-flow__hero-badge" aria-label={`Overall progress ${visibleProgressPercent}%`}>
+              <strong>{visibleProgressPercent}%</strong>
+              <span>Pipeline progress</span>
+            </div>
+          ) : null}
+        </div>
+
         <div className="upload-file-card">
           <div className="upload-file-card__main">
             <strong>{selectedFileLabel}</strong>
-            <p>{selectedFiles?.length ? `${pendingUploadKind.toUpperCase()} - ${selectedFileSize}` : "Select a telemetry file to begin."}</p>
+            <p>{selectedFiles?.length ? `${String(pendingUploadKind || "csv").toUpperCase()} • ${selectedFileSize}` : "Select a telemetry file to begin."}</p>
           </div>
           <div className="upload-file-card__actions upload-file-card__actions--responsive">
             <button data-testid="onboarding-demo-csv-option" className="command-button" type="button" onClick={() => openFilePicker("csv")}>Choose Telemetry File</button>
@@ -232,6 +363,16 @@ export default function IntakeFlowPanel({
             </button>
           </div>
         </div>
+
+        <div className="intake-stage-rail" aria-label="Upload and review workflow">
+          {workflowRail.map((stage, index) => (
+            <div key={stage.id} className={`intake-stage-rail__item intake-stage-rail__item--${stage.state}`}>
+              <span className="intake-stage-rail__index">{index + 1}</span>
+              <strong>{stage.label}</strong>
+            </div>
+          ))}
+        </div>
+
         {hasValidationError || hasUploadError ? (
           <div className="upload-partial-alert" role="alert" aria-live="assertive" style={alertLayoutStyle}>
             <strong>{hasValidationError ? "File not ready" : "Analysis failed"}</strong>
@@ -256,6 +397,7 @@ export default function IntakeFlowPanel({
             </div>
           </div>
         ) : null}
+
         {shouldShowStatusBlock ? (
           <div className={`intake-flow__status intake-flow__status--${uploadJob?.error ? "error" : isUploadProcessing(uploadState) ? "active" : "idle"}`}>
             {shouldShowUploadStatus ? (
@@ -310,6 +452,74 @@ export default function IntakeFlowPanel({
             ) : null}
           </div>
         ) : null}
+
+        <div className="intake-flow__workflow-grid">
+          <section className="intake-flow__support-card intake-flow__support-card--wide" aria-label="Backend milestones">
+            <div className="intake-flow__support-header">
+              <div>
+                <span className="section-token">Pipeline</span>
+                <h3>Backend milestones</h3>
+                <p>Each milestone reflects the actual analysis pipeline so operators can tell whether the run is validating data, building the fingerprint, or saving the result.</p>
+              </div>
+            </div>
+            <div className="intake-stage-list" role="list">
+              {pipelineStages.map((stage, index) => {
+                const detailText = normalizeStatusText(stage.detail) === normalizeStatusText(uploadStatusLabel)
+                  ? "Current backend stage is active."
+                  : stage.detail;
+                return (
+                  <div key={`${stage.title}-${index}`} className={`intake-stage-list__item intake-stage-list__item--${stage.state}`} role="listitem">
+                    <span className="intake-stage-list__index">{index + 1}</span>
+                    <div>
+                      <div className="intake-stage-list__heading">
+                        <strong>{stage.title}</strong>
+                        <span className={`intake-stage-list__status intake-stage-list__status--${stage.state}`}>{stage.state}</span>
+                      </div>
+                      <p>{detailText}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="intake-flow__support-card" aria-label="Run snapshot">
+            <div className="intake-flow__support-header">
+              <div>
+                <span className="section-token">Snapshot</span>
+                <h3>Current run at a glance</h3>
+                <p>The selected file, current stage, and latest accepted upload stay visible while analysis runs.</p>
+              </div>
+            </div>
+            <div className="intake-flow__fact-grid">
+              {supportFacts.map((fact) => (
+                <div key={fact.label} className="intake-flow__fact">
+                  <span>{fact.label}</span>
+                  <strong>{fact.value}</strong>
+                  <p>{fact.detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="intake-flow__support-card" aria-label="Analysis outputs">
+            <div className="intake-flow__support-header">
+              <div>
+                <span className="section-token">Outputs</span>
+                <h3>What this run returns</h3>
+                <p>The goal is a usable system report, not just a processed file.</p>
+              </div>
+            </div>
+            <ul className="intake-output-list">
+              {runOutputs.map((item) => (
+                <li key={item}>
+                  <strong>{item}</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
         {showUploadDebug ? (
           <div
             className="upload-debug-panel"
@@ -334,6 +544,7 @@ export default function IntakeFlowPanel({
             <span><strong>response body/error:</strong> {uploadDebug?.responseBodyOrError || "n/a"}</span>
           </div>
         ) : null}
+
         <details className="upload-secondary-actions">
           <summary>Analysis options</summary>
           <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Clear Analysis</button>

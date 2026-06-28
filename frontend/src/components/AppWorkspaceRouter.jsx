@@ -1,10 +1,10 @@
 import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
-import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
-import OperationalWorkflowWorkspace from "./OperationalWorkflowWorkspace";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
+const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
+const OperationalWorkflowWorkspace = lazy(() => import("./OperationalWorkflowWorkspace"));
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./GovernanceAdminWorkspace"));
 const ObservationCenterWorkspace = lazy(() => import("./ObservationCenterWorkspace"));
@@ -82,22 +82,24 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <DataConnectionsWorkspace
-          accessCode={accessCode}
-          apiFetch={apiFetch}
-          apiStatus={apiStatus}
-          latestUploadSnapshot={effectiveLatestUploadSnapshot}
-          latestUploadResult={effectiveLatestUploadResult}
-          hasActiveSession={hasActiveSession}
-          hasResumedSession={hasResumedSession}
-          hasCurrentUploadResult={hasCurrentUploadResult}
-          hasRealSiiOutput={hasRealSiiOutput}
-          roomContext={roomContext}
-          onUploadComplete={handleGateUploadComplete}
-          sessionStore={liveOps.session}
-          onResetDemo={handleResetDemo}
-          formatClockTime={formatClockTime}
-        />
+        <Suspense fallback={renderLoadingPanel("Loading Upload Workspace", "Preparing telemetry intake...")}>
+          <DataConnectionsWorkspace
+            accessCode={accessCode}
+            apiFetch={apiFetch}
+            apiStatus={apiStatus}
+            latestUploadSnapshot={effectiveLatestUploadSnapshot}
+            latestUploadResult={effectiveLatestUploadResult}
+            hasActiveSession={hasActiveSession}
+            hasResumedSession={hasResumedSession}
+            hasCurrentUploadResult={hasCurrentUploadResult}
+            hasRealSiiOutput={hasRealSiiOutput}
+            roomContext={roomContext}
+            onUploadComplete={handleGateUploadComplete}
+            sessionStore={liveOps.session}
+            onResetDemo={handleResetDemo}
+            formatClockTime={formatClockTime}
+          />
+        </Suspense>
       </WorkspaceWithBackControl>
     );
   }
@@ -201,26 +203,28 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <OperationalWorkflowWorkspace
-          liveOps={{
-            ...liveOps,
-            replayOverlay: historianReplayState.frame ?? null,
-            canonicalFinding,
-          }}
-          replayFrame={historianReplayState.frame}
-          currentSession={currentSession}
-          canonicalFinding={canonicalFinding}
-          effectiveLatestUploadResult={effectiveLatestUploadResult}
-          effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
-          roomContext={roomContext}
-          domainMode={domainMode}
-          domainDetection={domainDetection}
-          gateProcessing={gateProcessing}
-          onWorkspaceNavigate={setActiveWorkspace}
-          onSignOut={handleSignOut}
-          onUploadComplete={handleGateUploadComplete}
-          onResumePreviousSession={handleResumePreviousSession}
-        />
+        <Suspense fallback={renderLoadingPanel("Loading Command Center", "Preparing system overview...")}>
+          <OperationalWorkflowWorkspace
+            liveOps={{
+              ...liveOps,
+              replayOverlay: historianReplayState.frame ?? null,
+              canonicalFinding,
+            }}
+            replayFrame={historianReplayState.frame}
+            currentSession={currentSession}
+            canonicalFinding={canonicalFinding}
+            effectiveLatestUploadResult={effectiveLatestUploadResult}
+            effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+            roomContext={roomContext}
+            domainMode={domainMode}
+            domainDetection={domainDetection}
+            gateProcessing={gateProcessing}
+            onWorkspaceNavigate={setActiveWorkspace}
+            onSignOut={handleSignOut}
+            onUploadComplete={handleGateUploadComplete}
+            onResumePreviousSession={handleResumePreviousSession}
+          />
+        </Suspense>
       </div>
     </AppErrorBoundary>
   );

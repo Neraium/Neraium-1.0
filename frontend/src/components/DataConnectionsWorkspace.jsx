@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
 import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
 import {
   normalizeUploadJob,
@@ -347,7 +347,9 @@ export default function DataConnectionsWorkspace({
           const normalizedPayload = normalizeStatusPayload(payload, requestedJobId);
           pollingPath = normalizeUploadStatusPath(normalizedPayload?.status_url, requestedJobId) ?? pollingPath;
           uploadStatusPathRef.current = pollingPath;
-          setUploadJob(normalizedPayload);
+          startTransition(() => {
+            setUploadJob(normalizedPayload);
+          });
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
           const terminalSuccess = normalizedStatus === "complete" || Boolean(normalizedPayload.result_available || normalizedPayload.first_usable_available);
@@ -370,10 +372,12 @@ export default function DataConnectionsWorkspace({
           if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalizedStatus)) {
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
-          setUploadState("running_sii");
-          if (typeof progressPercent === "number") {
-            setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
-          }
+          startTransition(() => {
+            setUploadState("running_sii");
+            if (typeof progressPercent === "number") {
+              setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
+            }
+          });
           await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, 1500); });
         } catch (error) {
           pollFailureCountRef.current += 1;
@@ -424,7 +428,9 @@ export default function DataConnectionsWorkspace({
           const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
           if (!dataLine) continue;
           const payload = JSON.parse(dataLine.slice(5).trim());
-          setUploadJob(normalizeStatusPayload(payload, pollingJobId));
+          startTransition(() => {
+            setUploadJob(normalizeStatusPayload(payload, pollingJobId));
+          });
           if (normalizeUploadStatus(payload?.status) === "complete" || payload?.result_available || payload?.replay_ready) {
             return payload;
           }
@@ -474,7 +480,9 @@ export default function DataConnectionsWorkspace({
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
         onProgress: (progress) => {
-          setUploadTransfer({ ...progress, label: formatUploadTransferLabel(progress) });
+          startTransition(() => {
+            setUploadTransfer({ ...progress, label: formatUploadTransferLabel(progress) });
+          });
         },
         onDebug: (debug) => {
           setUploadDebug((current) => ({
@@ -522,6 +530,13 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
     : null;
+  const deferredProgressUploadJob = useDeferredValue(progressUploadJob);
+  const deferredProgressUploadTransfer = useDeferredValue(progressUploadTransfer);
+  const latestStatusMessage = uploadError || visibleStatusLabel || readiness;
+  const deferredLatestStatusMessage = useDeferredValue(latestStatusMessage);
+  const deferredVisibleProgressPercent = useDeferredValue(visibleProgressPercent);
+  const deferredPropagationLabel = useDeferredValue(propagationLabel);
+  const deferredQueuedWorkerDetail = useDeferredValue(queuedWorkerDetail);
 
   function handleFileSelection(event) {
     const files = Array.from(event?.target?.files ?? []);
@@ -585,12 +600,12 @@ export default function DataConnectionsWorkspace({
         isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
         openFilePicker={openFilePicker}
-        uploadJob={progressUploadJob}
-        latestMessage={uploadError || visibleStatusLabel || readiness}
-        visibleProgressPercent={visibleProgressPercent}
-        propagationLabel={propagationLabel}
-        queuedWorkerDetail={queuedWorkerDetail}
-        uploadTransfer={progressUploadTransfer}
+        uploadJob={deferredProgressUploadJob}
+        latestMessage={deferredLatestStatusMessage}
+        visibleProgressPercent={deferredVisibleProgressPercent}
+        propagationLabel={deferredPropagationLabel}
+        queuedWorkerDetail={deferredQueuedWorkerDetail}
+        uploadTransfer={deferredProgressUploadTransfer}
         uploadDebug={uploadDebug}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
