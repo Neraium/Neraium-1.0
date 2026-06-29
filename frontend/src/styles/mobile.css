@@ -427,6 +427,29 @@
     white-space: normal;
   }
 
+
+  .upload-result-summary,
+  .upload-advanced-details__grid,
+  .upload-progress-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-simple-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .upload-simple-actions .command-button,
+  .upload-simple-actions .secondary-command-button {
+    flex: 1 1 100%;
+    width: 100%;
+    white-space: normal;
+  }
+
+  .upload-simple-card {
+    padding: 14px;
+  }
+
   .system-status-rail__item {
     flex: 0 0 92px !important;
     width: 92px !important;

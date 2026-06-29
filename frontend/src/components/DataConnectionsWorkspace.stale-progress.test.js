@@ -10,25 +10,8 @@ const h = React.createElement;
 
 vi.mock("../services/api/uploadApi", () => ({
   uploadTelemetryFileWithProgress: vi.fn(),
+  retryUploadAnalysisJob: vi.fn(),
 }));
-
-const legacyUploadCompleteLabels = [
-  "Upload 100% complete",
-  "Telemetry transfer 100% complete",
-];
-const legacyProcessingCompleteLabels = [
-  "Processing 100% complete",
-  "Analysis 100% complete",
-];
-
-function expectNoCompleteProgressBars() {
-  for (const label of legacyUploadCompleteLabels) {
-    expect(screen.queryByLabelText(label)).toBeNull();
-  }
-  for (const label of legacyProcessingCompleteLabels) {
-    expect(screen.queryByLabelText(label)).toBeNull();
-  }
-}
 
 function renderPanel(overrides = {}) {
   return render(h(IntakeFlowPanel, {
@@ -38,20 +21,21 @@ function renderPanel(overrides = {}) {
     selectedFiles: [],
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "processing", "running_sii"].includes(String(state)),
+    isUploadProcessing: (state) => ["uploading", "processing", "running_sii", "structural_scoring", "building_fingerprint"].includes(String(state)),
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
-    latestMessage: "Choose a telemetry file to begin.",
+    latestMessage: "Choose a CSV to analyze.",
     visibleProgressPercent: null,
     propagationLabel: "",
     queuedWorkerDetail: "",
     uploadTransfer: null,
-    uploadStateMessage: (state) => state === "idle" ? "Choose a telemetry file to begin." : "Telemetry file ready.",
+    uploadStateMessage: (state) => state === "idle" ? "Choose a CSV to analyze." : "CSV ready.",
     batchResults: [],
     onRetryFailedUploads: vi.fn(),
     onReprocessCurrentBatch: vi.fn(),
     onResetWorkspace: vi.fn(),
+    onViewResults: vi.fn(),
     ...overrides,
   }));
 }
@@ -86,32 +70,114 @@ function renderWorkspace(props = {}) {
   }));
 }
 
+function selectedCsv(name = "fresh.csv") {
+  return new File(["timestamp,value\n2026-06-22,1\n"], name, { type: "text/csv" });
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.clearAllMocks();
 });
 
-it("idle no-file state does not render stale complete upload progress", () => {
+it("mobile upload screen does not render backend milestone cards by default", () => {
+  window.innerWidth = 390;
+  renderPanel();
+
+  expect(screen.getByRole("heading", { name: "Analyze System" })).toBeTruthy();
+  expect(screen.queryByLabelText("Backend milestones")).toBeNull();
+  expect(screen.queryByText("Backend milestones")).toBeNull();
+  expect(screen.queryByText("What this run returns")).toBeNull();
+  expect(screen.queryByText("Current run at a glance")).toBeNull();
+});
+
+it("selected file state shows filename, size, and Upload and Analyze", () => {
+  renderPanel({
+    uploadState: "validated",
+    selectedFiles: [selectedCsv("operators.csv")],
+    selectedFileSize: "15.7 MB",
+  });
+
+  expect(screen.getByText("operators.csv")).toBeTruthy();
+  expect(screen.getByText("CSV - 15.7 MB")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Upload and Analyze" })).toBeTruthy();
+});
+
+it("processing state shows one progress bar", () => {
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [selectedCsv("progress.csv")],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "progress-job",
+      status: "PROCESSING",
+      processing_state: "building_fingerprint",
+      percent: 65,
+      progress: 65,
+      progress_label: "Building fingerprint...",
+      result_available: false,
+    },
+    latestMessage: "Building fingerprint...",
+  });
+
+  expect(screen.getByText("Building operating fingerprint...")).toBeTruthy();
+  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
+});
+
+it("failed state shows retry and choose another file", () => {
+  renderPanel({
+    uploadState: "error",
+    selectedFiles: [selectedCsv("bad.csv")],
+    selectedFileSize: "3.2 MB",
+    latestMessage: "CSV could not be parsed.",
+    uploadJob: {
+      job_id: "failed-job",
+      status: "FAILED",
+      processing_state: "failed",
+      error: "CSV could not be parsed.",
+    },
+  });
+
+  expect(screen.getByRole("heading", { name: "Analysis failed" })).toBeTruthy();
+  expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
+  expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+});
+
+it("complete state shows View Results", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("complete.csv")],
+    selectedFileSize: "8.4 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        identified_systems: [{ name: "Pumping" }, { name: "Storage" }],
+        insights: [{ summary: "Pump cycling changed." }],
+        fingerprint_status: "Established",
+      },
+    },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+  });
+
+  expect(screen.getByRole("heading", { name: "Analysis Complete" })).toBeTruthy();
+  expect(screen.getByText("Systems identified")).toBeTruthy();
+  expect(screen.getByText("Insights found")).toBeTruthy();
+  expect(screen.getByText("Fingerprint status")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
+});
+
+it("idle no-file state does not render stale complete progress", () => {
   renderPanel({
     uploadState: "idle",
     selectedFiles: [],
     uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
   });
 
-  expect(screen.getByText(/No telemetry file selected|No file selected/i)).toBeTruthy();
-  expect(screen.getByText(/Select a telemetry file to begin|Select a CSV telemetry file to begin/i)).toBeTruthy();
-  expectNoCompleteProgressBars();
-});
-
-it("idle no-file state does not render stale complete processing progress", () => {
-  renderPanel({
-    uploadState: "idle",
-    selectedFiles: [],
-    uploadJob: { job_id: "old-job", status: "complete", progress: 100, processing_state: "complete" },
-  });
-
-  expectNoCompleteProgressBars();
+  expect(screen.getByText("No CSV selected")).toBeTruthy();
+  expect(screen.getByText("Choose a CSV to analyze.")).toBeTruthy();
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
@@ -122,16 +188,16 @@ it("selecting a file clears stale complete progress", async () => {
   });
 
   const input = screen.getByTestId("csv-upload-input");
-  const file = new File(["timestamp,value\n2026-06-22,1\n"], "fresh.csv", { type: "text/csv" });
-  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(input, { target: { files: [selectedCsv()] } });
 
   await waitFor(() => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
-  expectNoCompleteProgressBars();
+  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "Upload and Analyze" })).toBeTruthy();
 });
 
-it("reset workspace hides progress bars", async () => {
+it("analyze another CSV resets the completed workspace", async () => {
   const onResetDemo = vi.fn(async () => ({}));
   renderWorkspace({
     hasResumedSession: true,
@@ -140,15 +206,15 @@ it("reset workspace hides progress bars", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByLabelText(/Telemetry transfer 100% complete|Upload 100% complete/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: /Clear Analysis|Clear Upload Workspace/i }));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze Another CSV" }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);
   });
-  expectNoCompleteProgressBars();
+  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
 it("previous completed upload does not leak progress into new idle upload screen", () => {
@@ -158,12 +224,12 @@ it("previous completed upload does not leak progress into new idle upload screen
     sessionStore: completedSessionStore(),
   });
 
-  expect(screen.getByText(/No telemetry file selected|No file selected/i)).toBeTruthy();
-  expect(screen.getByText(/Select a telemetry file to begin|Select a CSV telemetry file to begin/i)).toBeTruthy();
-  expectNoCompleteProgressBars();
+  expect(screen.getByText("No CSV selected")).toBeTruthy();
+  expect(screen.getByText("Choose a CSV to analyze.")).toBeTruthy();
+  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
-it("treats the first complete payload with a saved result as terminal even if replay is still finalizing", async () => {
+it("treats the first complete payload with a saved result as terminal and waits for View Results navigation", async () => {
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
@@ -192,50 +258,25 @@ it("treats the first complete payload with a saved result as terminal even if re
   renderWorkspace({ apiFetch, onUploadComplete });
 
   const input = screen.getByTestId("csv-upload-input");
-  const file = new File(["timestamp,value\n2026-06-22,1\n"], "fresh.csv", { type: "text/csv" });
-  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(input, { target: { files: [selectedCsv()] } });
   fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
+  });
+
+  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "View Results" }));
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
   });
 });
 
-it("renders backend stage labels ahead of worker status detail", () => {
-  const file = new File(["timestamp,value\n2026-06-22,1\n"], "stage.csv", { type: "text/csv" });
-
+it("renders intermediate processing progress without jumping to complete", () => {
   renderPanel({
     uploadState: "running_sii",
-    selectedFiles: [file],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "stage-job",
-      status: "PROCESSING",
-      processing_state: "scoring_drift_relationships",
-      percent: 75,
-      progress: 75,
-      progress_label: "Mapping relationships...",
-      propagation_stage: "scoring_drift_relationships",
-      propagation_progress: 75,
-      propagation_label: "Mapping relationships...",
-      worker_state: "starting",
-    },
-    latestMessage: "Mapping relationships...",
-    propagationLabel: "Mapping relationships...",
-    queuedWorkerDetail: "Worker starting...",
-  });
-
-  expect(screen.getByText("Mapping relationships...")).toBeTruthy();
-  expect(screen.queryByText("Worker starting...")).toBeNull();
-  expect(screen.getByLabelText(/Analysis 75% complete|Processing 75% complete/i)).toBeTruthy();
-});
-
-it("renders intermediate backend processing progress without jumping to complete", () => {
-  const file = new File(["timestamp,value\n2026-06-22,1\n"], "progress.csv", { type: "text/csv" });
-
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [file],
+    selectedFiles: [selectedCsv("progress.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: {
       job_id: "progress-job",
@@ -249,24 +290,22 @@ it("renders intermediate backend processing progress without jumping to complete
     latestMessage: "Identifying systems...",
   });
 
-  expect(screen.getByLabelText(/Telemetry transfer 100% complete|Upload 100% complete/i)).toBeTruthy();
-  expect(screen.getByLabelText(/Analysis 65% complete|Processing 65% complete/i)).toBeTruthy();
-  expect(screen.queryByLabelText(/Analysis 100% complete|Processing 100% complete/i)).toBeNull();
+  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
+  expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });
 
-it("does not show processing 100 until backend status is complete", () => {
-  const file = new File(["timestamp,value\n2026-06-22,1\n"], "not-complete.csv", { type: "text/csv" });
-
+it("does not show processing 100 until status is complete", () => {
   renderPanel({
     uploadState: "running_sii",
-    selectedFiles: [file],
+    selectedFiles: [selectedCsv("not-complete.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: {
       job_id: "not-complete-job",
       status: "PROCESSING",
       processing_state: "writing_result_replay",
-      percent: 95,
-      progress: 95,
+      percent: 100,
+      progress: 100,
       progress_label: "Saving result...",
       result_available: true,
       replay_ready: true,
@@ -274,6 +313,6 @@ it("does not show processing 100 until backend status is complete", () => {
     latestMessage: "Saving result...",
   });
 
-  expect(screen.getByLabelText(/Analysis 95% complete|Processing 95% complete/i)).toBeTruthy();
-  expect(screen.queryByLabelText(/Analysis 100% complete|Processing 100% complete/i)).toBeNull();
+  expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
+  expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });

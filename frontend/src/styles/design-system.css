@@ -636,6 +636,186 @@ button:focus-visible {
   border-bottom: 0;
 }
 
+
+.intake-flow--simple {
+  display: grid;
+  gap: 14px;
+}
+
+.upload-simple-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.upload-simple-card__file,
+.upload-complete-header,
+.upload-progress-summary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.upload-simple-card__file strong,
+.upload-complete-header h3,
+.upload-result-summary__item strong,
+.upload-progress-summary strong {
+  color: var(--text-primary);
+}
+
+.upload-simple-card__file strong,
+.upload-complete-header span,
+.upload-progress-summary span,
+.upload-error-message,
+.upload-advanced-details dd {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.upload-simple-card__file span,
+.upload-complete-header span,
+.upload-result-summary__item span,
+.upload-progress-summary span,
+.upload-simple-note,
+.upload-advanced-details dt,
+.upload-advanced-details__stages span {
+  color: var(--text-secondary);
+}
+
+.upload-simple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.upload-simple-actions .command-button,
+.upload-simple-actions .secondary-command-button {
+  min-width: min(100%, 180px);
+  justify-content: center;
+}
+
+.upload-progress-summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.upload-progress-summary span {
+  font-weight: 700;
+}
+
+.upload-progress-meter--single {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.upload-progress-meter--single > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(197, 146, 60, 0.98), rgba(244, 210, 132, 0.98));
+  transition: width 320ms ease;
+}
+
+.upload-result-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.upload-result-summary__item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.upload-error-message,
+.upload-simple-note {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.upload-simple-card--failed {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.14);
+}
+
+.upload-simple-card--complete {
+  border-color: rgba(34, 197, 94, 0.32);
+  background: rgba(8, 116, 67, 0.12);
+}
+
+.upload-advanced-details {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--card-radius);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0;
+}
+
+.upload-advanced-details summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.upload-advanced-details__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
+.upload-advanced-details__grid div {
+  min-width: 0;
+}
+
+.upload-advanced-details dt {
+  font-size: var(--type-label-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-advanced-details dd {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+}
+
+.upload-advanced-details__stages {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 14px 14px 30px;
+}
+
+.upload-advanced-details__stages li {
+  padding-left: 4px;
+}
+
+.upload-advanced-details__stages strong {
+  color: var(--text-primary);
+}
+
+.upload-advanced-details__stages span {
+  margin-left: 8px;
+  font-size: var(--type-label-xs);
+}
+
 @media (max-width: 760px) {
   .command-button,
   .secondary-command-button,

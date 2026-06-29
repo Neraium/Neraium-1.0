@@ -392,8 +392,11 @@ export default function DataConnectionsWorkspace({
     };
     pollInFlightRef.current = runPoll()
       .then((completedPayload) => {
+        if (completedPayload) {
+          setUploadResult(uploadStateView.resolveCurrentUploadResult(completedPayload) ?? completedPayload);
+        }
         if (completedPayload && typeof onUploadComplete === "function") {
-          return onUploadComplete(completedPayload, { navigateToGate: true }).then(() => completedPayload);
+          return onUploadComplete(completedPayload, { navigateToGate: false }).then(() => completedPayload);
         }
         return completedPayload;
       })
@@ -558,6 +561,12 @@ export default function DataConnectionsWorkspace({
     uploadInputRef.current?.click();
   }
 
+  async function viewCompletedResults() {
+    if (typeof onUploadComplete !== "function") return;
+    const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
+    await onUploadComplete(payload, { navigateToGate: true });
+  }
+
   async function retryCurrentBatch() {
     const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
     if (!currentJobId) {
@@ -612,6 +621,7 @@ export default function DataConnectionsWorkspace({
         onRetryFailedUploads={() => { void retryCurrentBatch(); }}
         onReprocessCurrentBatch={() => { void retryCurrentBatch(); }}
         onResetWorkspace={() => { void clearUploadClientState(); }}
+        onViewResults={() => { void viewCompletedResults(); }}
       />
     </div>
   );
