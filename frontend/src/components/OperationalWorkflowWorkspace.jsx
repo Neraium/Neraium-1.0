@@ -504,7 +504,9 @@ function InsightsSection({
             <DetailGrid rows={[
               ["System affected", selectedInsight.system],
               ["Severity", selectedInsight.severity],
-              ["Confidence", selectedInsight.confidence],
+              ["Confidence", selectedInsight.confidenceScore ? `${selectedInsight.confidence} (${selectedInsight.confidenceScore})` : selectedInsight.confidence],
+              ["Confidence rationale", selectedInsight.confidenceRationale],
+              ["Evidence summary", selectedInsight.evidenceSummary],
               ["What happened", selectedInsight.whatHappened],
               ["Why Neraium thinks it happened", selectedInsight.whyNeraiumThinks],
               ["What could happen next", selectedInsight.possibleConsequence],
@@ -518,6 +520,22 @@ function InsightsSection({
                 <h3>Contributing factors</h3>
                 <ul className="compact-list">
                   {selectedInsight.contributingFactors.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </section>
+            ) : null}
+            {selectedInsight.contributingMetrics?.length ? (
+              <section className="operational-block">
+                <h3>Contributing metrics</h3>
+                <ul className="compact-list">
+                  {selectedInsight.contributingMetrics.map((item, index) => <li key={`${item.name ?? item.source_column ?? "metric"}-${index}`}>{firstText(item.name, item.source_column)}</li>)}
+                </ul>
+              </section>
+            ) : null}
+            {selectedInsight.contributingRelationships?.length ? (
+              <section className="operational-block">
+                <h3>Contributing relationships</h3>
+                <ul className="compact-list">
+                  {selectedInsight.contributingRelationships.map((item, index) => <li key={`${item.id ?? "relationship"}-${index}`}>{toList(item.columns).join(" / ") || firstText(item.change_type, item.relationship_type)}</li>)}
                 </ul>
               </section>
             ) : null}
@@ -975,14 +993,20 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       status: normalizeInsightStatus(item.status ?? item.severity),
       severity: normalizeSeverity(item.severity),
       summary: firstText(item.title, item.explanation),
-      whatHappened: item.explanation,
-      whyNeraiumThinks: firstText(item.likely_cause, item.likelyCause),
-      possibleConsequence: firstText(item.possible_consequence, item.possibleConsequence),
+      whatHappened: firstText(item.what_changed, item.whatChanged, item.explanation),
+      whyNeraiumThinks: firstText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.likelyCause),
+      possibleConsequence: firstText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
       recommendedAction: firstText(item.recommended_action, item.recommendedAction),
-      operatorCheck: firstText(item.operator_check, item.operatorCheck),
+      operatorCheck: firstText(item.recommended_operator_check, item.operator_check, item.operatorCheck),
       contributingFactors: toList(item.contributing_factors, item.contributingFactors).flatMap(splitPriorityText),
-      evidence: Array.isArray(item.evidence) ? item.evidence : [],
+      contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
+      contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
+      evidence: Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : []),
+      evidenceSummary: item.evidence_summary,
+      sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
       confidence: item.confidence,
+      confidenceScore: item.confidence_score,
+      confidenceRationale: item.confidence_rationale,
       telemetryNote: telemetryStatus.detail,
       detectedAt: lastAnalysis,
     })).filter((item) => item.summary);
@@ -1226,18 +1250,39 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
 function EvidencePanel({ evidence }) {
   const supportingSignals = toList(evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText);
   const metricChanges = toList(evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(splitPriorityText);
+  const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText);
+  const sourceRanges = Array.isArray(evidence.source_time_ranges) ? evidence.source_time_ranges.map(formatEvidenceRange).filter(Boolean) : [];
   return (
     <details className="evidence-panel">
       <summary>Evidence{evidence.confidence ? " (" + evidence.confidence + ")" : ""}</summary>
       <DetailGrid rows={[
-        ["Confidence", evidence.confidence],
+        ["Summary", evidence.summary],
+        ["Type", evidence.type],
+        ["Confidence", evidence.confidence_score ? `${evidence.confidence} (${evidence.confidence_score})` : evidence.confidence],
         ["Time window", evidence.time_window ?? evidence.timeWindow],
         ["Persistence / duration", evidence.persistence_duration ?? evidence.persistenceDuration],
+        ["Calculated delta", evidence.calculated_delta ?? evidence.calculatedDelta],
+        ["Calculated percent delta", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
+        ["Upload", evidence.source_upload_id ?? evidence.upload_id],
+        ["Analysis", evidence.analysis_id],
       ]} />
+      {sourceColumns.length ? <QualityList title="Source columns" items={sourceColumns} empty="" /> : null}
+      {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
       {supportingSignals.length ? <QualityList title="Supporting signals" items={supportingSignals} empty="" /> : null}
       {metricChanges.length ? <QualityList title="Relevant metric changes" items={metricChanges} empty="" /> : null}
     </details>
   );
+}
+
+function formatEvidenceRange(range) {
+  if (!range || typeof range !== "object") return "";
+  const label = firstText(range.label, range.window);
+  const direct = [range.start, range.end].filter(Boolean).join(" to ");
+  const comparison = [
+    range.baseline_start && range.baseline_end ? `baseline ${range.baseline_start} to ${range.baseline_end}` : "",
+    range.current_start && range.current_end ? `current ${range.current_start} to ${range.current_end}` : "",
+  ].filter(Boolean).join("; ");
+  return [label, firstText(direct, comparison)].filter(Boolean).join(": ");
 }
 
 function Timeline({ items }) {

@@ -228,11 +228,22 @@ describe("OperationalWorkflowWorkspace product story states", () => {
         recommended_action: "Check pump schedule and valve position",
         operator_check: "Inspect pump runtime and downstream valve position.",
         confidence: "high",
+        confidence_score: 0.91,
+        confidence_rationale: "Confidence score 0.91 is based on 18 baseline samples, 18 current samples, and correlation delta 1.11.",
+        evidence_summary: "Pressure increased 18%; Flow decreased 9%",
         system: "Flow and pressure system",
-        evidence: [{
+        contributing_metrics: [{ name: "pressure", source_column: "pressure" }, { name: "flow", source_column: "flow" }],
+        contributing_relationships: [{ id: "relationship-0", columns: ["pressure", "flow"], change_type: "weakened" }],
+        evidence_items: [{
+          type: "relationship_change",
+          summary: "Pressure and flow relationship weakened.",
           confidence: "high",
+          confidence_score: 0.91,
           supporting_signals: ["Pressure increased 18%", "Flow decreased 9%"],
           relevant_metric_changes: ["Pump runtime increased 14%"],
+          source_columns: ["pressure", "flow"],
+          source_time_ranges: [{ label: "relationship_comparison", baseline_start: "2026-06-23T09:00:00Z", baseline_end: "2026-06-23T21:00:00Z", current_start: "2026-06-24T09:00:00Z", current_end: "2026-06-24T21:00:00Z" }],
+          calculated_delta: 1.11,
           time_window: "2026-06-23T09:00:00Z to 2026-06-24T21:00:00Z",
           persistence_duration: "Pattern persisted for 36 hours",
         }],
@@ -275,6 +286,10 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("The signals stopped moving together like the baseline window.")).toBeTruthy();
     expect(screen.getByText("What could happen next")).toBeTruthy();
     expect(screen.getByText("Evidence (high)")).toBeTruthy();
+    expect(screen.getByText("Confidence rationale")).toBeTruthy();
+    expect(screen.getByText("Pressure increased 18%; Flow decreased 9%")).toBeTruthy();
+    expect(screen.getByText("Source columns")).toBeTruthy();
+    expect(screen.getByText("Source time ranges")).toBeTruthy();
     expect(screen.getByText("Pressure increased 18%")).toBeTruthy();
     expect(screen.getByText("Pattern persisted for 36 hours")).toBeTruthy();
     expect(screen.queryByText("Maintenance correlation will appear when maintenance history is connected.")).toBeNull();

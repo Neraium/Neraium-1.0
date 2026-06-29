@@ -80,6 +80,144 @@ def _relationship_source_rows(baseline_rows: list[dict[str, Any]], recent_rows: 
         anchors.append(_source_row_anchor(recent_rows[-1], "recent_end"))
     return [anchor for anchor in anchors if anchor.get("source_row") is not None or anchor.get("timestamp")]
 
+
+def _source_time_window(source_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_window = {
+        str(anchor.get("window")): anchor
+        for anchor in source_rows
+        if isinstance(anchor, dict) and anchor.get("window")
+    }
+    window = {
+        "baseline_start": (by_window.get("baseline_start") or {}).get("timestamp"),
+        "baseline_end": (by_window.get("baseline_end") or {}).get("timestamp"),
+        "current_start": (by_window.get("recent_start") or {}).get("timestamp"),
+        "current_end": (by_window.get("recent_end") or {}).get("timestamp"),
+    }
+    return {key: value for key, value in window.items() if value}
+
+
+def _relationship_direction(baseline_corr: float, recent_corr: float) -> str:
+    if abs(baseline_corr) >= 0.25 and abs(recent_corr) >= 0.25 and (baseline_corr > 0) != (recent_corr > 0):
+        return "inverted"
+    if recent_corr >= 0.1:
+        return "positive"
+    if recent_corr <= -0.1:
+        return "negative"
+    return "weak_or_flat"
+
+
+def _relationship_change_type(baseline_corr: float, recent_corr: float) -> str:
+    baseline_strength = abs(baseline_corr)
+    current_strength = abs(recent_corr)
+    sign_flipped = (
+        baseline_strength >= 0.35
+        and current_strength >= 0.35
+        and (baseline_corr > 0) != (recent_corr > 0)
+    )
+    if sign_flipped:
+        return "disrupted"
+    if baseline_strength >= 0.65 and current_strength < 0.35:
+        return "missing"
+    if baseline_strength >= 0.65 and current_strength <= baseline_strength - 0.25:
+        return "weakened"
+    if current_strength >= 0.65 and baseline_strength < 0.35:
+        return "new"
+    if current_strength >= baseline_strength + 0.25:
+        return "strengthened"
+    return "stable"
+
+
+def _change_percentage(baseline_strength: float, current_strength: float) -> float | None:
+    if baseline_strength <= 1e-9:
+        return None
+    return round(((current_strength - baseline_strength) / baseline_strength) * 100.0, 4)
+
+
+def _confidence_score(baseline_sample_size: int, recent_sample_size: int, change_magnitude: float) -> float:
+    sample_floor = min(baseline_sample_size, recent_sample_size)
+    sample_factor = min(1.0, sample_floor / 12.0)
+    change_factor = min(1.0, max(0.0, change_magnitude) / 0.75)
+    return round(max(0.2, (sample_factor * 0.65) + (change_factor * 0.35)), 4)
+
+
+def _confidence_level(score: float) -> str:
+    if score >= 0.75:
+        return "high"
+    if score >= 0.45:
+        return "moderate"
+    return "limited"
+
+
+def _system_label_for_columns(left_col: str, right_col: str) -> str:
+    text = f"{left_col} {right_col}".lower()
+    if any(token in text for token in ("flow", "pressure", "pump", "valve", "air")):
+        return "Flow and pressure system"
+    if any(token in text for token in ("temp", "heat", "cool", "hvac")):
+        return "Thermal response system"
+    if any(token in text for token in ("humidity", "moisture", "water")):
+        return "Moisture response system"
+    if any(token in text for token in ("runtime", "schedule", "energy", "power")):
+        return "Schedule and energy system"
+    return "Uploaded telemetry"
+
+
+def _relationship_summary(left_col: str, right_col: str, edge: dict[str, Any]) -> str:
+    change_type = str(edge.get("change_type") or "changed").replace("_", " ")
+    return (
+        f"{left_col} vs {right_col} relationship {change_type}: "
+        f"baseline strength={edge['baseline_strength']:.3f}, "
+        f"current strength={edge['current_strength']:.3f}, "
+        f"correlation delta={edge['correlation_delta']:.3f}."
+    )
+
+
+def _compact(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: item
+        for key, item in value.items()
+        if item is not None and item != "" and item != [] and item != {}
+    }
+
+
+def _relationship_graph(
+    *,
+    selected_numeric_columns: list[str],
+    edges: list[dict[str, Any]],
+    sampled_for_baseline: bool,
+    column_limited: bool,
+) -> dict[str, Any]:
+    systems = sorted(
+        {
+            _system_label_for_columns(
+                str(edge.get("supporting_metric_pairs", [{}])[0].get("left", "")),
+                str(edge.get("supporting_metric_pairs", [{}])[0].get("right", "")),
+            )
+            for edge in edges
+            if edge.get("supporting_metric_pairs")
+        }
+    )
+    nodes = [
+        {"id": f"metric:{column}", "type": "metric", "label": column, "source_column": column}
+        for column in selected_numeric_columns
+    ]
+    nodes.extend(
+        {"id": f"system:{system.lower().replace(' ', '_')}", "type": "system", "label": system}
+        for system in systems
+    )
+    changed_edges = [edge for edge in edges if edge.get("change_type") != "stable"]
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "changed_edges": changed_edges,
+        "weakened_relationships": [edge for edge in changed_edges if edge.get("change_type") == "weakened"],
+        "strengthened_relationships": [edge for edge in changed_edges if edge.get("change_type") == "strengthened"],
+        "new_relationships": [edge for edge in changed_edges if edge.get("change_type") == "new"],
+        "missing_relationships": [edge for edge in changed_edges if edge.get("change_type") == "missing"],
+        "disrupted_relationships": [edge for edge in changed_edges if edge.get("change_type") == "disrupted"],
+        "sampled_for_baseline": sampled_for_baseline,
+        "relationship_columns_limited": column_limited,
+    }
+
 def build_relationship_baseline(
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
@@ -97,6 +235,21 @@ def build_relationship_baseline(
         return {
             "top_relationship_changes": [],
             "baseline_relationships": [],
+            "relationship_graph": {
+                "nodes": [
+                    {"id": f"metric:{column}", "type": "metric", "label": column, "source_column": column}
+                    for column in selected_numeric_columns
+                ],
+                "edges": [],
+                "changed_edges": [],
+                "weakened_relationships": [],
+                "strengthened_relationships": [],
+                "new_relationships": [],
+                "missing_relationships": [],
+                "disrupted_relationships": [],
+                "sampled_for_baseline": False,
+                "relationship_columns_limited": column_limited,
+            },
             "sampled_for_baseline": False,
             "relationship_columns_analyzed": len(selected_numeric_columns),
             "relationship_columns_available": len(numeric_columns),
@@ -119,6 +272,7 @@ def build_relationship_baseline(
     if column_limited:
         sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
+    graph_edges: list[dict[str, Any]] = []
     baseline_frame = pd.DataFrame(baseline_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
     recent_frame = pd.DataFrame(recent_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
     baseline_corr_matrix = baseline_frame.corr(min_periods=3)
@@ -140,11 +294,46 @@ def build_relationship_baseline(
                 continue
 
             baseline_strength = abs(float(baseline_corr))
-            if baseline_strength < 0.65:
-                continue
-
+            current_strength = abs(float(recent_corr))
             drift = abs(float(recent_corr) - float(baseline_corr))
-            if drift < 0.25:
+            change_type = _relationship_change_type(float(baseline_corr), float(recent_corr))
+            confidence_score = _confidence_score(baseline_sample_size, recent_sample_size, drift)
+            time_window = _source_time_window(source_rows)
+            edge = _compact(
+                {
+                    "id": f"relationship:{left_col}:{right_col}",
+                    "source": f"metric:{left_col}",
+                    "target": f"metric:{right_col}",
+                    "relationship_type": "linear_correlation",
+                    "change_type": change_type,
+                    "strength": round(float(current_strength), 6),
+                    "baseline_strength": round(float(baseline_strength), 6),
+                    "current_strength": round(float(current_strength), 6),
+                    "direction": _relationship_direction(float(baseline_corr), float(recent_corr)),
+                    "confidence": confidence_score,
+                    "confidence_level": _confidence_level(confidence_score),
+                    "baseline_correlation": round(float(baseline_corr), 6),
+                    "recent_correlation": round(float(recent_corr), 6),
+                    "correlation_delta": round(float(drift), 6),
+                    "signed_correlation_delta": round(float(recent_corr) - float(baseline_corr), 6),
+                    "change_percentage": _change_percentage(baseline_strength, current_strength),
+                    "supporting_metric_pairs": [
+                        {
+                            "left": left_col,
+                            "right": right_col,
+                            "baseline_correlation": round(float(baseline_corr), 6),
+                            "recent_correlation": round(float(recent_corr), 6),
+                            "baseline_sample_size": baseline_sample_size,
+                            "recent_sample_size": recent_sample_size,
+                        }
+                    ],
+                    "time_window": time_window,
+                    "source_rows": source_rows,
+                }
+            )
+            graph_edges.append(edge)
+
+            if change_type == "stable" or drift < 0.25:
                 continue
 
             candidates.append(
@@ -153,7 +342,19 @@ def build_relationship_baseline(
                     "baseline_correlation": round(float(baseline_corr), 6),
                     "recent_correlation": round(float(recent_corr), 6),
                     "correlation_delta": round(float(drift), 6),
+                    "signed_correlation_delta": round(float(recent_corr) - float(baseline_corr), 6),
                     "coupling_strength": round(float(baseline_strength), 6),
+                    "relationship_type": "linear_correlation",
+                    "change_type": change_type,
+                    "strength": round(float(current_strength), 6),
+                    "baseline_strength": round(float(baseline_strength), 6),
+                    "current_strength": round(float(current_strength), 6),
+                    "direction": edge.get("direction"),
+                    "confidence_score": confidence_score,
+                    "confidence_level": _confidence_level(confidence_score),
+                    "change_percentage": edge.get("change_percentage"),
+                    "supporting_metric_pairs": edge.get("supporting_metric_pairs"),
+                    "time_window": time_window,
                     "baseline_sample_size": baseline_sample_size,
                     "recent_sample_size": recent_sample_size,
                     "sampled_for_baseline": sampled_for_baseline,
@@ -174,17 +375,22 @@ def build_relationship_baseline(
                         },
                     ],
                     "source_rows": source_rows,
-                    "summary": (
-                        f"Coupling shift in {left_col} vs {right_col}: "
-                        f"baseline={float(baseline_corr):.3f}, recent={float(recent_corr):.3f}, delta={float(drift):.3f}."
-                    ),
+                    "summary": _relationship_summary(left_col, right_col, edge),
                 }
             )
 
     candidates.sort(key=lambda item: (item["correlation_delta"], item["coupling_strength"]), reverse=True)
+    graph_edges.sort(key=lambda item: (abs(float(item.get("correlation_delta") or 0)), float(item.get("baseline_strength") or 0)), reverse=True)
+    graph = _relationship_graph(
+        selected_numeric_columns=selected_numeric_columns,
+        edges=graph_edges,
+        sampled_for_baseline=sampled_for_baseline,
+        column_limited=column_limited,
+    )
     return {
         "top_relationship_changes": candidates[:5],
         "baseline_relationships": candidates,
+        "relationship_graph": graph,
         "sampled_for_baseline": sampled_for_baseline,
         "relationship_columns_analyzed": len(selected_numeric_columns),
         "relationship_columns_available": len(numeric_columns),

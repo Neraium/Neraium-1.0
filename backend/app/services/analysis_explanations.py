@@ -10,6 +10,7 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         relationship_model = {
             "top_relationship_changes": baseline.get("top_relationship_changes", []),
             "baseline_relationships": baseline.get("baseline_relationships", []),
+            "relationship_graph": baseline.get("relationship_graph", {}),
         }
     operator_report = result.get("operator_report") if isinstance(result.get("operator_report"), dict) else {}
     intelligence = result.get("sii_intelligence") if isinstance(result.get("sii_intelligence"), dict) else {}
@@ -61,6 +62,7 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         ),
         "systems": systems,
         "relationships": relationships,
+        "relationship_graph": relationship_model.get("relationship_graph", {}),
         "insights": insights,
         "fingerprint": fingerprint,
         "evidence": evidence,
@@ -109,6 +111,9 @@ def build_insights(
     persistence = result.get("engine_result", {}).get("persistence_assessment") if isinstance(result.get("engine_result"), dict) else {}
     persistent_columns = set(persistence.get("persistent_columns") or []) if isinstance(persistence, dict) else set()
     time_window = build_time_window(result)
+    source_ranges = source_time_ranges(result, time_window)
+    upload_id = first_text(result.get("upload_id"), result.get("job_id"), result.get("run_id"))
+    analysis_id = first_text(result.get("analysis_id"), result.get("run_id"), upload_id)
 
     relationship_changes = [
         item for item in relationship_model.get("top_relationship_changes", [])
@@ -117,28 +122,64 @@ def build_insights(
     for index, item in enumerate(relationship_changes[:3]):
         columns = relationship_columns(item)
         label = " / ".join(columns) if columns else str(item.get("relationship") or "Signal relationship")
-        evidence = relationship_evidence(item, time_window)
-        insights.append(
-            compact_dict(
-                {
-                    "id": f"relationship-{index}",
-                    "title": f"Relationship shift: {label}",
-                    "severity": severity_from_number(item.get("correlation_delta")),
-                    "explanation": first_text(
-                        item.get("summary"),
-                        f"{label} changed between the baseline window and recent window.",
-                    ),
-                    "likely_cause": "The affected signals no longer move together the way they did in the baseline window.",
-                    "contributing_factors": columns,
-                    "possible_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
-                    "recommended_action": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity for the same window.",
-                    "operator_check": f"Check whether {label} changed after a known operating mode or equipment state change.",
-                    "evidence": evidence,
-                    "confidence": confidence_from_samples(item.get("baseline_sample_size"), item.get("recent_sample_size")),
-                    "system": system_from_columns(columns),
-                }
-            )
+        system = system_from_columns(columns)
+        confidence_score = numeric_confidence_score(
+            item.get("confidence_score"),
+            sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
         )
+        confidence = confidence_label_from_score(confidence_score)
+        relationship_ranges = relationship_source_time_ranges(item, source_ranges)
+        evidence_items = relationship_evidence_items(
+            item=item,
+            label=label,
+            time_window=time_window,
+            source_ranges=relationship_ranges,
+            upload_id=upload_id,
+            analysis_id=analysis_id,
+            confidence_score=confidence_score,
+        )
+        what_changed = first_text(
+            item.get("summary"),
+            relationship_change_sentence(label, item),
+        )
+        why = relationship_confidence_basis(label, item)
+        persistence_duration = sample_window_phrase(item.get("baseline_sample_size"), item.get("recent_sample_size"))
+        insight = compact_dict(
+            {
+                "id": f"relationship-{index}",
+                "title": f"Relationship shift: {label}",
+                "severity": severity_from_number(item.get("correlation_delta")),
+                "confidence": confidence,
+                "confidence_score": confidence_score,
+                "confidence_rationale": confidence_rationale_for_relationship(item, confidence_score),
+                "affected_systems": [system],
+                "system": system,
+                "what_changed": what_changed,
+                "explanation": what_changed,
+                "why_neraium_thinks_it_happened": why,
+                "why_neraium_thinks": why,
+                "likely_cause": why,
+                "contributing_factors": columns,
+                "possible_operational_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
+                "possible_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
+                "recommended_operator_check": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity for the same window.",
+                "recommended_action": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity for the same window.",
+                "operator_check": f"Check whether {label} changed after a known operating mode or equipment state change.",
+                "evidence_summary": evidence_summary(evidence_items),
+                "evidence_items": evidence_items,
+                "evidence": evidence_items,
+                "contributing_relationships": [relationship_contribution(item, index, columns)],
+                "contributing_metrics": metric_contributions(columns),
+                "source_metrics": columns,
+                "source_tags": columns,
+                "source_time_ranges": relationship_ranges,
+                "time_window": time_window,
+                "persistence_duration": persistence_duration,
+                "upload_id": upload_id,
+                "analysis_id": analysis_id,
+            }
+        )
+        insights.append(insight)
 
     drift_items = [
         item for item in baseline.get("column_drift", [])
@@ -149,63 +190,121 @@ def build_insights(
         column = str(item.get("column") or "Signal")
         direction = str(item.get("direction") or "changed")
         persistent = column in persistent_columns
-        evidence = column_evidence(item, time_window, persistence if isinstance(persistence, dict) else {})
+        persistence_detail = persistence_detail_for_column(persistence if isinstance(persistence, dict) else {}, column)
+        confidence_score = metric_confidence_score(item, persistence_detail)
+        confidence = confidence_label_from_score(confidence_score)
+        system = system_from_columns([column])
+        evidence_items = column_evidence_items(
+            item=item,
+            persistence_detail=persistence_detail,
+            time_window=time_window,
+            source_ranges=source_ranges,
+            upload_id=upload_id,
+            analysis_id=analysis_id,
+            confidence_score=confidence_score,
+        )
+        what_changed = metric_change_sentence(item)
+        why = metric_confidence_basis(item, persistence_detail)
+        operator_check = first_text(
+            matching_operator_check(operator_report, column),
+            f"Review {column} readings against facility logs for the uploaded period.",
+        )
         insights.append(
             compact_dict(
                 {
                     "id": f"metric-{index}",
                     "title": f"{column} moved {direction}",
                     "severity": "high" if item.get("drift_flag") == "review" else "moderate",
-                    "explanation": f"{column} moved {direction} from the baseline window to the recent window.",
-                    "likely_cause": "The recent operating period differs from the baseline period for this signal.",
+                    "confidence": confidence,
+                    "confidence_score": confidence_score,
+                    "confidence_rationale": confidence_rationale_for_metric(item, persistence_detail, confidence_score),
+                    "affected_systems": [system],
+                    "system": system,
+                    "what_changed": what_changed,
+                    "explanation": what_changed,
+                    "why_neraium_thinks_it_happened": why,
+                    "why_neraium_thinks": why,
+                    "likely_cause": why,
                     "contributing_factors": [column],
+                    "possible_operational_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
                     "possible_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
-                    "recommended_action": first_text(
-                        matching_operator_check(operator_report, column),
-                        f"Review {column} readings against facility logs for the uploaded period.",
-                    ),
+                    "recommended_operator_check": operator_check,
+                    "recommended_action": operator_check,
                     "operator_check": f"Check source readings, control changes, and maintenance activity involving {column}.",
-                    "evidence": evidence,
-                    "confidence": "high" if persistent else "moderate",
-                    "system": system_from_columns([column]),
+                    "evidence_summary": evidence_summary(evidence_items),
+                    "evidence_items": evidence_items,
+                    "evidence": evidence_items,
+                    "contributing_metrics": metric_contributions([column], item),
+                    "source_metrics": [column],
+                    "source_tags": [column],
+                    "source_time_ranges": source_ranges,
+                    "time_window": time_window,
+                    "persistence_duration": persistence_phrase(persistence_detail),
+                    "upload_id": upload_id,
+                    "analysis_id": analysis_id,
+                    "persistent": persistent,
                 }
             )
         )
 
     if not insights and baseline.get("overall_assessment") == "normal":
-        evidence = [
+        confidence_score = baseline_confidence_score(baseline)
+        confidence = confidence_label_from_score(confidence_score)
+        evidence_items = [
             compact_dict(
                 {
-                    "confidence": confidence_from_baseline(baseline),
+                    "id": "baseline-stable-evidence-0",
+                    "type": "baseline_context",
+                    "summary": "No numeric signal crossed the baseline review threshold in the uploaded analysis.",
                     "supporting_signals": [
                         f"{baseline.get('columns_analyzed')} numeric columns analyzed",
                         f"{baseline.get('baseline_window_rows')} baseline rows",
                         f"{baseline.get('recent_window_rows')} recent rows",
                     ],
+                    "relevant_metric_changes": [],
                     "time_window": time_window,
+                    "source_time_ranges": source_ranges,
+                    "confidence": confidence,
+                    "confidence_score": confidence_score,
+                    "source_upload_id": upload_id,
+                    "analysis_id": analysis_id,
                 }
             )
         ]
+        title = "Operating fingerprint remains stable"
         insights.append(
             compact_dict(
                 {
                     "id": "baseline-stable",
-                    "title": "Operating fingerprint remains stable",
+                    "title": title,
                     "severity": "low",
-                    "explanation": "No numeric signal crossed the baseline review threshold in the uploaded analysis.",
-                    "likely_cause": "Recent readings remained close to the baseline window.",
+                    "confidence": confidence,
+                    "confidence_score": confidence_score,
+                    "confidence_rationale": baseline_confidence_rationale(baseline, confidence_score),
+                    "affected_systems": [first_text(intelligence.get("primary_room"), "Uploaded telemetry")],
+                    "system": first_text(intelligence.get("primary_room"), "Uploaded telemetry"),
+                    "what_changed": "No reviewed metric or relationship moved beyond the configured baseline thresholds.",
+                    "explanation": "No reviewed metric or relationship moved beyond the configured baseline thresholds.",
+                    "why_neraium_thinks_it_happened": "The current window remained close to the baseline window across the numeric columns available in the CSV.",
+                    "likely_cause": "The current window remained close to the baseline window across the numeric columns available in the CSV.",
+                    "possible_operational_consequence": "Continue normal monitoring unless operator logs show an unmodeled event.",
                     "possible_consequence": "Continue normal monitoring unless operator logs show an unmodeled event.",
+                    "recommended_operator_check": first_item(operator_report.get("recommended_operator_checks")),
                     "recommended_action": first_item(operator_report.get("recommended_operator_checks")),
                     "operator_check": first_item(operator_report.get("recommended_operator_checks")),
-                    "evidence": evidence,
-                    "confidence": confidence_from_baseline(baseline),
-                    "system": first_text(intelligence.get("primary_room"), "Uploaded telemetry"),
+                    "evidence_summary": evidence_summary(evidence_items),
+                    "evidence_items": evidence_items,
+                    "evidence": evidence_items,
+                    "contributing_metrics": [],
+                    "source_time_ranges": source_ranges,
+                    "time_window": time_window,
+                    "upload_id": upload_id,
+                    "analysis_id": analysis_id,
                 }
             )
         )
 
     return insights
-
 
 def build_systems(
     *,
@@ -272,6 +371,10 @@ def build_relationships(
             continue
         columns = relationship_columns(item)
         label = " / ".join(columns) if columns else str(item.get("relationship") or "Signal relationship")
+        confidence_score = numeric_confidence_score(
+            item.get("confidence_score"),
+            sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
+        )
         relationships.append(
             compact_dict(
                 {
@@ -279,19 +382,31 @@ def build_relationships(
                     "name": label,
                     "columns": columns,
                     "system": system_from_columns(columns),
+                    "relationship_type": item.get("relationship_type"),
+                    "change_type": item.get("change_type"),
+                    "strength": item.get("strength"),
+                    "baseline_strength": item.get("baseline_strength"),
+                    "current_strength": item.get("current_strength"),
                     "baseline_correlation": item.get("baseline_correlation"),
                     "recent_correlation": item.get("recent_correlation"),
                     "correlation_delta": item.get("correlation_delta"),
+                    "signed_correlation_delta": item.get("signed_correlation_delta"),
+                    "change_percentage": item.get("change_percentage"),
+                    "direction": item.get("direction"),
                     "coupling_strength": item.get("coupling_strength"),
                     "baseline_sample_size": item.get("baseline_sample_size"),
                     "recent_sample_size": item.get("recent_sample_size"),
-                    "confidence": confidence_from_samples(item.get("baseline_sample_size"), item.get("recent_sample_size")),
+                    "confidence": confidence_label_from_score(confidence_score),
+                    "confidence_score": confidence_score,
+                    "confidence_rationale": confidence_rationale_for_relationship(item, confidence_score),
                     "what_changed": first_text(
                         item.get("summary"),
-                        f"{label} changed between the baseline window and recent window.",
+                        relationship_change_sentence(label, item),
                     ),
                     "why_it_matters": "Coupled signals changing together can reveal a subsystem state change before a single metric explains it.",
                     "operator_check": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity.",
+                    "supporting_metric_pairs": item.get("supporting_metric_pairs"),
+                    "time_window": item.get("time_window"),
                     "evidence_refs": item.get("evidence_refs"),
                     "source_rows": item.get("source_rows"),
                     "sampled_for_baseline": item.get("sampled_for_baseline"),
@@ -299,7 +414,6 @@ def build_relationships(
             )
         )
     return relationships
-
 
 def build_fingerprint(
     *,
@@ -314,11 +428,15 @@ def build_fingerprint(
         if isinstance(item, dict) and item.get("drift_flag") in {"watch", "review"}
     ]
     largest = largest_deviation(significant_columns, relationship_changes)
+    largest_items = largest_deviation_items(significant_columns, relationship_changes)
     assessment = baseline.get("overall_assessment")
-    if assessment == "normal" and not relationship_changes:
+    graph = relationship_model.get("relationship_graph") if isinstance(relationship_model.get("relationship_graph"), dict) else baseline.get("relationship_graph", {})
+    changed_edges = graph.get("changed_edges", []) if isinstance(graph, dict) and isinstance(graph.get("changed_edges"), list) else []
+
+    if assessment == "normal" and not relationship_changes and not significant_columns:
         meaning = "The operating fingerprint is stable. Current behavior closely matches the baseline window in the uploaded telemetry."
         status = "stable"
-    elif relationship_changes or significant_columns:
+    elif relationship_changes or significant_columns or changed_edges:
         meaning = "The operating fingerprint is changing. Recent behavior no longer fully matches the baseline window in the uploaded telemetry."
         status = "changed"
     else:
@@ -327,19 +445,37 @@ def build_fingerprint(
     if largest:
         meaning = f"{meaning} The largest deviation is {largest}.".strip()
 
+    confidence_score = fingerprint_confidence_score(baseline, relationship_changes, significant_columns)
+    confidence = confidence_label_from_score(confidence_score)
+    source_range = source_time_ranges(result, build_time_window(result))
+    evidence = fingerprint_evidence_items(
+        baseline=baseline,
+        relationship_changes=relationship_changes,
+        significant_columns=significant_columns,
+        source_ranges=source_range,
+        confidence_score=confidence_score,
+    )
+
     return compact_dict(
         {
             "status": status,
+            "drift_status": status,
             "meaning": meaning,
+            "baseline_summary": baseline_summary(baseline),
+            "current_behavior_summary": current_behavior_summary(baseline, relationship_changes, significant_columns),
             "largest_deviation": largest,
+            "largest_deviations": largest_items,
             "baseline_window_rows": baseline.get("baseline_window_rows"),
             "recent_window_rows": baseline.get("recent_window_rows"),
             "columns_analyzed": baseline.get("columns_analyzed"),
-            "confidence": confidence_from_baseline(baseline),
+            "confidence": confidence,
+            "confidence_score": confidence_score,
+            "confidence_rationale": fingerprint_confidence_rationale(baseline, relationship_changes, confidence_score),
             "primary_driver": intelligence.get("primary_driver"),
+            "evidence": evidence,
+            "evidence_supporting_status": evidence,
         }
     )
-
 
 def build_evidence(
     *,
@@ -502,6 +638,423 @@ def compact_system(item: dict[str, Any]) -> dict[str, Any]:
         compacted[key] = dedupe(value) if isinstance(value, list) else value
     return compacted
 
+
+
+def numeric_confidence_score(value: Any, fallback: float = 0.5) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = float(fallback)
+    if score > 1.0 and score <= 100.0:
+        score = score / 100.0
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def sample_confidence_score(baseline_size: Any, recent_size: Any, magnitude: Any = None) -> float:
+    try:
+        minimum = min(int(baseline_size or 0), int(recent_size or 0))
+    except (TypeError, ValueError):
+        minimum = 0
+    try:
+        change = abs(float(magnitude or 0.0))
+    except (TypeError, ValueError):
+        change = 0.0
+    sample_factor = min(1.0, minimum / 12.0)
+    change_factor = min(1.0, change / 0.75)
+    return round(max(0.2, sample_factor * 0.65 + change_factor * 0.35), 4)
+
+
+def baseline_confidence_score(baseline: dict[str, Any]) -> float:
+    rows = min(int(baseline.get("baseline_window_rows") or 0), int(baseline.get("recent_window_rows") or 0))
+    columns = int(baseline.get("columns_analyzed") or 0)
+    row_factor = min(1.0, rows / 12.0)
+    column_factor = min(1.0, columns / 2.0)
+    return round(max(0.2, row_factor * 0.7 + column_factor * 0.3), 4)
+
+
+def confidence_label_from_score(score: Any) -> str:
+    score = numeric_confidence_score(score, 0.0)
+    if score >= 0.75:
+        return "high"
+    if score >= 0.45:
+        return "moderate"
+    return "limited"
+
+
+def source_time_ranges(result: dict[str, Any], fallback_window: str = "") -> list[dict[str, Any]]:
+    timestamp = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
+    first = first_text(timestamp.get("first_timestamp"))
+    last = first_text(timestamp.get("last_timestamp"))
+    if first or last:
+        return [compact_dict({"label": "uploaded_csv", "start": first, "end": last})]
+    if fallback_window:
+        return [{"label": "uploaded_csv", "window": fallback_window}]
+    return []
+
+
+def relationship_source_time_ranges(item: dict[str, Any], fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    window = item.get("time_window") if isinstance(item.get("time_window"), dict) else {}
+    if window:
+        return [
+            compact_dict(
+                {
+                    "label": "relationship_comparison",
+                    "baseline_start": window.get("baseline_start"),
+                    "baseline_end": window.get("baseline_end"),
+                    "current_start": window.get("current_start"),
+                    "current_end": window.get("current_end"),
+                }
+            )
+        ]
+    return fallback
+
+
+def relationship_change_sentence(label: str, item: dict[str, Any]) -> str:
+    change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
+    baseline = item.get("baseline_strength", item.get("coupling_strength"))
+    current = item.get("current_strength", item.get("strength"))
+    if baseline is not None and current is not None:
+        return f"{label} relationship {change_type}; baseline strength was {baseline} and current strength is {current}."
+    return f"{label} changed between the baseline window and current window."
+
+
+def relationship_confidence_basis(label: str, item: dict[str, Any]) -> str:
+    return (
+        f"Neraium compared the {label} correlation in the baseline window with the current window "
+        f"and found a {item.get('correlation_delta')} correlation delta."
+    )
+
+
+def confidence_rationale_for_relationship(item: dict[str, Any], confidence_score: float) -> str:
+    baseline_size = item.get("baseline_sample_size")
+    recent_size = item.get("recent_sample_size")
+    delta = item.get("correlation_delta")
+    return (
+        f"Confidence score {confidence_score} is based on {baseline_size} baseline samples, "
+        f"{recent_size} current samples, and correlation delta {delta}."
+    )
+
+
+def confidence_rationale_for_metric(item: dict[str, Any], persistence_detail: dict[str, Any], confidence_score: float) -> str:
+    support = persistence_detail.get("support_percent") if persistence_detail else None
+    percent = item.get("percent_change")
+    if support is not None:
+        return f"Confidence score {confidence_score} is based on {percent}% metric change and {support}% recent-window directional support."
+    return f"Confidence score {confidence_score} is based on {percent}% metric change and available baseline/current window rows."
+
+
+def baseline_confidence_rationale(baseline: dict[str, Any], confidence_score: float) -> str:
+    return (
+        f"Confidence score {confidence_score} is based on {baseline.get('baseline_window_rows')} baseline rows, "
+        f"{baseline.get('recent_window_rows')} current rows, and {baseline.get('columns_analyzed')} analyzed numeric columns."
+    )
+
+
+def evidence_summary(evidence_items: list[dict[str, Any]]) -> str:
+    summaries = [first_text(item.get("summary"), *(item.get("supporting_signals") or [])) for item in evidence_items if isinstance(item, dict)]
+    return "; ".join(dedupe([summary for summary in summaries if summary])[:4])
+
+
+def relationship_evidence_items(
+    *,
+    item: dict[str, Any],
+    label: str,
+    time_window: str,
+    source_ranges: list[dict[str, Any]],
+    upload_id: str,
+    analysis_id: str,
+    confidence_score: float,
+) -> list[dict[str, Any]]:
+    confidence = confidence_label_from_score(confidence_score)
+    summary = first_text(item.get("summary"), relationship_change_sentence(label, item))
+    return [
+        compact_dict(
+            {
+                "id": "relationship-evidence-0",
+                "type": "relationship_change",
+                "summary": summary,
+                "supporting_signals": [summary],
+                "relevant_metric_changes": [
+                    metric_change("Correlation delta", item.get("correlation_delta")),
+                    metric_change("Baseline strength", item.get("baseline_strength", item.get("coupling_strength"))),
+                    metric_change("Current strength", item.get("current_strength", item.get("strength"))),
+                    metric_change("Change percentage", item.get("change_percentage"), suffix="%"),
+                ],
+                "relationship_type": item.get("relationship_type"),
+                "change_type": item.get("change_type"),
+                "source_columns": relationship_columns(item),
+                "source_metrics": relationship_columns(item),
+                "source_tags": relationship_columns(item),
+                "supporting_metric_pairs": item.get("supporting_metric_pairs"),
+                "source_rows": item.get("source_rows"),
+                "source_time_ranges": source_ranges,
+                "time_window": time_window,
+                "persistence_duration": sample_window_phrase(item.get("baseline_sample_size"), item.get("recent_sample_size")),
+                "confidence": confidence,
+                "confidence_score": confidence_score,
+                "source_upload_id": upload_id,
+                "analysis_id": analysis_id,
+                "calculated_delta": item.get("correlation_delta"),
+            }
+        )
+    ]
+
+
+def persistence_detail_for_column(persistence: dict[str, Any], column: str) -> dict[str, Any]:
+    details = persistence.get("details") if isinstance(persistence.get("details"), list) else []
+    return next((detail for detail in details if isinstance(detail, dict) and detail.get("column") == column), {})
+
+
+def metric_confidence_score(item: dict[str, Any], persistence_detail: dict[str, Any]) -> float:
+    try:
+        magnitude = abs(float(item.get("percent_change") or 0.0))
+    except (TypeError, ValueError):
+        magnitude = abs(float(item.get("absolute_change") or 0.0))
+    signal_factor = min(1.0, magnitude / 30.0)
+    persistence_factor = 0.45 if item.get("drift_flag") in {"watch", "review"} else 0.2
+    if persistence_detail.get("persistent"):
+        persistence_factor = 1.0
+    elif persistence_detail.get("support_percent") is not None:
+        persistence_factor = min(1.0, float(persistence_detail.get("support_percent") or 0.0) / 100.0)
+    return round(max(0.2, signal_factor * 0.55 + persistence_factor * 0.45), 4)
+
+
+def metric_change_sentence(item: dict[str, Any]) -> str:
+    column = str(item.get("column") or "Signal")
+    direction = str(item.get("direction") or "changed")
+    percent = item.get("percent_change")
+    baseline = item.get("baseline_average")
+    current = item.get("recent_average")
+    if percent is not None and baseline is not None and current is not None:
+        return f"{column} moved {direction} by {percent}%: baseline average {baseline}, current average {current}."
+    if baseline is not None and current is not None:
+        return f"{column} moved {direction}: baseline average {baseline}, current average {current}."
+    return f"{column} moved {direction} from the baseline window to the current window."
+
+
+def metric_confidence_basis(item: dict[str, Any], persistence_detail: dict[str, Any]) -> str:
+    basis = metric_change_sentence(item)
+    persistence = persistence_phrase(persistence_detail)
+    if persistence:
+        return f"{basis} {persistence}"
+    return basis
+
+
+def column_evidence_items(
+    *,
+    item: dict[str, Any],
+    persistence_detail: dict[str, Any],
+    time_window: str,
+    source_ranges: list[dict[str, Any]],
+    upload_id: str,
+    analysis_id: str,
+    confidence_score: float,
+) -> list[dict[str, Any]]:
+    column = str(item.get("column") or "Signal")
+    confidence = confidence_label_from_score(confidence_score)
+    summary = metric_change_sentence(item)
+    return [
+        compact_dict(
+            {
+                "id": f"metric-{column}-evidence-0",
+                "type": "metric_drift",
+                "summary": summary,
+                "supporting_signals": [summary],
+                "relevant_metric_changes": [
+                    metric_change("Percent change", item.get("percent_change"), suffix="%"),
+                    metric_change("Absolute change", item.get("absolute_change")),
+                    metric_change("Baseline average", item.get("baseline_average")),
+                    metric_change("Current average", item.get("recent_average")),
+                    metric_change("Persistence score", item.get("persistence_score")),
+                ],
+                "source_columns": [column],
+                "source_metrics": [column],
+                "source_tags": [column],
+                "baseline_value": item.get("baseline_average"),
+                "current_value": item.get("recent_average"),
+                "calculated_delta": item.get("absolute_change"),
+                "calculated_percent_delta": item.get("percent_change"),
+                "source_time_ranges": source_ranges,
+                "time_window": time_window,
+                "persistence_duration": persistence_phrase(persistence_detail),
+                "confidence": confidence,
+                "confidence_score": confidence_score,
+                "source_upload_id": upload_id,
+                "analysis_id": analysis_id,
+            }
+        )
+    ]
+
+
+def relationship_contribution(item: dict[str, Any], index: int, columns: list[str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "id": f"relationship-{index}",
+            "columns": columns,
+            "relationship_type": item.get("relationship_type"),
+            "change_type": item.get("change_type"),
+            "strength": item.get("strength"),
+            "baseline_strength": item.get("baseline_strength"),
+            "current_strength": item.get("current_strength"),
+            "change_percentage": item.get("change_percentage"),
+            "confidence_score": item.get("confidence_score"),
+            "time_window": item.get("time_window"),
+        }
+    )
+
+
+def metric_contributions(columns: list[str], drift_item: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    contributions = []
+    for column in columns:
+        item = {"name": column, "source_column": column}
+        if drift_item and drift_item.get("column") == column:
+            item.update(
+                {
+                    "baseline_average": drift_item.get("baseline_average"),
+                    "current_average": drift_item.get("recent_average"),
+                    "absolute_change": drift_item.get("absolute_change"),
+                    "percent_change": drift_item.get("percent_change"),
+                    "direction": drift_item.get("direction"),
+                }
+            )
+        contributions.append(compact_dict(item))
+    return contributions
+
+
+def largest_deviation_items(columns: list[dict[str, Any]], relationships: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for item in columns:
+        items.append(
+            compact_dict(
+                {
+                    "type": "metric",
+                    "label": item.get("column"),
+                    "magnitude": abs(float(item.get("percent_change") or item.get("absolute_change") or 0)),
+                    "direction": item.get("direction"),
+                    "percent_change": item.get("percent_change"),
+                }
+            )
+        )
+    for item in relationships:
+        items.append(
+            compact_dict(
+                {
+                    "type": "relationship",
+                    "label": " / ".join(relationship_columns(item)) or item.get("relationship"),
+                    "magnitude": abs(float(item.get("correlation_delta") or 0)),
+                    "change_type": item.get("change_type"),
+                    "baseline_strength": item.get("baseline_strength"),
+                    "current_strength": item.get("current_strength"),
+                }
+            )
+        )
+    return sorted(items, key=lambda item: float(item.get("magnitude") or 0), reverse=True)[:5]
+
+
+def baseline_summary(baseline: dict[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "baseline_window_rows": baseline.get("baseline_window_rows"),
+            "recent_window_rows": baseline.get("recent_window_rows"),
+            "columns_analyzed": baseline.get("columns_analyzed"),
+            "overall_assessment": baseline.get("overall_assessment"),
+            "adaptive_baseline": baseline.get("adaptive_baseline"),
+            "regime_context": baseline.get("regime_context"),
+        }
+    )
+
+
+def current_behavior_summary(
+    baseline: dict[str, Any],
+    relationship_changes: list[dict[str, Any]],
+    significant_columns: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "active_metric_deviations": len(significant_columns),
+            "active_relationship_deviations": len(relationship_changes),
+            "largest_metric_deviations": [change_phrase(item) for item in significant_columns[:5]],
+            "relationship_changes": [first_text(item.get("summary"), item.get("relationship")) for item in relationship_changes[:5]],
+            "drift_trajectory": baseline.get("drift_trajectory"),
+        }
+    )
+
+
+def fingerprint_confidence_score(
+    baseline: dict[str, Any],
+    relationship_changes: list[dict[str, Any]],
+    significant_columns: list[dict[str, Any]],
+) -> float:
+    base = baseline_confidence_score(baseline)
+    relationship_scores = [numeric_confidence_score(item.get("confidence_score"), 0.0) for item in relationship_changes]
+    if relationship_scores:
+        return round((base * 0.6) + (max(relationship_scores) * 0.4), 4)
+    if significant_columns:
+        return round(max(0.2, base * 0.85), 4)
+    return base
+
+
+def fingerprint_confidence_rationale(baseline: dict[str, Any], relationship_changes: list[dict[str, Any]], confidence_score: float) -> str:
+    relation_text = f" and {len(relationship_changes)} changed relationships" if relationship_changes else ""
+    return (
+        f"Confidence score {confidence_score} is based on {baseline.get('baseline_window_rows')} baseline rows, "
+        f"{baseline.get('recent_window_rows')} current rows, {baseline.get('columns_analyzed')} numeric columns{relation_text}."
+    )
+
+
+def fingerprint_evidence_items(
+    *,
+    baseline: dict[str, Any],
+    relationship_changes: list[dict[str, Any]],
+    significant_columns: list[dict[str, Any]],
+    source_ranges: list[dict[str, Any]],
+    confidence_score: float,
+) -> list[dict[str, Any]]:
+    evidence = [
+        compact_dict(
+            {
+                "id": "fingerprint-baseline-window",
+                "type": "baseline_summary",
+                "summary": "Baseline and current windows were compared to classify the operating fingerprint.",
+                "supporting_signals": [
+                    f"{baseline.get('baseline_window_rows')} baseline rows",
+                    f"{baseline.get('recent_window_rows')} current rows",
+                    f"{baseline.get('columns_analyzed')} numeric columns analyzed",
+                ],
+                "source_time_ranges": source_ranges,
+                "confidence_score": confidence_score,
+                "confidence": confidence_label_from_score(confidence_score),
+            }
+        )
+    ]
+    for index, item in enumerate(significant_columns[:3]):
+        evidence.append(
+            compact_dict(
+                {
+                    "id": f"fingerprint-metric-{index}",
+                    "type": "metric_deviation",
+                    "summary": metric_change_sentence(item),
+                    "source_columns": [item.get("column")],
+                    "calculated_percent_delta": item.get("percent_change"),
+                    "source_time_ranges": source_ranges,
+                }
+            )
+        )
+    for index, item in enumerate(relationship_changes[:3]):
+        evidence.append(
+            compact_dict(
+                {
+                    "id": f"fingerprint-relationship-{index}",
+                    "type": "relationship_deviation",
+                    "summary": first_text(item.get("summary"), item.get("relationship")),
+                    "source_columns": relationship_columns(item),
+                    "calculated_delta": item.get("correlation_delta"),
+                    "change_percentage": item.get("change_percentage"),
+                    "source_time_ranges": relationship_source_time_ranges(item, source_ranges),
+                }
+            )
+        )
+    return evidence
 
 def relationship_evidence(item: dict[str, Any], time_window: str) -> list[dict[str, Any]]:
     signals = []

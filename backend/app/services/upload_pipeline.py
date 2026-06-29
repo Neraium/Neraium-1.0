@@ -76,6 +76,7 @@ def run_structural_analysis_pipeline(
         **baseline_analysis,
         "top_relationship_changes": relationship_baseline.get("top_relationship_changes", []),
         "baseline_relationships": relationship_baseline.get("baseline_relationships", []),
+        "relationship_graph": relationship_baseline.get("relationship_graph", {}),
         "sampled_for_baseline": bool(relationship_baseline.get("sampled_for_baseline")),
     }
     cultivation_mapping = map_cultivation_columns(columns)

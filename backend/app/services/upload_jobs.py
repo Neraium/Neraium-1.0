@@ -447,9 +447,19 @@ def _build_upload_engine_result(
                 "columns": columns,
                 "change": float(item.get("correlation_delta") or 0.0),
                 "summary": item.get("summary"),
+                "relationship_type": item.get("relationship_type"),
+                "change_type": item.get("change_type"),
+                "strength": item.get("strength"),
+                "baseline_strength": item.get("baseline_strength"),
+                "current_strength": item.get("current_strength"),
+                "change_percentage": item.get("change_percentage"),
+                "confidence_score": item.get("confidence_score"),
+                "confidence_level": item.get("confidence_level"),
                 "coupling_strength": item.get("coupling_strength"),
                 "baseline_sample_size": item.get("baseline_sample_size"),
                 "recent_sample_size": item.get("recent_sample_size"),
+                "supporting_metric_pairs": item.get("supporting_metric_pairs"),
+                "time_window": item.get("time_window"),
                 "evidence_refs": item.get("evidence_refs"),
                 "source_rows": item.get("source_rows"),
             }
@@ -679,6 +689,7 @@ def _build_csv_result(
     processing_trace = pipeline["processing_trace"]
     runner_result = pipeline["runner_result"]
     latest_runner_state = pipeline["latest_runner_state"]
+    relationship_model = pipeline["relationship_model"]
 
     result = {
         "job_id": job_id,
@@ -720,6 +731,7 @@ def _build_csv_result(
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
         "engine_result": engine_result,
+        "relationship_model": relationship_model,
         "driver_attribution": driver_attribution,
         "operating_state": "Baseline-aligned" if overall_urgency == "nominal" else ("Structural drift observed" if overall_urgency == "review" else "Persistent structural drift observed"),
         "drift_status": "info" if overall_urgency == "nominal" else ("review" if overall_urgency == "review" else "unstable"),
