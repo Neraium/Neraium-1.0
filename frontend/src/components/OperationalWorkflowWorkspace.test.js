@@ -66,20 +66,30 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
+    expect(screen.queryByText("Waiting for telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
-    expect(screen.getByText("NERAIUM SII")).toBeTruthy();
-    expect(screen.getAllByText("Waiting for telemetry")).toHaveLength(1);
-    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
-    expect(screen.getByText("Upload a CSV to begin analysis.")).toBeTruthy();
+    expect(screen.getByText("Neraium SII")).toBeTruthy();
+    expect(screen.getAllByText("Current Site").length).toBeGreaterThan(0);
+    expect(screen.getByText("Start Analysis")).toBeTruthy();
+    expect(screen.getByText("Upload a CSV to begin.")).toBeTruthy();
+    expect(screen.getByText("No file selected.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Upload CSV" })).toBeTruthy();
+    expect(screen.queryByText(/Command Pulse/i)).toBeNull();
     expect(screen.queryByText("Current Picture")).toBeNull();
     expect(screen.queryByText("Data source")).toBeNull();
     expect(screen.queryByText("Active Insights")).toBeNull();
     expect(screen.queryByText("Systems Pending")).toBeNull();
+    expect(screen.queryByText("No Operating Fingerprint Yet")).toBeNull();
     expect(screen.queryByText("Fingerprint Status")).toBeNull();
+    expect(screen.queryByText("Last analysis: No analysis yet")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
     expect(screen.queryByText(/systems identified/i)).toBeNull();
     expect(screen.queryByText("Baseline Established")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Systems\s+Pending/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Fingerprint\s+No Operating Fingerprint Yet/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Insights\s+—/ }).every((button) => button.disabled)).toBe(true);
+    expect(screen.getAllByRole("button", { name: /Systems\s+—/ }).every((button) => button.disabled)).toBe(true);
+    expect(screen.getAllByRole("button", { name: /Fingerprint\s+—/ }).every((button) => button.disabled)).toBe(true);
   });
 
   it("does not treat an empty data source as loaded telemetry", () => {
@@ -91,8 +101,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
-    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
-    expect(screen.getByText("Upload a CSV to begin analysis.")).toBeTruthy();
+    expect(screen.getAllByText("Start Analysis")).toHaveLength(1);
+    expect(screen.getByText("Upload a CSV to begin.")).toBeTruthy();
     expect(screen.queryByText("Data source")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
@@ -105,7 +115,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
-    expect(screen.getAllByText("Start with telemetry")).toHaveLength(1);
+    expect(screen.getAllByText("Start Analysis")).toHaveLength(1);
     expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
   });
@@ -295,17 +305,25 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Maintenance correlation will appear when maintenance history is connected.")).toBeNull();
   });
 
-  it("keeps the Systems section pending before analysis", () => {
+  it("disables result tabs before analysis", () => {
     renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult(),
+      effectiveLatestUploadSnapshot: {
+        status: "complete",
+        current_upload: { job_id: "telemetry-job", filename: "uploaded telemetry.csv", row_count: 120 },
+      },
       liveOps: {
         systems: [{ id: "system-1", name: "Chilled Water Loop" }],
       },
     });
 
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Systems")));
+    const systemButtons = screen.getAllByRole("button", { name: /Systems\s+—/ });
+    expect(systemButtons.every((button) => button.disabled)).toBe(true);
+    fireEvent.click(systemButtons[0]);
 
-    expect(screen.getAllByText("Systems Pending").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Run analysis to identify systems and relationships.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CSV loaded / Ready to analyze").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Systems Pending")).toBeNull();
+    expect(screen.queryByText("Run analysis to identify systems and relationships.")).toBeNull();
     expect(screen.queryByText("Chilled Water Loop")).toBeNull();
   });
 
