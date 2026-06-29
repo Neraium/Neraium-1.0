@@ -48,9 +48,17 @@ def run_structural_analysis_pipeline(
     stage_notifier: Callable[..., None],
 ) -> dict[str, Any]:
     stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
-    relationship_model = build_relationship_baseline(rows, numeric_columns, total_row_count=row_count_total)
+    matrix_rows = matrix_rows_for_profiles
+    timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
+    baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
 
     stage_notifier(job_id, stage="scoring_drift_relationships", progress=72, label="Mapping relationships...")
+    relationship_model = build_relationship_baseline(
+        rows,
+        numeric_columns,
+        total_row_count=row_count_total,
+        baseline_analysis=baseline_analysis,
+    )
     replay = (
         minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
         if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3)
@@ -62,9 +70,6 @@ def run_structural_analysis_pipeline(
     stage_notifier(job_id, stage="building_fingerprint", progress=84, label="Building fingerprint...")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
-    matrix_rows = matrix_rows_for_profiles
-    timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
-    baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
     normalization_report = build_normalization_report(
         rows=rows,
         numeric_columns=numeric_columns,

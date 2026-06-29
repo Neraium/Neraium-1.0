@@ -128,7 +128,7 @@ describe("System Story workspace", () => {
 
     renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-scoped" } } }));
 
-    await waitFor(() => expect(screen.getByText("2 observation points")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("1 minute")).toBeTruthy());
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped"))).toBe(true);
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
   });
@@ -154,6 +154,74 @@ describe("System Story workspace", () => {
 
     expect(screen.getAllByText("Valve replaced.").length).toBeGreaterThan(1);
     expect(screen.getByText(/Marked as maintenance event/i)).toBeTruthy();
+  });
+
+
+  it("clamps impossible evidence duration to the uploaded dataset span", async () => {
+    const start = new Date("2026-01-01T00:00:00Z");
+    const frames = [0, 60, 120].map((day, index) => {
+      const timestamp = new Date(start.getTime() + day * 24 * 60 * 60 * 1000).toISOString();
+      return {
+        frame_number: index,
+        timestamp_start: timestamp,
+        timestamp_end: timestamp,
+        baseline_distance: index / 3,
+        primary_contributors: ["pump_power_kw", "pump_vibration_ips"],
+        topology_state: { stability_state: "needs review", drift_index: index / 3 },
+      };
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith("/api/data/upload-status/job-duration")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      if (String(path).startsWith("/api/data/replay/job-duration")) return createResponse({ timeline: frames, meta: { frame_count: frames.length } });
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [{ run_id: "job-duration", status: "completed", deformation_started_at: "2023-11-01T00:00:00Z" }] });
+      return createResponse({}, 404);
+    });
+
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-duration" } } }));
+
+    await waitFor(() => expect(screen.getByText("120 days")).toBeTruthy());
+    expect(screen.queryByText(/791 days/i)).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith("system_story_duration_exceeds_dataset_span", expect.objectContaining({ datasetDuration: "120 days" }));
+  });
+
+  it("does not render impossible duration when timestamps are invalid or missing", async () => {
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith("/api/data/upload-status/job-invalid-duration")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      if (String(path).startsWith("/api/data/replay/job-invalid-duration")) return createResponse({ timeline: [{ frame_number: 0, timestamp_start: "not-a-date" }, { frame_number: 1 }], meta: { frame_count: 2 } });
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [{ run_id: "job-invalid-duration", status: "completed", deformation_started_at: "2024-01-01T00:00:00Z" }] });
+      return createResponse({}, 404);
+    });
+
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-invalid-duration" } } }));
+
+    await waitFor(() => expect(screen.getByText("2 observation points")).toBeTruthy());
+    expect(screen.queryByText(/days/i)).toBeNull();
+  });
+
+  it("uses uploaded timestamp span as the system story duration", async () => {
+    const start = new Date("2026-01-01T00:00:00Z");
+    const frames = [0, 120].map((day, index) => {
+      const timestamp = new Date(start.getTime() + day * 24 * 60 * 60 * 1000).toISOString();
+      return {
+        frame_number: index,
+        timestamp_start: timestamp,
+        timestamp_end: timestamp,
+        baseline_distance: index / 2,
+        primary_contributors: ["chw_supply_temp_f", "condenser_lwt_f"],
+        topology_state: { stability_state: "needs review", drift_index: index / 2 },
+      };
+    });
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith("/api/data/upload-status/job-span")) return createResponse({ status: "COMPLETE", replay_ready: true, result_available: true });
+      if (String(path).startsWith("/api/data/replay/job-span")) return createResponse({ timeline: frames, meta: { frame_count: frames.length } });
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
+      return createResponse({}, 404);
+    });
+
+    renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-span" } } }));
+
+    await waitFor(() => expect(screen.getByText("120 days")).toBeTruthy());
   });
 
   it("does not fetch stale history when there is no current upload", async () => {

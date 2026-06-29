@@ -6,6 +6,7 @@ from app.services.cumulative_counters import (
     detect_cumulative_counters_from_matrix,
 )
 from app.services.data_quality import round_number, variability_flag
+from app.services.telemetry_classification import classify_telemetry_signal
 
 BASELINE_WINDOW_TARGET = 100
 # Backward-compatible export for legacy relationship analysis imports.
@@ -52,6 +53,12 @@ def build_baseline_analysis(
     regime_context = classify_operating_regime(rows, numeric_indexes)
     column_drift: list[dict[str, Any]] = []
 
+    profile_by_column = {
+        str(profile.get("column")): profile
+        for profile in numeric_profiles
+        if isinstance(profile, dict) and profile.get("column")
+    }
+
     for index, column in enumerate(columns):
         if column not in numeric_columns:
             continue
@@ -74,10 +81,16 @@ def build_baseline_analysis(
         percent_change = safe_percent_change(baseline_average, absolute_change)
         direction = drift_direction(absolute_change, baseline_average)
         velocity = drift_velocity(baseline_values, recent_values)
-        flag = drift_flag(percent_change, absolute_change, baseline_average)
         metric_type = "cumulative_counter" if column in cumulative_counter_columns else "operational_signal"
-        analysis_role = "supporting_context" if metric_type == "cumulative_counter" else "primary_signal"
-        if metric_type == "cumulative_counter":
+        profile = profile_by_column.get(column, {})
+        classification = classify_telemetry_signal(
+            column,
+            metric_type=metric_type,
+            constant=bool(profile.get("constant_or_stuck")),
+        )
+        flag = drift_flag(percent_change, absolute_change, baseline_average)
+        analysis_role = classification["analysis_role"]
+        if not classification["is_primary_anomaly_candidate"]:
             flag = "context"
 
         if variability_flag(baseline_values, baseline_average) == "high":
@@ -101,6 +114,8 @@ def build_baseline_analysis(
                 "drift_flag": flag,
                 "metric_type": metric_type,
                 "analysis_role": analysis_role,
+                "telemetry_category": classification["category"],
+                "telemetry_classification": classification,
                 "warnings": column_warnings + informational_warnings,
             }
         )
@@ -175,6 +190,8 @@ def cumulative_delta_drift(
         "drift_flag": drift_flag(percent_change, absolute_change, baseline_average),
         "metric_type": "counter_delta",
         "analysis_role": "derived_rate_feature",
+        "telemetry_category": "counter_derived_rate",
+        "telemetry_classification": classify_telemetry_signal(f"{column}_delta", metric_type="counter_delta"),
         "warnings": [f"{column} was treated as a cumulative counter; delta values were analyzed instead of the raw counter."],
     }
 

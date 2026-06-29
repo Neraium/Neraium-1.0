@@ -51,7 +51,15 @@ function completedSessionStore() {
       progress: 100,
       progress_label: "Analysis ready.",
     },
-    latestUploadResult: { job_id: "completed-job-1", filename: "old.csv" },
+    latestUploadResult: {
+      job_id: "completed-job-1",
+      filename: "old.csv",
+      analysis_result: {
+        systems: [{ name: "Recovered system" }],
+        insights: [{ title: "Recovered insight" }],
+        fingerprint: { status: "Established" },
+      },
+    },
   };
 }
 
@@ -153,9 +161,11 @@ it("complete state shows View Results", () => {
     selectedFileSize: "8.4 MB",
     latestUploadSnapshot: {
       latest_result: {
-        identified_systems: [{ name: "Pumping" }, { name: "Storage" }],
-        insights: [{ summary: "Pump cycling changed." }],
-        fingerprint_status: "Established",
+        analysis_result: {
+          systems: [{ name: "Pumping" }, { name: "Storage" }],
+          insights: [{ title: "Pump cycling changed." }],
+          fingerprint: { status: "Established" },
+        },
       },
     },
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
@@ -167,6 +177,82 @@ it("complete state shows View Results", () => {
   expect(screen.getByText("Fingerprint status")).toBeTruthy();
   expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
+});
+
+
+it("completed upload screen count matches AnalysisResult systems length", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("systems-count.csv")],
+    selectedFileSize: "8.4 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        identified_systems: [{ name: "Legacy single system" }],
+        analysis_result: {
+          systems: [
+            { name: "Chilled Water" },
+            { name: "Condenser Water" },
+            { name: "Pumps" },
+          ],
+          insights: [],
+          fingerprint: { status: "Established" },
+        },
+      },
+    },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+  });
+
+  const item = screen.getByText("Systems identified").closest(".upload-result-summary__item");
+  expect(item.textContent).toContain("3");
+});
+
+it("completed upload screen count matches AnalysisResult insights length", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("insights-count.csv")],
+    selectedFileSize: "8.4 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        insights: [{ title: "Legacy finding" }],
+        analysis_result: {
+          systems: [],
+          insights: [
+            { title: "Pump vibration increased sharply" },
+            { title: "Thermal response behavior changed" },
+            { title: "Pump power increased" },
+            { title: "Flow behavior changed" },
+          ],
+          fingerprint: { status: "Changed" },
+        },
+      },
+    },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+  });
+
+  const item = screen.getByText("Insights found").closest(".upload-result-summary__item");
+  expect(item.textContent).toContain("4");
+});
+
+it("shows finalizing results instead of fake zero counts before AnalysisResult is available", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("finalizing.csv")],
+    selectedFileSize: "8.4 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        identified_systems: [],
+        insights: [],
+        fingerprint_status: "Pending",
+      },
+    },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+  });
+
+  expect(screen.getByText("Finalizing results...")).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
+  expect(screen.queryByText("Systems identified")).toBeNull();
+  expect(screen.queryByText("Insights found")).toBeNull();
+  expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
 });
 
 it("idle no-file state does not render stale complete progress", () => {
@@ -248,6 +334,11 @@ it("treats the first complete payload with a saved result as terminal and waits 
           replay_ready: false,
           progress_label: "Analysis ready.",
           message: "Analysis ready.",
+          analysis_result: {
+            systems: [{ name: "Completed system" }],
+            insights: [{ title: "Completed insight" }],
+            fingerprint: { status: "Established" },
+          },
         }),
       };
     }

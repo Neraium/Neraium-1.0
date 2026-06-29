@@ -420,14 +420,83 @@ function inferEquipmentName(variables, domainMode) {
 }
 
 function inferDuration({ frames, evidenceRun, finding }) {
+  const frameSpanMinutes = inferFrameSpanMinutes(frames);
+  const externalBaseline = evidenceRun?.external_historical_baseline === true || evidenceRun?.baseline_scope === "external_historical_baseline";
   const explicit = finding?.technicalDetails?.find?.((item) => item.label === "Behavior duration")?.value;
-  if (explicit) return String(explicit);
+  const explicitMinutes = parseDurationMinutes(explicit);
+  if (explicit && (!Number.isFinite(explicitMinutes) || !Number.isFinite(frameSpanMinutes) || explicitMinutes <= frameSpanMinutes || externalBaseline)) {
+    return String(explicit);
+  }
+  if (explicit && Number.isFinite(frameSpanMinutes) && explicitMinutes > frameSpanMinutes && !externalBaseline) {
+    warnImpossibleDuration("explicit", explicit, frameSpanMinutes);
+    return formatDurationMinutes(frameSpanMinutes);
+  }
+
   const startedAt = evidenceRun?.deformation_started_at;
-  const endedAt = frames[frames.length - 1]?.timestamp_end ?? frames[frames.length - 1]?.timestamp;
-  const minutes = startedAt && endedAt ? Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000) : NaN;
-  if (Number.isFinite(minutes) && minutes > 0) return `${minutes} minutes`;
+  const endedAt = latestValidFrameTimestamp(frames);
+  const evidenceMinutes = startedAt && endedAt ? Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000) : NaN;
+  if (Number.isFinite(evidenceMinutes) && evidenceMinutes > 0 && (!Number.isFinite(frameSpanMinutes) || evidenceMinutes <= frameSpanMinutes || externalBaseline)) {
+    return formatDurationMinutes(evidenceMinutes);
+  }
+  if (Number.isFinite(evidenceMinutes) && Number.isFinite(frameSpanMinutes) && evidenceMinutes > frameSpanMinutes && !externalBaseline) {
+    warnImpossibleDuration("evidence", `${evidenceMinutes} minutes`, frameSpanMinutes);
+    return formatDurationMinutes(frameSpanMinutes);
+  }
+  if (Number.isFinite(frameSpanMinutes) && frameSpanMinutes > 0) return formatDurationMinutes(frameSpanMinutes);
   if (frames.length > 1) return `${frames.length} observation points`;
   return "the current observation window";
+}
+
+function inferFrameSpanMinutes(frames) {
+  const timestamps = (Array.isArray(frames) ? frames : [])
+    .flatMap((frame) => [frame?.timestamp_start, frame?.timestamp, frame?.timestamp_end])
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+  if (timestamps.length < 2) return NaN;
+  const minutes = Math.round((Math.max(...timestamps) - Math.min(...timestamps)) / 60000);
+  return minutes > 0 ? minutes : NaN;
+}
+
+function latestValidFrameTimestamp(frames) {
+  const timestamps = (Array.isArray(frames) ? frames : [])
+    .flatMap((frame) => [frame?.timestamp_end, frame?.timestamp, frame?.timestamp_start])
+    .map((value) => ({ value, time: new Date(value).getTime() }))
+    .filter((item) => Number.isFinite(item.time));
+  if (!timestamps.length) return null;
+  timestamps.sort((a, b) => b.time - a.time);
+  return timestamps[0].value;
+}
+
+function parseDurationMinutes(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  const match = text.match(/([0-9]+(?:\.[0-9]+)?)\s*(minute|minutes|min|hour|hours|hr|hrs|day|days)/);
+  if (!match) return NaN;
+  const number = Number(match[1]);
+  if (!Number.isFinite(number)) return NaN;
+  const unit = match[2];
+  if (unit.startsWith("day")) return number * 24 * 60;
+  if (unit.startsWith("hour") || unit === "hr" || unit === "hrs") return number * 60;
+  return number;
+}
+
+function formatDurationMinutes(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "the current observation window";
+  if (minutes >= 24 * 60) {
+    const days = Math.max(1, Math.round(minutes / (24 * 60)));
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (minutes >= 60) {
+    const hours = Math.max(1, Math.round(minutes / 60));
+    return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+  const rounded = Math.max(1, Math.round(minutes));
+  return `${rounded} ${rounded === 1 ? "minute" : "minutes"}`;
+}
+
+function warnImpossibleDuration(source, duration, frameSpanMinutes) {
+  if (typeof console !== "undefined" && typeof console.warn === "function") {
+    console.warn("system_story_duration_exceeds_dataset_span", { source, duration, datasetDuration: formatDurationMinutes(frameSpanMinutes) });
+  }
 }
 
 function cleanEvidenceLine(value) {

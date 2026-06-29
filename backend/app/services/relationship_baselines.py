@@ -9,6 +9,7 @@ from app.services.cumulative_counters import (
     counter_delta_series,
     detect_cumulative_counters_from_rows,
 )
+from app.services.telemetry_classification import classify_relationship_columns
 
 
 def _to_float(value: Any) -> float | None:
@@ -176,6 +177,154 @@ def _relationship_summary(left_col: str, right_col: str, edge: dict[str, Any]) -
     )
 
 
+def _baseline_drift_lookup(baseline_analysis: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if not isinstance(baseline_analysis, dict):
+        return {}
+    return {
+        str(item.get("column")): item
+        for item in baseline_analysis.get("column_drift", [])
+        if isinstance(item, dict) and item.get("column")
+    }
+
+
+def _score_number(value: Any, fallback: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = fallback
+    if number > 1.0 and number <= 100.0:
+        number = number / 100.0
+    return max(0.0, min(1.0, number))
+
+
+def _severity_factor_for_columns(columns: list[str], baseline_drift_by_column: dict[str, dict[str, Any]]) -> float:
+    factors: list[float] = []
+    for column in columns:
+        drift = baseline_drift_by_column.get(column, {})
+        flag = str(drift.get("drift_flag") or "").lower()
+        if flag == "review":
+            factors.append(1.0)
+        elif flag == "watch":
+            factors.append(0.65)
+        elif flag == "context":
+            factors.append(0.25)
+        text = column.lower()
+        if "vibration" in text:
+            factors.append(1.0)
+        elif any(token in text for token in ("power", "kw", "amp", "current")):
+            factors.append(0.85)
+        elif any(token in text for token in ("pressure", "flow", "temp", "thermal", "fouling")):
+            factors.append(0.7)
+    return max(factors) if factors else 0.35
+
+
+def _system_factor_for_columns(columns: list[str]) -> float:
+    systems = {_system_label_for_columns(column, "") for column in columns}
+    return min(1.0, (len(systems) * 0.35) + (len(set(columns)) * 0.15))
+
+
+def _novelty_factor(change_type: Any) -> float:
+    normalized = str(change_type or "").lower()
+    if normalized in {"disrupted", "missing", "new"}:
+        return 1.0
+    if normalized in {"weakened", "strengthened"}:
+        return 0.8
+    if normalized == "stable":
+        return 0.2
+    return 0.55
+
+
+def score_relationship_importance(
+    columns: list[str],
+    edge: dict[str, Any],
+    baseline_drift_by_column: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    clean_columns = [str(column) for column in columns if str(column or "").strip()]
+    baseline_drift_by_column = baseline_drift_by_column or {}
+    classification = classify_relationship_columns(clean_columns)
+    delta_factor = min(1.0, abs(float(edge.get("correlation_delta") or 0.0)))
+    confidence_factor = _score_number(edge.get("confidence_score", edge.get("confidence")), 0.5)
+    try:
+        minimum_samples = min(int(edge.get("baseline_sample_size") or 0), int(edge.get("recent_sample_size") or 0))
+    except (TypeError, ValueError):
+        minimum_samples = 0
+    persistence_factor = min(1.0, minimum_samples / 24.0)
+    downstream_factor = _system_factor_for_columns(clean_columns)
+    severity_factor = _severity_factor_for_columns(clean_columns, baseline_drift_by_column)
+    novelty_factor = _novelty_factor(edge.get("change_type"))
+    data_quality_factor = min(confidence_factor, max(0.2, persistence_factor))
+    equipment_factor = 1.0 if classification["equipment_process_involved"] else 0.25
+
+    weighted = (
+        delta_factor * 0.22
+        + confidence_factor * 0.16
+        + persistence_factor * 0.12
+        + downstream_factor * 0.10
+        + severity_factor * 0.16
+        + novelty_factor * 0.09
+        + data_quality_factor * 0.08
+        + equipment_factor * 0.07
+    )
+    context_explanation_factor = 1.0
+    if classification["context_only"]:
+        context_explanation_factor = 0.35
+    elif classification["context_driver_involved"]:
+        context_explanation_factor = 0.82
+
+    score = max(0.0, min(100.0, weighted * 100.0 * context_explanation_factor))
+    if classification["context_only"]:
+        score = min(score, 34.0)
+
+    factors = {
+        "magnitude": round(delta_factor, 4),
+        "confidence": round(confidence_factor, 4),
+        "persistence": round(persistence_factor, 4),
+        "downstream_scope": round(downstream_factor, 4),
+        "affected_metric_severity": round(severity_factor, 4),
+        "novelty": round(novelty_factor, 4),
+        "data_quality": round(data_quality_factor, 4),
+        "equipment_process_involvement": round(equipment_factor, 4),
+        "context_explanation_factor": round(context_explanation_factor, 4),
+    }
+    rationale = _relationship_importance_rationale(clean_columns, classification, edge, factors)
+    return {
+        "relationship_importance_score": round(score, 4),
+        "relationship_importance_rationale": rationale,
+        "ranking_factors": factors,
+        "column_classifications": classification["column_classifications"],
+        "relationship_context": {
+            "context_only": classification["context_only"],
+            "equipment_process_involved": classification["equipment_process_involved"],
+            "context_driver_involved": classification["context_driver_involved"],
+        },
+    }
+
+
+def _relationship_importance_rationale(
+    columns: list[str],
+    classification: dict[str, Any],
+    edge: dict[str, Any],
+    factors: dict[str, float],
+) -> str:
+    label = " / ".join(columns) if columns else "This relationship"
+    change_type = str(edge.get("change_type") or "changed").replace("_", " ")
+    delta = edge.get("correlation_delta")
+    if classification["context_only"]:
+        return (
+            f"Down-ranked because {label} is made up of scheduled/load/context or environmental drivers. "
+            f"The correlation delta ({delta}) is retained as evidence, but it is less likely to indicate equipment health by itself."
+        )
+    if classification["context_driver_involved"]:
+        return (
+            f"This relationship is useful because {label} {change_type} while equipment/process telemetry is involved. "
+            f"Context/load movement may explain part of the change, so the ranking balances correlation delta, confidence, persistence, and affected metric severity."
+        )
+    return (
+        f"This relationship is important because {label} {change_type} with correlation delta {delta} and "
+        f"operational support from confidence, persistence, severity, and equipment/process involvement."
+    )
+
+
 def _compact(value: dict[str, Any]) -> dict[str, Any]:
     return {
         key: item
@@ -231,6 +380,7 @@ def build_relationship_baseline(
     baseline_window_limit: int = 12000,
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
+    baseline_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cumulative_counters = detect_cumulative_counters_from_rows(rows, numeric_columns)
     cumulative_counter_columns = {item["column"] for item in cumulative_counters}
@@ -297,6 +447,7 @@ def build_relationship_baseline(
         sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
     graph_edges: list[dict[str, Any]] = []
+    baseline_drift_by_column = _baseline_drift_lookup(baseline_analysis)
     baseline_rows_for_relationships = rows_for_relationships[:baseline_count]
     recent_rows_for_relationships = rows_for_relationships[baseline_count:]
     if len(baseline_rows_for_relationships) > baseline_window_limit:
@@ -362,6 +513,8 @@ def build_relationship_baseline(
                     "source_rows": source_rows,
                 }
             )
+            importance = score_relationship_importance([left_col, right_col], edge, baseline_drift_by_column)
+            edge.update(importance)
             graph_edges.append(edge)
 
             if change_type == "stable" or drift < 0.25:
@@ -389,6 +542,11 @@ def build_relationship_baseline(
                     "baseline_sample_size": baseline_sample_size,
                     "recent_sample_size": recent_sample_size,
                     "sampled_for_baseline": sampled_for_baseline,
+                    "relationship_importance_score": edge.get("relationship_importance_score"),
+                    "relationship_importance_rationale": edge.get("relationship_importance_rationale"),
+                    "ranking_factors": edge.get("ranking_factors"),
+                    "column_classifications": edge.get("column_classifications"),
+                    "relationship_context": edge.get("relationship_context"),
                     "evidence_refs": [
                         {
                             "column": left_col,
@@ -410,8 +568,8 @@ def build_relationship_baseline(
                 }
             )
 
-    candidates.sort(key=lambda item: (item["correlation_delta"], item["coupling_strength"]), reverse=True)
-    graph_edges.sort(key=lambda item: (abs(float(item.get("correlation_delta") or 0)), float(item.get("baseline_strength") or 0)), reverse=True)
+    candidates.sort(key=lambda item: (float(item.get("relationship_importance_score") or 0), item["correlation_delta"], item["coupling_strength"]), reverse=True)
+    graph_edges.sort(key=lambda item: (float(item.get("relationship_importance_score") or 0), abs(float(item.get("correlation_delta") or 0)), float(item.get("baseline_strength") or 0)), reverse=True)
     graph = _relationship_graph(
         selected_numeric_columns=selected_numeric_columns,
         edges=graph_edges,

@@ -8,6 +8,7 @@ from typing import Any
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.data_quality import parse_numeric_value
+from app.services.telemetry_classification import classify_telemetry_signal
 
 
 CONTRACT_VERSION = "analysis-result-v1"
@@ -159,6 +160,7 @@ def build_normalized_telemetry(
             flags = missing_value_flags(raw_value)
             parsed = parse_numeric_value(str(raw_value)) if raw_value is not None else None
             quality = normalized_quality(column, flags, integrity_flags)
+            classification = classify_telemetry_signal(column)
             tag = tag_summaries.setdefault(
                 column,
                 {
@@ -169,6 +171,9 @@ def build_normalized_telemetry(
                     "missing_value_flags": [],
                     "sampling_interval": sample_interval,
                     "detected_metric_type": detect_metric_type(column),
+                    "telemetry_category": classification["category"],
+                    "analysis_role": classification["analysis_role"],
+                    "telemetry_classification": classification,
                     "record_count": 0,
                 },
             )
@@ -192,6 +197,8 @@ def build_normalized_telemetry(
                     "missing_value_flags": flags,
                     "sampling_interval": sample_interval,
                     "detected_metric_type": tag.get("detected_metric_type"),
+                    "telemetry_category": tag.get("telemetry_category"),
+                    "analysis_role": tag.get("analysis_role"),
                     "source_row": row.get("__source_row_number"),
                 }
             )
@@ -337,6 +344,11 @@ def build_analysis_result(
                     "baseline_correlation": number_or_none(item.get("baseline_correlation")),
                     "current_correlation": number_or_none(first_present(item.get("current_correlation"), item.get("recent_correlation"))),
                     "correlation_delta": number_or_none(item.get("correlation_delta")),
+                    "relationship_importance_score": number_or_none(item.get("relationship_importance_score")),
+                    "relationship_importance_rationale": item.get("relationship_importance_rationale"),
+                    "ranking_factors": item.get("ranking_factors"),
+                    "column_classifications": item.get("column_classifications"),
+                    "relationship_context": item.get("relationship_context"),
                     "supporting_metrics": item.get("supporting_metric_pairs") or [{"tag_name": column} for column in columns],
                     "source_tags": columns,
                     "time_window": item.get("time_window") or build_time_window(result),
@@ -386,6 +398,10 @@ def build_analysis_result(
                     "severity": normalize_severity(item.get("severity")),
                     "confidence": first_present(item.get("confidence"), "limited"),
                     "confidence_score": number_or_none(item.get("confidence_score")),
+                    "confidence_rationale": item.get("confidence_rationale"),
+                    "relationship_importance_score": number_or_none(item.get("relationship_importance_score")),
+                    "relationship_importance_rationale": item.get("relationship_importance_rationale"),
+                    "ranking_factors": item.get("ranking_factors"),
                     "affected_systems": to_list(item.get("affected_systems")) or [first_present(item.get("system"), "Uploaded telemetry")],
                     "what_changed": first_present(item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
                     "what_happened": first_present(item.get("what_happened"), item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
@@ -402,6 +418,7 @@ def build_analysis_result(
                         item.get("why_it_matters"),
                     ),
                     "likely_contributors": likely_contributors,
+                    "contributing_relationships": to_list(item.get("contributing_relationships")),
                     "recommended_check": first_present(item.get("recommended_operator_check"), item.get("operator_check"), item.get("recommended_check")),
                     "operator_check": first_present(item.get("operator_check"), item.get("recommended_operator_check"), item.get("recommended_check")),
                     "recommended_action": first_distinct_from(
@@ -654,9 +671,9 @@ def build_executive_summary_contract(
     return compact_dict(
         {
             "overall_operational_status": first_present(raw.get("overall_operational_status"), result.get("operating_state"), "Analysis complete"),
-            "highest_priority_finding": first_present(raw.get("highest_priority_finding"), top_insight.get("title")),
-            "biggest_emerging_risk": first_present(raw.get("biggest_emerging_risk"), top_insight.get("possible_consequence"), fingerprint.get("explanation")),
-            "recommended_action": first_present(raw.get("recommended_action"), top_recommendation.get("recommendation"), top_insight.get("recommended_check")),
+            "highest_priority_finding": first_present(top_insight.get("title"), raw.get("highest_priority_finding")),
+            "biggest_emerging_risk": first_present(top_insight.get("possible_consequence"), raw.get("biggest_emerging_risk"), fingerprint.get("explanation")),
+            "recommended_action": first_present(top_recommendation.get("recommendation"), top_insight.get("recommended_check"), raw.get("recommended_action")),
         }
     )
 

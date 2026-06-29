@@ -57,6 +57,7 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
   if (viewState === "uploading") return "Uploading CSV...";
   if (viewState === "complete") return "Analysis Complete";
+  if (viewState === "finalizing") return "Finalizing results...";
   if (viewState === "failed") return "Analysis failed";
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
@@ -76,6 +77,7 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
   if (viewState === "complete") return 100;
+  if (viewState === "finalizing") return 99;
   if (viewState === "uploading") {
     return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
   }
@@ -105,55 +107,40 @@ function valueOrDash(value) {
   return text || "--";
 }
 
-function countArrayLike(...values) {
-  const found = values.find((value) => Array.isArray(value) && value.length > 0);
-  if (found) return found.length;
-  const numeric = values.find((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
-  return Number.isFinite(Number(numeric)) ? Number(numeric) : 0;
+function isFinalAnalysisResult(value) {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && Array.isArray(value.systems)
+    && Array.isArray(value.insights)
+  );
 }
 
-function resultSource(latestUploadSnapshot, uploadJob) {
-  return latestUploadSnapshot?.latest_result
-    ?? latestUploadSnapshot?.current_upload?.result
-    ?? uploadJob?.latest_result
-    ?? uploadJob?.result
-    ?? uploadJob
-    ?? {};
+function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
+  const candidates = [
+    latestUploadSnapshot?.latest_result?.analysis_result,
+    latestUploadSnapshot?.analysis_result,
+    latestUploadSnapshot?.current_upload?.result?.analysis_result,
+    uploadJob?.latest_result?.analysis_result,
+    uploadJob?.result?.analysis_result,
+    uploadJob?.analysis_result,
+    uploadJob?.result,
+  ];
+  return candidates.find(isFinalAnalysisResult) ?? null;
 }
 
-function completionSummary({ latestUploadSnapshot, uploadJob }) {
-  const result = resultSource(latestUploadSnapshot, uploadJob);
-  const explanation = result?.analysis_explanation ?? result?.analysisExplanation ?? {};
-  const interpretation = result?.system_interpretation ?? latestUploadSnapshot?.system_interpretation ?? {};
-  const systemsIdentified = countArrayLike(
-    explanation?.systems,
-    result?.identified_systems,
-    result?.analyzed_systems,
-    result?.systems_identified,
-    result?.systems,
-    interpretation?.systems,
-    interpretation?.identified_systems,
-    uploadJob?.systems_identified,
-  );
-  const insightsFound = countArrayLike(
-    explanation?.insights,
-    result?.insights,
-    result?.findings,
-    result?.operator_findings,
-    result?.recommended_checks,
-    uploadJob?.insights_found,
-  );
-  const fingerprint = explanation?.fingerprint ?? result?.fingerprint ?? result?.operational_fingerprint ?? result?.adaptive_learning?.operational_fingerprint ?? {};
+function completionSummary({ analysisResult }) {
+  const fingerprint = analysisResult?.fingerprint ?? {};
   const fingerprintStatus = valueOrDash(
     fingerprint?.status
+      ?? fingerprint?.drift_status
       ?? fingerprint?.label
-      ?? result?.fingerprint_status
-      ?? (uploadJob?.result_available || normalizeUploadLifecycle(uploadJob?.status) === "complete" ? "Established" : "Pending")
+      ?? "Established"
   );
 
   return [
-    { label: "Systems identified", value: String(systemsIdentified) },
-    { label: "Insights found", value: String(insightsFound) },
+    { label: "Systems identified", value: String(analysisResult.systems.length) },
+    { label: "Insights found", value: String(analysisResult.insights.length) },
     { label: "Fingerprint status", value: fingerprintStatus },
   ];
 }
@@ -244,13 +231,15 @@ export default function IntakeFlowPanel({
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : "No CSV selected";
   const fileKind = String(pendingUploadKind || "csv").toUpperCase();
-  const viewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
+  const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
+  const analysisResult = finalAnalysisResult(latestUploadSnapshot, uploadJob);
+  const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
   const statusText = operatorStatusText({ viewState, uploadJob, uploadState, latestMessage });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
   const remaining = estimateRemaining(uploadTransfer);
   const errorMessage = String(latestMessage || "Choose another CSV and try again.").trim();
-  const summary = completionSummary({ latestUploadSnapshot, uploadJob });
-  const showProgress = viewState === "uploading" || viewState === "analyzing";
+  const summary = analysisResult ? completionSummary({ analysisResult }) : [];
+  const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
 
   const chooseFileButtonText = hasSelectedFiles ? "Choose Another File" : "Choose CSV";
 

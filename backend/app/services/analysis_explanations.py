@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.cumulative_counters import is_cumulative_counter_name
+from app.services.telemetry_classification import is_context_or_supporting_column
 
 
 def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
@@ -117,40 +118,75 @@ def build_insights(
     upload_id = first_text(result.get("upload_id"), result.get("job_id"), result.get("run_id"))
     analysis_id = first_text(result.get("analysis_id"), result.get("run_id"), upload_id)
 
-    relationship_changes = [
-        item for item in relationship_model.get("top_relationship_changes", [])
-        if isinstance(item, dict) and not relationship_has_cumulative_counter(item)
-    ]
-    for index, item in enumerate(relationship_changes[:3]):
-        columns = relationship_columns(item)
-        label = " / ".join(columns) if columns else str(item.get("relationship") or "Signal relationship")
-        system = system_from_columns(columns)
-        confidence_score = numeric_confidence_score(
-            item.get("confidence_score"),
-            sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
-        )
+    supporting_context = context_driver_drift_items(baseline)
+    relationship_changes = sorted(
+        [
+            item for item in relationship_model.get("top_relationship_changes", [])
+            if isinstance(item, dict)
+            and not relationship_has_cumulative_counter(item)
+            and not relationship_is_context_only(item)
+        ],
+        key=relationship_importance_sort_key,
+        reverse=True,
+    )
+    relationship_groups = cluster_relationship_changes(relationship_changes)
+    for index, group in enumerate(relationship_groups[:3]):
+        if not group:
+            continue
+        primary = group[0]
+        primary_columns = relationship_columns(primary)
+        all_columns = dedupe([column for entry in group for column in relationship_columns(entry)])
+        label = " / ".join(primary_columns) if primary_columns else str(primary.get("relationship") or "Signal relationship")
+        system = system_from_columns(all_columns or primary_columns)
+        confidence_scores = [
+            numeric_confidence_score(
+                entry.get("confidence_score"),
+                sample_confidence_score(entry.get("baseline_sample_size"), entry.get("recent_sample_size"), entry.get("correlation_delta")),
+            )
+            for entry in group
+        ]
+        confidence_score = max(confidence_scores) if confidence_scores else 0.5
         confidence = confidence_label_from_score(confidence_score)
-        relationship_ranges = relationship_source_time_ranges(item, source_ranges)
-        evidence_items = relationship_evidence_items(
-            item=item,
-            label=label,
-            time_window=time_window,
-            source_ranges=relationship_ranges,
-            upload_id=upload_id,
-            analysis_id=analysis_id,
-            confidence_score=confidence_score,
-        )
-        what_changed = relationship_observable_sentence(columns, item)
-        why = relationship_confidence_basis(label, item)
-        persistence_duration = sample_window_phrase(item.get("baseline_sample_size"), item.get("recent_sample_size"))
+        evidence_items: list[dict[str, Any]] = []
+        contributions: list[dict[str, Any]] = []
+        group_source_ranges = []
+        for group_index, entry in enumerate(group):
+            columns = relationship_columns(entry)
+            entry_label = " / ".join(columns) if columns else str(entry.get("relationship") or "Signal relationship")
+            relationship_ranges = relationship_source_time_ranges(entry, source_time_ranges(result, time_window))
+            group_source_ranges.extend(relationship_ranges)
+            entry_confidence = numeric_confidence_score(
+                entry.get("confidence_score"),
+                sample_confidence_score(entry.get("baseline_sample_size"), entry.get("recent_sample_size"), entry.get("correlation_delta")),
+            )
+            for evidence_item in relationship_evidence_items(
+                item=entry,
+                label=entry_label,
+                time_window=time_window,
+                source_ranges=relationship_ranges,
+                upload_id=upload_id,
+                analysis_id=analysis_id,
+                confidence_score=entry_confidence,
+            ):
+                adjusted = dict(evidence_item)
+                adjusted["id"] = f"relationship-{index}-{group_index}-evidence-0"
+                evidence_items.append(adjusted)
+            contributions.append(relationship_contribution(entry, group_index, columns))
+        what_changed = merged_relationship_observable_sentence(group, primary)
+        why = merged_relationship_reason(group, primary, label)
+        persistence_duration = sample_window_phrase(primary.get("baseline_sample_size"), primary.get("recent_sample_size"))
+        title = merged_relationship_title(group, primary)
         insight = compact_dict(
             {
                 "id": f"relationship-{index}",
-                "title": relationship_title(columns, item),
-                "severity": severity_from_number(item.get("correlation_delta")),
+                "title": title,
+                "severity": severity_from_number(primary.get("correlation_delta")),
                 "confidence": confidence,
                 "confidence_score": confidence_score,
-                "confidence_rationale": confidence_rationale_for_relationship(item, confidence_score),
+                "confidence_rationale": confidence_rationale_for_relationship(primary, confidence_score),
+                "relationship_importance_score": primary.get("relationship_importance_score"),
+                "relationship_importance_rationale": primary.get("relationship_importance_rationale"),
+                "ranking_factors": primary.get("ranking_factors"),
                 "affected_systems": [system],
                 "system": system,
                 "what_changed": what_changed,
@@ -158,20 +194,21 @@ def build_insights(
                 "why_neraium_thinks_it_happened": why,
                 "why_neraium_thinks": why,
                 "likely_cause": why,
-                "contributing_factors": columns,
+                "contributing_factors": all_columns,
                 "possible_operational_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
                 "possible_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
-                "recommended_operator_check": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity for the same window.",
+                "recommended_operator_check": f"Compare {label} timing against operator logs, setpoint changes, context/load drivers, and equipment activity for the same window.",
                 "recommended_action": relationship_recommended_action(system),
-                "operator_check": f"Check whether {label} changed after a known operating mode or equipment state change.",
+                "operator_check": f"Check whether {label} changed after a known operating mode, load condition, or equipment state change.",
                 "evidence_summary": evidence_summary(evidence_items),
                 "evidence_items": evidence_items,
                 "evidence": evidence_items,
-                "contributing_relationships": [relationship_contribution(item, index, columns)],
-                "contributing_metrics": metric_contributions(columns),
-                "source_metrics": columns,
-                "source_tags": columns,
-                "source_time_ranges": relationship_ranges,
+                "contributing_relationships": contributions,
+                "affected_relationships": [relationship_label(entry) for entry in group],
+                "contributing_metrics": metric_contributions(all_columns),
+                "source_metrics": all_columns,
+                "source_tags": all_columns,
+                "source_time_ranges": dedupe_ranges(group_source_ranges),
                 "time_window": time_window,
                 "persistence_duration": persistence_duration,
                 "upload_id": upload_id,
@@ -184,7 +221,7 @@ def build_insights(
         item for item in baseline.get("column_drift", [])
         if isinstance(item, dict)
         and item.get("drift_flag") in {"watch", "review"}
-        and not is_cumulative_context_item(item)
+        and not is_supporting_context_item(item)
     ]
     drift_items.sort(key=lambda item: abs(float(item.get("percent_change") or item.get("absolute_change") or 0)), reverse=True)
     for index, item in enumerate(drift_items[: max(0, 5 - len(insights))]):
@@ -203,6 +240,15 @@ def build_insights(
             upload_id=upload_id,
             analysis_id=analysis_id,
             confidence_score=confidence_score,
+        )
+        evidence_items.extend(
+            context_modifier_evidence_items(
+                context_items=supporting_context,
+                time_window=time_window,
+                source_ranges=source_ranges,
+                upload_id=upload_id,
+                analysis_id=analysis_id,
+            )
         )
         what_changed = metric_change_sentence(item)
         why = metric_confidence_basis(item, persistence_detail)
@@ -337,7 +383,7 @@ def build_systems(
         if (
             not isinstance(item, dict)
             or item.get("drift_flag") not in {"watch", "review"}
-            or is_cumulative_context_item(item)
+            or is_supporting_context_item(item)
         ):
             continue
         target = entry(system_from_columns([str(item.get("column") or "")]))
@@ -345,7 +391,7 @@ def build_systems(
         target["what_changed"].append(change_phrase(item))
 
     for relationship in relationship_model.get("top_relationship_changes", []) if isinstance(relationship_model.get("top_relationship_changes"), list) else []:
-        if not isinstance(relationship, dict) or relationship_has_cumulative_counter(relationship):
+        if not isinstance(relationship, dict) or relationship_has_cumulative_counter(relationship) or relationship_is_context_only(relationship):
             continue
         columns = relationship_columns(relationship)
         target = entry(system_from_columns(columns))
@@ -370,6 +416,7 @@ def build_relationships(
     changes = relationship_model.get("top_relationship_changes", [])
     if not isinstance(changes, list):
         return relationships
+    changes = sorted([item for item in changes if isinstance(item, dict)], key=relationship_importance_sort_key, reverse=True)
 
     for index, item in enumerate(changes[:5]):
         if not isinstance(item, dict) or relationship_has_cumulative_counter(item):
@@ -404,6 +451,11 @@ def build_relationships(
                     "confidence": confidence_label_from_score(confidence_score),
                     "confidence_score": confidence_score,
                     "confidence_rationale": confidence_rationale_for_relationship(item, confidence_score),
+                    "relationship_importance_score": item.get("relationship_importance_score"),
+                    "relationship_importance_rationale": item.get("relationship_importance_rationale"),
+                    "ranking_factors": item.get("ranking_factors"),
+                    "column_classifications": item.get("column_classifications"),
+                    "relationship_context": item.get("relationship_context"),
                     "what_changed": first_text(
                         item.get("summary"),
                         relationship_change_sentence(label, item),
@@ -429,13 +481,13 @@ def build_fingerprint(
 ) -> dict[str, Any]:
     relationship_changes = [
         item for item in (relationship_model.get("top_relationship_changes", []) if isinstance(relationship_model.get("top_relationship_changes"), list) else [])
-        if isinstance(item, dict) and not relationship_has_cumulative_counter(item)
+        if isinstance(item, dict) and not relationship_has_cumulative_counter(item) and not relationship_is_context_only(item)
     ]
     significant_columns = [
         item for item in baseline.get("column_drift", [])
         if isinstance(item, dict)
         and item.get("drift_flag") in {"watch", "review"}
-        and not is_cumulative_context_item(item)
+        and not is_supporting_context_item(item)
     ]
     largest = largest_deviation(significant_columns, relationship_changes)
     largest_items = largest_deviation_items(significant_columns, relationship_changes)
@@ -913,6 +965,7 @@ def relationship_contribution(item: dict[str, Any], index: int, columns: list[st
         {
             "id": f"relationship-{index}",
             "columns": columns,
+            "label": relationship_label(item),
             "relationship_type": item.get("relationship_type"),
             "change_type": item.get("change_type"),
             "strength": item.get("strength"),
@@ -920,6 +973,9 @@ def relationship_contribution(item: dict[str, Any], index: int, columns: list[st
             "current_strength": item.get("current_strength"),
             "change_percentage": item.get("change_percentage"),
             "confidence_score": item.get("confidence_score"),
+            "relationship_importance_score": item.get("relationship_importance_score"),
+            "relationship_importance_rationale": item.get("relationship_importance_rationale"),
+            "ranking_factors": item.get("ranking_factors"),
             "time_window": item.get("time_window"),
         }
     )
@@ -1141,6 +1197,169 @@ def relationship_columns(item: dict[str, Any]) -> list[str]:
     if isinstance(columns, list):
         return dedupe([str(column) for column in columns if column])
     return []
+
+
+def is_supporting_context_item(item: dict[str, Any]) -> bool:
+    column = str(item.get("column") or "")
+    metric_type = str(item.get("metric_type") or "")
+    classification = item.get("telemetry_classification") if isinstance(item.get("telemetry_classification"), dict) else {}
+    category = str(item.get("telemetry_category") or classification.get("category") or "")
+    role = str(item.get("analysis_role") or classification.get("analysis_role") or "")
+    return (
+        is_cumulative_context_item(item)
+        or role == "supporting_context"
+        or category in {"scheduled_load_context", "weather_environment", "setpoint", "identifier_constant", "cumulative_counter"}
+        or is_context_or_supporting_column(column, metric_type=metric_type or None)
+    )
+
+
+def context_driver_drift_items(baseline: dict[str, Any]) -> list[dict[str, Any]]:
+    items = [
+        item for item in baseline.get("column_drift", [])
+        if isinstance(item, dict)
+        and is_supporting_context_item(item)
+        and item.get("drift_flag") == "context"
+    ]
+    items.sort(key=lambda item: abs(float(item.get("percent_change") or item.get("absolute_change") or 0)), reverse=True)
+    return items[:4]
+
+
+def context_modifier_evidence_items(
+    *,
+    context_items: list[dict[str, Any]],
+    time_window: str,
+    source_ranges: list[dict[str, Any]],
+    upload_id: str,
+    analysis_id: str,
+) -> list[dict[str, Any]]:
+    if not context_items:
+        return []
+    changes = [context_change_sentence(item) for item in context_items if context_change_sentence(item)]
+    if not changes:
+        return []
+    return [
+        compact_dict(
+            {
+                "id": "context-modifier-evidence-0",
+                "type": "context_modifier",
+                "summary": "Context/load signals were reviewed as explanatory modifiers, not primary anomalies.",
+                "supporting_signals": changes,
+                "relevant_metric_changes": changes,
+                "source_columns": [str(item.get("column")) for item in context_items if item.get("column")],
+                "source_metrics": [str(item.get("column")) for item in context_items if item.get("column")],
+                "source_tags": [str(item.get("column")) for item in context_items if item.get("column")],
+                "source_time_ranges": source_ranges,
+                "time_window": time_window,
+                "confidence": "moderate",
+                "confidence_score": 0.65,
+                "source_upload_id": upload_id,
+                "analysis_id": analysis_id,
+            }
+        )
+    ]
+
+
+def context_change_sentence(item: dict[str, Any]) -> str:
+    column = str(item.get("column") or "Context signal")
+    direction = str(item.get("direction") or "changed")
+    percent = item.get("percent_change")
+    if percent is not None:
+        return f"{column} moved {direction} by {percent}% and was treated as context/load evidence."
+    return f"{column} moved {direction} and was treated as context/load evidence."
+
+
+def relationship_importance_sort_key(item: dict[str, Any]) -> tuple[float, float, float]:
+    return (
+        float(item.get("relationship_importance_score") or 0.0),
+        abs(float(item.get("correlation_delta") or 0.0)),
+        float(item.get("confidence_score") or 0.0),
+    )
+
+
+def relationship_is_context_only(item: dict[str, Any]) -> bool:
+    context = item.get("relationship_context") if isinstance(item.get("relationship_context"), dict) else {}
+    if context.get("context_only") is True:
+        return True
+    classifications = item.get("column_classifications") if isinstance(item.get("column_classifications"), list) else []
+    if classifications:
+        return all(not classification.get("is_primary_anomaly_candidate") for classification in classifications if isinstance(classification, dict))
+    columns = relationship_columns(item)
+    return bool(columns) and all(is_context_or_supporting_column(column) for column in columns)
+
+
+def cluster_relationship_changes(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for item in items:
+        key = relationship_cluster_key(item)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(item)
+    for group in groups.values():
+        group.sort(key=relationship_importance_sort_key, reverse=True)
+    return sorted((groups[key] for key in order), key=lambda group: relationship_importance_sort_key(group[0]), reverse=True)
+
+
+def relationship_cluster_key(item: dict[str, Any]) -> str:
+    columns = relationship_columns(item)
+    title = relationship_title(columns, item).lower()
+    text = " ".join(columns).lower()
+    if "temp" in text or "thermal" in text or "fouling" in text or "thermal" in title:
+        return "thermal_response"
+    if any(token in text for token in ["flow", "pressure", "pump", "valve"]):
+        return "flow_pressure"
+    if any(token in text for token in ["humidity", "moisture", "water"]):
+        return "moisture_response"
+    return title
+
+
+def merged_relationship_title(group: list[dict[str, Any]], primary: dict[str, Any]) -> str:
+    if len(group) <= 1:
+        return relationship_title(relationship_columns(primary), primary)
+    key = relationship_cluster_key(primary)
+    if key == "thermal_response":
+        return "Thermal response behavior changed"
+    if key == "flow_pressure":
+        return "Flow and pressure behavior changed"
+    if key == "moisture_response":
+        return "Moisture response behavior changed"
+    return "Related signal relationships changed"
+
+
+def merged_relationship_observable_sentence(group: list[dict[str, Any]], primary: dict[str, Any]) -> str:
+    if len(group) <= 1:
+        return relationship_observable_sentence(relationship_columns(primary), primary)
+    relationships = "; ".join(relationship_label(item) for item in group[:4])
+    return f"{merged_relationship_title(group, primary)}; {len(group)} related relationships shifted against the baseline window: {relationships}."
+
+
+def merged_relationship_reason(group: list[dict[str, Any]], primary: dict[str, Any], label: str) -> str:
+    rationale = first_text(primary.get("relationship_importance_rationale"), relationship_confidence_basis(label, primary))
+    if len(group) <= 1:
+        return rationale
+    return f"{rationale} Neraium grouped the related changes because they describe the same system-level behavior instead of separate isolated findings."
+
+
+def relationship_label(item: dict[str, Any]) -> str:
+    columns = relationship_columns(item)
+    if len(columns) >= 2:
+        return f"{columns[0]} <-> {columns[1]} shifted"
+    return first_text(item.get("relationship"), item.get("summary"), "Relationship shifted")
+
+
+def dedupe_ranges(ranges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for item in ranges:
+        if not isinstance(item, dict):
+            continue
+        key = str(sorted(item.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
 
 
 def is_cumulative_context_item(item: dict[str, Any]) -> bool:
