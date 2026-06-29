@@ -11,6 +11,7 @@ from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any
 from app.services.analysis_explanations import build_analysis_explanation
+from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
@@ -763,6 +764,17 @@ def _build_csv_result(
     result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
     result["analysis_explanation"] = build_analysis_explanation(result)
     result["analysis"] = result["analysis_explanation"]
+    normalized_telemetry = build_normalized_telemetry(
+        rows=rows,
+        columns=columns,
+        numeric_columns=numeric_columns,
+        timestamp_column=timestamp_column,
+        timestamp_profile=timestamp_profile,
+        data_quality=data_quality,
+        ingestion_report=result["ingestion_report"],
+        source_file=filename,
+    )
+    result = attach_analysis_result(result, normalized_telemetry=normalized_telemetry)
 
     result["sii_reliable_enough_to_show"] = bool(baseline_reliable)
     result["report_finalization"] = {

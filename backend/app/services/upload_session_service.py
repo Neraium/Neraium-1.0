@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services import upload_jobs
+from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
 from app.services.runtime_db import (
     queue_metrics,
     queue_operational_metrics,
@@ -170,6 +171,7 @@ def _empty_response(*, include_persisted: bool, request_id: str | None) -> dict[
         "traceability": {},
         "current_upload": record,
         "metrics": session_metrics_snapshot(),
+        "analysis_result": empty_analysis_result(status="empty", message="No active upload session."),
     }
     _lifecycle_log(
         event="latest_session_resolved",
@@ -184,6 +186,7 @@ def _empty_response(*, include_persisted: bool, request_id: str | None) -> dict[
         "current_result": None,
         "latest_result": None,
         "latestResult": None,
+        "analysis_result": snapshot["analysis_result"],
         "summary": {},
         "history": [] if not include_persisted else [],
         "adaptive_learning": {},
@@ -281,6 +284,18 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
     if session_state == SESSION_STATE_STALE and source != SESSION_SOURCE_HISTORY:
         source = SESSION_SOURCE_HISTORY
 
+    if isinstance(result, dict):
+        analysis_result = ensure_analysis_result(result)
+        if result.get("analysis_result") != analysis_result:
+            result = {**result, "analysis_result": analysis_result}
+    else:
+        analysis_result = empty_analysis_result(
+            analysis_id=working_job_id,
+            upload_id=working_job_id,
+            source_file=(working_summary or {}).get("filename"),
+            status=session_state if session_state in {SESSION_STATE_QUEUED, SESSION_STATE_PROCESSING} else "empty",
+        )
+
     replay_payload = build_replay_payload_from_result(result, job_id=working_job_id)
     traceability = working_record.get("traceability") if isinstance(working_record.get("traceability"), dict) else {}
     snapshot_status = "COMPLETE" if session_state in {SESSION_STATE_VERIFIED, SESSION_STATE_RESTORED, SESSION_STATE_STALE} and result else (
@@ -313,6 +328,7 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         "traceability": traceability,
         "current_upload": working_record,
         "metrics": session_metrics_snapshot(current_state=session_state),
+        "analysis_result": analysis_result,
     }
     system_interpretation = build_system_interpretation(
         result if isinstance(result, dict) else None,
@@ -326,6 +342,7 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         "current_result": result,
         "latest_result": result,
         "latestResult": result,
+        "analysis_result": analysis_result,
         "summary": working_summary if isinstance(working_summary, dict) else {},
         "history": history if use_persisted else [],
         "adaptive_learning": {},
@@ -360,6 +377,13 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "request_id": request_id,
             "message": "Upload session expired or was not found.",
             "state_backend": upload_state_backend(),
+            "analysis_result": empty_analysis_result(
+                analysis_id=requested_id or None,
+                upload_id=requested_id or None,
+                status="missing",
+                message="Upload session expired or was not found.",
+                errors=["upload_session_missing"],
+            ),
         }
         return payload
 
@@ -373,6 +397,24 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
 
     if isinstance(status_payload, dict):
         normalized = normalize_upload_status_payload(status_payload)
+        if isinstance(result_payload, dict):
+            normalized["analysis_result"] = ensure_analysis_result(result_payload)
+        elif str(normalized.get("status") or "").upper() == "FAILED":
+            normalized["analysis_result"] = empty_analysis_result(
+                analysis_id=requested_id,
+                upload_id=requested_id,
+                source_file=normalized.get("filename"),
+                status="failed",
+                message=normalized.get("message"),
+                errors=[str(normalized.get("error") or normalized.get("error_type") or "analysis failed")],
+            )
+        else:
+            normalized["analysis_result"] = empty_analysis_result(
+                analysis_id=requested_id,
+                upload_id=requested_id,
+                source_file=normalized.get("filename"),
+                status=str(normalized.get("processing_state") or normalized.get("status") or "processing").lower(),
+            )
         state = _resolve_session_state(
             status=str(normalized.get("processing_state") or normalized.get("status") or ""),
             result=result_payload if isinstance(result_payload, dict) else None,
@@ -416,6 +458,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "message": "Telemetry processing complete.",
             "error": None,
             "state_backend": upload_state_backend(),
+            "analysis_result": ensure_analysis_result(result_payload),
             "session_state": SESSION_STATE_VERIFIED if requested_id == current_job_id else SESSION_STATE_STALE,
             "session_source": SESSION_SOURCE_MEMORY if requested_id == current_job_id else SESSION_SOURCE_HISTORY,
             "upload_session_id": requested_id,
@@ -436,6 +479,13 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
         "error": "upload_session_missing",
         "message": "Upload session expired or was not found.",
         "state_backend": upload_state_backend(),
+        "analysis_result": empty_analysis_result(
+            analysis_id=requested_id or None,
+            upload_id=requested_id or None,
+            status="missing",
+            message="Upload session expired or was not found.",
+            errors=["upload_session_missing"],
+        ),
         "session_state": SESSION_STATE_EMPTY,
         "session_source": SESSION_SOURCE_EMPTY,
         "upload_session_id": requested_id,

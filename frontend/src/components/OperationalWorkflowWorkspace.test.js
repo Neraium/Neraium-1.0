@@ -308,4 +308,73 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Run analysis to identify systems and relationships.").length).toBeGreaterThan(0);
     expect(screen.queryByText("Chilled Water Loop")).toBeNull();
   });
+
+  it("renders canonical analysis evidence and hides unavailable fields", () => {
+    const analysisResult = {
+      analysis_id: "analysis-1",
+      upload_id: "upload-1",
+      source_file: "canonical.csv",
+      generated_at: "2026-06-23T12:00:00Z",
+      data_quality: { warnings: [] },
+      executive_summary: {
+        overall_operational_status: "Current behavior changed",
+        highest_priority_finding: "Pump power moved up",
+        recommended_action: "Check pump schedule",
+      },
+      systems: [{ id: "pump", name: "Pump system", relationship_changes: [] }],
+      relationships: [],
+      fingerprint: {
+        drift_status: "changed",
+        explanation: "The operating fingerprint changed against the baseline window.",
+        confidence: "moderate",
+        evidence_refs: ["ev-1"],
+      },
+      insights: [{
+        id: "insight-1",
+        title: "Pump power moved up",
+        severity: "moderate",
+        confidence: "moderate",
+        affected_systems: ["Pump system"],
+        what_changed: "Pump power increased in the current window.",
+        why_it_matters: "The system is moving away from its normal operating behavior.",
+        recommended_check: "Check pump schedule",
+        possible_consequence: "Pump runtime may increase.",
+        source_tags: ["pump_power"],
+        time_window: "2026-06-23T09:00:00Z to 2026-06-23T12:00:00Z",
+        evidence_refs: ["ev-1"],
+      }],
+      recommendations: [{ id: "rec-1", recommendation: "Check pump schedule", evidence_refs: ["ev-1"] }],
+      evidence_index: {
+        "ev-1": {
+          evidence_id: "ev-1",
+          type: "metric_delta",
+          description: "Pump power baseline average increased in the current window.",
+          source_tags: ["pump_power"],
+          metric_delta: [{ tag_name: "pump_power", percent_change: 22 }],
+          time_window: "2026-06-23T09:00:00Z to 2026-06-23T12:00:00Z",
+          confidence: "moderate",
+          calculation_method: "Metric delta from baseline average versus current average.",
+        },
+      },
+      warnings: [],
+      errors: [],
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({
+        analysis_result: analysisResult,
+        analysis_explanation: null,
+      }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+
+    expect(screen.getAllByText("Pump power moved up").length).toBeGreaterThan(0);
+    expect(screen.getByText("Evidence (moderate)")).toBeTruthy();
+    expect(screen.getAllByText("Pump power baseline average increased in the current window.").length).toBeGreaterThan(0);
+    expect(screen.getByText(/percent change: 22/)).toBeTruthy();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+  });
 });

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from app.services.upload_state import build_session_scope
+from app.services.analysis_result_contract import empty_analysis_result
 
 
 def build_partial_upload_artifacts(
@@ -124,6 +125,14 @@ def build_partial_upload_artifacts(
         "propagation_label": "Partial upload complete.",
     }
 
+    result["analysis_result"] = empty_analysis_result(
+        analysis_id=job_id,
+        upload_id=job_id,
+        source_file=filename,
+        status="failed",
+        message="Upload completed, but full intelligence processing could not finish.",
+        errors=[error_message],
+    )
     result["session_scope"] = build_session_scope(job_id, filename=filename, status="partial_complete")
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])

@@ -15,6 +15,7 @@ import re
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_operator_role
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
@@ -822,12 +823,20 @@ async def intake_result(job_id: str):
             "result_available": False,
             "status": "NOT_FOUND",
             "result": None,
+            "analysis_result": empty_analysis_result(
+                analysis_id=job_id,
+                upload_id=job_id,
+                status="missing",
+                message="Upload result was not found.",
+                errors=["upload_result_missing"],
+            ),
         }
     return {
         "job_id": job_id,
         "result_available": True,
         "status": "COMPLETE",
         "result": result,
+        "analysis_result": ensure_analysis_result(result),
     }
 
 

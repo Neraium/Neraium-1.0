@@ -258,14 +258,14 @@ export default function OperationalWorkflowWorkspace({
 }
 
 function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
-  const heroRows = buildOverviewHeroRows(model);
+  const heroRows = model.analysisComplete ? [] : buildOverviewHeroRows(model);
   const brief = buildOverviewBrief(model);
   const checklistItems = buildOverviewChecklist(model);
   const historyItems = model.historyItems.slice(0, 4);
   const fallbackOutputs = buildOverviewOutputs(model);
   const primaryInsight = model.insights[0] ?? null;
   const showSystemsAction = model.analysisComplete && model.identifiedSystemCount > 0;
-  const showSupportGrid = model.analysisComplete || model.overviewState === "analyzing";
+  const showSupportGrid = model.overviewState === "analyzing";
 
   function renderPrimaryAction() {
     if (model.analysisComplete && primaryInsight) {
@@ -330,10 +330,12 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
               {renderSecondaryAction()}
             </div>
           </div>
-          <aside className="operational-hero__aside" aria-label="Overview quick facts">
-            <span className="section-token">Command pulse</span>
-            <DetailGrid rows={heroRows} />
-          </aside>
+          {heroRows.length ? (
+            <aside className="operational-hero__aside" aria-label="Overview quick facts">
+              <span className="section-token">Command pulse</span>
+              <DetailGrid rows={heroRows} />
+            </aside>
+          ) : null}
         </div>
       </section>
 
@@ -631,6 +633,12 @@ function FingerprintSection({ model }) {
         <PanelHeader eyebrow="Fingerprint" title="Operating Fingerprint" subtitle="Plain-language meaning of the baseline comparison." />
         <FingerprintStatus drift={model.fingerprintDrift} />
         <DetailGrid rows={model.fingerprintRows} />
+        {model.fingerprintEvidence?.length ? (
+          <section className="operational-block">
+            <h3>Supporting evidence</h3>
+            {model.fingerprintEvidence.map((item, index) => <EvidencePanel key={item.evidence_id ?? index} evidence={item} />)}
+          </section>
+        ) : null}
       </section>
     </div>
   );
@@ -653,6 +661,10 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
           ["Last analysis", model.lastAnalysis],
           ["Detected data type", model.domainLabel],
         ]} />
+      </section>
+      <section className="operational-panel" aria-label="Analysis metadata">
+        <PanelHeader eyebrow="Analysis" title="Analysis Metadata" subtitle="Source file, identifiers, and generation time." />
+        <DetailGrid rows={model.analysisMetadataRows} />
       </section>
       <section className="operational-panel" aria-label="Signal browser">
         <PanelHeader eyebrow="Signals" title="Signal Browser" subtitle="Detected telemetry signals and integrity state." />
@@ -698,8 +710,9 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
 function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, roomContext, domainDetection, gateProcessing, replayFrame }) {
   const result = effectiveLatestUploadResult ?? liveOps?.latestUploadResult ?? {};
   const snapshot = effectiveLatestUploadSnapshot ?? liveOps?.latestUploadSnapshot ?? {};
-  const relationshipRows = Array.isArray(liveOps?.relationshipRows) ? liveOps.relationshipRows : [];
   const analysisExplanation = extractAnalysisExplanation(result, snapshot);
+  const canonicalRelationships = Array.isArray(analysisExplanation?.relationships) ? analysisExplanation.relationships : [];
+  const relationshipRows = canonicalRelationships.length ? canonicalRelationships : (Array.isArray(liveOps?.relationshipRows) ? liveOps.relationshipRows : []);
   const quality = collectQuality(result, snapshot);
   const telemetryAvailable = hasTelemetry(result, snapshot, liveOps, replayFrame);
   const telemetryConnected = isTelemetryConnected(liveOps);
@@ -715,6 +728,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const heroStatus = uiState.status;
   const lastAnalysis = deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result });
   const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation });
+  const fingerprintEvidence = resolveEvidenceRefs(analysisExplanation?.fingerprint, analysisExplanation);
   const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) : [];
   const identifiedSystems = analysisComplete ? collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) : [];
   const identifiedSystemCount = identifiedSystems.length;
@@ -771,6 +785,8 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     identifiedSystemCount,
     fingerprintDrift,
     fingerprintRows: buildFingerprintRows(analysisExplanation),
+    fingerprintEvidence,
+    analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
     systemsTabMetric: systemSummary.tabMetric,
     systemsSectionTitle: systemSummary.sectionTitle,
@@ -863,6 +879,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
 function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
   if (uiState.key === "noTelemetry") return "None";
   return firstMeaningfulText(
+    result?.analysis_result?.source_file,
     result?.result_source,
     snapshot?.result_source,
     result?.source,
@@ -916,20 +933,40 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
 
 function extractAnalysisExplanation(result, snapshot) {
   const interpretation = result?.system_interpretation ?? snapshot?.system_interpretation ?? {};
-  const explanation = result?.analysis_explanation ?? interpretation?.analysis_explanation ?? snapshot?.analysis_explanation;
+  const currentUpload = snapshot?.current_upload ?? {};
+  const explanation = result?.analysis_result
+    ?? result?.analysis_explanation
+    ?? currentUpload?.result?.analysis_result
+    ?? snapshot?.analysis_result
+    ?? interpretation?.analysis_result
+    ?? interpretation?.analysis_explanation
+    ?? snapshot?.analysis_explanation;
   return explanation && typeof explanation === "object" ? explanation : {};
 }
 
 function buildFingerprintRows(analysisExplanation) {
   const fingerprint = analysisExplanation?.fingerprint ?? {};
+  const normalBehavior = fingerprint.normal_operating_behavior ?? fingerprint.baseline_summary;
+  const currentBehavior = fingerprint.current_behavior ?? fingerprint.current_behavior_summary;
   return [
-    ["Meaning", fingerprint.meaning],
-    ["Largest deviation", fingerprint.largest_deviation],
-    ["Confidence", fingerprint.confidence],
-    ["Baseline rows", fingerprint.baseline_window_rows],
-    ["Recent rows", fingerprint.recent_window_rows],
-    ["Columns analyzed", fingerprint.columns_analyzed],
-    ["Primary driver", fingerprint.primary_driver],
+    ["Explanation", firstText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
+    ["Drift status", fingerprint.drift_status ?? fingerprint.status],
+    ["Confidence", fingerprint.confidence_score ? `${fingerprint.confidence} (${fingerprint.confidence_score})` : fingerprint.confidence],
+    ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : normalBehavior],
+    ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : currentBehavior],
+    ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).join("; ")],
+  ];
+}
+
+function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
+  const metadata = analysisExplanation?.analysis_metadata ?? {};
+  return [
+    ["Analysis ID", firstText(analysisExplanation?.analysis_id, metadata.analysis_id, result?.analysis_id, result?.run_id, result?.job_id)],
+    ["Upload ID", firstText(analysisExplanation?.upload_id, metadata.upload_id, result?.upload_id, result?.job_id, snapshot?.upload_id)],
+    ["Source file", firstText(analysisExplanation?.source_file, result?.source_file, result?.filename, snapshot?.filename, snapshot?.current_upload?.filename)],
+    ["Generated at", firstText(analysisExplanation?.generated_at, result?.completed_at, result?.last_processed_at, snapshot?.last_processed_at)],
+    ["Rows", firstText(metadata.row_count, result?.row_count, snapshot?.rows_processed)],
+    ["Columns", firstText(metadata.column_count, result?.column_count, snapshot?.columns_detected)],
   ];
 }
 
@@ -959,11 +996,18 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
 function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) {
   const explanatorySystems = Array.isArray(analysisExplanation?.systems) ? analysisExplanation.systems : [];
   if (explanatorySystems.length > 0) {
-    return explanatorySystems.map((system, index) => ({
-      ...system,
-      id: system.id ?? system.name ?? "system-" + index,
-      name: firstText(system.name, system.label, "System " + (index + 1)),
-    }));
+    return explanatorySystems.map((system, index) => {
+      const relationshipChanges = Array.isArray(system.relationship_changes) ? system.relationship_changes : [];
+      const relationshipSummaries = relationshipChanges
+        .map((item) => firstText(item.explanation, item.what_changed, item.summary, item.change_type))
+        .filter(Boolean);
+      return {
+        ...system,
+        id: system.id ?? system.name ?? "system-" + index,
+        name: firstText(system.name, system.label, "System " + (index + 1)),
+        relationships: toList(system.relationships, relationshipSummaries),
+      };
+    });
   }
   const candidates = [
     liveOps?.identifiedSystems,
@@ -984,25 +1028,41 @@ function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExpl
   return [{ id: "primary", name: primarySystem }];
 }
 
+function resolveEvidenceRefs(item, analysisExplanation) {
+  const index = analysisExplanation?.evidence_index ?? {};
+  const refs = Array.isArray(item?.evidence_refs) ? item.evidence_refs : [];
+  return refs
+    .map((ref) => index?.[ref])
+    .filter((entry) => entry && typeof entry === "object");
+}
+
+function summarizeEvidence(items) {
+  return items
+    .map((item) => firstText(item.description, item.summary, item.type))
+    .filter(Boolean)
+    .slice(0, 4)
+    .join("; ");
+}
+
 function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) {
   const explanatoryInsights = Array.isArray(analysisExplanation?.insights) ? analysisExplanation.insights : [];
   if (explanatoryInsights.length > 0) {
     return explanatoryInsights.map((item, index) => ({
       id: item.id ?? "insight-" + index,
-      system: firstText(item.system, primarySystem),
+      system: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
       status: normalizeInsightStatus(item.status ?? item.severity),
       severity: normalizeSeverity(item.severity),
       summary: firstText(item.title, item.explanation),
       whatHappened: firstText(item.what_changed, item.whatChanged, item.explanation),
-      whyNeraiumThinks: firstText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.likelyCause),
+      whyNeraiumThinks: firstText(item.why_it_matters, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.likelyCause),
       possibleConsequence: firstText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
-      recommendedAction: firstText(item.recommended_action, item.recommendedAction),
-      operatorCheck: firstText(item.recommended_operator_check, item.operator_check, item.operatorCheck),
-      contributingFactors: toList(item.contributing_factors, item.contributingFactors).flatMap(splitPriorityText),
+      recommendedAction: firstText(item.recommended_action, item.recommendedAction, item.recommended_check),
+      operatorCheck: firstText(item.recommended_check, item.recommended_operator_check, item.operator_check, item.operatorCheck),
+      contributingFactors: toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText),
       contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
       contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
-      evidence: Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : []),
-      evidenceSummary: item.evidence_summary,
+      evidence: resolveEvidenceRefs(item, analysisExplanation).length ? resolveEvidenceRefs(item, analysisExplanation) : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : [])),
+      evidenceSummary: firstText(item.evidence_summary, summarizeEvidence(resolveEvidenceRefs(item, analysisExplanation))),
       sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
       confidence: item.confidence,
       confidenceScore: item.confidence_score,
@@ -1096,7 +1156,7 @@ function buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insight
 }
 
 function collectQuality(result, snapshot) {
-  const dataQuality = result?.data_quality ?? {};
+  const dataQuality = result?.analysis_result?.data_quality ?? result?.data_quality ?? {};
   const timestampProfile = result?.timestamp_profile ?? {};
   const warnings = dedupeText([
     ...(Array.isArray(dataQuality.warnings) ? dataQuality.warnings : []),
@@ -1138,7 +1198,8 @@ function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisCom
 function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation }) {
   const fingerprint = analysisExplanation?.fingerprint ?? {};
   if (analysisComplete && fingerprint.meaning) {
-    const changed = fingerprint.status === "changed";
+    const driftStatus = String(fingerprint.drift_status ?? fingerprint.status ?? "").toLowerCase();
+    const changed = driftStatus === "changed" || driftStatus === "drifting" || driftStatus === "review" || driftStatus === "unstable";
     return {
       label: changed ? "Changed" : "Stable",
       tone: changed ? "changed" : "normal",
@@ -1171,7 +1232,10 @@ function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysis
 function buildSignals(result) {
   const columns = Array.isArray(result?.columns) ? result.columns : [];
   const detected = Array.isArray(result?.detected_columns) ? result.detected_columns : [];
-  return dedupeText([...columns, ...detected]).slice(0, 24);
+  const normalizedTags = Array.isArray(result?.analysis_result?.normalized_telemetry?.tags)
+    ? result.analysis_result.normalized_telemetry.tags.map((tag) => tag.tag_name)
+    : [];
+  return dedupeText([...columns, ...detected, ...normalizedTags]).slice(0, 24);
 }
 
 function buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, analysisComplete }) {
@@ -1203,8 +1267,9 @@ function RelationshipList({ rows }) {
   return (
     <ul className="operational-list">
       {rows.slice(0, 8).map((row, index) => {
-        const label = Array.isArray(row.columns) ? row.columns.join(" / ") : firstText(row.column, row.pair, row.detail, `Relationship ${index + 1}`);
-        const detail = firstText(row.detail, row.summary, row.direction, "Relationship behavior changed against baseline.");
+        const sourceTarget = row.source && row.target ? [row.source, row.target].map((item) => String(item).replace(/^tag:/, "").replace(/^metric:/, "")) : [];
+        const label = Array.isArray(row.columns) ? row.columns.join(" / ") : (Array.isArray(row.source_tags) ? row.source_tags.join(" / ") : firstText(row.column, row.pair, sourceTarget.join(" / "), row.detail, `Relationship ${index + 1}`));
+        const detail = firstText(row.explanation, row.what_changed, row.detail, row.summary, row.change_type, "Relationship behavior changed against baseline.");
         return <li key={`${label}-${index}`}><strong>{label}</strong><span>{detail}</span></li>;
       })}
     </ul>
@@ -1248,20 +1313,21 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
 }
 
 function EvidencePanel({ evidence }) {
-  const supportingSignals = toList(evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText);
-  const metricChanges = toList(evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(splitPriorityText);
+  const supportingSignals = toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText);
+  const metricChanges = toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(formatEvidenceDelta).flatMap(splitPriorityText);
   const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText);
   const sourceRanges = Array.isArray(evidence.source_time_ranges) ? evidence.source_time_ranges.map(formatEvidenceRange).filter(Boolean) : [];
   return (
     <details className="evidence-panel">
       <summary>Evidence{evidence.confidence ? " (" + evidence.confidence + ")" : ""}</summary>
       <DetailGrid rows={[
-        ["Summary", evidence.summary],
+        ["Summary", firstText(evidence.description, evidence.summary)],
         ["Type", evidence.type],
         ["Confidence", evidence.confidence_score ? `${evidence.confidence} (${evidence.confidence_score})` : evidence.confidence],
         ["Time window", evidence.time_window ?? evidence.timeWindow],
         ["Persistence / duration", evidence.persistence_duration ?? evidence.persistenceDuration],
         ["Calculated delta", evidence.calculated_delta ?? evidence.calculatedDelta],
+        ["Relationship delta", evidence.relationship_delta ? compactJson(evidence.relationship_delta) : ""],
         ["Calculated percent delta", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
         ["Upload", evidence.source_upload_id ?? evidence.upload_id],
         ["Analysis", evidence.analysis_id],
@@ -1272,6 +1338,30 @@ function EvidencePanel({ evidence }) {
       {metricChanges.length ? <QualityList title="Relevant metric changes" items={metricChanges} empty="" /> : null}
     </details>
   );
+}
+
+function compactJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
+
+function formatEvidenceDelta(value) {
+  if (Array.isArray(value)) return value.map(formatEvidenceDelta).filter(Boolean);
+  if (!value || typeof value !== "object") return value ? [String(value)] : [];
+  const label = firstText(value.tag_name, value.label, value.name, value.source_column, value.change_type);
+  const details = [
+    value.percent_change !== undefined ? `percent change: ${value.percent_change}` : "",
+    value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
+    value.baseline_average !== undefined ? `baseline average: ${value.baseline_average}` : "",
+    value.current_average !== undefined ? `current average: ${value.current_average}` : "",
+    value.baseline_strength !== undefined ? `baseline strength: ${value.baseline_strength}` : "",
+    value.current_strength !== undefined ? `current strength: ${value.current_strength}` : "",
+    value.correlation_delta !== undefined ? `correlation delta: ${value.correlation_delta}` : "",
+  ].filter(Boolean).join(", ");
+  return [firstText([label, details].filter(Boolean).join(" - "), compactJson(value))];
 }
 
 function formatEvidenceRange(range) {
@@ -1465,7 +1555,7 @@ function isAnalysisRunning({ gateProcessing, result, snapshot, currentSession, l
 }
 
 function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) {
-  const hasIntelligenceData = Boolean(result?.sii_intelligence || result?.engine_result);
+  const hasIntelligenceData = Boolean(result?.analysis_result || result?.sii_intelligence || result?.engine_result);
   const completed = Boolean(
     currentSession?.hasReliableOperatorEvidence === true
     || result?.sii_reliable_enough_to_show === true
