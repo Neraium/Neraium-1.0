@@ -1,6 +1,10 @@
 import math
 from typing import Any
 
+from app.services.cumulative_counters import (
+    counter_delta_series,
+    detect_cumulative_counters_from_matrix,
+)
 from app.services.data_quality import round_number, variability_flag
 
 BASELINE_WINDOW_TARGET = 100
@@ -39,6 +43,8 @@ def build_baseline_analysis(
         }
 
     numeric_columns = {profile["column"] for profile in numeric_profiles}
+    cumulative_counters = detect_cumulative_counters_from_matrix(columns, rows, numeric_columns)
+    cumulative_counter_columns = {item["column"] for item in cumulative_counters}
     numeric_indexes = [index for index, column in enumerate(columns) if column in numeric_columns]
     adaptive_baseline = select_adaptive_baseline_window(rows, numeric_indexes, baseline_window_size, recent_window_size)
     baseline_rows = rows[adaptive_baseline["start_index"]:adaptive_baseline["end_index"]]
@@ -69,6 +75,10 @@ def build_baseline_analysis(
         direction = drift_direction(absolute_change, baseline_average)
         velocity = drift_velocity(baseline_values, recent_values)
         flag = drift_flag(percent_change, absolute_change, baseline_average)
+        metric_type = "cumulative_counter" if column in cumulative_counter_columns else "operational_signal"
+        analysis_role = "supporting_context" if metric_type == "cumulative_counter" else "primary_signal"
+        if metric_type == "cumulative_counter":
+            flag = "context"
 
         if variability_flag(baseline_values, baseline_average) == "high":
             column_warnings.append(f"{column} baseline window is highly variable.")
@@ -89,9 +99,22 @@ def build_baseline_analysis(
                 "drift_acceleration": velocity["acceleration"],
                 "persistence_score": persistence_score(baseline_values, recent_values, baseline_average),
                 "drift_flag": flag,
+                "metric_type": metric_type,
+                "analysis_role": analysis_role,
                 "warnings": column_warnings + informational_warnings,
             }
         )
+        if metric_type == "cumulative_counter":
+            delta_drift = cumulative_delta_drift(
+                column=column,
+                rows=rows,
+                column_index=index,
+                baseline_start=adaptive_baseline["start_index"],
+                baseline_end=adaptive_baseline["end_index"],
+                recent_window_size=recent_window_size,
+            )
+            if delta_drift:
+                column_drift.append(delta_drift)
 
     if not column_drift:
         warnings.append("No numeric columns were available for baseline comparison.")
@@ -107,11 +130,52 @@ def build_baseline_analysis(
         "recent_window_rows": recent_window_size,
         "columns_analyzed": len(column_drift),
         "column_drift": column_drift,
+        "cumulative_counters": cumulative_counters,
         "adaptive_baseline": adaptive_baseline,
         "regime_context": regime_context,
         "drift_trajectory": summarize_drift_trajectory(column_drift),
         "overall_assessment": overall_assessment,
         "warnings": warnings,
+    }
+
+
+def cumulative_delta_drift(
+    *,
+    column: str,
+    rows: list[list[str]],
+    column_index: int,
+    baseline_start: int,
+    baseline_end: int,
+    recent_window_size: int,
+) -> dict[str, Any] | None:
+    all_values = [row[column_index] if column_index < len(row) else None for row in rows]
+    deltas = counter_delta_series(all_values)
+    baseline_values = [value for value in deltas[baseline_start:baseline_end] if value is not None]
+    recent_values = [value for value in deltas[-recent_window_size:] if value is not None]
+    if len(baseline_values) < 3 or len(recent_values) < 3:
+        return None
+
+    baseline_average = sum(baseline_values) / len(baseline_values)
+    recent_average = sum(recent_values) / len(recent_values)
+    absolute_change = recent_average - baseline_average
+    percent_change = safe_percent_change(baseline_average, absolute_change)
+    direction = drift_direction(absolute_change, baseline_average)
+    velocity = drift_velocity(baseline_values, recent_values)
+    return {
+        "column": f"{column}_delta",
+        "source_counter": column,
+        "baseline_average": round_number(baseline_average),
+        "recent_average": round_number(recent_average),
+        "absolute_change": round_number(absolute_change),
+        "percent_change": round_number(percent_change) if percent_change is not None else None,
+        "direction": direction,
+        "drift_velocity": velocity["velocity"],
+        "drift_acceleration": velocity["acceleration"],
+        "persistence_score": persistence_score(baseline_values, recent_values, baseline_average),
+        "drift_flag": drift_flag(percent_change, absolute_change, baseline_average),
+        "metric_type": "counter_delta",
+        "analysis_role": "derived_rate_feature",
+        "warnings": [f"{column} was treated as a cumulative counter; delta values were analyzed instead of the raw counter."],
     }
 
 

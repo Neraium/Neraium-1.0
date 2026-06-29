@@ -5,6 +5,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.cumulative_counters import (
+    counter_delta_series,
+    detect_cumulative_counters_from_rows,
+)
+
 
 def _to_float(value: Any) -> float | None:
     if value is None:
@@ -227,8 +232,26 @@ def build_relationship_baseline(
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
 ) -> dict[str, Any]:
+    cumulative_counters = detect_cumulative_counters_from_rows(rows, numeric_columns)
+    cumulative_counter_columns = {item["column"] for item in cumulative_counters}
+    rows_for_relationships = rows
+    relationship_numeric_columns = [column for column in numeric_columns if column not in cumulative_counter_columns]
+    if cumulative_counters:
+        rows_for_relationships = [dict(row) for row in rows]
+        for counter in cumulative_counters:
+            column = counter["column"]
+            derived = counter["derived_rate_feature"]
+            deltas = counter_delta_series([row.get(column) for row in rows])
+            usable_delta_count = sum(1 for value in deltas if value is not None)
+            if usable_delta_count >= 6:
+                relationship_numeric_columns.append(derived)
+                counter["derived_rate_feature_analyzed"] = True
+                for row, delta in zip(rows_for_relationships, deltas):
+                    row[derived] = delta
+            else:
+                counter["derived_rate_feature_analyzed"] = False
     selected_numeric_columns, column_limited = _select_numeric_columns_for_relationships(
-        numeric_columns,
+        relationship_numeric_columns,
         max_relationship_columns=max_relationship_columns,
     )
     if len(rows) < 12 or len(selected_numeric_columns) < 2:
@@ -252,8 +275,9 @@ def build_relationship_baseline(
             },
             "sampled_for_baseline": False,
             "relationship_columns_analyzed": len(selected_numeric_columns),
-            "relationship_columns_available": len(numeric_columns),
+            "relationship_columns_available": len(relationship_numeric_columns),
             "relationship_columns_limited": column_limited,
+            "excluded_cumulative_counters": cumulative_counters,
         }
 
     baseline_count = max(6, int(len(rows) * 0.7))
@@ -273,8 +297,15 @@ def build_relationship_baseline(
         sampled_for_baseline = True
     candidates: list[dict[str, Any]] = []
     graph_edges: list[dict[str, Any]] = []
-    baseline_frame = pd.DataFrame(baseline_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
-    recent_frame = pd.DataFrame(recent_rows, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
+    baseline_rows_for_relationships = rows_for_relationships[:baseline_count]
+    recent_rows_for_relationships = rows_for_relationships[baseline_count:]
+    if len(baseline_rows_for_relationships) > baseline_window_limit:
+        baseline_rows_for_relationships = baseline_rows_for_relationships[:baseline_window_limit]
+    if len(recent_rows_for_relationships) > recent_window_limit:
+        recent_rows_for_relationships = recent_rows_for_relationships[-recent_window_limit:]
+
+    baseline_frame = pd.DataFrame(baseline_rows_for_relationships, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
+    recent_frame = pd.DataFrame(recent_rows_for_relationships, columns=selected_numeric_columns).apply(pd.to_numeric, errors="coerce")
     baseline_corr_matrix = baseline_frame.corr(min_periods=3)
     recent_corr_matrix = recent_frame.corr(min_periods=3)
     baseline_counts = baseline_frame.notna().astype(int).T.dot(baseline_frame.notna().astype(int))
@@ -393,8 +424,9 @@ def build_relationship_baseline(
         "relationship_graph": graph,
         "sampled_for_baseline": sampled_for_baseline,
         "relationship_columns_analyzed": len(selected_numeric_columns),
-        "relationship_columns_available": len(numeric_columns),
+        "relationship_columns_available": len(relationship_numeric_columns),
         "relationship_columns_limited": column_limited,
+        "excluded_cumulative_counters": cumulative_counters,
     }
 
 

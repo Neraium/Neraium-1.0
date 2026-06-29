@@ -234,7 +234,7 @@ def build_normalization_report(
         "integrity_flags": result["integrity_flags"],
         "window_suppressed": bool(result["window_suppressed"]),
         "normalized_columns": list(result["normalized"].columns),
-        "missing_values": [f"{profile.signal_id}: completeness {profile.completeness:.0%}, treatment {profile.treatment or 'none'}" for profile in profiles.values() if profile.gap_type],
+        "missing_values": [f"{profile.signal_id}: {max(0.0, 1 - profile.completeness):.1%} missing, treatment {profile.treatment or 'none'}" for profile in profiles.values() if profile.gap_type],
     }
 
 

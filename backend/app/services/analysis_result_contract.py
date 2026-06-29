@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services.analysis_explanations import build_analysis_explanation
+from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.data_quality import parse_numeric_value
 
 
@@ -353,7 +354,7 @@ def build_analysis_result(
             continue
         insight_id = clean_text(item.get("id")) or f"insight-{index}"
         title = first_present(item.get("title"), item.get("summary"), item.get("explanation"))
-        if is_unsupported_output(title, item):
+        if is_unsupported_output(title, item) or insight_uses_cumulative_counter(item):
             continue
         refs = []
         for evidence_index_number, evidence_item in enumerate(to_list(first_present(item.get("evidence_items"), item.get("evidence")))):
@@ -387,15 +388,29 @@ def build_analysis_result(
                     "confidence_score": number_or_none(item.get("confidence_score")),
                     "affected_systems": to_list(item.get("affected_systems")) or [first_present(item.get("system"), "Uploaded telemetry")],
                     "what_changed": first_present(item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
+                    "what_happened": first_present(item.get("what_happened"), item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
                     "why_it_matters": first_present(
+                        item.get("why_neraium_thinks_it_happened"),
+                        item.get("why_neraium_thinks"),
                         item.get("why_it_matters"),
+                        item.get("likely_cause"),
+                    ),
+                    "why_neraium_thinks_it_happened": first_present(
                         item.get("why_neraium_thinks_it_happened"),
                         item.get("why_neraium_thinks"),
                         item.get("likely_cause"),
+                        item.get("why_it_matters"),
                     ),
                     "likely_contributors": likely_contributors,
-                    "recommended_check": first_present(item.get("recommended_check"), item.get("recommended_operator_check"), item.get("operator_check"), item.get("recommended_action")),
+                    "recommended_check": first_present(item.get("recommended_operator_check"), item.get("operator_check"), item.get("recommended_check")),
+                    "operator_check": first_present(item.get("operator_check"), item.get("recommended_operator_check"), item.get("recommended_check")),
+                    "recommended_action": first_distinct_from(
+                        first_present(item.get("operator_check"), item.get("recommended_operator_check"), item.get("recommended_check")),
+                        item.get("recommended_action"),
+                        item.get("recommendation"),
+                    ),
                     "possible_consequence": first_present(item.get("possible_consequence"), item.get("possible_operational_consequence")),
+                    "possible_operational_consequence": first_present(item.get("possible_operational_consequence"), item.get("possible_consequence")),
                     "evidence_refs": refs,
                     "time_window": first_present(item.get("time_window"), build_time_window(result)),
                     "source_tags": source_tags,
@@ -594,14 +609,14 @@ def build_recommendation_contracts(
 
     if not recommendations:
         for insight in insights:
-            text = first_present(insight.get("recommended_check"))
+            text = first_present(insight.get("recommended_action"), insight.get("recommended_check"))
             if text and not is_unsupported_text(text):
                 recommendations.append(
                     {
                         "id": f"{insight['id']}-recommendation",
                         "priority": priority_from_severity(insight.get("severity")),
                         "recommendation": text,
-                        "recommended_check": text,
+                        "recommended_check": first_present(insight.get("operator_check"), insight.get("recommended_check")),
                         "reason": insight.get("what_changed"),
                         "affected_systems": insight.get("affected_systems", []),
                         "evidence_refs": insight.get("evidence_refs", []),
@@ -679,13 +694,48 @@ def normalize_evidence_item(
     )
 
 
+def first_distinct_from(reference: Any, *values: Any) -> Any:
+    reference_text = clean_text(reference).lower()
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        value_text = clean_text(value)
+        if value_text and value_text.lower() != reference_text:
+            return value
+    return ""
+
+
+def relationship_uses_cumulative_counter(item: dict[str, Any]) -> bool:
+    return any(is_cumulative_counter_name(column) for column in relationship_columns(item))
+
+
+def insight_uses_cumulative_counter(item: dict[str, Any]) -> bool:
+    candidates: list[Any] = [
+        item.get("title"),
+        item.get("summary"),
+        *to_list(item.get("source_tags")),
+        *to_list(item.get("source_metrics")),
+        *to_list(item.get("contributing_factors")),
+        *to_list(item.get("likely_contributors")),
+    ]
+    for metric in to_list(item.get("contributing_metrics")):
+        if isinstance(metric, dict):
+            candidates.extend([metric.get("source_column"), metric.get("name")])
+    for relationship in to_list(item.get("contributing_relationships")):
+        if isinstance(relationship, dict):
+            candidates.extend(relationship_columns(relationship))
+    return any(is_cumulative_counter_name(str(candidate)) for candidate in candidates if candidate)
+
+
 def source_relationships(explanation: dict[str, Any], relationship_model: dict[str, Any]) -> list[dict[str, Any]]:
     relationships = explanation.get("relationships") if isinstance(explanation.get("relationships"), list) else []
     if relationships:
-        return [item for item in relationships if isinstance(item, dict)]
+        return [item for item in relationships if isinstance(item, dict) and not relationship_uses_cumulative_counter(item)]
     graph = relationship_model.get("relationship_graph") if isinstance(relationship_model.get("relationship_graph"), dict) else {}
     changed = graph.get("changed_edges") if isinstance(graph.get("changed_edges"), list) else []
-    return [item for item in changed if isinstance(item, dict)]
+    return [item for item in changed if isinstance(item, dict) and not relationship_uses_cumulative_counter(item)]
 
 
 def relationship_columns(item: dict[str, Any]) -> list[str]:

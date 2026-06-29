@@ -305,6 +305,55 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Maintenance correlation will appear when maintenance history is connected.")).toBeNull();
   });
 
+  it("formats confidence, dedupes factors, and summarizes missing telemetry", () => {
+    const analysisResult = {
+      executive_summary: {
+        overall_operational_status: "Persistent structural drift",
+        highest_priority_finding: "Pump vibration increased sharply",
+        recommended_action: "Prioritize pump mechanical review.",
+      },
+      data_quality: {
+        warnings: [],
+        signal_integrity: [
+          { signal_id: "supply_pressure", gap_type: "short_drop", completeness: 0.996, suppress_confidence: false },
+          { signal_id: "pump_vibration", gap_type: "short_drop", completeness: 0.996, suppress_confidence: false },
+        ],
+        missing_values: [],
+      },
+      insights: [{
+        id: "pump-vibration",
+        title: "Pump vibration increased sharply",
+        severity: "high",
+        what_happened: "Pump vibration increased by 440% versus baseline.",
+        why_neraium_thinks_it_happened: "Baseline/current comparison and recent-window persistence support the change.",
+        possible_operational_consequence: "Bearing wear may accelerate if the vibration persists.",
+        operator_check: "Inspect pump bearings and mounting condition.",
+        recommended_action: "Prioritize pump mechanical review and trend the vibration signal.",
+        confidence: "high",
+        confidence_score: 1,
+        evidence_summary: "Percent change: 440%",
+        system: "Flow and pressure system",
+        contributing_factors: ["pump vibration", "pump vibration"],
+      }],
+      systems: [],
+      relationships: [],
+      fingerprint: { drift_status: "changed", explanation: "Persistent structural drift is present." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+    });
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("More")));
+    expect(screen.getAllByText("0.4% missing values detected in supply pressure and pump vibration. Confidence reduced slightly.").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getByText("High · 100%")).toBeTruthy();
+    expect(screen.queryByText("high (1)")).toBeNull();
+    expect(screen.getAllByText("pump vibration")).toHaveLength(1);
+  });
+
   it("disables result tabs before analysis", () => {
     renderWorkspace({
       effectiveLatestUploadResult: telemetryResult(),

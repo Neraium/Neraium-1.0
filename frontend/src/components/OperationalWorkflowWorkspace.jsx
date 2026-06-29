@@ -407,7 +407,7 @@ function InsightsSection({
             <DetailGrid rows={[
               ["System affected", selectedInsight.system],
               ["Severity", selectedInsight.severity],
-              ["Confidence", selectedInsight.confidenceScore ? `${selectedInsight.confidence} (${selectedInsight.confidenceScore})` : selectedInsight.confidence],
+              ["Confidence", formatConfidenceDisplay(selectedInsight.confidence, selectedInsight.confidenceScore)],
               ["Confidence rationale", selectedInsight.confidenceRationale],
               ["Evidence summary", selectedInsight.evidenceSummary],
               ["What happened", selectedInsight.whatHappened],
@@ -859,7 +859,7 @@ function buildFingerprintRows(analysisExplanation) {
   return [
     ["Explanation", firstText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
     ["Drift status", fingerprint.drift_status ?? fingerprint.status],
-    ["Confidence", fingerprint.confidence_score ? `${fingerprint.confidence} (${fingerprint.confidence_score})` : fingerprint.confidence],
+    ["Confidence", formatConfidenceDisplay(fingerprint.confidence, fingerprint.confidence_score)],
     ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : normalBehavior],
     ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : currentBehavior],
     ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).join("; ")],
@@ -961,12 +961,12 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       status: normalizeInsightStatus(item.status ?? item.severity),
       severity: normalizeSeverity(item.severity),
       summary: firstText(item.title, item.explanation),
-      whatHappened: firstText(item.what_changed, item.whatChanged, item.explanation),
-      whyNeraiumThinks: firstText(item.why_it_matters, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.likelyCause),
+      whatHappened: firstText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
+      whyNeraiumThinks: firstText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
       possibleConsequence: firstText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
-      recommendedAction: firstText(item.recommended_action, item.recommendedAction, item.recommended_check),
-      operatorCheck: firstText(item.recommended_check, item.recommended_operator_check, item.operator_check, item.operatorCheck),
-      contributingFactors: toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText),
+      recommendedAction: firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check),
+      operatorCheck: firstText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
+      contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText)),
       contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
       contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
       evidence: resolveEvidenceRefs(item, analysisExplanation).length ? resolveEvidenceRefs(item, analysisExplanation) : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : [])),
@@ -1066,7 +1066,9 @@ function collectQuality(result, snapshot) {
     ...(Array.isArray(result?.warnings) ? result.warnings : []),
     ...(Array.isArray(result?.backend_warnings) ? result.backend_warnings : []),
   ]);
+  const missingSummary = formatMissingValueSummary(dataQuality);
   const missingValues = dedupeText([
+    missingSummary,
     ...(Array.isArray(dataQuality.missing_values) ? dataQuality.missing_values : []),
     ...(Array.isArray(dataQuality.missing_value_warnings) ? dataQuality.missing_value_warnings : []),
     ...(Array.isArray(result?.missing_values) ? result.missing_values : []),
@@ -1089,7 +1091,7 @@ function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisCom
   }
   const text = `${quality.warnings.join(" ")} ${quality.missingValues.join(" ")} ${liveOps?.connectionStatusLine ?? ""}`.toLowerCase();
   if (!result && !snapshot) return { label: "Telemetry Missing", tone: "unknown", detail: "No telemetry has been analyzed yet." };
-  if (text.includes("missing")) return { label: "Telemetry Missing", tone: "warning", detail: "Some telemetry values or sources are missing." };
+  if (text.includes("missing")) return { label: "Telemetry Missing", tone: "warning", detail: firstText(quality.missingValues[0], "Some telemetry values or sources are missing.") };
   if (text.includes("inconsistent") || text.includes("timestamp")) return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry timing or source consistency needs review." };
   if (quality.warnings.length > 0 || quality.missingValues.length > 0 || String(liveOps?.connectionTone ?? "").includes("degraded")) {
     return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry is usable, but one or more quality conditions should be reviewed." };
@@ -1225,7 +1227,7 @@ function EvidencePanel({ evidence }) {
       <DetailGrid rows={[
         ["Summary", firstText(evidence.description, evidence.summary)],
         ["Type", evidence.type],
-        ["Confidence", evidence.confidence_score ? `${evidence.confidence} (${evidence.confidence_score})` : evidence.confidence],
+        ["Confidence", formatConfidenceDisplay(evidence.confidence, evidence.confidence_score)],
         ["Time window", evidence.time_window ?? evidence.timeWindow],
         ["Persistence / duration", evidence.persistence_duration ?? evidence.persistenceDuration],
         ["Calculated delta", evidence.calculated_delta ?? evidence.calculatedDelta],
@@ -1388,6 +1390,69 @@ function toList(...values) {
     if (value === null || value === undefined || value === "") return [];
     return [value];
   });
+}
+
+function formatConfidenceDisplay(label, score) {
+  const cleanLabel = firstText(label)
+    .split("_")
+    .join(" ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const percent = confidencePercent(score);
+  if (!cleanLabel && percent === null) return "";
+  if (percent === null) return cleanLabel;
+  return `${cleanLabel || "Confidence"} · ${percent}%`;
+}
+
+function confidencePercent(score) {
+  if (score === null || score === undefined || score === "") return null;
+  const value = Number(score);
+  if (!Number.isFinite(value)) return null;
+  const normalized = value > 1 && value <= 100 ? value : value * 100;
+  return Math.max(0, Math.min(100, Math.round(normalized)));
+}
+
+function firstDistinctText(reference, ...values) {
+  const referenceText = firstText(reference).trim().toLowerCase();
+  return firstText(...values.filter((value) => firstText(value).trim().toLowerCase() !== referenceText));
+}
+
+function formatMissingValueSummary(dataQuality) {
+  const profiles = Array.isArray(dataQuality?.signal_integrity)
+    ? dataQuality.signal_integrity.filter((profile) => profile && profile.gap_type)
+    : [];
+  if (!profiles.length) return "";
+  const affected = dedupeText(profiles.map((profile) => humanizeSignalName(profile.signal_id))).slice(0, 4);
+  const missingPercents = profiles
+    .map((profile) => 1 - Number(profile.completeness))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const maxMissing = missingPercents.length ? Math.max(...missingPercents) : null;
+  const missingText = maxMissing === null ? "Missing values" : `${formatPercent(maxMissing)} missing values`;
+  const affectedText = affected.length ? ` in ${formatList(affected)}` : "";
+  const confidenceText = profiles.some((profile) => profile.suppress_confidence)
+    ? " Confidence reduced."
+    : " Confidence reduced slightly.";
+  return `${missingText} detected${affectedText}.${confidenceText}`;
+}
+
+function humanizeSignalName(value) {
+  return firstText(value)
+    .replace(/_/g, " ")
+    .replace(/\b(f|c|psi|pct|gal)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatPercent(value) {
+  const percent = value * 100;
+  if (percent < 1) return `${percent.toFixed(1)}%`;
+  return `${Math.round(percent)}%`;
+}
+
+function formatList(items) {
+  if (items.length <= 1) return firstText(items[0]);
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
 }
 
 function dedupeText(items) {
