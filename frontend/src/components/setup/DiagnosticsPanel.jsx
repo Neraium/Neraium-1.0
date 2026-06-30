@@ -109,11 +109,11 @@ export default function DiagnosticsPanel({
         if (cancelled) return;
         const frames = Array.isArray(payload?.timeline) ? payload.timeline : [];
         setReplayFrames(frames);
-        setReplayError(frames.length ? "" : "No System Story timeline is available for this session.");
+        setReplayError(frames.length ? "" : "No behavior timeline is available for this session.");
       } catch {
         if (cancelled) return;
         setReplayFrames([]);
-        setReplayError("No System Story timeline is available for this session.");
+        setReplayError("No behavior timeline is available for this session.");
       }
     }
     loadReplayByJob();
@@ -129,7 +129,7 @@ export default function DiagnosticsPanel({
   const contributors = readPrimaryContributors(latestUploadResult);
 
   const metrics = showAnalysis ? [
-    { label: "System Story timeline", value: summary.frameCount > 0 ? summary.frameCount : "Active session" },
+    { label: "Behavior timeline", value: summary.frameCount > 0 ? summary.frameCount : "Active session" },
     { label: "Current Window", value: summary.currentWindow },
     { label: "Change strength", value: summary.baselineSeparation },
     { label: "Change direction", value: summary.driftVelocity },
@@ -137,11 +137,11 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: summary.structuralRead },
     { label: "Evidence focus", value: contributors },
     { label: "Confidence", value: summary.evidenceConfidence },
-    { label: "System Story", value: summary.replay },
+    { label: "Advanced details", value: summary.replay },
     { label: "Review Window", value: summary.leadTime },
     { label: "Preview Range", value: summary.previewRange },
   ] : [
-    { label: "System Story timeline", value: DASH },
+    { label: "Behavior timeline", value: DASH },
     { label: "Current Window", value: DASH },
     { label: "Change strength", value: DASH },
     { label: "Change direction", value: DASH },
@@ -149,7 +149,7 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: DASH },
     { label: "Evidence focus", value: DASH },
     { label: "Confidence", value: DASH },
-    { label: "System Story", value: "Unavailable" },
+    { label: "Advanced details", value: "Unavailable" },
     { label: "Review Window", value: DASH },
     { label: "Preview Range", value: DASH },
   ];
@@ -194,7 +194,7 @@ export default function DiagnosticsPanel({
   return (
     <Panel title="Evidence Details" className="span-12">
       {!showAnalysis ? (
-        <EmptyState title="No active evidence session" body="Upload telemetry or resume a previous session to generate System Story." compact />
+        <EmptyState title="No active evidence session" body="Upload telemetry or resume a previous session to generate behavior evidence." compact />
       ) : (
         <>
           <MetricGrid metrics={metrics} compact />

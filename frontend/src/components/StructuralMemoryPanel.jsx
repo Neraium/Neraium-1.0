@@ -5,7 +5,7 @@ export default function StructuralMemoryPanel({ frame }) {
   return (
     <div className="structural-memory-panel">
       {matches.length === 0 ? (
-        <p className="narrative-text">Historical structural memory matches will appear as replay evidence accumulates.</p>
+        <p className="narrative-text">Historical structural memory matches will appear as behavior evidence accumulates.</p>
       ) : (
         matches.map((match) => (
           <div key={match.fingerprint_id ?? match.label} className="structural-memory-panel__match">

@@ -81,7 +81,6 @@ export default function OperationalWorkflowWorkspace({
   roomContext,
   domainDetection,
   gateProcessing,
-  replayFrame = null,
   onWorkspaceNavigate,
   onUploadComplete,
   onResumePreviousSession,
@@ -100,7 +99,6 @@ export default function OperationalWorkflowWorkspace({
   const deferredRoomContext = useDeferredValue(roomContext);
   const deferredDomainDetection = useDeferredValue(domainDetection);
   const deferredGateProcessing = useDeferredValue(gateProcessing);
-  const deferredReplayFrame = useDeferredValue(replayFrame);
 
   const model = useMemo(() => buildOperationalModel({
     liveOps: deferredLiveOps,
@@ -111,7 +109,6 @@ export default function OperationalWorkflowWorkspace({
     roomContext: deferredRoomContext,
     domainDetection: deferredDomainDetection,
     gateProcessing: deferredGateProcessing,
-    replayFrame: deferredReplayFrame,
   }), [
     deferredLiveOps,
     deferredCanonicalFinding,
@@ -121,7 +118,6 @@ export default function OperationalWorkflowWorkspace({
     deferredRoomContext,
     deferredDomainDetection,
     deferredGateProcessing,
-    deferredReplayFrame,
   ]);
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
@@ -250,7 +246,6 @@ export default function OperationalWorkflowWorkspace({
             onSelectInsight={setSelectedInsightId}
             onSetInsightStatus={setInsightStatus}
             onSetOperatorNote={setOperatorNote}
-            onOpenSystemStory={() => onWorkspaceNavigate?.("system-story")}
           />
         ) : null}
 
@@ -384,7 +379,6 @@ function InsightsSection({
   onSelectInsight,
   onSetInsightStatus,
   onSetOperatorNote,
-  onOpenSystemStory,
 }) {
   return (
     <div className="operational-grid operational-grid--split">
@@ -469,9 +463,6 @@ function InsightsSection({
                 onChange={(event) => onSetOperatorNote(selectedInsight.id, event.target.value)}
               />
             </label>
-            <div className="operational-actions">
-              <button type="button" className="secondary-command-button" onClick={onOpenSystemStory}>Open System Story</button>
-            </div>
           </article>
         ) : (
           <EmptyOperationalState title="No insight selected" body="Select an insight from the feed or analyze telemetry to generate findings." />
@@ -587,8 +578,8 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
         </section>
       ) : null}
 
-      <section className="operational-panel operational-panel--wide" aria-label="Behavioral timeline">
-        <PanelHeader eyebrow="History" title="Behavioral Timeline" subtitle="Operational record across analyses." />
+      <section className="operational-panel operational-panel--wide" aria-label="Behavior timeline">
+        <PanelHeader eyebrow="History" title="Behavior Timeline" subtitle="Operational record across analyses." />
         <Timeline items={model.historyItems} />
       </section>
       <section className="operational-panel" aria-label="Insight archive">
@@ -610,14 +601,14 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
   );
 }
 
-function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, roomContext, domainDetection, gateProcessing, replayFrame }) {
+function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, roomContext, domainDetection, gateProcessing }) {
   const result = effectiveLatestUploadResult ?? liveOps?.latestUploadResult ?? {};
   const snapshot = effectiveLatestUploadSnapshot ?? liveOps?.latestUploadSnapshot ?? {};
   const analysisExplanation = extractAnalysisExplanation(result, snapshot);
   const canonicalRelationships = Array.isArray(analysisExplanation?.relationships) ? analysisExplanation.relationships : [];
   const relationshipRows = canonicalRelationships.length ? canonicalRelationships : (Array.isArray(liveOps?.relationshipRows) ? liveOps.relationshipRows : []);
   const quality = collectQuality(result, snapshot);
-  const telemetryAvailable = hasTelemetry(result, snapshot, liveOps, replayFrame);
+  const telemetryAvailable = hasTelemetry(result, snapshot, liveOps);
   const telemetryConnected = isTelemetryConnected(liveOps);
   const analysisRunning = isAnalysisRunning({ gateProcessing, result, snapshot, currentSession, liveOps });
   const completedSiiAnalysis = telemetryAvailable && hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps });
@@ -638,7 +629,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) : [];
   const systemSummary = buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected });
   const signals = buildSignals(result);
-  const historyItems = buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, analysisComplete });
+  const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const siteLabel = firstText(result?.facility_name, snapshot?.facility_name, "Current Site");
   const isEmptyTelemetryState = uiState.key === "noTelemetry";
@@ -863,6 +854,10 @@ function buildFingerprintRows(analysisExplanation) {
     ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : normalBehavior],
     ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : currentBehavior],
     ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).join("; ")],
+    ["Change onset", analysisExplanation?.change_onset],
+    ["Stable window", formatBehaviorWindow(analysisExplanation?.stable_window)],
+    ["Deviation window", formatBehaviorWindow(analysisExplanation?.deviation_window)],
+    ["Current state window", formatBehaviorWindow(analysisExplanation?.current_state_window)],
   ];
 }
 
@@ -1142,7 +1137,7 @@ function buildSignals(result) {
   return dedupeText([...columns, ...detected, ...normalizedTags]).slice(0, 24);
 }
 
-function buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, analysisComplete }) {
+function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete }) {
   const items = [];
   const previous = Array.isArray(liveOps?.previousUploadHistory) ? liveOps.previousUploadHistory : [];
   previous.slice(0, 8).forEach((entry, index) => {
@@ -1153,11 +1148,11 @@ function buildHistoryItems({ liveOps, snapshot, result, replayFrame, insights, a
       detail: "Previous telemetry analysis available for review.",
     });
   });
-  if (analysisComplete && (snapshot?.processed_at || result?.processed_at || replayFrame)) {
+  if (analysisComplete && (snapshot?.processed_at || result?.processed_at || result?.last_processed_at || result?.completed_at)) {
     items.unshift({
       id: "current-analysis",
       title: insights.length ? "Current insight generated" : "Current analysis completed",
-      time: snapshot?.processed_at ?? result?.processed_at ?? "Current period",
+      time: snapshot?.processed_at ?? result?.processed_at ?? result?.last_processed_at ?? result?.completed_at ?? "Current period",
       detail: insights[0]?.summary ? `Top finding: ${insights[0].summary}` : "Current telemetry was analyzed for system behavior changes.",
     });
   }
@@ -1266,6 +1261,11 @@ function formatEvidenceDelta(value) {
     value.correlation_delta !== undefined ? `correlation delta: ${value.correlation_delta}` : "",
   ].filter(Boolean).join(", ");
   return [firstText([label, details].filter(Boolean).join(" - "), compactJson(value))];
+}
+
+function formatBehaviorWindow(window) {
+  if (!window || typeof window !== "object") return "";
+  return firstText(window.time_window, [window.start, window.end].filter(Boolean).join(" to "), window.description);
 }
 
 function formatEvidenceRange(range) {
@@ -1534,8 +1534,7 @@ function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) 
   return hasIntelligenceData && completed;
 }
 
-function hasTelemetry(result, snapshot, liveOps, replayFrame) {
-  if (replayFrame) return true;
+function hasTelemetry(result, snapshot, liveOps) {
   if (isTelemetryConnected(liveOps)) return true;
 
   const snapshotStatus = String(snapshot?.status ?? "").trim().toLowerCase();

@@ -444,4 +444,57 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText(/percent change: 22/)).toBeTruthy();
     expect(screen.queryByText("Unavailable")).toBeNull();
   });
+
+  it("does not render replay artifacts in normal result sections", () => {
+    const analysisResult = {
+      change_onset: "2026-06-23T09:00:00Z",
+      stable_window: { label: "Stable window", time_window: "2026-06-23T00:00:00Z to 2026-06-23T09:00:00Z" },
+      deviation_window: { label: "Deviation window", time_window: "2026-06-23T09:00:00Z to 2026-06-23T12:00:00Z" },
+      current_state_window: { label: "Current state window", time_window: "2026-06-23T11:00:00Z to 2026-06-23T12:00:00Z" },
+      executive_summary: {
+        overall_operational_status: "Current behavior changed",
+        highest_priority_finding: "Pump power moved up",
+        recommended_action: "Check pump schedule",
+      },
+      insights: [{
+        id: "insight-1",
+        title: "Pump power moved up",
+        severity: "moderate",
+        confidence: "moderate",
+        what_changed: "Pump power increased in the current window.",
+        recommended_check: "Check pump schedule",
+        evidence_refs: ["ev-1"],
+      }],
+      systems: [{ id: "pump", name: "Pump system", health_status: "Needs review" }],
+      relationships: [],
+      fingerprint: { status: "changed", explanation: "The operating fingerprint changed." },
+      recommendations: [],
+      evidence_index: {
+        "ev-1": { evidence_id: "ev-1", description: "Pump power increased in the current window." },
+      },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({
+        analysis_result: analysisResult,
+        replay_ready: true,
+        replay_frame_count: 3,
+        replay_timeline: { timeline: [{ frame_number: 0, summary: "legacy replay frame" }] },
+        sii_intelligence: { facility_state: "stable", replay_timeline: { timeline: [{ frame_number: 0 }] } },
+      }),
+      effectiveLatestUploadSnapshot: completeSnapshot({ replay_ready: true, replay_frame_count: 3 }),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.queryByText(/replay/i)).toBeNull();
+    expect(screen.queryByText(/Advanced Details/i)).toBeNull();
+
+    for (const label of ["More", "Insights", "Systems", "Fingerprint"]) {
+      const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
+      expect(tab).toBeTruthy();
+      fireEvent.click(tab);
+      expect(screen.queryByText(/replay/i)).toBeNull();
+      expect(screen.queryByText(/Advanced Details/i)).toBeNull();
+    }
+  });
 });

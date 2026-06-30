@@ -32,14 +32,14 @@ export const DEMO_STEPS = [
     workspace: "system-body",
   },
   {
-    title: "System Story",
-    message: "Engineering teams can read the operating narrative and inspection plan.",
-    workspace: "system-story",
+    title: "Evidence Review",
+    message: "Engineering teams can review findings, evidence, and inspection priorities.",
+    workspace: "system-body",
   },
   {
-    title: "Story Timeline",
-    message: "Uploaded telemetry becomes a clear timeline from normal behavior to the current observation.",
-    workspace: "system-story",
+    title: "Behavior Timeline",
+    message: "Uploaded telemetry can describe when behavior moved from stable to the current observation.",
+    workspace: "system-body",
   },
 ];
 

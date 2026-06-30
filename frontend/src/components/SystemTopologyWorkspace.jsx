@@ -55,7 +55,7 @@ export default function SystemTopologyWorkspace({
             ? "No runtime data"
             : (uploadSignal.label || governed.currentGovernedSystemState || ESCALATION_LAYERS[layer - 1] || FALLBACK_STATE.label);
   const stateDescription = pendingVerification
-    ? "Telemetry is present, but the system story is still being verified for engineer review."
+    ? "Telemetry is present, but the behavior evidence is still being verified for engineer review."
     : buildStateDescription(layer);
   const primaryItem = liveOps.interventionItems?.[0] ?? null;
   const coherence = useMemo(() => {
@@ -81,7 +81,7 @@ export default function SystemTopologyWorkspace({
 
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = pendingVerification
-    ? "System Story Verification Pending"
+    ? "behavior evidence Verification Pending"
     : governed.hasPass
       ? "System Review Active"
       : "System Review Pending";
@@ -153,7 +153,7 @@ export default function SystemTopologyWorkspace({
 export function derivePrimaryMessage({ awaitingSii, pendingVerification, governed, canonicalFinding, uploadSignal }) {
   if (awaitingSii) return "Analyze or connect telemetry to begin monitoring.";
   if (pendingVerification) {
-    return "Telemetry processing finished, but the system story is still being verified for engineer review.";
+    return "Telemetry processing finished, but the behavior evidence is still being verified for engineer review.";
   }
   if (governed.hasPass) {
     return concise(governed.passedFindingSummary, 120);

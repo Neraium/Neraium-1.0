@@ -133,7 +133,7 @@ export default function SystemBodyWorkspace({
   const resultSections = [
     { id: "overview", label: "Health" },
     { id: "findings", label: "Issues" },
-    { id: "story", label: "System Story" },
+    { id: "story", label: "Evidence" },
     { id: "actions", label: "Actions" },
     { id: "quality", label: "Data Quality" },
     { id: "technical", label: "Technical" },
@@ -361,10 +361,10 @@ export default function SystemBodyWorkspace({
           ) : null}
 
           {activeResultSection === "story" ? (
-            <section className="post-upload-section" aria-label="System Story">
+            <section className="post-upload-section" aria-label="Evidence">
               <div className="post-upload-section__header">
-                <p className="section-token">System Story</p>
-                <h2>{finding.exists ? "View the operating story behind this issue." : "View the system story for this telemetry window."}</h2>
+                <p className="section-token">Evidence</p>
+                <h2>{finding.exists ? "Review the evidence behind this issue." : "Review behavior evidence for this telemetry window."}</h2>
               </div>
               <dl className="result-detail-grid">
                 {evidenceReport.rows.map((item) => (
@@ -382,14 +382,9 @@ export default function SystemBodyWorkspace({
                     : <li>No supporting evidence reported.</li>}
                 </ul>
               </section>
-              {evidenceReport.hasReplay ? (
-                <div className="post-upload-actions" aria-label="System Story action">
-                  <button type="button" className="command-button" onClick={() => navigateWorkspace("system-story")}>View System Story</button>
-                </div>
-              ) : null}
               <section className="post-upload-review-next" aria-label="Recommended next checks">
                 <span>What to inspect next</span>
-                <strong>{finding.exists ? finding.reviewNext : "Use System Story when an engineer needs the full operating narrative."}</strong>
+                <strong>{finding.exists ? finding.reviewNext : "Review supporting evidence when an engineer needs the operating narrative."}</strong>
               </section>
             </section>
           ) : null}
@@ -632,7 +627,7 @@ function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceR
     return { label: "Review missing sensor values before relying on trend analysis.", section: "quality", button: "View Data Quality" };
   }
   if (evidenceReport.hasReplay) {
-    return { label: "Open System Story when an engineer needs the full operating narrative.", section: "story", button: "View System Story" };
+    return { label: "Review supporting evidence when an engineer needs the operating narrative.", section: "story", button: "Review Evidence" };
   }
   return { label: "Continue monitoring normal equipment behavior.", section: null, button: "" };
 }
@@ -742,7 +737,7 @@ function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestR
       { label: "Historical comparison", value: formatScalar(assessmentState.stability.regime) },
       { label: "Change strength", value: formatScalar(stabilitySnapshot.driftMagnitude) },
       { label: "Operating pattern duration", value: formatScalar(stabilitySnapshot.deformationAge) },
-      { label: "Story readiness", value: confidence },
+      { label: "Evidence readiness", value: confidence },
     ]),
   };
 }
@@ -754,8 +749,6 @@ function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assess
     : [];
   const schemaDetection = result.schema_detection ?? result.detected_schema ?? result.domain_detection ?? null;
   const runtime = result.runtime_metadata ?? result.processing_stats ?? {};
-  const sii = result.sii_intelligence ?? {};
-  const replay = result.replay_timeline?.timeline ?? sii.replay_timeline?.timeline ?? [];
   const runId = firstPresent(result.run_id, result.job_id, latestUploadSnapshot?.current_upload?.job_id, latestUploadSnapshot?.job_id, "Unavailable");
   const backendWarnings = dedupeText([
     ...(Array.isArray(result.warnings) ? result.warnings : []),
@@ -765,8 +758,6 @@ function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assess
   const traceability = dedupeText([
     ...(Array.isArray(result.operator_report?.evidence_summary) ? result.operator_report.evidence_summary : []),
     ...(Array.isArray(result.finding_evidence_chains) ? result.finding_evidence_chains : []),
-    result.replay_id ? `Replay ID: ${result.replay_id}` : null,
-    result.replay_reference ? `Replay reference: ${result.replay_reference}` : null,
   ]);
   return {
     rows: compactRows([
@@ -775,7 +766,6 @@ function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assess
       { label: "Schema detection", value: formatScalar(schemaDetection ? compactJson(schemaDetection) : "Unavailable") },
       { label: "Runtime metadata", value: formatScalar(Object.keys(runtime).length ? compactJson(runtime) : "Unavailable") },
       { label: "Result source", value: formatScalar(latestUploadSnapshot?.result_source ?? result.result_source ?? "Unavailable") },
-      { label: "Raw story frame count", value: replay.length ? String(replay.length) : "" },
     ]),
     traceability,
     processingTrace,
@@ -881,7 +871,7 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
       subtitle: "Telemetry is being monitored.",
       detail: "No equipment issues detected.",
     },
-    evidenceButtonLabel: "View System Story",
+    evidenceButtonLabel: "Review Evidence",
     supportingEvidence: [],
     dataQuality: {
       missingBaselineValues: [],
@@ -1132,7 +1122,7 @@ function mapBackendSystemInterpretation(contract, expectedJobId = null, reliable
       : [],
     hasTelemetry: true,
     nextStep: reliableEnoughToShow && Array.isArray(value.finding_evidence_chains) && value.finding_evidence_chains.length > 0
-      ? "View System Story."
+      ? "Review supporting evidence."
       : "Check technical details.",
   };
 }
@@ -1179,7 +1169,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     ?? latestUploadResult?.processing_state
     ?? "",
   ).toLowerCase();
-  const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "generating_replay", "cognition_ready", "writing_state"];
+  const processingLike = ["processing", "queued", "pending", "running_sii", "parsing", "baseline_modeling", "structural_scoring", "saving_result", "cognition_ready", "writing_state"];
   const hasUploadInFlight = processingLike.some((token) => uploadStatus.includes(token));
   const analysisState = resolveAnalysisGateState({ latestUploadSnapshot, latestUploadResult });
 
@@ -1240,7 +1230,7 @@ export function buildSystemInterpretation({ latestUploadSnapshot, latestUploadRe
     relationshipSummary: relationship,
     confidence,
     findingEvidenceChains: [],
-    nextStep: canShowEvidenceBackedFinding ? "View System Story." : (hasDriftState ? "Check the System Story." : "Continue monitoring."),
+    nextStep: canShowEvidenceBackedFinding ? "Review supporting evidence." : (hasDriftState ? "Review supporting evidence." : "Continue monitoring."),
     hasTelemetry: true,
   };
 }
@@ -1268,7 +1258,7 @@ function heartbeatStatus(connectionTone, connectionStatus, lastUpdate, hasTeleme
   if (!hasTelemetry) return { tone: "pending", label: "Awaiting telemetry" };
   if (isConnectionDegraded(connectionTone, connectionStatus)) return { tone: "offline", label: "Connection degraded" };
   const text = `${connectionTone ?? ""} ${connectionStatus ?? ""} ${lastUpdate ?? ""}`.toLowerCase();
-  if (text.includes("replay")) return { label: "Replay running", tone: "syncing" };
+  if (text.includes("replay")) return { label: "Analysis finalizing", tone: "syncing" };
   if (text.includes("sync")) return { label: "Data stream active", tone: "syncing" };
   if (lastUpdate) return { tone: "online", label: "Telemetry usable" };
   if (telemetrySessionMode === "persisted") return { tone: "watch", label: "Persisted telemetry available" };

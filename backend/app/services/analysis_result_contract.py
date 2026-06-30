@@ -96,6 +96,10 @@ def empty_analysis_result(
         "upload_id": clean_text(upload_id),
         "source_file": clean_text(source_file),
         "generated_at": now_iso(),
+        "change_onset": "",
+        "stable_window": {},
+        "deviation_window": {},
+        "current_state_window": {},
         "data_quality": {
             "status": status,
             "readiness": "not_ready",
@@ -463,6 +467,12 @@ def build_analysis_result(
         recommendations=recommendations,
         fingerprint=fingerprint,
     )
+    behavior_windows = build_behavior_windows(
+        result=result,
+        baseline=baseline,
+        relationships=relationships,
+        insights=insights,
+    )
 
     return sanitize_payload(
         {
@@ -472,6 +482,10 @@ def build_analysis_result(
             "upload_id": clean_text(upload_id),
             "source_file": clean_text(source_file),
             "generated_at": clean_text(generated_at),
+            "change_onset": behavior_windows.get("change_onset", ""),
+            "stable_window": behavior_windows.get("stable_window", {}),
+            "deviation_window": behavior_windows.get("deviation_window", {}),
+            "current_state_window": behavior_windows.get("current_state_window", {}),
             "data_quality": data_quality,
             "executive_summary": executive_summary,
             "systems": systems,
@@ -924,6 +938,87 @@ def build_time_window(result: dict[str, Any]) -> str:
     if first and last:
         return f"{first} to {last}"
     return first_present(result.get("last_processed_at"), result.get("completed_at"), "")
+
+
+def build_behavior_windows(
+    *,
+    result: dict[str, Any],
+    baseline: dict[str, Any],
+    relationships: list[dict[str, Any]],
+    insights: list[dict[str, Any]],
+) -> dict[str, Any]:
+    timestamp = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
+    first = clean_text(timestamp.get("first_timestamp"))
+    last = clean_text(timestamp.get("last_timestamp"))
+    baseline_rows = int_or_none(baseline.get("baseline_window_rows"))
+    recent_rows = int_or_none(baseline.get("recent_window_rows"))
+    total_rows = int_or_none(result.get("row_count") or result.get("rows_processed"))
+    fallback_window = build_time_window(result)
+
+    deviation_source = first_present(
+        *[item.get("time_window") for item in relationships if isinstance(item, dict)],
+        *[item.get("time_window") for item in insights if isinstance(item, dict)],
+        fallback_window,
+    )
+    deviation_start, deviation_end = split_window_bounds(deviation_source)
+    if not deviation_start and not deviation_end:
+        deviation_start, deviation_end = first, last
+
+    return {
+        "change_onset": first_present(deviation_start, first),
+        "stable_window": behavior_window(
+            label="Stable window",
+            start=first,
+            end=last,
+            rows=baseline_rows,
+            description="Reference behavior window used for baseline comparison.",
+        ),
+        "deviation_window": behavior_window(
+            label="Deviation window",
+            start=deviation_start,
+            end=deviation_end,
+            rows=recent_rows,
+            description="Window where current behavior diverged from the reference pattern.",
+        ),
+        "current_state_window": behavior_window(
+            label="Current state window",
+            start=deviation_start or first,
+            end=deviation_end or last,
+            rows=recent_rows or total_rows,
+            description="Most recent behavior window represented by this analysis result.",
+        ),
+    }
+
+
+def behavior_window(*, label: str, start: Any = None, end: Any = None, rows: int | None = None, description: str = "") -> dict[str, Any]:
+    time_window = " to ".join(item for item in [clean_text(start), clean_text(end)] if item)
+    return compact_dict({
+        "label": label,
+        "start": clean_text(start),
+        "end": clean_text(end),
+        "time_window": time_window,
+        "rows": rows,
+        "description": description,
+    })
+
+
+def split_window_bounds(value: Any) -> tuple[str, str]:
+    if isinstance(value, dict):
+        start = first_present(value.get("current_start"), value.get("start"), value.get("baseline_start"))
+        end = first_present(value.get("current_end"), value.get("end"), value.get("baseline_end"))
+        return clean_text(start), clean_text(end)
+    text = clean_text(value)
+    if " to " in text:
+        start, end = text.split(" to ", 1)
+        return clean_text(start), clean_text(end)
+    return text, ""
+
+
+def int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def telemetry_tag_names(normalized_telemetry: dict[str, Any]) -> list[str]:

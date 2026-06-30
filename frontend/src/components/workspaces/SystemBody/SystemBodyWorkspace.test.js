@@ -15,9 +15,9 @@ vi.mock("../../layout/PageContainer", () => ({
   default: ({ children, className }) => h("div", { className }, children),
 }));
 
-function readResultDetail(label, sectionName = "System Story") {
+function readResultDetail(label, sectionName = "Evidence") {
   fireEvent.click(screen.getByRole("button", { name: sectionName }));
-  const section = screen.getByLabelText(sectionName === "System Story" ? "System Story" : sectionName);
+  const section = screen.getByLabelText(sectionName);
   const labelNode = within(section).getByText(label);
   return labelNode.nextElementSibling?.textContent;
 }
@@ -71,7 +71,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Issues" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "System Story" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
     expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
     expect(screen.queryByText("Rows loaded")).toBeNull();
   });
@@ -144,7 +144,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
     expect(readResultDetail("Operating pattern duration")).toBe("2d");
     expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "View System Story" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
 
   it("does not render pending copy for a DEGRADED_READY upload result", () => {
@@ -181,7 +181,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getByRole("heading", { name: "Telemetry is still processing." })).toBeTruthy();
     expect(screen.getAllByText("Telemetry is present, but analysis is still running.")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "View System Story" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
 
   it("replaces impossible persistence with a history fallback when only an old start timestamp exists", () => {
@@ -197,7 +197,7 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "System Story" }));
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
     expect(screen.queryByText("Operating pattern duration")).toBeNull();
     expect(screen.queryByText(/20625d/)).toBeNull();
   });

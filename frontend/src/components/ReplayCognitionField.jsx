@@ -192,13 +192,13 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         "--replay-divergence": model.divergence.toFixed(3),
         "--replay-recovery": model.recovery.toFixed(3),
       }}
-      aria-label="Animated evidence replay field"
+      aria-label="Animated behavior timeline field"
     >
       <div className="replay-cognition-field__header">
         <div>
-          <p className="section-token">Evidence replay</p>
+          <p className="section-token">Behavior timeline</p>
           <h3>{status}</h3>
-          <span>{[phase, pathLabel].filter((item) => item && item !== "-").join(" - ") || "Replay context"}</span>
+          <span>{[phase, pathLabel].filter((item) => item && item !== "-").join(" - ") || "Behavior context"}</span>
         </div>
         <div className="replay-cognition-field__state">
           <strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong>
@@ -266,7 +266,7 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
         {!inactive ? <circle cx={model.nodes[2].x} cy={model.nodes[2].y} r={54 + model.propagation * 46} className="replay-cognition-field__structural-pulse" /> : null}
       </svg>
 
-      <section className="replay-cognition-field__mobile-summary" aria-label="System story summary">
+      <section className="replay-cognition-field__mobile-summary" aria-label="Behavior timeline summary">
         <div><span>Status</span><strong>{status}</strong></div>
         <div><span>Change strength</span><strong>{inactive ? "-" : `${Math.round(model.divergence * 100)}%`}</strong></div>
         <div><span>Confidence</span><strong>{confidence}</strong></div>

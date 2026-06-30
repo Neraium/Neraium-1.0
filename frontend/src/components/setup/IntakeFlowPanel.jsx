@@ -64,7 +64,7 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
   if (["building_fingerprint", "baseline_modeling", "structural_scoring"].includes(normalized)) {
     return "Building operating fingerprint...";
   }
-  if (["writing_state", "cognition_ready", "generating_replay"].includes(normalized)) {
+  if (["writing_state", "cognition_ready", "saving_result"].includes(normalized)) {
     return "Generating results...";
   }
   if (["accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
@@ -152,7 +152,6 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Stage name", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
     ["Timing", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
     ["Transfer", uploadTransfer?.label],
-    ["Replay status", uploadJob?.replay_ready === true ? "Ready" : uploadJob?.replay_ready === false ? "Not ready" : null],
     ["Finalization", uploadJob?.result_available ? "Result available" : uploadJob?.first_usable_available ? "First result available" : null],
     ["Worker", queuedWorkerDetail],
     ["Stage detail", propagationLabel],

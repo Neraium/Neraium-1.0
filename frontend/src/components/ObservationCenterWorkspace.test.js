@@ -107,7 +107,7 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.getAllByText("System behavior has moved away from its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Filter issues")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "View System Story" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Review Evidence" })[0]);
     expect(onReviewEvidence).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();

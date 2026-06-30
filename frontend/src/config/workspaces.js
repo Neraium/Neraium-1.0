@@ -9,13 +9,13 @@ export const WORKSPACES = [
     id: "data-connections",
     label: "Upload Data",
     eyebrow: "Telemetry",
-    description: "Analyze a telemetry file and build the system story.",
+    description: "Upload a CSV, analyze it, view results, and investigate findings.",
   },
   {
     id: "system-story",
-    label: "System Story",
-    eyebrow: "Story",
-    description: "Explain what happened, why we believe it, what likely caused it, and what to inspect next.",
+    label: "Advanced Details",
+    eyebrow: "Technical",
+    description: "Developer-only behavior reconstruction details for diagnostics.",
   },
   {
     id: "observation-center",
@@ -73,7 +73,7 @@ export const INTAKE_STAGES = [
   "Variable and timestamp detection",
   "Historical comparison",
   "System behavior review",
-  "System story write",
+  "Result write",
   "Complete",
 ];
 
@@ -87,4 +87,4 @@ export const DEFAULT_WORKSPACE_ID = "system-body";
 
 export const PRIMARY_WORKSPACE_ORDER = WORKSPACES.map((workspace) => workspace.id);
 
-export const EXPERT_WORKSPACE_IDS = new Set(["governance-admin"]);
+export const EXPERT_WORKSPACE_IDS = new Set(["governance-admin", "system-story"]);

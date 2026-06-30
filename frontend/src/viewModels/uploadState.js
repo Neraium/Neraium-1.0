@@ -25,7 +25,6 @@ export function resolveCurrentUploadJobId(payload) {
 }
 
 export function hasFullUploadResult(result) {
-  const replayTimeline = result?.replay_timeline?.timeline ?? result?.sii_intelligence?.replay_timeline?.timeline;
   return Boolean(
     result
     && (
@@ -37,7 +36,6 @@ export function hasFullUploadResult(result) {
       || result.processing_trace
       || result.row_count
       || result.rows_processed
-      || (Array.isArray(replayTimeline) && replayTimeline.length > 0)
       || result.job_id
       || result.filename
     )
@@ -65,19 +63,15 @@ export function hasActiveTelemetrySnapshot(snapshot) {
 }
 
 export function deriveTelemetrySessionState({ latestUploadResult = null, latestUploadSnapshot = null, latestReplayFrame = null } = {}) {
-  const hasReplayFrame = Boolean(latestReplayFrame && Object.keys(latestReplayFrame).length > 0);
   const hasLiveResult = hasFullUploadResult(latestUploadResult);
   const hasActiveSnapshot = hasActiveTelemetrySnapshot(latestUploadSnapshot);
-  const hasTelemetry = hasReplayFrame || hasLiveResult || hasActiveSnapshot;
+  const hasTelemetry = hasLiveResult || hasActiveSnapshot;
   const sessionMode = !hasTelemetry
     ? "empty"
-    : (hasReplayFrame || hasLiveResult)
+    : hasLiveResult
       ? "live"
       : "persisted";
-  const heartbeatAt = latestReplayFrame?.timestamp
-    ?? latestReplayFrame?.last_processed_at
-    ?? latestReplayFrame?.completed_at
-    ?? latestUploadSnapshot?.last_processed_at
+  const heartbeatAt = latestUploadSnapshot?.last_processed_at
     ?? latestUploadSnapshot?.last_upload_at
     ?? latestUploadResult?.last_processed_at
     ?? latestUploadResult?.completed_at
@@ -446,7 +440,7 @@ function normalizeUploadStatus(status) {
 
 function isUploadProcessing(status) {
   const normalized = normalizeUploadStatus(status);
-  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "building_fingerprint", "cognition_ready", "generating_replay", "writing_state"].includes(normalized);
+  return ["uploading", "accepted", "queued", "processing", "parsing", "baseline_modeling", "structural_scoring", "building_fingerprint", "cognition_ready", "saving_result", "writing_state"].includes(normalized);
 }
 
 function normalizeErrorMessage(message) {

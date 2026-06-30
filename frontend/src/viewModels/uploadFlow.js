@@ -22,7 +22,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
   const operatorReviewReady = result?.sii_reliable_enough_to_show === true;
   const finalStageIndex = INTAKE_STAGES.length - 1;
   return INTAKE_STAGES.map((stage, index) => {
-    if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "generating_replay"]].includes(normalizeUploadStatus(uploadState))) {
+    if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "saving_result"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
       const terminalFailure = ["failed", "cancelled", "timeout"].includes(normalizedStatus);
       return {
@@ -266,7 +266,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
     jobStatus === "structural_scoring" ? job.progress_label : "Cross-signal relationships are being mapped against baseline behavior.",
     jobStatus === "building_fingerprint" ? job.progress_label : "A structural fingerprint is being assembled from the normalized telemetry.",
     jobStatus === "writing_state" ? job.progress_label : "Insights are being generated from the mapped system behavior.",
-    ["cognition_ready", "generating_replay"].includes(jobStatus) ? job.progress_label : "The core result can complete before optional report finalization finishes.",
+    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The core result can complete before optional report finalization finishes.",
     "Completion will refresh the structural state view.",
   ];
   return details[index] ?? stage;

@@ -1,3 +1,4 @@
+from app.services import upload_jobs
 from app.services.upload_jobs import process_csv_content, reset_latest_upload_state, write_job
 from app.services.upload_state_repository import write_latest_upload_result
 
@@ -37,7 +38,15 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         "evidence_index",
         "warnings",
         "errors",
+        "change_onset",
+        "stable_window",
+        "deviation_window",
+        "current_state_window",
     }
+    assert analysis["change_onset"]
+    assert analysis["stable_window"]["description"] == "Reference behavior window used for baseline comparison."
+    assert analysis["deviation_window"]["description"] == "Window where current behavior diverged from the reference pattern."
+    assert analysis["current_state_window"]["description"] == "Most recent behavior window represented by this analysis result."
     assert analysis["normalized_telemetry"]["records"]
     first_record = analysis["normalized_telemetry"]["records"][0]
     assert set(first_record) >= {
@@ -50,6 +59,51 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         "sampling_interval",
         "detected_metric_type",
     }
+
+
+def test_analysis_completion_does_not_require_replay(monkeypatch) -> None:
+    def fail_replay(*args, **kwargs):
+        raise RuntimeError("replay disabled")
+
+    monkeypatch.setattr(upload_jobs, "_build_replay", fail_replay)
+    monkeypatch.setattr(upload_jobs, "_minimal_replay", fail_replay)
+
+    result = process_csv_content(
+        filename="no-replay.csv",
+        content=contract_fixture_csv(),
+        job_id="noreplay001",
+    )
+
+    assert result["analysis_result"]["status"] == "complete"
+    assert result["analysis_result"]["insights"]
+    assert result["replay_ready"] is False
+    assert result["replay_frame_count"] == 0
+    assert result["replay_timeline"]["timeline"] == []
+    assert result["sii_intelligence"]["replay_timeline"]["timeline"] == []
+
+
+def test_saved_analysis_result_is_viewable_without_replay(client, monkeypatch) -> None:
+    def fail_replay(*args, **kwargs):
+        raise RuntimeError("replay disabled")
+
+    monkeypatch.setattr(upload_jobs, "_build_replay", fail_replay)
+    monkeypatch.setattr(upload_jobs, "_minimal_replay", fail_replay)
+
+    result = process_csv_content(
+        filename="viewable-no-replay.csv",
+        content=contract_fixture_csv(),
+        job_id="viewablenoreplay001",
+    )
+    write_latest_upload_result("viewablenoreplay001", result)
+
+    status_payload = client.get("/api/data/upload-status/viewablenoreplay001").json()
+    assert status_payload["result_available"] is True
+    assert status_payload["first_usable_available"] is True
+    assert status_payload["replay_ready"] is False
+
+    latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    assert latest_payload["analysis_result"]["status"] == "complete"
+    assert latest_payload["analysis_result"]["analysis_id"] == result["analysis_result"]["analysis_id"]
 
 
 def test_canonical_insights_and_fingerprint_are_evidence_backed() -> None:

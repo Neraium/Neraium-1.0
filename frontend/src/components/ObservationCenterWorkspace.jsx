@@ -376,7 +376,7 @@ export default function ObservationCenterWorkspace({
     supportingEvidence: [],
     technicalDetails: [],
     dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-    evidenceButtonLabel: "View System Story",
+    evidenceButtonLabel: "Review Evidence",
     emptyState: OPERATOR_EMPTY_STATE,
   };
   const hasCurrentFinding = Boolean(activeFinding.exists);
@@ -534,7 +534,7 @@ export default function ObservationCenterWorkspace({
           />
           <div className="intake-flow__controls">
             <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
-              View System Story
+              Review Evidence
             </button>
           </div>
         </section>
@@ -631,7 +631,7 @@ export default function ObservationCenterWorkspace({
                 compact
               />
               <div className="intake-flow__controls">
-                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>View System Story</button>
+                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
               </div>
               <details className="compact-list-block" open>
                 <summary className="section-token">Why We Believe It</summary>

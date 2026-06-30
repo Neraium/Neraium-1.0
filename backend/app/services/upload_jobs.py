@@ -334,7 +334,7 @@ def _progress_label(stage: str, *, row_count: int | None = None, signal_count: i
         return "Building fingerprint..."
     if stage == "generating_findings_evidence":
         return "Generating insights..."
-    if stage == "writing_result_replay":
+    if stage in {"writing_result_replay", "saving_result"}:
         return "Saving result..."
     if stage == "finalizing_report":
         return "Finalizing report..."
@@ -789,7 +789,7 @@ def _build_csv_result(
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
-    _set_propagation_stage(job_id, stage="writing_result_replay", progress=95, label=_progress_label("writing_result_replay"))
+    _set_propagation_stage(job_id, stage="saving_result", progress=95, label=_progress_label("saving_result"))
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label=_progress_label("complete")))
     _persist_completed_upload(job_id, result=result, summary=summary)
     _start_optional_upload_finalization(

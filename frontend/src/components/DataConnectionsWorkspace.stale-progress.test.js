@@ -394,16 +394,18 @@ it("does not show processing 100 until status is complete", () => {
     uploadJob: {
       job_id: "not-complete-job",
       status: "PROCESSING",
-      processing_state: "writing_result_replay",
+      processing_state: "saving_result",
       percent: 100,
       progress: 100,
       progress_label: "Saving result...",
       result_available: true,
-      replay_ready: true,
+      replay_ready: false,
     },
     latestMessage: "Saving result...",
   });
 
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
+  expect(screen.queryByText(/replay/i)).toBeNull();
+  expect(screen.queryByText("Replay status")).toBeNull();
 });

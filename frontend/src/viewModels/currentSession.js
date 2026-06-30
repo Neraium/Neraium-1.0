@@ -66,8 +66,7 @@ export function deriveCurrentSession({
     result?.operator_report
       || result?.engine_result
       || result?.sii_intelligence
-      || result?.replay_ready
-      || result?.replay_frame_count
+      || result?.analysis_result
       || result?.data_quality,
   );
   const evidenceReadyForReview = Boolean(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -13,6 +14,26 @@ from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
 from app.services.telemetry_normalization import build_normalization_report
+
+
+def _inline_replay_generation_enabled() -> bool:
+    configured = os.getenv("NERAIUM_INLINE_REPLAY_GENERATION")
+    if configured is not None:
+        return configured.strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("PYTEST_CURRENT_TEST") is not None
+
+
+def _empty_optional_replay(job_id: str, reason: str) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "run_id": job_id,
+        "upload_id": job_id,
+        "source": "not_generated",
+        "replay_ready": False,
+        "frame_count": 0,
+        "meta": {"frame_count": 0, "optional": True, "reason": reason},
+        "timeline": [],
+    }
 
 
 def run_structural_analysis_pipeline(
@@ -59,13 +80,18 @@ def run_structural_analysis_pipeline(
         total_row_count=row_count_total,
         baseline_analysis=baseline_analysis,
     )
-    replay = (
-        minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
-        if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3)
-        else build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
-    )
-    if not replay.get("timeline"):
-        replay = minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
+    replay = _empty_optional_replay(job_id, "inline_replay_disabled")
+    if _inline_replay_generation_enabled():
+        try:
+            replay = (
+                minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
+                if (len(rows) < 20 or not timestamp_column or len(numeric_columns) < 3)
+                else build_replay(rows, timestamp_column, numeric_columns, job_id, relationship_model)
+            )
+            if not replay.get("timeline"):
+                replay = minimal_replay(columns, rows, timestamp_column, numeric_columns, job_id, relationship_model)
+        except Exception as exc:
+            replay = _empty_optional_replay(job_id, f"inline_replay_failed:{exc.__class__.__name__}")
 
     stage_notifier(job_id, stage="building_fingerprint", progress=84, label="Building fingerprint...")
     frame_count = len(replay.get("timeline", []))
@@ -228,7 +254,7 @@ def run_structural_analysis_pipeline(
         engine_result=engine_result,
         processing_trace=processing_trace,
     )
-    stage_notifier(job_id, stage="writing_result_replay", progress=95, label="Saving result...")
+    stage_notifier(job_id, stage="saving_result", progress=95, label="Saving result...")
     if isinstance(runner_result, dict):
         processing_trace = dict(runner_result.get("processing_trace") or processing_trace)
         processing_trace.setdefault("sii_runner_ran", bool(runner_result.get("runner_used")))

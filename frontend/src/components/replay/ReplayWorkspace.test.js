@@ -58,11 +58,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("System Story workspace", () => {
+describe("Advanced Details workspace", () => {
   it("renders the flagship story sections without internal graph diagnostics", async () => {
     renderStory(baseProps());
 
-    await waitFor(() => expect(screen.getByText("System Story")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Advanced Details")).toBeTruthy());
     expect(screen.getByLabelText("Why We Believe It")).toBeTruthy();
     expect(screen.getByLabelText("Likely Causes")).toBeTruthy();
     expect(screen.getByLabelText("What To Inspect")).toBeTruthy();
@@ -233,7 +233,7 @@ describe("System Story workspace", () => {
 
     renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: null, latestUploadSnapshot: null } }));
 
-    await waitFor(() => expect(screen.getByText("System Story is waiting for an active telemetry session.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Advanced details are waiting for an active telemetry session.")).toBeTruthy());
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("stale-history-job"))).toBe(false);
   });
 });

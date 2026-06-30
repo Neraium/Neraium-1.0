@@ -112,11 +112,11 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading System Story", "Preparing System Story...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Advanced Details", "Preparing behavior diagnostics...")}>
           <SystemStoryWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
-            expertMode={false}
+            expertMode={true}
             normalizeErrorMessage={(value) => String(value ?? "")}
             formatClockTime={formatClockTime}
             Panel={Panel}
@@ -173,7 +173,7 @@ export default function AppWorkspaceRouter({
             canonicalFinding={canonicalFinding}
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
-            onReviewEvidence={() => setActiveWorkspace("system-story")}
+            onReviewEvidence={() => setActiveWorkspace("observation-center")}
             onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>

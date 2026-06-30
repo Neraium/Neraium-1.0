@@ -68,7 +68,7 @@ export default function ReplayWorkspace({
         setTimeline(sortedTimeline);
         setMeta({ ...(scoped.meta ?? {}), job_id: scoped.jobId, message: scoped.message });
         setEvidenceRun(matchedEvidenceRun);
-        setError(sortedTimeline.length > 0 ? "" : (scoped.message || "System Story will appear when this session has enough telemetry."));
+        setError(sortedTimeline.length > 0 ? "" : (scoped.message || "Behavior timeline details will appear when this session has enough telemetry."));
         setCurrentFrameIndex((current) => sessionChanged ? Math.max(0, sortedTimeline.length - 1) : Math.min(current, Math.max(0, sortedTimeline.length - 1)));
       } catch (loadError) {
         if (cancelled) return;
@@ -130,10 +130,10 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console system-story-workspace">
-      <Panel title="System Story" className="span-12 workspace-hero-panel system-story-hero" subtitle="What happened, why we believe it, and what to inspect next.">
+      <Panel title="Advanced Details" className="span-12 workspace-hero-panel system-story-hero" subtitle="What happened, why we believe it, and what to inspect next.">
         <div className="system-story-hero__layout">
           <div>
-            <p className="section-token">System Story</p>
+            <p className="section-token">Advanced Details</p>
             <h3>{story.whatHappened}</h3>
             <p className="narrative-text">{story.summary}</p>
           </div>
@@ -173,7 +173,7 @@ export default function ReplayWorkspace({
         </div>
       </Panel>
       <Panel title="How It Developed" className="span-6 system-story-card">
-        <div className="system-story-timeline" aria-label="System Story timeline">
+        <div className="system-story-timeline" aria-label="Behavior timeline">
           {story.development.map((item) => (
             <section key={`${item.time}-${item.label}`}>
               <span>{item.time}</span>
@@ -226,7 +226,7 @@ export default function ReplayWorkspace({
           {selectedLearning ? `Marked as ${selectedLearning.toLowerCase()}. Future comparisons for this session will include that field context.` : "Mark the inspection outcome so future stories can account for field knowledge."}
         </p>
       </Panel>
-      {error ? <Panel title="System Story Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
+      {error ? <Panel title="Advanced Details Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
     </div>
   );
 }
@@ -259,7 +259,7 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
     const latestPayload = await latestResponse.json();
     const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
     targetJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload) ?? currentUpload?.job_id ?? null;
-    if (!targetJobId) return { jobId: null, timeline: [], meta: {}, message: "System Story is waiting for an active telemetry session." };
+    if (!targetJobId) return { jobId: null, timeline: [], meta: {}, message: "Advanced details are waiting for an active telemetry session." };
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
   let pendingMessage = "";
@@ -269,7 +269,7 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
     const timelineReady = Boolean(statusPayload?.replay_ready) || Number(statusPayload?.replay_frame_count ?? 0) > 0;
     const resultAvailable = Boolean(statusPayload?.result_available);
     const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || timelineReady || resultAvailable;
-    if (status && !terminalOrFetchable) pendingMessage = `System Story is still building for this upload job (${status.toLowerCase()}).`;
+    if (status && !terminalOrFetchable) pendingMessage = `Advanced details are still building for this upload job (${status.toLowerCase()}).`;
   }
   const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
   if (!timelineResponse.ok) throw new Error(`Unexpected response: ${timelineResponse.status}`);
@@ -356,7 +356,7 @@ function buildChecklist({ variables, domainMode }) {
 }
 
 function buildDevelopmentTimeline({ frames, frameIndex, formatClockTime, pendingState }) {
-  if (!frames.length) return [{ time: "Current", label: "Waiting for telemetry", detail: "Upload or resume a session to create a System Story." }];
+  if (!frames.length) return [{ time: "Current", label: "Waiting for telemetry", detail: "Upload or resume a session to create behavior timeline details." }];
   const first = frames[0];
   const middle = frames[Math.floor(frames.length / 2)];
   const current = frames[Math.min(frameIndex, frames.length - 1)] ?? frames[frames.length - 1];
@@ -365,7 +365,7 @@ function buildDevelopmentTimeline({ frames, frameIndex, formatClockTime, pending
     { time: formatStoryTime(first, formatClockTime), label: "Normal", detail: "Historical operating pattern established." },
     { time: formatStoryTime(middle, formatClockTime), label: "Behavior begins deviating", detail: "The current window starts moving away from expected behavior." },
     { time: formatStoryTime(current, formatClockTime), label: pendingState ? "Verification pending" : "Confidence increases", detail: pendingState ? pendingState.subtitle : "Evidence becomes strong enough to create an operator story." },
-    { time: formatStoryTime(last, formatClockTime), label: "Observation created", detail: "System Story is ready for engineer review." },
+    { time: formatStoryTime(last, formatClockTime), label: "Observation created", detail: "Behavior details are ready for engineer review." },
     { time: "Current", label: "Inspect and teach", detail: "Add notes and mark the outcome after field review." },
   ];
 }
@@ -595,7 +595,7 @@ function loadJsonStorage(key, fallback) {
 function buildStoryNotice(error, normalizeErrorMessage) {
   const message = String(normalizeErrorMessage?.(error?.message ?? error) ?? error?.message ?? error ?? "");
   const lower = message.toLowerCase();
-  if (lower.includes("404") || lower.includes("unexpected response")) return "System Story will appear when this session has enough telemetry.";
-  if (lower.includes("network") || lower.includes("failed to fetch")) return "System Story will appear when processing completes.";
-  return "System Story will appear when this session has enough telemetry.";
+  if (lower.includes("404") || lower.includes("unexpected response")) return "Behavior timeline details will appear when this session has enough telemetry.";
+  if (lower.includes("network") || lower.includes("failed to fetch")) return "Behavior timeline details will appear when processing completes.";
+  return "Behavior timeline details will appear when this session has enough telemetry.";
 }
