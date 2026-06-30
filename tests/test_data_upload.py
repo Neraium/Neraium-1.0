@@ -603,7 +603,7 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
         "scoring_drift_relationships",
         "building_fingerprint",
         "generating_findings_evidence",
-        "writing_result_replay",
+        "saving_result",
         "complete",
     ]:
         assert expected in stages

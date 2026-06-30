@@ -90,6 +90,53 @@ def _resolve_session_state(*, status: str, result: dict[str, Any] | None, source
     return SESSION_STATE_STALE
 
 
+def _analysis_completed(result: dict[str, Any] | None, analysis_result: dict[str, Any] | None = None) -> bool:
+    if not isinstance(result, dict):
+        return False
+    candidate = analysis_result if isinstance(analysis_result, dict) else ensure_analysis_result(result)
+    status = str(candidate.get("status") or "").strip().lower()
+    return bool(
+        status in {"complete", "completed", "ready"}
+        or result.get("sii_completed") is True
+        or (result.get("processing_trace") or {}).get("sii_completed") is True
+    )
+
+
+def _merge_completed_result_fields(status_payload: dict[str, Any], result_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(result_payload, dict):
+        return status_payload
+    normalized = dict(status_payload or {})
+    analysis_result = ensure_analysis_result(result_payload)
+    analysis_completed = _analysis_completed(result_payload, analysis_result)
+    raw_status = str(status_payload.get("status") or "").strip().upper()
+    if analysis_completed:
+        normalized["result_available"] = True
+        normalized["first_usable_available"] = True
+        normalized["sii_completed"] = True
+        if raw_status in {"COMPLETE", "COMPLETED", "SUCCESS"}:
+            normalized["status"] = "COMPLETE"
+            normalized["processing_state"] = "complete"
+            normalized["percent"] = 100
+            normalized["progress"] = 100
+            normalized["error"] = None
+            normalized["error_type"] = None
+            normalized["message"] = normalized.get("message") or "Analysis ready."
+            normalized["progress_label"] = normalized.get("progress_label") or "Analysis ready."
+    normalized["analysis_result"] = analysis_result
+    normalized["sii_reliable_enough_to_show"] = bool(result_payload.get("sii_reliable_enough_to_show"))
+
+    evidence_persisted = bool(
+        normalized.get("evidence_persisted")
+        or (result_payload.get("evidence_persistence") or {}).get("persisted")
+    )
+    normalized["evidence_persisted"] = evidence_persisted
+    if isinstance(result_payload.get("evidence_persistence"), dict):
+        normalized["evidence_persistence"] = dict(result_payload["evidence_persistence"])
+    if isinstance(result_payload.get("report_finalization"), dict):
+        normalized["report_finalization"] = dict(result_payload["report_finalization"])
+    return normalized
+
+
 def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict[str, Any]:
     if not job_id:
         return payload
@@ -297,6 +344,7 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         )
 
     replay_payload = build_replay_payload_from_result(result, job_id=working_job_id)
+    analysis_complete = _analysis_completed(result, analysis_result)
     traceability = working_record.get("traceability") if isinstance(working_record.get("traceability"), dict) else {}
     snapshot_status = "COMPLETE" if session_state in {SESSION_STATE_VERIFIED, SESSION_STATE_RESTORED, SESSION_STATE_STALE} and result else (
         working_summary.get("status") if isinstance(working_summary, dict) else raw_status or session_state
@@ -317,7 +365,8 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         "status": snapshot_status,
         "processing_state": snapshot_processing_state,
         "result_available": isinstance(result, dict),
-        "sii_completed": bool((result or {}).get("sii_reliable_enough_to_show") is not False and result) if result else bool((working_summary or {}).get("sii_completed")),
+        "first_usable_available": analysis_complete if result else bool((working_summary or {}).get("first_usable_available")),
+        "sii_completed": analysis_complete if result else bool((working_summary or {}).get("sii_completed")),
         "replay_ready": bool(replay_payload.get("timeline")),
         "replay_frame_count": int(replay_payload.get("frame_count") or 0),
         "latest_replay_frames": int(replay_payload.get("frame_count") or 0),
@@ -398,7 +447,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
     if isinstance(status_payload, dict):
         normalized = normalize_upload_status_payload(status_payload)
         if isinstance(result_payload, dict):
-            normalized["analysis_result"] = ensure_analysis_result(result_payload)
+            normalized = _merge_completed_result_fields(normalized, result_payload)
         elif str(normalized.get("status") or "").upper() == "FAILED":
             normalized["analysis_result"] = empty_analysis_result(
                 analysis_id=requested_id,

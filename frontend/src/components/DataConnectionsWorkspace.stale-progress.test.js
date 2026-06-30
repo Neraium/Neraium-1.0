@@ -364,6 +364,73 @@ it("treats the first complete payload with a saved result as terminal and waits 
   });
 });
 
+it("continues polling when stream status includes a placeholder analysis result", async () => {
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: { job_id: "job-stream", status_url: "/api/data/upload-status/job-stream", status: "queued", message: "Upload accepted." },
+  });
+
+  const streamPayload = {
+    job_id: "job-stream",
+    status: "PENDING",
+    processing_state: "queued",
+    result_available: false,
+    first_usable_available: false,
+    analysis_result: { status: "queued", systems: [], insights: [], fingerprint: {} },
+  };
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-stream/job-stream")) {
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamPayload)}\n\n`));
+            controller.close();
+          },
+        }),
+      };
+    }
+    if (String(path).includes("/api/data/upload-status/job-stream")) {
+      return {
+        ok: true,
+        json: async () => ({
+          job_id: "job-stream",
+          status: "COMPLETE",
+          processing_state: "complete",
+          result_available: true,
+          first_usable_available: true,
+          replay_ready: false,
+          progress_label: "Analysis ready.",
+          message: "Analysis ready.",
+          analysis_result: {
+            status: "complete",
+            systems: [{ name: "Completed system" }],
+            insights: [{ title: "Completed insight" }],
+            fingerprint: { status: "Established" },
+          },
+        }),
+      };
+    }
+    return { ok: true, json: async () => ({}) };
+  });
+  const onUploadComplete = vi.fn(async () => {});
+
+  renderWorkspace({ apiFetch, onUploadComplete });
+
+  const input = screen.getByTestId("csv-upload-input");
+  fireEvent.change(input, { target: { files: [selectedCsv()] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await waitFor(() => {
+    expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/job-stream", { accessCode: "" });
+  });
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-stream", status: "COMPLETE" }), { navigateToGate: false });
+  });
+});
+
 it("renders intermediate processing progress without jumping to complete", () => {
   renderPanel({
     uploadState: "running_sii",

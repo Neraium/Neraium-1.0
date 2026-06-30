@@ -104,6 +104,9 @@ def test_saved_analysis_result_is_viewable_without_replay(client, monkeypatch) -
     latest_payload = client.get("/api/data/latest-upload?include_persisted=1").json()
     assert latest_payload["analysis_result"]["status"] == "complete"
     assert latest_payload["analysis_result"]["analysis_id"] == result["analysis_result"]["analysis_id"]
+    assert latest_payload["result_available"] is True
+    assert latest_payload["first_usable_available"] is True
+    assert latest_payload["sii_completed"] is True
 
 
 def test_canonical_insights_and_fingerprint_are_evidence_backed() -> None:

@@ -434,7 +434,7 @@ export default function DataConnectionsWorkspace({
           startTransition(() => {
             setUploadJob(normalizeStatusPayload(payload, pollingJobId));
           });
-          if (normalizeUploadStatus(payload?.status) === "complete" || payload?.result_available || payload?.first_usable_available || payload?.analysis_result) {
+          if (normalizeUploadStatus(payload?.status) === "complete" || payload?.result_available || payload?.first_usable_available) {
             return payload;
           }
         }
