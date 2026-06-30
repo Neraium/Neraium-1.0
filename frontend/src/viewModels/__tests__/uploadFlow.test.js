@@ -1,8 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { classifyUploadError } from "../uploadFlow";
+import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE, buildUploadRequestError, classifyUploadError, readJsonPayload } from "../uploadFlow";
 
 
 describe("uploadFlow poll error classification", () => {
+
+  it("sanitizes HTML 503 payloads and keeps raw details out of the user message", async () => {
+    const html = "<html><head><title>503 Service Temporarily Unavailable</title></head><body>nginx</body></html>";
+    const response = {
+      ok: false,
+      status: 503,
+      url: "/api/data/upload-status/job-503",
+      headers: { get: () => "text/html" },
+      text: async () => html,
+    };
+
+    const payload = await readJsonPayload(response, { route: "/api/data/upload-status/job-503", phase: "poll" });
+    expect(payload).toMatchObject({
+      status: "FAILED",
+      processing_state: "failed",
+      error_type: "service_unavailable",
+      message: SERVICE_UNAVAILABLE_UPLOAD_MESSAGE,
+      failure_url: "/api/data/upload-status/job-503",
+      failure_phase: "poll",
+      response_status: 503,
+      html_response: true,
+    });
+    expect(payload.raw_response_body).toContain("<html>");
+
+    const requestError = buildUploadRequestError(response, payload, "poll");
+    expect(requestError.detail).toBe(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+    expect(requestError.detail).not.toContain("<html>");
+    expect(requestError.failureUrl).toBe("/api/data/upload-status/job-503");
+  });
   it("keeps upload job-not-found errors distinct from endpoint misses", () => {
     const error = new Error("Upload job missing");
     error.name = "UploadRequestError";

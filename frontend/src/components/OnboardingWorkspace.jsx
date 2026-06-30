@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApiUrl } from "../config";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import {
+  SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+  buildUploadRequestError,
+  classifyUploadError,
+  isTransientUploadServiceStatus,
+  readJsonPayload,
+} from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 
 const STORAGE_KEY = "neraium.onboarding.v1";
@@ -278,20 +285,34 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
   async function pollUploadUntilTerminal(jobId) {
     let attempts = 0;
+    let temporaryUnavailableCount = 0;
     while (attempts < 240 && !uploadPollAbortRef.current) {
       attempts += 1;
-      const response = await onboardingFetch(`/api/data/upload-status/${encodeURIComponent(jobId)}`);
-      const payload = await readJsonSafely(response);
+      const path = `/api/data/upload-status/${encodeURIComponent(jobId)}`;
+      const response = await onboardingFetch(path);
+      const payload = await readJsonPayload(response, { route: path, phase: "poll" });
       const stage = normalizeOnboardingUploadStage(payload?.status ?? payload?.processing_state);
 
       if (flow.uploadCompleteSticky && stage === "failed") {
         return payload;
       }
 
-      if (!response.ok && stage === "failed") {
-        throw new Error(String(payload?.message || payload?.error || "Upload processing failed."));
+      if (!response.ok) {
+        if (isTransientUploadServiceStatus(response.status) && temporaryUnavailableCount < 8) {
+          temporaryUnavailableCount += 1;
+          setFlow((current) => ({
+            ...current,
+            uploadStatus: "processing",
+            uploadMessage: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+            uploadError: "",
+          }));
+          await new Promise((resolve) => window.setTimeout(resolve, Math.min(1500 * temporaryUnavailableCount, 6000)));
+          continue;
+        }
+        throw buildUploadRequestError(response, payload, "poll");
       }
 
+      temporaryUnavailableCount = 0;
       setFlow((current) => {
         if (current.uploadCompleteSticky && stage !== "complete") {
           return current;
@@ -306,7 +327,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       });
 
       if (stage === "complete") return payload;
-      if (stage === "failed") throw new Error(String(payload?.message || payload?.error || "Upload processing failed."));
+      if (stage === "failed") throw buildUploadRequestError({ status: 500 }, payload, "poll");
 
       await new Promise((resolve) => window.setTimeout(resolve, 1200));
     }
@@ -314,10 +335,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
   }
 
   async function refreshLatestUploadAndPropagate(expectedJobId, fallbackPayload = null) {
-    const latestResponse = await onboardingFetch("/api/data/latest-upload?include_persisted=1");
-    const latestPayload = await readJsonSafely(latestResponse);
+    const path = "/api/data/latest-upload?include_persisted=1";
+    const latestResponse = await onboardingFetch(path);
+    const latestPayload = await readJsonPayload(latestResponse, { route: path, phase: "result" });
     if (!latestResponse.ok) {
-      throw new Error(String(latestPayload?.detail || latestPayload?.message || "Unable to confirm the latest upload state."));
+      throw buildUploadRequestError(latestResponse, latestPayload, "result");
     }
     const finalPayload = uploadStateView.resolveCurrentUploadResult(latestPayload) ?? null;
     const resolvedJobId = String(
@@ -422,12 +444,13 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         uploadCompleteSticky: true,
       }));
     } catch (error) {
+      const classified = classifyUploadError(error, error?.phase || "upload");
       setFlow((current) => {
         if (current.uploadCompleteSticky) return current;
         return {
           ...current,
           uploadStatus: "failed",
-          uploadError: String(error?.message || "Upload failed."),
+          uploadError: String(classified.message || error?.message || "Upload failed."),
           uploadMessage: "Upload failed.",
         };
       });

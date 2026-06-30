@@ -5,8 +5,10 @@ import {
   uploadStagePercent,
 } from "../viewModels/uploadContract";
 import {
+  SERVICE_UNAVAILABLE_RETRY_MESSAGE,
   buildUploadRequestError,
   classifyUploadError,
+  isTransientUploadServiceStatus,
   isUploadProcessing,
   normalizeErrorMessage,
   normalizeUploadStatus,
@@ -22,6 +24,7 @@ const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
+const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1500;
 
 function formatTransferSpeed(bytesPerSecond) {
   const speed = Number(bytesPerSecond);
@@ -89,6 +92,28 @@ function queuedWorkerMessage(uploadJob) {
 function isActiveUploadProgressState(uploadState) {
   return ["uploading", "running_sii", "processing", "complete"].includes(String(uploadState || "").toLowerCase());
 }
+
+function uploadFailureDiagnosticsFrom(value = {}) {
+  return {
+    failureUrl: value.failureUrl ?? value.failure_url ?? null,
+    failurePhase: value.failurePhase ?? value.failure_phase ?? null,
+    rawResponseBody: value.rawResponseBody ?? value.raw_response_body ?? "",
+    responseStatus: value.responseStatus ?? value.response_status ?? value.status ?? null,
+    responseContentType: value.responseContentType ?? value.response_content_type ?? null,
+  };
+}
+
+function logUploadFailureDiagnostics(value = {}) {
+  if (!import.meta.env.DEV) return;
+  const diagnostics = uploadFailureDiagnosticsFrom(value);
+  console.warn("[neraium] upload request failure", {
+    url: diagnostics.failureUrl,
+    phase: diagnostics.failurePhase,
+    status: diagnostics.responseStatus,
+    errorType: value.errorType ?? value.error_type ?? null,
+  });
+}
+
 
 export default function DataConnectionsWorkspace({
   accessCode,
@@ -257,20 +282,37 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  function markUploadFailed({ message, errorType = null, jobId = null, keepStoredJobId = false }) {
+  function markUploadFailed({ message, errorType = null, jobId = null, keepStoredJobId = false, diagnostics = null }) {
     stopUploadPolling("upload_failed");
-    setUploadError(message);
+    const safeMessage = normalizeErrorMessage(message || "Telemetry analysis failed.");
+    const failureDiagnostics = uploadFailureDiagnosticsFrom(diagnostics ?? {});
+    setUploadError(safeMessage);
     setUploadState("error");
     setUploadJob((current) => ({
       ...(current ?? {}),
       job_id: jobId ?? current?.job_id ?? null,
       status: "FAILED",
       processing_state: "failed",
-      progress_label: message,
-      message,
-      error: message,
+      progress_label: safeMessage,
+      message: safeMessage,
+      error: safeMessage,
       error_type: errorType,
+      response_status: failureDiagnostics.responseStatus ?? current?.response_status ?? null,
+      failure_url: failureDiagnostics.failureUrl ?? current?.failure_url ?? null,
+      failure_phase: failureDiagnostics.failurePhase ?? current?.failure_phase ?? null,
+      raw_response_body: failureDiagnostics.rawResponseBody || current?.raw_response_body || "",
+      response_content_type: failureDiagnostics.responseContentType ?? current?.response_content_type ?? null,
     }));
+    if (failureDiagnostics.failureUrl || failureDiagnostics.responseStatus) {
+      setUploadDebug((current) => ({
+        ...current,
+        uploadUrl: failureDiagnostics.failureUrl ?? current.uploadUrl,
+        responseStatus: failureDiagnostics.responseStatus ?? current.responseStatus,
+        responseBodyOrError: failureDiagnostics.rawResponseBody || current.responseBodyOrError,
+        failurePhase: failureDiagnostics.failurePhase ?? current.failurePhase ?? null,
+        responseContentType: failureDiagnostics.responseContentType ?? current.responseContentType ?? null,
+      }));
+    }
     if (!keepStoredJobId) clearStoredUploadJobId();
   }
 
@@ -319,11 +361,31 @@ export default function DataConnectionsWorkspace({
           }
           const requestPath = pollingPath;
           const response = await apiFetch(requestPath, { accessCode });
-          const payload = await readJsonPayload(response);
+          const payload = await readJsonPayload(response, { route: requestPath, phase: "poll" });
           uploadJobIdRef.current = payload.job_id ?? requestedJobId;
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
+              if (isTransientUploadServiceStatus(response.status)) {
+                startTransition(() => {
+                  setUploadState("running_sii");
+                  setUploadJob((current) => ({
+                    ...(current ?? {}),
+                    ...(payload ?? {}),
+                    job_id: requestedJobId,
+                    status: "PROCESSING",
+                    processing_state: "processing",
+                    progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+                    message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+                    error_type: payload?.error_type ?? "service_unavailable",
+                    response_status: response.status,
+                    failure_url: payload?.failure_url ?? requestPath,
+                    failure_phase: payload?.failure_phase ?? "poll",
+                    raw_response_body: payload?.raw_response_body ?? "",
+                    response_content_type: payload?.response_content_type ?? null,
+                  }));
+                });
+              }
               if (statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES) {
                 pollFailureCountRef.current = MAX_STATUS_POLL_FAILURES;
                 throw buildUploadRequestError(
@@ -336,7 +398,7 @@ export default function DataConnectionsWorkspace({
                   "poll",
                 );
               }
-              const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);
+              const cooldownMs = Math.min(15000, STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS * statusEndpointFailureCountRef.current);
               statusEndpointCooldownUntilRef.current = Date.now() + cooldownMs;
               await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });
               continue;
@@ -402,7 +464,8 @@ export default function DataConnectionsWorkspace({
       })
       .catch((error) => {
         const classified = classifyUploadError(error, "poll");
-        markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false });
+        logUploadFailureDiagnostics(classified);
+        markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false, diagnostics: classified });
         return null;
       })
       .finally(() => {
@@ -416,7 +479,31 @@ export default function DataConnectionsWorkspace({
   async function streamUploadStatusOnce({ streamPath, pollingJobId }) {
     try {
       const response = await apiFetch(streamPath, { accessCode });
-      if (!response.ok || !response.body) return null;
+      if (!response.ok) {
+        const payload = await readJsonPayload(response, { route: streamPath, phase: "stream" });
+        if (isTransientUploadServiceStatus(response.status)) {
+          startTransition(() => {
+            setUploadState("running_sii");
+            setUploadJob((current) => ({
+              ...(current ?? {}),
+              ...(payload ?? {}),
+              job_id: pollingJobId,
+              status: "PROCESSING",
+              processing_state: "processing",
+              progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+              message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+              error_type: payload?.error_type ?? "service_unavailable",
+              response_status: response.status,
+              failure_url: payload?.failure_url ?? streamPath,
+              failure_phase: payload?.failure_phase ?? "stream",
+              raw_response_body: payload?.raw_response_body ?? "",
+              response_content_type: payload?.response_content_type ?? null,
+            }));
+          });
+        }
+        return null;
+      }
+      if (!response.body) return null;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -508,8 +595,9 @@ export default function DataConnectionsWorkspace({
       setUploadState("running_sii");
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
-      const classified = classifyUploadError(error, "upload");
-      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType });
+      const classified = classifyUploadError(error, error?.phase || "upload");
+      logUploadFailureDiagnostics(classified);
+      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, diagnostics: classified });
     }
   }
 
@@ -523,7 +611,7 @@ export default function DataConnectionsWorkspace({
   const statusFallbackPercent = hasActiveProgress ? fallbackPercentFromStatus(uploadState) : null;
   const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
-  const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? uploadStateMessage(uploadState);
+  const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? progressUploadTransfer?.message ?? uploadStateMessage(uploadState);
   const isProcessingQuiet = ["running_sii", "processing"].includes(String(uploadState || "").toLowerCase())
     && normalizeUploadStatus(progressUploadJob?.status ?? progressUploadJob?.processing_state) !== "complete"
     && Date.now() - lastProgressAt > 6000
@@ -588,8 +676,9 @@ export default function DataConnectionsWorkspace({
         await handleUpload();
         return;
       }
-      const classified = classifyUploadError(error, "upload");
-      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: currentJobId, keepStoredJobId: true });
+      const classified = classifyUploadError(error, error?.phase || "upload");
+      logUploadFailureDiagnostics(classified);
+      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: currentJobId, keepStoredJobId: true, diagnostics: classified });
     }
   }
 

@@ -8,6 +8,13 @@ import {
 } from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
+import {
+  SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+  buildUploadRequestError,
+  buildUploadServiceUnavailablePayload,
+  isTransientUploadServiceStatus,
+  readJsonPayload,
+} from "../../viewModels/uploadFlow";
 
 const LATEST_UPLOAD_DEDUPE_TTL_MS = 4000;
 const latestUploadInflight = new Map();
@@ -34,12 +41,14 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
   }
 
   const request = (async () => {
-    const response = await apiFetch(`/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`, { accessCode });
+    const path = `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
+    const response = await apiFetch(path, { accessCode });
+    const payload = await readJsonPayload(response, { route: path, phase: "result" });
     if (!response.ok) {
-      throw new Error(`Unexpected response: ${response.status}`);
+      const requestError = buildUploadRequestError(response, payload, "result");
+      throw Object.assign(new Error(requestError.detail || `Unexpected response: ${response.status}`), requestError);
     }
 
-    const payload = await response.json();
     const latestResult = uploadStateView.resolveCurrentUploadResult(payload);
     const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
     const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
@@ -70,12 +79,53 @@ export async function resetDemoSession({ apiFetch, accessCode }) {
   return response.json();
 }
 
-function readJsonResponse(xhr) {
+function xhrHeader(xhr, key) {
   try {
-    return xhr.responseText ? JSON.parse(xhr.responseText) : {};
+    return xhr.getResponseHeader?.(key) || "";
   } catch {
-    return { message: xhr.responseText || "Upload response was not valid JSON." };
+    return "";
   }
+}
+
+function readJsonResponse(xhr, { route = "", phase = "" } = {}) {
+  const rawBody = String(xhr.responseText || "");
+  const contentType = xhrHeader(xhr, "content-type");
+  if (!rawBody) return {};
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    return buildUploadServiceUnavailablePayload({
+      status: xhr.status,
+      rawBody,
+      route,
+      phase,
+      contentType,
+    });
+  }
+}
+
+function buildUploadXhrError(xhr, payload, uploadUrl, phase) {
+  const requestError = buildUploadRequestError({ status: xhr.status, url: uploadUrl }, payload, phase);
+  const error = new Error(requestError.detail || `Unexpected response: ${xhr.status}`);
+  return Object.assign(error, requestError, {
+    responseText: requestError.rawResponseBody || xhr.responseText || "",
+    uploadUrl,
+  });
+}
+
+function uploadRetryDelayMs(retryCount) {
+  return [600, 1200, 2200][retryCount] ?? 2200;
+}
+
+function logUploadFailureDiagnostics(label, details) {
+  if (!import.meta.env.DEV) return;
+  console.warn(`[neraium] ${label}`, {
+    url: details?.url ?? null,
+    phase: details?.phase ?? null,
+    status: details?.status ?? null,
+    attempt: details?.attempt ?? null,
+    errorType: details?.errorType ?? null,
+  });
 }
 
 function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
@@ -199,7 +249,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
       xhr.onload = () => {
         responseSettled = true;
         clearResponseGraceTimer();
-        const payload = normalizeUploadJob(readJsonResponse(xhr));
+        const payload = normalizeUploadJob(readJsonResponse(xhr, { route: uploadUrl, phase: "upload" }));
         const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
         onDebug?.({
           ...debugState,
@@ -218,25 +268,27 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           resolve(response);
           return;
         }
-        const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
         const errorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
-        console.error("Upload HTTP error", {
+        logUploadFailureDiagnostics("upload HTTP error", {
           url: uploadUrl,
+          phase: "upload",
           attempt: retryCount + 1,
           status: xhr.status,
           errorType,
-          payload,
-          responseText: xhr.responseText,
         });
-        const error = new Error(detail ? String(detail) : `Unexpected response: ${xhr.status}`);
-        error.name = "UploadRequestError";
-        error.status = xhr.status;
-        error.errorType = errorType;
-        error.detail = detail;
-        error.payload = payload;
-        error.responseText = xhr.responseText;
-        error.uploadUrl = uploadUrl;
-        reject(error);
+        if (isTransientUploadServiceStatus(xhr.status) && retryCount < MAX_SAME_URL_RETRIES) {
+          onProgress?.({
+            stage: "upload_retrying",
+            loaded: file.size,
+            total: file.size,
+            percent: 100,
+            speedBytesPerSecond: 0,
+            message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+          });
+          scheduleTimer(() => uploadAttempt(retryCount + 1), uploadRetryDelayMs(retryCount));
+          return;
+        }
+        reject(buildUploadXhrError(xhr, payload, uploadUrl, "upload"));
       };
 
       xhr.onerror = () => {
@@ -247,16 +299,24 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           responseStatus: xhr.status || null,
           responseBodyOrError: xhr.responseText || `Network error while calling ${uploadUrl}`,
         });
-        console.error("Upload network error", {
+        logUploadFailureDiagnostics("upload network error", {
           url: uploadUrl,
+          phase: "upload",
           attempt: retryCount + 1,
-          readyState: xhr.readyState,
-          status: xhr.status,
-          responseText: xhr.responseText,
+          status: xhr.status || null,
+          errorType: "network",
         });
 
         if (retryCount < MAX_SAME_URL_RETRIES) {
-          uploadAttempt(retryCount + 1);
+          onProgress?.({
+            stage: "upload_retrying",
+            loaded: file.size,
+            total: file.size,
+            percent: file.size > 0 ? 100 : 0,
+            speedBytesPerSecond: 0,
+            message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+          });
+          scheduleTimer(() => uploadAttempt(retryCount + 1), uploadRetryDelayMs(retryCount));
           return;
         }
 
@@ -280,17 +340,24 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           responseStatus: xhr.status || 408,
           responseBodyOrError: xhr.responseText || `Timeout while calling ${uploadUrl}`,
         });
-        console.error("Upload timeout", {
+        logUploadFailureDiagnostics("upload timeout", {
           url: uploadUrl,
+          phase: "upload",
           attempt: retryCount + 1,
-          timeoutMs,
-          readyState: xhr.readyState,
-          status: xhr.status,
-          responseText: xhr.responseText,
+          status: xhr.status || 408,
+          errorType: "timeout",
         });
 
         if (retryCount < MAX_SAME_URL_RETRIES) {
-          uploadAttempt(retryCount + 1);
+          onProgress?.({
+            stage: "upload_retrying",
+            loaded: file.size,
+            total: file.size,
+            percent: file.size > 0 ? 100 : 0,
+            speedBytesPerSecond: 0,
+            message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+          });
+          scheduleTimer(() => uploadAttempt(retryCount + 1), uploadRetryDelayMs(retryCount));
           return;
         }
 
@@ -322,18 +389,15 @@ export async function retryUploadAnalysisJob({ jobId, apiFetch, accessCode } = {
   if (!cleanJobId) {
     throw new Error("No uploaded telemetry job is available to retry.");
   }
-  const response = await apiFetch(`/api/data/upload/${encodeURIComponent(cleanJobId)}/retry`, {
+  const path = `/api/data/upload/${encodeURIComponent(cleanJobId)}/retry`;
+  const response = await apiFetch(path, {
     method: "POST",
     accessCode,
   });
-  const payload = await response.json().catch(() => ({}));
+  const payload = await readJsonPayload(response, { route: path, phase: "retry" });
   if (!response.ok) {
-    const detail = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error;
-    const error = new Error(detail || `Unexpected response: ${response.status}`);
-    error.name = "UploadRequestError";
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
+    const requestError = buildUploadRequestError(response, payload, "retry");
+    throw Object.assign(new Error(requestError.detail || `Unexpected response: ${response.status}`), requestError);
   }
   return { ok: true, status: response.status, payload: normalizeUploadJob(payload) };
 }

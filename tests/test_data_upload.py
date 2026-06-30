@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from app.core.config import Settings
-from app.main import create_app
+from app.main import create_app, upload_error_payload
 from app.routers import data as data_router
 from app.services import evidence_store
 from app.services.runtime_db import read_upload_queue_job, upsert_latest_payload
@@ -307,6 +307,21 @@ def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
     assert payload["error_type"] == "upload_too_large"
     assert payload["status"] == "FAILED"
     assert "16 bytes" in payload["message"]
+
+
+
+
+def test_upload_error_payload_sanitizes_html_service_unavailable() -> None:
+    html = "<html><head><title>503 Service Temporarily Unavailable</title></head><body>nginx</body></html>"
+
+    payload = upload_error_payload(html, status_code=503)
+
+    assert payload["status"] == "FAILED"
+    assert payload["processing_state"] == "failed"
+    assert payload["error_type"] == "service_unavailable"
+    assert payload["message"] == "Analysis service temporarily unavailable. Please retry."
+    assert "<html>" not in payload["message"]
+    assert "<html>" not in payload["error"]
 
 
 def test_upload_rejects_saturated_queue(monkeypatch, tmp_path) -> None:

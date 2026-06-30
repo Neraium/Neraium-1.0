@@ -173,7 +173,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 content=auth_error_payload(exc.detail),
                 headers=exc.headers,
             )
-        if not request.url.path.startswith("/api/data/upload"):
+        if not is_upload_analysis_path(request.url.path):
             detail = exc.detail
             return JSONResponse(status_code=exc.status_code, content={"detail": detail}, headers=exc.headers)
 
@@ -185,7 +185,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(Exception)
     async def upload_unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        if not request.url.path.startswith("/api/data/upload"):
+        if not is_upload_analysis_path(request.url.path):
             logger.exception("api_request_failed path=%s", request.url.path)
             return JSONResponse(
                 status_code=500,
@@ -261,6 +261,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+UPLOAD_SERVICE_UNAVAILABLE_MESSAGE = "Analysis service temporarily unavailable. Please retry."
+UPLOAD_SERVICE_UNAVAILABLE_STATUSES = {502, 503, 504}
+UPLOAD_SPECIFIC_TRANSIENT_ERRORS = {
+    "shared_upload_queue_not_configured",
+    "upload_queue_saturated",
+    "upload_rate_limited",
+    "upload_status_rate_limited",
+}
+HTML_ERROR_MARKERS = (
+    "<!doctype html",
+    "<html",
+    "<head>",
+    "<body",
+    "<title>502 bad gateway</title>",
+    "<title>503 service temporarily unavailable</title>",
+    "<title>504 gateway time-out</title>",
+)
+
+
+def is_upload_analysis_path(path: str) -> bool:
+    normalized = str(path or "")
+    return (
+        normalized.startswith("/api/data/upload")
+        or normalized.startswith("/api/data/latest-upload")
+        or bool(re.match(r"^/api/data/intake/[^/]+/result$", normalized))
+    )
+
+
+def is_html_error_message(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip().lower()
+    if not text:
+        return False
+    return any(marker in text for marker in HTML_ERROR_MARKERS)
+
+
+def is_service_unavailable_upload_error(status_code: int, error_type: str | None, message: str) -> bool:
+    if is_html_error_message(message):
+        return True
+    if status_code not in UPLOAD_SERVICE_UNAVAILABLE_STATUSES:
+        return False
+    return not error_type or error_type == "upload_request_error" or error_type not in UPLOAD_SPECIFIC_TRANSIENT_ERRORS
+
+
 def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
     error_type = "upload_request_error"
     message = "Upload interrupted. Refresh your workspace and try again."
@@ -272,6 +317,10 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
 
     if status_code in {401, 403}:
         return auth_error_payload(detail)
+
+    if is_service_unavailable_upload_error(status_code, error_type, message):
+        error_type = "service_unavailable"
+        message = UPLOAD_SERVICE_UNAVAILABLE_MESSAGE
 
     return {
         "job_id": None,

@@ -1,10 +1,11 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
 const h = React.createElement;
 
@@ -82,10 +83,148 @@ function selectedCsv(name = "fresh.csv") {
   return new File(["timestamp,value\n2026-06-22,1\n"], name, { type: "text/csv" });
 }
 
+
+const HTML_503 = "<html><head><title>503 Service Temporarily Unavailable</title></head><body>nginx</body></html>";
+
+function htmlResponse(status = 503) {
+  return {
+    ok: false,
+    status,
+    headers: { get: () => "text/html" },
+    text: async () => HTML_503,
+  };
+}
+
+function jsonResponse(payload, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    json: async () => payload,
+  };
+}
+
+function uploadHtml503Error() {
+  const error = new Error(HTML_503);
+  error.name = "UploadRequestError";
+  error.status = 503;
+  error.phase = "upload";
+  error.errorType = "service_unavailable";
+  error.detail = HTML_503;
+  error.payload = {
+    status: "FAILED",
+    processing_state: "failed",
+    error_type: "service_unavailable",
+    message: HTML_503,
+    failure_url: "/api/data/upload",
+    failure_phase: "upload",
+    response_status: 503,
+    raw_response_body: HTML_503,
+    html_response: true,
+  };
+  error.responseText = HTML_503;
+  error.uploadUrl = "/api/data/upload";
+  return error;
+}
+
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.clearAllMocks();
+  vi.useRealTimers();
+});
+
+
+it("shows a clean service unavailable upload failure while keeping raw HTML in Advanced Details", async () => {
+  uploadTelemetryFileWithProgress.mockRejectedValue(uploadHtml503Error());
+
+  renderWorkspace();
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("html-503.csv")] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await waitFor(() => {
+    expect(screen.getByRole("alert").textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+  });
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+  expect(alert.textContent).not.toContain("<html>");
+
+  const details = screen.getByText("Advanced Details").closest("details");
+  expect(details.textContent).toContain("/api/data/upload");
+  expect(details.textContent).toContain(HTML_503);
+});
+
+it("continues polling after temporary stream and status HTML 503 responses", async () => {
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: { job_id: "job-temporary-503", status_url: "/api/data/upload-status/job-temporary-503", status: "queued", message: "Upload accepted." },
+  });
+  let statusCalls = 0;
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-stream/job-temporary-503")) return htmlResponse(503);
+    if (String(path).includes("/api/data/upload-status/job-temporary-503")) {
+      statusCalls += 1;
+      if (statusCalls === 1) return htmlResponse(503);
+      return jsonResponse({
+        job_id: "job-temporary-503",
+        status: "COMPLETE",
+        processing_state: "complete",
+        result_available: true,
+        first_usable_available: true,
+        progress_label: "Analysis ready.",
+        message: "Analysis ready.",
+        analysis_result: {
+          systems: [{ name: "Recovered system" }],
+          insights: [{ title: "Recovered insight" }],
+          fingerprint: { status: "Established" },
+        },
+      });
+    }
+    return jsonResponse({});
+  });
+  const onUploadComplete = vi.fn(async () => {});
+
+  renderWorkspace({ apiFetch, onUploadComplete });
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("temporary.csv")] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  expect(await screen.findByText(SERVICE_UNAVAILABLE_RETRY_MESSAGE)).toBeTruthy();
+
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-temporary-503" }), { navigateToGate: false });
+  }, { timeout: 3500 });
+});
+
+it("eventually fails persistent polling HTML 503 responses with a clean message", async () => {
+  vi.useFakeTimers();
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: { job_id: "job-persistent-503", status_url: "/api/data/upload-status/job-persistent-503", status: "queued", message: "Upload accepted." },
+  });
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-stream/job-persistent-503")) return htmlResponse(503);
+    if (String(path).includes("/api/data/upload-status/job-persistent-503")) return htmlResponse(503);
+    return jsonResponse({});
+  });
+
+  renderWorkspace({ apiFetch });
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("persistent.csv")] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(70000);
+  });
+  vi.useRealTimers();
+
+  await waitFor(() => {
+    expect(screen.getByRole("alert").textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+  });
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+  expect(alert.textContent).not.toContain("<html>");
 });
 
 it("mobile upload screen does not render backend milestone cards by default", () => {

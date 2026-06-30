@@ -17,6 +17,121 @@ const INTAKE_STAGES = [
   "Saving result",
 ];
 
+export const SERVICE_UNAVAILABLE_UPLOAD_MESSAGE = "Analysis service temporarily unavailable. Please retry.";
+export const SERVICE_UNAVAILABLE_RETRY_MESSAGE = "Analysis service is temporarily unavailable. Retrying...";
+
+const TRANSIENT_UPLOAD_SERVICE_STATUSES = new Set([408, 429, 502, 503, 504]);
+
+export function isTransientUploadServiceStatus(status) {
+  return TRANSIENT_UPLOAD_SERVICE_STATUSES.has(Number(status));
+}
+
+export function isLikelyHtmlResponse(value = "", contentType = "") {
+  const type = String(contentType || "").toLowerCase();
+  const text = String(value || "").trim().toLowerCase();
+  return type.includes("text/html")
+    || text.startsWith("<!doctype html")
+    || text.startsWith("<html")
+    || text.includes("<head>")
+    || text.includes("<body")
+    || text.includes("<title>503 service temporarily unavailable</title>")
+    || text.includes("<title>502 bad gateway</title>")
+    || text.includes("<title>504 gateway time-out</title>");
+}
+
+function compactRawResponse(value = "") {
+  const text = String(value || "");
+  return text.length > 4000 ? `${text.slice(0, 4000)}...` : text;
+}
+
+function responseHeader(response, key) {
+  try {
+    return response?.headers?.get?.(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function buildUploadServiceUnavailablePayload({
+  status = null,
+  rawBody = "",
+  route = "",
+  phase = "",
+  contentType = "",
+  fallbackErrorType = "invalid_response",
+} = {}) {
+  const numericStatus = Number(status || 0) || null;
+  const html = isLikelyHtmlResponse(rawBody, contentType);
+  const serviceUnavailable = html || isTransientUploadServiceStatus(numericStatus);
+  const message = serviceUnavailable
+    ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
+    : "Upload response was not valid JSON.";
+  return {
+    status: "FAILED",
+    processing_state: "failed",
+    error_type: serviceUnavailable ? "service_unavailable" : fallbackErrorType,
+    message,
+    error: message,
+    response_status: numericStatus,
+    failure_url: route || null,
+    failure_phase: phase || null,
+    raw_response_body: compactRawResponse(rawBody),
+    response_content_type: contentType || null,
+    non_json_response: true,
+    html_response: html,
+  };
+}
+
+function hasSpecificTransientPayload(errorType) {
+  return [
+    "upload_queue_saturated",
+    "upload_rate_limited",
+    "upload_status_rate_limited",
+    "shared_upload_queue_not_configured",
+  ].includes(String(errorType || ""));
+}
+
+function withResponseDiagnostics(payload, { status = null, rawBody = "", route = "", phase = "", contentType = "" } = {}) {
+  const candidateErrorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
+  const rawMessage = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? "";
+  const html = isLikelyHtmlResponse(rawMessage, contentType) || isLikelyHtmlResponse(rawBody, contentType);
+  const serviceUnavailable = html
+    || (
+      isTransientUploadServiceStatus(status)
+      && !hasSpecificTransientPayload(candidateErrorType)
+      && !String(rawMessage || "").trim()
+    );
+  const message = serviceUnavailable
+    ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
+    : sanitizeUploadUserMessage(rawMessage, payload?.message ?? "");
+
+  return {
+    ...(payload ?? {}),
+    ...(serviceUnavailable ? {
+      status: payload?.status ?? "FAILED",
+      processing_state: payload?.processing_state ?? "failed",
+      error_type: "service_unavailable",
+      message,
+      error: message,
+    } : {}),
+    response_status: Number(status || 0) || payload?.response_status || null,
+    failure_url: payload?.failure_url ?? route ?? null,
+    failure_phase: payload?.failure_phase ?? phase ?? null,
+    raw_response_body: payload?.raw_response_body ?? compactRawResponse(rawBody),
+    response_content_type: payload?.response_content_type ?? contentType ?? null,
+    html_response: payload?.html_response ?? html,
+  };
+}
+
+export function sanitizeUploadUserMessage(value, fallback = "Upload processing interrupted.") {
+  const text = typeof value === "string"
+    ? value.trim()
+    : normalizeUploadContractErrorMessage(value);
+  if (!text || text === "Unknown error") return fallback;
+  if (isLikelyHtmlResponse(text)) return SERVICE_UNAVAILABLE_UPLOAD_MESSAGE;
+  return text;
+}
+
 export function buildIntakeStages(result, uploadState, roomContext, job = null) {
   const activeIndex = uploadStageIndex(uploadState);
   const operatorReviewReady = result?.sii_reliable_enough_to_show === true;
@@ -80,35 +195,71 @@ export function isUploadProcessing(status) {
   return isUploadProcessingStatus(status);
 }
 
-export async function readJsonPayload(response) {
+export async function readJsonPayload(response, { route = null, phase = "" } = {}) {
+  const contentType = responseHeader(response, "content-type");
+  const responseRoute = route ?? response?.url ?? "";
+  if (typeof response?.text === "function") {
+    const rawText = await response.text();
+    if (!rawText) {
+      return withResponseDiagnostics({}, { status: response?.status, route: responseRoute, phase, contentType });
+    }
+    try {
+      return withResponseDiagnostics(JSON.parse(rawText), {
+        status: response?.status,
+        rawBody: rawText,
+        route: responseRoute,
+        phase,
+        contentType,
+      });
+    } catch {
+      return buildUploadServiceUnavailablePayload({
+        status: response?.status,
+        rawBody: rawText,
+        route: responseRoute,
+        phase,
+        contentType,
+      });
+    }
+  }
   try {
-    return await response.json();
+    return withResponseDiagnostics(await response.json(), { status: response?.status, route: responseRoute, phase, contentType });
   } catch {
-    return {};
+    return buildUploadServiceUnavailablePayload({ status: response?.status, route: responseRoute, phase, contentType });
   }
 }
 
 export function normalizeErrorMessage(error) {
-  return normalizeUploadContractErrorMessage(error);
+  return sanitizeUploadUserMessage(normalizeUploadContractErrorMessage(error), "Unknown error");
 }
 
 export function buildUploadRequestError(response, payload, phase) {
   const payloadStatus = String(payload?.status ?? "").toUpperCase();
   const fallbackErrorType = ["NOT_FOUND", "MISSING"].includes(payloadStatus) ? "upload_session_missing" : null;
-  const errorType = payload?.error_type ?? payload?.detail?.error_type ?? fallbackErrorType;
+  const responseStatus = Number(response?.status ?? payload?.response_status ?? 0) || null;
+  const rawErrorType = payload?.error_type ?? payload?.detail?.error_type ?? fallbackErrorType;
+  const serviceUnavailable = payload?.html_response === true
+    || rawErrorType === "service_unavailable"
+    || (isTransientUploadServiceStatus(responseStatus) && !hasSpecificTransientPayload(rawErrorType));
+  const errorType = serviceUnavailable ? "service_unavailable" : rawErrorType;
   const isMissingStatusDuringPoll =
     phase === "poll"
     && (
-      (response.status === 404 && errorType === "upload_session_missing")
+      (responseStatus === 404 && errorType === "upload_session_missing")
       || ["NOT_FOUND", "MISSING"].includes(payloadStatus)
     );
   return {
     name: "UploadRequestError",
-    status: response.status,
+    status: responseStatus,
     phase,
     errorType,
-    detail: normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
-    retryable: response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500 || (phase === "poll" && (response.status === 401 || response.status === 403)) || isMissingStatusDuringPoll,
+    detail: serviceUnavailable
+      ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
+      : normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
+    payload,
+    rawResponseBody: payload?.raw_response_body ?? "",
+    failureUrl: payload?.failure_url ?? response?.url ?? null,
+    failurePhase: payload?.failure_phase ?? phase,
+    retryable: responseStatus === 408 || responseStatus === 409 || responseStatus === 425 || responseStatus === 429 || responseStatus >= 500 || (phase === "poll" && (responseStatus === 401 || responseStatus === 403)) || isMissingStatusDuringPoll,
   };
 }
 
@@ -125,6 +276,10 @@ export function classifyUploadError(error, phase) {
       retryable: phase === "poll" && error.retryable,
       status: error.status,
       errorType: requestErrorType,
+      failureUrl: error.failureUrl ?? error.uploadUrl ?? error.path ?? error.payload?.failure_url ?? null,
+      failurePhase: error.failurePhase ?? error.phase ?? phase,
+      rawResponseBody: error.rawResponseBody ?? error.responseText ?? error.payload?.raw_response_body ?? "",
+      responseStatus: error.status ?? error.payload?.response_status ?? null,
       finalMessage: isMissingStatusDuringPoll
         ? "Upload status unavailable. The backend may have restarted or another ECS task may be serving polling."
         : null,
@@ -142,6 +297,10 @@ export function classifyUploadError(error, phase) {
       retryable: phase === "poll",
       status: error?.name === "ApiTimeoutError" ? Number(error?.status ?? 408) || 408 : null,
       errorType: error?.name === "ApiTimeoutError" ? "timeout" : "network",
+      failureUrl: error.uploadUrl ?? error.path ?? null,
+      failurePhase: phase,
+      rawResponseBody: error.responseText ?? "",
+      responseStatus: error?.status ?? null,
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
         : error?.name === "ApiTimeoutError"
@@ -155,6 +314,10 @@ export function classifyUploadError(error, phase) {
       retryable: phase === "poll",
       status: null,
       errorType: "network",
+      failureUrl: error.path ?? null,
+      failurePhase: phase,
+      rawResponseBody: "",
+      responseStatus: null,
       message: phase === "poll"
         ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
         : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
@@ -165,6 +328,10 @@ export function classifyUploadError(error, phase) {
     retryable: false,
     status: null,
     errorType: null,
+    failureUrl: error?.path ?? null,
+    failurePhase: phase,
+    rawResponseBody: error?.responseText ?? "",
+    responseStatus: null,
     message: operatorUploadMessage({
       status: null,
       errorType: null,
@@ -201,6 +368,9 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
       : "Upload status remained unavailable after repeated retries.";
+  }
+  if (errorType === "service_unavailable" || [502, 503, 504].includes(Number(status))) {
+    return SERVICE_UNAVAILABLE_UPLOAD_MESSAGE;
   }
   if (errorType === "upload_too_large" || status === 413) {
     return typeof detail === "string" && detail.trim()

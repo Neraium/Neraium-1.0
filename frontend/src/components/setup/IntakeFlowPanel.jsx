@@ -55,10 +55,12 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 }
 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
-  if (viewState === "uploading") return "Uploading CSV...";
+  const cleanMessage = String(latestMessage || "").trim();
+  if (viewState === "uploading") return cleanMessage || "Uploading CSV...";
   if (viewState === "complete") return "Analysis Complete";
   if (viewState === "finalizing") return "Finalizing results...";
   if (viewState === "failed") return "Analysis failed";
+  if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
   if (["building_fingerprint", "baseline_modeling", "structural_scoring"].includes(normalized)) {
@@ -71,7 +73,6 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
     return "Processing telemetry...";
   }
 
-  const cleanMessage = String(latestMessage || "").trim();
   return cleanMessage || "Processing telemetry...";
 }
 
@@ -145,7 +146,7 @@ function completionSummary({ analysisResult }) {
   ];
 }
 
-function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage }) {
+function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
   const rawError = uploadJob?.error ?? uploadJob?.detail ?? uploadJob?.message;
   return [
     ["Upload ID", uploadJob?.job_id ?? uploadJob?.id],
@@ -155,13 +156,17 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Finalization", uploadJob?.result_available ? "Result available" : uploadJob?.first_usable_available ? "First result available" : null],
     ["Worker", queuedWorkerDetail],
     ["Stage detail", propagationLabel],
+    ["Failure phase", uploadJob?.failure_phase ?? uploadDebug?.failurePhase],
+    ["Failed route", uploadJob?.failure_url ?? uploadDebug?.uploadUrl],
+    ["HTTP status", uploadJob?.response_status ?? uploadDebug?.responseStatus],
     ["Raw message", latestMessage],
     ["Raw error", uploadJob?.error_type || uploadJob?.error ? rawError : null],
+    ["Raw response", uploadJob?.raw_response_body ?? uploadDebug?.responseBodyOrError],
   ].filter(([, value]) => String(value ?? "").trim());
 }
 
-function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage }) {
-  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage });
+function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
+  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug });
   const stages = buildIntakeStages(
     latestUploadSnapshot?.latest_result ?? null,
     uploadJob?.processing_state ?? uploadJob?.status ?? uploadState,
@@ -216,6 +221,7 @@ export default function IntakeFlowPanel({
   propagationLabel,
   queuedWorkerDetail = "",
   uploadTransfer,
+  uploadDebug = null,
   uploadStateMessage,
   batchResults = [],
   onRetryFailedUploads,
@@ -331,6 +337,7 @@ export default function IntakeFlowPanel({
           propagationLabel={propagationLabel}
           queuedWorkerDetail={queuedWorkerDetail}
           latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(statusText) ? "" : latestMessage}
+          uploadDebug={uploadDebug}
         />
       </form>
     </Panel>
