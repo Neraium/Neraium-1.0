@@ -1,5 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
+import fs from "node:fs";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -68,7 +69,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
     expect(screen.queryByText("Waiting for telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
-    expect(screen.getByText("Neraium SII")).toBeTruthy();
+    expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Current Site").length).toBeGreaterThan(0);
     expect(screen.getByText("Start Analysis")).toBeTruthy();
     expect(screen.getByText("Upload a CSV to begin.")).toBeTruthy();
@@ -90,6 +91,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByRole("button", { name: /Insights\s+—/ }).every((button) => button.disabled)).toBe(true);
     expect(screen.getAllByRole("button", { name: /Systems\s+—/ }).every((button) => button.disabled)).toBe(true);
     expect(screen.getAllByRole("button", { name: /Fingerprint\s+—/ }).every((button) => button.disabled)).toBe(true);
+    expect(screen.getAllByRole("button", { name: /Evidence\s+—/ }).every((button) => button.disabled)).toBe(true);
   });
 
   it("does not treat an empty data source as loaded telemetry", () => {
@@ -161,7 +163,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     const analyzeButton = screen.getByRole("button", { name: "Building Fingerprint" });
     expect(screen.getAllByText("Building Operating Fingerprint").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("SII is analyzing telemetry, identifying system behavior, and mapping relationships.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Analyzing telemetry, identifying system behavior, and mapping relationships.").length).toBeGreaterThan(0);
     expect(analyzeButton.disabled).toBe(true);
     fireEvent.click(analyzeButton);
     expect(onWorkspaceNavigate).not.toHaveBeenCalled();
@@ -189,8 +191,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Analysis Complete").length).toBeGreaterThan(0);
     expect(screen.getByText("Analysis based on uploaded telemetry")).toBeTruthy();
     expect(screen.getByText("Historical telemetry analyzed.")).toBeTruthy();
-    expect(screen.getByText("Overall operational status")).toBeTruthy();
-    expect(screen.getByText("Recommended action")).toBeTruthy();
+    expect(screen.getByText("Overall status")).toBeTruthy();
+    expect(screen.getByText("Recommended next check")).toBeTruthy();
     expect(screen.getAllByText("Continue monitoring").length).toBeGreaterThan(0);
     expect(screen.queryByText("Relationships mapped")).toBeNull();
     expect(screen.queryByText("Baseline confidence")).toBeNull();
@@ -216,7 +218,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Live telemetry connected").length).toBeGreaterThan(0);
-    expect(screen.getByText("Overall operational status")).toBeTruthy();
+    expect(screen.getByText("Overall status")).toBeTruthy();
     expect(screen.queryByText("systems monitored")).toBeNull();
   });
 
@@ -275,7 +277,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       },
     };
 
-    renderWorkspace({
+    const view = renderWorkspace({
       liveOps: { relationshipRows: [{ columns: ["pressure", "flow"], summary: "Pressure / flow relationship changed." }] },
       effectiveLatestUploadResult: completeResult({
         operating_state: "Structural drift observed",
@@ -285,20 +287,24 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Overall operational status")).toBeTruthy();
+    expect(screen.getByText("Overall status")).toBeTruthy();
     expect(screen.getByText("Pressure and flow relationship shifted")).toBeTruthy();
     expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
     expect(screen.getAllByText("Check pump schedule and valve position").length).toBeGreaterThan(0);
     expect(screen.queryByText("Systems identified")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByText("Why Neraium thinks it happened")).toBeTruthy();
-    expect(screen.getByText("The signals stopped moving together like the baseline window.")).toBeTruthy();
-    expect(screen.getByText("What could happen next")).toBeTruthy();
-    expect(screen.getByText("Evidence (high)")).toBeTruthy();
-    expect(screen.getByText("Confidence rationale")).toBeTruthy();
-    expect(screen.getByText("Pressure increased 18%; Flow decreased 9%")).toBeTruthy();
-    expect(screen.getByText("Source columns")).toBeTruthy();
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Why it matters")).toBeTruthy();
+    expect(screen.getAllByText("High · 91%").length).toBeGreaterThan(0);
+    expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    expect(screen.getByRole("heading", { name: "Supporting Telemetry" })).toBeTruthy();
+    const details = view.container.querySelector("details.evidence-panel");
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    expect(screen.getByText("Evidence (High · 91%)")).toBeTruthy();
+    expect(screen.getByText("Source signals")).toBeTruthy();
     expect(screen.getByText("Source time ranges")).toBeTruthy();
     expect(screen.getByText("Pressure increased 18%")).toBeTruthy();
     expect(screen.getByText("Pattern persisted for 36 hours")).toBeTruthy();
@@ -349,7 +355,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("0.4% missing values detected in supply pressure and pump vibration. Confidence reduced slightly.").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByText("High · 100%")).toBeTruthy();
+    expect(screen.getAllByText("High · 100%").length).toBeGreaterThan(0);
     expect(screen.queryByText("high (1)")).toBeNull();
     expect(screen.getAllByText("pump vibration")).toHaveLength(1);
   });
@@ -427,7 +433,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       errors: [],
     };
 
-    renderWorkspace({
+    const view = renderWorkspace({
       effectiveLatestUploadResult: completeResult({
         analysis_result: analysisResult,
         analysis_explanation: null,
@@ -439,7 +445,11 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
 
     expect(screen.getAllByText("Pump power moved up").length).toBeGreaterThan(0);
-    expect(screen.getByText("Evidence (moderate)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    const details = view.container.querySelector("details.evidence-panel");
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    expect(screen.getByText("Evidence (Moderate)")).toBeTruthy();
     expect(screen.getAllByText("Pump power baseline average increased in the current window.").length).toBeGreaterThan(0);
     expect(screen.getByText(/percent change: 22/)).toBeTruthy();
     expect(screen.queryByText("Unavailable")).toBeNull();
@@ -489,12 +499,64 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText(/replay/i)).toBeNull();
     expect(screen.queryByText(/Advanced Details/i)).toBeNull();
 
-    for (const label of ["More", "Insights", "Systems", "Fingerprint"]) {
+    for (const label of ["More", "Insights", "Systems", "Fingerprint", "Evidence"]) {
       const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
       expect(tab).toBeTruthy();
       fireEvent.click(tab);
       expect(screen.queryByText(/replay/i)).toBeNull();
       expect(screen.queryByText(/Advanced Details/i)).toBeNull();
     }
+  });
+
+  it("removes internal pipeline copy from rendered result pages", () => {
+    const analysisResult = {
+      executive_summary: {
+        overall_operational_status: "Backend pipeline replay requires review",
+        highest_priority_finding: "Raw tag-pair pressure_flow headline",
+        biggest_emerging_risk: "Pipeline replay drift may confuse operators",
+        recommended_action: "Check Column 3 against pump pressure",
+      },
+      insights: [{
+        id: "internal-copy",
+        title: "Raw tag-pair pressure_flow headline",
+        severity: "high",
+        confidence: "high",
+        what_changed: "Backend pipeline replay changed Column 3",
+        why_it_matters: "Raw replay output should not appear to operators",
+        recommended_check: "Check Column 3 against pump pressure",
+        evidence_items: [{
+          description: "Backend pipeline replay evidence for Column 3",
+          confidence: "high",
+          source_columns: ["Column 3", "pump_pressure"],
+        }],
+      }],
+      systems: [{ id: "pump", name: "Pump system" }],
+      relationships: [{ pair: "tag:pump_pressure::tag:flow", detail: "backend pipeline replay pair" }],
+      fingerprint: { status: "changed", explanation: "Raw replay fingerprint text" },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const main = screen.getByLabelText("Neraium operational workspace");
+    expect(main.textContent).not.toMatch(/\bbackend\b|\bpipeline\b|\breplay\b|\braw\b|tag-pair|Column 3|SII/i);
+
+    for (const label of ["Insights", "Systems", "Fingerprint", "Evidence", "More"]) {
+      const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
+      fireEvent.click(tab);
+      expect(main.textContent).not.toMatch(/\bbackend\b|\bpipeline\b|\breplay\b|\braw\b|tag-pair|Column 3|SII/i);
+    }
+  });
+
+  it("keeps mobile result cards from crowding", () => {
+    const css = fs.readFileSync("src/styles/operational-workflow.css", "utf8");
+
+    expect(css.includes("(max-width: 520px)")).toBe(true);
+    expect(css.includes("grid-template-columns: repeat(3, minmax(0, 1fr));")).toBe(true);
+    expect(css.includes("grid-template-columns: 1fr;")).toBe(true);
+    expect(css.includes(".insight-card__actions > *")).toBe(true);
   });
 });

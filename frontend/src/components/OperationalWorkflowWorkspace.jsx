@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
+import { sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
 import "../styles/design-system.css";
 
@@ -9,6 +10,7 @@ const NAV_ITEMS = [
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
   { id: "fingerprint", label: "Fingerprint" },
+  { id: "evidence", label: "Evidence" },
   { id: "more", label: "More" },
 ];
 
@@ -17,13 +19,13 @@ const MOBILE_PRIMARY_NAV = [
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
   { id: "fingerprint", label: "Fingerprint" },
+  { id: "evidence", label: "Evidence" },
   { id: "more", label: "More" },
 ];
 
-const RESULT_TAB_IDS = new Set(["insights", "systems", "fingerprint"]);
+const RESULT_TAB_IDS = new Set(["insights", "systems", "fingerprint", "evidence"]);
 const EMPTY_TAB_METRIC = "—";
 
-const INVESTIGATION_STATUSES = ["Open", "Acknowledged", "Under Investigation", "Resolved"];
 const EMPTY_TELEMETRY_COPY = {
   label: "Start Analysis",
   detail: "Upload a CSV to begin.",
@@ -49,7 +51,7 @@ const READY_TO_ANALYZE_STATUS = {
 const ANALYZING_STATUS = {
   label: "Building Operating Fingerprint",
   tone: "changed",
-  detail: "SII is analyzing telemetry, identifying system behavior, and mapping relationships.",
+  detail: "Analyzing telemetry, identifying system behavior, and mapping relationships.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
   label: "Analysis Complete",
@@ -88,8 +90,6 @@ export default function OperationalWorkflowWorkspace({
 }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedInsightId, setSelectedInsightId] = useState(null);
-  const [insightStatuses, setInsightStatuses] = useState({});
-  const [operatorNotes, setOperatorNotes] = useState({});
 
   const deferredLiveOps = useDeferredValue(liveOps);
   const deferredCanonicalFinding = useDeferredValue(canonicalFinding);
@@ -126,6 +126,7 @@ export default function OperationalWorkflowWorkspace({
     insights: model.insightsTabMetric,
     systems: model.systemsTabMetric,
     fingerprint: model.fingerprintTabMetric,
+    evidence: model.evidenceTabMetric,
     more: model.moreTabMetric,
   };
   const visibleSection = model.disableResultTabs && RESULT_TAB_IDS.has(activeSection) ? "overview" : activeSection;
@@ -139,12 +140,9 @@ export default function OperationalWorkflowWorkspace({
     navigate("insights");
   }
 
-  function setInsightStatus(insightId, status) {
-    setInsightStatuses((current) => ({ ...current, [insightId]: status }));
-  }
-
-  function setOperatorNote(insightId, note) {
-    setOperatorNotes((current) => ({ ...current, [insightId]: note }));
+  function openEvidence(insightId) {
+    setSelectedInsightId(insightId);
+    navigate("evidence");
   }
 
   function analyzeSystem() {
@@ -204,7 +202,6 @@ export default function OperationalWorkflowWorkspace({
           </div>
           {model.showTopbarStatus ? (
             <div className="operational-topbar__status">
-              {model.showHeroStatusBadge ? <StatusBadge label={model.heroStatus.label} tone={model.heroStatus.tone} /> : null}
               <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
             </div>
           ) : null}
@@ -231,6 +228,7 @@ export default function OperationalWorkflowWorkspace({
           <OverviewSection
             model={model}
             onOpenInsight={openInsight}
+            onOpenEvidence={openEvidence}
             onAnalyzeSystem={analyzeSystem}
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
@@ -241,11 +239,8 @@ export default function OperationalWorkflowWorkspace({
           <InsightsSection
             model={model}
             selectedInsight={selectedInsight}
-            insightStatuses={insightStatuses}
-            operatorNotes={operatorNotes}
             onSelectInsight={setSelectedInsightId}
-            onSetInsightStatus={setInsightStatus}
-            onSetOperatorNote={setOperatorNote}
+            onOpenEvidence={openEvidence}
           />
         ) : null}
 
@@ -255,6 +250,10 @@ export default function OperationalWorkflowWorkspace({
 
         {visibleSection === "fingerprint" ? (
           <FingerprintSection model={model} />
+        ) : null}
+
+        {visibleSection === "evidence" ? (
+          <EvidenceSection model={model} selectedInsightId={selectedInsightId} />
         ) : null}
 
         {visibleSection === "more" ? (
@@ -267,9 +266,8 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
+function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
   if (model.overviewState === "noCsvUploaded") {
-    const historyItems = model.historyItems.slice(0, 4);
     return (
       <div className="operational-grid operational-grid--empty">
         <section className="operational-panel operational-panel--start" aria-label="Start analysis">
@@ -286,24 +284,16 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
             </div>
           </div>
         </section>
-
-        {historyItems.length ? (
-          <section className="operational-panel operational-panel--recent" aria-label="Recent analyses">
-            <PanelHeader eyebrow="History" title="Recent analyses" subtitle="Saved analysis activity." />
-            <Timeline items={historyItems} />
-          </section>
-        ) : null}
       </div>
     );
   }
 
-  const historyItems = model.historyItems.slice(0, 4);
   const primaryInsight = model.insights[0] ?? null;
   const showSystemsAction = model.analysisComplete && model.identifiedSystemCount > 0;
 
   function renderPrimaryAction() {
     if (model.analysisComplete && primaryInsight) {
-      return <button type="button" className="command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open Top Insight</button>;
+      return <button type="button" className="command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open insight</button>;
     }
     return (
       <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>
@@ -314,7 +304,7 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
 
   function renderSecondaryAction() {
     if (showSystemsAction) {
-      return <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>;
+      return <button type="button" className="secondary-command-button" onClick={onViewSystems}>View systems</button>;
     }
     if (model.canResumePrevious && typeof onResumePreviousSession === "function") {
       return <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>;
@@ -324,49 +314,43 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
 
   return (
     <div className="operational-grid operational-grid--command-center">
-      <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Overview status">
-        <div className="operational-hero operational-hero--solo">
-          <div className="operational-hero__summary">
-            <div className="operational-panel__header operational-panel__header--tight">
-              <span className="section-token">Overview</span>
-              <h2>{model.heroStatus.label}</h2>
-              <p>{model.heroStatus.detail}</p>
+      <section className="operational-panel operational-panel--hero operational-panel--wide" aria-label="Executive summary">
+        <div className="operator-summary-card">
+          <div className="operational-panel__header operational-panel__header--tight">
+            <span className="section-token">Overview</span>
+            <h2>{model.heroStatus.label}</h2>
+            <p>{model.heroStatus.detail}</p>
+          </div>
+          <div className="operator-summary-card__meta">
+            <span>{model.storyProgressLabel || model.heroStatus.label}</span>
+            <span>{model.sourceLabel}</span>
+            <span>{model.telemetryStatus.label}</span>
+            {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
+          </div>
+          {model.analysisComplete ? (
+            <div className="operator-summary-card__rows" aria-label="Executive summary rows">
+              <SummaryRows rows={model.executiveSummaryRows} />
             </div>
-            <div className="operational-hero__meta">
-              <span>{model.storyProgressLabel || model.heroStatus.label}</span>
-              <span>{model.sourceLabel}</span>
-              <span>{model.telemetryStatus.label}</span>
-              {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
+          ) : (
+            <div className="operator-summary-card__rows" aria-label="Source summary">
+              <SummaryRows rows={[
+                ["Source", model.sourceLabel],
+                ["Status", model.sourceStatusLabel],
+                ["Rows", model.sourceRowCount],
+                ["Telemetry", model.telemetryStatus.label],
+                model.overviewState === "analyzing" ? ["Progress", model.storyProgressLabel] : null,
+              ]} />
             </div>
-            {model.analysisComplete ? (
-              <div className="operational-result-summary" aria-label="Executive summary">
-                <DetailGrid rows={model.executiveSummaryRows} />
-              </div>
-            ) : (
-              <div className="operational-result-summary" aria-label="Source summary">
-                <DetailGrid rows={[
-                  ["Source", model.sourceLabel],
-                  ["Status", model.sourceStatusLabel],
-                  ["Rows", model.sourceRowCount],
-                  ["Telemetry", model.telemetryStatus.label],
-                  model.overviewState === "analyzing" ? ["Progress", model.storyProgressLabel] : null,
-                ]} />
-              </div>
-            )}
-            <div className="operational-actions operational-actions--hero">
-              {renderPrimaryAction()}
-              {renderSecondaryAction()}
-            </div>
+          )}
+          <div className="operational-actions operational-actions--hero">
+            {renderPrimaryAction()}
+            {model.analysisComplete && primaryInsight?.hasEvidence ? (
+              <button type="button" className="secondary-command-button" onClick={() => onOpenEvidence(primaryInsight.id)}>Review evidence</button>
+            ) : null}
+            {renderSecondaryAction()}
           </div>
         </div>
       </section>
-
-      {model.analysisComplete && historyItems.length ? (
-        <section className="operational-panel operational-panel--wide" aria-label="Recent analysis activity">
-          <PanelHeader eyebrow="Activity" title="Recent Analysis Activity" subtitle="Latest analysis and historical context." />
-          <Timeline items={historyItems} />
-        </section>
-      ) : null}
     </div>
   );
 }
@@ -374,99 +358,21 @@ function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, onResumePrevio
 function InsightsSection({
   model,
   selectedInsight,
-  insightStatuses,
-  operatorNotes,
   onSelectInsight,
-  onSetInsightStatus,
-  onSetOperatorNote,
+  onOpenEvidence,
 }) {
   return (
-    <div className="operational-grid operational-grid--split">
-      <section className="operational-panel" aria-label="Insight feed">
-        <PanelHeader eyebrow="Insights" title="Insight Feed" subtitle="Open, acknowledged, and resolved findings." />
+    <div className="operational-grid operational-grid--command-center">
+      <section className="operational-panel operational-panel--wide" aria-label="Insights">
+        <PanelHeader eyebrow="Insights" title="Findings and Recommended Checks" subtitle="What changed, why it matters, and where to begin." />
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No insights yet." : model.uiState.status.detail}
           emptyTitle={model.analysisComplete ? "No insights yet" : model.uiState.status.label}
           onOpenInsight={onSelectInsight}
+          onOpenEvidence={onOpenEvidence}
           selectedId={selectedInsight?.id}
         />
-      </section>
-
-      <section className="operational-panel operational-panel--detail" aria-label="Insight detail">
-        <PanelHeader eyebrow="Investigation" title="Insight Detail" subtitle="What changed, why it matters, and where to begin investigating." />
-        {selectedInsight ? (
-          <article className="insight-detail">
-            <h2>{selectedInsight.summary}</h2>
-            <DetailGrid rows={[
-              ["System affected", selectedInsight.system],
-              ["Severity", selectedInsight.severity],
-              ["Confidence", formatConfidenceDisplay(selectedInsight.confidence, selectedInsight.confidenceScore)],
-              ["Confidence rationale", selectedInsight.confidenceRationale],
-              ["Evidence summary", selectedInsight.evidenceSummary],
-              ["What happened", selectedInsight.whatHappened],
-              ["Why Neraium thinks it happened", selectedInsight.whyNeraiumThinks],
-              ["What could happen next", selectedInsight.possibleConsequence],
-              ["What the operator should check", selectedInsight.operatorCheck],
-              ["Recommended action", selectedInsight.recommendedAction],
-              ["Telemetry integrity", selectedInsight.telemetryNote],
-              ["Detected", selectedInsight.detectedAt],
-            ]} />
-             {selectedInsight.contributingFactors?.length ? (
-              <section className="operational-block">
-                <h3>Contributing factors</h3>
-                <ul className="compact-list">
-                  {selectedInsight.contributingFactors.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </section>
-            ) : null}
-            {selectedInsight.contributingMetrics?.length ? (
-              <section className="operational-block">
-                <h3>Contributing metrics</h3>
-                <ul className="compact-list">
-                  {selectedInsight.contributingMetrics.map((item, index) => <li key={`${item.name ?? item.source_column ?? "metric"}-${index}`}>{firstText(item.name, item.source_column)}</li>)}
-                </ul>
-              </section>
-            ) : null}
-            {selectedInsight.contributingRelationships?.length ? (
-              <section className="operational-block">
-                <h3>Contributing relationships</h3>
-                <ul className="compact-list">
-                  {selectedInsight.contributingRelationships.map((item, index) => <li key={`${item.id ?? "relationship"}-${index}`}>{toList(item.columns).join(" / ") || firstText(item.change_type, item.relationship_type)}</li>)}
-                </ul>
-              </section>
-            ) : null}
-            {selectedInsight.evidence?.length ? (
-              <section className="operational-block">
-                <h3>Evidence</h3>
-                {selectedInsight.evidence.map((item, index) => <EvidencePanel key={index} evidence={item} />)}
-              </section>
-            ) : null}
-            <section className="operator-status-controls" aria-label="Insight status controls">
-              {INVESTIGATION_STATUSES.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={(insightStatuses[selectedInsight.id] ?? "Open") === status ? "is-active" : ""}
-                  onClick={() => onSetInsightStatus(selectedInsight.id, status)}
-                >
-                  {status}
-                </button>
-              ))}
-            </section>
-            <label className="operator-note-field">
-              <span>Operator notes</span>
-              <textarea
-                rows={4}
-                placeholder="Log what was inspected, confirmed, or resolved."
-                value={operatorNotes[selectedInsight.id] ?? ""}
-                onChange={(event) => onSetOperatorNote(selectedInsight.id, event.target.value)}
-              />
-            </label>
-          </article>
-        ) : (
-          <EmptyOperationalState title="No insight selected" body="Select an insight from the feed or analyze telemetry to generate findings." />
-        )}
       </section>
     </div>
   );
@@ -525,12 +431,40 @@ function FingerprintSection({ model }) {
         <PanelHeader eyebrow="Fingerprint" title="Operating Fingerprint" subtitle="Plain-language meaning of the baseline comparison." />
         <FingerprintStatus drift={model.fingerprintDrift} />
         <DetailGrid rows={model.fingerprintRows} />
-        {model.fingerprintEvidence?.length ? (
-          <section className="operational-block">
-            <h3>Supporting evidence</h3>
-            {model.fingerprintEvidence.map((item, index) => <EvidencePanel key={item.evidence_id ?? index} evidence={item} />)}
-          </section>
-        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function EvidenceSection({ model, selectedInsightId }) {
+  const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
+  return (
+    <div className="operational-grid operational-grid--command-center">
+      <section className="operational-panel operational-panel--wide" aria-label="Evidence">
+        <PanelHeader eyebrow="Evidence" title="Supporting Telemetry" subtitle="Details are collapsed until an operator opens them." />
+        {groups.length ? (
+          <div className="evidence-group-list">
+            {groups.map((group) => (
+              <article className={group.id === selectedInsightId ? "evidence-group is-selected" : "evidence-group"} key={group.id}>
+                <div className="evidence-group__header">
+                  <div>
+                    <span className="section-token">{group.system}</span>
+                    <h3>{group.title}</h3>
+                  </div>
+                  <div className="evidence-group__badges">
+                    {group.severity ? <StatusBadge label={group.severity} tone={severityToTone(group.severity)} /> : null}
+                    {group.confidence ? <StatusBadge label={formatConfidenceDisplay(group.confidence, group.confidenceScore)} tone="unknown" /> : null}
+                  </div>
+                </div>
+                <div className="evidence-group__items">
+                  {group.evidence.map((item, index) => <EvidencePanel key={item.evidence_id ?? index} evidence={item} />)}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyOperationalState title="No supporting telemetry yet" body={model.analysisComplete ? "No detailed evidence was reported for this result." : model.uiState.status.detail} />
+        )}
       </section>
     </div>
   );
@@ -539,14 +473,8 @@ function FingerprintSection({ model }) {
 function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="Advanced status">
-        <PanelHeader eyebrow="Status" title="Advanced Status" subtitle="Detailed source, analysis, systems, and fingerprint state." />
-        <div className="status-rack">
-          {model.statusTiles.map((tile) => <CompactStatusTile key={tile.label} tile={tile} />)}
-        </div>
-      </section>
-      <section className="operational-panel" aria-label="Source status">
-        <PanelHeader eyebrow="Telemetry" title="Source Status" subtitle="Current data source and analysis heartbeat." />
+      <section className="operational-panel" aria-label="Upload details">
+        <PanelHeader eyebrow="Upload" title="Upload Details" subtitle="Source file and last completed review." />
         <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
         <DetailGrid rows={[
           ["Source", model.sourceLabel],
@@ -555,14 +483,14 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
         ]} />
       </section>
       <section className="operational-panel" aria-label="Analysis metadata">
-        <PanelHeader eyebrow="Analysis" title="Analysis Metadata" subtitle="Source file, identifiers, and generation time." />
+        <PanelHeader eyebrow="Analysis" title="Analysis Metadata" subtitle="Source file, references, and generation time." />
         <DetailGrid rows={model.analysisMetadataRows} />
       </section>
-      <section className="operational-panel" aria-label="Signal browser">
-        <PanelHeader eyebrow="Signals" title="Signal Browser" subtitle="Detected telemetry signals and integrity state." />
+      <section className="operational-panel" aria-label="Detected signals">
+        <PanelHeader eyebrow="Signals" title="Detected Signals" subtitle="Telemetry headers found in the uploaded file." />
         <SignalList signals={model.signals} integrity={model.telemetryStatus} />
       </section>
-      <section className="operational-panel operational-panel--wide" aria-label="Data quality warnings">
+      <section className="operational-panel" aria-label="Data quality">
         <PanelHeader eyebrow="Integrity" title="Data Quality" subtitle="Warnings, missing values, and timestamp conditions." />
         <QualityList title="Warnings" items={model.qualityWarnings} empty={model.analysisComplete ? "No data quality warnings reported." : model.uiState.status.detail} />
         <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : model.uiState.status.detail} />
@@ -571,32 +499,16 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
           <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
         </div>
       </section>
-      {model.analysisComplete ? (
-        <section className="operational-panel" aria-label="Fingerprint panel">
-          <PanelHeader eyebrow="Fingerprint" title="Fingerprint Status" subtitle="Baseline comparison and operating fingerprint detail." />
-          <FingerprintStatus drift={model.fingerprintDrift} />
-        </section>
-      ) : null}
-
-      <section className="operational-panel operational-panel--wide" aria-label="Behavior timeline">
-        <PanelHeader eyebrow="History" title="Behavior Timeline" subtitle="Operational record across analyses." />
+      <section className="operational-panel operational-panel--wide" aria-label="Analysis history">
+        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Saved operational reviews." />
         <Timeline items={model.historyItems} />
       </section>
-      <section className="operational-panel" aria-label="Insight archive">
-        <PanelHeader eyebrow="Archive" title="Insight Archive" subtitle="Resolved and historical findings." />
-        <InsightList
-          insights={model.insights}
-          empty={model.analysisComplete ? "No insight archive yet." : model.uiState.status.detail}
-          emptyTitle={model.analysisComplete ? "No insight archive yet" : model.uiState.status.label}
-        />
-      </section>
-      <section className="operational-panel" aria-label="Comparative analysis">
-        <PanelHeader eyebrow="Comparison" title="Compare Operating Periods" subtitle="Before and after review." />
-        <p className="operational-copy">Compare two operating periods once multiple analyses are available.</p>
-        {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
+      {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
+        <section className="operational-panel" aria-label="Previous analysis">
+          <PanelHeader eyebrow="Previous" title="Previous Analysis" subtitle="Continue a saved review." />
           <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -624,6 +536,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation });
   const fingerprintEvidence = resolveEvidenceRefs(analysisExplanation?.fingerprint, analysisExplanation);
   const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) : [];
+  const evidenceGroups = analysisComplete ? buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }) : [];
   const identifiedSystems = analysisComplete ? collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) : [];
   const identifiedSystemCount = identifiedSystems.length;
   const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) : [];
@@ -655,15 +568,15 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     domainLabel,
     sourceLabel,
     contextLabel,
-    headerEyebrow: isEmptyTelemetryState ? "Neraium SII" : "Neraium Systemic Infrastructure Intelligence",
+    headerEyebrow: "Neraium",
     headerSubtitle: isEmptyTelemetryState ? siteLabel : contextLabel,
     overviewState,
     overviewTabMetric: isEmptyTelemetryState ? "Start" : heroStatus.label,
     moreTabMetric: "Details",
     insightsTabMetric: resultTabsReady ? String(insights.length) : EMPTY_TAB_METRIC,
     fingerprintTabMetric: resultTabsReady ? fingerprintDrift.label : EMPTY_TAB_METRIC,
+    evidenceTabMetric: resultTabsReady ? String(evidenceGroups.reduce((count, group) => count + group.evidence.length, 0)) : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
-    showHeroStatusBadge: !isEmptyTelemetryState,
     showTopbarStatus: !isEmptyTelemetryState,
     showSidebarStatus: !isEmptyTelemetryState,
     sourceStatusLabel: uiState.sourceStatusLabel,
@@ -684,14 +597,13 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     identifiedSystemCount,
     fingerprintDrift,
     fingerprintRows: buildFingerprintRows(analysisExplanation),
-    fingerprintEvidence,
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
     systemsTabMetric: resultTabsReady ? systemSummary.tabMetric : EMPTY_TAB_METRIC,
     systemsSectionTitle: systemSummary.sectionTitle,
     systemsSectionSubtitle: systemSummary.sectionSubtitle,
     insights,
-    statusTiles: buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insights, analysisComplete, identifiedSystemCount }),
+    evidenceGroups,
     relationshipRows,
     signals,
     historyItems,
@@ -826,7 +738,7 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
     countLabel: String(identifiedSystemCount),
     descriptor,
     sectionTitle: telemetryConnected ? "Monitored Systems" : "Identified Systems",
-    sectionSubtitle: telemetryConnected ? "Live telemetry is connected." : "Systems identified by completed SII analysis.",
+    sectionSubtitle: telemetryConnected ? "Live telemetry is connected." : "Systems identified by the completed analysis.",
   };
 }
 
@@ -848,12 +760,12 @@ function buildFingerprintRows(analysisExplanation) {
   const normalBehavior = fingerprint.normal_operating_behavior ?? fingerprint.baseline_summary;
   const currentBehavior = fingerprint.current_behavior ?? fingerprint.current_behavior_summary;
   return [
-    ["Explanation", firstText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
-    ["Drift status", fingerprint.drift_status ?? fingerprint.status],
+    ["Explanation", operatorText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
+    ["Drift status", operatorText(fingerprint.drift_status, fingerprint.status)],
     ["Confidence", formatConfidenceDisplay(fingerprint.confidence, fingerprint.confidence_score)],
-    ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : normalBehavior],
-    ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : currentBehavior],
-    ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).join("; ")],
+    ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : operatorText(normalBehavior)],
+    ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : operatorText(currentBehavior)],
+    ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).map(operatorText).join("; ")],
     ["Change onset", analysisExplanation?.change_onset],
     ["Stable window", formatBehaviorWindow(analysisExplanation?.stable_window)],
     ["Deviation window", formatBehaviorWindow(analysisExplanation?.deviation_window)],
@@ -864,8 +776,8 @@ function buildFingerprintRows(analysisExplanation) {
 function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
   const metadata = analysisExplanation?.analysis_metadata ?? {};
   return [
-    ["Analysis ID", firstText(analysisExplanation?.analysis_id, metadata.analysis_id, result?.analysis_id, result?.run_id, result?.job_id)],
-    ["Upload ID", firstText(analysisExplanation?.upload_id, metadata.upload_id, result?.upload_id, result?.job_id, snapshot?.upload_id)],
+    ["Analysis reference", firstText(analysisExplanation?.analysis_id, metadata.analysis_id, result?.analysis_id, result?.run_id, result?.job_id)],
+    ["Upload reference", firstText(analysisExplanation?.upload_id, metadata.upload_id, result?.upload_id, result?.job_id, snapshot?.upload_id)],
     ["Source file", firstText(analysisExplanation?.source_file, result?.source_file, result?.filename, snapshot?.filename, snapshot?.current_upload?.filename)],
     ["Generated at", firstText(analysisExplanation?.generated_at, result?.completed_at, result?.last_processed_at, snapshot?.last_processed_at)],
     ["Rows", firstText(metadata.row_count, result?.row_count, snapshot?.rows_processed)],
@@ -889,10 +801,10 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
     liveOps?.recommendedAction
   );
   return [
-    ["Overall operational status", firstText(summary.overall_operational_status, result?.operating_state, result?.sii_intelligence?.facility_state)],
-    ["Highest-priority finding", firstText(summary.highest_priority_finding, topInsight.summary)],
-    ["Biggest emerging risk", firstText(summary.biggest_emerging_risk, topInsight.possibleConsequence, fingerprintDrift.detail)],
-    ["Recommended action", topRecommendation],
+    ["Overall status", operatorText(summary.overall_operational_status, result?.operating_state, result?.sii_intelligence?.facility_state)],
+    ["Highest-priority finding", operatorText(summary.highest_priority_finding, topInsight.summary)],
+    ["Biggest risk", operatorText(summary.biggest_emerging_risk, topInsight.possibleConsequence, fingerprintDrift.detail)],
+    ["Recommended next check", operatorText(topRecommendation)],
   ];
 }
 
@@ -950,29 +862,35 @@ function summarizeEvidence(items) {
 function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) {
   const explanatoryInsights = Array.isArray(analysisExplanation?.insights) ? analysisExplanation.insights : [];
   if (explanatoryInsights.length > 0) {
-    return explanatoryInsights.map((item, index) => ({
-      id: item.id ?? "insight-" + index,
-      system: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
-      status: normalizeInsightStatus(item.status ?? item.severity),
-      severity: normalizeSeverity(item.severity),
-      summary: firstText(item.title, item.explanation),
-      whatHappened: firstText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
-      whyNeraiumThinks: firstText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
-      possibleConsequence: firstText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
-      recommendedAction: firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check),
-      operatorCheck: firstText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
-      contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText)),
-      contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
-      contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
-      evidence: resolveEvidenceRefs(item, analysisExplanation).length ? resolveEvidenceRefs(item, analysisExplanation) : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : [])),
-      evidenceSummary: firstText(item.evidence_summary, summarizeEvidence(resolveEvidenceRefs(item, analysisExplanation))),
-      sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
-      confidence: item.confidence,
-      confidenceScore: item.confidence_score,
-      confidenceRationale: item.confidence_rationale,
-      telemetryNote: telemetryStatus.detail,
-      detectedAt: lastAnalysis,
-    })).filter((item) => item.summary);
+    return explanatoryInsights.map((item, index) => {
+      const resolvedEvidence = resolveEvidenceRefs(item, analysisExplanation);
+      const evidence = resolvedEvidence.length ? resolvedEvidence : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : []));
+      return {
+        id: item.id ?? "insight-" + index,
+        system: cleanDisplayText(firstText(item.system, toList(item.affected_systems)[0], primarySystem)),
+        status: normalizeInsightStatus(item.status ?? item.severity),
+        severity: normalizeSeverity(item.severity),
+        summary: operatorText(item.title, item.explanation),
+        whatHappened: operatorText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
+        whyItMatters: operatorText(item.why_it_matters, item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence, item.likely_cause, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likelyCause),
+        whyNeraiumThinks: operatorText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
+        possibleConsequence: operatorText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
+        recommendedAction: operatorText(firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check)),
+        operatorCheck: operatorText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
+        contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText).map(cleanDisplayText)),
+        contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
+        contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
+        evidence,
+        hasEvidence: evidence.length > 0,
+        evidenceSummary: operatorText(item.evidence_summary, summarizeEvidence(resolvedEvidence)),
+        sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
+        confidence: item.confidence,
+        confidenceScore: item.confidence_score,
+        confidenceRationale: operatorText(item.confidence_rationale),
+        telemetryNote: telemetryStatus.detail,
+        detectedAt: lastAnalysis,
+      };
+    }).filter((item) => item.summary);
   }
 
   const rawFindings = [];
@@ -984,19 +902,23 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
     .map((item, index) => {
       const summary = firstText(item.summary, item.detail, item.title, result?.operator_report?.summary);
       const supporting = toList(item.supportingEvidence, item.relationshipEvidence, result?.operator_report?.evidence_summary, result?.finding_evidence_chains)
-        .flatMap(splitPriorityText);
+        .flatMap(splitPriorityText)
+        .map(operatorText);
+      const evidence = supporting.length ? [{ supporting_signals: supporting }] : [];
       return {
         id: "insight-" + index,
-        system: firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem),
+        system: cleanDisplayText(firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem)),
         status: normalizeInsightStatus(item.status ?? result?.operating_state),
         severity: normalizeSeverity(item.confidence ?? result?.drift_status),
-        summary,
-        whatHappened: summary,
-        whyNeraiumThinks: item.whyItMatters,
-        possibleConsequence: item.possibleConsequence,
-        recommendedAction: firstText(item.recommendation, item.reviewNext),
-        operatorCheck: item.operator_focus,
-        evidence: supporting.length ? [{ supporting_signals: supporting }] : [],
+        summary: operatorText(summary),
+        whatHappened: operatorText(summary),
+        whyItMatters: operatorText(item.whyItMatters, item.possibleConsequence),
+        whyNeraiumThinks: operatorText(item.whyItMatters),
+        possibleConsequence: operatorText(item.possibleConsequence),
+        recommendedAction: operatorText(item.recommendation, item.reviewNext),
+        operatorCheck: operatorText(item.operator_focus),
+        evidence,
+        hasEvidence: evidence.length > 0,
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
       };
@@ -1005,6 +927,46 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
 
   if (insights.length > 0) return dedupeInsights(insights).slice(0, 8);
   return [];
+}
+
+function buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }) {
+  const groups = insights
+    .filter((insight) => insight.evidence?.length)
+    .map((insight) => ({
+      id: insight.id,
+      title: insight.summary,
+      system: insight.system,
+      severity: insight.severity,
+      confidence: insight.confidence,
+      confidenceScore: insight.confidenceScore,
+      evidence: insight.evidence,
+    }));
+
+  const seenEvidence = new Set(groups.flatMap((group) => group.evidence.map(evidenceKey)));
+  const uniqueFingerprintEvidence = (fingerprintEvidence ?? []).filter((item) => {
+    const key = evidenceKey(item);
+    if (seenEvidence.has(key)) return false;
+    seenEvidence.add(key);
+    return true;
+  });
+
+  if (uniqueFingerprintEvidence.length) {
+    groups.push({
+      id: "fingerprint",
+      title: "Operating fingerprint evidence",
+      system: "Operating fingerprint",
+      severity: fingerprintDrift.label,
+      confidence: "",
+      confidenceScore: null,
+      evidence: uniqueFingerprintEvidence,
+    });
+  }
+
+  return groups;
+}
+
+function evidenceKey(item) {
+  return firstText(item?.evidence_id, item?.id, item?.description, item?.summary, compactJson(item));
 }
 
 function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) {
@@ -1031,27 +993,6 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
   });
 }
 
-function buildStatusTiles({ uiState, telemetryStatus, baselineAvailable, insights, analysisComplete, identifiedSystemCount }) {
-  if (uiState.key === "noTelemetry") {
-    return [];
-  }
-
-  if (!analysisComplete) {
-    return [
-      { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },
-      { label: "Status", value: uiState.status.label, detail: uiState.status.detail, tone: uiState.status.tone },
-    ];
-  }
-
-  return [
-    { label: "Telemetry", value: telemetryStatus.label, detail: telemetryStatus.detail, tone: telemetryStatus.tone },
-    { label: "Status", value: uiState.status.label, detail: analysisComplete ? "Result saved and ready for review." : uiState.status.detail, tone: uiState.status.tone },
-    { label: "Systems", value: String(identifiedSystemCount), detail: identifiedSystemCount + " " + (identifiedSystemCount === 1 ? "system" : "systems") + " identified by SII analysis.", tone: "normal" },
-    { label: "Insights", value: String(insights.length), detail: insights.length + " active " + (insights.length === 1 ? "insight" : "insights"), tone: insights.length > 0 ? "changed" : "unknown" },
-    baselineAvailable ? { label: "Fingerprint", value: "Established", detail: "Fingerprint comparison is available.", tone: "normal" } : null,
-  ].filter(Boolean);
-}
-
 function collectQuality(result, snapshot) {
   const dataQuality = result?.analysis_result?.data_quality ?? result?.data_quality ?? {};
   const timestampProfile = result?.timestamp_profile ?? {};
@@ -1059,7 +1000,6 @@ function collectQuality(result, snapshot) {
     ...(Array.isArray(dataQuality.warnings) ? dataQuality.warnings : []),
     ...(Array.isArray(timestampProfile.warnings) ? timestampProfile.warnings : []),
     ...(Array.isArray(result?.warnings) ? result.warnings : []),
-    ...(Array.isArray(result?.backend_warnings) ? result.backend_warnings : []),
   ]);
   const missingSummary = formatMissingValueSummary(dataQuality);
   const missingValues = dedupeText([
@@ -1114,7 +1054,7 @@ function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysis
   if (!analysisComplete) {
     return {
       ...READY_TO_ANALYZE_STATUS,
-      detail: "Fingerprint comparison will populate after SII completes analysis.",
+      detail: "Fingerprint comparison will populate after analysis completes.",
     };
   }
   const magnitudes = relationshipRows.map((row) => Math.abs(Number(row.percent_change ?? row.absolute_change ?? row.pair_weight ?? row.change ?? 0))).filter(Number.isFinite);
@@ -1167,44 +1107,66 @@ function RelationshipList({ rows }) {
     <ul className="operational-list">
       {rows.slice(0, 8).map((row, index) => {
         const sourceTarget = row.source && row.target ? [row.source, row.target].map((item) => String(item).replace(/^tag:/, "").replace(/^metric:/, "")) : [];
-        const label = Array.isArray(row.columns) ? row.columns.join(" / ") : (Array.isArray(row.source_tags) ? row.source_tags.join(" / ") : firstText(row.column, row.pair, sourceTarget.join(" / "), row.detail, `Relationship ${index + 1}`));
-        const detail = firstText(row.explanation, row.what_changed, row.detail, row.summary, row.change_type, "Relationship behavior changed against baseline.");
-        return <li key={`${label}-${index}`}><strong>{label}</strong><span>{detail}</span></li>;
+        const rawLabel = Array.isArray(row.columns) ? row.columns.join(" / ") : (Array.isArray(row.source_tags) ? row.source_tags.join(" / ") : firstText(row.column, row.pair, sourceTarget.join(" / "), row.detail, "Relationship " + (index + 1)));
+        const label = cleanRelationshipLabel(rawLabel);
+        const detail = operatorText(row.explanation, row.what_changed, row.detail, row.summary, row.change_type, "Relationship behavior changed against baseline.");
+        return <li key={label + "-" + index}><strong>{label}</strong><span>{detail}</span></li>;
       })}
     </ul>
   );
 }
 
 function SignalList({ signals, integrity }) {
-  if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Upload telemetry to populate the signal browser." />;
+  if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Detected signals will appear after telemetry is uploaded." />;
   return (
     <ul className="operational-list operational-list--signals">
-      {signals.map((signal) => <li key={signal}><strong>{signal}</strong><span>{integrity.label}</span></li>)}
+      {signals.map((signal) => <li key={signal}><strong>{cleanDisplayText(signal)}</strong><span>{integrity.label}</span></li>)}
     </ul>
   );
 }
 
-function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId }) {
+function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, onOpenEvidence, selectedId }) {
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;
   return (
     <div className="insight-feed">
       {insights.map((insight) => {
-        const Tag = typeof onOpenInsight === "function" ? "button" : "article";
+        const selected = selectedId === insight.id;
         return (
-          <Tag
+          <article
             key={insight.id}
-            type={Tag === "button" ? "button" : undefined}
-            className={`insight-card ${selectedId === insight.id ? "is-selected" : ""}`}
-            onClick={Tag === "button" ? () => onOpenInsight(insight.id) : undefined}
+            className={selected ? "insight-card is-selected" : "insight-card"}
+            aria-current={selected ? "true" : undefined}
           >
             <div className="insight-card__header">
               <span className="section-token">{insight.system}</span>
-              <StatusBadge label={insight.status} tone={statusToTone(insight.status)} />
+              <div className="insight-card__badges">
+                <StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} />
+                <StatusBadge label={formatConfidenceDisplay(insight.confidence, insight.confidenceScore) || "Confidence not reported"} tone="unknown" />
+              </div>
             </div>
-            <strong>{insight.summary}</strong>
-            <p>{firstText(insight.whatHappened, insight.possibleConsequence)}</p>
-            <small>{insight.detectedAt}</small>
-          </Tag>
+            <h3>{insight.summary}</h3>
+            <DetailGrid rows={[
+              ["Affected system", insight.system],
+              ["Severity", insight.severity],
+              ["Confidence", formatConfidenceDisplay(insight.confidence, insight.confidenceScore)],
+              ["What changed", insight.whatHappened],
+              ["Why it matters", insight.whyItMatters],
+              ["Recommended check", firstText(insight.operatorCheck, insight.recommendedAction)],
+            ]} />
+            {insight.contributingFactors?.length ? (
+              <QualityList title="Recommended checks" items={insight.contributingFactors.slice(0, 3)} empty="" />
+            ) : null}
+            <div className="insight-card__actions">
+              {typeof onOpenInsight === "function" ? (
+                <button type="button" className="secondary-command-button" onClick={() => onOpenInsight(insight.id)}>Select</button>
+              ) : null}
+              {typeof onOpenEvidence === "function" ? (
+                <button type="button" className="command-button" onClick={() => onOpenEvidence(insight.id)} disabled={!insight.hasEvidence}>
+                  {insight.hasEvidence ? "Evidence" : "No evidence"}
+                </button>
+              ) : null}
+            </div>
+          </article>
         );
       })}
     </div>
@@ -1212,15 +1174,15 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
 }
 
 function EvidencePanel({ evidence }) {
-  const supportingSignals = toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText);
+  const supportingSignals = toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText).map(operatorText);
   const metricChanges = toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(formatEvidenceDelta).flatMap(splitPriorityText);
-  const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText);
+  const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText).map(cleanDisplayText);
   const sourceRanges = Array.isArray(evidence.source_time_ranges) ? evidence.source_time_ranges.map(formatEvidenceRange).filter(Boolean) : [];
   return (
     <details className="evidence-panel">
-      <summary>Evidence{evidence.confidence ? " (" + evidence.confidence + ")" : ""}</summary>
+      <summary>Evidence{evidence.confidence ? " (" + formatConfidenceDisplay(evidence.confidence, evidence.confidence_score) + ")" : ""}</summary>
       <DetailGrid rows={[
-        ["Summary", firstText(evidence.description, evidence.summary)],
+        ["Summary", operatorText(evidence.description, evidence.summary)],
         ["Type", evidence.type],
         ["Confidence", formatConfidenceDisplay(evidence.confidence, evidence.confidence_score)],
         ["Time window", evidence.time_window ?? evidence.timeWindow],
@@ -1228,10 +1190,10 @@ function EvidencePanel({ evidence }) {
         ["Calculated delta", evidence.calculated_delta ?? evidence.calculatedDelta],
         ["Relationship delta", evidence.relationship_delta ? compactJson(evidence.relationship_delta) : ""],
         ["Calculated percent delta", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
-        ["Upload", evidence.source_upload_id ?? evidence.upload_id],
-        ["Analysis", evidence.analysis_id],
+        ["Upload reference", evidence.source_upload_id ?? evidence.upload_id],
+        ["Analysis reference", evidence.analysis_id],
       ]} />
-      {sourceColumns.length ? <QualityList title="Source columns" items={sourceColumns} empty="" /> : null}
+      {sourceColumns.length ? <QualityList title="Source signals" items={sourceColumns} empty="" /> : null}
       {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
       {supportingSignals.length ? <QualityList title="Supporting signals" items={supportingSignals} empty="" /> : null}
       {metricChanges.length ? <QualityList title="Relevant metric changes" items={metricChanges} empty="" /> : null}
@@ -1250,7 +1212,7 @@ function compactJson(value) {
 function formatEvidenceDelta(value) {
   if (Array.isArray(value)) return value.map(formatEvidenceDelta).filter(Boolean);
   if (!value || typeof value !== "object") return value ? [String(value)] : [];
-  const label = firstText(value.tag_name, value.label, value.name, value.source_column, value.change_type);
+  const label = cleanDisplayText(firstText(value.tag_name, value.label, value.name, value.source_column, value.change_type));
   const details = [
     value.percent_change !== undefined ? `percent change: ${value.percent_change}` : "",
     value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
@@ -1310,16 +1272,6 @@ function DetailGrid({ rows }) {
   );
 }
 
-function CompactStatusTile({ tile }) {
-  return (
-    <article className={`status-tile status-tile--${tile.tone}`}>
-      <span>{tile.label}</span>
-      <strong>{tile.value}</strong>
-      <small>{tile.detail}</small>
-    </article>
-  );
-}
-
 function FingerprintStatus({ drift }) {
   return (
     <div className={`fingerprint-status fingerprint-status--${drift.tone}`}>
@@ -1351,6 +1303,7 @@ function sectionTitle(section) {
   if (section === "insights") return "Insights";
   if (section === "systems") return "Systems";
   if (section === "fingerprint") return "Fingerprint";
+  if (section === "evidence") return "Evidence";
   if (section === "more") return "More";
   return "Overview";
 }
@@ -1370,10 +1323,33 @@ function normalizeSeverity(value) {
   return "Low";
 }
 
-function statusToTone(status) {
-  if (status === "Resolved") return "normal";
-  if (status === "Under Investigation") return "changed";
-  return "investigate";
+function severityToTone(severity) {
+  const text = String(severity ?? "").toLowerCase();
+  if (text.includes("high") || text.includes("significant") || text.includes("critical")) return "investigate";
+  if (text.includes("moderate") || text.includes("changed") || text.includes("review") || text.includes("drift")) return "changed";
+  return "normal";
+}
+
+function prioritizeEvidenceGroups(groups, selectedInsightId) {
+  if (!selectedInsightId) return groups;
+  return [...groups].sort((left, right) => {
+    if (left.id === selectedInsightId) return -1;
+    if (right.id === selectedInsightId) return 1;
+    return 0;
+  });
+}
+
+function SummaryRows({ rows }) {
+  return (
+    <div className="summary-row-list">
+      {rows.filter((row) => row && row.length >= 2).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").map(([label, value]) => (
+        <div className="summary-row" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function splitPriorityText(value) {
@@ -1441,6 +1417,31 @@ function humanizeSignalName(value) {
     .replace(/\b(f|c|psi|pct|gal)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function cleanDisplayText(value) {
+  const text = sanitizeOperatorText(firstText(value))
+    .replace(/^tag:/i, "")
+    .replace(/^metric:/i, "")
+    .replace(/\btag[-_\s]?pair\b/gi, "relationship")
+    .replace(/\bColumn\s+(\d+)\b/gi, (match, number) => "Signal " + number)
+    .replace(/_+/g, " ")
+    .replace(/\s+\/\s+/g, " / ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || firstText(value);
+}
+
+function cleanRelationshipLabel(value) {
+  return cleanDisplayText(value)
+    .replace(/::/g, " / ")
+    .replace(/\s+vs\.?\s+/gi, " / ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function operatorText(...values) {
+  return cleanDisplayText(firstText(...values));
 }
 
 function formatPercent(value) {

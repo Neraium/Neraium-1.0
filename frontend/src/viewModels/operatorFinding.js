@@ -28,6 +28,12 @@ const DISALLOWED_REPLACEMENTS = [
   [/\bdeformation\b/gi, "behavior change"],
   [/\bbaseline separation\b/gi, "change from the historical pattern"],
   [/\bstructural drift\b/gi, "system behavior change"],
+  [/\bSII\b/g, "analysis"],
+  [/\bbackend\b/gi, "analysis service"],
+  [/\bpipeline\b/gi, "analysis workflow"],
+  [/\breplay\b/gi, "historical review"],
+  [/\braw\b/gi, "source"],
+  [/\bdebug\b/gi, "diagnostic"],
 ];
 
 export function deriveCanonicalFinding({ currentSession, latestReplayFrame = null }) {
