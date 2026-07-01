@@ -6,7 +6,12 @@ from app.services.cumulative_counters import (
     detect_cumulative_counters_from_matrix,
 )
 from app.services.data_quality import round_number, variability_flag
-from app.services.telemetry_classification import classify_telemetry_signal
+from app.services.telemetry_classification import (
+    classify_telemetry_signal,
+    signal_display_name,
+    signal_metadata,
+    telemetry_catalog_by_column,
+)
 
 BASELINE_WINDOW_TARGET = 100
 # Backward-compatible export for legacy relationship analysis imports.
@@ -19,8 +24,10 @@ def build_baseline_analysis(
     columns: list[str],
     rows: list[list[str]],
     numeric_profiles: list[dict[str, Any]],
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     warnings: list[str] = []
+    signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     if len(rows) < MIN_BASELINE_ROWS:
         return {
             "baseline_window_rows": 0,
@@ -87,11 +94,20 @@ def build_baseline_analysis(
             column,
             metric_type=metric_type,
             constant=bool(profile.get("constant_or_stuck")),
+            numeric_profile=profile,
         )
         flag = drift_flag(percent_change, absolute_change, baseline_average)
         analysis_role = classification["analysis_role"]
-        if not classification["is_primary_anomaly_candidate"]:
+        if classification.get("is_ignored"):
+            flag = "ignored"
+        elif analysis_role == "validation_label":
+            flag = "validation"
+        elif classification.get("is_state_signal"):
+            flag = "state_analysis"
+        elif not classification["is_primary_anomaly_candidate"]:
             flag = "context"
+        metadata = signal_metadata(column, signal_catalog)
+        display_name = signal_display_name(column, signal_catalog)
 
         if variability_flag(baseline_values, baseline_average) == "high":
             column_warnings.append(f"{column} baseline window is highly variable.")
@@ -116,6 +132,13 @@ def build_baseline_analysis(
                 "analysis_role": analysis_role,
                 "telemetry_category": classification["category"],
                 "telemetry_classification": classification,
+                "original_header": metadata.get("original_header"),
+                "normalized_name": metadata.get("normalized_name"),
+                "display_name": display_name,
+                "engineering_units": metadata.get("engineering_units"),
+                "inferred_telemetry_type": classification.get("structural_class"),
+                "source_column_index": metadata.get("source_column_index", index),
+                "state_analysis": binary_state_analysis([row[index] if index < len(row) else None for row in rows]) if classification.get("is_state_signal") else None,
                 "warnings": column_warnings + informational_warnings,
             }
         )
@@ -192,7 +215,44 @@ def cumulative_delta_drift(
         "analysis_role": "derived_rate_feature",
         "telemetry_category": "counter_derived_rate",
         "telemetry_classification": classify_telemetry_signal(f"{column}_delta", metric_type="counter_delta"),
+        "source_counter_display_name": column,
         "warnings": [f"{column} was treated as a cumulative counter; delta values were analyzed instead of the raw counter."],
+    }
+
+
+def binary_state_analysis(values: list[Any]) -> dict[str, Any]:
+    states: list[float] = []
+    for value in values:
+        if value is None or str(value).strip() == "":
+            continue
+        try:
+            states.append(float(str(value).strip()))
+        except ValueError:
+            continue
+    if not states:
+        return {"samples": 0, "transition_count": 0, "transition_rate": 0.0, "dwell_segments": []}
+
+    transitions = 0
+    dwell_segments: list[dict[str, Any]] = []
+    current_state = states[0]
+    current_length = 1
+    for previous, current in zip(states, states[1:]):
+        if current != previous:
+            transitions += 1
+            dwell_segments.append({"state": int(current_state) if current_state in {0.0, 1.0} else current_state, "samples": current_length})
+            current_state = current
+            current_length = 1
+        else:
+            current_length += 1
+    dwell_segments.append({"state": int(current_state) if current_state in {0.0, 1.0} else current_state, "samples": current_length})
+    transition_rate = transitions / max(1, len(states) - 1)
+    return {
+        "samples": len(states),
+        "transition_count": transitions,
+        "transition_rate": round_number(transition_rate, digits=4),
+        "dwell_segments": dwell_segments[:12],
+        "longest_dwell_samples": max(segment["samples"] for segment in dwell_segments),
+        "current_state": int(states[-1]) if states[-1] in {0.0, 1.0} else states[-1],
     }
 
 

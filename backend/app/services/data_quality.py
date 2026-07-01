@@ -91,6 +91,7 @@ def profile_numeric_columns(columns: list[str], rows: list[list[str]]) -> list[d
         average = sum(values) / len(values)
         missing_percent = (missing_count / row_count * 100) if row_count else 0
 
+        unique_values = sorted(set(values))
         profiles.append(
             {
                 "column": column,
@@ -102,6 +103,10 @@ def profile_numeric_columns(columns: list[str], rows: list[list[str]]) -> list[d
                 "valid_numeric_count": len(values),
                 "non_numeric_count": max(0, row_count - missing_count - len(values)),
                 "constant_or_stuck": minimum == maximum,
+                "distinct_count": len(unique_values),
+                "unique_values": [round_number(value, digits=6) for value in unique_values[:12]],
+                "bounded_0_1": minimum >= 0 and maximum <= 1,
+                "bounded_0_100": minimum >= 0 and maximum <= 100,
                 "variability": variability_flag(values, average),
                 "range_warning": range_warning(column, minimum, maximum),
             }

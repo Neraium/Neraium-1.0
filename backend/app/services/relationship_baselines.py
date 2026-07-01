@@ -9,7 +9,14 @@ from app.services.cumulative_counters import (
     counter_delta_series,
     detect_cumulative_counters_from_rows,
 )
-from app.services.telemetry_classification import classify_relationship_columns
+from app.services.telemetry_classification import (
+    NON_OPERATOR_RELATIONSHIP_CATEGORIES,
+    classify_relationship_columns,
+    signal_classification,
+    signal_display_name,
+    signal_metadata,
+    telemetry_catalog_by_column,
+)
 
 
 def _to_float(value: Any) -> float | None:
@@ -238,10 +245,11 @@ def score_relationship_importance(
     columns: list[str],
     edge: dict[str, Any],
     baseline_drift_by_column: dict[str, dict[str, Any]] | None = None,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     clean_columns = [str(column) for column in columns if str(column or "").strip()]
     baseline_drift_by_column = baseline_drift_by_column or {}
-    classification = classify_relationship_columns(clean_columns)
+    classification = classify_relationship_columns(clean_columns, telemetry_signal_catalog=telemetry_signal_catalog)
     delta_factor = min(1.0, abs(float(edge.get("correlation_delta") or 0.0)))
     confidence_factor = _score_number(edge.get("confidence_score", edge.get("confidence")), 0.5)
     try:
@@ -296,6 +304,9 @@ def score_relationship_importance(
             "context_only": classification["context_only"],
             "equipment_process_involved": classification["equipment_process_involved"],
             "context_driver_involved": classification["context_driver_involved"],
+            "state_signal_involved": classification.get("state_signal_involved", False),
+            "operator_primary_eligible": classification.get("operator_primary_eligible", True),
+            "blocked_operator_categories": classification.get("blocked_operator_categories", []),
         },
     }
 
@@ -339,6 +350,7 @@ def _relationship_graph(
     edges: list[dict[str, Any]],
     sampled_for_baseline: bool,
     column_limited: bool,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     systems = sorted(
         {
@@ -351,7 +363,14 @@ def _relationship_graph(
         }
     )
     nodes = [
-        {"id": f"metric:{column}", "type": "metric", "label": column, "source_column": column}
+        {
+            "id": f"metric:{column}",
+            "type": "metric",
+            "label": signal_display_name(column, telemetry_signal_catalog),
+            "source_column": column,
+            "display_name": signal_display_name(column, telemetry_signal_catalog),
+            "telemetry_metadata": signal_metadata(column, telemetry_signal_catalog),
+        }
         for column in selected_numeric_columns
     ]
     nodes.extend(
@@ -381,11 +400,28 @@ def build_relationship_baseline(
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
     baseline_analysis: dict[str, Any] | None = None,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     cumulative_counters = detect_cumulative_counters_from_rows(rows, numeric_columns)
     cumulative_counter_columns = {item["column"] for item in cumulative_counters}
     rows_for_relationships = rows
-    relationship_numeric_columns = [column for column in numeric_columns if column not in cumulative_counter_columns]
+    excluded_structural_columns: list[dict[str, Any]] = []
+    relationship_numeric_columns = []
+    for column in numeric_columns:
+        classification = signal_classification(column, signal_catalog)
+        if column in cumulative_counter_columns or classification.get("category") in NON_OPERATOR_RELATIONSHIP_CATEGORIES or classification.get("is_ignored"):
+            excluded_structural_columns.append(
+                {
+                    "column": column,
+                    "display_name": signal_display_name(column, signal_catalog),
+                    "telemetry_category": classification.get("category"),
+                    "structural_class": classification.get("structural_class"),
+                    "reason": classification.get("reason"),
+                }
+            )
+            continue
+        relationship_numeric_columns.append(column)
     if cumulative_counters:
         rows_for_relationships = [dict(row) for row in rows]
         for counter in cumulative_counters:
@@ -428,6 +464,7 @@ def build_relationship_baseline(
             "relationship_columns_available": len(relationship_numeric_columns),
             "relationship_columns_limited": column_limited,
             "excluded_cumulative_counters": cumulative_counters,
+            "excluded_structural_columns": excluded_structural_columns,
         }
 
     baseline_count = max(6, int(len(rows) * 0.7))
@@ -503,6 +540,8 @@ def build_relationship_baseline(
                         {
                             "left": left_col,
                             "right": right_col,
+                            "left_display_name": signal_display_name(left_col, signal_catalog),
+                            "right_display_name": signal_display_name(right_col, signal_catalog),
                             "baseline_correlation": round(float(baseline_corr), 6),
                             "recent_correlation": round(float(recent_corr), 6),
                             "baseline_sample_size": baseline_sample_size,
@@ -513,16 +552,23 @@ def build_relationship_baseline(
                     "source_rows": source_rows,
                 }
             )
-            importance = score_relationship_importance([left_col, right_col], edge, baseline_drift_by_column)
+            display_columns = [signal_display_name(left_col, signal_catalog), signal_display_name(right_col, signal_catalog)]
+            importance = score_relationship_importance([left_col, right_col], edge, baseline_drift_by_column, signal_catalog)
             edge.update(importance)
+            edge["display_columns"] = display_columns
+            edge["source_column_metadata"] = [signal_metadata(left_col, signal_catalog), signal_metadata(right_col, signal_catalog)]
             graph_edges.append(edge)
 
-            if change_type == "stable" or drift < 0.25:
+            relationship_context = edge.get("relationship_context") if isinstance(edge.get("relationship_context"), dict) else {}
+            if change_type == "stable" or drift < 0.25 or relationship_context.get("operator_primary_eligible") is False:
                 continue
 
             candidates.append(
                 {
                     "relationship": f"{left_col} <-> {right_col}",
+                    "display_relationship": f"{display_columns[0]} <-> {display_columns[1]}",
+                    "display_columns": display_columns,
+                    "source_column_metadata": edge.get("source_column_metadata"),
                     "baseline_correlation": round(float(baseline_corr), 6),
                     "recent_correlation": round(float(recent_corr), 6),
                     "correlation_delta": round(float(drift), 6),
@@ -550,6 +596,7 @@ def build_relationship_baseline(
                     "evidence_refs": [
                         {
                             "column": left_col,
+                            "display_name": signal_display_name(left_col, signal_catalog),
                             "role": "left_variable",
                             "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
                             "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
@@ -557,6 +604,7 @@ def build_relationship_baseline(
                         },
                         {
                             "column": right_col,
+                            "display_name": signal_display_name(right_col, signal_catalog),
                             "role": "right_variable",
                             "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
                             "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
@@ -564,7 +612,7 @@ def build_relationship_baseline(
                         },
                     ],
                     "source_rows": source_rows,
-                    "summary": _relationship_summary(left_col, right_col, edge),
+                    "summary": _relationship_summary(display_columns[0], display_columns[1], edge),
                 }
             )
 
@@ -575,6 +623,7 @@ def build_relationship_baseline(
         edges=graph_edges,
         sampled_for_baseline=sampled_for_baseline,
         column_limited=column_limited,
+        telemetry_signal_catalog=signal_catalog,
     )
     return {
         "top_relationship_changes": candidates[:5],
@@ -585,6 +634,7 @@ def build_relationship_baseline(
         "relationship_columns_available": len(relationship_numeric_columns),
         "relationship_columns_limited": column_limited,
         "excluded_cumulative_counters": cumulative_counters,
+        "excluded_structural_columns": excluded_structural_columns,
     }
 
 

@@ -8,7 +8,12 @@ from typing import Any
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.data_quality import parse_numeric_value
-from app.services.telemetry_classification import classify_telemetry_signal
+from app.services.telemetry_classification import (
+    signal_classification,
+    signal_display_name,
+    signal_metadata,
+    telemetry_catalog_by_column,
+)
 
 
 CONTRACT_VERSION = "analysis-result-v1"
@@ -142,6 +147,7 @@ def build_normalized_telemetry(
     ingestion_report: dict[str, Any] | None,
     source_file: str,
     record_limit: int = NORMALIZED_RECORD_LIMIT,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     timestamp_profile = timestamp_profile if isinstance(timestamp_profile, dict) else {}
     data_quality = data_quality if isinstance(data_quality, dict) else {}
@@ -153,6 +159,7 @@ def build_normalized_telemetry(
         timestamp_profile.get("estimated_sample_interval"),
     )
     normalized_columns = [column for column in numeric_columns if column in columns]
+    signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     tag_summaries: dict[str, dict[str, Any]] = {}
     records: list[dict[str, Any]] = []
     total_records = 0
@@ -164,17 +171,25 @@ def build_normalized_telemetry(
             flags = missing_value_flags(raw_value)
             parsed = parse_numeric_value(str(raw_value)) if raw_value is not None else None
             quality = normalized_quality(column, flags, integrity_flags)
-            classification = classify_telemetry_signal(column)
+            classification = signal_classification(column, signal_catalog)
+            metadata = signal_metadata(column, signal_catalog)
+            display_name = signal_display_name(column, signal_catalog)
             tag = tag_summaries.setdefault(
                 column,
                 {
-                    "tag_name": column,
+                    "tag_name": display_name,
                     "source_column": column,
-                    "unit": detect_unit(column),
+                    "original_header": metadata.get("original_header"),
+                    "normalized_name": metadata.get("normalized_name"),
+                    "display_name": display_name,
+                    "unit": metadata.get("engineering_units") or detect_unit(column),
+                    "engineering_units": metadata.get("engineering_units") or detect_unit(column),
+                    "source_column_index": metadata.get("source_column_index"),
                     "quality_counts": {},
                     "missing_value_flags": [],
                     "sampling_interval": sample_interval,
                     "detected_metric_type": detect_metric_type(column),
+                    "inferred_telemetry_type": classification.get("structural_class"),
                     "telemetry_category": classification["category"],
                     "analysis_role": classification["analysis_role"],
                     "telemetry_classification": classification,
@@ -193,10 +208,14 @@ def build_normalized_telemetry(
             records.append(
                 {
                     "timestamp": timestamp,
-                    "tag_name": column,
+                    "tag_name": tag.get("tag_name"),
                     "value": parsed,
                     "unit": tag.get("unit"),
                     "source_column": column,
+                    "original_header": tag.get("original_header"),
+                    "normalized_name": tag.get("normalized_name"),
+                    "display_name": tag.get("display_name"),
+                    "source_column_index": tag.get("source_column_index"),
                     "quality": quality,
                     "missing_value_flags": flags,
                     "sampling_interval": sample_interval,
@@ -219,6 +238,7 @@ def build_normalized_telemetry(
         "sampling_interval": sample_interval,
         "records": records,
         "tags": list(tag_summaries.values()),
+        "signals": list(signal_catalog.values()) if signal_catalog else [],
         "calculation_method": "CSV rows were parsed once during upload ingestion and expanded into one normalized telemetry record per numeric tag reading.",
     }
 
@@ -272,6 +292,9 @@ def build_analysis_result(
         ]
     )
     data_quality["normalized_telemetry"] = normalized_telemetry
+    telemetry_signals = list((result.get("telemetry_signal_catalog") or {}).values()) if isinstance(result.get("telemetry_signal_catalog"), dict) else to_list(result.get("telemetry_signals"))
+    if telemetry_signals:
+        data_quality["telemetry_signals"] = telemetry_signals
 
     evidence_index: dict[str, dict[str, Any]] = {}
 
@@ -355,6 +378,7 @@ def build_analysis_result(
                     "relationship_context": item.get("relationship_context"),
                     "supporting_metrics": item.get("supporting_metric_pairs") or [{"tag_name": column} for column in columns],
                     "source_tags": columns,
+                    "source_tag_display_names": to_list(item.get("display_columns")),
                     "time_window": item.get("time_window") or build_time_window(result),
                     "evidence_refs": [ref],
                     "explanation": first_present(item.get("what_changed"), item.get("summary"), item.get("name")),
@@ -387,6 +411,7 @@ def build_analysis_result(
                 *[metric.get("source_column") or metric.get("name") for metric in to_list(item.get("contributing_metrics")) if isinstance(metric, dict)],
             ]
         )
+        source_tag_display_names = dedupe_text([*to_list(item.get("source_tag_display_names")), *to_list(item.get("display_names"))])
         likely_contributors = dedupe_text(
             [
                 *to_list(item.get("likely_contributors")),
@@ -435,6 +460,7 @@ def build_analysis_result(
                     "evidence_refs": refs,
                     "time_window": first_present(item.get("time_window"), build_time_window(result)),
                     "source_tags": source_tags,
+                    "source_tag_display_names": source_tag_display_names,
                     "explanation": first_present(item.get("explanation"), item.get("what_changed")),
                 }
             )
@@ -497,6 +523,7 @@ def build_analysis_result(
             "evidence_index": evidence_index,
             "warnings": warnings,
             "errors": errors,
+            "telemetry_signals": telemetry_signals,
             "analysis_metadata": {
                 "contract_version": CONTRACT_VERSION,
                 "job_id": result.get("job_id"),
@@ -507,6 +534,7 @@ def build_analysis_result(
                 "column_count": result.get("column_count"),
                 "generated_from": "uploaded_csv_telemetry",
                 "processing_time_seconds": result.get("processing_time_seconds"),
+                "telemetry_signal_count": len(telemetry_signals),
             },
             "normalized_telemetry": normalized_telemetry,
         }

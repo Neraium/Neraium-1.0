@@ -13,6 +13,7 @@ from app.services.operator_report import build_operator_report
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
+from app.services.telemetry_classification import build_telemetry_signal_catalog, update_catalog_from_baseline
 from app.services.telemetry_normalization import build_normalization_report
 
 
@@ -71,7 +72,20 @@ def run_structural_analysis_pipeline(
     stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
     matrix_rows = matrix_rows_for_profiles
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
-    baseline_analysis = build_baseline_analysis(columns, matrix_rows, numeric_profiles)
+    header_present = bool((ingestion_report or {}).get("header_present", True))
+    telemetry_signal_catalog = build_telemetry_signal_catalog(
+        columns,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=timestamp_column,
+        header_present=header_present,
+    )
+    baseline_analysis = build_baseline_analysis(
+        columns,
+        matrix_rows,
+        numeric_profiles,
+        telemetry_signal_catalog=telemetry_signal_catalog,
+    )
+    telemetry_signal_catalog = update_catalog_from_baseline(telemetry_signal_catalog, baseline_analysis)
 
     stage_notifier(job_id, stage="scoring_drift_relationships", progress=72, label="Mapping relationships...")
     relationship_model = build_relationship_baseline(
@@ -79,6 +93,7 @@ def run_structural_analysis_pipeline(
         numeric_columns,
         total_row_count=row_count_total,
         baseline_analysis=baseline_analysis,
+        telemetry_signal_catalog=telemetry_signal_catalog,
     )
     replay = _empty_optional_replay(job_id, "inline_replay_disabled")
     if _inline_replay_generation_enabled():
@@ -253,6 +268,7 @@ def run_structural_analysis_pipeline(
         driver_attribution=driver_attribution,
         engine_result=engine_result,
         processing_trace=processing_trace,
+        telemetry_signal_catalog=telemetry_signal_catalog,
     )
     stage_notifier(job_id, stage="saving_result", progress=95, label="Saving result...")
     if isinstance(runner_result, dict):
@@ -265,6 +281,7 @@ def run_structural_analysis_pipeline(
     latest_runner_state = runner_result.get("latest_state") if isinstance(runner_result, dict) else None
     return {
         "baseline_analysis": baseline_analysis,
+        "telemetry_signal_catalog": telemetry_signal_catalog,
         "baseline_reliable": baseline_reliable,
         "cultivation_mapping": cultivation_mapping,
         "data_quality": data_quality,

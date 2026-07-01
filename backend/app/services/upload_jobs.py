@@ -677,6 +677,7 @@ def _build_csv_result(
     now = pipeline["now"]
     timestamp_profile = pipeline["timestamp_profile"]
     baseline_analysis = pipeline["baseline_analysis"]
+    telemetry_signal_catalog = pipeline.get("telemetry_signal_catalog", {})
     cultivation_mapping = pipeline["cultivation_mapping"]
     baseline_reliable = pipeline["baseline_reliable"]
     data_quality = pipeline["data_quality"]
@@ -729,6 +730,8 @@ def _build_csv_result(
             "synthetic_fallback_used": False,
         },
         "baseline_analysis": baseline_analysis,
+        "telemetry_signal_catalog": telemetry_signal_catalog,
+        "telemetry_signals": list(telemetry_signal_catalog.values()) if isinstance(telemetry_signal_catalog, dict) else telemetry_signal_catalog,
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
         "engine_result": engine_result,
@@ -773,6 +776,7 @@ def _build_csv_result(
         data_quality=data_quality,
         ingestion_report=result["ingestion_report"],
         source_file=filename,
+        telemetry_signal_catalog=telemetry_signal_catalog,
     )
     result = attach_analysis_result(result, normalized_telemetry=normalized_telemetry)
 

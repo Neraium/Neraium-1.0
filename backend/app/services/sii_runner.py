@@ -13,6 +13,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
 from app.services.runtime_db import read_latest_payload, upsert_latest_payload
+from app.services.telemetry_classification import signal_classification, telemetry_catalog_by_column
 from app.services.telemetry_normalization import SENTINEL
 
 import numpy as np
@@ -394,6 +395,7 @@ def run_sii_runner(
     driver_attribution: dict[str, Any],
     engine_result: dict[str, Any],
     processing_trace: dict[str, Any],
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     _try_import_runner()
     base_result: dict[str, Any] = {
@@ -414,11 +416,12 @@ def run_sii_runner(
         base_result["errors"].append(runner_import_error() or "SII runner is not importable.")
         return base_result
 
-    vector_rows = build_sensor_vectors(columns, rows, numeric_profiles)
+    vector_rows = build_sensor_vectors(columns, rows, numeric_profiles, telemetry_signal_catalog=telemetry_signal_catalog)
     source_vector_count = len(vector_rows["vectors"])
     vector_rows = limit_runner_vectors(vector_rows)
     retained_vector_count = len(vector_rows["vectors"])
     base_result["columns_used"] = vector_rows["columns_used"]
+    base_result["columns_excluded"] = vector_rows.get("excluded_columns", [])
     base_result["sensor_vector_count"] = retained_vector_count
     base_result["sensor_vector_source_count"] = source_vector_count
     base_result["sampling_applied"] = bool(vector_rows.get("sampling_applied"))
@@ -506,12 +509,20 @@ def build_sensor_vectors(
     columns: list[str],
     rows: list[list[str]],
     numeric_profiles: list[dict[str, Any]],
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    numeric_columns = [
-        profile["column"]
-        for profile in numeric_profiles
-        if profile.get("column") in columns
-    ]
+    signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
+    numeric_columns = []
+    excluded_columns = []
+    for profile in numeric_profiles:
+        column = profile.get("column")
+        if column not in columns:
+            continue
+        classification = signal_classification(str(column), signal_catalog)
+        if classification.get("operator_primary_eligible") or classification.get("analysis_role") == "control_signal":
+            numeric_columns.append(column)
+        else:
+            excluded_columns.append({"column": column, "telemetry_category": classification.get("category"), "analysis_role": classification.get("analysis_role")})
     column_indexes = [columns.index(column) for column in numeric_columns]
     vectors: list[list[float]] = []
     row_indexes: list[int] = []
@@ -531,6 +542,7 @@ def build_sensor_vectors(
             row_indexes.append(row_index)
     return {
         "columns_used": numeric_columns,
+        "excluded_columns": excluded_columns,
         "vectors": vectors,
         "row_indexes": row_indexes,
     }

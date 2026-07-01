@@ -135,8 +135,9 @@ def build_insights(
             continue
         primary = group[0]
         primary_columns = relationship_columns(primary)
+        primary_display_columns = relationship_display_columns(primary)
         all_columns = dedupe([column for entry in group for column in relationship_columns(entry)])
-        label = " / ".join(primary_columns) if primary_columns else str(primary.get("relationship") or "Signal relationship")
+        label = " / ".join(primary_display_columns) if primary_display_columns else str(primary.get("display_relationship") or primary.get("relationship") or "Signal relationship")
         system = system_from_columns(all_columns or primary_columns)
         confidence_scores = [
             numeric_confidence_score(
@@ -152,7 +153,8 @@ def build_insights(
         group_source_ranges = []
         for group_index, entry in enumerate(group):
             columns = relationship_columns(entry)
-            entry_label = " / ".join(columns) if columns else str(entry.get("relationship") or "Signal relationship")
+            display_columns = relationship_display_columns(entry)
+            entry_label = " / ".join(display_columns) if display_columns else str(entry.get("display_relationship") or entry.get("relationship") or "Signal relationship")
             relationship_ranges = relationship_source_time_ranges(entry, source_time_ranges(result, time_window))
             group_source_ranges.extend(relationship_ranges)
             entry_confidence = numeric_confidence_score(
@@ -226,6 +228,7 @@ def build_insights(
     drift_items.sort(key=lambda item: abs(float(item.get("percent_change") or item.get("absolute_change") or 0)), reverse=True)
     for index, item in enumerate(drift_items[: max(0, 5 - len(insights))]):
         column = str(item.get("column") or "Signal")
+        column_label = signal_label_from_item(item)
         direction = str(item.get("direction") or "changed")
         persistent = column in persistent_columns
         persistence_detail = persistence_detail_for_column(persistence if isinstance(persistence, dict) else {}, column)
@@ -254,7 +257,7 @@ def build_insights(
         why = metric_confidence_basis(item, persistence_detail)
         operator_check = first_text(
             matching_operator_check(operator_report, column),
-            f"Review {column} readings against facility logs for the uploaded period.",
+            f"Review {column_label} readings against facility logs for the uploaded period.",
         )
         insights.append(
             compact_dict(
@@ -277,7 +280,7 @@ def build_insights(
                     "possible_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
                     "recommended_operator_check": operator_check,
                     "recommended_action": metric_recommended_action(column, item),
-                    "operator_check": f"Check source readings, control changes, and maintenance activity involving {column}.",
+                    "operator_check": f"Check source readings, control changes, and maintenance activity involving {column_label}.",
                     "evidence_summary": evidence_summary(evidence_items),
                     "evidence_items": evidence_items,
                     "evidence": evidence_items,
@@ -387,7 +390,7 @@ def build_systems(
         ):
             continue
         target = entry(system_from_columns([str(item.get("column") or "")]))
-        target["key_behaviors"].append(f"{item.get('column')} is moving {item.get('direction')} against baseline.")
+        target["key_behaviors"].append(f"{signal_label_from_item(item)} is moving {item.get('direction')} against baseline.")
         target["what_changed"].append(change_phrase(item))
 
     for relationship in relationship_model.get("top_relationship_changes", []) if isinstance(relationship_model.get("top_relationship_changes"), list) else []:
@@ -422,7 +425,8 @@ def build_relationships(
         if not isinstance(item, dict) or relationship_has_cumulative_counter(item):
             continue
         columns = relationship_columns(item)
-        label = " / ".join(columns) if columns else str(item.get("relationship") or "Signal relationship")
+        display_columns = relationship_display_columns(item)
+        label = " / ".join(display_columns) if display_columns else str(item.get("display_relationship") or item.get("relationship") or "Signal relationship")
         confidence_score = numeric_confidence_score(
             item.get("confidence_score"),
             sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
@@ -433,6 +437,7 @@ def build_relationships(
                     "id": f"relationship-{index}",
                     "name": label,
                     "columns": columns,
+                    "display_columns": display_columns,
                     "system": system_from_columns(columns),
                     "relationship_type": item.get("relationship_type"),
                     "change_type": item.get("change_type"),
@@ -890,7 +895,7 @@ def metric_confidence_score(item: dict[str, Any], persistence_detail: dict[str, 
 
 
 def metric_change_sentence(item: dict[str, Any]) -> str:
-    column = str(item.get("column") or "Signal")
+    column = signal_label_from_item(item)
     direction = str(item.get("direction") or "changed")
     percent = item.get("percent_change")
     baseline = item.get("baseline_average")
@@ -903,7 +908,7 @@ def metric_change_sentence(item: dict[str, Any]) -> str:
 
 
 def metric_confidence_basis(item: dict[str, Any], persistence_detail: dict[str, Any]) -> str:
-    column = str(item.get("column") or "this signal")
+    column = signal_label_from_item(item) or "this signal"
     percent = item.get("percent_change")
     persistence = persistence_phrase(persistence_detail)
     basis = f"Neraium compared baseline and current windows for {column}"
@@ -925,6 +930,7 @@ def column_evidence_items(
     confidence_score: float,
 ) -> list[dict[str, Any]]:
     column = str(item.get("column") or "Signal")
+    column_label = signal_label_from_item(item)
     confidence = confidence_label_from_score(confidence_score)
     summary = metric_change_sentence(item)
     return [
@@ -944,6 +950,7 @@ def column_evidence_items(
                 "source_columns": [column],
                 "source_metrics": [column],
                 "source_tags": [column],
+                "display_name": column_label,
                 "baseline_value": item.get("baseline_average"),
                 "current_value": item.get("recent_average"),
                 "calculated_delta": item.get("absolute_change"),
@@ -961,10 +968,12 @@ def column_evidence_items(
 
 
 def relationship_contribution(item: dict[str, Any], index: int, columns: list[str]) -> dict[str, Any]:
+    display_columns = relationship_display_columns(item)
     return compact_dict(
         {
             "id": f"relationship-{index}",
             "columns": columns,
+            "display_columns": display_columns,
             "label": relationship_label(item),
             "relationship_type": item.get("relationship_type"),
             "change_type": item.get("change_type"),
@@ -1006,7 +1015,7 @@ def largest_deviation_items(columns: list[dict[str, Any]], relationships: list[d
             compact_dict(
                 {
                     "type": "metric",
-                    "label": item.get("column"),
+                    "label": signal_label_from_item(item),
                     "magnitude": abs(float(item.get("percent_change") or item.get("absolute_change") or 0)),
                     "direction": item.get("direction"),
                     "percent_change": item.get("percent_change"),
@@ -1018,7 +1027,7 @@ def largest_deviation_items(columns: list[dict[str, Any]], relationships: list[d
             compact_dict(
                 {
                     "type": "relationship",
-                    "label": " / ".join(relationship_columns(item)) or item.get("relationship"),
+                    "label": " / ".join(relationship_display_columns(item)) or item.get("display_relationship") or item.get("relationship"),
                     "magnitude": abs(float(item.get("correlation_delta") or 0)),
                     "change_type": item.get("change_type"),
                     "baseline_strength": item.get("baseline_strength"),
@@ -1208,7 +1217,7 @@ def is_supporting_context_item(item: dict[str, Any]) -> bool:
     return (
         is_cumulative_context_item(item)
         or role == "supporting_context"
-        or category in {"scheduled_load_context", "weather_environment", "setpoint", "identifier_constant", "cumulative_counter"}
+        or category in {"scheduled_load_context", "weather_environment", "setpoint", "identifier_constant", "identifier", "constant", "cumulative_counter", "counter", "ground_truth_label", "binary_status", "equipment_state", "synthetic_feature", "timestamp", "unknown"}
         or is_context_or_supporting_column(column, metric_type=metric_type or None)
     )
 
@@ -1248,6 +1257,7 @@ def context_modifier_evidence_items(
                 "source_columns": [str(item.get("column")) for item in context_items if item.get("column")],
                 "source_metrics": [str(item.get("column")) for item in context_items if item.get("column")],
                 "source_tags": [str(item.get("column")) for item in context_items if item.get("column")],
+                "display_names": [signal_label_from_item(item) for item in context_items if item.get("column")],
                 "source_time_ranges": source_ranges,
                 "time_window": time_window,
                 "confidence": "moderate",
@@ -1260,7 +1270,7 @@ def context_modifier_evidence_items(
 
 
 def context_change_sentence(item: dict[str, Any]) -> str:
-    column = str(item.get("column") or "Context signal")
+    column = signal_label_from_item(item) or "Context signal"
     direction = str(item.get("direction") or "changed")
     percent = item.get("percent_change")
     if percent is not None:
@@ -1278,6 +1288,8 @@ def relationship_importance_sort_key(item: dict[str, Any]) -> tuple[float, float
 
 def relationship_is_context_only(item: dict[str, Any]) -> bool:
     context = item.get("relationship_context") if isinstance(item.get("relationship_context"), dict) else {}
+    if context.get("operator_primary_eligible") is False:
+        return True
     if context.get("context_only") is True:
         return True
     classifications = item.get("column_classifications") if isinstance(item.get("column_classifications"), list) else []
@@ -1342,10 +1354,10 @@ def merged_relationship_reason(group: list[dict[str, Any]], primary: dict[str, A
 
 
 def relationship_label(item: dict[str, Any]) -> str:
-    columns = relationship_columns(item)
+    columns = relationship_display_columns(item)
     if len(columns) >= 2:
         return f"{columns[0]} <-> {columns[1]} shifted"
-    return first_text(item.get("relationship"), item.get("summary"), "Relationship shifted")
+    return first_text(item.get("display_relationship"), item.get("relationship"), item.get("summary"), "Relationship shifted")
 
 
 def dedupe_ranges(ranges: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1375,6 +1387,22 @@ def relationship_has_cumulative_counter(item: dict[str, Any]) -> bool:
     return any(is_cumulative_counter_name(column) for column in relationship_columns(item))
 
 
+def signal_label_from_item(item: dict[str, Any]) -> str:
+    return first_text(item.get("display_name"), item.get("normalized_name"), item.get("original_header"), item.get("column"), "Signal")
+
+
+def relationship_display_columns(item: dict[str, Any]) -> list[str]:
+    display_columns = item.get("display_columns")
+    if isinstance(display_columns, list):
+        values = dedupe([str(column) for column in display_columns if column])
+        if values:
+            return values
+    metadata = item.get("source_column_metadata") if isinstance(item.get("source_column_metadata"), list) else []
+    values = [first_text(meta.get("display_name"), meta.get("normalized_name"), meta.get("original_header"), meta.get("source_column")) for meta in metadata if isinstance(meta, dict)]
+    values = dedupe([value for value in values if value])
+    return values or relationship_columns(item)
+
+
 def human_metric_label(column: str) -> str:
     text = str(column or "").lower()
     if "pump" in text and "vibration" in text:
@@ -1401,7 +1429,7 @@ def re_split_identifier(value: str) -> list[str]:
 
 def metric_title(item: dict[str, Any]) -> str:
     column = str(item.get("column") or "Signal")
-    label = human_metric_label(column)
+    label = human_metric_label(first_text(item.get("display_name"), column))
     direction = str(item.get("direction") or "changed")
     try:
         magnitude = abs(float(item.get("percent_change") or item.get("absolute_change") or 0))
@@ -1417,7 +1445,8 @@ def metric_title(item: dict[str, Any]) -> str:
 
 
 def relationship_title(columns: list[str], item: dict[str, Any]) -> str:
-    text = " ".join(columns).lower()
+    display_columns = relationship_display_columns(item) or columns
+    text = " ".join([*columns, *display_columns]).lower()
     if "fouling" in text and ("temp" in text or "thermal" in text):
         return "Fouling-related thermal behavior changed"
     if "pressure" in text and "flow" in text:
@@ -1428,7 +1457,7 @@ def relationship_title(columns: list[str], item: dict[str, Any]) -> str:
         return "Thermal relationship changed"
     if "flow" in text or "pressure" in text:
         return "Flow and pressure behavior changed"
-    labels = [human_metric_label(column) for column in columns[:2]]
+    labels = [human_metric_label(column) for column in display_columns[:2]]
     if len(labels) == 2 and labels[0] != "Signal" and labels[1] != "Signal":
         return f"{labels[0]} and {labels[1]} relationship changed"
     return "Signal relationship changed"
@@ -1445,7 +1474,7 @@ def relationship_recommended_action(system: str) -> str:
 
 
 def metric_recommended_action(column: str, item: dict[str, Any]) -> str:
-    label = human_metric_label(column).lower()
+    label = human_metric_label(first_text(item.get("display_name"), column)).lower()
     if "vibration" in label:
         return "Prioritize pump mechanical review and trend the vibration signal against the next operating window."
     return f"Prioritize {label} in the next operations review and track whether it continues outside baseline."
@@ -1480,7 +1509,7 @@ def largest_deviation(columns: list[dict[str, Any]], relationships: list[dict[st
 
 
 def change_phrase(item: dict[str, Any]) -> str:
-    column = str(item.get("column") or "Signal")
+    column = signal_label_from_item(item)
     direction = str(item.get("direction") or "changed")
     percent = item.get("percent_change")
     if percent is not None:

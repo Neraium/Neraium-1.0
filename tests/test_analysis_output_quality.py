@@ -61,7 +61,7 @@ def test_analysis_output_suppresses_cumulative_counter_artifacts() -> None:
     assert "meter_cumulative_gal moved" not in serialized_insights
 
 
-def test_analysis_output_promotes_operational_findings_and_keeps_valid_relationship() -> None:
+def test_analysis_output_promotes_operational_findings_and_suppresses_ground_truth_relationships() -> None:
     result = process_csv_content(
         filename="analysis-quality.csv",
         content=_analysis_quality_csv(),
@@ -71,10 +71,17 @@ def test_analysis_output_promotes_operational_findings_and_keeps_valid_relations
     insight_titles = [insight["title"] for insight in analysis["insights"]]
 
     assert "Pump vibration increased sharply" in insight_titles
-    assert "Fouling-related thermal behavior changed" in insight_titles
-    assert any(
-        {"ct_outlet_temp_f", "gt_ct_fouling_severity"}.issubset(set(relationship.get("source_tags", [])))
+    assert not any("fouling" in title.lower() for title in insight_titles)
+    assert not any(
+        "gt_ct_fouling_severity" in relationship.get("source_tags", [])
         for relationship in analysis["relationships"]
+    )
+    assert any(
+        item["column"] == "gt_ct_fouling_severity"
+        and item["telemetry_category"] == "ground_truth_label"
+        and item["analysis_role"] == "validation_label"
+        and item["drift_flag"] == "validation"
+        for item in result["baseline_analysis"]["column_drift"]
     )
     assert not any(title.startswith("Relationship shift:") for title in insight_titles)
 
@@ -116,3 +123,60 @@ def test_analysis_output_missing_telemetry_warning_has_affected_columns_and_perc
     missing_values = " ".join(data_quality["missing_values"])
     assert "0.4% missing" in missing_values
 
+
+
+def _semantic_mapping_csv() -> bytes:
+    rows = []
+    for index in range(80):
+        timestamp = f"2026-06-01T{index // 60:02d}:{index % 60:02d}:00Z"
+        pressure = 50.0 if index < 40 else 75.0
+        status = 0 if index < 40 else 1
+        occupancy = 18 if index < 40 else 92
+        rows.append(f"{timestamp},{pressure:.2f},{status},{occupancy}")
+    header = "Timestamp,Supply Pressure (psi),Pump Status,Occupancy Load %"
+    return (header + "\n" + "\n".join(rows)).encode("utf-8")
+
+
+def test_semantic_header_mapping_survives_pipeline_and_titles_avoid_column_fallbacks() -> None:
+    result = process_csv_content(
+        filename="semantic-mapping.csv",
+        content=_semantic_mapping_csv(),
+        job_id="semanticmapping001",
+    )
+
+    catalog = result["telemetry_signal_catalog"]
+    pressure = catalog["Supply Pressure (psi)"]
+    assert pressure["original_header"] == "Supply Pressure (psi)"
+    assert pressure["normalized_name"] == "supply_pressure_psi"
+    assert pressure["display_name"] == "Supply pressure"
+    assert pressure["engineering_units"] == "psi"
+    assert pressure["source_column_index"] == 1
+    assert pressure["inferred_telemetry_type"] == "Equipment Process Variable"
+
+    tags = {tag["source_column"]: tag for tag in result["analysis_result"]["normalized_telemetry"]["tags"]}
+    assert tags["Supply Pressure (psi)"]["original_header"] == "Supply Pressure (psi)"
+    assert tags["Supply Pressure (psi)"]["display_name"] == "Supply pressure"
+
+    serialized_insights = str(result["analysis_result"]["insights"])
+    assert "Supply pressure moved up" in serialized_insights
+    assert "Column " not in serialized_insights
+
+
+def test_binary_status_columns_use_state_analysis_not_operator_findings() -> None:
+    rows = []
+    for index in range(120):
+        timestamp = f"2026-06-01T{index // 60:02d}:{index % 60:02d}:00Z"
+        status = 0 if index < 60 else 1
+        vibration = 0.1 if index < 60 else 0.5
+        rows.append(f"{timestamp},{status},{70.0:.1f},{vibration:.3f}")
+    content = ("timestamp,pump_status,water_temp_f,pump_vibration_ips\n" + "\n".join(rows)).encode("utf-8")
+
+    result = process_csv_content(filename="binary-status.csv", content=content, job_id="binarystate001")
+    status_drift = next(item for item in result["baseline_analysis"]["column_drift"] if item["column"] == "pump_status")
+
+    assert status_drift["telemetry_category"] == "binary_status"
+    assert status_drift["analysis_role"] == "state_signal"
+    assert status_drift["drift_flag"] == "state_analysis"
+    assert status_drift["state_analysis"]["transition_count"] == 1
+    assert "pump_status" not in str(result["analysis_result"]["insights"])
+    assert "pump_status" not in result["sii_runner_result"]["columns_used"]
