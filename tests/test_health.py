@@ -30,7 +30,27 @@ def test_health_endpoint_returns_ok() -> None:
     assert payload["service"] == "neraium-api"
     assert payload["startup_complete"] is True
     assert payload["failed_modules"] == []
-    assert payload["upload_session_state"] in {"empty", "restored", "verified", "processing", "queued", "stale", "error"}
+    assert payload["upload_session_state"] == "not_checked"
+    assert payload["upload_session_metrics"] == {}
+    assert payload["diagnostics"]["upload"]["latest_upload_session_id"] is None
+    assert payload["diagnostics"]["upload"]["latest_upload_state"] is None
+
+
+def test_health_endpoint_does_not_resolve_upload_session(monkeypatch) -> None:
+    def fail_upload_session_lookup(*args, **kwargs):
+        raise AssertionError("health endpoint should not resolve upload session state")
+
+    monkeypatch.setattr("app.routers.health.resolve_latest_upload_session", fail_upload_session_lookup)
+    monkeypatch.setattr("app.services.service_status.resolve_latest_upload_session", fail_upload_session_lookup)
+
+    with TestClient(create_app()) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["upload_session_state"] == "not_checked"
+    assert payload["diagnostics"]["upload"]["latest_upload_session_id"] is None
 
 
 def test_health_endpoint_returns_degraded_when_startup_failed() -> None:
@@ -104,7 +124,7 @@ def test_health_endpoint_exposes_last_upload_failure_diagnostic(tmp_path) -> Non
             "error_type": "csv_validation_error",
             "message": "CSV file is empty.",
         })
-        response = client.get("/api/health")
+        response = client.get("/api/ready?verbose=true")
 
     assert response.status_code == 503
     upload = response.json()["diagnostics"]["upload"]

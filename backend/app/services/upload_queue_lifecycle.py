@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -13,6 +14,19 @@ from app.services.runtime_db import (
     touch_upload_queue_job,
 )
 from app.services.upload_runtime_state import UploadRuntimeState
+
+
+def _log_queue_event(logger: logging.Logger, event: str, **fields: Any) -> None:
+    normalized = {"event": event, **fields}
+    parts = []
+    for key, value in normalized.items():
+        if value is None:
+            continue
+        text = str(value).replace("\n", " ").replace("\r", " ")
+        if len(text) > 500:
+            text = f"{text[:500]}..."
+        parts.append(f"{key}={text}")
+    logger.info("upload_queue_lifecycle_event %s", " ".join(parts))
 
 
 class UploadQueueLifecycleService:
@@ -72,20 +86,53 @@ class UploadQueueLifecycleService:
         return restored
 
     def process_next_queued_upload_job(self) -> bool:
+        started_at = time.perf_counter()
         job_id = claim_next_upload_job()
         if not job_id:
             return False
         metadata = self._read_processing_metadata(job_id)
+        filename = metadata.get("filename")
+        request_id = metadata.get("request_id")
+        _log_queue_event(
+            self.logger,
+            "job_claimed",
+            job_id=job_id,
+            request_id=request_id,
+            filename=filename,
+            queue_status="processing",
+            processing_stage="claim",
+        )
         try:
             path = self._resolve_processing_path(job_id, metadata)
-        except Exception:
-            self.logger.exception("upload_source_restore_failed job_id=%s filename=%s", job_id, metadata.get("filename"))
+        except Exception as exc:
+            self.logger.exception("upload_source_restore_failed job_id=%s filename=%s", job_id, filename)
+            _log_queue_event(
+                self.logger,
+                "job_failed",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                queue_status="failed",
+                processing_stage="restore_source",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                failure_reason=str(exc) or exc.__class__.__name__,
+            )
             path = None
         if path is None or not path.exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
             existing_status = self.read_upload_status(job_id) or {}
             if existing_result or str(existing_status.get("status", "")).upper() == "COMPLETE":
                 complete_upload_queue_job(job_id, "completed")
+                _log_queue_event(
+                    self.logger,
+                    "job_completed",
+                    job_id=job_id,
+                    request_id=request_id,
+                    filename=filename,
+                    queue_status="completed",
+                    processing_stage="existing_result",
+                    elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                )
                 return True
             mark_queue_job_failed(job_id, "missing_upload_file")
             self.write_job(
@@ -99,8 +146,34 @@ class UploadQueueLifecycleService:
                     "message": "Upload file could not be found for processing.",
                 }
             )
+            _log_queue_event(
+                self.logger,
+                "job_failed",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                queue_status="failed",
+                processing_stage="resolve_source",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                failure_reason="missing_upload_file",
+            )
             return False
         try:
+            file_size_bytes = None
+            try:
+                file_size_bytes = path.stat().st_size
+            except OSError:
+                pass
+            _log_queue_event(
+                self.logger,
+                "job_processing_started",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                file_size_bytes=file_size_bytes,
+                queue_status="processing",
+                processing_stage="parsing_telemetry",
+            )
             self.write_job(
                 {
                     **metadata,
@@ -158,6 +231,16 @@ class UploadQueueLifecycleService:
                 completed["propagation_label"] = "Complete."
             self.write_job(completed)
             complete_upload_queue_job(job_id, "completed")
+            _log_queue_event(
+                self.logger,
+                "job_completed",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                queue_status="completed",
+                processing_stage=completed.get("processing_state") or "complete",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+            )
             try:
                 path.unlink(missing_ok=True)
             except OSError:
@@ -165,7 +248,18 @@ class UploadQueueLifecycleService:
             self.delete_upload_source(metadata.get("shared_upload_source_key"))
             return bool(result)
         except TimeoutError as exc:
-            self.logger.exception("upload_queue_job_timed_out job_id=%s filename=%s", job_id, metadata.get("filename"))
+            self.logger.exception("upload_queue_job_timed_out job_id=%s filename=%s", job_id, filename)
+            _log_queue_event(
+                self.logger,
+                "job_failed",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                queue_status="failed",
+                processing_stage="processing_timeout",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                failure_reason=str(exc) or exc.__class__.__name__,
+            )
             mark_queue_job_failed(job_id, str(exc) or exc.__class__.__name__)
             complete_upload_queue_job(job_id, "failed", str(exc) or exc.__class__.__name__)
             self.write_job(
@@ -188,9 +282,20 @@ class UploadQueueLifecycleService:
             )
             return False
         except Exception as exc:
-            self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, metadata.get("filename"))
+            self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, filename)
             current = self.read_upload_status(job_id) or {}
             error_message = str(exc) or exc.__class__.__name__
+            _log_queue_event(
+                self.logger,
+                "job_failed",
+                job_id=job_id,
+                request_id=request_id,
+                filename=filename,
+                queue_status="failed",
+                processing_stage="processing",
+                elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                failure_reason=error_message,
+            )
             mark_queue_job_failed(job_id, error_message)
             complete_upload_queue_job(job_id, "failed", error_message)
             self.write_job(

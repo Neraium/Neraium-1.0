@@ -37,13 +37,17 @@ def _production_config_warnings(settings, *, state_shared: bool, queue_backend: 
     return warnings
 
 
-def runtime_diagnostics(settings=None) -> dict[str, object]:
+def runtime_diagnostics(settings=None, *, include_upload_session: bool = True) -> dict[str, object]:
     settings = settings or get_settings()
     state_backend = upload_state_backend()
     state_shared = shared_state_configured()
     queue_backend = upload_queue_backend()
-    latest_session = resolve_latest_upload_session(include_persisted=True)
-    snapshot = latest_session.get("snapshot") if isinstance(latest_session.get("snapshot"), dict) else {}
+    if include_upload_session:
+        latest_session = resolve_latest_upload_session(include_persisted=True)
+        snapshot = latest_session.get("snapshot") if isinstance(latest_session.get("snapshot"), dict) else {}
+    else:
+        latest_session = {}
+        snapshot = {}
     warnings = _production_config_warnings(settings, state_shared=state_shared, queue_backend=queue_backend)
     return {
         "deployment": {
@@ -107,8 +111,8 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
 
 @router.get("/health")
 def read_health(request: Request) -> JSONResponse:
-    snapshot = service_health_snapshot()
-    payload = {**snapshot, "service": "neraium-api", "diagnostics": runtime_diagnostics(request.app.state.settings)}
+    snapshot = service_health_snapshot(include_upload_session=False)
+    payload = {**snapshot, "service": "neraium-api", "diagnostics": runtime_diagnostics(request.app.state.settings, include_upload_session=False)}
     return JSONResponse(
         status_code=status.HTTP_200_OK if snapshot["status"] == "ok" else status.HTTP_503_SERVICE_UNAVAILABLE,
         content=payload,
@@ -119,13 +123,13 @@ def read_health(request: Request) -> JSONResponse:
 def read_ready(request: Request, verbose: bool = False) -> JSONResponse:
     settings = request.app.state.settings
     checks, failed_modules = readiness_snapshot(settings)
-    diagnostics = runtime_diagnostics(settings)
+    diagnostics = runtime_diagnostics(settings, include_upload_session=verbose)
     details: dict[str, object] = {
         "mode": "verbose" if verbose else "lightweight",
     }
 
     if verbose:
-        snapshot = service_health_snapshot()
+        snapshot = service_health_snapshot(include_upload_session=True)
         latest_session = resolve_latest_upload_session(include_persisted=True)
         session_state = str(latest_session.get("session_state") or "empty")
         if snapshot["status"] != "ok":

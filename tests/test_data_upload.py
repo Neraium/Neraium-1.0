@@ -172,6 +172,48 @@ def test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
 
 
 
+def test_upload_in_split_role_production_uses_external_worker_queue(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
+    settings = Settings(
+        app_env="production",
+        backend_host="127.0.0.1",
+        backend_port=8010,
+        cors_origins=["https://app.neraium.com"],
+        runtime_dir=tmp_path,
+        process_role="api",
+    )
+    enqueued_jobs = []
+    dispatched_workers = []
+
+    monkeypatch.setattr(data_router, "shared_state_configured", lambda: True)
+    monkeypatch.setattr(
+        data_router,
+        "persist_upload_source",
+        lambda job_id, temp_path, filename=None, content_type=None: f"upload-state/upload-sources/{job_id}.csv",
+    )
+    monkeypatch.setattr(data_router, "queue_metrics", lambda: {"pending": 0, "processing": 0})
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued_jobs.append(job_id))
+    monkeypatch.setattr(data_router, "_dispatch_upload_worker_for_runtime", lambda runtime_dir: dispatched_workers.append(runtime_dir))
+    client = TestClient(create_app(settings))
+
+    response = client.post(
+        "/api/data/upload",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+        files={"file": ("sensor-export.csv", "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58", "text/csv")},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["job_id"]
+    assert payload["status"] == "PENDING"
+    assert payload["worker_dispatch_status"] == "external_worker_queue"
+    assert payload["worker_state"] == "queued"
+    assert enqueued_jobs == [payload["job_id"]]
+    assert dispatched_workers == []
+    status_payload = upload_jobs.read_upload_status(payload["job_id"])
+    assert status_payload["shared_upload_source_key"] == f"upload-state/upload-sources/{payload['job_id']}.csv"
+
+
 def test_retry_upload_analysis_requeues_current_uploaded_dataset(tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path)
     client = TestClient(create_app(settings))

@@ -91,6 +91,27 @@ def invalidate_latest_upload_cache() -> None:
     return None
 
 
+def _log_upload_event(event: str, **fields: Any) -> None:
+    normalized = {"event": event, **fields}
+    parts = []
+    for key, value in normalized.items():
+        if value is None:
+            continue
+        text = str(value).replace("\n", " ").replace("\r", " ")
+        if len(text) > 500:
+            text = f"{text[:500]}..."
+        parts.append(f"{key}={text}")
+    logger.info("upload_lifecycle_event %s", " ".join(parts))
+
+
+def _should_dispatch_upload_worker(settings: Any) -> bool:
+    app_env = str(getattr(settings, "app_env", "") or "").strip().lower()
+    process_role = str(getattr(settings, "process_role", "") or "").strip().lower()
+    if app_env in {"prod", "production"} and process_role == "api" and shared_state_configured():
+        return False
+    return True
+
+
 def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
     worker_job_id: str | None = None
     try:
@@ -410,9 +431,12 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         if not allowed:
             return _rate_limit_response(retry_after, error_type="upload_rate_limited", message="Upload rate limit exceeded. Retry shortly.")
     settings = request.app.state.settings
+    started_at = time.perf_counter()
+    request_id = getattr(request.state, "request_id", None)
     filename = file.filename or "upload.csv"
     lowered = filename.lower()
     if not (lowered.endswith(".csv") or lowered.endswith(".json") or lowered.endswith(".txt")):
+        _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, processing_stage="validate_file_type", failure_reason="unsupported_file_type")
         return JSONResponse(
             status_code=400,
             content={
@@ -426,6 +450,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 10 * 1024 * 1024 * 1024))
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(settings, "max_pending_upload_jobs", 3)):
+        _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, queue_status="saturated", processing_stage="queue_capacity", failure_reason="upload_queue_saturated")
         return JSONResponse(
             status_code=503,
             headers={"retry-after": "30"},
@@ -437,12 +462,14 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         )
 
     content_type = (file.content_type or "").lower()
-    logger.info(
-        "upload_request_started filename=%s content_type=%s content_length=%s max_upload_size_bytes=%s",
-        filename,
-        content_type or "unknown",
-        request.headers.get("content-length"),
-        max_size_bytes,
+    _log_upload_event(
+        "request_started",
+        request_id=request_id,
+        endpoint="/api/data/upload",
+        filename=filename,
+        content_type=content_type or "unknown",
+        content_length=request.headers.get("content-length"),
+        max_upload_size_bytes=max_size_bytes,
     )
     auth_context = getattr(request.state, "auth_context", {})
     actor = (
@@ -484,6 +511,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 temp.write(chunk)
 
         if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
+            _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, processing_stage="validate_csv", failure_reason="csv_empty")
             try:
                 Path(temp_path).unlink(missing_ok=True)
             except OSError:
@@ -498,10 +526,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 },
             )
 
-        logger.info("upload_request_bytes_received filename=%s size_bytes=%s content_type=%s", filename, file_size_bytes, content_type or "unknown")
+        _log_upload_event("request_bytes_received", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, content_type=content_type or "unknown", processing_stage="spooled")
 
         job_id = uuid.uuid4().hex
-        request_id = getattr(request.state, "request_id", None)
         request.state.upload_session_id = job_id
         shared_upload_source_key = None
         if shared_state_configured():
@@ -511,6 +538,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 filename=filename,
                 content_type=content_type or None,
             )
+        worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(settings) else "external_worker_queue"
         summary = {
             "job_id": job_id,
             "filename": filename,
@@ -534,10 +562,24 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "initiated_by": actor,
             "request_id": request_id,
             "upload_session_id": job_id,
+            "worker_dispatch_status": worker_dispatch_status,
         }
         upload_jobs.write_job(summary)
         enqueue_upload_job(job_id)
-        _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+        if worker_dispatch_status == "thread_dispatched":
+            _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+        _log_upload_event(
+            "job_queued",
+            request_id=request_id,
+            endpoint="/api/data/upload",
+            filename=filename,
+            file_size_bytes=file_size_bytes,
+            job_id=job_id,
+            queue_status="pending",
+            worker_dispatch_status=worker_dispatch_status,
+            processing_stage="queued",
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
         record_audit_event(
             actor=actor,
             action="upload.accepted",
@@ -593,6 +635,18 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         failed_at = datetime.now(timezone.utc).isoformat()
         error_message = str(exc) or exc.__class__.__name__
         error_type = "shared_upload_queue_not_configured" if "shared_upload_queue_not_configured" in error_message else "upload_enqueue_failed"
+        _log_upload_event(
+            "request_failed",
+            request_id=request_id,
+            endpoint="/api/data/upload",
+            filename=filename,
+            file_size_bytes=file_size_bytes,
+            job_id=failed_job_id,
+            processing_stage="enqueue",
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+            failure_reason=error_type,
+        )
+        logger.exception("upload_request_enqueue_failed request_id=%s job_id=%s filename=%s size_bytes=%s", request_id, failed_job_id, filename, file_size_bytes)
         upload_jobs.write_job(
             {
                 **summary,
@@ -669,7 +723,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "propagation_stage": "queued",
         "propagation_progress": 5,
         "propagation_label": "Worker starting...",
-        "worker_state": "starting",
+        "worker_state": "starting" if summary.get("worker_dispatch_status") == "thread_dispatched" else "queued",
+        "worker_dispatch_status": summary.get("worker_dispatch_status"),
         "worker_last_seen_at": datetime.now(timezone.utc).isoformat(),
         "queue_position": None,
         "queued_seconds": 0,
@@ -679,6 +734,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 @router.post("/upload/{job_id}/retry", status_code=202, dependencies=[Depends(require_operator_role)])
 async def retry_upload_analysis(request: Request, job_id: str):
+    settings = request.app.state.settings
+    request_id = getattr(request.state, "request_id", None)
     requested_job_id = str(job_id or "").strip()
     if not UPLOAD_JOB_ID_PATTERN.match(requested_job_id):
         return JSONResponse(
@@ -707,6 +764,7 @@ async def retry_upload_analysis(request: Request, job_id: str):
         )
 
     now = datetime.now(timezone.utc).isoformat()
+    worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(settings) else "external_worker_queue"
     retried = {
         **status_payload,
         "job_id": requested_job_id,
@@ -726,12 +784,24 @@ async def retry_upload_analysis(request: Request, job_id: str):
         "propagation_progress": 5,
         "propagation_label": "Retry queued.",
         "retry_requested_at": now,
-        "worker_state": "starting",
+        "worker_state": "starting" if worker_dispatch_status == "thread_dispatched" else "queued",
+        "worker_dispatch_status": worker_dispatch_status,
         "worker_last_seen_at": now,
     }
     upload_jobs.write_job(retried)
     enqueue_upload_job(requested_job_id)
-    _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+    if worker_dispatch_status == "thread_dispatched":
+        _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+    _log_upload_event(
+        "retry_queued",
+        request_id=request_id,
+        endpoint=f"/api/data/upload/{requested_job_id}/retry",
+        filename=status_payload.get("filename"),
+        job_id=requested_job_id,
+        queue_status="pending",
+        worker_dispatch_status=worker_dispatch_status,
+        processing_stage="queued",
+    )
     return {
         "job_id": requested_job_id,
         "status": "PENDING",
@@ -741,7 +811,8 @@ async def retry_upload_analysis(request: Request, job_id: str):
         "progress_label": "Retry queued.",
         "message": "Retry queued.",
         "status_url": f"/api/data/upload-status/{requested_job_id}",
-        "worker_state": "starting",
+        "worker_state": "starting" if worker_dispatch_status == "thread_dispatched" else "queued",
+        "worker_dispatch_status": worker_dispatch_status,
         "worker_last_seen_at": now,
     }
 
