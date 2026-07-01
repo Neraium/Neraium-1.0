@@ -1015,6 +1015,98 @@ button.insight-card {
   max-width: 980px;
 }
 
+.operator-executive-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.operator-completion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operator-completion-list li {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+  color: var(--ops-ink);
+  padding: 8px 10px;
+}
+
+.operator-completion-list span {
+  color: var(--ops-success);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.operator-completion-list strong {
+  font-size: 0.88rem;
+  font-weight: 620;
+  line-height: 1.25;
+}
+
+.operator-summary-notice {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--ops-line);
+  border-left: 3px solid var(--ops-warning);
+  border-radius: 8px;
+  background: var(--ops-warning-soft);
+  color: var(--ops-warning);
+  padding: 10px 12px;
+}
+
+.operator-summary-notice strong {
+  font-size: 0.94rem;
+  font-weight: 640;
+  line-height: 1.25;
+}
+
+.operator-summary-notice p {
+  margin: 0;
+  color: var(--ops-ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.executive-summary-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  margin: 0;
+}
+
+.executive-summary-item {
+  min-width: 0;
+  border-top: 1px solid var(--ops-line);
+  padding: 13px 0;
+}
+
+.executive-summary-item dt {
+  color: var(--ops-ink-muted);
+  font-size: 0.72rem;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.executive-summary-item dd {
+  margin: 6px 0 0;
+  color: var(--ops-ink);
+  font-size: 1rem;
+  font-weight: 620;
+  line-height: 1.38;
+}
+
 .operator-summary-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -1147,10 +1239,15 @@ button.insight-card {
   .evidence-group__header {
     display: grid;
   }
+
+  .executive-summary-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 520px) {
   .summary-row-list,
+  .executive-summary-list,
   .operational-detail-grid {
     grid-template-columns: 1fr;
   }

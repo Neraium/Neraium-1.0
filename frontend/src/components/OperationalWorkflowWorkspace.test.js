@@ -189,10 +189,15 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.getAllByText("Analysis Complete").length).toBeGreaterThan(0);
-    expect(screen.getByText("Analysis based on uploaded telemetry")).toBeTruthy();
     expect(screen.getByText("Historical telemetry analyzed.")).toBeTruthy();
-    expect(screen.getByText("Overall status")).toBeTruthy();
-    expect(screen.getByText("Recommended next check")).toBeTruthy();
+    expect(screen.getByText("Systems identified")).toBeTruthy();
+    expect(screen.getByText("Relationship changes detected")).toBeTruthy();
+    expect(screen.getByText("Baseline updated")).toBeTruthy();
+    expect(screen.getByText("Overall Status")).toBeTruthy();
+    expect(screen.getByText("Recommended Next Check")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
+    expect(screen.queryByText("Telemetry acceptable")).toBeNull();
+    expect(screen.queryByText("Analysis completed with minor data quality warnings")).toBeNull();
     expect(screen.getAllByText("Continue monitoring").length).toBeGreaterThan(0);
     expect(screen.queryByText("Relationships mapped")).toBeNull();
     expect(screen.queryByText("Baseline confidence")).toBeNull();
@@ -217,8 +222,9 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Live telemetry connected").length).toBeGreaterThan(0);
-    expect(screen.getByText("Overall status")).toBeTruthy();
+    expect(screen.getByText("Live telemetry is connected and current behavior is being monitored.")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
+    expect(screen.getByText("Overall Status")).toBeTruthy();
     expect(screen.queryByText("systems monitored")).toBeNull();
   });
 
@@ -286,11 +292,12 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Overall status")).toBeTruthy();
+    expect(screen.getByText("Overall Status")).toBeTruthy();
+    expect(screen.getByText("Operational instability observed")).toBeTruthy();
     expect(screen.getByText("Pressure and flow relationship shifted")).toBeTruthy();
     expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
     expect(screen.getAllByText("Check pump schedule and valve position").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Systems identified")).toBeNull();
+    expect(screen.getByText("Systems identified")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
     expect(screen.getByText("What changed")).toBeTruthy();
@@ -309,6 +316,39 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("Pressure increased 18%")).toBeTruthy();
     expect(screen.getByText("Pattern persisted for 36 hours")).toBeTruthy();
     expect(screen.queryByText("Maintenance correlation will appear when maintenance history is connected.")).toBeNull();
+  });
+
+  it("keeps overall status consistent when a finding contradicts baseline wording", () => {
+    const analysisResult = {
+      executive_summary: {
+        overall_operational_status: "Baseline-aligned",
+        highest_priority_finding: "Flow / Pressure subsystem behavior changed",
+        biggest_emerging_risk: "Pressure response may drift from normal control behavior.",
+        recommended_action: "Check pressure valve response.",
+      },
+      insights: [{
+        id: "flow-pressure-change",
+        title: "Flow / Pressure subsystem behavior changed",
+        severity: "moderate",
+        possible_consequence: "Pressure response may drift from normal control behavior.",
+        operator_check: "Check pressure valve response.",
+        system: "Flow / Pressure subsystem",
+      }],
+      systems: [{ id: "flow-pressure", name: "Flow / Pressure subsystem" }],
+      relationships: [{ columns: ["flow", "pressure"], change_type: "changed" }],
+      fingerprint: { status: "changed", meaning: "Flow and pressure behavior changed against baseline." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Localized subsystem change detected")).toBeTruthy();
+    expect(screen.getByText("Flow / Pressure subsystem behavior changed")).toBeTruthy();
+    expect(screen.queryByText("Baseline-aligned")).toBeNull();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
   });
 
   it("formats confidence, dedupes factors, and summarizes missing telemetry", () => {
@@ -351,6 +391,9 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       effectiveLatestUploadSnapshot: completeSnapshot(),
     });
 
+    expect(screen.getByText("2 telemetry signals contained intermittent missing values")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
+
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("More")));
     expect(screen.getAllByText("0.4% missing values detected in supply pressure and pump vibration. Confidence reduced slightly.").length).toBeGreaterThan(0);
 
@@ -359,6 +402,34 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("high (1)")).toBeNull();
     expect(screen.queryByText("pump vibration")).toBeNull();
     expect(screen.getByText("Supporting measurements are available in Evidence.")).toBeTruthy();
+  });
+
+  it("shows reduced-confidence copy only when quality materially affects interpretation", () => {
+    const analysisResult = {
+      executive_summary: {
+        recommended_action: "Confirm source historian export.",
+      },
+      data_quality: {
+        warnings: [],
+        signal_integrity: [
+          { signal_id: "flow", gap_type: "extended_gap", completeness: 0.72, suppress_confidence: true },
+        ],
+        missing_values: [],
+      },
+      insights: [],
+      systems: [],
+      relationships: [],
+      fingerprint: { status: "stable", meaning: "Current behavior remains close to the baseline." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Analysis completed with reduced confidence.")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
   });
 
   it("disables result tabs before analysis", () => {

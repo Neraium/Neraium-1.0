@@ -321,16 +321,12 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
             <h2>{model.heroStatus.label}</h2>
             <p>{model.heroStatus.detail}</p>
           </div>
-          <div className="operator-summary-card__meta">
-            <span>{model.storyProgressLabel || model.heroStatus.label}</span>
-            <span>{model.sourceLabel}</span>
-            <span>{model.telemetryStatus.label}</span>
-            {model.showBaselineClaim ? <span>{model.baselineStatus.label}</span> : null}
-          </div>
           {model.analysisComplete ? (
-            <div className="operator-summary-card__rows" aria-label="Executive summary rows">
-              <SummaryRows rows={model.executiveSummaryRows} />
-            </div>
+            <ExecutiveSummary
+              checklist={model.completionChecklist}
+              notice={model.dataQualityNotice}
+              rows={model.executiveSummaryRows}
+            />
           ) : (
             <div className="operator-summary-card__rows" aria-label="Source summary">
               <SummaryRows rows={[
@@ -531,6 +527,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const primarySystem = firstText(roomContext?.primary, liveOps?.primaryWindow?.label, result?.system_name, "Primary Water System");
   const baselineAvailable = analysisComplete && hasBaseline({ result, snapshot, relationshipRows, liveOps });
   const telemetryStatus = deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisComplete, telemetryAvailable, telemetryConnected });
+  const dataQualityNotice = deriveDataQualityNotice({ quality, liveOps, analysisComplete });
   const heroStatus = uiState.status;
   const lastAnalysis = deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result });
   const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation });
@@ -560,6 +557,13 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     finding,
     analysisExplanation,
   });
+  const completionChecklist = buildCompletionChecklist({
+    identifiedSystemCount,
+    insights,
+    relationshipRows,
+    fingerprintDrift,
+    baselineAvailable,
+  });
 
   const resultTabsReady = analysisComplete;
 
@@ -571,14 +575,14 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     headerEyebrow: "Neraium",
     headerSubtitle: isEmptyTelemetryState ? siteLabel : contextLabel,
     overviewState,
-    overviewTabMetric: isEmptyTelemetryState ? "Start" : heroStatus.label,
+    overviewTabMetric: isEmptyTelemetryState ? "Start" : (resultTabsReady ? "Summary" : heroStatus.label),
     moreTabMetric: "Details",
-    insightsTabMetric: resultTabsReady ? String(insights.length) : EMPTY_TAB_METRIC,
-    fingerprintTabMetric: resultTabsReady ? fingerprintDrift.label : EMPTY_TAB_METRIC,
-    evidenceTabMetric: resultTabsReady ? String(evidenceGroups.reduce((count, group) => count + group.evidence.length, 0)) : EMPTY_TAB_METRIC,
+    insightsTabMetric: resultTabsReady ? "Findings" : EMPTY_TAB_METRIC,
+    fingerprintTabMetric: resultTabsReady ? "Baseline" : EMPTY_TAB_METRIC,
+    evidenceTabMetric: resultTabsReady ? "Support" : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
-    showTopbarStatus: !isEmptyTelemetryState,
-    showSidebarStatus: !isEmptyTelemetryState,
+    showTopbarStatus: !isEmptyTelemetryState && !analysisComplete,
+    showSidebarStatus: !isEmptyTelemetryState && !analysisComplete,
     sourceStatusLabel: uiState.sourceStatusLabel,
     sourceRowCount,
     storyProgressLabel: uiState.storyProgressLabel,
@@ -586,6 +590,8 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     analyzeDisabled: uiState.key === "analyzing",
     showBaselineClaim: baselineAvailable,
     executiveSummaryRows,
+    completionChecklist,
+    dataQualityNotice,
     uiState,
     heroStatus,
     baselineStatus: baselineAvailable ? { label: "Baseline Established", tone: "normal" } : NO_BASELINE_AVAILABLE,
@@ -599,7 +605,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     fingerprintRows: buildFingerprintRows(analysisExplanation),
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
-    systemsTabMetric: resultTabsReady ? systemSummary.tabMetric : EMPTY_TAB_METRIC,
+    systemsTabMetric: resultTabsReady ? "Inventory" : EMPTY_TAB_METRIC,
     systemsSectionTitle: systemSummary.sectionTitle,
     systemsSectionSubtitle: systemSummary.sectionSubtitle,
     insights,
@@ -791,6 +797,7 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
   const topInsight = insights[0] ?? {};
   const topRecommendation = firstText(
     summary.recommended_action,
+    topInsight.operatorCheck,
     topInsight.recommendedAction,
     result?.recommended_action,
     result?.recommendation,
@@ -800,12 +807,65 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
     finding?.reviewNext,
     liveOps?.recommendedAction
   );
+  const meaningfulChange = hasMeaningfulOperationalChange({ insights, fingerprintDrift });
   return [
-    ["Overall status", operatorText(summary.overall_operational_status, result?.operating_state, result?.sii_intelligence?.facility_state)],
-    ["Highest-priority finding", operatorText(summary.highest_priority_finding, topInsight.summary)],
-    ["Biggest risk", operatorText(summary.biggest_emerging_risk, topInsight.possibleConsequence, fingerprintDrift.detail)],
-    ["Recommended next check", operatorText(topRecommendation)],
+    ["Overall Status", deriveExecutiveOverallStatus({ summary, insights, fingerprintDrift, result })],
+    [
+      "Highest Priority Finding",
+      conciseOperatorSentence(
+        summary.highest_priority_finding,
+        topInsight.summary,
+        meaningfulChange ? fingerprintDrift.detail : "No material subsystem change detected."
+      ),
+    ],
+    [
+      "Biggest Risk",
+      conciseOperatorSentence(
+        summary.biggest_emerging_risk,
+        topInsight.possibleConsequence,
+        topInsight.whyItMatters,
+        meaningfulChange ? fingerprintDrift.detail : "Current behavior remains close to the baseline."
+      ),
+    ],
+    ["Recommended Next Check", conciseOperatorSentence(topRecommendation, "Continue monitoring.")],
   ];
+}
+
+function buildCompletionChecklist({ identifiedSystemCount, insights, relationshipRows, fingerprintDrift, baselineAvailable }) {
+  const relationshipChangeDetected = relationshipRows.length > 0 || hasMeaningfulOperationalChange({ insights, fingerprintDrift });
+  return [
+    identifiedSystemCount > 0 ? "Systems identified" : "Systems unavailable",
+    relationshipChangeDetected ? "Relationship changes detected" : "No relationship changes detected",
+    baselineAvailable ? "Baseline updated" : "Baseline unavailable",
+  ];
+}
+
+function deriveExecutiveOverallStatus({ summary, insights, fingerprintDrift, result }) {
+  const rawStatus = operatorText(summary.overall_operational_status, result?.operating_state, result?.sii_intelligence?.facility_state);
+  const statusText = rawStatus.toLowerCase();
+  const meaningfulChange = hasMeaningfulOperationalChange({ insights, fingerprintDrift });
+
+  if (!meaningfulChange) return "Normal operation";
+  if (statusText.includes("unstable") || statusText.includes("critical") || statusText.includes("instability") || insights.some((insight) => insight.severity === "High")) {
+    return "Operational instability observed";
+  }
+  if (insights.length > 1) return "Multiple subsystem changes detected";
+  if (insights.length === 1) return "Localized subsystem change detected";
+  return "Subsystem behavior changed";
+}
+
+function hasMeaningfulOperationalChange({ insights, fingerprintDrift }) {
+  if (insights.length > 0) return true;
+  const label = String(fingerprintDrift?.label ?? "").toLowerCase();
+  const tone = String(fingerprintDrift?.tone ?? "").toLowerCase();
+  return tone === "changed" || tone === "investigate" || label.includes("change") || label.includes("drift");
+}
+
+function conciseOperatorSentence(...values) {
+  const text = operatorText(...values);
+  if (!text) return "";
+  const match = text.match(/^(.+?[.!?])(?:\s|$)/);
+  return (match ? match[1] : text).trim();
 }
 
 function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) {
@@ -997,6 +1057,9 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
 function collectQuality(result, snapshot) {
   const dataQuality = result?.analysis_result?.data_quality ?? result?.data_quality ?? {};
   const timestampProfile = result?.timestamp_profile ?? {};
+  const signalIntegrity = Array.isArray(dataQuality.signal_integrity)
+    ? dataQuality.signal_integrity.filter((profile) => profile && profile.gap_type)
+    : [];
   const warnings = dedupeText([
     ...(Array.isArray(dataQuality.warnings) ? dataQuality.warnings : []),
     ...(Array.isArray(timestampProfile.warnings) ? timestampProfile.warnings : []),
@@ -1009,13 +1072,65 @@ function collectQuality(result, snapshot) {
     ...(Array.isArray(dataQuality.missing_value_warnings) ? dataQuality.missing_value_warnings : []),
     ...(Array.isArray(result?.missing_values) ? result.missing_values : []),
   ]);
+  const timestampWindow = timestampProfile.first_timestamp && timestampProfile.last_timestamp
+    ? timestampProfile.first_timestamp + " to " + timestampProfile.last_timestamp
+    : null;
   const timestampNotes = dedupeText([
     timestampProfile.mode,
-    timestampProfile.first_timestamp && timestampProfile.last_timestamp ? `${timestampProfile.first_timestamp} to ${timestampProfile.last_timestamp}` : null,
+    timestampWindow,
     result?.timestamp_mode,
     snapshot?.timestamp_mode,
   ]);
-  return { warnings, missingValues, timestampNotes };
+  const confidenceReduced = Boolean(
+    dataQuality.reduced_confidence
+    || dataQuality.confidence_reduced
+    || dataQuality.suppress_confidence
+    || signalIntegrity.some((profile) => profile.suppress_confidence)
+  );
+  return {
+    warnings,
+    missingValues,
+    timestampNotes,
+    signalIntegrity,
+    affectedSignalCount: signalIntegrity.length,
+    confidenceReduced,
+  };
+}
+
+function deriveDataQualityNotice({ quality, liveOps, analysisComplete }) {
+  if (!analysisComplete) return null;
+  const degradedConnection = String(liveOps?.connectionTone ?? "").toLowerCase().includes("degraded");
+  const hasWarnings = quality.warnings.length > 0;
+  const hasMissingValues = quality.missingValues.length > 0;
+  if (!quality.confidenceReduced && !degradedConnection && !hasWarnings && !hasMissingValues) return null;
+
+  const detail = conciseOperatorSentence(quality.missingValues[0], quality.warnings[0]);
+  if (quality.confidenceReduced || degradedConnection) {
+    return {
+      label: "Analysis completed with reduced confidence.",
+      tone: "warning",
+      detail,
+    };
+  }
+  if (quality.affectedSignalCount > 1) {
+    return {
+      label: quality.affectedSignalCount + " telemetry signals contained intermittent missing values",
+      tone: "warning",
+      detail,
+    };
+  }
+  if (hasMissingValues) {
+    return {
+      label: "Some telemetry samples were unavailable",
+      tone: "warning",
+      detail,
+    };
+  }
+  return {
+    label: "Analysis completed with minor data quality warnings",
+    tone: "warning",
+    detail,
+  };
 }
 
 function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisComplete, telemetryAvailable, telemetryConnected }) {
@@ -1025,14 +1140,10 @@ function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisCom
       ? { label: "Telemetry Loaded", tone: "unknown", detail: READY_TO_ANALYZE_STATUS.detail }
       : WAITING_FOR_TELEMETRY_STATUS;
   }
-  const text = `${quality.warnings.join(" ")} ${quality.missingValues.join(" ")} ${liveOps?.connectionStatusLine ?? ""}`.toLowerCase();
-  if (!result && !snapshot) return { label: "Telemetry Missing", tone: "unknown", detail: "No telemetry has been analyzed yet." };
-  if (text.includes("missing")) return { label: "Telemetry Missing", tone: "warning", detail: firstText(quality.missingValues[0], "Some telemetry values or sources are missing.") };
-  if (text.includes("inconsistent") || text.includes("timestamp")) return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry timing or source consistency needs review." };
-  if (quality.warnings.length > 0 || quality.missingValues.length > 0 || String(liveOps?.connectionTone ?? "").includes("degraded")) {
-    return { label: "Telemetry Needs Review", tone: "warning", detail: "Telemetry is usable, but one or more quality conditions should be reviewed." };
-  }
-  return { label: "Telemetry Verified", tone: "normal", detail: "Telemetry integrity is acceptable for operational review." };
+  const qualityNotice = deriveDataQualityNotice({ quality, liveOps, analysisComplete });
+  if (!result && !snapshot) return { label: "Telemetry unavailable", tone: "unknown", detail: "No telemetry has been analyzed yet." };
+  if (qualityNotice) return qualityNotice;
+  return { label: "Telemetry acceptable", tone: "normal", detail: "Telemetry integrity is acceptable for interpretation." };
 }
 
 function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation }) {
@@ -1337,6 +1448,35 @@ function prioritizeEvidenceGroups(groups, selectedInsightId) {
     if (right.id === selectedInsightId) return 1;
     return 0;
   });
+}
+
+function ExecutiveSummary({ checklist, notice, rows }) {
+  return (
+    <div className="operator-executive-summary" aria-label="Executive summary rows">
+      {notice ? (
+        <div className={"operator-summary-notice operator-summary-notice--" + notice.tone}>
+          <strong>{notice.label}</strong>
+          {notice.detail ? <p>{notice.detail}</p> : null}
+        </div>
+      ) : null}
+      <ul className="operator-completion-list" aria-label="Analysis completion checks">
+        {checklist.map((item) => (
+          <li key={item}>
+            <span aria-hidden="true">✓</span>
+            <strong>{item}</strong>
+          </li>
+        ))}
+      </ul>
+      <dl className="executive-summary-list">
+        {rows.filter((row) => row && row.length >= 2).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").map(([label, value]) => (
+          <div className="executive-summary-item" key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
 }
 
 function SummaryRows({ rows }) {
