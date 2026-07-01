@@ -311,11 +311,16 @@ it("complete state shows View Results", () => {
   });
 
   expect(screen.getByRole("heading", { name: "Analysis Complete" })).toBeTruthy();
-  expect(screen.getByText("Systems identified")).toBeTruthy();
-  expect(screen.getByText("Insights found")).toBeTruthy();
-  expect(screen.getByText("Fingerprint status")).toBeTruthy();
+  expect(screen.getByText("Systems")).toBeTruthy();
+  expect(screen.getByText("Insights")).toBeTruthy();
+  expect(screen.getByText("Fingerprint")).toBeTruthy();
   expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
+  const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
+  expect(labels).toEqual(["Systems", "Insights", "Fingerprint"]);
+
+  const details = screen.getByText("Advanced Details").closest("details");
+  expect(details.open).toBe(false);
 });
 
 
@@ -341,7 +346,7 @@ it("completed upload screen count matches AnalysisResult systems length", () => 
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = screen.getByText("Systems identified").closest(".upload-result-summary__item");
+  const item = screen.getByText("Systems").closest(".upload-result-summary__item");
   expect(item.textContent).toContain("3");
 });
 
@@ -361,15 +366,18 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
             { title: "Pump power increased" },
             { title: "Flow behavior changed" },
           ],
-          fingerprint: { status: "Changed" },
+          fingerprint: { status: "changed" },
         },
       },
     },
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = screen.getByText("Insights found").closest(".upload-result-summary__item");
+  const item = screen.getByText("Insights").closest(".upload-result-summary__item");
   expect(item.textContent).toContain("4");
+
+  const fingerprintItem = screen.getByText("Fingerprint").closest(".upload-result-summary__item");
+  expect(fingerprintItem.textContent).toContain("Changed");
 });
 
 it("shows finalizing results instead of fake zero counts before AnalysisResult is available", () => {
@@ -389,8 +397,8 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
 
   expect(screen.getByText("Finalizing results...")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
-  expect(screen.queryByText("Systems identified")).toBeNull();
-  expect(screen.queryByText("Insights found")).toBeNull();
+  expect(screen.queryByText("Systems")).toBeNull();
+  expect(screen.queryByText("Insights")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
 });
 

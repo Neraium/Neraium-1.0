@@ -667,8 +667,36 @@ button:focus-visible {
   color: var(--text-primary);
 }
 
+.upload-complete-header h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.upload-complete-header h3::before {
+  content: "";
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.88);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.08);
+}
+
+.upload-complete-filename {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .upload-simple-card__file strong,
 .upload-complete-header span,
+.upload-result-summary__item strong,
 .upload-progress-summary span,
 .upload-error-message,
 .upload-advanced-details dd {
@@ -754,22 +782,28 @@ button:focus-visible {
 }
 
 .upload-simple-card--complete {
-  border-color: rgba(34, 197, 94, 0.32);
-  background: rgba(8, 116, 67, 0.12);
+  border-color: var(--surface-border);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .upload-advanced-details {
   border: 1px solid var(--surface-border);
   border-radius: var(--card-radius);
   background: rgba(255, 255, 255, 0.025);
+  opacity: 0.78;
   padding: 0;
+}
+
+.upload-advanced-details[open] {
+  opacity: 1;
 }
 
 .upload-advanced-details summary {
   cursor: pointer;
   padding: 12px 14px;
-  color: var(--text-primary);
-  font-weight: 750;
+  color: var(--text-secondary);
+  font-size: var(--type-label-sm);
+  font-weight: 700;
 }
 
 .upload-advanced-details__grid {
@@ -814,6 +848,94 @@ button:focus-visible {
 .upload-advanced-details__stages span {
   margin-left: 8px;
   font-size: var(--type-label-xs);
+}
+
+@media (max-width: 639px) {
+  .intake-flow--complete,
+  .intake-flow--complete * {
+    min-width: 0;
+  }
+
+  .upload-simple-card {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .upload-simple-card--complete {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .upload-complete-header {
+    gap: 4px;
+  }
+
+  .upload-complete-header h3 {
+    font-size: 1rem;
+  }
+
+  .upload-complete-filename {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .upload-result-summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--surface-border);
+    border-radius: var(--card-radius);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .upload-result-summary__item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .upload-result-summary__item + .upload-result-summary__item {
+    border-top: 1px solid var(--surface-border);
+  }
+
+  .upload-result-summary__item span,
+  .upload-result-summary__item strong {
+    min-width: 0;
+  }
+
+  .upload-result-summary__item strong {
+    text-align: right;
+    white-space: normal;
+  }
+
+  .upload-simple-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .upload-simple-actions .command-button,
+  .upload-simple-actions .secondary-command-button {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .upload-progress-summary,
+  .upload-advanced-details__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .upload-advanced-details summary {
+    padding: 10px 12px;
+  }
 }
 
 @media (max-width: 760px) {

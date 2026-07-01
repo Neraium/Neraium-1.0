@@ -108,6 +108,18 @@ function valueOrDash(value) {
   return text || "--";
 }
 
+function formatFingerprintStatus(value) {
+  const text = valueOrDash(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text === "--") return text;
+  if (/^changed$/i.test(text)) return "Changed";
+  if (/^established$/i.test(text)) return "Established";
+  if (/^stable$/i.test(text)) return "Stable";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function isFinalAnalysisResult(value) {
   return Boolean(
     value
@@ -132,7 +144,7 @@ function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
 
 function completionSummary({ analysisResult }) {
   const fingerprint = analysisResult?.fingerprint ?? {};
-  const fingerprintStatus = valueOrDash(
+  const fingerprintStatus = formatFingerprintStatus(
     fingerprint?.status
       ?? fingerprint?.drift_status
       ?? fingerprint?.label
@@ -140,9 +152,9 @@ function completionSummary({ analysisResult }) {
   );
 
   return [
-    { label: "Systems identified", value: String(analysisResult.systems.length) },
-    { label: "Insights found", value: String(analysisResult.insights.length) },
-    { label: "Fingerprint status", value: fingerprintStatus },
+    { label: "Systems", value: String(analysisResult.systems.length) },
+    { label: "Insights", value: String(analysisResult.insights.length) },
+    { label: "Fingerprint", value: fingerprintStatus },
   ];
 }
 
@@ -298,7 +310,7 @@ export default function IntakeFlowPanel({
           <section className="upload-simple-card upload-simple-card--complete" aria-label="Analysis complete">
             <div className="upload-complete-header">
               <h3>Analysis Complete</h3>
-              <span>{selectedFileLabel}</span>
+              <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
             </div>
             <div className="upload-result-summary">
               {summary.map((item) => (
