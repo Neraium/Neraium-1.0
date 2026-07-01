@@ -176,12 +176,7 @@ def _system_label_for_columns(left_col: str, right_col: str) -> str:
 
 def _relationship_summary(left_col: str, right_col: str, edge: dict[str, Any]) -> str:
     change_type = str(edge.get("change_type") or "changed").replace("_", " ")
-    return (
-        f"{left_col} vs {right_col} relationship {change_type}: "
-        f"baseline strength={edge['baseline_strength']:.3f}, "
-        f"current strength={edge['current_strength']:.3f}, "
-        f"correlation delta={edge['correlation_delta']:.3f}."
-    )
+    return f"{left_col} and {right_col} relationship {change_type} against the historical operating pattern."
 
 
 def _baseline_drift_lookup(baseline_analysis: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -319,20 +314,19 @@ def _relationship_importance_rationale(
 ) -> str:
     label = " / ".join(columns) if columns else "This relationship"
     change_type = str(edge.get("change_type") or "changed").replace("_", " ")
-    delta = edge.get("correlation_delta")
     if classification["context_only"]:
         return (
             f"Down-ranked because {label} is made up of scheduled/load/context or environmental drivers. "
-            f"The correlation delta ({delta}) is retained as evidence, but it is less likely to indicate equipment health by itself."
+            "Detailed relationship statistics are retained in evidence, but this is less likely to indicate equipment health by itself."
         )
     if classification["context_driver_involved"]:
         return (
             f"This relationship is useful because {label} {change_type} while equipment/process telemetry is involved. "
-            f"Context/load movement may explain part of the change, so the ranking balances correlation delta, confidence, persistence, and affected metric severity."
+            "Context/load movement may explain part of the change, so Neraium treats it as supporting subsystem evidence."
         )
     return (
-        f"This relationship is important because {label} {change_type} with correlation delta {delta} and "
-        f"operational support from confidence, persistence, severity, and equipment/process involvement."
+        f"This relationship is important because {label} {change_type} while equipment/process signals changed together, "
+        "which can indicate subsystem behavior changing before a single sensor explains it."
     )
 
 

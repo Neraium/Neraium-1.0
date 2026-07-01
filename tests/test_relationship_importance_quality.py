@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.services.analysis_explanations import build_analysis_explanation
+from app.services.analysis_explanations import build_analysis_explanation, relationship_subsystem_name
 from app.services.analysis_result_contract import build_analysis_result
 from app.services.relationship_baselines import score_relationship_importance
 from app.services.upload_jobs import process_csv_content
@@ -22,13 +22,13 @@ def _edge(**overrides):
     return payload
 
 
-def _relationship(left, right, *, score=80.0, delta=0.62, change_type="weakened"):
+def _relationship(left, right, *, score=80.0, delta=0.62, change_type="weakened", confidence_score=0.91, summary=None):
     return {
         "relationship": f"{left} <-> {right}",
         "columns": [left, right],
         "correlation_delta": delta,
         "change_type": change_type,
-        "confidence_score": 0.91,
+        "confidence_score": confidence_score,
         "baseline_sample_size": 40,
         "recent_sample_size": 40,
         "baseline_strength": 0.9,
@@ -37,7 +37,7 @@ def _relationship(left, right, *, score=80.0, delta=0.62, change_type="weakened"
         "relationship_importance_rationale": "Important because equipment/process behavior changed with corroborating signals.",
         "ranking_factors": {"magnitude": delta, "equipment_process_involvement": 1.0},
         "evidence_refs": [{"column": left}, {"column": right}],
-        "summary": f"{left} vs {right} relationship weakened.",
+        "summary": summary or f"{left} and {right} relationship weakened against the historical operating pattern.",
     }
 
 
@@ -121,7 +121,7 @@ def test_top_finding_is_selected_by_relationship_importance_not_raw_delta() -> N
 def test_duplicate_relationship_insights_are_merged_and_preserve_relationships() -> None:
     relationships = [
         _relationship("chw_supply_temp_f", "condenser_lwt_f", score=90.0),
-        _relationship("ct_outlet_temp_f", "gt_ct_fouling_severity", score=84.0),
+        _relationship("supply_temp_f", "return_temp_f", score=84.0),
         _relationship("evap_entering_temp_f", "condenser_lwt_f", score=78.0),
     ]
     explanation = build_analysis_explanation(
@@ -135,7 +135,7 @@ def test_duplicate_relationship_insights_are_merged_and_preserve_relationships()
 
     titles = [insight["title"] for insight in explanation["insights"]]
     assert titles.count("Thermal relationship changed") == 0
-    merged = next(insight for insight in explanation["insights"] if insight["title"] == "Thermal response behavior changed")
+    merged = next(insight for insight in explanation["insights"] if insight["title"] == "Thermal Transfer Subsystem behavior changed")
     assert len(merged["contributing_relationships"]) == 3
     assert all(item["label"] for item in merged["contributing_relationships"])
 
@@ -154,3 +154,102 @@ def test_analysis_result_preserves_relationship_importance_fields() -> None:
     assert result["relationships"][0]["relationship_importance_rationale"]
     assert result["relationships"][0]["ranking_factors"]
     assert result["insights"][0]["relationship_importance_score"] == 82.0
+
+
+def test_relationship_stats_stay_out_of_main_insight_contract_and_remain_in_evidence() -> None:
+    raw_summary = "pump_power_kw vs flow_rate_gpm relationship weakened: baseline strength=0.900, current strength=0.200, correlation delta=0.700."
+    result = build_analysis_result(
+        {
+            "job_id": "operator-language-contract",
+            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
+            "baseline_analysis": {"baseline_window_rows": 40, "recent_window_rows": 40, "columns_analyzed": 2, "column_drift": []},
+            "relationship_model": {"top_relationship_changes": [_relationship("pump_power_kw", "flow_rate_gpm", summary=raw_summary)]},
+        }
+    )
+
+    main_insights = str(result["insights"]).lower()
+    assert "correlation delta" not in main_insights
+    assert "confidence score" not in main_insights
+    assert "operational support from confidence" not in main_insights
+    assert "correlation delta" in str(result["evidence_index"]).lower()
+    assert "correlation_delta" in str(result["evidence_index"]).lower()
+
+
+def test_subsystem_names_match_dominant_telemetry_groups() -> None:
+    assert relationship_subsystem_name(["pump_power_kw", "main_pressure_psi", "flow_rate_gpm"]) == "Flow / Pressure Subsystem"
+    assert relationship_subsystem_name(["chlorine_dose_ppm", "turbidity_ntu", "orp_mv"]) == "Chemical Feed / Water Quality Subsystem"
+    assert relationship_subsystem_name(["wet_well_level_ft", "pump_status", "flow_rate_gpm"]) == "Lift Station Operations"
+    assert relationship_subsystem_name(["supply_temp_f", "return_temp_f", "condenser_lwt_f"]) == "Thermal Transfer Subsystem"
+
+
+def test_low_confidence_or_ambiguous_subsystem_naming_falls_back_to_observed_behavior() -> None:
+    assert relationship_subsystem_name(["source_temperature_f", "main_pressure_psi"]) == "Observed subsystem behavior changed"
+
+    explanation = build_analysis_explanation(
+        {
+            "job_id": "low-confidence-subsystem",
+            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
+            "baseline_analysis": {"baseline_window_rows": 5, "recent_window_rows": 5, "columns_analyzed": 2, "column_drift": []},
+            "relationship_model": {"top_relationship_changes": [_relationship("source_temperature_f", "main_pressure_psi", confidence_score=0.2)]},
+        }
+    )
+
+    assert explanation["insights"][0]["title"] == "Observed subsystem behavior changed"
+    assert explanation["insights"][0]["affected_systems"] == ["Observed subsystem behavior changed"]
+
+
+def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -> None:
+    relationships = [
+        _relationship("pump_power_kw", "chlorine_dose_ppm", score=92.0),
+        _relationship("main_pressure_psi", "chlorine_dose_ppm", score=88.0),
+        _relationship("pump_speed_hz", "chlorine_dose_ppm", score=86.0),
+    ]
+    explanation = build_analysis_explanation(
+        {
+            "job_id": "flow-chemical-cluster",
+            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
+            "baseline_analysis": {"baseline_window_rows": 40, "recent_window_rows": 40, "columns_analyzed": 4, "column_drift": []},
+            "relationship_model": {"top_relationship_changes": relationships},
+        }
+    )
+
+    assert explanation["insights"][0]["title"] == "Flow / Pressure Subsystem behavior changed"
+    assert explanation["insights"][0]["affected_systems"] == ["Flow / Pressure Subsystem"]
+    assert len(explanation["insights"][0]["contributing_relationships"]) == 3
+
+
+def test_individual_variable_changes_are_down_ranked_when_relationship_changes_exist() -> None:
+    explanation = build_analysis_explanation(
+        {
+            "job_id": "relationship-before-metric",
+            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
+            "baseline_analysis": {
+                "baseline_window_rows": 40,
+                "recent_window_rows": 40,
+                "columns_analyzed": 3,
+                "column_drift": [
+                    {"column": "turbidity_ntu", "direction": "up", "drift_flag": "review", "percent_change": 194},
+                    {"column": "chlorine_dose_ppm", "direction": "up", "drift_flag": "review", "percent_change": 42},
+                ],
+            },
+            "relationship_model": {"top_relationship_changes": [_relationship("chlorine_dose_ppm", "turbidity_ntu", score=91.0)]},
+        }
+    )
+
+    assert explanation["insights"][0]["title"] == "Chemical Feed / Water Quality Subsystem behavior changed"
+    assert not any(insight["title"].lower().startswith("turbidity") for insight in explanation["insights"])
+
+
+def test_raw_csv_tags_remain_available_in_evidence() -> None:
+    result = build_analysis_result(
+        {
+            "job_id": "raw-tag-evidence",
+            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
+            "baseline_analysis": {"baseline_window_rows": 40, "recent_window_rows": 40, "columns_analyzed": 2, "column_drift": []},
+            "relationship_model": {"top_relationship_changes": [_relationship("chlorine_dose_ppm", "turbidity_ntu", score=91.0)]},
+        }
+    )
+
+    refs = result["insights"][0]["evidence_refs"]
+    evidence_tags = {tag for ref in refs for tag in result["evidence_index"][ref]["source_tags"]}
+    assert {"chlorine_dose_ppm", "turbidity_ntu"}.issubset(evidence_tags)

@@ -241,7 +241,6 @@ describe("OperationalWorkflowWorkspace product story states", () => {
         operator_check: "Inspect pump runtime and downstream valve position.",
         confidence: "high",
         confidence_score: 0.91,
-        confidence_rationale: "Confidence score 0.91 is based on 18 baseline samples, 18 current samples, and correlation delta 1.11.",
         evidence_summary: "Pressure increased 18%; Flow decreased 9%",
         system: "Flow and pressure system",
         contributing_metrics: [{ name: "pressure", source_column: "pressure" }, { name: "flow", source_column: "flow" }],
@@ -295,9 +294,10 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
     expect(screen.getByText("What changed")).toBeTruthy();
-    expect(screen.getByText("Why it matters")).toBeTruthy();
+    expect(screen.getByText("Why Neraium believes this matters")).toBeTruthy();
     expect(screen.getAllByText("High · 91%").length).toBeGreaterThan(0);
-    expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
+    expect(screen.getByText("The signals stopped moving together like the baseline window.")).toBeTruthy();
+    expect(screen.queryByText(/correlation delta/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
     expect(screen.getByRole("heading", { name: "Supporting Telemetry" })).toBeTruthy();
     const details = view.container.querySelector("details.evidence-panel");
@@ -357,7 +357,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
     expect(screen.getAllByText("High · 100%").length).toBeGreaterThan(0);
     expect(screen.queryByText("high (1)")).toBeNull();
-    expect(screen.getAllByText("pump vibration")).toHaveLength(1);
+    expect(screen.queryByText("pump vibration")).toBeNull();
+    expect(screen.getByText("Supporting measurements are available in Evidence.")).toBeTruthy();
   });
 
   it("disables result tabs before analysis", () => {
@@ -391,7 +392,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       data_quality: { warnings: [] },
       executive_summary: {
         overall_operational_status: "Current behavior changed",
-        highest_priority_finding: "Pump power moved up",
+        highest_priority_finding: "Pump subsystem behavior changed",
         recommended_action: "Check pump schedule",
       },
       systems: [{ id: "pump", name: "Pump system", relationship_changes: [] }],
@@ -404,7 +405,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       },
       insights: [{
         id: "insight-1",
-        title: "Pump power moved up",
+        title: "Pump subsystem behavior changed",
         severity: "moderate",
         confidence: "moderate",
         affected_systems: ["Pump system"],
@@ -444,7 +445,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
 
-    expect(screen.getAllByText("Pump power moved up").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pump subsystem behavior changed").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
     const details = view.container.querySelector("details.evidence-panel");
     expect(details).toBeTruthy();

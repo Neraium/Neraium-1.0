@@ -879,10 +879,11 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         operatorCheck: operatorText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
         contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText).map(cleanDisplayText)),
         contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
+        affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
         contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
         evidence,
         hasEvidence: evidence.length > 0,
-        evidenceSummary: operatorText(item.evidence_summary, summarizeEvidence(resolvedEvidence)),
+        evidenceSummary: operatorEvidenceSummary(item.evidence_summary, summarizeEvidence(resolvedEvidence)),
         sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
         confidence: item.confidence,
         confidenceScore: item.confidence_score,
@@ -1146,15 +1147,14 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
             </div>
             <h3>{insight.summary}</h3>
             <DetailGrid rows={[
-              ["Affected system", insight.system],
-              ["Severity", insight.severity],
-              ["Confidence", formatConfidenceDisplay(insight.confidence, insight.confidenceScore)],
+              ["Affected subsystem", insight.system],
               ["What changed", insight.whatHappened],
-              ["Why it matters", insight.whyItMatters],
-              ["Recommended check", firstText(insight.operatorCheck, insight.recommendedAction)],
+              ["Why Neraium believes this matters", firstText(insight.whyNeraiumThinks, insight.whyItMatters)],
+              ["What to check first", firstText(insight.operatorCheck, insight.recommendedAction)],
+              ["Evidence summary", insight.evidenceSummary],
             ]} />
-            {insight.contributingFactors?.length ? (
-              <QualityList title="Recommended checks" items={insight.contributingFactors.slice(0, 3)} empty="" />
+            {insight.affectedRelationships?.length ? (
+              <QualityList title="Affected relationships" items={insight.affectedRelationships.slice(0, 4)} empty="" />
             ) : null}
             <div className="insight-card__actions">
               {typeof onOpenInsight === "function" ? (
@@ -1438,6 +1438,26 @@ function cleanRelationshipLabel(value) {
     .replace(/\s+vs\.?\s+/gi, " / ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function relationshipContributionLabels(values) {
+  if (!Array.isArray(values)) return [];
+  return dedupeText(values.map((item) => {
+    if (!item || typeof item !== "object") return cleanRelationshipLabel(item);
+    const displayColumns = Array.isArray(item.display_columns) ? item.display_columns : [];
+    const rawColumns = Array.isArray(item.columns) ? item.columns : [];
+    return cleanRelationshipLabel(firstText(item.label, displayColumns.join(" / "), rawColumns.join(" / ")));
+  }).filter(Boolean));
+}
+
+function operatorEvidenceSummary(...values) {
+  const text = operatorText(...values);
+  if (!text) return "";
+  if (/^(percent change|absolute change|correlation delta|calculated delta|baseline average|current average)\s*:/i.test(text)) {
+    return "Supporting measurements are available in Evidence.";
+  }
+  if (/\bcorrelation delta\b/i.test(text)) return "Supporting relationship measurements are available in Evidence.";
+  return text;
 }
 
 function operatorText(...values) {
