@@ -126,6 +126,10 @@ def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
     UPLOAD_DIR = state.upload_dir
     JOB_DIR = state.job_dir
     LEGACY_JOB_DIR = state.legacy_job_dir
+    from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
+
+    configure_runtime_db_dir(RUNTIME_DIR)
+    init_runtime_db()
     _invalidate_router_latest_cache()
 
 

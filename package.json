@@ -1,7 +1,7 @@
 {
   "name": "neraium-1.0",
   "version": "1.0.0",
-  "description": "Neraium helps commercial water system operators detect and explain telemetry drift before it becomes operational failure.",
+  "description": "Neraium helps commercial water system operators detect and explain persistent relationship drift before operational degradation compounds.",
   "main": "index.js",
   "directories": {
     "doc": "docs",

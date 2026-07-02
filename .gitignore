@@ -56,25 +56,23 @@ results/
 uploads/
 tmp/
 .tmp/
+output/
 *.csv
 *.jsonl
+*.db
 backend/app/runtime/latest_sii_state.json
 backend/app/runtime/latest_upload.json
 backend/app/runtime/uploads/
 backend/app/runtime/jobs/
 backend/app/runtime/*
 !backend/app/runtime/.gitkeep
-*.db
+backend/runtime/*.json
+backend/runtime/*.db
+backend/runtime/evidence/
+backend/runtime/upload_jobs/
 
 # Backup and stray root artifacts
 *.backup-before-ecs.js
 *.patch
 *.jpeg
-
-# Runtime/output artifacts
-backend/runtime/*.json
-backend/runtime/*.db
-backend/runtime/evidence/*.json
-backend/runtime/upload_jobs/*.json
-output/
 frontend/audit-*.png

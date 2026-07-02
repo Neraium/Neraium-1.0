@@ -1,8 +1,8 @@
 # Neraium Backend
 
-FastAPI application for customer-facing Neraium API endpoints used by cannabis cultivation operators and growers.
+FastAPI application for customer-facing Neraium API endpoints used by commercial water system operators.
 
-The backend currently supports the first app scaffold for controlled environment operations. Product-facing metadata should stay focused on helping grow teams detect and explain environmental drift before it becomes visible crop stress.
+The backend supports read-only operational intelligence for commercial pools, resort water systems, treatment, chilled water loops, pumps and filtration, and future cooling tower workflows.
 
 ## Local Setup
 
@@ -54,10 +54,10 @@ docker run --rm -p 8080:80 neraium-backend:local
 
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
-- `GET /api/facility/systems` returns hardcoded cultivation system placeholders.
-- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, cultivation mapping, timestamp profile, numeric column profiles, baseline comparison, deterministic Neraium SII v1 engine result, warnings, data readiness, and a plain-English operator report.
+- `GET /api/facility/systems` returns the active domain profile, including commercial water system categories by default.
+- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, schema mapping, timestamp profile, numeric column profiles, baseline comparison, deterministic Neraium SII v1 engine result, warnings, data readiness, and a plain-English operator report.
 
-Uploaded CSV files are deleted after processing completes or fails. Job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. Cultivation mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. Neraium SII v1 is deterministic and returns signals, system-level evidence, corroboration level, persistence assessment, recommended checks, limitations, and audit trace without prediction or root-cause claims.
+Uploaded CSV files are deleted after processing completes or fails. Job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. Schema mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. Neraium SII v1 is deterministic and returns signals, system-level evidence, corroboration level, persistence assessment, recommended checks, limitations, and audit trace without prediction or root-cause claims.
 
 ## Tests
 

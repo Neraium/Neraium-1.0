@@ -1,14 +1,14 @@
 # Neraium Frontend
 
-Vite React application shell for the customer-facing Neraium product for cannabis cultivation operators and growers.
+Vite React application shell for the customer-facing Neraium product for commercial water system operators.
 
-The app shell positions Neraium around environmental drift in controlled grow facilities, with focus areas including HVAC, humidity, airflow, irrigation, lighting, and sensor data.
+The app shell positions Neraium around relationship drift in commercial water systems, with focus areas including pools, resort water systems, treatment, chilled-water loops, pumps, filtration, and future cooling tower coverage.
 
 ## Sections
 
 - Overview: product orientation, API status, and facility summary placeholders.
-- Facility Systems: placeholder monitored systems for cultivation operations.
-- Data Upload: CSV ingestion flow for historical facility data and sensor exports, with validation results, cultivation mapping, data quality, timestamp range, numeric profiles, baseline comparison, Neraium SII v1 engine result, operator report, warnings, readiness, and preview rows.
+- Facility Systems: commercial water system categories and active domain-detected systems.
+- Data Upload: CSV ingestion flow for historical facility data and sensor exports, with validation results, schema mapping, data quality, timestamp range, numeric profiles, baseline comparison, Neraium SII v1 engine result, operator report, warnings, readiness, and preview rows.
 - Reports: placeholder report list plus the latest generated upload report for the current frontend session.
 
 ## Local Setup
@@ -30,7 +30,7 @@ The app runs at `http://127.0.0.1:3010`.
 
 Frontend API configuration is centralized in `frontend/src/config.js`. By default, the frontend calls the local backend at `http://127.0.0.1:8010` for API health, facility systems, and CSV upload validation.
 
-The Engine Result section displays system evidence by cultivation category, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details from the upload response.
+The Engine Result section displays system evidence by operational category, corroboration level, persistence assessment, recommended operator checks, limitations, and audit trace details from the upload response.
 
 To use another backend URL, including the production ECS backend URL, set:
 
