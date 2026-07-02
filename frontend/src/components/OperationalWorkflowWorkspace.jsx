@@ -240,7 +240,6 @@ export default function OperationalWorkflowWorkspace({
             model={model}
             selectedInsight={selectedInsight}
             onSelectInsight={setSelectedInsightId}
-            onOpenEvidence={openEvidence}
           />
         ) : null}
 
@@ -355,18 +354,16 @@ function InsightsSection({
   model,
   selectedInsight,
   onSelectInsight,
-  onOpenEvidence,
 }) {
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
-        <PanelHeader eyebrow="Insights" title="Findings and Recommended Checks" subtitle="What changed, why it matters, and where to begin." />
+        <PanelHeader eyebrow="Insights" title="Operator Briefing" subtitle="What changed, why it matters, and where to begin." />
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No insights yet." : model.uiState.status.detail}
           emptyTitle={model.analysisComplete ? "No insights yet" : model.uiState.status.label}
           onOpenInsight={onSelectInsight}
-          onOpenEvidence={onOpenEvidence}
           selectedId={selectedInsight?.id}
         />
       </section>
@@ -937,6 +934,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         possibleConsequence: operatorText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
         recommendedAction: operatorText(firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check)),
         operatorCheck: operatorText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
+        possibleOperationalCauses: dedupeText(toList(item.possible_operational_causes, item.possibleOperationalCauses, item.possible_operational_causes_summary).flatMap(splitPriorityText).map(operatorText)),
         contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText).map(cleanDisplayText)),
         contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
         affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
@@ -978,6 +976,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         possibleConsequence: operatorText(item.possibleConsequence),
         recommendedAction: operatorText(item.recommendation, item.reviewNext),
         operatorCheck: operatorText(item.operator_focus),
+        possibleOperationalCauses: dedupeText(toList(item.possibleOperationalCauses, item.possible_operational_causes).flatMap(splitPriorityText).map(operatorText)),
         evidence,
         hasEvidence: evidence.length > 0,
         telemetryNote: telemetryStatus.detail,
@@ -1237,46 +1236,43 @@ function SignalList({ signals, integrity }) {
   );
 }
 
-function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, onOpenEvidence, selectedId }) {
+function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId }) {
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;
   return (
     <div className="insight-feed">
       {insights.map((insight) => {
         const selected = selectedId === insight.id;
+        const title = formatInsightTitle(insight.summary);
+        const causes = operationalCauseHypotheses(insight).slice(0, 6);
+        const relationships = insightRelationshipLabels(insight).slice(0, 8);
         return (
           <article
             key={insight.id}
-            className={selected ? "insight-card is-selected" : "insight-card"}
+            className={selected ? "insight-card insight-briefing is-selected" : "insight-card insight-briefing"}
             aria-current={selected ? "true" : undefined}
           >
-            <div className="insight-card__header">
-              <span className="section-token">{insight.system}</span>
-              <div className="insight-card__badges">
-                <StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} />
-                <StatusBadge label={formatConfidenceDisplay(insight.confidence, insight.confidenceScore) || "Confidence not reported"} tone="unknown" />
+            <div className="insight-briefing__header">
+              <span className="section-token">{formatSubsystemName(insight.system)}</span>
+              <h3>{title}</h3>
+            </div>
+            <dl className="insight-briefing__status" aria-label="Insight status">
+              <div>
+                <dt>Severity</dt>
+                <dd><StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} /></dd>
               </div>
-            </div>
-            <h3>{insight.summary}</h3>
-            <DetailGrid rows={[
-              ["Affected subsystem", insight.system],
-              ["What changed", insight.whatHappened],
-              ["Why Neraium believes this matters", firstText(insight.whyNeraiumThinks, insight.whyItMatters)],
-              ["What to check first", firstText(insight.operatorCheck, insight.recommendedAction)],
-              ["Evidence summary", insight.evidenceSummary],
-            ]} />
-            {insight.affectedRelationships?.length ? (
-              <QualityList title="Affected relationships" items={insight.affectedRelationships.slice(0, 4)} empty="" />
+              <div>
+                <dt>Confidence</dt>
+                <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
+              </div>
+            </dl>
+            <BriefingTextBlock title="What Changed" lines={whatChangedBriefing(insight, relationships)} />
+            <BriefingTextBlock title="Why It Matters" lines={whyItMattersBriefing(insight)} />
+            <BriefingList title="Possible Operational Causes" items={causes} />
+            {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
+            {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
+            {typeof onOpenInsight === "function" && !selected ? (
+              <button type="button" className="secondary-command-button insight-briefing__select" onClick={() => onOpenInsight(insight.id)}>Select</button>
             ) : null}
-            <div className="insight-card__actions">
-              {typeof onOpenInsight === "function" ? (
-                <button type="button" className="secondary-command-button" onClick={() => onOpenInsight(insight.id)}>Select</button>
-              ) : null}
-              {typeof onOpenEvidence === "function" ? (
-                <button type="button" className="command-button" onClick={() => onOpenEvidence(insight.id)} disabled={!insight.hasEvidence}>
-                  {insight.hasEvidence ? "Evidence" : "No evidence"}
-                </button>
-              ) : null}
-            </div>
           </article>
         );
       })}
@@ -1284,23 +1280,81 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
   );
 }
 
+function BriefingTextBlock({ title, lines }) {
+  const visibleLines = toList(lines).filter(Boolean).slice(0, 3);
+  if (!visibleLines.length) return null;
+  return (
+    <section className="insight-briefing__section">
+      <h4>{title}</h4>
+      {visibleLines.map((line) => <p key={line}>{line}</p>)}
+    </section>
+  );
+}
+
+function BriefingList({ title, items }) {
+  const visibleItems = dedupeText(toList(items).map(cleanBriefingText)).slice(0, 6);
+  if (!visibleItems.length) return null;
+  return (
+    <section className="insight-briefing__section">
+      <h4>{title}</h4>
+      <ul className="operator-briefing-list">{visibleItems.map((item) => <li key={item}>{item}</li>)}</ul>
+    </section>
+  );
+}
+
+function RelationshipObservedList({ items }) {
+  const visibleItems = dedupeText(items.map(formatRelationshipObservedLabel)).slice(0, 8);
+  if (!visibleItems.length) return null;
+  return (
+    <section className="insight-briefing__section">
+      <h4>Relationships Observed</h4>
+      <span className="insight-briefing__list-label">Observed relationship changes</span>
+      <ul className="operator-briefing-list">{visibleItems.map((item) => <li key={item}>{item}</li>)}</ul>
+    </section>
+  );
+}
+
+function InsightEvidenceDrawer({ insight }) {
+  const evidenceItems = Array.isArray(insight.evidence) ? insight.evidence : [];
+  if (!evidenceItems.length) return null;
+  return (
+    <details className="insight-evidence-drawer">
+      <summary>Evidence</summary>
+      <div className="insight-evidence-drawer__body">
+        {evidenceItems.map((item, index) => (
+          <div className="insight-evidence-item" key={item.evidence_id ?? index}>
+            <EvidenceDetails evidence={item} />
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function EvidencePanel({ evidence }) {
+  return (
+    <details className="evidence-panel">
+      <summary>Evidence</summary>
+      <EvidenceDetails evidence={evidence} />
+    </details>
+  );
+}
+
+function EvidenceDetails({ evidence }) {
   const supportingSignals = toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText).map(operatorText);
   const metricChanges = toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(formatEvidenceDelta).flatMap(splitPriorityText);
   const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText).map(cleanDisplayText);
   const sourceRanges = Array.isArray(evidence.source_time_ranges) ? evidence.source_time_ranges.map(formatEvidenceRange).filter(Boolean) : [];
   return (
-    <details className="evidence-panel">
-      <summary>Evidence{evidence.confidence ? " (" + formatConfidenceDisplay(evidence.confidence, evidence.confidence_score) + ")" : ""}</summary>
+    <div className="evidence-details-body">
       <DetailGrid rows={[
         ["Summary", operatorText(evidence.description, evidence.summary)],
-        ["Type", evidence.type],
         ["Confidence", formatConfidenceDisplay(evidence.confidence, evidence.confidence_score)],
         ["Time window", evidence.time_window ?? evidence.timeWindow],
         ["Persistence / duration", evidence.persistence_duration ?? evidence.persistenceDuration],
-        ["Calculated delta", evidence.calculated_delta ?? evidence.calculatedDelta],
-        ["Relationship delta", evidence.relationship_delta ? compactJson(evidence.relationship_delta) : ""],
-        ["Calculated percent delta", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
+        ["Calculated change", evidence.calculated_delta ?? evidence.calculatedDelta],
+        ["Relationship measurements", evidence.relationship_delta ? compactJson(evidence.relationship_delta) : ""],
+        ["Calculated percent change", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
         ["Upload reference", evidence.source_upload_id ?? evidence.upload_id],
         ["Analysis reference", evidence.analysis_id],
       ]} />
@@ -1308,7 +1362,7 @@ function EvidencePanel({ evidence }) {
       {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
       {supportingSignals.length ? <QualityList title="Supporting signals" items={supportingSignals} empty="" /> : null}
       {metricChanges.length ? <QualityList title="Relevant metric changes" items={metricChanges} empty="" /> : null}
-    </details>
+    </div>
   );
 }
 
@@ -1329,9 +1383,9 @@ function formatEvidenceDelta(value) {
     value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
     value.baseline_average !== undefined ? `baseline average: ${value.baseline_average}` : "",
     value.current_average !== undefined ? `current average: ${value.current_average}` : "",
-    value.baseline_strength !== undefined ? `baseline strength: ${value.baseline_strength}` : "",
-    value.current_strength !== undefined ? `current strength: ${value.current_strength}` : "",
-    value.correlation_delta !== undefined ? `correlation delta: ${value.correlation_delta}` : "",
+    value.baseline_strength !== undefined ? `baseline operating coupling: ${value.baseline_strength}` : "",
+    value.current_strength !== undefined ? `current operating coupling: ${value.current_strength}` : "",
+    value.correlation_delta !== undefined ? `operating pattern change: ${value.correlation_delta}` : "",
   ].filter(Boolean).join(", ");
   return [firstText([label, details].filter(Boolean).join(" - "), compactJson(value))];
 }
@@ -1590,10 +1644,178 @@ function relationshipContributionLabels(values) {
   }).filter(Boolean));
 }
 
+
+const DEFAULT_OPERATIONAL_CAUSES = [
+  "Operating setpoint changed",
+  "Control sequence adjustment",
+  "Process demand changed",
+  "Recent maintenance activity",
+];
+
+const OPERATIONAL_CAUSE_SETS = [
+  {
+    pattern: /flow|pressure|pump|valve|vfd|filter/i,
+    causes: [
+      "Filter resistance increasing",
+      "Pump operating point changed",
+      "Valve position changed",
+      "VFD control adjustment",
+      "Process demand changed",
+      "Recent maintenance activity",
+    ],
+  },
+  {
+    pattern: /thermal|condenser|chilled|chw|lwt|cooling|coil|temperature|approach/i,
+    causes: [
+      "Heat exchanger fouling",
+      "Cooling tower performance changed",
+      "Water flow changed",
+      "Valve position changed",
+      "Process load changed",
+      "Recent maintenance activity",
+    ],
+  },
+  {
+    pattern: /air|ahu|fan|damper|duct|coil leaving/i,
+    causes: [
+      "Damper position changed",
+      "Fan speed changed",
+      "Coil heat transfer changed",
+      "Airflow restriction increasing",
+      "Zone demand changed",
+      "Recent maintenance activity",
+    ],
+  },
+  {
+    pattern: /chemical|water quality|turbidity|chlorine|ph|conductivity/i,
+    causes: [
+      "Chemical feed rate changed",
+      "Water source condition changed",
+      "Sensor calibration drift",
+      "Mixing pattern changed",
+      "Process demand changed",
+      "Recent maintenance activity",
+    ],
+  },
+];
+
+function formatInsightTitle(value) {
+  return formatSubsystemName(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatSubsystemName(value) {
+  return cleanDisplayText(value)
+    .replace(/\s+\/\s+/g, " & ")
+    .replace(/\bSubsystem\b/g, "subsystem")
+    .replace(/\bSystem\b/g, "system")
+    .trim();
+}
+
+function whatChangedBriefing(insight, relationships) {
+  if (relationships.length > 0) {
+    const count = relationships.length;
+    const countLabel = numberWord(count);
+    const relationshipWord = count === 1 ? "relationship" : "relationships";
+    const pronoun = count === 1 ? "its" : "their";
+    const system = formatSubsystemName(insight.system || "subsystem");
+    return [
+      `${countLabel} operating ${relationshipWord} within the ${system} deviated from ${pronoun} historical operating pattern during the analysis period.`,
+      "The subsystem is no longer behaving the way it normally does.",
+    ];
+  }
+  const lines = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.summary), 2);
+  return lines.length ? lines : ["Subsystem behavior changed from its historical operating pattern."];
+}
+
+function whyItMattersBriefing(insight) {
+  const lines = briefingSentences(firstText(insight.possibleConsequence, insight.whyItMatters, insight.whyNeraiumThinks), 2);
+  if (lines.length) return lines;
+  return [
+    "When several operating relationships change together, the subsystem may have shifted operating state.",
+    "This often appears before a single sensor clearly identifies the underlying cause.",
+  ];
+}
+
+function operationalCauseHypotheses(insight) {
+  const direct = dedupeText(toList(insight.possibleOperationalCauses).flatMap(splitPriorityText).map(cleanBriefingText));
+  const searchText = [insight.system, insight.summary, insight.whatHappened, insightRelationshipLabels(insight).join(" ")].join(" ");
+  const matched = OPERATIONAL_CAUSE_SETS.find((item) => item.pattern.test(searchText));
+  return dedupeText([...direct, ...(matched?.causes ?? []), ...DEFAULT_OPERATIONAL_CAUSES]).slice(0, 6);
+}
+
+function insightRelationshipLabels(insight) {
+  if (Array.isArray(insight.affectedRelationships) && insight.affectedRelationships.length) {
+    return insight.affectedRelationships;
+  }
+  if (Array.isArray(insight.contributingRelationships) && insight.contributingRelationships.length) {
+    return relationshipContributionLabels(insight.contributingRelationships);
+  }
+  return [];
+}
+
+function formatRelationshipObservedLabel(value) {
+  return cleanRelationshipLabel(value)
+    .replace(/\s+\/\s+/g, " ↔ ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanBriefingText(value) {
+  return cleanDisplayText(value)
+    .replace(/\bbaseline\/current comparison\b/gi, "historical comparison")
+    .replace(/\bbaseline window\b/gi, "historical pattern")
+    .replace(/\bcurrent window\b/gi, "analysis period")
+    .replace(/\bversus baseline\b/gi, "from normal")
+    .replace(/\bby\s+[-+]?\d+(?:\.\d+)?\s*%/gi, "")
+    .replace(/\b[-+]?\d+(?:\.\d+)?\s*%\b/g, "")
+    .replace(/\brelationship missing\b/gi, "")
+    .replace(/\bcorrelation delta\b/gi, "")
+    .replace(/\brelationship strength\b/gi, "")
+    .replace(/\bconfidence score\b/gi, "")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function briefingSentences(value, max = 2) {
+  const text = cleanBriefingText(value);
+  if (!text) return [];
+  const sentences = text.match(/[^.!?]+[.!?]?/g) ?? [text];
+  return sentences.map((item) => ensureSentence(item.trim())).filter(Boolean).slice(0, max);
+}
+
+function ensureSentence(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function formatConfidenceLevel(label, score) {
+  const cleanLabel = firstText(label)
+    .split("_")
+    .join(" ")
+    .toLowerCase();
+  if (cleanLabel.includes("high") || cleanLabel.includes("confirmed") || cleanLabel.includes("strong")) return "High";
+  if (cleanLabel.includes("moderate") || cleanLabel.includes("medium") || cleanLabel.includes("likely") || cleanLabel.includes("present")) return "Moderate";
+  if (cleanLabel.includes("low") || cleanLabel.includes("weak") || cleanLabel.includes("developing") || cleanLabel.includes("pending")) return "Low";
+  const percent = confidencePercent(score);
+  if (percent === null) return cleanLabel ? cleanLabel.replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Low";
+  if (percent >= 82) return "High";
+  if (percent >= 62) return "Moderate";
+  return "Low";
+}
+
+function numberWord(value) {
+  const words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
+  return words[value] ?? String(value);
+}
+
 function operatorEvidenceSummary(...values) {
   const text = operatorText(...values);
   if (!text) return "";
-  if (/^(percent change|absolute change|correlation delta|calculated delta|baseline average|current average)\s*:/i.test(text)) {
+  if (/^(percent change|absolute change|calculated delta|baseline average|current average)\s*:/i.test(text)) {
     return "Supporting measurements are available in Evidence.";
   }
   if (/\bcorrelation delta\b/i.test(text)) return "Supporting relationship measurements are available in Evidence.";

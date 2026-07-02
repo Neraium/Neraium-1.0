@@ -14,6 +14,12 @@ export const OPERATOR_PENDING_STATE = {
 };
 
 const DISALLOWED_REPLACEMENTS = [
+  [/\brelationship missing\b/gi, "no longer followed its historical operating pattern"],
+  [/\bcorrelation delta\b/gi, "operating pattern change"],
+  [/\brelationship strength\b/gi, "operating coupling"],
+  [/\boperational support\b/gi, "supporting operating evidence"],
+  [/\bconfidence persistence\b/gi, "consistent recent behavior"],
+  [/\bbaseline score\b/gi, "baseline comparison"],
   [/\brelationship divergence\b/gi, "system behavior changed from its normal pattern"],
   [/\breplay\/relationship evidence\b/gi, "historical comparison evidence"],
   [/\breplay relationship evidence\b/gi, "historical comparison evidence"],

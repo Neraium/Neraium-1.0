@@ -217,7 +217,7 @@ function buildGuidanceFromCategory(category) {
       primaryDriver: "A relationship between key variables changed.",
       whyFlagged: "Variable relationships are weaker than usual.",
       whatToCheck: [
-        "Compare before/after relationship strength",
+        "Compare before/after operating pattern",
         "Review the time window where the shift began",
         "Check whether the shift persists across subsequent windows",
       ],

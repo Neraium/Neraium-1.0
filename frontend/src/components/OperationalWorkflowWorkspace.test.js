@@ -300,17 +300,27 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("Systems identified")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByText("What changed")).toBeTruthy();
-    expect(screen.getByText("Why Neraium believes this matters")).toBeTruthy();
-    expect(screen.getAllByText("High · 91%").length).toBeGreaterThan(0);
-    expect(screen.getByText("The signals stopped moving together like the baseline window.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operator Briefing" })).toBeTruthy();
+    expect(screen.getByText("What Changed")).toBeTruthy();
+    expect(screen.getByText("Why It Matters")).toBeTruthy();
+    expect(screen.queryByText("Why Neraium believes this matters")).toBeNull();
+    expect(screen.queryByText("Evidence summary")).toBeNull();
+    expect(screen.getByText("One operating relationship within the Flow and pressure system deviated from its historical operating pattern during the analysis period.")).toBeTruthy();
+    expect(screen.getByText("The subsystem is no longer behaving the way it normally does.")).toBeTruthy();
+    expect(screen.getByText("Possible Operational Causes")).toBeTruthy();
+    expect(screen.getByText("Pump operating point changed")).toBeTruthy();
+    expect(screen.getByText("Relationships Observed")).toBeTruthy();
+    expect(screen.getByText("pressure ↔ flow")).toBeTruthy();
     expect(screen.queryByText(/correlation delta/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    const drawer = view.container.querySelector("details.insight-evidence-drawer");
+    expect(drawer).toBeTruthy();
+    expect(drawer.open).toBe(false);
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Evidence")));
     expect(screen.getByRole("heading", { name: "Supporting Telemetry" })).toBeTruthy();
     const details = view.container.querySelector("details.evidence-panel");
     expect(details).toBeTruthy();
     expect(details.open).toBe(false);
-    expect(screen.getByText("Evidence (High · 91%)")).toBeTruthy();
+    expect(screen.getAllByText("Evidence").length).toBeGreaterThan(0);
     expect(screen.getByText("Source signals")).toBeTruthy();
     expect(screen.getByText("Source time ranges")).toBeTruthy();
     expect(screen.getByText("Pressure increased 18%")).toBeTruthy();
@@ -398,10 +408,10 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("0.4% missing values detected in supply pressure and pump vibration. Confidence reduced slightly.").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getAllByText("High · 100%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("High").length).toBeGreaterThan(0);
     expect(screen.queryByText("high (1)")).toBeNull();
     expect(screen.queryByText("pump vibration")).toBeNull();
-    expect(screen.getByText("Supporting measurements are available in Evidence.")).toBeTruthy();
+    expect(screen.queryByText("Supporting measurements are available in Evidence.")).toBeNull();
   });
 
   it("shows reduced-confidence copy only when quality materially affects interpretation", () => {
@@ -517,11 +527,11 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
 
     expect(screen.getAllByText("Pump subsystem behavior changed").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Evidence")));
     const details = view.container.querySelector("details.evidence-panel");
     expect(details).toBeTruthy();
     expect(details.open).toBe(false);
-    expect(screen.getByText("Evidence (Moderate)")).toBeTruthy();
+    expect(screen.getAllByText("Evidence").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pump power baseline average increased in the current window.").length).toBeGreaterThan(0);
     expect(screen.getByText(/percent change: 22/)).toBeTruthy();
     expect(screen.queryByText("Unavailable")).toBeNull();
