@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.analysis_explanations import build_analysis_explanation
 from app.services.upload_jobs import process_csv_content
 
 
@@ -35,6 +36,68 @@ def _analysis_quality_csv() -> bytes:
         )
     header = "timestamp,meter_cumulative_gal,pump_vibration_ips,ct_outlet_temp_f,gt_ct_fouling_severity,supply_pressure_psi"
     return (header + "\n" + "\n".join(rows)).encode("utf-8")
+
+
+def test_analysis_explanation_builds_operator_interpretation_report() -> None:
+    analysis = build_analysis_explanation(
+        {
+            "job_id": "operatorinterpretation001",
+            "timestamp_profile": {
+                "first_timestamp": "2026-06-01T00:00:00Z",
+                "last_timestamp": "2026-06-01T04:00:00Z",
+            },
+            "baseline_analysis": {
+                "overall_assessment": "needs_review",
+                "baseline_window_rows": 48,
+                "recent_window_rows": 24,
+                "columns_analyzed": 6,
+                "warnings": [],
+                "column_drift": [],
+                "top_relationship_changes": [
+                    {
+                        "relationship": "pump_power_kw<->filter_dp_psi",
+                        "display_columns": ["Pump Power", "Filter Differential Pressure"],
+                        "change_type": "weakened",
+                        "correlation_delta": 0.72,
+                        "baseline_correlation": 0.88,
+                        "recent_correlation": 0.16,
+                        "coupling_strength": 0.88,
+                        "baseline_sample_size": 48,
+                        "recent_sample_size": 24,
+                        "confidence_score": 0.91,
+                    },
+                    {
+                        "relationship": "pump_speed_hz<->filter_dp_psi",
+                        "display_columns": ["Pump Speed", "Filter Differential Pressure"],
+                        "change_type": "changed",
+                        "correlation_delta": 0.51,
+                        "baseline_correlation": 0.82,
+                        "recent_correlation": 0.31,
+                        "coupling_strength": 0.82,
+                        "baseline_sample_size": 48,
+                        "recent_sample_size": 24,
+                        "confidence_score": 0.86,
+                    },
+                ],
+            },
+            "operator_report": {"recommended_operator_checks": ["Compare the baseline and recent windows against facility logs."]},
+            "sii_intelligence": {"facility_state": "needs_review"},
+        }
+    )
+
+    report = analysis["operator_interpretation"]
+
+    assert report["overall_status"]["condition"] == "Flow & Pressure subsystem deviating from historical operation"
+    assert report["overall_status"]["confidence"] == "High"
+    assert report["overall_status"]["urgency"] == "Medium"
+    assert report["overall_status"]["fingerprint"] == "Changed"
+    assert report["primary_finding"]["title"] == "Flow & Pressure behavior changed"
+    assert "Pump Power <-> Filter Differential Pressure" in report["supporting_evidence"]["relationships"]
+    assert "Increasing filter resistance" in report["possible_operational_causes"]
+    assert "Review filter differential pressure trends." in report["suggested_investigation"]
+    assert report["supporting_evidence"]["relationship_persistence"] == "High"
+    assert any("No evidence of abnormal thermal" in item for item in report["did_not_observe"])
+    assert report["trend"]["subsystem_stability"] == "Declining"
 
 
 def test_analysis_output_suppresses_cumulative_counter_artifacts() -> None:

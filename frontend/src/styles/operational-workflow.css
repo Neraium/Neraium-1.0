@@ -588,6 +588,78 @@
   line-height: 1.5;
 }
 
+.operator-interpretation {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.operator-interpretation__block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border-top: 1px solid var(--ops-line);
+  padding-top: 14px;
+}
+
+.operator-interpretation__block h3,
+.operator-interpretation__block h4 {
+  margin: 0;
+  color: var(--ops-ink);
+  font-size: 0.98rem;
+  font-weight: 620;
+  line-height: 1.25;
+}
+
+.operator-interpretation__block p,
+.operator-interpretation__block strong {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.operator-interpretation__block > strong {
+  color: var(--ops-ink);
+  font-size: 1.04rem;
+}
+
+.operator-interpretation__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operator-interpretation__status-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid var(--ops-line);
+  border-radius: 999px;
+  background: var(--ops-surface-subtle);
+  color: var(--ops-ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.2;
+  padding: 6px 10px;
+}
+
+.operator-interpretation__status-row strong {
+  margin-right: 4px;
+  color: var(--ops-ink);
+}
+
+.operator-interpretation__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--ops-line);
+  padding-top: 14px;
+}
+
+.operator-interpretation__columns .insight-briefing__section,
+.operator-interpretation__columns .operator-interpretation__block {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .systems-summary {
   display: flex;
   align-items: center;
@@ -929,6 +1001,7 @@ button.insight-card {
   .operational-grid--split,
   .overview-support-grid,
   .status-rack,
+  .operator-interpretation__columns,
   .operational-detail-grid {
     grid-template-columns: 1fr;
   }

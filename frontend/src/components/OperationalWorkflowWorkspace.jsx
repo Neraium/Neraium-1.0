@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
-import { sanitizeOperatorText } from "../viewModels/operatorFinding";
+import { sanitizeOperatorList, sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
 import "../styles/design-system.css";
 
@@ -324,6 +324,7 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
             <ExecutiveSummary
               checklist={model.completionChecklist}
               notice={model.dataQualityNotice}
+              report={model.operatorReport}
               rows={model.executiveSummaryRows}
             />
           ) : (
@@ -554,6 +555,15 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     finding,
     analysisExplanation,
   });
+  const operatorReport = analysisComplete ? buildOperatorInterpretationReport({
+    analysisExplanation,
+    insights,
+    relationshipRows,
+    fingerprintDrift,
+    result,
+    finding,
+    identifiedSystems,
+  }) : null;
   const completionChecklist = buildCompletionChecklist({
     identifiedSystemCount,
     insights,
@@ -591,6 +601,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     dataQualityNotice,
     uiState,
     heroStatus,
+    operatorReport,
     baselineStatus: baselineAvailable ? { label: "Baseline Established", tone: "normal" } : NO_BASELINE_AVAILABLE,
     telemetryStatus,
     lastAnalysis,
@@ -826,6 +837,192 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
     ],
     ["Recommended Next Check", conciseOperatorSentence(topRecommendation, "Continue monitoring.")],
   ];
+}
+
+
+function buildOperatorInterpretationReport({ analysisExplanation, insights, relationshipRows, fingerprintDrift, result, finding, identifiedSystems }) {
+  const source = analysisExplanation?.operator_interpretation
+    ?? result?.operator_interpretation
+    ?? result?.operator_report?.operator_interpretation
+    ?? null;
+  if (source && typeof source === "object" && (source.overall_status || source.primary_finding)) {
+    return normalizeOperatorInterpretationReport(source);
+  }
+  if (!hasMeaningfulOperationalChange({ insights, fingerprintDrift }) && !finding?.exists) {
+    return normalizeOperatorInterpretationReport({
+      overall_status: {
+        condition: "Plant behavior consistent with historical operation",
+        confidence: formatConfidenceLevel(fingerprintDrift?.confidence, null),
+        urgency: "Low",
+        fingerprint: fingerprintDrift?.label ?? "Stable",
+        subsystem: identifiedSystems?.[0]?.name ?? "Uploaded telemetry",
+      },
+      executive_summary: [
+        "During the last analysis period, reviewed telemetry remained close to its historical operating pattern.",
+        "No subsystem-level behavior change was flagged by the available baseline comparison.",
+      ],
+      primary_finding: {
+        title: "Operating fingerprint remains stable",
+        what_changed: ["No reviewed operating relationship moved beyond the baseline review threshold."],
+        why_it_matters: ["Stable relationships reduce the need to investigate this subsystem first."],
+      },
+      suggested_investigation: ["Continue routine monitoring."],
+      supporting_evidence: { relationships: [], fingerprint_confidence: "Low", relationship_persistence: "Low" },
+      did_not_observe: ["No subsystem-level relationship change was flagged."],
+      trend: { direction: "Stable", subsystem_stability: "Stable", recommended_follow_up: "Continue routine monitoring" },
+    });
+  }
+
+  const primaryInsight = insights[0] ?? {};
+  const relationshipLabels = dedupeText([
+    ...insightRelationshipLabels(primaryInsight),
+    ...(Array.isArray(relationshipRows) ? relationshipRows.map(relationshipDisplayName) : []),
+  ].filter(Boolean)).slice(0, 6);
+  const subsystem = formatSubsystemName(firstText(primaryInsight.system, identifiedSystems?.[0]?.name, "Uploaded telemetry"));
+  return normalizeOperatorInterpretationReport({
+    overall_status: {
+      condition: `${subsystem} subsystem deviating from historical operation`,
+      confidence: formatConfidenceLevel(primaryInsight.confidence, primaryInsight.confidenceScore),
+      urgency: primaryInsight.severity === "High" ? "High" : "Medium",
+      fingerprint: fingerprintDrift?.label ?? "Changed",
+      subsystem,
+    },
+    executive_summary: [
+      `During the last analysis period, the ${subsystem} subsystem no longer behaved according to its historical operating pattern.`,
+      relationshipLabels.length > 1
+        ? "Several relationships that normally move together changed simultaneously, suggesting a subsystem-level change rather than a single instrument drifting."
+        : "At least one operating relationship changed from its established pattern, suggesting a subsystem behavior shift worth checking.",
+      "No immediate failure is indicated, but the behavior differs from the established operating fingerprint.",
+    ],
+    primary_finding: {
+      title: firstText(primaryInsight.summary, `${subsystem} subsystem behavior changed`),
+      system: subsystem,
+      what_changed: relationshipLabels.length
+        ? [`The historical relationships in the ${subsystem} subsystem deviated from their established operating patterns during the analysis window.`, ...relationshipLabels]
+        : whatChangedBriefing(primaryInsight, relationshipLabels),
+      why_it_matters: whyItMattersBriefing(primaryInsight),
+    },
+    possible_operational_causes: operationalCauseHypotheses(primaryInsight),
+    suggested_investigation: suggestedInvestigationSteps({ subsystem, relationshipLabels, insight: primaryInsight }),
+    supporting_evidence: {
+      relationships: relationshipLabels,
+      fingerprint_confidence: formatConfidenceLevel(primaryInsight.confidence, primaryInsight.confidenceScore),
+      relationship_persistence: relationshipLabels.length > 1 ? "High" : "Medium",
+    },
+    did_not_observe: didNotObserveStatements(subsystem),
+    trend: {
+      first_observed: firstText(result?.timestamp_profile?.first_timestamp, result?.deformation_started_at, "Current analysis window"),
+      direction: "Increasing",
+      subsystem_stability: "Declining",
+      recommended_follow_up: "Monitor next 24 hours",
+    },
+  });
+}
+
+function normalizeOperatorInterpretationReport(source) {
+  const status = source.overall_status ?? {};
+  const primary = source.primary_finding ?? {};
+  const evidence = source.supporting_evidence ?? {};
+  const trend = source.trend ?? {};
+  const condition = operatorText(status.condition, status.overall_condition, source.condition);
+  const subsystem = formatSubsystemName(operatorText(status.subsystem, primary.system, source.subsystem));
+  return {
+    condition,
+    subsystem,
+    confidence: formatConfidenceLevel(status.confidence, status.confidence_score),
+    urgency: normalizeUrgencyLabel(status.urgency),
+    fingerprint: operatorText(status.fingerprint, status.fingerprint_status),
+    executiveSummary: sanitizeOperatorList(toList(source.executive_summary, source.summary).flatMap(splitPriorityText)).slice(0, 4),
+    primaryFinding: {
+      title: operatorText(primary.title, primary.summary),
+      system: subsystem,
+      whatChanged: sanitizeOperatorList(toList(primary.what_changed, primary.whatChanged).flatMap(splitPriorityText)).slice(0, 8),
+      whyItMatters: sanitizeOperatorList(toList(primary.why_it_matters, primary.whyItMatters).flatMap(splitPriorityText)).slice(0, 4),
+    },
+    possibleOperationalCauses: sanitizeOperatorList(toList(source.possible_operational_causes, source.possibleOperationalCauses).flatMap(splitPriorityText)).slice(0, 8),
+    suggestedInvestigation: sanitizeOperatorList(toList(source.suggested_investigation, source.suggestedInvestigation).flatMap(splitPriorityText)).map(ensureSentence).slice(0, 8),
+    supportingEvidence: {
+      relationships: sanitizeOperatorList(toList(evidence.relationships).flatMap(splitPriorityText)).map(formatRelationshipObservedLabel).slice(0, 8),
+      fingerprintConfidence: formatConfidenceLevel(evidence.fingerprint_confidence, evidence.fingerprint_confidence_score),
+      relationshipPersistence: normalizePersistenceLabel(evidence.relationship_persistence),
+    },
+    didNotObserve: sanitizeOperatorList(toList(source.did_not_observe, source.things_not_observed).flatMap(splitPriorityText)).map(ensureSentence).slice(0, 5),
+    trend: {
+      firstObserved: operatorText(trend.first_observed, trend.firstObserved),
+      direction: operatorText(trend.direction, trend.progression),
+      subsystemStability: operatorText(trend.subsystem_stability, trend.subsystemStability),
+      recommendedFollowUp: operatorText(trend.recommended_follow_up, trend.recommendedFollowUp),
+    },
+  };
+}
+
+function relationshipDisplayName(row) {
+  if (!row || typeof row !== "object") return "";
+  const sourceTarget = row.source && row.target ? [row.source, row.target].map((item) => String(item).replace(/^tag:/, "").replace(/^metric:/, "")) : [];
+  return cleanRelationshipLabel(Array.isArray(row.display_columns) ? row.display_columns.join(" / ") : (Array.isArray(row.columns) ? row.columns.join(" / ") : firstText(row.name, row.label, row.pair, sourceTarget.join(" / "))));
+}
+
+function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight }) {
+  const searchText = [subsystem, relationshipLabels.join(" "), insight?.summary].join(" ").toLowerCase();
+  if (/flow|pressure|pump|valve|vfd|filter|hydraulic/.test(searchText)) {
+    return [
+      "Review filter differential pressure trends.",
+      "Verify current pump operating point.",
+      "Compare valve positions with historical operation.",
+      "Review recent maintenance and operator logs.",
+      "Confirm VFD commands match expected operation.",
+    ];
+  }
+  if (/chemical|chlor|dose|feed|quality|ph|orp/.test(searchText)) {
+    return [
+      "Review chemical feed trends.",
+      "Verify current dosing setpoints and feed pump status.",
+      "Compare water quality readings with historical operation.",
+      "Review recent chemical changes and operator logs.",
+      "Confirm control commands match expected operation.",
+    ];
+  }
+  if (/thermal|cooling|heat|chiller|condenser|tower/.test(searchText)) {
+    return [
+      "Review heat transfer and temperature approach trends.",
+      "Verify current equipment staging and operating point.",
+      "Compare flow and valve positions with historical operation.",
+      "Review recent maintenance and load changes.",
+      "Confirm control commands match expected operation.",
+    ];
+  }
+  return [
+    firstText(insight?.operatorCheck, insight?.recommendedAction, "Review the contributing signal trends."),
+    "Verify current operating mode and setpoints.",
+    "Compare equipment states with historical operation.",
+    "Review recent maintenance and operator logs.",
+    "Monitor the next operating window for persistence.",
+  ];
+}
+
+function didNotObserveStatements(subsystem) {
+  const text = String(subsystem ?? "").toLowerCase();
+  return [
+    text.includes("thermal") ? "" : "No evidence of abnormal thermal subsystem behavior was flagged.",
+    text.includes("chemical") ? "" : "Chemical feed relationships remain consistent with the available baseline.",
+    text.includes("electrical") || text.includes("energy") ? "" : "Electrical load relationships remain stable in the reviewed evidence.",
+  ].filter(Boolean);
+}
+
+function normalizeUrgencyLabel(value) {
+  const text = firstText(value).toLowerCase();
+  if (text.includes("high") || text.includes("critical")) return "High";
+  if (text.includes("medium") || text.includes("moderate") || text.includes("elevated")) return "Medium";
+  if (text.includes("low")) return "Low";
+  return firstText(value, "Low");
+}
+
+function normalizePersistenceLabel(value) {
+  const text = firstText(value).toLowerCase();
+  if (text.includes("high")) return "High";
+  if (text.includes("medium") || text.includes("moderate")) return "Medium";
+  if (text.includes("low")) return "Low";
+  return firstText(value, "Low");
 }
 
 function buildCompletionChecklist({ identifiedSystemCount, insights, relationshipRows, fingerprintDrift, baselineAvailable }) {
@@ -1504,7 +1701,7 @@ function prioritizeEvidenceGroups(groups, selectedInsightId) {
   });
 }
 
-function ExecutiveSummary({ checklist, notice, rows }) {
+function ExecutiveSummary({ checklist, notice, report, rows }) {
   return (
     <div className="operator-executive-summary" aria-label="Executive summary rows">
       {notice ? (
@@ -1513,6 +1710,7 @@ function ExecutiveSummary({ checklist, notice, rows }) {
           {notice.detail ? <p>{notice.detail}</p> : null}
         </div>
       ) : null}
+      {report ? <OperatorInterpretation report={report} /> : null}
       <ul className="operator-completion-list" aria-label="Analysis completion checks">
         {checklist.map((item) => (
           <li key={item}>
@@ -1529,6 +1727,71 @@ function ExecutiveSummary({ checklist, notice, rows }) {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+function OperatorInterpretation({ report }) {
+  const statusRows = [
+    ["Confidence", report.confidence],
+    ["Urgency", report.urgency],
+    ["Fingerprint", report.fingerprint],
+  ];
+  const primary = report.primaryFinding ?? {};
+  const evidence = report.supportingEvidence ?? {};
+  const trendRows = [
+    ["First observed", report.trend?.firstObserved],
+    ["Progression", report.trend?.direction],
+    ["Subsystem stability", report.trend?.subsystemStability],
+    ["Follow-up", report.trend?.recommendedFollowUp],
+  ];
+
+  return (
+    <div className="operator-interpretation" aria-label="Operator interpretation report">
+      <section className="operator-interpretation__block" aria-label="Overall system status">
+        <span className="section-token">Overall System Status</span>
+        <h3>Overall Condition</h3>
+        <p>{report.condition}</p>
+        <div className="operator-interpretation__status-row">
+          {statusRows.filter(([, value]) => value).map(([label, value]) => (
+            <span key={label}><strong>{label}:</strong> {value}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="operator-interpretation__block" aria-label="Executive summary">
+        <h3>Executive Summary</h3>
+        {report.executiveSummary.map((line) => <p key={line}>{ensureSentence(line)}</p>)}
+      </section>
+
+      <section className="operator-interpretation__block" aria-label="Primary finding">
+        <h3>Primary Finding</h3>
+        <strong>{primary.title}</strong>
+        <BriefingTextBlock title="What Changed" lines={primary.whatChanged} />
+        <BriefingTextBlock title="Why It Matters" lines={primary.whyItMatters} />
+      </section>
+
+      <div className="operator-interpretation__columns">
+        <BriefingList title="Possible Operational Causes" items={report.possibleOperationalCauses} />
+        <BriefingList title="Suggested Investigation" items={report.suggestedInvestigation} />
+      </div>
+
+      <section className="operator-interpretation__block" aria-label="Supporting evidence summary">
+        <h3>Supporting Evidence</h3>
+        {evidence.relationships?.length ? <RelationshipObservedList items={evidence.relationships} /> : null}
+        <DetailGrid rows={[
+          ["Fingerprint confidence", evidence.fingerprintConfidence],
+          ["Relationship persistence", evidence.relationshipPersistence],
+        ]} />
+      </section>
+
+      <div className="operator-interpretation__columns">
+        <BriefingList title="Things Neraium Did Not Observe" items={report.didNotObserve} />
+        <section className="operator-interpretation__block" aria-label="Behavior trend">
+          <h3>Trend</h3>
+          <DetailGrid rows={trendRows} />
+        </section>
+      </div>
     </div>
   );
 }
@@ -1757,6 +2020,7 @@ function insightRelationshipLabels(insight) {
 
 function formatRelationshipObservedLabel(value) {
   return cleanRelationshipLabel(value)
+    .replace(/\s*<->\s*/g, " ↔ ")
     .replace(/\s+\/\s+/g, " ↔ ")
     .replace(/\s+/g, " ")
     .trim();

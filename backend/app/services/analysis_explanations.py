@@ -54,6 +54,17 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         operator_report=operator_report,
         relationships=relationships,
     )
+    operator_interpretation = build_operator_interpretation(
+        insights=insights,
+        systems=systems,
+        relationships=relationships,
+        fingerprint=fingerprint,
+        baseline=baseline,
+        operator_report=operator_report,
+        intelligence=intelligence,
+        result=result,
+        recommendations=recommendations,
+    )
 
     return {
         "executive_summary": build_executive_summary(
@@ -70,6 +81,7 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         "fingerprint": fingerprint,
         "evidence": evidence,
         "recommendations": recommendations,
+        "operator_interpretation": operator_interpretation,
     }
 
 
@@ -649,6 +661,327 @@ def build_evidence(
         )
 
     return dedupe_evidence(evidence)
+
+
+def build_operator_interpretation(
+    *,
+    insights: list[dict[str, Any]],
+    systems: list[dict[str, Any]],
+    relationships: list[dict[str, Any]],
+    fingerprint: dict[str, Any],
+    baseline: dict[str, Any],
+    operator_report: dict[str, Any],
+    intelligence: dict[str, Any],
+    result: dict[str, Any],
+    recommendations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    primary = primary_operator_insight(insights)
+    changed = operator_change_present(primary, relationships, fingerprint)
+    raw_system = operator_primary_system(primary, systems, relationships, intelligence)
+    relationship_labels = operator_relationship_labels(primary, relationships)
+    system = operator_report_system_label(raw_system, relationship_labels)
+    confidence = operator_confidence_label(
+        first_text(primary.get("confidence") if primary else "", fingerprint.get("confidence"), intelligence.get("confidence")),
+        primary.get("confidence_score") if primary else fingerprint.get("confidence_score"),
+    )
+    urgency = operator_urgency_label(primary, relationships, changed)
+    fingerprint_status = operator_fingerprint_status(fingerprint, changed)
+    possible_causes = operator_possible_causes(primary, system, relationship_labels)
+    suggested_investigation = operator_investigation_steps(system, relationship_labels, recommendations, operator_report)
+    executive_summary = operator_executive_summary(system, relationship_labels, fingerprint, changed)
+    primary_title = operator_primary_title(primary, raw_system, system, changed)
+    what_changed = operator_what_changed(primary, system, relationship_labels, changed)
+    why_matters = operator_why_it_matters(primary, changed)
+
+    return compact_dict(
+        {
+            "overall_status": compact_dict(
+                {
+                    "condition": f"{system} subsystem deviating from historical operation" if changed else "Plant behavior consistent with historical operation",
+                    "confidence": confidence,
+                    "urgency": urgency,
+                    "fingerprint": fingerprint_status,
+                    "subsystem": system,
+                }
+            ),
+            "executive_summary": executive_summary,
+            "primary_finding": compact_dict(
+                {
+                    "title": primary_title,
+                    "system": system,
+                    "what_changed": what_changed,
+                    "why_it_matters": why_matters,
+                }
+            ),
+            "possible_operational_causes": possible_causes,
+            "suggested_investigation": suggested_investigation,
+            "supporting_evidence": compact_dict(
+                {
+                    "relationships": relationship_labels,
+                    "fingerprint_confidence": confidence,
+                    "relationship_persistence": operator_relationship_persistence(relationships),
+                }
+            ),
+            "did_not_observe": operator_did_not_observe(system, systems, relationships, baseline),
+            "trend": operator_trend(result, baseline, changed),
+        }
+    )
+
+
+def primary_operator_insight(insights: list[dict[str, Any]]) -> dict[str, Any]:
+    for insight in insights:
+        if not isinstance(insight, dict):
+            continue
+        if str(insight.get("id") or "") == "baseline-stable":
+            continue
+        if str(insight.get("severity") or "").lower() != "low":
+            return insight
+    for insight in insights:
+        if isinstance(insight, dict):
+            return insight
+    return {}
+
+
+def operator_change_present(primary: dict[str, Any], relationships: list[dict[str, Any]], fingerprint: dict[str, Any]) -> bool:
+    status = str(fingerprint.get("status") or fingerprint.get("drift_status") or "").lower()
+    if status in {"changed", "drifting", "review", "unstable"}:
+        return True
+    if relationships:
+        return True
+    if primary and str(primary.get("id") or "") != "baseline-stable" and str(primary.get("severity") or "").lower() != "low":
+        return True
+    return False
+
+
+def operator_primary_system(
+    primary: dict[str, Any],
+    systems: list[dict[str, Any]],
+    relationships: list[dict[str, Any]],
+    intelligence: dict[str, Any],
+) -> str:
+    return first_text(
+        primary.get("system") if primary else "",
+        first_item(primary.get("affected_systems") if primary else []),
+        relationships[0].get("system") if relationships else "",
+        systems[0].get("name") if systems else "",
+        intelligence.get("primary_room"),
+        "Uploaded telemetry",
+    )
+
+
+
+def operator_report_system_label(system: str, relationship_labels: list[str]) -> str:
+    combined = " ".join([system, *relationship_labels]).lower()
+    if system == "Pumping System" and any(token in combined for token in ["pressure", "filter", "flow", "valve", "hydraulic"]):
+        return "Flow & Pressure"
+    return system
+
+
+def operator_primary_title(primary: dict[str, Any], raw_system: str, system: str, changed: bool) -> str:
+    raw_title = first_text(primary.get("title") if primary else "")
+    if raw_title and raw_system and raw_system != system and raw_title.lower().startswith(raw_system.lower()):
+        return system + raw_title[len(raw_system):]
+    return first_text(raw_title, f"{system} subsystem behavior changed" if changed else "Operating fingerprint remains stable")
+
+def operator_relationship_labels(primary: dict[str, Any], relationships: list[dict[str, Any]]) -> list[str]:
+    labels: list[str] = []
+    if primary:
+        for value in primary.get("affected_relationships") or []:
+            labels.append(clean_operator_relationship_label(value))
+        for item in primary.get("contributing_relationships") or []:
+            if isinstance(item, dict):
+                labels.append(clean_operator_relationship_label(first_text(item.get("label"), " / ".join(item.get("display_columns") or []), " / ".join(item.get("columns") or []))))
+            else:
+                labels.append(clean_operator_relationship_label(item))
+    for item in relationships:
+        if not isinstance(item, dict):
+            continue
+        labels.append(clean_operator_relationship_label(first_text(item.get("name"), " / ".join(item.get("display_columns") or []), " / ".join(item.get("columns") or []))))
+    return dedupe([label for label in labels if label])[:6]
+
+
+def clean_operator_relationship_label(value: Any) -> str:
+    text = first_text(value)
+    text = text.replace(" shifted", "").replace("Shifted", "")
+    text = text.replace(" / ", " <-> ")
+    return " ".join(text.split())
+
+
+def operator_confidence_label(label: str, score: Any) -> str:
+    text = str(label or "").lower()
+    if "high" in text or "strong" in text or "confirmed" in text:
+        return "High"
+    if "moderate" in text or "medium" in text or "present" in text:
+        return "Medium"
+    numeric = numeric_confidence_score(score, 0.0)
+    if numeric >= 0.75:
+        return "High"
+    if numeric >= 0.45:
+        return "Medium"
+    return "Low"
+
+
+def operator_urgency_label(primary: dict[str, Any], relationships: list[dict[str, Any]], changed: bool) -> str:
+    severity = str(primary.get("severity") if primary else "").lower()
+    if severity in {"high", "critical"}:
+        return "High"
+    if severity in {"moderate", "medium", "elevated"} or changed or len(relationships) >= 2:
+        return "Medium"
+    return "Low"
+
+
+def operator_fingerprint_status(fingerprint: dict[str, Any], changed: bool) -> str:
+    status = str(fingerprint.get("status") or fingerprint.get("drift_status") or "").lower()
+    if changed or status in {"changed", "drifting", "review", "unstable"}:
+        return "Changed"
+    if status == "stable":
+        return "Stable"
+    return "Pending"
+
+
+def operator_possible_causes(primary: dict[str, Any], system: str, relationship_labels: list[str]) -> list[str]:
+    direct = primary.get("possible_operational_causes") if isinstance(primary, dict) else []
+    direct_list = direct if isinstance(direct, list) else []
+    fallback = possible_operational_causes(system, relationship_labels)
+    return dedupe([*direct_list, *fallback])[:6]
+
+
+def operator_investigation_steps(
+    system: str,
+    relationship_labels: list[str],
+    recommendations: list[dict[str, Any]],
+    operator_report: dict[str, Any],
+) -> list[str]:
+    combined = " ".join([system, *relationship_labels]).lower()
+    if any(token in combined for token in ["flow", "pressure", "pump", "valve", "vfd", "filter", "hydraulic"]):
+        steps = [
+            "Review filter differential pressure trends.",
+            "Verify current pump operating point.",
+            "Compare valve positions with historical operation.",
+            "Review recent maintenance and operator logs.",
+            "Confirm VFD commands match expected operation.",
+        ]
+    elif any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality", "ph", "orp"]):
+        steps = [
+            "Review chemical feed trends.",
+            "Verify current dosing setpoints and feed pump status.",
+            "Compare water quality readings with historical operation.",
+            "Review recent chemical changes and operator logs.",
+            "Confirm control commands match expected operation.",
+        ]
+    elif any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
+        steps = [
+            "Review heat transfer and temperature approach trends.",
+            "Verify current equipment staging and operating point.",
+            "Compare flow and valve positions with historical operation.",
+            "Review recent maintenance and load changes.",
+            "Confirm control commands match expected operation.",
+        ]
+    else:
+        steps = [
+            "Review the contributing signal trends.",
+            "Verify current operating mode and setpoints.",
+            "Compare equipment states with historical operation.",
+            "Review recent maintenance and operator logs.",
+            "Monitor the next operating window for persistence.",
+        ]
+    extra = [str(item.get("recommendation") or item.get("next_check") or "") for item in recommendations if isinstance(item, dict)]
+    report_checks = operator_report.get("recommended_operator_checks") if isinstance(operator_report.get("recommended_operator_checks"), list) else []
+    return dedupe([*steps, *extra, *report_checks])[:7]
+
+
+def operator_executive_summary(system: str, relationship_labels: list[str], fingerprint: dict[str, Any], changed: bool) -> list[str]:
+    if not changed:
+        return [
+            "During the last analysis period, reviewed telemetry remained close to its historical operating pattern.",
+            "No subsystem-level behavior change was flagged by the available baseline comparison.",
+        ]
+    relationship_sentence = (
+        "Several relationships that normally move together changed simultaneously, suggesting a subsystem-level change rather than a single instrument drifting."
+        if len(relationship_labels) >= 2 else
+        "At least one operating relationship changed from its established pattern, suggesting a subsystem behavior shift worth checking."
+    )
+    return [
+        f"During the last analysis period, the {system} subsystem no longer behaved according to its historical operating pattern.",
+        relationship_sentence,
+        "No immediate failure is indicated, but the behavior differs from the established operating fingerprint.",
+    ]
+
+
+def operator_what_changed(primary: dict[str, Any], system: str, relationship_labels: list[str], changed: bool) -> list[str]:
+    if relationship_labels:
+        return [
+            f"The historical relationships in the {system} subsystem deviated from their established operating patterns during the analysis window.",
+            *relationship_labels,
+        ]
+    text = first_text(primary.get("what_changed") if primary else "", primary.get("explanation") if primary else "")
+    if text:
+        return [text]
+    if changed:
+        return [f"The {system} subsystem changed from its historical operating pattern during the analysis window."]
+    return ["No reviewed operating relationship moved beyond the baseline review threshold."]
+
+
+def operator_why_it_matters(primary: dict[str, Any], changed: bool) -> list[str]:
+    direct = first_text(
+        primary.get("possible_operational_consequence") if primary else "",
+        primary.get("possible_consequence") if primary else "",
+        primary.get("why_it_matters") if primary else "",
+    )
+    if direct:
+        return [direct]
+    if changed:
+        return [
+            "When several operating relationships change together, the underlying operating state of the subsystem may have shifted.",
+            "This is commonly observed before operators can isolate a single failed component.",
+        ]
+    return ["Stable relationships reduce the need to investigate this subsystem first."]
+
+
+def operator_relationship_persistence(relationships: list[dict[str, Any]]) -> str:
+    if not relationships:
+        return "Low"
+    sample_counts = []
+    for relationship in relationships:
+        try:
+            sample_counts.append(min(int(relationship.get("baseline_sample_size") or 0), int(relationship.get("recent_sample_size") or 0)))
+        except (TypeError, ValueError):
+            sample_counts.append(0)
+    if max(sample_counts or [0]) >= 12:
+        return "High"
+    if max(sample_counts or [0]) >= 4:
+        return "Medium"
+    return "Low"
+
+
+def operator_did_not_observe(system: str, systems: list[dict[str, Any]], relationships: list[dict[str, Any]], baseline: dict[str, Any]) -> list[str]:
+    active_text = " ".join(
+        [system, *[str(item.get("name") or "") for item in systems if isinstance(item, dict)], *[str(item.get("system") or "") for item in relationships if isinstance(item, dict)]]
+    ).lower()
+    candidates = [
+        ("thermal", "No evidence of abnormal thermal subsystem behavior was flagged."),
+        ("chemical", "Chemical feed relationships remain consistent with the available baseline."),
+        ("electrical", "Electrical load relationships remain stable in the reviewed evidence."),
+        ("water quality", "Water quality relationships remain consistent with the available baseline."),
+    ]
+    observations = [message for token, message in candidates if token not in active_text]
+    if baseline.get("overall_assessment") == "normal" and not relationships:
+        observations.insert(0, "No subsystem-level relationship change was flagged.")
+    return observations[:3]
+
+
+def operator_trend(result: dict[str, Any], baseline: dict[str, Any], changed: bool) -> dict[str, Any]:
+    timestamp = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
+    drift_trajectory = baseline.get("drift_trajectory") if isinstance(baseline.get("drift_trajectory"), dict) else {}
+    progression = first_text(drift_trajectory.get("direction"), drift_trajectory.get("trend"))
+    return compact_dict(
+        {
+            "first_observed": first_text(timestamp.get("first_timestamp"), result.get("deformation_started_at"), "Current analysis window"),
+            "direction": progression.capitalize() if progression else ("Increasing" if changed else "Stable"),
+            "subsystem_stability": "Declining" if changed else "Stable",
+            "recommended_follow_up": "Monitor next 24 hours" if changed else "Continue routine monitoring",
+        }
+    )
 
 
 def build_recommendations(

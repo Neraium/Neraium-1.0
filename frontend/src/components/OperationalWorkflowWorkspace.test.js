@@ -294,8 +294,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.getByText("Overall Status")).toBeTruthy();
     expect(screen.getByText("Operational instability observed")).toBeTruthy();
-    expect(screen.getByText("Pressure and flow relationship shifted")).toBeTruthy();
-    expect(screen.getByText("Pump cycling may increase")).toBeTruthy();
+    expect(screen.getAllByText("Pressure and flow relationship shifted").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pump cycling may increase").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Check pump schedule and valve position").length).toBeGreaterThan(0);
     expect(screen.getByText("Systems identified")).toBeTruthy();
 
@@ -356,7 +356,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.getByText("Localized subsystem change detected")).toBeTruthy();
-    expect(screen.getByText("Flow / Pressure subsystem behavior changed")).toBeTruthy();
+    expect(screen.getAllByText("Flow / Pressure subsystem behavior changed").length).toBeGreaterThan(0);
     expect(screen.queryByText("Baseline-aligned")).toBeNull();
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
   });
@@ -631,6 +631,86 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       fireEvent.click(tab);
       expect(main.textContent).not.toMatch(/\bbackend\b|\bpipeline\b|\breplay\b|\braw\b|tag-pair|Column 3|SII/i);
     }
+  });
+
+  it("renders the operator interpretation report around subsystem behavior", () => {
+    const analysisResult = {
+      executive_summary: {
+        overall_operational_status: "Flow & Pressure subsystem deviating from historical operation",
+        highest_priority_finding: "Flow & Pressure subsystem behavior changed",
+        recommended_action: "Review filter differential pressure trends.",
+      },
+      operator_interpretation: {
+        overall_status: {
+          condition: "Flow & Pressure subsystem deviating from historical operation",
+          confidence: "High",
+          urgency: "Medium",
+          fingerprint: "Changed",
+          subsystem: "Flow & Pressure",
+        },
+        executive_summary: [
+          "During the last analysis period, the Flow & Pressure subsystem no longer behaved according to its historical operating pattern.",
+          "Several relationships that normally move together changed simultaneously, suggesting a subsystem-level change rather than a single instrument drifting.",
+        ],
+        primary_finding: {
+          title: "Flow & Pressure subsystem behavior changed",
+          what_changed: [
+            "Pump Power <-> Filter Differential Pressure",
+            "Pump Speed <-> Filter Differential Pressure",
+            "Main Pressure <-> Pump Power",
+          ],
+          why_it_matters: ["When several hydraulic relationships change together, the subsystem operating state may have shifted."],
+        },
+        possible_operational_causes: ["Increasing filter resistance", "Valve position changed", "VFD control adjustment"],
+        suggested_investigation: ["Review filter differential pressure trends.", "Verify current pump operating point."],
+        supporting_evidence: {
+          relationships: ["Pump Power <-> Filter Differential Pressure", "Main Pressure <-> Chlorine Dose"],
+          fingerprint_confidence: "High",
+          relationship_persistence: "High",
+        },
+        did_not_observe: [
+          "No evidence of abnormal thermal subsystem behavior was flagged.",
+          "Chemical feed relationships remain consistent with the available baseline.",
+        ],
+        trend: {
+          first_observed: "3 days ago",
+          direction: "Increasing",
+          subsystem_stability: "Declining",
+          recommended_follow_up: "Monitor next 24 hours",
+        },
+      },
+      insights: [{
+        id: "flow-pressure",
+        title: "Flow & Pressure subsystem behavior changed",
+        severity: "moderate",
+        confidence: "high",
+        system: "Flow & Pressure",
+      }],
+      systems: [{ id: "flow-pressure", name: "Flow & Pressure" }],
+      relationships: [{ columns: ["Pump Power", "Filter Differential Pressure"] }],
+      fingerprint: { status: "changed", meaning: "Flow & Pressure changed against baseline.", confidence: "high" },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Overall System Status")).toBeTruthy();
+    expect(screen.getAllByText("Flow & Pressure subsystem deviating from historical operation").length).toBeGreaterThan(0);
+    expect(screen.getByText("Confidence:")).toBeTruthy();
+    expect(screen.getByText("Urgency:")).toBeTruthy();
+    expect(screen.getByText("Fingerprint:")).toBeTruthy();
+    expect(screen.getByText("Possible Operational Causes")).toBeTruthy();
+    expect(screen.getByText("Increasing filter resistance")).toBeTruthy();
+    expect(screen.getByText("Suggested Investigation")).toBeTruthy();
+    expect(screen.getAllByText("Review filter differential pressure trends.").length).toBeGreaterThan(0);
+    expect(screen.getByText("Things Neraium Did Not Observe")).toBeTruthy();
+    expect(screen.getByText("No evidence of abnormal thermal subsystem behavior was flagged.")).toBeTruthy();
+    expect(screen.getByText("Trend")).toBeTruthy();
+    expect(screen.getByText("Declining")).toBeTruthy();
+    expect(screen.getByText("Pump Power ↔ Filter Differential Pressure")).toBeTruthy();
   });
 
   it("keeps mobile result cards from crowding", () => {
