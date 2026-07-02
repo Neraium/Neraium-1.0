@@ -63,8 +63,8 @@ describe("Advanced Details workspace", () => {
     renderStory(baseProps());
 
     await waitFor(() => expect(screen.getByText("Advanced Details")).toBeTruthy());
-    expect(screen.getByLabelText("Why We Believe It")).toBeTruthy();
-    expect(screen.getByLabelText("Likely Causes")).toBeTruthy();
+    expect(screen.getByLabelText("Evidence")).toBeTruthy();
+    expect(screen.getByLabelText("Possible Operational Causes")).toBeTruthy();
     expect(screen.getByLabelText("What To Inspect")).toBeTruthy();
     expect(screen.getByLabelText("How It Developed")).toBeTruthy();
     expect(screen.getByLabelText("Supporting Trends")).toBeTruthy();

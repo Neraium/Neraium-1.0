@@ -154,15 +154,92 @@ function confidenceForFinding(run) {
   return "Low";
 }
 
-function potentialImpactForFinding(run) {
-  const explicit = run?.potential_impact ?? run?.impact_summary ?? run?.operator_impact;
-  if (explicit) return String(explicit);
-  const type = String(run?.observation_type ?? "");
-  const strength = classifyChangeStrength(run?.drift_metrics?.baseline_distance ?? run?.drift_metrics?.drift_index);
-  if (type === "recovery_elongation") return "Recovery behavior differs from historical evidence.";
-  if (type === "coupling_change" || type === "covariance_shift") return "The observed signals no longer move together as expected.";
-  if (type === "trajectory_drift") return "This indicates the operating pattern differs from historical evidence.";
-  return strength === "Low" ? "No equipment issues detected." : "Historical comparison indicates a change from the normal operating pattern.";
+function cleanBriefingSentence(value) {
+  const text = sanitizeOperatorText(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return /[.!?]$/.test(text) ? text : text + ".";
+}
+
+function splitBriefingSentences(value) {
+  const text = cleanBriefingSentence(value);
+  if (!text) return [];
+  return (text.match(/[^.!?]+[.!?]?/g) ?? [text]).map(cleanBriefingSentence).filter(Boolean);
+}
+
+function uniqueBriefingItems(items) {
+  return [...new Set(items.map((item) => sanitizeOperatorText(item).trim()).filter(Boolean))];
+}
+
+function buildObservationBriefing(finding, run) {
+  return {
+    summary: splitBriefingSentences(finding?.summary).slice(0, 2),
+    possibleCauses: buildObservationCauses(finding, run),
+    relationships: buildObservationRelationships(finding, run),
+    investigation: buildObservationInvestigation(finding, run),
+  };
+}
+
+function buildObservationCauses(finding, run) {
+  const text = observationBriefingText(finding, run);
+  const causes = [];
+  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter loading", "Increased hydraulic resistance");
+  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump operating point changed", "VFD control adjustment");
+  if (/valve|damper/.test(text)) causes.push("Valve position changed");
+  if (/temperature|cool|chw|thermal|humidity/.test(text)) causes.push("Load shift", "Heat transfer changed");
+  if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
+  causes.push("Demand shift", "Recent maintenance activity", "Operating setpoint changed");
+  return uniqueBriefingItems(causes).slice(0, 6);
+}
+
+function buildObservationRelationships(finding, run) {
+  const variables = uniqueBriefingItems([
+    ...(Array.isArray(finding?.affectedVariables) ? finding.affectedVariables : []),
+    ...(Array.isArray(run?.variables) ? run.variables : []),
+  ].map((item) => sanitizeOperatorText(item).replace(/_/g, " ")));
+  const relationships = [];
+  for (let index = 0; index < variables.length - 1 && relationships.length < 6; index += 1) {
+    relationships.push(variables[index] + " ↔ " + variables[index + 1]);
+  }
+  return relationships;
+}
+
+function buildObservationInvestigation(finding, run) {
+  const text = observationBriefingText(finding, run);
+  if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
+    return ["Review filter differential pressure trend", "Verify valve positions", "Compare with recent maintenance activity"];
+  }
+  if (/temperature|cool|chw|thermal|humidity/.test(text)) {
+    return ["Review affected trend lines", "Verify current equipment mode", "Compare with recent load changes"];
+  }
+  return uniqueBriefingItems([
+    cleanBriefingSentence(finding?.reviewNext),
+    "Review affected signal trends",
+    "Verify current operating mode and setpoints",
+    "Compare with recent maintenance activity",
+  ]).slice(0, 3);
+}
+
+function observationBriefingText(finding, run) {
+  return [
+    finding?.summary,
+    finding?.reviewNext,
+    ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
+    ...(Array.isArray(run?.variables) ? run.variables : []),
+    ...(Array.isArray(run?.evidence_summary) ? run.evidence_summary : []),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function IssueBriefingList({ title, items }) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!safeItems.length) return null;
+  return (
+    <section className="compact-list-block">
+      <span className="section-token">{title}</span>
+      <ul className="compact-list">
+        {safeItems.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </section>
+  );
 }
 
 function readPendingObservationRunId() {
@@ -385,6 +462,7 @@ export default function ObservationCenterWorkspace({
   const selectedRunValidationHistory = Array.isArray(selectedRun?.validation_event_history) ? selectedRun.validation_event_history : [];
   const selectedRunInterventionComparison = selectedRun?.before_after_intervention ?? {};
   const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
+  const activeBriefing = buildObservationBriefing(activeFinding, selectedRun);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
@@ -527,8 +605,8 @@ export default function ObservationCenterWorkspace({
           <p>{activeFinding.summary}</p>
           <MetricGrid
             metrics={[
+              { label: "Severity", value: activeFinding.status },
               { label: "Confidence", value: activeFinding.confidence },
-              { label: "Why it matters", value: activeFinding.whyItMatters },
             ]}
             compact
           />
@@ -567,9 +645,9 @@ export default function ObservationCenterWorkspace({
                 </select>
               </label>
               <label className="observation-center__field">
-                <span>Issue type</span>
+                <span>Issue category</span>
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-                  <option value="all">All types</option>
+                  <option value="all">All categories</option>
                   {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
                 </select>
               </label>
@@ -598,7 +676,7 @@ export default function ObservationCenterWorkspace({
                 <p>{activeFinding.summary}</p>
                 <div className="intervention-card__footer">
                   <span>Confidence {activeFinding.confidence}</span>
-                  <span>{activeFinding.whyItMatters}</span>
+                  <span>{activeBriefing.investigation[0]}</span>
                 </div>
               </button>
             </div>
@@ -617,34 +695,32 @@ export default function ObservationCenterWorkspace({
               <div className="observation-detail-callout">
                 <span className="section-token">Observation Summary</span>
                 <strong>{activeFinding.summary}</strong>
-                <p>{activeFinding.whyItMatters}</p>
+                {activeBriefing.summary.slice(1).map((line) => <p key={line}>{line}</p>)}
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Status", value: activeFinding.status },
+                  { label: "Severity", value: activeFinding.status },
                   { label: "Confidence", value: activeFinding.confidence },
-                  { label: "Review next", value: activeFinding.reviewNext },
-                  { label: "Historical comparison", value: activeFinding.historicalComparison ?? OPERATOR_EMPTY_STATE.detail },
-                  { label: "Potential impact", value: potentialImpactForFinding(selectedRun) },
                   { label: "Detected", value: formatDetectedTime(selectedRun) },
                 ]}
                 compact
               />
+              <IssueBriefingList title="Possible Operational Causes" items={activeBriefing.possibleCauses} />
+              <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
+              <IssueBriefingList title="Recommended Investigation" items={activeBriefing.investigation} />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
               </div>
-              <details className="compact-list-block" open>
-                <summary className="section-token">Why We Believe It</summary>
+              <details className="compact-list-block">
+                <summary className="section-token">Evidence</summary>
                 <ul className="compact-list">
                   {(activeFinding.supportingEvidence ?? []).length > 0
                     ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
                     : <li>{OPERATOR_EMPTY_STATE.detail}</li>}
-                </ul>
-              </details>
-              <details className="compact-list-block">
-                <summary className="section-token">Technical Details</summary>
-                <ul className="compact-list">
                   {(activeFinding.technicalDetails ?? []).map((item) => <li key={item.label}>{item.label}: {sanitizeOperatorText(item.value)}</li>)}
+                  {selectedRun ? <li>{sanitizeOperatorText(selectedRunSummary)}</li> : null}
+                  {selectedRunHistoricalFact ? <li>{sanitizeOperatorText(selectedRunHistoricalFact)}</li> : null}
+                  {selectedRun ? <li>Confidence: {confidenceForFinding(selectedRun)}</li> : null}
                 </ul>
               </details>
               <details className="compact-list-block">
@@ -653,16 +729,6 @@ export default function ObservationCenterWorkspace({
                   {renderDataQualityRows(activeFinding.dataQuality)}
                 </ul>
               </details>
-              {selectedRun ? (
-                <details className="compact-list-block">
-                  <summary className="section-token">Historical comparison</summary>
-                  <ul className="compact-list">
-                    <li>{sanitizeOperatorText(selectedRunSummary)}</li>
-                    {selectedRunHistoricalFact ? <li>{sanitizeOperatorText(selectedRunHistoricalFact)}</li> : null}
-                    <li>Confidence: {confidenceForFinding(selectedRun)}</li>
-                  </ul>
-                </details>
-              ) : null}
               {selectedRunValidationHistory.length > 0 ? (
                 <details className="compact-list-block" open>
                   <summary className="section-token">Labeled event history</summary>

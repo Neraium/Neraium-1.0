@@ -660,6 +660,22 @@
   align-items: start;
 }
 
+.finding-card__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.finding-evidence-drawer {
+  display: grid;
+  gap: 12px;
+}
+
+.finding-evidence-drawer .result-detail-grid {
+  margin-top: 12px;
+}
+
 .result-list-block {
   padding-top: 4px;
 }

@@ -148,10 +148,10 @@ export default function ReplayWorkspace({
         </div>
       </Panel>
 
-      <Panel title="Why We Believe It" className="span-6 system-story-card">
+      <Panel title="Evidence" className="span-6 system-story-card">
         <ul className="system-story-list">{story.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
       </Panel>
-      <Panel title="Likely Causes" className="span-6 system-story-card">
+      <Panel title="Possible Operational Causes" className="span-6 system-story-card">
         <div className="system-story-hypotheses">
           {story.hypotheses.map((item) => (
             <section key={`${item.rank}-${item.label}`}>

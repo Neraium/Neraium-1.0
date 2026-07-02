@@ -123,6 +123,7 @@ export default function SystemBodyWorkspace({
     finding,
     stabilitySnapshot,
   });
+  const findingBriefing = buildFindingBriefing(finding, evidenceReport);
   const technicalReport = buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState });
   const overviewSummary = buildOverviewSummary(assessmentState.mode);
   const healthMetrics = buildHealthMetrics({ assessmentState, finding });
@@ -323,26 +324,33 @@ export default function SystemBodyWorkspace({
                 <h2>{finding.exists ? finding.title : "No operational issues found."}</h2>
               </div>
               {finding.exists ? (
-                <article className="finding-card">
+                <article className="finding-card finding-briefing">
                   <div className="finding-card__topline">
                     <h3>{finding.title}</h3>
-                    <span>Severity {formatIssueSeverity(finding.status)}</span>
+                    <div className="finding-card__status-row" aria-label="Issue status">
+                      <span>Severity {formatIssueSeverity(finding.status)}</span>
+                      <span>Confidence {finding.confidence}</span>
+                    </div>
                   </div>
-                  <dl className="result-detail-grid">
-                    {compactRows([
-                      { label: "Affected equipment", value: evidenceReport.affectedVariables },
-                      { label: "What changed", value: finding.summary },
-                      { label: "Likely cause", value: inferLikelyCause(finding, evidenceReport) },
-                      { label: "Why it matters", value: finding.whyItMatters },
-                      { label: "Recommended checks", value: finding.reviewNext },
-                      { label: "Confidence", value: finding.confidence },
-                    ]).map((item) => (
-                      <div key={item.label}>
-                        <dt>{item.label}</dt>
-                        <dd>{item.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                  <section className="result-list-block" aria-label="Summary">
+                    <h3>Summary</h3>
+                    {findingBriefing.summary.map((line) => <p key={line}>{line}</p>)}
+                  </section>
+                  <ResultList title="Possible Operational Causes" items={findingBriefing.possibleCauses} />
+                  <ResultList title="Relationships Involved" items={findingBriefing.relationships} />
+                  <ResultList title="Recommended Investigation" items={findingBriefing.investigation} />
+                  <details className="technical-details-panel finding-evidence-drawer">
+                    <summary>Evidence</summary>
+                    <dl className="result-detail-grid">
+                      {evidenceReport.rows.map((item) => (
+                        <div key={item.label}>
+                          <dt>{item.label}</dt>
+                          <dd>{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <ResultList title="Raw Evidence" items={evidenceReport.traceability} empty="No supporting evidence reported." />
+                  </details>
                   {canReviewFindings ? (
                     <button type="button" className="command-button" onClick={() => navigateWorkspace("observation-center")}>View Issues</button>
                   ) : null}
@@ -366,22 +374,18 @@ export default function SystemBodyWorkspace({
                 <p className="section-token">Evidence</p>
                 <h2>{finding.exists ? "Review the evidence behind this issue." : "Review behavior evidence for this telemetry window."}</h2>
               </div>
-              <dl className="result-detail-grid">
-                {evidenceReport.rows.map((item) => (
-                  <div key={item.label}>
-                    <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <section className="result-list-block" aria-label="Supporting evidence">
-                <h3>Supporting Evidence</h3>
-                <ul className="compact-list">
-                  {evidenceReport.traceability.length > 0
-                    ? evidenceReport.traceability.map((item) => <li key={item}>{item}</li>)
-                    : <li>No supporting evidence reported.</li>}
-                </ul>
-              </section>
+              <details className="technical-details-panel finding-evidence-drawer">
+                <summary>Evidence</summary>
+                <dl className="result-detail-grid">
+                  {evidenceReport.rows.map((item) => (
+                    <div key={item.label}>
+                      <dt>{item.label}</dt>
+                      <dd>{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <ResultList title="Raw Evidence" items={evidenceReport.traceability} empty="No supporting evidence reported." />
+              </details>
               <section className="post-upload-review-next" aria-label="Recommended next checks">
                 <span>What to inspect next</span>
                 <strong>{finding.exists ? finding.reviewNext : "Review supporting evidence when an engineer needs the operating narrative."}</strong>
@@ -529,14 +533,107 @@ function ResultList({ title, items, empty = "" }) {
   );
 }
 
-function inferLikelyCause(finding, evidenceReport) {
-  const text = String([finding?.summary, finding?.whyItMatters, evidenceReport?.affectedVariables].filter(Boolean).join(" ")).toLowerCase();
-  if (text.includes("sensor") || text.includes("missing") || text.includes("timestamp")) return "Possible sensor calibration, offline point, or telemetry gap.";
-  if (text.includes("pump")) return "Pump efficiency or control response changed.";
-  if (text.includes("valve")) return "Valve command, valve position, or actuator response changed.";
-  if (text.includes("flow")) return "Flow instability or operating load changed.";
-  if (text.includes("cool") || text.includes("chw") || text.includes("temperature")) return "Possible chilled-water sensor drift or cooling performance change.";
-  return "Equipment behavior changed from its usual operating pattern.";
+function buildFindingBriefing(finding, evidenceReport) {
+  return {
+    summary: buildFindingSummaryLines(finding),
+    possibleCauses: buildPossibleOperationalCauses(finding, evidenceReport),
+    relationships: buildFindingRelationships(finding, evidenceReport),
+    investigation: buildRecommendedInvestigation(finding, evidenceReport),
+  };
+}
+
+function buildFindingSummaryLines(finding) {
+  const lines = splitSentences(finding?.summary).slice(0, 2);
+  return lines.length ? lines : ["The subsystem no longer follows its historical operating pattern."];
+}
+
+function buildPossibleOperationalCauses(finding, evidenceReport) {
+  const text = briefingSearchText(finding, evidenceReport);
+  const causes = [];
+  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter loading", "Increased hydraulic resistance");
+  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump operating point changed", "VFD control adjustment");
+  if (/valve|damper/.test(text)) causes.push("Valve position changed");
+  if (/temperature|cool|chw|thermal/.test(text)) causes.push("Heat transfer changed", "Process load changed");
+  if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
+  causes.push("Demand shift", "Recent maintenance activity", "Operating setpoint changed");
+  return dedupeText(causes).slice(0, 6);
+}
+
+function buildFindingRelationships(finding, evidenceReport) {
+  const supplied = [
+    ...(Array.isArray(finding?.relationships) ? finding.relationships : []),
+    ...(Array.isArray(finding?.affectedRelationships) ? finding.affectedRelationships : []),
+  ].map(formatRelationshipLabel).filter(Boolean);
+  if (supplied.length) return dedupeText(supplied).slice(0, 6);
+
+  const variables = dedupeText([
+    ...(Array.isArray(finding?.affectedVariables) ? finding.affectedVariables : []),
+    ...(Array.isArray(finding?.variables) ? finding.variables : []),
+    ...String(evidenceReport?.affectedVariables ?? "").split(","),
+  ].map(cleanSignalLabel)).filter(Boolean);
+
+  const relationships = [];
+  for (let index = 0; index < variables.length - 1 && relationships.length < 6; index += 1) {
+    relationships.push(variables[index] + " ↔ " + variables[index + 1]);
+  }
+  return relationships;
+}
+
+function buildRecommendedInvestigation(finding, evidenceReport) {
+  const text = briefingSearchText(finding, evidenceReport);
+  if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
+    return [
+      "Review filter differential pressure trend",
+      "Verify valve positions",
+      "Compare with recent maintenance activity",
+    ];
+  }
+  if (/temperature|cool|chw|thermal/.test(text)) {
+    return [
+      "Review temperature approach trend",
+      "Verify equipment staging and valve positions",
+      "Compare with recent load changes",
+    ];
+  }
+  return dedupeText([
+    cleanSentence(finding?.reviewNext),
+    "Review affected signal trends",
+    "Verify current operating mode and setpoints",
+    "Compare with recent maintenance activity",
+  ]).slice(0, 3);
+}
+
+function briefingSearchText(finding, evidenceReport) {
+  return String([
+    finding?.title,
+    finding?.summary,
+    finding?.reviewNext,
+    evidenceReport?.affectedVariables,
+    ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
+  ].filter(Boolean).join(" ")).toLowerCase();
+}
+
+function splitSentences(value) {
+  const text = cleanSentence(value);
+  if (!text) return [];
+  return (text.match(/[^.!?]+[.!?]?/g) ?? [text]).map(cleanSentence).filter(Boolean);
+}
+
+function cleanSentence(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return /[.!?]$/.test(text) ? text : text + ".";
+}
+
+function cleanSignalLabel(value) {
+  return String(value ?? "").replace(/^Affected variables:\s*/i, "").replace(/[.]/g, "").replace(/_/g, " ").trim();
+}
+
+function formatRelationshipLabel(value) {
+  return cleanSignalLabel(value)
+    .replace(/\s*<->\s*/g, " ↔ ")
+    .replace(/\s+\/\s+/g, " ↔ ")
+    .replace(/\s+vs\.?\s+/gi, " ↔ ");
 }
 
 function buildHealthMetrics({ assessmentState, finding }) {

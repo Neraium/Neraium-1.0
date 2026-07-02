@@ -49,7 +49,7 @@ export default function EvidenceLineagePanel({ frame, lineage = null }) {
         {renderLineageItem("Change support", sources.propagation_evidence ?? [])}
         {renderLineageItem("Historical evidence", sources.historical_memory_references ?? [])}
         {renderLineageItem("Behavior evidence", sources.replay_support ?? [])}
-        {renderLineageItem("Confidence basis", confidence.corroboration_strength ?? confidence.evidence_density)}
+        {renderLineageItem("Evidence basis", confidence.corroboration_strength ?? confidence.evidence_density)}
         {renderLineageItem("Confidence", normalizeOperatorConfidenceLabel(confidenceTier))}
       </ul>
     </div>

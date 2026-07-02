@@ -301,15 +301,17 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
     expect(screen.getByRole("heading", { name: "Operator Briefing" })).toBeTruthy();
-    expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getByText("Why It Matters")).toBeTruthy();
+    expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
+    expect(screen.queryByText("What Changed")).toBeNull();
+    expect(screen.queryByText("Why It Matters")).toBeNull();
     expect(screen.queryByText("Why Neraium believes this matters")).toBeNull();
     expect(screen.queryByText("Evidence summary")).toBeNull();
-    expect(screen.getByText("One operating relationship within the Flow and pressure system deviated from its historical operating pattern during the analysis period.")).toBeTruthy();
-    expect(screen.getByText("The subsystem is no longer behaving the way it normally does.")).toBeTruthy();
-    expect(screen.getByText("Possible Operational Causes")).toBeTruthy();
+    expect(screen.getByText("Flow and pressure system no longer follows its historical operating pattern.")).toBeTruthy();
+    expect(screen.getByText("One operating relationship shifted.")).toBeTruthy();
+    expect(screen.getAllByText("Possible Operational Causes").length).toBeGreaterThan(0);
     expect(screen.getByText("Pump operating point changed")).toBeTruthy();
-    expect(screen.getByText("Relationships Observed")).toBeTruthy();
+    expect(screen.getByText("Relationships Involved")).toBeTruthy();
+    expect(screen.getAllByText("Recommended Investigation").length).toBeGreaterThan(0);
     expect(screen.getByText("pressure ↔ flow")).toBeTruthy();
     expect(screen.queryByText(/correlation delta/i)).toBeNull();
     const drawer = view.container.querySelector("details.insight-evidence-drawer");
@@ -661,7 +663,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
           ],
           why_it_matters: ["When several hydraulic relationships change together, the subsystem operating state may have shifted."],
         },
-        possible_operational_causes: ["Increasing filter resistance", "Valve position changed", "VFD control adjustment"],
+        possible_operational_causes: ["Filter loading", "Valve position changed", "VFD control adjustment"],
         suggested_investigation: ["Review filter differential pressure trends.", "Verify current pump operating point."],
         supporting_evidence: {
           relationships: ["Pump Power <-> Filter Differential Pressure", "Main Pressure <-> Chlorine Dose"],
@@ -697,19 +699,17 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Overall System Status")).toBeTruthy();
-    expect(screen.getAllByText("Flow & Pressure subsystem deviating from historical operation").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Flow & Pressure subsystem behavior changed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Severity:")).toBeTruthy();
     expect(screen.getByText("Confidence:")).toBeTruthy();
-    expect(screen.getByText("Urgency:")).toBeTruthy();
-    expect(screen.getByText("Fingerprint:")).toBeTruthy();
-    expect(screen.getByText("Possible Operational Causes")).toBeTruthy();
-    expect(screen.getByText("Increasing filter resistance")).toBeTruthy();
-    expect(screen.getByText("Suggested Investigation")).toBeTruthy();
+    expect(screen.queryByText("Overall System Status")).toBeNull();
+    expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Possible Operational Causes").length).toBeGreaterThan(0);
+    expect(screen.getByText("Filter loading")).toBeTruthy();
+    expect(screen.getAllByText("Recommended Investigation").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Review filter differential pressure trends.").length).toBeGreaterThan(0);
-    expect(screen.getByText("Things Neraium Did Not Observe")).toBeTruthy();
-    expect(screen.getByText("No evidence of abnormal thermal subsystem behavior was flagged.")).toBeTruthy();
-    expect(screen.getByText("Trend")).toBeTruthy();
-    expect(screen.getByText("Declining")).toBeTruthy();
+    expect(screen.queryByText("Things Neraium Did Not Observe")).toBeNull();
+    expect(screen.queryByText("Trend")).toBeNull();
     expect(screen.getByText("Pump Power ↔ Filter Differential Pressure")).toBeTruthy();
   });
 

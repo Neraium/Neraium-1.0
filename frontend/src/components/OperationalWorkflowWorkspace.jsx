@@ -359,7 +359,7 @@ function InsightsSection({
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
-        <PanelHeader eyebrow="Insights" title="Operator Briefing" subtitle="What changed, why it matters, and where to begin." />
+        <PanelHeader eyebrow="Insights" title="Operator Briefing" subtitle="What changed and where to begin." />
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No insights yet." : model.uiState.status.detail}
@@ -1462,10 +1462,18 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
                 <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
               </div>
             </dl>
-            <BriefingTextBlock title="What Changed" lines={whatChangedBriefing(insight, relationships)} />
-            <BriefingTextBlock title="Why It Matters" lines={whyItMattersBriefing(insight)} />
+            <BriefingTextBlock title="Summary" lines={operatorSummaryBriefing(insight, relationships)} />
             <BriefingList title="Possible Operational Causes" items={causes} />
             {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
+            <BriefingList
+              title="Recommended Investigation"
+              items={suggestedInvestigationSteps({
+                subsystem: insight.system,
+                relationshipLabels: relationships,
+                insight,
+              }).slice(0, 3)}
+              limit={3}
+            />
             {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
             {typeof onOpenInsight === "function" && !selected ? (
               <button type="button" className="secondary-command-button insight-briefing__select" onClick={() => onOpenInsight(insight.id)}>Select</button>
@@ -1478,7 +1486,7 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
 }
 
 function BriefingTextBlock({ title, lines }) {
-  const visibleLines = toList(lines).filter(Boolean).slice(0, 3);
+  const visibleLines = toList(lines).filter(Boolean).slice(0, title === "Summary" ? 2 : 3);
   if (!visibleLines.length) return null;
   return (
     <section className="insight-briefing__section">
@@ -1488,8 +1496,8 @@ function BriefingTextBlock({ title, lines }) {
   );
 }
 
-function BriefingList({ title, items }) {
-  const visibleItems = dedupeText(toList(items).map(cleanBriefingText)).slice(0, 6);
+function BriefingList({ title, items, limit = 6 }) {
+  const visibleItems = dedupeText(toList(items).map(cleanBriefingText)).slice(0, limit);
   if (!visibleItems.length) return null;
   return (
     <section className="insight-briefing__section">
@@ -1504,8 +1512,7 @@ function RelationshipObservedList({ items }) {
   if (!visibleItems.length) return null;
   return (
     <section className="insight-briefing__section">
-      <h4>Relationships Observed</h4>
-      <span className="insight-briefing__list-label">Observed relationship changes</span>
+      <h4>Relationships Involved</h4>
       <ul className="operator-briefing-list">{visibleItems.map((item) => <li key={item}>{item}</li>)}</ul>
     </section>
   );
@@ -1733,13 +1740,15 @@ function ExecutiveSummary({ checklist, notice, report, rows }) {
 
 function OperatorInterpretation({ report }) {
   const statusRows = [
+    ["Severity", report.urgency],
     ["Confidence", report.confidence],
-    ["Urgency", report.urgency],
-    ["Fingerprint", report.fingerprint],
   ];
   const primary = report.primaryFinding ?? {};
   const evidence = report.supportingEvidence ?? {};
+  const relationships = evidence.relationships?.length ? evidence.relationships : primary.whatChanged;
   const trendRows = [
+    ["Condition", report.condition],
+    ["Operating fingerprint", report.fingerprint],
     ["First observed", report.trend?.firstObserved],
     ["Progression", report.trend?.direction],
     ["Subsystem stability", report.trend?.subsystemStability],
@@ -1749,9 +1758,8 @@ function OperatorInterpretation({ report }) {
   return (
     <div className="operator-interpretation" aria-label="Operator interpretation report">
       <section className="operator-interpretation__block" aria-label="Overall system status">
-        <span className="section-token">Overall System Status</span>
-        <h3>Overall Condition</h3>
-        <p>{report.condition}</p>
+        <span className="section-token">{report.subsystem || "Insight"}</span>
+        <h3>{primary.title || report.condition}</h3>
         <div className="operator-interpretation__status-row">
           {statusRows.filter(([, value]) => value).map(([label, value]) => (
             <span key={label}><strong>{label}:</strong> {value}</span>
@@ -1760,38 +1768,28 @@ function OperatorInterpretation({ report }) {
       </section>
 
       <section className="operator-interpretation__block" aria-label="Executive summary">
-        <h3>Executive Summary</h3>
-        {report.executiveSummary.map((line) => <p key={line}>{ensureSentence(line)}</p>)}
-      </section>
-
-      <section className="operator-interpretation__block" aria-label="Primary finding">
-        <h3>Primary Finding</h3>
-        <strong>{primary.title}</strong>
-        <BriefingTextBlock title="What Changed" lines={primary.whatChanged} />
-        <BriefingTextBlock title="Why It Matters" lines={primary.whyItMatters} />
+        <h3>Summary</h3>
+        {report.executiveSummary.slice(0, 2).map((line) => <p key={line}>{ensureSentence(line)}</p>)}
       </section>
 
       <div className="operator-interpretation__columns">
         <BriefingList title="Possible Operational Causes" items={report.possibleOperationalCauses} />
-        <BriefingList title="Suggested Investigation" items={report.suggestedInvestigation} />
+        <BriefingList title="Recommended Investigation" items={report.suggestedInvestigation} limit={3} />
       </div>
 
-      <section className="operator-interpretation__block" aria-label="Supporting evidence summary">
-        <h3>Supporting Evidence</h3>
-        {evidence.relationships?.length ? <RelationshipObservedList items={evidence.relationships} /> : null}
-        <DetailGrid rows={[
-          ["Fingerprint confidence", evidence.fingerprintConfidence],
-          ["Relationship persistence", evidence.relationshipPersistence],
-        ]} />
-      </section>
+      {relationships?.length ? <RelationshipObservedList items={relationships} /> : null}
 
-      <div className="operator-interpretation__columns">
-        <BriefingList title="Things Neraium Did Not Observe" items={report.didNotObserve} />
-        <section className="operator-interpretation__block" aria-label="Behavior trend">
-          <h3>Trend</h3>
-          <DetailGrid rows={trendRows} />
-        </section>
-      </div>
+      <details className="insight-evidence-drawer">
+        <summary>Evidence</summary>
+        <div className="insight-evidence-drawer__body">
+          <DetailGrid rows={[
+            ["Fingerprint confidence", evidence.fingerprintConfidence],
+            ["Operating persistence", evidence.relationshipPersistence],
+            ...trendRows,
+          ]} />
+          {report.didNotObserve?.length ? <BriefingList title="Not Observed" items={report.didNotObserve} /> : null}
+        </div>
+      </details>
     </div>
   );
 }
@@ -1919,7 +1917,7 @@ const OPERATIONAL_CAUSE_SETS = [
   {
     pattern: /flow|pressure|pump|valve|vfd|filter/i,
     causes: [
-      "Filter resistance increasing",
+      "Filter loading",
       "Pump operating point changed",
       "Valve position changed",
       "VFD control adjustment",
@@ -1977,19 +1975,20 @@ function formatSubsystemName(value) {
 }
 
 function whatChangedBriefing(insight, relationships) {
+  const system = formatSubsystemName(insight.system || "subsystem");
   if (relationships.length > 0) {
     const count = relationships.length;
-    const countLabel = numberWord(count);
-    const relationshipWord = count === 1 ? "relationship" : "relationships";
-    const pronoun = count === 1 ? "its" : "their";
-    const system = formatSubsystemName(insight.system || "subsystem");
     return [
-      `${countLabel} operating ${relationshipWord} within the ${system} deviated from ${pronoun} historical operating pattern during the analysis period.`,
-      "The subsystem is no longer behaving the way it normally does.",
+      `${system} no longer follows its historical operating pattern.`,
+      count === 1 ? "One operating relationship shifted." : "Multiple operating relationships shifted together.",
     ];
   }
   const lines = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.summary), 2);
   return lines.length ? lines : ["Subsystem behavior changed from its historical operating pattern."];
+}
+
+function operatorSummaryBriefing(insight, relationships) {
+  return dedupeText(whatChangedBriefing(insight, relationships)).slice(0, 2);
 }
 
 function whyItMattersBriefing(insight) {
@@ -2028,6 +2027,8 @@ function formatRelationshipObservedLabel(value) {
 
 function cleanBriefingText(value) {
   return cleanDisplayText(value)
+    .replace(/\bincreasing filter resistance\b/gi, "Filter loading")
+    .replace(/\bfilter resistance increasing\b/gi, "Filter loading")
     .replace(/\bbaseline\/current comparison\b/gi, "historical comparison")
     .replace(/\bbaseline window\b/gi, "historical pattern")
     .replace(/\bcurrent window\b/gi, "analysis period")
@@ -2069,11 +2070,6 @@ function formatConfidenceLevel(label, score) {
   if (percent >= 82) return "High";
   if (percent >= 62) return "Moderate";
   return "Low";
-}
-
-function numberWord(value) {
-  const words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"];
-  return words[value] ?? String(value);
 }
 
 function operatorEvidenceSummary(...values) {

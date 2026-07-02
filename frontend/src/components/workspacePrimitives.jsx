@@ -369,17 +369,17 @@ export function WhyPanel({
       </div>
 
       <div className="why-panel__section">
-        <span className="section-token">Why it matters</span>
+        <span className="section-token">Summary</span>
         <p className="why-panel__headline">{item.whyHeadline ?? item.summary ?? item.detail}</p>
       </div>
 
       <div className="why-panel__section guidance-driver">
-        <span className="section-token">Primary driver</span>
+        <span className="section-token">Starting point</span>
         <p>{guidance.primaryDriver}</p>
       </div>
 
       <div className="why-panel__section guidance-flag">
-        <span className="section-token">Why flagged</span>
+        <span className="section-token">Evidence</span>
         <p>{guidance.whyFlagged}</p>
       </div>
 
@@ -394,7 +394,7 @@ export function WhyPanel({
 
       {!compact && (
         <div className="why-panel__section structural-explanation">
-          <span className="section-token">Structural explanation</span>
+          <span className="section-token">Operating pattern</span>
           {structuralExplanation.map((line) => (
             <p key={line}>{line}</p>
           ))}
@@ -403,7 +403,7 @@ export function WhyPanel({
 
       {!compact && item.likelyDriver && (
         <div className="why-panel__section">
-          <span className="section-token">Likely driver</span>
+          <span className="section-token">Possible driver</span>
           <p>{item.likelyDriver}</p>
           {contributingSignals.length > 0 && (
             <div className="signal-chip-row">
@@ -416,7 +416,7 @@ export function WhyPanel({
       )}
 
       <div className="why-panel__section">
-        <span className="section-token">Confidence basis</span>
+        <span className="section-token">Evidence basis</span>
         <p>{formatConfidenceLabel(item.confidence)} confidence. {confidenceBasis}</p>
       </div>
 
