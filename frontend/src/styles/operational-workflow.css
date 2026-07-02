@@ -299,6 +299,7 @@
   border: 1px solid var(--ops-line);
   border-radius: 8px;
   background: var(--ops-surface);
+  color: var(--ops-ink);
   box-shadow: var(--ops-shadow);
   padding: 16px;
 }

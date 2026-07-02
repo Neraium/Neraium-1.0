@@ -3,7 +3,6 @@ import { useDeferredValue, useMemo, useState } from "react";
 import PageContainer from "./layout/PageContainer";
 import { sanitizeOperatorList, sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
-import "../styles/design-system.css";
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
