@@ -350,7 +350,7 @@ def build_analysis_result(
                 "time_window": item.get("time_window") or build_time_window(result),
                 "confidence": first_present(item.get("confidence"), item.get("confidence_level")),
                 "confidence_score": first_present(item.get("confidence_score"), item.get("confidence")),
-                "calculation_method": "Pearson correlation compared between baseline and current telemetry windows.",
+                "calculation_method": "Historical and current operating windows were compared for this signal pair.",
             },
         )
         relationship_refs_by_id[relationship_id] = [ref]
@@ -832,7 +832,7 @@ def relationship_delta_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def calculation_method_for_evidence(payload: dict[str, Any]) -> str:
     evidence_type = str(payload.get("type") or "").lower()
     if "relationship" in evidence_type:
-        return "Relationship strength delta from baseline/current correlation windows."
+        return "Operating relationship change from the historical and current windows."
     if "metric" in evidence_type or "drift" in evidence_type:
         return "Metric delta from baseline average versus current average."
     if "baseline" in evidence_type:

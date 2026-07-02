@@ -176,7 +176,18 @@ def _system_label_for_columns(left_col: str, right_col: str) -> str:
 
 def _relationship_summary(left_col: str, right_col: str, edge: dict[str, Any]) -> str:
     change_type = str(edge.get("change_type") or "changed").replace("_", " ")
-    return f"{left_col} and {right_col} relationship {change_type} against the historical operating pattern."
+    pair = f"{left_col} and {right_col}"
+    if change_type == "missing":
+        return f"The historical relationship between {pair} no longer follows its established operating pattern."
+    if change_type == "weakened":
+        return f"The historical relationship between {pair} weakened substantially during the analysis window."
+    if change_type in {"disrupted", "inverted"}:
+        return f"The historical relationship between {pair} shifted from its established operating pattern."
+    if change_type == "new":
+        return f"A new operating relationship between {pair} emerged during the analysis window and should be checked against operating changes."
+    if change_type == "strengthened":
+        return f"{pair} became more tightly coupled than their historical operating pattern."
+    return f"The relationship between {pair} changed significantly from baseline operation."
 
 
 def _baseline_drift_lookup(baseline_analysis: dict[str, Any] | None) -> dict[str, dict[str, Any]]:

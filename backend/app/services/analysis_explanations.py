@@ -175,6 +175,7 @@ def build_insights(
                 adjusted["id"] = f"relationship-{index}-{group_index}-evidence-0"
                 evidence_items.append(adjusted)
             contributions.append(relationship_contribution(entry, group_index, columns))
+        possible_causes = possible_operational_causes(system, all_signal_names or all_columns or primary_columns)
         what_changed = merged_relationship_observable_sentence(group, primary)
         why = merged_relationship_reason(group, primary, label)
         persistence_duration = sample_window_phrase(primary.get("baseline_sample_size"), primary.get("recent_sample_size"))
@@ -198,11 +199,13 @@ def build_insights(
                 "why_neraium_thinks": why,
                 "likely_cause": why,
                 "contributing_factors": [relationship_label(entry) for entry in group],
-                "possible_operational_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
-                "possible_consequence": "A coupled subsystem may be changing state instead of an isolated sensor moving alone.",
-                "recommended_operator_check": f"Compare {label} timing against operator logs, setpoint changes, context/load drivers, and equipment activity for the same window.",
+                "possible_operational_consequence": "This may indicate a subsystem operating condition changed rather than a single sensor moving by itself.",
+                "possible_consequence": "This may indicate a subsystem operating condition changed rather than a single sensor moving by itself.",
+                "possible_operational_causes": possible_causes,
+                "possible_operational_causes_summary": "; ".join(possible_causes),
+                "recommended_operator_check": operational_cause_check(label, possible_causes),
                 "recommended_action": relationship_recommended_action(system),
-                "operator_check": f"Check whether {label} changed after a known operating mode, load condition, or equipment state change.",
+                "operator_check": operational_cause_check(label, possible_causes),
                 "evidence_summary": evidence_summary(evidence_items),
                 "evidence_items": evidence_items,
                 "evidence": evidence_items,
@@ -406,7 +409,9 @@ def build_systems(
             continue
         columns = relationship_columns(relationship)
         target = entry(system_from_columns(columns))
-        summary = first_text(relationship.get("summary"), "Signal relationship changed against baseline.")
+        display_columns = relationship_display_columns(relationship)
+        label = " / ".join(display_columns) if display_columns else str(relationship.get("display_relationship") or relationship.get("relationship") or "Signal relationship")
+        summary = relationship_operator_summary(relationship, label)
         target["relationships"].append(summary)
         target["what_changed"].append(summary)
 
@@ -596,9 +601,9 @@ def build_evidence(
                     "why_neraium_believes_this": relationship.get("why_it_matters"),
                     "supporting_evidence": relationship.get("columns"),
                     "relevant_metric_changes": [
-                        metric_change("Correlation delta", relationship.get("correlation_delta")),
-                        metric_change("Baseline correlation", relationship.get("baseline_correlation")),
-                        metric_change("Recent correlation", relationship.get("recent_correlation")),
+                        metric_change("Operating pattern change", relationship.get("correlation_delta")),
+                        metric_change("Baseline operating coupling", relationship.get("baseline_correlation")),
+                        metric_change("Current operating coupling", relationship.get("recent_correlation")),
                     ],
                     "confidence": relationship.get("confidence"),
                     "source_rows": relationship.get("source_rows"),
@@ -786,7 +791,28 @@ def relationship_source_time_ranges(item: dict[str, Any], fallback: list[dict[st
 
 def relationship_change_sentence(label: str, item: dict[str, Any]) -> str:
     change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
-    return f"{label} relationship {change_type} against the historical operating pattern."
+    pair = relationship_pair_phrase(label)
+    if change_type == "missing":
+        return f"The historical relationship between {pair} no longer follows its established operating pattern."
+    if change_type == "weakened":
+        return f"The historical relationship between {pair} weakened substantially during the analysis window."
+    if change_type in {"disrupted", "inverted"}:
+        return f"The historical relationship between {pair} shifted from its established operating pattern."
+    if change_type == "new":
+        return f"A new operating relationship between {pair} emerged during the analysis window and should be checked against operating changes."
+    if change_type == "strengthened":
+        return f"{pair} became more tightly coupled than their historical operating pattern."
+    return f"The relationship between {pair} changed significantly from baseline operation."
+
+
+def relationship_pair_phrase(label: str) -> str:
+    text = first_text(label, "these signals")
+    for separator in ["<->", " / ", " vs ", " vs. "]:
+        if separator in text:
+            parts = [part.strip() for part in text.split(separator, 1) if part.strip()]
+            if len(parts) == 2:
+                return f"{parts[0]} and {parts[1]}"
+    return text
 
 
 def relationship_confidence_basis(label: str, item: dict[str, Any]) -> str:
@@ -796,7 +822,7 @@ def relationship_confidence_basis(label: str, item: dict[str, Any]) -> str:
 
 
 def confidence_rationale_for_relationship(item: dict[str, Any], confidence_score: float) -> str:
-    return "Confidence reflects comparison-window coverage and how clearly the relationship departed from its usual pattern. Technical values are retained in evidence."
+    return "Confidence reflects comparison-window coverage and how clearly the operating pattern departed from its usual behavior. Technical values are retained in evidence."
 
 
 def confidence_rationale_for_metric(item: dict[str, Any], persistence_detail: dict[str, Any], confidence_score: float) -> str:
@@ -846,9 +872,9 @@ def relationship_evidence_items(
                 "summary": summary,
                 "supporting_signals": [summary],
                 "relevant_metric_changes": [
-                    metric_change("Correlation delta", item.get("correlation_delta")),
-                    metric_change("Baseline strength", item.get("baseline_strength", item.get("coupling_strength"))),
-                    metric_change("Current strength", item.get("current_strength", item.get("strength"))),
+                    metric_change("Operating pattern change", item.get("correlation_delta")),
+                    metric_change("Baseline operating coupling", item.get("baseline_strength", item.get("coupling_strength"))),
+                    metric_change("Current operating coupling", item.get("current_strength", item.get("strength"))),
                     metric_change("Change percentage", item.get("change_percentage"), suffix="%"),
                 ],
                 "relationship_type": item.get("relationship_type"),
@@ -1047,7 +1073,13 @@ def current_behavior_summary(
             "active_metric_deviations": len(significant_columns),
             "active_relationship_deviations": len(relationship_changes),
             "largest_metric_deviations": [change_phrase(item) for item in significant_columns[:5]],
-            "relationship_changes": [first_text(item.get("summary"), item.get("relationship")) for item in relationship_changes[:5]],
+            "relationship_changes": [
+                relationship_operator_summary(
+                    item,
+                    " / ".join(relationship_display_columns(item)) or str(item.get("display_relationship") or item.get("relationship") or "Signal relationship"),
+                )
+                for item in relationship_changes[:5]
+            ],
             "drift_trajectory": baseline.get("drift_trajectory"),
         }
     )
@@ -1119,7 +1151,10 @@ def fingerprint_evidence_items(
                 {
                     "id": f"fingerprint-relationship-{index}",
                     "type": "relationship_deviation",
-                    "summary": first_text(item.get("summary"), item.get("relationship")),
+                    "summary": relationship_operator_summary(
+                        item,
+                        " / ".join(relationship_display_columns(item)) or str(item.get("display_relationship") or item.get("relationship") or "Signal relationship"),
+                    ),
                     "source_columns": relationship_columns(item),
                     "calculated_delta": item.get("correlation_delta"),
                     "change_percentage": item.get("change_percentage"),
@@ -1142,9 +1177,9 @@ def relationship_evidence(item: dict[str, Any], time_window: str) -> list[dict[s
                 "confidence": confidence_from_samples(item.get("baseline_sample_size"), item.get("recent_sample_size")),
                 "supporting_signals": signals,
                 "relevant_metric_changes": [
-                    metric_change("Correlation delta", item.get("correlation_delta")),
-                    metric_change("Baseline correlation", item.get("baseline_correlation")),
-                    metric_change("Recent correlation", item.get("recent_correlation")),
+                    metric_change("Operating pattern change", item.get("correlation_delta")),
+                    metric_change("Baseline operating coupling", item.get("baseline_correlation")),
+                    metric_change("Current operating coupling", item.get("recent_correlation")),
                 ],
                 "time_window": time_window,
                 "persistence_duration": sample_window_phrase(item.get("baseline_sample_size"), item.get("recent_sample_size")),
@@ -1399,7 +1434,7 @@ def relationship_subsystem_name(names: list[str], confidence_score: float | None
     if scores.get("lift_station") and ("wet well" in combined or "wetwell" in combined or "lift station" in combined or ("pump" in combined and "status" in combined and "flow" in combined)):
         return "Lift Station Operations"
     if scores.get("flow_pressure") and scores.get("chemical_water_quality") and scores["flow_pressure"] >= scores["chemical_water_quality"]:
-        return "Flow / Pressure Subsystem"
+        return "Flow & Pressure"
     winner, winner_score = max(scores.items(), key=lambda item: item[1])
     if winner_score < 2 and allow_generic:
         return GENERIC_SUBSYSTEM_NAME
@@ -1407,14 +1442,41 @@ def relationship_subsystem_name(names: list[str], confidence_score: float | None
     if len(tied) > 1 and allow_generic:
         return GENERIC_SUBSYSTEM_NAME
     labels = {
-        "flow_pressure": "Flow / Pressure Subsystem",
-        "chemical_water_quality": "Chemical Feed / Water Quality Subsystem",
+        "flow_pressure": flow_pressure_label(names),
+        "chemical_water_quality": chemical_water_quality_label(names),
         "lift_station": "Lift Station Operations",
-        "thermal_transfer": "Thermal Transfer Subsystem",
-        "moisture_control": "Moisture / Humidity Control",
-        "schedule_energy": "Schedule / Energy Operations",
+        "thermal_transfer": thermal_performance_label(names),
+        "moisture_control": "Moisture Control",
+        "schedule_energy": "Energy & Schedule Operations",
     }
     return labels.get(winner, GENERIC_SUBSYSTEM_NAME if allow_generic else "Uploaded telemetry")
+
+
+def flow_pressure_label(names: list[str]) -> str:
+    combined = " ".join(str(name or "").lower().replace("_", " ").replace("-", " ") for name in names)
+    if "pump" in combined and any(token in combined for token in ["vibration", "power", "kw", "speed", "amp", "current"]):
+        return "Pumping System"
+    if any(token in combined for token in ["flow", "pressure", "valve", "suction", "discharge"]):
+        return "Flow & Pressure"
+    return "Hydraulic Performance"
+
+
+def chemical_water_quality_label(names: list[str]) -> str:
+    combined = " ".join(str(name or "").lower().replace("_", " ").replace("-", " ") for name in names)
+    if any(token in combined for token in ["dose", "feed", "chemical", "chlorine", "chlor"]):
+        return "Chemical Feed"
+    if any(token in combined for token in ["orp", "disinfect"]):
+        return "Disinfection"
+    return "Water Quality"
+
+
+def thermal_performance_label(names: list[str]) -> str:
+    combined = " ".join(str(name or "").lower().replace("_", " ").replace("-", " ") for name in names)
+    if any(token in combined for token in ["tower", "condenser", "ct ", "heat rejection"]):
+        return "Heat Rejection"
+    if any(token in combined for token in ["chiller", "chw", "cooling"]):
+        return "Cooling Distribution"
+    return "Thermal Performance"
 
 
 def telemetry_group_scores(names: list[str]) -> dict[str, int]:
@@ -1461,7 +1523,7 @@ def relationship_operator_summary(item: dict[str, Any], label: str) -> str:
 
 def contains_algorithmic_relationship_language(value: str) -> bool:
     text = str(value or "").lower()
-    return any(fragment in text for fragment in ["correlation delta", "baseline strength=", "current strength=", "delta=", "baseline=", "recent="])
+    return any(fragment in text for fragment in ["relationship missing", "correlation delta", "relationship strength", "baseline strength=", "current strength=", "delta=", "baseline=", "recent="])
 
 
 def human_metric_label(column: str) -> str:
@@ -1517,13 +1579,74 @@ def relationship_title(columns: list[str], item: dict[str, Any]) -> str:
 
 
 def relationship_observable_sentence(columns: list[str], item: dict[str, Any]) -> str:
-    change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
     title = relationship_title(columns, item).rstrip(".")
-    return f"{title}; the historical relationship {change_type} in the current window."
+    label = " / ".join(relationship_display_columns(item) or columns) or str(item.get("display_relationship") or item.get("relationship") or "these signals")
+    return f"{title}; {relationship_change_sentence(label, item)}"
 
 
 def relationship_recommended_action(system: str) -> str:
-    return f"Prioritize {system.lower()} trend review and decide whether maintenance triage or closer monitoring is needed."
+    return f"Review {system.lower()} trends, operator logs, setpoint changes, maintenance activity, and demand changes for the same window."
+
+
+def operational_cause_check(label: str, causes: list[str]) -> str:
+    if not causes:
+        return f"Investigate whether {label} changed after a known operating mode, load condition, or equipment state change."
+    return f"Investigate whether any of these operating conditions changed during the same window: {'; '.join(causes[:5])}."
+
+
+def possible_operational_causes(system: str, names: list[str]) -> list[str]:
+    combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd"]):
+        return [
+            "Increasing filter resistance",
+            "Pump operating point shifted",
+            "Valve position changed",
+            "Increased hydraulic resistance",
+            "VFD control adjustment",
+            "Recent maintenance activity",
+            "Operational demand change",
+        ]
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
+        return [
+            "Feed pump calibration drift",
+            "Chemical concentration changes",
+            "Water quality variation",
+            "Control loop tuning",
+            "Process demand changes",
+            "Recent maintenance activity",
+        ]
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
+        return [
+            "Heat exchanger fouling",
+            "Cooling tower performance change",
+            "Chiller staging or control adjustment",
+            "Flow imbalance",
+            "Outdoor load condition change",
+            "Recent maintenance activity",
+        ]
+    if any(token in combined for token in ["humidity", "moisture", "vpd"]):
+        return [
+            "Airflow balance change",
+            "Latent load variation",
+            "Humidification or dehumidification control adjustment",
+            "Envelope or ventilation change",
+            "Operational demand change",
+        ]
+    if any(token in combined for token in ["energy", "schedule", "runtime"]):
+        return [
+            "Schedule change",
+            "Load profile change",
+            "Equipment runtime pattern changed",
+            "Control mode adjustment",
+            "Recent maintenance activity",
+        ]
+    return [
+        "Setpoint or control mode change",
+        "Equipment state change",
+        "Sensor calibration drift",
+        "Recent maintenance activity",
+        "Operational demand change",
+    ]
 
 
 def metric_recommended_action(column: str, item: dict[str, Any]) -> str:

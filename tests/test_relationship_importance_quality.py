@@ -135,9 +135,15 @@ def test_duplicate_relationship_insights_are_merged_and_preserve_relationships()
 
     titles = [insight["title"] for insight in explanation["insights"]]
     assert titles.count("Thermal relationship changed") == 0
-    merged = next(insight for insight in explanation["insights"] if insight["title"] == "Thermal Transfer Subsystem behavior changed")
-    assert len(merged["contributing_relationships"]) == 3
-    assert all(item["label"] for item in merged["contributing_relationships"])
+    assert "Heat Rejection behavior changed" in titles
+    assert "Thermal Performance behavior changed" in titles
+    contributing_relationships = [
+        relationship
+        for insight in explanation["insights"]
+        for relationship in insight["contributing_relationships"]
+    ]
+    assert len(contributing_relationships) == 3
+    assert all(item["label"] for item in contributing_relationships)
 
 
 def test_analysis_result_preserves_relationship_importance_fields() -> None:
@@ -176,10 +182,10 @@ def test_relationship_stats_stay_out_of_main_insight_contract_and_remain_in_evid
 
 
 def test_subsystem_names_match_dominant_telemetry_groups() -> None:
-    assert relationship_subsystem_name(["pump_power_kw", "main_pressure_psi", "flow_rate_gpm"]) == "Flow / Pressure Subsystem"
-    assert relationship_subsystem_name(["chlorine_dose_ppm", "turbidity_ntu", "orp_mv"]) == "Chemical Feed / Water Quality Subsystem"
+    assert relationship_subsystem_name(["pump_power_kw", "main_pressure_psi", "flow_rate_gpm"]) == "Pumping System"
+    assert relationship_subsystem_name(["chlorine_dose_ppm", "turbidity_ntu", "orp_mv"]) == "Chemical Feed"
     assert relationship_subsystem_name(["wet_well_level_ft", "pump_status", "flow_rate_gpm"]) == "Lift Station Operations"
-    assert relationship_subsystem_name(["supply_temp_f", "return_temp_f", "condenser_lwt_f"]) == "Thermal Transfer Subsystem"
+    assert relationship_subsystem_name(["supply_temp_f", "return_temp_f", "condenser_lwt_f"]) == "Heat Rejection"
 
 
 def test_low_confidence_or_ambiguous_subsystem_naming_falls_back_to_observed_behavior() -> None:
@@ -213,8 +219,8 @@ def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Flow / Pressure Subsystem behavior changed"
-    assert explanation["insights"][0]["affected_systems"] == ["Flow / Pressure Subsystem"]
+    assert explanation["insights"][0]["title"] == "Flow & Pressure behavior changed"
+    assert explanation["insights"][0]["affected_systems"] == ["Flow & Pressure"]
     assert len(explanation["insights"][0]["contributing_relationships"]) == 3
 
 
@@ -236,7 +242,7 @@ def test_individual_variable_changes_are_down_ranked_when_relationship_changes_e
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Chemical Feed / Water Quality Subsystem behavior changed"
+    assert explanation["insights"][0]["title"] == "Chemical Feed behavior changed"
     assert not any(insight["title"].lower().startswith("turbidity") for insight in explanation["insights"])
 
 

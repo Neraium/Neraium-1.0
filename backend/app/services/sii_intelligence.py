@@ -82,7 +82,7 @@ def build_sample_intelligence() -> dict[str, Any]:
             "primary_driver": "The current state remains close to the learned baseline regime.",
             "supporting_evidence": [
                 "The leading variables remain inside their normal baseline envelope.",
-                "Relationship strengths remain close to baseline values.",
+                "Signal relationships remain close to baseline behavior.",
             ],
             "relationship_evidence": [
                 "The covariance structure remains stable.",
