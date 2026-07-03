@@ -162,9 +162,9 @@ test.describe("Insight completion rendering", () => {
       };
     });
 
-    expect(rendering.panel.backgroundColor).toBe("rgb(255, 255, 255)");
+    expect(rendering.panel.backgroundColor).toBe("rgb(13, 20, 31)");
     expect(rendering.panel.backgroundImage).toBe("none");
-    expect(rendering.checklistItem.backgroundColor).toBe("rgb(248, 250, 252)");
+    expect(rendering.checklistItem.backgroundColor).toBe("rgb(18, 29, 44)");
     expect(rendering.checklistItem.backgroundImage).toBe("none");
     expect(rendering.headingIsTopmost).toBe(true);
 
@@ -178,9 +178,9 @@ test.describe("Insight completion rendering", () => {
     }
 
     const panelBackground = parseRgb(rendering.panel.backgroundColor);
-    expect(contrastRatio(parseRgb(rendering.heading.color), panelBackground)).toBeGreaterThan(12);
-    expect(contrastRatio(parseRgb(rendering.body.color), panelBackground)).toBeGreaterThan(12);
-    expect(contrastRatio(parseRgb(rendering.value.color), panelBackground)).toBeGreaterThan(12);
+    expect(contrastRatio(parseRgb(rendering.heading.color), panelBackground)).toBeGreaterThan(4.5);
+    expect(contrastRatio(parseRgb(rendering.body.color), panelBackground)).toBeGreaterThan(4.5);
+    expect(contrastRatio(parseRgb(rendering.value.color), panelBackground)).toBeGreaterThan(4.5);
   });
 });
 

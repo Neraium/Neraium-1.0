@@ -246,7 +246,7 @@ export default function IntakeFlowPanel({
   const hasSelectedFiles = selectedFiles?.length > 0;
   const selectedFileLabel = hasSelectedFiles
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
-    : "No CSV selected";
+    : "No file selected";
   const fileKind = String(pendingUploadKind || "csv").toUpperCase();
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = finalAnalysisResult(latestUploadSnapshot, uploadJob);
@@ -258,24 +258,25 @@ export default function IntakeFlowPanel({
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
 
-  const chooseFileButtonText = hasSelectedFiles ? "Choose Another File" : "Choose CSV";
+  const chooseFileButtonText = hasSelectedFiles ? "Select Another CSV" : "Select CSV";
 
   return (
-    <Panel title="Analyze System" className="span-7 upload-ops-panel">
+    <Panel title="Analyze infrastructure behavior" className="span-7 upload-ops-panel">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
+        <p className="intake-flow__subtitle">Upload historical telemetry to identify relationship changes across operational systems.</p>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section className="upload-simple-card" aria-label="Selected CSV">
             <div className="upload-simple-card__file">
               <strong>{selectedFileLabel}</strong>
-              <span>{hasSelectedFiles ? `${fileKind} - ${selectedFileSize}` : "Choose a CSV to analyze."}</span>
+              <span>{hasSelectedFiles ? `${fileKind} - ${selectedFileSize}` : "No file selected"}</span>
             </div>
             <div className="upload-simple-actions">
               <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
               {hasSelectedFiles ? (
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
-                  Upload and Analyze
+                  Analyze System
                 </button>
               ) : null}
             </div>
@@ -331,12 +332,12 @@ export default function IntakeFlowPanel({
           <section className="upload-simple-card upload-simple-card--failed" role="alert" aria-live="assertive">
             <div className="upload-complete-header">
               <h3>Analysis failed</h3>
-              <span>{hasSelectedFiles ? selectedFileLabel : "No CSV selected"}</span>
+              <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
             </div>
             <p className="upload-error-message">{errorMessage}</p>
             <div className="upload-simple-actions">
               <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry</button>
-              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Another File</button>
+              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Select Another CSV</button>
             </div>
           </section>
         ) : null}

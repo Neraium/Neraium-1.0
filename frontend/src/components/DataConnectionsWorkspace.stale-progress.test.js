@@ -231,14 +231,14 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getByRole("heading", { name: "Analyze System" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Analyze infrastructure behavior" })).toBeTruthy();
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Upload and Analyze", () => {
+it("selected file state shows filename, size, and Analyze System", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -247,8 +247,8 @@ it("selected file state shows filename, size, and Upload and Analyze", () => {
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV - 15.7 MB")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Upload and Analyze" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Select Another CSV" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
 });
 
 it("processing state shows one progress bar", () => {
@@ -290,7 +290,7 @@ it("failed state shows retry and choose another file", () => {
   expect(screen.getByRole("heading", { name: "Analysis failed" })).toBeTruthy();
   expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Select Another CSV" })).toBeTruthy();
 });
 
 it("complete state shows View Results", () => {
@@ -409,8 +409,7 @@ it("idle no-file state does not render stale complete progress", () => {
     uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
   });
 
-  expect(screen.getByText("No CSV selected")).toBeTruthy();
-  expect(screen.getByText("Choose a CSV to analyze.")).toBeTruthy();
+  expect(screen.getAllByText("No file selected").length).toBeGreaterThan(0);
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
@@ -427,7 +426,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Upload and Analyze" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -457,8 +456,7 @@ it("previous completed upload does not leak progress into new idle upload screen
     sessionStore: completedSessionStore(),
   });
 
-  expect(screen.getByText("No CSV selected")).toBeTruthy();
-  expect(screen.getByText("Choose a CSV to analyze.")).toBeTruthy();
+  expect(screen.getAllByText("No file selected").length).toBeGreaterThan(0);
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 

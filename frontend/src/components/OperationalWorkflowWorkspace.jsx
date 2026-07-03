@@ -26,10 +26,10 @@ const RESULT_TAB_IDS = new Set(["insights", "systems", "fingerprint", "evidence"
 const EMPTY_TAB_METRIC = "—";
 
 const EMPTY_TELEMETRY_COPY = {
-  label: "Start Analysis",
-  detail: "Upload a CSV to begin.",
-  fileStatus: "No file selected.",
-  cta: "Upload CSV",
+  label: "Analyze infrastructure behavior",
+  detail: "Upload historical telemetry to identify relationship changes across operational systems.",
+  fileStatus: "No file selected",
+  cta: "Select CSV",
   headerStatus: "Waiting for telemetry",
 };
 const NO_TELEMETRY_STATUS = {
@@ -128,7 +128,8 @@ export default function OperationalWorkflowWorkspace({
     evidence: model.evidenceTabMetric,
     more: model.moreTabMetric,
   };
-  const visibleSection = model.disableResultTabs && RESULT_TAB_IDS.has(activeSection) ? "overview" : activeSection;
+  const visibleSection = !model.resultTabsReady || (model.disableResultTabs && RESULT_TAB_IDS.has(activeSection)) ? "overview" : activeSection;
+  const shellClassName = model.resultTabsReady ? "operational-workflow" : "operational-workflow operational-workflow--intake";
 
   function navigate(sectionId) {
     setActiveSection(sectionId);
@@ -156,47 +157,48 @@ export default function OperationalWorkflowWorkspace({
   }
 
   return (
-    <PageContainer className="operational-workflow">
-      <aside className="operational-sidebar" aria-label="Neraium navigation">
-        <div className="operational-sidebar__brand">
-          <span className="section-token">Neraium</span>
-          <strong>{model.siteLabel}</strong>
-          <p>{model.domainLabel}</p>
-        </div>
-        <nav className="operational-nav" aria-label="Primary workflow navigation">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={visibleSection === item.id ? "is-active" : ""}
-              aria-label={[item.label, navMetrics[item.id]].filter(Boolean).join(" ")}
-              aria-current={visibleSection === item.id ? "page" : undefined}
-              onClick={() => navigate(item.id)}
-              disabled={model.disableResultTabs && RESULT_TAB_IDS.has(item.id)}
-            >
-              <span>{item.label}</span>
-              <small>{navMetrics[item.id]}</small>
-            </button>
-          ))}
-        </nav>
-        <div className="operational-sidebar__footer">
-          {model.showSidebarStatus ? (
-            <>
-              <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
-              <small>Last analysis: {model.lastAnalysis}</small>
-            </>
-          ) : null}
-          {typeof onSignOut === "function" ? (
-            <button type="button" className="operational-link-button" onClick={onSignOut}>Sign out</button>
-          ) : null}
-        </div>
-      </aside>
+    <PageContainer className={shellClassName}>
+      {model.resultTabsReady ? (
+        <aside className="operational-sidebar" aria-label="Neraium navigation">
+          <div className="operational-sidebar__brand">
+            <span className="section-token">Neraium</span>
+            <strong>{model.siteLabel}</strong>
+            <p>{model.domainLabel}</p>
+          </div>
+          <nav className="operational-nav" aria-label="Primary workflow navigation">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={visibleSection === item.id ? "is-active" : ""}
+                aria-label={[item.label, navMetrics[item.id]].filter(Boolean).join(" ")}
+                aria-current={visibleSection === item.id ? "page" : undefined}
+                onClick={() => navigate(item.id)}
+              >
+                <span>{item.label}</span>
+                <small>{navMetrics[item.id]}</small>
+              </button>
+            ))}
+          </nav>
+          <div className="operational-sidebar__footer">
+            {model.showSidebarStatus ? (
+              <>
+                <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
+                <small>Last analysis: {model.lastAnalysis}</small>
+              </>
+            ) : null}
+            {typeof onSignOut === "function" ? (
+              <button type="button" className="operational-link-button" onClick={onSignOut}>Sign out</button>
+            ) : null}
+          </div>
+        </aside>
+      ) : null}
 
       <main className="operational-main" aria-label="Neraium operational workspace">
         <header className="operational-topbar">
           <div>
             <p className="section-token">{model.headerEyebrow}</p>
-            <h1>{sectionTitle(visibleSection)}</h1>
+            <h1>{model.resultTabsReady ? sectionTitle(visibleSection) : "Operational Intelligence"}</h1>
             <p className="operational-topbar__context">{model.headerSubtitle}</p>
           </div>
           {model.showTopbarStatus ? (
@@ -206,22 +208,23 @@ export default function OperationalWorkflowWorkspace({
           ) : null}
         </header>
 
-        <div className="operational-mobile-nav" aria-label="Mobile workflow navigation">
-          {MOBILE_PRIMARY_NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={visibleSection === item.id ? "is-active" : ""}
-              aria-label={[item.label, navMetrics[item.id]].filter(Boolean).join(" ")}
-              aria-current={visibleSection === item.id ? "page" : undefined}
-              onClick={() => navigate(item.id)}
-              disabled={model.disableResultTabs && RESULT_TAB_IDS.has(item.id)}
-            >
-              <span>{item.label}</span>
-              <small>{navMetrics[item.id]}</small>
-            </button>
-          ))}
-        </div>
+        {model.resultTabsReady ? (
+          <div className="operational-mobile-nav" aria-label="Mobile workflow navigation">
+            {MOBILE_PRIMARY_NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={visibleSection === item.id ? "is-active" : ""}
+                aria-label={[item.label, navMetrics[item.id]].filter(Boolean).join(" ")}
+                aria-current={visibleSection === item.id ? "page" : undefined}
+                onClick={() => navigate(item.id)}
+              >
+                <span>{item.label}</span>
+                <small>{navMetrics[item.id]}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {visibleSection === "overview" ? (
           <OverviewSection
@@ -358,7 +361,7 @@ function InsightsSection({
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
-        <PanelHeader eyebrow="Insights" title="Operator Briefing" subtitle="What changed and where to begin." />
+        <PanelHeader eyebrow="Insights" title="Insights" subtitle="Priority findings from the completed analysis." />
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No insights yet." : model.uiState.status.detail}
@@ -366,6 +369,7 @@ function InsightsSection({
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}
         />
+        {selectedInsight ? <InsightDetail insight={selectedInsight} /> : null}
       </section>
     </div>
   );
@@ -587,6 +591,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     fingerprintTabMetric: resultTabsReady ? "Baseline" : EMPTY_TAB_METRIC,
     evidenceTabMetric: resultTabsReady ? "Support" : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
+    resultTabsReady,
     showTopbarStatus: !isEmptyTelemetryState && !analysisComplete,
     showSidebarStatus: !isEmptyTelemetryState && !analysisComplete,
     sourceStatusLabel: uiState.sourceStatusLabel,
@@ -816,7 +821,7 @@ function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrif
   );
   const meaningfulChange = hasMeaningfulOperationalChange({ insights, fingerprintDrift });
   return [
-    ["Overall Status", deriveExecutiveOverallStatus({ summary, insights, fingerprintDrift, result })],
+    ["Overall condition", deriveExecutiveOverallStatus({ summary, insights, fingerprintDrift, result })],
     [
       "Highest Priority Finding",
       conciseOperatorSentence(
@@ -1435,52 +1440,68 @@ function SignalList({ signals, integrity }) {
 function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId }) {
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;
   return (
-    <div className="insight-feed">
+    <div className="insight-feed insight-feed--cards">
       {insights.map((insight) => {
         const selected = selectedId === insight.id;
         const title = formatInsightTitle(insight.summary);
-        const causes = operationalCauseHypotheses(insight).slice(0, 6);
         const relationships = insightRelationshipLabels(insight).slice(0, 8);
+        const summary = operatorSummaryBriefing(insight, relationships)[0] || title;
         return (
           <article
             key={insight.id}
-            className={selected ? "insight-card insight-briefing is-selected" : "insight-card insight-briefing"}
+            className={selected ? "insight-card insight-card--compact is-selected" : "insight-card insight-card--compact"}
             aria-current={selected ? "true" : undefined}
           >
-            <div className="insight-briefing__header">
+            <div className="insight-card__header">
               <span className="section-token">{formatSubsystemName(insight.system)}</span>
-              <h3>{title}</h3>
+              <div className="insight-card__badges">
+                <StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} />
+                <StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" />
+              </div>
             </div>
-            <dl className="insight-briefing__status" aria-label="Insight status">
-              <div>
-                <dt>Severity</dt>
-                <dd><StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} /></dd>
-              </div>
-              <div>
-                <dt>Confidence</dt>
-                <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
-              </div>
-            </dl>
-            <BriefingTextBlock title="Summary" lines={operatorSummaryBriefing(insight, relationships)} />
-            <BriefingList title="Possible Operational Causes" items={causes} />
-            {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
-            <BriefingList
-              title="Recommended Investigation"
-              items={suggestedInvestigationSteps({
-                subsystem: insight.system,
-                relationshipLabels: relationships,
-                insight,
-              }).slice(0, 3)}
-              limit={3}
-            />
-            {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
-            {typeof onOpenInsight === "function" && !selected ? (
-              <button type="button" className="secondary-command-button insight-briefing__select" onClick={() => onOpenInsight(insight.id)}>Select</button>
-            ) : null}
+            <h3>{title}</h3>
+            <p className="insight-card__summary">{summary}</p>
+            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open</button>
           </article>
         );
       })}
     </div>
+  );
+}
+
+function InsightDetail({ insight }) {
+  const causes = operationalCauseHypotheses(insight).slice(0, 6);
+  const relationships = insightRelationshipLabels(insight).slice(0, 8);
+  return (
+    <article className="insight-detail-card" aria-label="Insight detail">
+      <div className="insight-briefing__header">
+        <span className="section-token">{formatSubsystemName(insight.system)}</span>
+        <h3>{formatInsightTitle(insight.summary)}</h3>
+      </div>
+      <dl className="insight-briefing__status" aria-label="Insight status">
+        <div>
+          <dt>Severity</dt>
+          <dd><StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} /></dd>
+        </div>
+        <div>
+          <dt>Confidence</dt>
+          <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
+        </div>
+      </dl>
+      <BriefingTextBlock title="Summary" lines={operatorSummaryBriefing(insight, relationships)} />
+      <BriefingList title="Possible Operational Causes" items={causes} />
+      {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
+      <BriefingList
+        title="Recommended Investigation"
+        items={suggestedInvestigationSteps({
+          subsystem: insight.system,
+          relationshipLabels: relationships,
+          insight,
+        }).slice(0, 4)}
+        limit={4}
+      />
+      {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
+    </article>
   );
 }
 

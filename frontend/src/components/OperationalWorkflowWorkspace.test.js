@@ -71,10 +71,11 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Current Site").length).toBeGreaterThan(0);
-    expect(screen.getByText("Start Analysis")).toBeTruthy();
-    expect(screen.getByText("Upload a CSV to begin.")).toBeTruthy();
-    expect(screen.getByText("No file selected.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Upload CSV" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Intelligence" })).toBeTruthy();
+    expect(screen.getByText("Analyze infrastructure behavior")).toBeTruthy();
+    expect(screen.getByText("Upload historical telemetry to identify relationship changes across operational systems.")).toBeTruthy();
+    expect(screen.getByText("No file selected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Select CSV" })).toBeTruthy();
     expect(screen.queryByText(/Command Pulse/i)).toBeNull();
     expect(screen.queryByText("Current Picture")).toBeNull();
     expect(screen.queryByText("Data source")).toBeNull();
@@ -88,10 +89,12 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Baseline Established")).toBeNull();
     expect(screen.queryByRole("button", { name: /Systems\s+Pending/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Fingerprint\s+No Operating Fingerprint Yet/i })).toBeNull();
-    expect(screen.getAllByRole("button", { name: /Insights\s+—/ }).every((button) => button.disabled)).toBe(true);
-    expect(screen.getAllByRole("button", { name: /Systems\s+—/ }).every((button) => button.disabled)).toBe(true);
-    expect(screen.getAllByRole("button", { name: /Fingerprint\s+—/ }).every((button) => button.disabled)).toBe(true);
-    expect(screen.getAllByRole("button", { name: /Evidence\s+—/ }).every((button) => button.disabled)).toBe(true);
+    expect(screen.queryByRole("button", { name: /Overview/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Insights/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Systems/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Fingerprint/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Evidence/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /More/i })).toBeNull();
   });
 
   it("does not treat an empty data source as loaded telemetry", () => {
@@ -103,8 +106,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
-    expect(screen.getAllByText("Start Analysis")).toHaveLength(1);
-    expect(screen.getByText("Upload a CSV to begin.")).toBeTruthy();
+    expect(screen.getAllByText("Analyze infrastructure behavior")).toHaveLength(1);
+    expect(screen.getByText("Upload historical telemetry to identify relationship changes across operational systems.")).toBeTruthy();
     expect(screen.queryByText("Data source")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
@@ -117,7 +120,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.queryByText("No Telemetry Loaded")).toBeNull();
-    expect(screen.getAllByText("Start Analysis")).toHaveLength(1);
+    expect(screen.getAllByText("Analyze infrastructure behavior")).toHaveLength(1);
     expect(screen.queryByText("CSV loaded / Ready to analyze")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
   });
@@ -189,11 +192,17 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.getAllByText("Analysis Complete").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Overview Summary/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Insights Findings/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Systems Inventory/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Fingerprint Baseline/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Evidence Support/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /More Details/i }).length).toBeGreaterThan(0);
     expect(screen.getByText("Historical telemetry analyzed.")).toBeTruthy();
     expect(screen.getByText("Systems identified")).toBeTruthy();
     expect(screen.getByText("Relationship changes detected")).toBeTruthy();
     expect(screen.getByText("Baseline updated")).toBeTruthy();
-    expect(screen.getByText("Overall Status")).toBeTruthy();
+    expect(screen.getByText("Overall condition")).toBeTruthy();
     expect(screen.getByText("Recommended Next Check")).toBeTruthy();
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
     expect(screen.queryByText("Telemetry acceptable")).toBeNull();
@@ -224,7 +233,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
     expect(screen.getByText("Live telemetry is connected and current behavior is being monitored.")).toBeTruthy();
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
-    expect(screen.getByText("Overall Status")).toBeTruthy();
+    expect(screen.getByText("Overall condition")).toBeTruthy();
     expect(screen.queryByText("systems monitored")).toBeNull();
   });
 
@@ -292,7 +301,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Overall Status")).toBeTruthy();
+    expect(screen.getByText("Overall condition")).toBeTruthy();
     expect(screen.getByText("Operational instability observed")).toBeTruthy();
     expect(screen.getAllByText("Pressure and flow relationship shifted").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pump cycling may increase").length).toBeGreaterThan(0);
@@ -300,13 +309,13 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("Systems identified")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByRole("heading", { name: "Operator Briefing" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Insights" }).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("What Changed")).toBeNull();
     expect(screen.queryByText("Why It Matters")).toBeNull();
     expect(screen.queryByText("Why Neraium believes this matters")).toBeNull();
     expect(screen.queryByText("Evidence summary")).toBeNull();
-    expect(screen.getByText("Flow and pressure system no longer follows its historical operating pattern.")).toBeTruthy();
+    expect(screen.getAllByText("Flow and pressure system no longer follows its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getByText("One operating relationship shifted.")).toBeTruthy();
     expect(screen.getAllByText("Possible Operational Causes").length).toBeGreaterThan(0);
     expect(screen.getByText("Pump operating point changed")).toBeTruthy();
@@ -444,7 +453,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
   });
 
-  it("disables result tabs before analysis", () => {
+  it("does not render result tabs before analysis", () => {
     renderWorkspace({
       effectiveLatestUploadResult: telemetryResult(),
       effectiveLatestUploadSnapshot: {
@@ -456,10 +465,12 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       },
     });
 
-    const systemButtons = screen.getAllByRole("button", { name: /Systems\s+—/ });
-    expect(systemButtons.every((button) => button.disabled)).toBe(true);
-    fireEvent.click(systemButtons[0]);
-
+    expect(screen.queryByRole("button", { name: /Overview/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Insights/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Systems/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Fingerprint/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Evidence/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /More/i })).toBeNull();
     expect(screen.getAllByText("CSV loaded / Ready to analyze").length).toBeGreaterThan(0);
     expect(screen.queryByText("Systems Pending")).toBeNull();
     expect(screen.queryByText("Run analysis to identify systems and relationships.")).toBeNull();

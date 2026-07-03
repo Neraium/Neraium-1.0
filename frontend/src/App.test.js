@@ -150,7 +150,7 @@ afterEach(() => {
 });
 
 
-it("keeps a fresh session empty when a persisted latest upload exists", () => {
+it("keeps a fresh session empty when a persisted latest upload exists", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-42",
     row_count: 51841,
@@ -166,7 +166,9 @@ it("keeps a fresh session empty when a persisted latest upload exists", () => {
 
   render(h(App));
 
-  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  await waitFor(() => {
+    expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  });
   expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
   expect(screen.getByTestId("gate-previous-upload").textContent).toBe("persisted-job-42");
   expect(screen.getByRole("button", { name: "Resume Previous Upload" })).toBeTruthy();
@@ -202,7 +204,9 @@ describe("App upload completion navigation", () => {
     render(h(App));
 
     fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
-    expect(screen.getByTestId("upload-workspace")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId("upload-workspace")).toBeTruthy();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Finish upload" }));
 

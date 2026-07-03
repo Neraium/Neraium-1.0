@@ -1,4 +1,5 @@
 /* @vitest-environment jsdom */
+/* global globalThis */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../../viewModels/uploadFlow";
 import { clearLatestUploadStateCache, fetchLatestUploadState, uploadTelemetryFileWithProgress } from "./uploadApi";
