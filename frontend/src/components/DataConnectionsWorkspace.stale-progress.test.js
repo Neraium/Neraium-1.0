@@ -247,7 +247,7 @@ it("selected file state shows filename, size, and Analyze System", () => {
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV - 15.7 MB")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Select Another CSV" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Select Another CSV" })).toBeNull();
   expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
 });
 

@@ -12,6 +12,7 @@ import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/syst
 function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
   const [activeWorkspace, setActiveWorkspace] = useState("system-body");
+  const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [appReady, setAppReady] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
 
@@ -228,6 +229,8 @@ function App() {
       handleReplayModeChange={handleReplayModeChange}
       handleSignOut={handleSignOut}
       setActiveWorkspace={setActiveWorkspace}
+      pendingUploadFiles={pendingUploadFiles}
+      setPendingUploadFiles={setPendingUploadFiles}
     />
   );
 }

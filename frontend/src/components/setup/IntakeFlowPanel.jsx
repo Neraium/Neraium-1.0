@@ -273,7 +273,9 @@ export default function IntakeFlowPanel({
               <span>{hasSelectedFiles ? `${fileKind} - ${selectedFileSize}` : "No file selected"}</span>
             </div>
             <div className="upload-simple-actions">
-              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
+              {!hasSelectedFiles ? (
+                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
+              ) : null}
               {hasSelectedFiles ? (
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
                   Analyze System

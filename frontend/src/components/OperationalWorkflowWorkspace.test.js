@@ -76,6 +76,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("Upload historical telemetry to identify relationship changes across operational systems.")).toBeTruthy();
     expect(screen.getByText("No file selected")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select CSV" })).toBeTruthy();
+    expect(screen.getByTestId("overview-csv-upload-input")).toBeTruthy();
     expect(screen.queryByText(/Command Pulse/i)).toBeNull();
     expect(screen.queryByText("Current Picture")).toBeNull();
     expect(screen.queryByText("Data source")).toBeNull();
@@ -95,6 +96,27 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByRole("button", { name: /Fingerprint/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Evidence/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /More/i })).toBeNull();
+  });
+
+  it("opens the native CSV picker from the overview without navigating first", () => {
+    const onWorkspaceNavigate = vi.fn();
+    const onCsvSelected = vi.fn();
+    renderWorkspace({ onWorkspaceNavigate, onCsvSelected });
+
+    const input = screen.getByTestId("overview-csv-upload-input");
+    const inputClick = vi.spyOn(input, "click");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select CSV" }));
+
+    expect(inputClick).toHaveBeenCalledTimes(1);
+    expect(onWorkspaceNavigate).not.toHaveBeenCalled();
+
+    const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(onCsvSelected).toHaveBeenCalledTimes(1);
+    expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
+    expect(onWorkspaceNavigate).not.toHaveBeenCalled();
   });
 
   it("does not treat an empty data source as loaded telemetry", () => {

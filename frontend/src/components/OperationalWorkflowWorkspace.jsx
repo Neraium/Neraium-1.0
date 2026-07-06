@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
 import { sanitizeOperatorList, sanitizeOperatorText } from "../viewModels/operatorFinding";
@@ -24,6 +24,18 @@ const MOBILE_PRIMARY_NAV = [
 
 const RESULT_TAB_IDS = new Set(["insights", "systems", "fingerprint", "evidence"]);
 const EMPTY_TAB_METRIC = "—";
+
+const hiddenFileInputStyle = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
 
 const EMPTY_TELEMETRY_COPY = {
   label: "Analyze infrastructure behavior",
@@ -83,12 +95,14 @@ export default function OperationalWorkflowWorkspace({
   domainDetection,
   gateProcessing,
   onWorkspaceNavigate,
+  onCsvSelected,
   onUploadComplete,
   onResumePreviousSession,
   onSignOut,
 }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedInsightId, setSelectedInsightId] = useState(null);
+  const overviewUploadInputRef = useRef(null);
 
   const deferredLiveOps = useDeferredValue(liveOps);
   const deferredCanonicalFinding = useDeferredValue(canonicalFinding);
@@ -143,6 +157,18 @@ export default function OperationalWorkflowWorkspace({
   function openEvidence(insightId) {
     setSelectedInsightId(insightId);
     navigate("evidence");
+  }
+
+  function openOverviewFilePicker() {
+    overviewUploadInputRef.current?.click();
+  }
+
+  function handleOverviewFileSelection(event) {
+    const files = Array.from(event?.target?.files ?? []);
+    if (!files.length) return;
+    if (typeof onCsvSelected === "function") {
+      onCsvSelected(files);
+    }
   }
 
   function analyzeSystem() {
@@ -232,6 +258,9 @@ export default function OperationalWorkflowWorkspace({
             onOpenInsight={openInsight}
             onOpenEvidence={openEvidence}
             onAnalyzeSystem={analyzeSystem}
+            uploadInputRef={overviewUploadInputRef}
+            onSelectCsv={openOverviewFilePicker}
+            onFileSelection={handleOverviewFileSelection}
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
           />
@@ -267,7 +296,7 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem, onResumePreviousSession, onViewSystems }) {
+function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem, uploadInputRef, onSelectCsv, onFileSelection, onResumePreviousSession, onViewSystems }) {
   if (model.overviewState === "noCsvUploaded") {
     return (
       <div className="operational-grid operational-grid--empty">
@@ -277,9 +306,10 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
               <h2>{EMPTY_TELEMETRY_COPY.label}</h2>
               <p>{EMPTY_TELEMETRY_COPY.detail}</p>
             </div>
+            <input data-testid="overview-csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} onChange={onFileSelection} />
             <small>{EMPTY_TELEMETRY_COPY.fileStatus}</small>
             <div className="operational-actions operational-actions--hero">
-              <button type="button" className="command-button" onClick={onAnalyzeSystem}>
+              <button type="button" className="command-button" onClick={onSelectCsv}>
                 {EMPTY_TELEMETRY_COPY.cta}
               </button>
             </div>

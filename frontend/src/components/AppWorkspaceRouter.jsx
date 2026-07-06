@@ -73,6 +73,8 @@ export default function AppWorkspaceRouter({
   handleReplayModeChange,
   handleSignOut,
   setActiveWorkspace,
+  pendingUploadFiles = [],
+  setPendingUploadFiles = () => {},
 }) {
   if (activeWorkspace === "data-connections") {
     return (
@@ -98,6 +100,8 @@ export default function AppWorkspaceRouter({
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}
+            initialSelectedFiles={pendingUploadFiles}
+            onInitialSelectedFilesConsumed={() => setPendingUploadFiles([])}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -221,6 +225,10 @@ export default function AppWorkspaceRouter({
             gateProcessing={gateProcessing}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
+            onCsvSelected={(files) => {
+              setPendingUploadFiles(files);
+              setActiveWorkspace("data-connections");
+            }}
             onUploadComplete={handleGateUploadComplete}
             onResumePreviousSession={handleResumePreviousSession}
           />

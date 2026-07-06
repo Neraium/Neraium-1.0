@@ -125,10 +125,13 @@ export default function DataConnectionsWorkspace({
   sessionStore,
   onUploadComplete,
   onResetDemo,
+  initialSelectedFiles = [],
+  onInitialSelectedFilesConsumed,
 }) {
-  const [selectedFiles, setSelectedFiles] = useState([]);
+  const seededSelectedFiles = Array.isArray(initialSelectedFiles) ? initialSelectedFiles : [];
+  const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
-  const [uploadState, setUploadState] = useState("idle");
+  const [uploadState, setUploadState] = useState(() => seededSelectedFiles.length ? "validated" : "idle");
   const [uploadError, setUploadError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
@@ -164,6 +167,12 @@ export default function DataConnectionsWorkspace({
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = Boolean(active);
     }
   };
+
+  useEffect(() => {
+    if (seededSelectedFiles.length && typeof onInitialSelectedFilesConsumed === "function") {
+      onInitialSelectedFilesConsumed();
+    }
+  }, [onInitialSelectedFilesConsumed, seededSelectedFiles.length]);
 
   useEffect(() => {
     uploadStateRef.current = uploadState;
