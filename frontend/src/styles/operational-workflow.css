@@ -1544,3 +1544,44 @@ button.insight-card {
     grid-template-columns: 1fr;
   }
 }
+
+
+.operational-detail-grid--technical dd,
+.technical-value,
+.compact-list--code,
+.operator-briefing-list--code {
+  min-width: 0;
+}
+
+.technical-value {
+  display: grid;
+  gap: 8px;
+}
+
+.technical-value > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.technical-value code,
+.compact-list--code code,
+.operator-briefing-list--code code {
+  border: 1px solid var(--ops-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--ops-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 2px 5px;
+}
+
+@media (max-width: 700px) {
+  .technical-value > div {
+    grid-template-columns: 1fr;
+  }
+}

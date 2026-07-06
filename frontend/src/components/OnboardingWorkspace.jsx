@@ -306,7 +306,8 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             uploadMessage: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
             uploadError: "",
           }));
-          await new Promise((resolve) => window.setTimeout(resolve, Math.min(1500 * temporaryUnavailableCount, 6000)));
+          const retryDelayMs = Math.min(1500 * temporaryUnavailableCount, 6000);
+          await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
           continue;
         }
         throw buildUploadRequestError(response, payload, "poll");

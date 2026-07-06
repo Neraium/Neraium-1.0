@@ -186,8 +186,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       onWorkspaceNavigate,
     });
 
-    const analyzeButton = screen.getByRole("button", { name: "Building Fingerprint" });
-    expect(screen.getAllByText("Building Operating Fingerprint").length).toBeGreaterThan(0);
+    const analyzeButton = screen.getByRole("button", { name: "Building Behavior Pattern" });
+    expect(screen.getAllByText("Building Behavior Pattern").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Analyzing telemetry, identifying system behavior, and mapping relationships.").length).toBeGreaterThan(0);
     expect(analyzeButton.disabled).toBe(true);
     fireEvent.click(analyzeButton);
@@ -217,20 +217,20 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByRole("button", { name: /Overview Summary/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Insights Findings/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Systems Inventory/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Fingerprint Baseline/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Behavior Pattern/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Advanced Details/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /More Details/i }).length).toBeGreaterThan(0);
     expect(screen.getByText("Attention needed.")).toBeTruthy();
-    expect(screen.getByText("Normal")).toBeTruthy();
-    expect(screen.getByText("No reviewed operational relationship moved outside the baseline threshold")).toBeTruthy();
-    expect(screen.getByText("Overall Condition")).toBeTruthy();
+    expect(screen.getAllByText("Low").length).toBeGreaterThan(0);
+    expect(screen.getByText("No reviewed operational relationship moved outside the baseline threshold.")).toBeTruthy();
+    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Severity").length).toBeGreaterThan(0);
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
     expect(screen.queryByText("Telemetry acceptable")).toBeNull();
     expect(screen.queryByText("Analysis completed with minor data quality warnings")).toBeNull();
     expect(screen.queryByText("Relationships mapped")).toBeNull();
     expect(screen.queryByText("Baseline confidence")).toBeNull();
     expect(screen.queryByText("Top risk")).toBeNull();
-    expect(screen.queryByText("Active Insights")).toBeNull();
     expect(screen.queryByText("Fingerprint Status")).toBeNull();
     expect(screen.queryByText(/systems monitored/i)).toBeNull();
   });
@@ -252,7 +252,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Monitoring Live").length).toBeGreaterThan(0);
     expect(screen.getByText("Live telemetry is connected and current behavior is being monitored.")).toBeTruthy();
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
-    expect(screen.getByText("Overall Condition")).toBeTruthy();
+    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Severity").length).toBeGreaterThan(0);
     expect(screen.queryByText("systems monitored")).toBeNull();
   });
 
@@ -320,21 +321,21 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Overall Condition")).toBeTruthy();
-    expect(screen.getByText("Attention Needed")).toBeTruthy();
+    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Severity").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Operational Assessment").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
     expect(screen.getAllByRole("heading", { name: "Insights" }).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("What Changed")).toBeNull();
-    expect(screen.queryByText("Why It Matters")).toBeNull();
+    expect(screen.getByText("Why It Matters")).toBeTruthy();
     expect(screen.queryByText("Why Neraium believes this matters")).toBeNull();
     expect(screen.queryByText("Evidence summary")).toBeNull();
     expect(screen.getAllByText("Flow and pressure system no longer follows its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getByText("One operating relationship shifted.")).toBeTruthy();
     expect(screen.getAllByText("Possible Operational Causes").length).toBeGreaterThan(0);
-    expect(screen.getByText("Operating setpoint modification")).toBeTruthy();
+    expect(screen.getByText("Filter loading")).toBeTruthy();
     expect(screen.getByText("Relationships Involved")).toBeTruthy();
     expect(screen.getAllByText("Recommended Review").length).toBeGreaterThan(0);
     expect(screen.getByText("pressure ↔ flow")).toBeTruthy();
@@ -382,8 +383,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Attention Needed")).toBeTruthy();
-    expect(screen.getByText("1 operational relationship changed")).toBeTruthy();
+    expect(screen.getAllByText("Severity").length).toBeGreaterThan(0);
+    expect(screen.getByText("flow ↔ pressure")).toBeTruthy();
     expect(screen.queryByText("Baseline-aligned")).toBeNull();
     expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
   });
@@ -607,7 +608,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     expect(screen.queryByText(/replay/i)).toBeNull();
 
-    for (const label of ["More", "Insights", "Systems", "Fingerprint", "Advanced"]) {
+    for (const label of ["More", "Insights", "Systems", "Behavior", "Advanced"]) {
       const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
       expect(tab).toBeTruthy();
       fireEvent.click(tab);
@@ -651,7 +652,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     const main = screen.getByLabelText("Neraium operational workspace");
     expect(main.textContent).not.toMatch(/\bbackend\b|\bpipeline\b|\breplay\b|\braw\b|tag-pair|Column 3|SII/i);
 
-    for (const label of ["Insights", "Systems", "Fingerprint"]) {
+    for (const label of ["Insights", "Systems", "Behavior"]) {
       const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
       fireEvent.click(tab);
       expect(main.textContent).not.toMatch(/\bbackend\b|\bpipeline\b|\breplay\b|\braw\b|tag-pair|Column 3|SII/i);
@@ -723,14 +724,13 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     });
 
     expect(screen.getAllByText("Operational Assessment").length).toBeGreaterThan(0);
-    expect(screen.getByText("Overall Condition")).toBeTruthy();
-    expect(screen.getByText("Confidence")).toBeTruthy();
+    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Severity").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Confidence").length).toBeGreaterThan(0);
     expect(screen.queryByText("Overall System Status")).toBeNull();
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Potential Operational Causes").length).toBeGreaterThan(0);
-    expect(screen.getByText("Filter loading")).toBeTruthy();
-    expect(screen.getAllByText("Recommended Review").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Review filter differential pressure trends").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Potential Operational Causes")).toBeNull();
+    expect(screen.queryByText("Recommended Review")).toBeNull();
     expect(screen.queryByText("Things Neraium Did Not Observe")).toBeNull();
     expect(screen.queryByText("Trend")).toBeNull();
     expect(screen.getByText("Pump Power ↔ Filter Differential Pressure")).toBeTruthy();
@@ -777,13 +777,14 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     const systemsTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Systems"));
     fireEvent.click(systemsTab);
-    expect(main.textContent.match(/Needs review/g)?.length ?? 0).toBe(1);
+    expect(main.textContent.match(/StatusMonitoring/g)?.length ?? 0).toBe(1);
+    expect(main.textContent).toContain("Active Insights1");
     expect(main.textContent).toContain("pump2 vibration rms ips");
     expect(main.textContent).toContain("pump2 motor temp f");
 
-    const fingerprintTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Fingerprint"));
-    fireEvent.click(fingerprintTab);
-    expect(screen.getByText("Changed")).toBeTruthy();
+    const behaviorTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Behavior"));
+    fireEvent.click(behaviorTab);
+    expect(screen.getByText("Shift detected")).toBeTruthy();
     expect(main.textContent).toContain("pump2 vibration rms ips");
     expect(main.textContent).toContain("tank level delta ft");
     expect(main.textContent).toContain("2026-04-27T15:45:00Z to 2026-04-28T16:45:00Z");

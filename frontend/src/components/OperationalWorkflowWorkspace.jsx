@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-  { id: "fingerprint", label: "Fingerprint" },
+  { id: "fingerprint", label: "Behavior" },
   { id: "evidence", label: "Advanced" },
   { id: "more", label: "More" },
 ];
@@ -17,7 +17,7 @@ const MOBILE_PRIMARY_NAV = [
   { id: "overview", label: "Overview" },
   { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-  { id: "fingerprint", label: "Fingerprint" },
+  { id: "fingerprint", label: "Behavior" },
   { id: "evidence", label: "Advanced" },
   { id: "more", label: "More" },
 ];
@@ -60,7 +60,7 @@ const READY_TO_ANALYZE_STATUS = {
   detail: "Upload is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.",
 };
 const ANALYZING_STATUS = {
-  label: "Building Operating Fingerprint",
+  label: "Building Behavior Pattern",
   tone: "changed",
   detail: "Analyzing telemetry, identifying system behavior, and mapping relationships.",
 };
@@ -75,7 +75,7 @@ const MONITORING_LIVE_STATUS = {
   detail: "Live telemetry is connected and current behavior is being monitored.",
 };
 const NO_BASELINE_AVAILABLE = {
-  label: "No Operating Fingerprint Yet",
+  label: "No Behavior Pattern Yet",
   tone: "unknown",
   detail: "Run analysis to establish a baseline.",
 };
@@ -416,11 +416,13 @@ function SystemsSection({ model, onOpenInsight }) {
               <article className="system-summary-row" key={system.id}>
                 <div>
                   <strong>{system.name}</strong>
-                  <p>{system.status}</p>
+                  <p>Behavior: {system.behavior}</p>
                   <DetailGrid rows={[
+                    ["Status", system.status],
+                    ["Active Insights", system.activeInsights],
                     ["Confidence", system.confidence],
-                    ["What changed", system.whatChanged?.join("; ")],
-                    ["Relationships", system.relationships?.join("; ")],
+                    ["What changed", system.whatChanged],
+                    ["Relationships", system.relationships],
                   ]} />
                   {system.keyBehaviors?.length ? (
                     <ul className="compact-list">
@@ -454,8 +456,8 @@ function SystemsSection({ model, onOpenInsight }) {
 function FingerprintSection({ model }) {
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="Fingerprint interpretation">
-        <PanelHeader eyebrow="Fingerprint" title="Operating Fingerprint" subtitle="Plain-language meaning of the baseline comparison." />
+      <section className="operational-panel operational-panel--wide" aria-label="Behavior interpretation">
+        <PanelHeader eyebrow="Behavior" title="Behavior Pattern" subtitle="Plain-language meaning of the baseline comparison." />
         <FingerprintStatus drift={model.fingerprintDrift} />
         <DetailGrid rows={model.fingerprintRows} />
       </section>
@@ -529,7 +531,7 @@ function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
       {model.advancedRelationshipDetails.length ? (
         <section className="operational-panel" aria-label="Advanced details">
           <PanelHeader eyebrow="Advanced" title="Advanced Details" subtitle="Raw relationship identifiers used for traceability." />
-          <QualityList title="Raw relationship identifiers" items={model.advancedRelationshipDetails} empty="" />
+          <QualityList title="Raw relationship identifiers" items={model.advancedRelationshipDetails} empty="" codeItems />
         </section>
       ) : null}
       <section className="operational-panel operational-panel--wide" aria-label="Analysis history">
@@ -619,7 +621,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     overviewTabMetric: isEmptyTelemetryState ? "Start" : (resultTabsReady ? "Summary" : heroStatus.label),
     moreTabMetric: "Details",
     insightsTabMetric: resultTabsReady ? "Findings" : EMPTY_TAB_METRIC,
-    fingerprintTabMetric: resultTabsReady ? "Baseline" : EMPTY_TAB_METRIC,
+    fingerprintTabMetric: resultTabsReady ? "Pattern" : EMPTY_TAB_METRIC,
     evidenceTabMetric: resultTabsReady ? "Details" : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
     resultTabsReady,
@@ -698,7 +700,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYZING_STATUS,
       sourceStatusLabel: "Analyzing telemetry",
       storyProgressLabel: "Analysis in progress",
-      primaryCtaLabel: "Building Fingerprint",
+      primaryCtaLabel: "Building Behavior Pattern",
     };
   }
   if (!telemetryAvailable && !telemetryConnected) {
@@ -811,10 +813,10 @@ function buildFingerprintRows(analysisExplanation) {
   const currentBehavior = fingerprint.current_behavior ?? fingerprint.current_behavior_summary;
   return [
     ["Explanation", operatorText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
-    ["Drift status", operatorText(fingerprint.drift_status, fingerprint.status)],
+    ["Behavior pattern", behaviorPatternLabel(fingerprint.drift_status ?? fingerprint.status)],
     ["Confidence", formatConfidenceDisplay(fingerprint.confidence, fingerprint.confidence_score)],
-    ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : operatorText(normalBehavior)],
-    ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : operatorText(currentBehavior)],
+    ...formatBehaviorSummaryRows("Normal behavior", normalBehavior),
+    ...formatBehaviorSummaryRows("Current behavior", currentBehavior),
     ["Largest deviations", formatLargestDeviations(fingerprint.largest_deviations, fingerprint.largest_deviation)],
     ["Change onset", analysisExplanation?.change_onset],
     ["Stable window", formatBehaviorWindow(analysisExplanation?.stable_window)],
@@ -835,11 +837,13 @@ function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
   ];
 }
 
-function buildExecutiveSummaryRows({ analysisComplete, insights, fingerprintDrift, result, liveOps, finding, analysisExplanation }) {
+function buildExecutiveSummaryRows({ analysisComplete, identifiedSystemCount, insights, fingerprintDrift, result, liveOps, finding, analysisExplanation }) {
   if (!analysisComplete) return [];
-  const summary = analysisExplanation?.executive_summary ?? {};
+  const severity = insights[0]?.severity ?? (hasMeaningfulOperationalChange({ insights, fingerprintDrift }) ? "Moderate" : "Low");
   return [
-    ["Overall Condition", deriveAssessmentCondition({ summary, insights, fingerprintDrift, result })],
+    ["Systems", identifiedSystemCount ? `${identifiedSystemCount} reviewed` : "Not available"],
+    ["Insights", `${insights.length} active`],
+    ["Severity", severity],
     ["Confidence", deriveAssessmentConfidence({ insights, fingerprintDrift, result })],
   ];
 }
@@ -851,7 +855,7 @@ function buildOperatorInterpretationReport({ analysisExplanation, insights, rela
     ?? result?.operator_report?.operator_interpretation
     ?? null;
   if (source && typeof source === "object") {
-    return normalizeOperatorInterpretationReport(source, { quality, fallbackRelationships: relationshipRows });
+    return normalizeOperatorInterpretationReport(source, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
   }
   if (!hasMeaningfulOperationalChange({ insights, fingerprintDrift }) && !finding?.exists) {
     return normalizeOperatorInterpretationReport({
@@ -871,7 +875,7 @@ function buildOperatorInterpretationReport({ analysisExplanation, insights, rela
       recommended_review: DEFAULT_RECOMMENDED_REVIEW,
       relationship_changes: [],
       advanced_details: {},
-    }, { quality, fallbackRelationships: relationshipRows });
+    }, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
   }
 
   const primaryInsight = insights[0] ?? {};
@@ -901,7 +905,7 @@ function buildOperatorInterpretationReport({ analysisExplanation, insights, rela
     recommended_review: DEFAULT_RECOMMENDED_REVIEW,
     relationship_changes: relationshipLabels.map((label) => ({ label })),
     advanced_details: { raw_relationship_identifiers: buildAdvancedRelationshipDetails(relationshipRows) },
-  }, { quality, fallbackRelationships: relationshipRows });
+  }, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
 }
 
 function normalizeOperatorInterpretationReport(source, options = {}) {
@@ -914,11 +918,15 @@ function normalizeOperatorInterpretationReport(source, options = {}) {
     firstNonEmptyList(source.relationship_changes, source.relationshipChanges, evidence.relationships, primary.relationship_changes, primary.relationshipChanges, primary.affected_relationships, primary.affectedRelationships),
     options.fallbackRelationships
   );
+  const insightCount = Array.isArray(options.insights) ? options.insights.length : 0;
+  const activeInsightCount = relationshipChanges.length && insightCount === 0 ? 1 : insightCount;
+  const systemCount = Array.isArray(options.identifiedSystems) && options.identifiedSystems.length ? options.identifiedSystems.length : (subsystem ? 1 : 0);
   const condition = normalizeAssessmentCondition(firstText(source.overall_condition, source.overallCondition, status.condition, status.overall_condition, source.condition), relationshipChanges.length);
   const confidence = formatConfidenceLevel(
-    firstText(source.confidence, status.confidence),
-    source.confidence_score ?? status.confidence_score
+    firstText(source.confidence, status.confidence, options.fingerprintDrift?.confidence),
+    source.confidence_score ?? status.confidence_score ?? options.fingerprintDrift?.confidenceScore
   );
+  const severity = normalizeSeverity(firstText(source.severity, status.severity, primary.severity, options.insights?.[0]?.severity, condition));
   const summary = sanitizeOperatorList(toList(source.summary, source.executive_summary).flatMap(splitPriorityText)).slice(0, 3);
   const whatChanged = sanitizeOperatorList(toList(source.what_changed, source.whatChanged, primary.what_changed, primary.whatChanged).flatMap(splitPriorityText)).slice(0, 8);
   const possibleOperationalCauses = sanitizeOperatorList(toList(source.potential_operational_causes, source.potentialOperationalCauses, source.possible_operational_causes, source.possibleOperationalCauses).flatMap(splitPriorityText)).slice(0, 8);
@@ -927,9 +935,12 @@ function normalizeOperatorInterpretationReport(source, options = {}) {
     title: operatorText(source.title, "Operational Assessment"),
     condition,
     subsystem,
+    systems: systemCount ? `${systemCount} reviewed` : "Not available",
+    insights: `${activeInsightCount} active`,
+    severity,
     confidence,
     summary: summary.length ? summary : ["Behavior within this subsystem deviated from its historical operating pattern during the analyzed period."],
-    whatChanged: whatChanged.length ? whatChanged : ["Relationship fingerprint differs from the established baseline"],
+    whatChanged: whatChanged.length ? whatChanged : ["Relationship pattern differs from the established baseline"],
     possibleOperationalCauses: possibleOperationalCauses.length ? possibleOperationalCauses : DEFAULT_POTENTIAL_OPERATIONAL_CAUSES,
     recommendedReview: recommendedReview.length ? recommendedReview : DEFAULT_RECOMMENDED_REVIEW,
     relationshipChanges,
@@ -1085,41 +1096,12 @@ function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight })
   ];
 }
 
-function didNotObserveStatements(subsystem) {
-  const text = String(subsystem ?? "").toLowerCase();
-  return [
-    text.includes("thermal") ? "" : "No evidence of abnormal thermal subsystem behavior was flagged.",
-    text.includes("chemical") ? "" : "Chemical feed relationships remain consistent with the available baseline.",
-    text.includes("electrical") || text.includes("energy") ? "" : "Electrical load relationships remain stable in the reviewed evidence.",
-  ].filter(Boolean);
-}
-
-function normalizeUrgencyLabel(value) {
+function normalizeSystemStatus(value) {
   const text = firstText(value).toLowerCase();
-  if (text.includes("high") || text.includes("critical")) return "High";
-  if (text.includes("medium") || text.includes("moderate") || text.includes("elevated")) return "Medium";
-  if (text.includes("low")) return "Low";
-  return firstText(value, "Low");
-}
-
-function normalizePersistenceLabel(value) {
-  const text = firstText(value).toLowerCase();
-  if (text.includes("high")) return "High";
-  if (text.includes("medium") || text.includes("moderate")) return "Medium";
-  if (text.includes("low")) return "Low";
-  return firstText(value, "Low");
-}
-
-function buildCompletionChecklist({ identifiedSystemCount, insights, relationshipRows, fingerprintDrift, baselineAvailable }) {
-  return [];
-}
-
-function deriveAssessmentCondition({ summary, insights, fingerprintDrift, result }) {
-  const rawStatus = operatorText(summary.overall_operational_status, result?.operating_state, result?.sii_intelligence?.facility_state);
-  const statusText = rawStatus.toLowerCase();
-  const meaningfulChange = hasMeaningfulOperationalChange({ insights, fingerprintDrift });
-  if (!meaningfulChange && !statusText.includes("review")) return "Normal";
-  return "Attention Needed";
+  if (text.includes("review") || text.includes("attention") || text.includes("changed") || text.includes("drift") || text.includes("shift")) return "Monitoring";
+  if (text.includes("connected") || text.includes("monitor")) return "Monitoring";
+  if (text.includes("normal") || text.includes("stable") || text.includes("baseline")) return "Monitoring";
+  return firstText(value, "Monitoring");
 }
 
 function deriveAssessmentConfidence({ insights, fingerprintDrift, result }) {
@@ -1316,18 +1298,26 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
 
   const cards = safeSystems.map((system) => {
     const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
+    const activeInsightCount = relatedInsights.length;
+    const rawStatus = firstText(system.health_status, system.status, heroStatus.label);
+    const status = activeInsightCount > 0 ? "Monitoring" : normalizeSystemStatus(rawStatus);
+    const behavior = activeInsightCount > 0 || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate"
+      ? "Shift Detected"
+      : "Baseline Aligned";
     return {
       id: system.id,
       name: system.name,
-      status: firstText(system.health_status, system.status, heroStatus.label),
+      status,
+      behavior,
+      activeInsights: String(activeInsightCount),
       tone: heroStatus.tone,
       summary: firstText(system.summary, fingerprintDrift.detail),
       confidence: system.confidence,
       keyBehaviors: toList(system.key_behaviors, system.keyBehaviors).flatMap(splitPriorityText),
       whatChanged: toList(system.what_changed, system.whatChanged).flatMap(splitPriorityText),
-      relationships: toList(system.relationships, system.relationship_summary).flatMap(splitPriorityText),
+      relationships: relationshipContributionLabels(toList(system.relationships, system.relationship_summary)),
       lastAnalysis,
-      insightSummary: `${relatedInsights.length} active insight${relatedInsights.length === 1 ? "" : "s"}`,
+      insightSummary: `Active Insights: ${activeInsightCount}`,
       primaryInsightId: relatedInsights[0]?.id ?? null,
     };
   });
@@ -1452,7 +1442,7 @@ function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysis
   if (!analysisComplete) {
     return {
       ...READY_TO_ANALYZE_STATUS,
-      detail: "Fingerprint comparison will populate after analysis completes.",
+      detail: "Behavior comparison will populate after analysis completes.",
     };
   }
   const magnitudes = relationshipRows.map((row) => Math.abs(Number(row.percent_change ?? row.absolute_change ?? row.pair_weight ?? row.change ?? 0))).filter(Number.isFinite);
@@ -1470,9 +1460,9 @@ function buildSignals(result) {
   const columns = Array.isArray(result?.columns) ? result.columns : [];
   const detected = Array.isArray(result?.detected_columns) ? result.detected_columns : [];
   const normalizedTags = Array.isArray(result?.analysis_result?.normalized_telemetry?.tags)
-    ? result.analysis_result.normalized_telemetry.tags.map((tag) => tag.tag_name)
+    ? result.analysis_result.normalized_telemetry.tags.map((tag) => tag.display_name ?? tag.tag_name ?? tag.original_header)
     : [];
-  return dedupeText([...columns, ...detected, ...normalizedTags]).slice(0, 24);
+  return dedupeDisplayValues([...columns, ...detected, ...normalizedTags], signalDisplayKey).slice(0, 24);
 }
 
 function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete }) {
@@ -1501,12 +1491,13 @@ function RelationshipList({ rows }) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return <EmptyOperationalState title="No relationship shifts" body="Relationship drift will appear after baseline comparison is available." />;
   }
+  const displayRows = dedupeRelationships(rows).slice(0, 8);
   return (
     <ul className="operational-list">
-      {rows.slice(0, 8).map((row, index) => {
+      {displayRows.map((row, index) => {
         const label = relationshipDisplayName(row, index) || `Relationship ${relationshipOrdinal(index)}`;
         const detail = operatorText(row.explanation, row.what_changed, row.detail, row.summary, row.change_type, "Relationship behavior changed against baseline.");
-        return <li key={label + "-" + index}><strong>{label}</strong><span>{detail}</span></li>;
+        return <li key={relationshipDisplayKey(label) + "-" + index}><strong>{label}</strong><span>{detail}</span></li>;
       })}
     </ul>
   );
@@ -1516,7 +1507,10 @@ function SignalList({ signals, integrity }) {
   if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Detected signals will appear after telemetry is uploaded." />;
   return (
     <ul className="operational-list operational-list--signals">
-      {signals.map((signal) => <li key={signal}><strong>{cleanDisplayText(signal)}</strong><span>{integrity.label}</span></li>)}
+      {signals.map((signal) => {
+        const label = cleanDisplayText(signal);
+        return <li key={signalDisplayKey(label)}><strong>{label}</strong><span>{integrity.label}</span></li>;
+      })}
     </ul>
   );
 }
@@ -1573,11 +1567,12 @@ function InsightDetail({ insight }) {
         </div>
       </dl>
       <BriefingTextBlock title="Summary" lines={operatorSummaryBriefing(insight, relationships)} />
-      <BriefingList title="Possible Operational Causes" items={causes} />
+      <BriefingTextBlock title="Why It Matters" lines={whyItMattersBriefing(insight)} />
       {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
+      <BriefingList title="Possible Operational Causes" items={causes} />
       <BriefingList
         title="Recommended Review"
-        items={recommendedReviewItems()}
+        items={recommendedReviewItems(insight, relationships)}
         limit={6}
       />
       {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
@@ -1596,13 +1591,15 @@ function BriefingTextBlock({ title, lines }) {
   );
 }
 
-function BriefingList({ title, items, limit = 6 }) {
-  const visibleItems = dedupeText(toList(items).map(cleanBriefingText)).slice(0, limit);
+function BriefingList({ title, items, limit = 6, codeItems = false }) {
+  const visibleItems = dedupeText(toList(items).map(codeItems ? displayText : cleanBriefingText)).slice(0, limit);
   if (!visibleItems.length) return null;
   return (
     <section className="insight-briefing__section">
       <h4>{title}</h4>
-      <ul className="operator-briefing-list">{visibleItems.map((item) => <li key={item}>{item}</li>)}</ul>
+      <ul className={codeItems ? "operator-briefing-list operator-briefing-list--code" : "operator-briefing-list"}>
+        {visibleItems.map((item) => <li key={item}>{codeItems ? <code>{item}</code> : item}</li>)}
+      </ul>
     </section>
   );
 }
@@ -1657,11 +1654,11 @@ function EvidenceDetails({ evidence }) {
         ["Time window", evidence.time_window ?? evidence.timeWindow],
         ["Persistence / duration", evidence.persistence_duration ?? evidence.persistenceDuration],
         ["Calculated change", evidence.calculated_delta ?? evidence.calculatedDelta],
-        ["Relationship measurements", evidence.relationship_delta ? compactJson(evidence.relationship_delta) : ""],
+        ["Relationship measurements", evidence.relationship_delta],
         ["Calculated percent change", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
         ["Upload reference", evidence.source_upload_id ?? evidence.upload_id],
         ["Analysis reference", evidence.analysis_id],
-      ]} />
+      ]} technical />
       {sourceColumns.length ? <QualityList title="Source signals" items={sourceColumns} empty="" /> : null}
       {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
       {supportingSignals.length ? <QualityList title="Supporting signals" items={supportingSignals} empty="" /> : null}
@@ -1672,10 +1669,117 @@ function EvidenceDetails({ evidence }) {
 
 function compactJson(value) {
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value, null, 2);
   } catch {
     return "";
   }
+}
+
+function hasDisplayValue(value) {
+  if (value === "") return false;
+  if (Array.isArray(value)) return value.some((item) => hasDisplayValue(item));
+  return true;
+}
+
+function renderDisplayValue(value, options = {}) {
+  if (value === null || value === undefined) return "Not available";
+  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value.trim() || "Not available";
+  if (Array.isArray(value)) {
+    const items = value.map((item) => displayText(item)).filter(Boolean);
+    return items.length ? items.join(", ") : "Not available";
+  }
+  if (isPlainObject(value)) {
+    if (options.technical) return <TechnicalValue value={value} />;
+    return plainObjectSummary(value) || "Details available in Advanced Details";
+  }
+  return displayText(value) || "Not available";
+}
+
+function TechnicalValue({ value }) {
+  const entries = Object.entries(value ?? {})
+    .filter(([, entryValue]) => hasDisplayValue(entryValue))
+    .slice(0, 16);
+  if (!entries.length) return <span>Not available</span>;
+  return (
+    <div className="technical-value" aria-label="Technical values">
+      {entries.map(([key, entryValue]) => (
+        <div key={key}>
+          <code>{formatTechnicalKey(key)}</code>
+          <span>{isPlainObject(entryValue) || Array.isArray(entryValue) ? <code>{compactJson(entryValue)}</code> : renderDisplayValue(entryValue)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function displayText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map(displayText).filter(Boolean).join(", ");
+  if (isPlainObject(value)) return plainObjectSummary(value);
+  return String(value ?? "").trim();
+}
+
+function plainObjectSummary(value) {
+  if (!isPlainObject(value)) return "";
+  const rows = behaviorObjectRows(value);
+  if (!rows.length) return "";
+  return rows.map(([label, rowValue]) => `${label}: ${displayText(rowValue)}`).join("; ");
+}
+
+function formatBehaviorSummaryRows(prefix, value) {
+  if (!hasDisplayValue(value)) return [];
+  if (!isPlainObject(value)) return [[prefix, operatorText(value)]];
+  const rows = behaviorObjectRows(value);
+  if (!rows.length) return [[prefix, "Details available in Advanced Details"]];
+  return rows.map(([label, rowValue]) => [label, rowValue]);
+}
+
+function behaviorObjectRows(value) {
+  if (!isPlainObject(value)) return [];
+  const knownRows = [
+    ["Baseline window", value.baseline_window_rows ?? value.baselineRows ?? value.baseline_rows],
+    ["Current window", value.current_window_rows ?? value.currentRows ?? value.current_rows],
+    ["Comparison method", value.comparison_method ?? value.method ?? value.analysis_method ?? "Relationship change analysis"],
+    ["Normal pattern", value.summary ?? value.description ?? value.normal_pattern],
+    ["Current pattern", value.current_pattern ?? value.current_summary],
+    ["Relationship changes", value.relationship_changes ?? value.relationshipChanges],
+    ["Signals reviewed", value.signals_reviewed ?? value.signalsReviewed ?? value.columns],
+  ].filter(([, rowValue]) => hasDisplayValue(rowValue));
+  if (knownRows.length) return knownRows;
+  return Object.entries(value)
+    .filter(([, rowValue]) => hasDisplayValue(rowValue) && !isPlainObject(rowValue))
+    .slice(0, 5)
+    .map(([key, rowValue]) => [formatTechnicalKey(key), rowValue]);
+}
+
+function behaviorPatternLabel(value) {
+  const text = firstText(value).toLowerCase();
+  if (text.includes("stable") || text.includes("normal") || text.includes("baseline")) return "Baseline aligned";
+  if (text.includes("changed") || text.includes("drift") || text.includes("review") || text.includes("unstable")) return "Shift detected";
+  return firstText(value, "Shift detected");
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatNumber(value) {
+  if (!Number.isFinite(value)) return "Not available";
+  if (Number.isInteger(value)) return String(value);
+  return Number(value.toFixed(3)).toLocaleString("en-US");
+}
+
+function formatTechnicalKey(value) {
+  return String(value ?? "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatLargestDeviations(...values) {
@@ -1741,22 +1845,29 @@ function Timeline({ items }) {
   );
 }
 
-function QualityList({ title, items, empty }) {
+function QualityList({ title, items, empty, codeItems = false }) {
   return (
     <section className="operational-block">
       <h3>{title}</h3>
-      {items.length ? <ul className="compact-list">{items.map((item) => <li key={item}>{item}</li>)}</ul> : <p>{empty}</p>}
+      {items.length ? (
+        <ul className={codeItems ? "compact-list compact-list--code" : "compact-list"}>
+          {items.map((item) => <li key={item}>{codeItems ? <code>{item}</code> : renderDisplayValue(item)}</li>)}
+        </ul>
+      ) : <p>{empty}</p>}
     </section>
   );
 }
 
-function DetailGrid({ rows }) {
+function DetailGrid({ rows, technical = false }) {
+  const visibleRows = rows
+    .filter((row) => row && row.length >= 2)
+    .filter(([, value]) => hasDisplayValue(value));
   return (
-    <dl className="operational-detail-grid">
-      {rows.filter((row) => row && row.length >= 2).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").map(([label, value]) => (
+    <dl className={technical ? "operational-detail-grid operational-detail-grid--technical" : "operational-detail-grid"}>
+      {visibleRows.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd>{renderDisplayValue(value, { technical })}</dd>
         </div>
       ))}
     </dl>
@@ -1793,7 +1904,7 @@ function EmptyOperationalState({ title, body }) {
 function sectionTitle(section) {
   if (section === "insights") return "Insights";
   if (section === "systems") return "Systems";
-  if (section === "fingerprint") return "Fingerprint";
+  if (section === "fingerprint") return "Behavior";
   if (section === "evidence") return "Advanced";
   if (section === "more") return "More";
   return "Overview";
@@ -1840,9 +1951,12 @@ function ExecutiveSummary({ checklist, notice, report, rows }) {
 
 function OperatorInterpretation({ report }) {
   const statusRows = [
-    ["Overall Condition", report.condition],
+    ["Systems", report.systems],
+    ["Insights", report.insights],
+    ["Severity", report.severity],
     ["Confidence", report.confidence],
   ];
+  const topFinding = firstText(report.whatChanged?.[0], report.relationshipChanges?.[0], report.summary?.[0]);
 
   return (
     <div className="operator-interpretation" aria-label="Operational assessment report">
@@ -1854,22 +1968,16 @@ function OperatorInterpretation({ report }) {
       <section className="operator-interpretation__block" aria-label="Summary">
         <h3>Summary</h3>
         {report.summary.slice(0, 2).map((line) => <p key={line}>{ensureSentence(line)}</p>)}
+        {topFinding ? <p><strong>Top finding:</strong> {ensureSentence(topFinding)}</p> : null}
       </section>
 
-      <BriefingList title="What Changed" items={report.whatChanged} />
-
-      <div className="operator-interpretation__columns">
-        <BriefingList title="Potential Operational Causes" items={report.possibleOperationalCauses} />
-        <BriefingList title="Recommended Review" items={report.recommendedReview} />
-      </div>
-
-      {report.relationshipChanges?.length ? <RelationshipObservedList title="Relationship Changes" items={report.relationshipChanges} /> : null}
+      {report.relationshipChanges?.length ? <RelationshipObservedList title="Relationship Changes" items={report.relationshipChanges.slice(0, 3)} /> : null}
 
       {report.advancedDetails?.length ? (
         <details className="insight-evidence-drawer">
           <summary>Advanced Details</summary>
           <div className="insight-evidence-drawer__body">
-            <BriefingList title="Raw Relationship Identifiers" items={report.advancedDetails} limit={12} />
+            <BriefingList title="Raw Relationship Identifiers" items={report.advancedDetails} limit={12} codeItems />
           </div>
         </details>
       ) : null}
@@ -2031,8 +2139,6 @@ const DEFAULT_RECOMMENDED_REVIEW = [
   "Demand during the detected window",
 ];
 
-const DEFAULT_OPERATIONAL_CAUSES = DEFAULT_POTENTIAL_OPERATIONAL_CAUSES;
-
 const OPERATIONAL_CAUSE_SETS = [
   {
     pattern: /flow|pressure|pump|valve|vfd|filter/i,
@@ -2121,12 +2227,19 @@ function whyItMattersBriefing(insight) {
 }
 
 function operationalCauseHypotheses(insight) {
+  const relationships = insightRelationshipLabels(insight);
   const direct = dedupeText(toList(insight.possibleOperationalCauses).flatMap(splitPriorityText).map(cleanBriefingText));
-  return dedupeText([...direct, ...DEFAULT_POTENTIAL_OPERATIONAL_CAUSES]).slice(0, 6);
+  const context = [insight.system, insight.summary, relationships.join(" ")].join(" ");
+  const matched = OPERATIONAL_CAUSE_SETS.find((set) => set.pattern.test(context));
+  return dedupeText([...direct, ...(matched?.causes ?? DEFAULT_POTENTIAL_OPERATIONAL_CAUSES)]).slice(0, 6);
 }
 
-function recommendedReviewItems() {
-  return DEFAULT_RECOMMENDED_REVIEW;
+function recommendedReviewItems(insight, relationships = []) {
+  return dedupeText(suggestedInvestigationSteps({
+    subsystem: insight?.system,
+    relationshipLabels: relationships,
+    insight,
+  }).map(cleanBriefingText)).slice(0, 6);
 }
 
 function insightRelationshipLabels(insight) {
@@ -2226,7 +2339,49 @@ function formatList(items) {
 }
 
 function dedupeText(items) {
-  return [...new Set(items.filter((item) => item !== null && item !== undefined).map((item) => String(item).trim()).filter(Boolean))];
+  return [...new Set(items.filter((item) => item !== null && item !== undefined).map((item) => displayText(item).trim()).filter(Boolean))];
+}
+
+function dedupeDisplayValues(items, keyFormatter = displayText) {
+  const seen = new Set();
+  const values = [];
+  items.forEach((item) => {
+    const label = cleanDisplayText(item);
+    const key = keyFormatter(label);
+    if (!label || seen.has(key)) return;
+    seen.add(key);
+    values.push(label);
+  });
+  return values;
+}
+
+function dedupeRelationships(rows) {
+  const seen = new Set();
+  return rows.filter((row, index) => {
+    const key = relationshipDisplayKey(relationshipDisplayName(row, index));
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function signalDisplayKey(value) {
+  return normalizeDisplayKey(value)
+    .replace(/\b(kw|kwh|psi|gpm|rpm|pct|percent|f|c|ph|orp)\b/g, "")
+    .trim();
+}
+
+function relationshipDisplayKey(value) {
+  return normalizeDisplayKey(value).replace(/\b(and|with)\b/g, "").trim();
+}
+
+function normalizeDisplayKey(value) {
+  return cleanDisplayText(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function dedupeInsights(items) {
@@ -2257,13 +2412,16 @@ function dedupeSystemCards(items) {
 }
 
 function firstText(...values) {
-  const value = values.find((item) => item !== null && item !== undefined && String(item).trim() !== "");
-  return value === undefined ? "" : String(value);
+  for (const value of values) {
+    const text = displayText(value);
+    if (text.trim() !== "") return text;
+  }
+  return "";
 }
 
 function firstMeaningfulText(...values) {
   const value = values.find((item) => !isPlaceholderValue(item));
-  return value === undefined ? "" : String(value);
+  return value === undefined ? "" : displayText(value);
 }
 
 function isPlaceholderValue(value) {
