@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.analysis_explanations import build_analysis_explanation
@@ -498,6 +498,7 @@ def build_analysis_result(
         baseline=baseline,
         relationships=relationships,
         insights=insights,
+        normalized_telemetry=normalized_telemetry,
     )
 
     return sanitize_payload(
@@ -974,6 +975,7 @@ def build_behavior_windows(
     baseline: dict[str, Any],
     relationships: list[dict[str, Any]],
     insights: list[dict[str, Any]],
+    normalized_telemetry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     timestamp = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
     first = clean_text(timestamp.get("first_timestamp"))
@@ -982,6 +984,13 @@ def build_behavior_windows(
     recent_rows = int_or_none(baseline.get("recent_window_rows"))
     total_rows = int_or_none(result.get("row_count") or result.get("rows_processed"))
     fallback_window = build_time_window(result)
+    stable_start, stable_end = adaptive_baseline_window_bounds(
+        baseline=baseline,
+        result=result,
+        normalized_telemetry=normalized_telemetry,
+        fallback_start=first,
+        fallback_end=last,
+    )
 
     deviation_source = first_present(
         *[item.get("time_window") for item in relationships if isinstance(item, dict)],
@@ -996,8 +1005,8 @@ def build_behavior_windows(
         "change_onset": first_present(deviation_start, first),
         "stable_window": behavior_window(
             label="Stable window",
-            start=first,
-            end=last,
+            start=stable_start,
+            end=stable_end,
             rows=baseline_rows,
             description="Reference behavior window used for baseline comparison.",
         ),
@@ -1016,6 +1025,80 @@ def build_behavior_windows(
             description="Most recent behavior window represented by this analysis result.",
         ),
     }
+
+
+def adaptive_baseline_window_bounds(
+    *,
+    baseline: dict[str, Any],
+    result: dict[str, Any],
+    normalized_telemetry: dict[str, Any] | None,
+    fallback_start: str,
+    fallback_end: str,
+) -> tuple[str, str]:
+    adaptive = baseline.get("adaptive_baseline") if isinstance(baseline.get("adaptive_baseline"), dict) else {}
+    start_index = int_or_none(adaptive.get("start_index"))
+    end_index = int_or_none(adaptive.get("end_index"))
+    if start_index is None or end_index is None:
+        return fallback_start, fallback_end
+
+    exact_start = timestamp_for_normalized_row(normalized_telemetry, start_index)
+    exact_end = timestamp_for_normalized_row(normalized_telemetry, end_index)
+    if exact_start or exact_end:
+        return first_present(exact_start, fallback_start), first_present(exact_end, fallback_end)
+
+    profile = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
+    first_timestamp = clean_text(profile.get("first_timestamp"))
+    interval_seconds = sample_interval_seconds(profile.get("estimated_sample_interval"))
+    if first_timestamp and interval_seconds:
+        return (
+            timestamp_at_index(first_timestamp, start_index, interval_seconds) or fallback_start,
+            timestamp_at_index(first_timestamp, end_index, interval_seconds) or fallback_end,
+        )
+    return fallback_start, fallback_end
+
+
+def timestamp_for_normalized_row(normalized_telemetry: dict[str, Any] | None, row_index: int) -> str:
+    if not isinstance(normalized_telemetry, dict):
+        return ""
+    timestamps: list[str] = []
+    seen: set[str] = set()
+    for record in to_list(normalized_telemetry.get("records")):
+        if not isinstance(record, dict):
+            continue
+        timestamp = clean_text(record.get("timestamp"))
+        if timestamp and timestamp not in seen:
+            seen.add(timestamp)
+            timestamps.append(timestamp)
+    if 0 <= row_index < len(timestamps):
+        return timestamps[row_index]
+    return ""
+
+
+def timestamp_at_index(first_timestamp: str, row_index: int, interval_seconds: int) -> str:
+    try:
+        parsed = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    value = parsed + timedelta(seconds=row_index * interval_seconds)
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def sample_interval_seconds(value: Any) -> int | None:
+    text = clean_text(value).lower()
+    if not text:
+        return None
+    match = re.match(r"^(\d+)\s*(second|seconds|minute|minutes|hour|hours)$", text)
+    if not match:
+        return None
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if unit.startswith("second"):
+        return amount
+    if unit.startswith("minute"):
+        return amount * 60
+    if unit.startswith("hour"):
+        return amount * 3600
+    return None
 
 
 def behavior_window(*, label: str, start: Any = None, end: Any = None, rows: int | None = None, description: str = "") -> dict[str, Any]:

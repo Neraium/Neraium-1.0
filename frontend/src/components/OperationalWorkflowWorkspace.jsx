@@ -815,7 +815,7 @@ function buildFingerprintRows(analysisExplanation) {
     ["Confidence", formatConfidenceDisplay(fingerprint.confidence, fingerprint.confidence_score)],
     ["Normal behavior", typeof normalBehavior === "object" ? compactJson(normalBehavior) : operatorText(normalBehavior)],
     ["Current behavior", typeof currentBehavior === "object" ? compactJson(currentBehavior) : operatorText(currentBehavior)],
-    ["Largest deviations", toList(fingerprint.largest_deviations, fingerprint.largest_deviation).flatMap(splitPriorityText).map(operatorText).join("; ")],
+    ["Largest deviations", formatLargestDeviations(fingerprint.largest_deviations, fingerprint.largest_deviation)],
     ["Change onset", analysisExplanation?.change_onset],
     ["Stable window", formatBehaviorWindow(analysisExplanation?.stable_window)],
     ["Deviation window", formatBehaviorWindow(analysisExplanation?.deviation_window)],
@@ -963,7 +963,7 @@ function normalizeRelationshipChanges(values, fallbackRows = []) {
 
 function relationshipLabelFromValue(value, index = 0) {
   if (!value || typeof value !== "object") return firstText(value);
-  return firstText(value.label, value.name, value.display_name, value.displayName, relationshipDisplayName(value, index));
+  return firstText(relationshipDisplayName(value, index), value.label, value.name, value.display_name, value.displayName);
 }
 
 function firstNonEmptyList(...values) {
@@ -994,11 +994,16 @@ function dataQualitySummaryItems(quality) {
 
 function relationshipDisplayName(row, index = 0) {
   if (!row || typeof row !== "object") return "";
-  const sourceTarget = row.source && row.target ? [row.source, row.target].map((item) => String(item).replace(/^tag:/, "").replace(/^metric:/, "")) : [];
-  const displayColumns = Array.isArray(row.display_columns) ? row.display_columns : (Array.isArray(row.displayColumns) ? row.displayColumns : []);
-  const rawColumns = Array.isArray(row.columns) ? row.columns : (Array.isArray(row.source_tags) ? row.source_tags : []);
+  const sourceTarget = row.source && row.target ? [row.source, row.target].map(cleanRelationshipEndpoint) : [];
+  const displayColumns = firstNonEmptyList(row.display_columns, row.displayColumns, row.source_tag_display_names, row.sourceTagDisplayNames);
+  const metadataColumns = toList(row.source_column_metadata, row.sourceColumnMetadata)
+    .flatMap((item) => Array.isArray(item) ? item : [item])
+    .filter((item) => item && typeof item === "object")
+    .map((item, metadataIndex) => metricDisplayName(item, metadataIndex + 1));
+  const rawColumns = firstNonEmptyList(row.columns, row.source_tags, row.sourceTags, row.supporting_metrics, row.supportingMetrics)
+    .map((item, columnIndex) => metricDisplayName(item, columnIndex + 1));
   const rawLabel = firstText(row.raw_identifier, row.relationship, row.pair, rawColumns.join(" / "), sourceTarget.join(" / "));
-  const displayLabel = firstText(row.label, row.name, displayColumns.join(" / "), rawLabel);
+  const displayLabel = firstText(displayColumns.join(" / "), metadataColumns.join(" / "), row.label, row.name, rawLabel);
   return publicRelationshipLabel(cleanRelationshipLabel(displayLabel), index);
 }
 
@@ -1015,6 +1020,10 @@ function publicRelationshipLabel(label, index = 0) {
   return clean;
 }
 
+function cleanRelationshipEndpoint(value) {
+  return String(value ?? "").replace(/^tag:/, "").replace(/^metric:/, "");
+}
+
 function relationshipOrdinal(index) {
   const safeIndex = Number.isFinite(Number(index)) ? Number(index) : 0;
   return String.fromCharCode("A".charCodeAt(0) + Math.max(0, Math.min(25, safeIndex)));
@@ -1022,7 +1031,7 @@ function relationshipOrdinal(index) {
 
 function isGenericRelationshipLabel(value) {
   const text = String(value ?? "").toLowerCase();
-  return /\b(exogenous|numeric\s*\d+|column\s*\d+|unknown|unnamed)\b/.test(text);
+  return /\b(exogenous|numeric\s*\d+|delta\s*\d+|column\s*\d+|unknown|unnamed)\b/.test(text);
 }
 
 function buildAdvancedRelationshipDetails(rows) {
@@ -1032,7 +1041,8 @@ function buildAdvancedRelationshipDetails(rows) {
       const raw = rawRelationshipDisplayName(row);
       if (!raw) return "";
       const label = relationshipDisplayName(row, index);
-      return raw && raw !== label ? `${label}: ${raw}` : "";
+      if (isGenericRelationshipLabel(raw)) return "";
+      return raw && raw !== label ? label + ": " + raw : "";
     })
     .filter(Boolean);
 }
@@ -1188,7 +1198,7 @@ function summarizeEvidence(items) {
 function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) {
   const explanatoryInsights = Array.isArray(analysisExplanation?.insights) ? analysisExplanation.insights : [];
   if (explanatoryInsights.length > 0) {
-    return explanatoryInsights.map((item, index) => {
+    const insights = explanatoryInsights.map((item, index) => {
       const resolvedEvidence = resolveEvidenceRefs(item, analysisExplanation);
       const evidence = resolvedEvidence.length ? resolvedEvidence : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : []));
       return {
@@ -1219,6 +1229,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         detectedAt: lastAnalysis,
       };
     }).filter((item) => item.summary);
+    return dedupeInsights(insights).slice(0, 8);
   }
 
   const rawFindings = [];
@@ -1303,7 +1314,7 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
     ? systems.slice(0, 6).map((system, index) => ({ ...system, id: system.id ?? system.name ?? "system-" + index, name: system.name ?? system.label ?? "System " + (index + 1) }))
     : [{ id: "primary", name: primarySystem }];
 
-  return safeSystems.map((system) => {
+  const cards = safeSystems.map((system) => {
     const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
     return {
       id: system.id,
@@ -1320,6 +1331,7 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
       primaryInsightId: relatedInsights[0]?.id ?? null,
     };
   });
+  return dedupeSystemCards(cards);
 }
 
 function collectQuality(result, snapshot) {
@@ -1421,13 +1433,14 @@ function deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisCom
 
 function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation }) {
   const fingerprint = analysisExplanation?.fingerprint ?? {};
-  if (analysisComplete && fingerprint.meaning) {
+  const fingerprintDetail = operatorText(fingerprint.meaning, fingerprint.explanation, fingerprint.plain_language_explanation);
+  if (analysisComplete && (fingerprintDetail || fingerprint.drift_status || fingerprint.status)) {
     const driftStatus = String(fingerprint.drift_status ?? fingerprint.status ?? "").toLowerCase();
     const changed = driftStatus === "changed" || driftStatus === "drifting" || driftStatus === "review" || driftStatus === "unstable";
     return {
       label: changed ? "Changed" : "Stable",
       tone: changed ? "changed" : "normal",
-      detail: fingerprint.meaning,
+      detail: fingerprintDetail || (changed ? "The operating fingerprint is changing." : "Current behavior remains close to the historical operating fingerprint."),
     };
   }
   if (!baselineAvailable) {
@@ -1665,10 +1678,32 @@ function compactJson(value) {
   }
 }
 
+function formatLargestDeviations(...values) {
+  return dedupeText(toList(...values)
+    .flatMap((item, index) => {
+      if (Array.isArray(item)) return item.map((nested, nestedIndex) => formatDeviationItem(nested, nestedIndex));
+      return [formatDeviationItem(item, index)];
+    })
+    .flatMap(splitPriorityText)
+    .map(operatorText))
+    .join("; ");
+}
+
+function formatDeviationItem(value, index = 0) {
+  if (!value || typeof value !== "object") return firstText(value);
+  const label = metricDisplayName(value, index + 1);
+  const details = [
+    value.direction ? String(value.direction) : "",
+    value.percent_change !== undefined ? "percent change: " + value.percent_change : "",
+    value.change_type ? String(value.change_type) : "",
+  ].filter(Boolean).join(", ");
+  return [label, details].filter(Boolean).join(" - ");
+}
+
 function formatEvidenceDelta(value) {
   if (Array.isArray(value)) return value.map(formatEvidenceDelta).filter(Boolean);
   if (!value || typeof value !== "object") return value ? [String(value)] : [];
-  const label = cleanDisplayText(firstText(value.tag_name, value.label, value.name, value.source_column, value.change_type));
+  const label = metricDisplayName(value);
   const details = [
     value.percent_change !== undefined ? `percent change: ${value.percent_change}` : "",
     value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
@@ -1943,6 +1978,24 @@ function cleanDisplayText(value) {
   return text || firstText(value);
 }
 
+function metricDisplayName(value, index = 0) {
+  if (!value || typeof value !== "object") return cleanDisplayText(value);
+  return cleanDisplayText(firstText(
+    value.display_name,
+    value.displayName,
+    value.label,
+    value.name,
+    value.tag_name,
+    value.original_header,
+    value.source_counter_display_name,
+    value.source_column,
+    value.source_counter,
+    value.column,
+    value.change_type,
+    index ? "Signal " + index : ""
+  ));
+}
+
 function cleanRelationshipLabel(value) {
   return cleanDisplayText(value)
     .replace(/::/g, " / ")
@@ -2179,7 +2232,24 @@ function dedupeText(items) {
 function dedupeInsights(items) {
   const seen = new Set();
   return items.filter((item) => {
-    const key = `${item.system}-${item.summary}`;
+    const detailKey = firstText(item.whatHappened, item.whyItMatters, item.recommendedAction, insightRelationshipLabels(item).join("|"), item.id);
+    const key = [item.system, item.summary, detailKey].join("::");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeSystemCards(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = [
+      item.name,
+      item.status,
+      item.lastAnalysis,
+      toList(item.relationships).join("|"),
+      toList(item.whatChanged).join("|"),
+    ].join("::");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

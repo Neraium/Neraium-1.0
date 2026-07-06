@@ -736,6 +736,60 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getByText("Pump Power ↔ Filter Differential Pressure")).toBeTruthy();
   });
 
+
+  it("resolves operational labels and fingerprint rendering regressions", () => {
+    const analysisResult = {
+      stable_window: { label: "Stable window", start: "2026-04-27T15:45:00Z", end: "2026-04-28T16:45:00Z", time_window: "2026-04-27T15:45:00Z to 2026-04-28T16:45:00Z" },
+      insights: [
+        { id: "pump2-a", title: "Observed subsystem behavior changed", system: "Pump 2", severity: "high", confidence: "high", what_changed: "Pump 2 bearing wear signature increased.", contributing_relationships: [{ label: "Numeric 3 / Numeric 4", display_columns: ["pump2_vibration_rms_ips", "pump2_current_amps"] }] },
+        { id: "pump2-b", title: "Observed subsystem behavior changed", system: "Pump 2", severity: "high", confidence: "high", what_changed: "Pump 2 bearing wear signature increased.", contributing_relationships: [{ label: "Numeric 3 / Numeric 4", display_columns: ["pump2_vibration_rms_ips", "pump2_current_amps"] }] },
+      ],
+      systems: [
+        { id: "pump2", name: "Pump 2", status: "Needs review", relationships: [{ label: "Numeric 3 / Numeric 5", display_columns: ["pump2_vibration_rms_ips", "pump2_motor_temp_f"] }] },
+        { id: "pump2-copy", name: "Pump 2", status: "Needs review", relationships: [{ label: "Numeric 3 / Numeric 5", display_columns: ["pump2_vibration_rms_ips", "pump2_motor_temp_f"] }] },
+      ],
+      relationships: [
+        { label: "Numeric 3 / Numeric 4", columns: ["Numeric 3", "Numeric 4"], display_columns: ["pump2_vibration_rms_ips", "pump2_current_amps"], explanation: "Pump vibration and current changed together." },
+        { label: "Exogenous / Numeric 5", columns: ["Exogenous", "Numeric 5"], source_column_metadata: [{ display_name: "ambient_temp_f" }, { display_name: "pump2_motor_temp_f" }], explanation: "Ambient temperature context was checked against motor temperature." },
+      ],
+      fingerprint: {
+        drift_status: "changed",
+        explanation: "The operating fingerprint is changing.",
+        confidence: "high",
+        confidence_score: 1,
+        largest_deviations: [
+          { label: "Numeric 3", display_name: "pump2_vibration_rms_ips", percent_change: 600, direction: "up" },
+          { label: "cumulative_3_delta", display_name: "tank_level_delta_ft", percent_change: -37, direction: "down" },
+        ],
+      },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const main = screen.getByLabelText("Neraium operational workspace");
+    const insightsTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
+    fireEvent.click(insightsTab);
+    expect(main.textContent.match(/Observed subsystem behavior changed/g)?.length ?? 0).toBe(2);
+
+    const systemsTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Systems"));
+    fireEvent.click(systemsTab);
+    expect(main.textContent.match(/Needs review/g)?.length ?? 0).toBe(1);
+    expect(main.textContent).toContain("pump2 vibration rms ips");
+    expect(main.textContent).toContain("pump2 motor temp f");
+
+    const fingerprintTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Fingerprint"));
+    fireEvent.click(fingerprintTab);
+    expect(screen.getByText("Changed")).toBeTruthy();
+    expect(main.textContent).toContain("pump2 vibration rms ips");
+    expect(main.textContent).toContain("tank level delta ft");
+    expect(main.textContent).toContain("2026-04-27T15:45:00Z to 2026-04-28T16:45:00Z");
+    expect(main.textContent).not.toMatch(/\[object Object\]|Numeric |Delta |Column |cumulative_3_delta/);
+  });
+
   it("keeps mobile result cards from crowding", () => {
     const css = fs.readFileSync("src/styles/operational-workflow.css", "utf8");
 

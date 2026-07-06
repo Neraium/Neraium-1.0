@@ -1,4 +1,5 @@
 from app.services import upload_jobs
+from app.services.analysis_result_contract import build_behavior_windows
 from app.services.upload_jobs import process_csv_content, reset_latest_upload_state, write_job
 from app.services.upload_state_repository import write_latest_upload_result
 
@@ -59,6 +60,30 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         "sampling_interval",
         "detected_metric_type",
     }
+
+
+def test_behavior_windows_use_adaptive_baseline_indices() -> None:
+    windows = build_behavior_windows(
+        result={
+            "timestamp_profile": {
+                "first_timestamp": "2026-04-01T00:00:00Z",
+                "last_timestamp": "2026-04-02T00:00:00Z",
+                "estimated_sample_interval": "15 minutes",
+            },
+            "row_count": 120,
+        },
+        baseline={
+            "baseline_window_rows": 4,
+            "recent_window_rows": 4,
+            "adaptive_baseline": {"strategy": "lowest_variability_window", "start_index": 4, "end_index": 8},
+        },
+        relationships=[],
+        insights=[],
+    )
+
+    assert windows["stable_window"]["start"] == "2026-04-01T01:00:00Z"
+    assert windows["stable_window"]["end"] == "2026-04-01T02:00:00Z"
+    assert windows["stable_window"]["time_window"] == "2026-04-01T01:00:00Z to 2026-04-01T02:00:00Z"
 
 
 def test_analysis_completion_does_not_require_replay(monkeypatch) -> None:
