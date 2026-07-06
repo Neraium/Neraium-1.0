@@ -197,7 +197,7 @@ def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
     assert "text: simplifyOperatorSummary(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
     assert "divergence_severity: String(divergence.severity" in source
     assert "findingEvidenceChains: Array.isArray(value.finding_evidence_chains)" in source
-    assert 'summary>Evidence</summary>' in source
+    assert 'summary>Advanced Details</summary>' in source
     assert 'Raw Evidence' in source
 
 

@@ -64,7 +64,7 @@ describe("ObservationCenterWorkspace", () => {
         supportingEvidence: [],
         technicalDetails: [],
         dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-        evidenceButtonLabel: "Review Evidence",
+        evidenceButtonLabel: "Review Details",
         emptyState: {
           title: "No current observations.",
           subtitle: "Telemetry is being monitored.",
@@ -92,7 +92,7 @@ describe("ObservationCenterWorkspace", () => {
         supportingEvidence: ["Affected variables: temperature, humidity."],
         technicalDetails: [{ label: "Drift magnitude", value: "0.70" }],
         dataQuality: { missingBaselineValues: [], missingRecentValues: ["Missing values in recent telemetry."], unavailableTelemetry: [] },
-        evidenceButtonLabel: "Review Evidence",
+        evidenceButtonLabel: "Review Details",
         historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
         emptyState: {
           title: "No current observations.",
@@ -107,7 +107,7 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.getAllByText("System behavior has moved away from its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Filter issues")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Review Evidence" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Review Details" })[0]);
     expect(onReviewEvidence).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
@@ -127,7 +127,7 @@ describe("ObservationCenterWorkspace", () => {
         supportingEvidence: ["Affected variables: temperature, humidity."],
         technicalDetails: [{ label: "Behavior duration", value: "4h" }],
         dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-        evidenceButtonLabel: "Review Evidence",
+        evidenceButtonLabel: "Review Details",
         historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
         affectedVariables: ["temperature", "humidity"],
         emptyState: {
@@ -169,7 +169,7 @@ describe("ObservationCenterWorkspace", () => {
         supportingEvidence: ["Affected variables: temperature, humidity."],
         technicalDetails: [{ label: "Behavior duration", value: "4h" }],
         dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-        evidenceButtonLabel: "Review Evidence",
+        evidenceButtonLabel: "Review Details",
         historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
         affectedVariables: ["temperature", "humidity"],
         emptyState: {
@@ -246,7 +246,7 @@ describe("ObservationCenterWorkspace", () => {
         supportingEvidence: ["Affected variables: temperature, humidity."],
         technicalDetails: [],
         dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-        evidenceButtonLabel: "Review Evidence",
+        evidenceButtonLabel: "Review Details",
         historicalComparison: "Historical comparison evidence supports a change from the normal pattern.",
         affectedVariables: ["temperature", "humidity"],
         emptyState: {

@@ -453,7 +453,7 @@ export default function ObservationCenterWorkspace({
     supportingEvidence: [],
     technicalDetails: [],
     dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
-    evidenceButtonLabel: "Review Evidence",
+    evidenceButtonLabel: "Review Details",
     emptyState: OPERATOR_EMPTY_STATE,
   };
   const hasCurrentFinding = Boolean(activeFinding.exists);
@@ -612,7 +612,7 @@ export default function ObservationCenterWorkspace({
           />
           <div className="intake-flow__controls">
             <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
-              Review Evidence
+              Review Details
             </button>
           </div>
         </section>
@@ -707,12 +707,12 @@ export default function ObservationCenterWorkspace({
               />
               <IssueBriefingList title="Possible Operational Causes" items={activeBriefing.possibleCauses} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
-              <IssueBriefingList title="Recommended Investigation" items={activeBriefing.investigation} />
+              <IssueBriefingList title="Recommended Review" items={activeBriefing.investigation} />
               <div className="intake-flow__controls">
-                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
+                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Details</button>
               </div>
               <details className="compact-list-block">
-                <summary className="section-token">Evidence</summary>
+                <summary className="section-token">Advanced Details</summary>
                 <ul className="compact-list">
                   {(activeFinding.supportingEvidence ?? []).length > 0
                     ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)

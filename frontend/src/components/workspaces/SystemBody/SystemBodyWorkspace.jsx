@@ -338,9 +338,9 @@ export default function SystemBodyWorkspace({
                   </section>
                   <ResultList title="Possible Operational Causes" items={findingBriefing.possibleCauses} />
                   <ResultList title="Relationships Involved" items={findingBriefing.relationships} />
-                  <ResultList title="Recommended Investigation" items={findingBriefing.investigation} />
+                  <ResultList title="Recommended Review" items={findingBriefing.investigation} />
                   <details className="technical-details-panel finding-evidence-drawer">
-                    <summary>Evidence</summary>
+                    <summary>Advanced Details</summary>
                     <dl className="result-detail-grid">
                       {evidenceReport.rows.map((item) => (
                         <div key={item.label}>
@@ -375,7 +375,7 @@ export default function SystemBodyWorkspace({
                 <h2>{finding.exists ? "Review the evidence behind this issue." : "Review behavior evidence for this telemetry window."}</h2>
               </div>
               <details className="technical-details-panel finding-evidence-drawer">
-                <summary>Evidence</summary>
+                <summary>Advanced Details</summary>
                 <dl className="result-detail-grid">
                   {evidenceReport.rows.map((item) => (
                     <div key={item.label}>
@@ -724,7 +724,7 @@ function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceR
     return { label: "Review missing sensor values before relying on trend analysis.", section: "quality", button: "View Data Quality" };
   }
   if (evidenceReport.hasReplay) {
-    return { label: "Review supporting evidence when an engineer needs the operating narrative.", section: "story", button: "Review Evidence" };
+    return { label: "Review supporting evidence when an engineer needs the operating narrative.", section: "story", button: "Review Details" };
   }
   return { label: "Continue monitoring normal equipment behavior.", section: null, button: "" };
 }
@@ -968,7 +968,7 @@ function buildFallbackFinding(interpretation, stabilitySnapshot, dataConditions)
       subtitle: "Telemetry is being monitored.",
       detail: "No equipment issues detected.",
     },
-    evidenceButtonLabel: "Review Evidence",
+    evidenceButtonLabel: "Review Details",
     supportingEvidence: [],
     dataQuality: {
       missingBaselineValues: [],

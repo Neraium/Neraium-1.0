@@ -87,17 +87,15 @@ def test_analysis_explanation_builds_operator_interpretation_report() -> None:
 
     report = analysis["operator_interpretation"]
 
-    assert report["overall_status"]["condition"] == "Flow & Pressure subsystem deviating from historical operation"
-    assert report["overall_status"]["confidence"] == "High"
-    assert report["overall_status"]["urgency"] == "Medium"
-    assert report["overall_status"]["fingerprint"] == "Changed"
-    assert report["primary_finding"]["title"] == "Flow & Pressure behavior changed"
-    assert "Pump Power <-> Filter Differential Pressure" in report["supporting_evidence"]["relationships"]
-    assert "Increasing filter resistance" in report["possible_operational_causes"]
-    assert "Review filter differential pressure trends." in report["suggested_investigation"]
-    assert report["supporting_evidence"]["relationship_persistence"] == "High"
-    assert any("No evidence of abnormal thermal" in item for item in report["did_not_observe"])
-    assert report["trend"]["subsystem_stability"] == "Declining"
+    assert report["title"] == "Operational Assessment"
+    assert report["overall_condition"] == "Attention Needed"
+    assert report["confidence"] == "High"
+    assert report["subsystem"] == "Flow & Pressure"
+    assert "2 operational relationships changed" in report["what_changed"]
+    assert {"label": "Pump Power <-> Filter Differential Pressure"} in report["relationship_changes"]
+    assert "Operating setpoint modification" in report["potential_operational_causes"]
+    assert "Operator logs" in report["recommended_review"]
+    assert any("Pump Power <-> Filter Differential Pressure shifted" in item for item in report["advanced_details"]["raw_relationship_identifiers"])
 
 
 def test_analysis_output_suppresses_cumulative_counter_artifacts() -> None:
