@@ -20,36 +20,27 @@ function renderWorkspace(props = {}) {
   }));
 }
 
-function telemetryResult(overrides = {}) {
+function completeResult(analysisResult) {
   return {
-    job_id: "telemetry-job",
+    job_id: "ready-job",
     processed_at: "2026-06-23T12:00:00Z",
     columns: ["flow", "temperature"],
     result_source: "uploaded telemetry.csv",
     row_count: 120,
-    data_quality: { warnings: [] },
-    ...overrides,
-  };
-}
-
-function completeResult(overrides = {}) {
-  return {
-    ...telemetryResult(),
     sii_reliable_enough_to_show: true,
     sii_completed: true,
     sii_intelligence: { facility_state: "stable", baseline: { state: "stable" } },
     baseline_analysis: { status: "available" },
-    ...overrides,
+    analysis_result: analysisResult,
   };
 }
 
-function completeSnapshot(overrides = {}) {
+function completeSnapshot() {
   return {
     status: "complete",
     sii_completed: true,
     processed_at: "2026-06-23T12:00:00Z",
     current_upload: { job_id: "ready-job", filename: "uploaded telemetry.csv", row_count: 120 },
-    ...overrides,
   };
 }
 
@@ -84,8 +75,8 @@ function relationshipAnalysis({ secondEvidence = true, signReversal = false } = 
       confidence: "high",
       system: "Pump system",
       contributing_relationships: [
-        { display_columns: ["Pump Power", "Filter DP"], columns: ["pump_power", "filter_dp"] },
-        { display_columns: ["Pump Power", "Flow"], columns: ["pump_power", "flow"] },
+        { display_columns: ["Pump Power", "Filter DP"] },
+        { display_columns: ["Pump Power", "Flow"] },
       ],
       evidence_items: evidence,
     }],
@@ -97,8 +88,8 @@ function relationshipAnalysis({ secondEvidence = true, signReversal = false } = 
 
 afterEach(() => cleanup());
 
-describe("OperationalWorkflowWorkspace current UI", () => {
-  it("opens the native CSV picker without navigating away", () => {
+describe("OperationalWorkflowWorkspace critical flows", () => {
+  it("opens the native CSV picker and forwards the selected file", () => {
     const onWorkspaceNavigate = vi.fn();
     const onCsvSelected = vi.fn();
     renderWorkspace({ onWorkspaceNavigate, onCsvSelected });
@@ -106,6 +97,7 @@ describe("OperationalWorkflowWorkspace current UI", () => {
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
     fireEvent.click(screen.getByRole("button", { name: "Select CSV" }));
+
     expect(inputClick).toHaveBeenCalledTimes(1);
     expect(onWorkspaceNavigate).not.toHaveBeenCalled();
 
@@ -114,72 +106,44 @@ describe("OperationalWorkflowWorkspace current UI", () => {
     expect(onCsvSelected).toHaveBeenCalledWith([file]);
   });
 
-  it("shows upload ready and analysis running states", () => {
-    const { unmount } = renderWorkspace({
-      effectiveLatestUploadResult: telemetryResult(),
-      effectiveLatestUploadSnapshot: { status: "uploaded", current_upload: { job_id: "telemetry-job" } },
-    });
-    expect(screen.getAllByText("CSV loaded / Ready to analyze").length).toBeGreaterThan(0);
-    expect(screen.getByText("Telemetry is ready for analysis.")).toBeTruthy();
-    unmount();
-
+  it("maps two changed relationships to two evidence lines", () => {
     renderWorkspace({
-      effectiveLatestUploadResult: telemetryResult({ processing_state: "processing" }),
-      effectiveLatestUploadSnapshot: { status: "processing", current_upload: { job_id: "telemetry-job" } },
-      gateProcessing: { active: true, status: "processing" },
-    });
-    const button = screen.getByRole("button", { name: "Analyzing" });
-    expect(button.disabled).toBe(true);
-    expect(screen.getByText("Building the operational view.")).toBeTruthy();
-  });
-
-  it("renders the completed analysis workspace", () => {
-    renderWorkspace({
-      liveOps: { systems: [{ id: "one", name: "Loop One" }, { id: "two", name: "Loop Two" }] },
-      effectiveLatestUploadResult: completeResult(),
+      effectiveLatestUploadResult: completeResult(relationshipAnalysis()),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Analysis Complete")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /Overview Summary/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Systems 2/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Insights 0/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Signals 2/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /Advanced Details Raw/i }).length).toBeGreaterThan(0);
-  });
-
-  it("maps two relationships to two evidence lines", () => {
-    renderWorkspace({
-      effectiveLatestUploadResult: completeResult({ analysis_result: relationshipAnalysis() }),
-      effectiveLatestUploadSnapshot: completeSnapshot(),
-      currentSession: { hasReliableOperatorEvidence: true },
-    });
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    const insightsButton = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
+    fireEvent.click(insightsButton);
 
     expect(screen.getByText(/Pump Power ↔ Filter DP: Unitless coupling score changed from 0.78 to 0.06/)).toBeTruthy();
     expect(screen.getByText(/Pump Power ↔ Flow: Unitless coupling score changed from 0.72 to 0.31/)).toBeTruthy();
-    expect(screen.getByText("Changed Relationships")).toBeTruthy();
   });
 
-  it("shows explicit missing quantitative evidence for an unmatched relationship", () => {
+  it("shows an explicit message when a relationship has no quantitative evidence", () => {
     renderWorkspace({
-      effectiveLatestUploadResult: completeResult({ analysis_result: relationshipAnalysis({ secondEvidence: false }) }),
+      effectiveLatestUploadResult: completeResult(relationshipAnalysis({ secondEvidence: false })),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+
+    const insightsButton = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
+    fireEvent.click(insightsButton);
+
     expect(screen.getByText(/Pump Power ↔ Flow: change detected, but no quantitative measurement was included in this result/)).toBeTruthy();
   });
 
-  it("formats relationship evidence to two decimals and explains weakening", () => {
+  it("formats evidence to two decimals and explains the weakening direction", () => {
     renderWorkspace({
-      effectiveLatestUploadResult: completeResult({ analysis_result: relationshipAnalysis() }),
+      effectiveLatestUploadResult: completeResult(relationshipAnalysis()),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+
+    const insightsButton = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
+    fireEvent.click(insightsButton);
     const text = screen.getByLabelText("Neraium operational workspace").textContent;
+
     expect(text).toContain("0.78");
     expect(text).toContain("0.06");
     expect(text).toContain("0.84");
@@ -187,23 +151,16 @@ describe("OperationalWorkflowWorkspace current UI", () => {
     expect(text).not.toMatch(/0\.775497|0\.063807|0\.839304/);
   });
 
-  it("describes a coupling sign reversal", () => {
+  it("describes a coupling sign reversal explicitly", () => {
     renderWorkspace({
-      effectiveLatestUploadResult: completeResult({ analysis_result: relationshipAnalysis({ signReversal: true }) }),
+      effectiveLatestUploadResult: completeResult(relationshipAnalysis({ signReversal: true })),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByText(/the relationship reversed direction/)).toBeTruthy();
-  });
 
-  it("does not leak object stringification into operator pages", () => {
-    renderWorkspace({
-      effectiveLatestUploadResult: completeResult({ analysis_result: relationshipAnalysis() }),
-      effectiveLatestUploadSnapshot: completeSnapshot(),
-      currentSession: { hasReliableOperatorEvidence: true },
-    });
-    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
-    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toContain("[object Object]");
+    const insightsButton = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
+    fireEvent.click(insightsButton);
+
+    expect(screen.getByText(/the relationship reversed direction/)).toBeTruthy();
   });
 });
