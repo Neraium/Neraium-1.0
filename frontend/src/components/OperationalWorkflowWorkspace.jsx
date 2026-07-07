@@ -2051,19 +2051,103 @@ function formatTechnicalKey(value) {
 }
 
 function formatEvidenceDelta(value) {
-  if (Array.isArray(value)) return value.map(formatEvidenceDelta).filter(Boolean);
-  if (!value || typeof value !== "object") return value ? [String(value)] : [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(formatEvidenceDelta)
+      .filter(Boolean);
+  }
+  if (!value || typeof value !== "object") {
+    return value
+      ? [cleanEvidenceText(String(value))]
+      : [];
+  }
   const label = metricDisplayName(value);
+  const baselineStrength = numberOrNull(
+    value.baseline_strength ??
+      value.baselineStrength ??
+      value.baseline_coupling ??
+      value.baselineCoupling
+  );
+  const currentStrength = numberOrNull(
+    value.current_strength ??
+      value.currentStrength ??
+      value.current_coupling ??
+      value.currentCoupling
+  );
+  const correlationDelta = numberOrNull(
+    value.correlation_delta ??
+      value.correlationDelta ??
+      value.coupling_delta ??
+      value.couplingDelta
+  );
+  if (
+    baselineStrength !== null &&
+    currentStrength !== null
+  ) {
+    const interpretation =
+      interpretCouplingChange(
+        baselineStrength,
+        currentStrength
+      );
+    const magnitude =
+      correlationDelta !== null
+        ? ` Overall change magnitude: ${formatEvidenceNumber(
+            Math.abs(correlationDelta)
+          )}.`
+        : "";
+    const summary =
+      `Unitless coupling score changed from ` +
+      `${formatEvidenceNumber(baselineStrength)} to ` +
+      `${formatEvidenceNumber(currentStrength)}; ` +
+      `${interpretation}.${magnitude}`;
+    return [
+      label
+        ? `${label}: ${summary}`
+        : summary,
+    ];
+  }
   const details = [
-    value.percent_change !== undefined ? `percent change: ${value.percent_change}` : "",
-    value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
-    value.baseline_average !== undefined ? `baseline average: ${value.baseline_average}` : "",
-    value.current_average !== undefined ? `current average: ${value.current_average}` : "",
-    value.baseline_strength !== undefined ? `baseline operating coupling: ${value.baseline_strength}` : "",
-    value.current_strength !== undefined ? `current operating coupling: ${value.current_strength}` : "",
-    value.correlation_delta !== undefined ? `operating pattern change: ${value.correlation_delta}` : "",
-  ].filter(Boolean).join(", ");
-  return [firstText([label, details].filter(Boolean).join(" - "), compactJson(value))];
+    value.percent_change !== undefined
+      ? `Percent change: ${formatQuantitativeValue(
+          value.percent_change
+        )}%`
+      : "",
+    value.absolute_change !== undefined
+      ? `Absolute change: ${formatQuantitativeValue(
+          value.absolute_change
+        )}`
+      : "",
+    value.baseline_average !== undefined
+      ? `Baseline average: ${formatQuantitativeValue(
+          value.baseline_average
+        )}`
+      : "",
+    value.current_average !== undefined
+      ? `Current average: ${formatQuantitativeValue(
+          value.current_average
+        )}`
+      : "",
+    correlationDelta !== null
+      ? `Operating pattern change magnitude: ${formatEvidenceNumber(
+          Math.abs(correlationDelta)
+        )}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  if (!details) {
+    return [
+      firstText(
+        label,
+        compactJson(value)
+      ),
+    ];
+  }
+  return [
+    label
+      ? `${label}: ${details}`
+      : details,
+  ];
 }
 
 function formatBehaviorWindow(window) {
