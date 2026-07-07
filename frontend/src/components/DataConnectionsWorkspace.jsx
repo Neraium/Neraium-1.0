@@ -24,7 +24,31 @@ const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
+const MAX_STATUS_POLL_ATTEMPTS = 240;
 const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1500;
+const PARSING_COMPLETE_STATUSES = new Set([
+  "validating_schema",
+  "processing",
+  "baseline_modeling",
+  "structural_scoring",
+  "running_sii",
+  "building_fingerprint",
+  "writing_state",
+  "cognition_ready",
+  "saving_result",
+  "complete",
+]);
+const ANALYSIS_STARTED_STATUSES = new Set([
+  "baseline_modeling",
+  "structural_scoring",
+  "running_sii",
+  "building_fingerprint",
+  "writing_state",
+  "cognition_ready",
+  "saving_result",
+  "complete",
+]);
+
 
 function formatTransferSpeed(bytesPerSecond) {
   const speed = Number(bytesPerSecond);
@@ -114,6 +138,27 @@ function logUploadFailureDiagnostics(value = {}) {
   });
 }
 
+function isFinalAnalysisResult(value) {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && Array.isArray(value.systems)
+    && Array.isArray(value.insights)
+  );
+}
+
+function resolveFinalAnalysisResult(...candidates) {
+  for (const candidate of candidates) {
+    const result = candidate?.analysis_result
+      ?? candidate?.latest_result?.analysis_result
+      ?? candidate?.current_upload?.result?.analysis_result
+      ?? candidate?.result?.analysis_result
+      ?? candidate?.result;
+    if (isFinalAnalysisResult(result)) return result;
+    if (isFinalAnalysisResult(candidate)) return candidate;
+  }
+  return null;
+}
 
 export default function DataConnectionsWorkspace({
   accessCode,
@@ -161,10 +206,36 @@ export default function DataConnectionsWorkspace({
   const uploadStateRef = useRef("idle");
   const pollSessionRef = useRef(0);
   const lastProgressSignatureRef = useRef("");
+  const uploadInFlightRef = useRef(false);
+  const telemetryStageLogRef = useRef(new Set());
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = Boolean(active);
+    }
+  };
+
+  const resetTelemetryStageLogs = () => {
+    telemetryStageLogRef.current = new Set();
+  };
+
+  const logTelemetryStage = (stage, details = {}) => {
+    console.info(`[neraium] telemetry ${stage}`, details);
+  };
+
+  const logTelemetryStageOnce = (stage, details = {}) => {
+    if (telemetryStageLogRef.current.has(stage)) return;
+    telemetryStageLogRef.current.add(stage);
+    logTelemetryStage(stage, details);
+  };
+
+  const logTelemetryStatusProgress = (status, payload = {}) => {
+    const normalized = normalizeUploadStatus(status);
+    if (PARSING_COMPLETE_STATUSES.has(normalized)) {
+      logTelemetryStageOnce("parsing complete", { jobId: payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
+    }
+    if (ANALYSIS_STARTED_STATUSES.has(normalized)) {
+      logTelemetryStageOnce("analysis started", { jobId: payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
     }
   };
 
@@ -346,14 +417,19 @@ export default function DataConnectionsWorkspace({
       let attempts = 0;
       while (shouldContinuePolling(requestedJobId) && pollSessionRef.current === pollSessionId) {
         attempts += 1;
+        if (attempts > MAX_STATUS_POLL_ATTEMPTS) {
+          throw new Error("Telemetry analysis did not report completion before the status polling timeout.");
+        }
         try {
           const streamPath = normalizeUploadStreamPath(pollingPath, requestedJobId);
           if (streamPath && attempts === 1) {
             const streamed = await streamUploadStatusOnce({ streamPath, pollingJobId: requestedJobId });
             if (streamed) {
               const streamedStatus = normalizeUploadStatus(streamed.status);
+              logTelemetryStatusProgress(streamedStatus, streamed);
               if (streamedStatus === "complete") {
                 const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "complete", progress_label: streamed?.progress_label || "Analysis ready.", message: streamed?.message || "Analysis ready." };
+                logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
                 setUploadState("complete");
                 setUploadProcessingFlag(false);
@@ -422,9 +498,11 @@ export default function DataConnectionsWorkspace({
             setUploadJob(normalizedPayload);
           });
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
+          logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
           const terminalSuccess = normalizedStatus === "complete" || Boolean(normalizedPayload.result_available || normalizedPayload.first_usable_available);
           if (terminalSuccess) {
+            logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
             const completePayload = {
               ...normalizedPayload,
               status: "COMPLETE",
@@ -464,7 +542,9 @@ export default function DataConnectionsWorkspace({
     pollInFlightRef.current = runPoll()
       .then((completedPayload) => {
         if (completedPayload) {
-          setUploadResult(uploadStateView.resolveCurrentUploadResult(completedPayload) ?? completedPayload);
+          const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload) ?? completedPayload;
+          setUploadResult(completedResult);
+          logTelemetryStageOnce("results saved", { jobId: completedPayload?.job_id ?? requestedJobId });
         }
         if (completedPayload && typeof onUploadComplete === "function") {
           return onUploadComplete(completedPayload, { navigateToGate: false }).then(() => completedPayload);
@@ -474,8 +554,9 @@ export default function DataConnectionsWorkspace({
       .catch((error) => {
         const classified = classifyUploadError(error, "poll");
         logUploadFailureDiagnostics(classified);
+        logTelemetryStage("error", { jobId: requestedJobId, message: classified.message || error?.message || "Telemetry analysis failed." });
         markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false, diagnostics: classified });
-        return null;
+        throw error;
       })
       .finally(() => {
         pollInFlightRef.current = null;
@@ -527,10 +608,13 @@ export default function DataConnectionsWorkspace({
           const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
           if (!dataLine) continue;
           const payload = JSON.parse(dataLine.slice(5).trim());
+          const normalizedPayload = normalizeStatusPayload(payload, pollingJobId);
+          const normalizedStatus = normalizeUploadStatus(normalizedPayload?.status ?? normalizedPayload?.processing_state);
+          logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
           startTransition(() => {
-            setUploadJob(normalizeStatusPayload(payload, pollingJobId));
+            setUploadJob(normalizedPayload);
           });
-          if (normalizeUploadStatus(payload?.status) === "complete" || payload?.result_available || payload?.first_usable_available) {
+          if (normalizedStatus === "complete" || payload?.result_available || payload?.first_usable_available) {
             return payload;
           }
         }
@@ -554,6 +638,10 @@ export default function DataConnectionsWorkspace({
   }
 
   async function handleUpload() {
+    if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
+      logTelemetryStage("duplicate processing prevented", { state: uploadStateRef.current });
+      return;
+    }
     if (!selectedFiles.length) {
       setUploadError("Choose a telemetry file before analysis.");
       return;
@@ -564,6 +652,7 @@ export default function DataConnectionsWorkspace({
       setUploadError(validationError);
       return;
     }
+    uploadInFlightRef.current = true;
     setUploadError("");
     console.info("[neraium] upload start", {
       filename: file.name,
@@ -571,7 +660,7 @@ export default function DataConnectionsWorkspace({
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
-    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
+    setUploadTransfer({ percent: 5, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
     try {
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
@@ -600,25 +689,40 @@ export default function DataConnectionsWorkspace({
         markUploadFailed({ message: "Telemetry was accepted but no analysis job was returned. Try again.", errorType: "missing_job_id" });
         return;
       }
-      setUploadJob(normalizeStatusPayload(payload, jobId));
+      logTelemetryStageOnce("parsing started", { filename: file.name, jobId });
+      const initialPayload = normalizeStatusPayload(payload, jobId);
+      logTelemetryStatusProgress(initialPayload.status ?? initialPayload.processing_state, initialPayload);
+      setUploadJob(initialPayload);
+      setUploadTransfer(null);
       setUploadState("running_sii");
-      await pollUploadStatus(jobId, payload?.status_url);
+      const completedPayload = await pollUploadStatus(jobId, payload?.status_url);
+      if (!completedPayload) {
+        throw new Error("Telemetry analysis ended before results were available.");
+      }
     } catch (error) {
       const classified = classifyUploadError(error, error?.phase || "upload");
       logUploadFailureDiagnostics(classified);
+      logTelemetryStage("error", { message: classified.message || error?.message || "Telemetry analysis failed." });
       markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, diagnostics: classified });
+    } finally {
+      uploadInFlightRef.current = false;
+      setUploadProcessingFlag(false);
     }
   }
 
   const readiness = uploadReadinessMessage(selectedFiles[0]);
   const hasActiveProgress = isActiveUploadProgressState(uploadState);
   const progressUploadJob = hasActiveProgress ? uploadJob : null;
-  const progressUploadTransfer = hasActiveProgress ? uploadTransfer : null;
+  const isUploadingState = String(uploadState || "").toLowerCase() === "uploading";
+  const progressUploadTransfer = hasActiveProgress && isUploadingState ? uploadTransfer : null;
   const uploadTransferPercent = progressUploadTransfer?.percent;
   const propagationPercent = progressUploadJob?.propagation_progress ?? progressUploadJob?.propagationProgress;
   const backendPercent = progressUploadJob?.percent ?? progressUploadJob?.progress;
   const statusFallbackPercent = hasActiveProgress ? fallbackPercentFromStatus(uploadState) : null;
-  const uploadPercent = [uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent].find((value) => Number.isFinite(Number(value))) ?? null;
+  const uploadPercentCandidates = isUploadingState
+    ? [uploadTransferPercent, backendPercent, statusFallbackPercent]
+    : [propagationPercent, backendPercent, statusFallbackPercent];
+  const uploadPercent = uploadPercentCandidates.find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
   const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? progressUploadTransfer?.message ?? uploadStateMessage(uploadState);
   const isProcessingQuiet = ["running_sii", "processing"].includes(String(uploadState || "").toLowerCase())
@@ -639,7 +743,16 @@ export default function DataConnectionsWorkspace({
   const deferredQueuedWorkerDetail = useDeferredValue(queuedWorkerDetail);
 
   function handleFileSelection(event) {
+    if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
+      logTelemetryStage("duplicate processing prevented", { action: "file selection", state: uploadStateRef.current });
+      if (event?.target) event.target.value = "";
+      return;
+    }
     const files = Array.from(event?.target?.files ?? []);
+    resetTelemetryStageLogs();
+    if (files[0]) {
+      logTelemetryStage("file selected", { filename: files[0].name, size: files[0].size });
+    }
     stopUploadPolling("file_selection_changed");
     uploadJobIdRef.current = null;
     uploadStatusPathRef.current = null;
@@ -654,6 +767,10 @@ export default function DataConnectionsWorkspace({
   }
 
   function openFilePicker(kind = "csv") {
+    if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
+      logTelemetryStage("duplicate processing prevented", { action: "open file picker", state: uploadStateRef.current });
+      return;
+    }
     setPendingUploadKind(kind);
     uploadInputRef.current?.click();
   }
@@ -661,6 +778,11 @@ export default function DataConnectionsWorkspace({
   async function viewCompletedResults() {
     if (typeof onUploadComplete !== "function") return;
     const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
+    const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
+    if (!hasResults) {
+      setUploadError("Analysis results are still being prepared.");
+      return;
+    }
     await onUploadComplete(payload, { navigateToGate: true });
   }
 
