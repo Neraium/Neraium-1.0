@@ -1,0 +1,73 @@
+name: Fix empty tab metric
+
+on:
+  push:
+    branches:
+      - fix-empty-tab-metric
+    paths:
+      - .github/workflows/fix-empty-tab-metric.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-empty-tab-metric.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-empty-tab-metric
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Restore constant
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/components/OperationalWorkflowWorkspace.jsx')
+          text = path.read_text()
+          needle = 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);\n'
+          replacement = needle + 'const EMPTY_TAB_METRIC = "—";\n'
+          if 'const EMPTY_TAB_METRIC = "—";' not in text:
+              if needle not in text:
+                  raise SystemExit('RESULT_TAB_IDS declaration not found')
+              text = text.replace(needle, replacement, 1)
+          path.write_text(text)
+          PY
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run focused component tests
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --run src/components/OperationalWorkflowWorkspace.test.js 2>&1 | tee focused-test-output.txt
+      - name: Build frontend
+        if: always()
+        working-directory: frontend
+        run: npm run build
+      - name: Upload focused test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fix-empty-tab-metric-test-output
+          path: frontend/focused-test-output.txt
+      - name: Remove temporary workflow
+        if: success()
+        run: rm .github/workflows/fix-empty-tab-metric.yml
+      - name: Commit fix
+        if: success() && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/components/OperationalWorkflowWorkspace.jsx .github/workflows/fix-empty-tab-metric.yml
+          git commit -m "fix: restore empty tab metric constant"
+          git push origin HEAD:fix-empty-tab-metric

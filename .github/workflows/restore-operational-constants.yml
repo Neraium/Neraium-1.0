@@ -1,0 +1,47 @@
+name: Restore operational constants
+
+on:
+  push:
+    branches:
+      - fix-empty-tab-metric
+    paths:
+      - .github/workflows/restore-operational-constants.yml
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-empty-tab-metric
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Restore constants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/components/OperationalWorkflowWorkspace.jsx')
+          text = path.read_text()
+          marker = 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);\n'
+          required = marker + 'const EMPTY_TAB_METRIC = "—";\nconst UNASSIGNED_SYSTEM_NAME = "Unassigned System";\n'
+          if 'const EMPTY_TAB_METRIC = "—";' not in text or 'const UNASSIGNED_SYSTEM_NAME = "Unassigned System";' not in text:
+              text = text.replace(marker, required, 1)
+          path.write_text(text)
+          PY
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: fix: restore operational workflow constants
+          branch: fix-empty-tab-metric
+          file_pattern: frontend/src/components/OperationalWorkflowWorkspace.jsx
