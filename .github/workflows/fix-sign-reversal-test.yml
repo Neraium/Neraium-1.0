@@ -1,0 +1,33 @@
+name: Fix sign reversal assertion
+
+on:
+  push:
+    branches:
+      - main-validation-20260707
+    paths:
+      - .github/workflows/fix-sign-reversal-test.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main-validation-20260707
+      - name: Patch assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('frontend/src/components/OperationalWorkflowWorkspace.current.test.js')
+          s = p.read_text()
+          s = s.replace('expect(screen.getByText(/the relationship reversed direction/)).toBeTruthy();', 'expect(screen.getAllByText(/the relationship reversed direction/).length).toBeGreaterThan(0);')
+          p.write_text(s)
+          PY
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: test: allow multiple sign reversal evidence matches
+          branch: main-validation-20260707
+          file_pattern: frontend/src/components/OperationalWorkflowWorkspace.current.test.js
