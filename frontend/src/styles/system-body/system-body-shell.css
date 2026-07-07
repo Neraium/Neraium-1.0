@@ -319,7 +319,7 @@
 
 .system-gate__nav-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(37, 99, 235, 0.34);
+  border-color: rgba(0, 122, 116, 0.34);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
 }
 
@@ -488,7 +488,7 @@
 }
 
 .result-section-tabs button.is-active {
-  border-color: rgba(37, 99, 235, 0.34);
+  border-color: rgba(0, 122, 116, 0.34);
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.07);
 }

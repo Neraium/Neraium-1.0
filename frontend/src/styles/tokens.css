@@ -10,8 +10,8 @@
   --color-neutral-300: #cbd5e1;
   --color-neutral-100: #f1f5f9;
   --color-neutral-0: #ffffff;
-  --color-brand: #2563eb;
-  --color-brand-strong: #1d4ed8;
+  --color-brand: #007A74;
+  --color-brand-strong: #005F5A;
   --color-success: #087443;
   --color-warning: #d97706;
   --color-danger: #dc2626;
@@ -31,13 +31,13 @@
   --accent-amber: #d97706;
   --accent-red: #dc2626;
   --accent-red-deep: #991b1b;
-  --accent-brand: #2563eb;
-  --brand-thread: rgba(37, 99, 235, 0.14);
+  --accent-brand: #007A74;
+  --brand-thread: rgba(0, 122, 116, 0.16);
   --shadow-panel: 0 18px 40px rgba(0, 0, 0, 0.24);
   --shadow-lux: 0 28px 72px rgba(0, 0, 0, 0.34);
   --shadow-rail: 16px 0 48px rgba(0, 0, 0, 0.26);
   --glow-green: 0 0 0 1px rgba(8, 116, 67, 0.18);
-  --glow-cyan: 0 0 0 1px rgba(37, 99, 235, 0.16);
+  --glow-cyan: 0 0 0 1px rgba(0, 122, 116, 0.18);
   --glow-amber: 0 0 0 1px rgba(197, 146, 60, 0.22);
   --glow-red: 0 0 0 1px rgba(184, 110, 58, 0.18);
   --space-2: 0.125rem;
@@ -65,7 +65,7 @@
   --shadow-sm: 0 8px 18px rgba(2, 7, 13, 0.18);
   --shadow-md: 0 18px 36px rgba(2, 7, 13, 0.24);
   --shadow-lg: 0 24px 52px rgba(2, 7, 13, 0.28);
-  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.28);
+  --shadow-focus: 0 0 0 3px rgba(0, 122, 116, 0.32);
   --panel-max-standard: 1160px;
   --panel-max-wide: 1320px;
   --panel-max-ultra: 1440px;
@@ -89,20 +89,20 @@
   --card-radius: var(--radius-md);
   --card-padding: var(--space-16);
   --nav-radius: var(--radius-md);
-  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-rgb: 0, 122, 116;
   --mode-accent-soft-rgb: 148, 163, 184;
-  --mode-bg-tint: rgba(37, 99, 235, 0.06);
+  --mode-bg-tint: rgba(0, 122, 116, 0.08);
   --mode-label: "agnostic";
 }
 
 :root[data-domain-mode="aquatic"] {
-  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-rgb: 0, 122, 116;
   --mode-accent-soft-rgb: 148, 163, 184;
-  --mode-bg-tint: rgba(37, 99, 235, 0.06);
+  --mode-bg-tint: rgba(0, 122, 116, 0.08);
 }
 
 :root[data-domain-mode="cultivation"] {
-  --mode-accent-rgb: 37, 99, 235;
+  --mode-accent-rgb: 0, 122, 116;
   --mode-accent-soft-rgb: 148, 163, 184;
-  --mode-bg-tint: rgba(37, 99, 235, 0.06);
+  --mode-bg-tint: rgba(0, 122, 116, 0.08);
 }

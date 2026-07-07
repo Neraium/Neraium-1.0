@@ -773,7 +773,8 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     const main = screen.getByLabelText("Neraium operational workspace");
     const insightsTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Insights"));
     fireEvent.click(insightsTab);
-    expect(main.textContent.match(/Observed subsystem behavior changed/g)?.length ?? 0).toBe(2);
+    expect(main.textContent).not.toContain("Observed subsystem behavior changed");
+    expect(main.textContent).toContain("Pump 2 relationship shift detected");
 
     const systemsTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Systems"));
     fireEvent.click(systemsTab);
@@ -781,14 +782,13 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(main.textContent).toContain("Active Insights1");
     expect(main.textContent).toContain("pump2 vibration rms ips");
     expect(main.textContent).toContain("pump2 motor temp f");
-
-    const behaviorTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Behavior"));
-    fireEvent.click(behaviorTab);
-    expect(screen.getByText("Shift detected")).toBeTruthy();
-    expect(main.textContent).toContain("pump2 vibration rms ips");
-    expect(main.textContent).toContain("tank level delta ft");
-    expect(main.textContent).toContain("2026-04-27T15:45:00Z to 2026-04-28T16:45:00Z");
     expect(main.textContent).not.toMatch(/\[object Object\]|Numeric |Delta |Column |cumulative_3_delta/);
+
+    const advancedTab = screen.getAllByRole("button").find((button) => button.textContent.includes("Advanced Details"));
+    fireEvent.click(advancedTab);
+    expect(screen.getByText("Behavior Windows")).toBeTruthy();
+    expect(main.textContent).toContain("2026-04-27T15:45:00Z to 2026-04-28T16:45:00Z");
+    expect(main.textContent).toContain("cumulative_3_delta");
   });
 
   it("keeps mobile result cards from crowding", () => {

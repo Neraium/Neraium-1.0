@@ -22,6 +22,13 @@ const MOBILE_PRIMARY_NAV = [
 
 const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);
 const EMPTY_TAB_METRIC = "—";
+const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
+const GENERIC_FALLBACK_LABELS = new Set([
+  "observed system behavior changed",
+  "observed subsystem behavior changed",
+  "subsystem behavior changed subsystem",
+  "subsystem behavior changed system",
+]);
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -151,11 +158,6 @@ export default function OperationalWorkflowWorkspace({
     navigate("insights");
   }
 
-  function openEvidence(insightId) {
-    setSelectedInsightId(insightId);
-    navigate("advanced");
-  }
-
   function openOverviewFilePicker() {
     overviewUploadInputRef.current?.click();
   }
@@ -253,7 +255,6 @@ export default function OperationalWorkflowWorkspace({
           <OverviewSection
             model={model}
             onOpenInsight={openInsight}
-            onOpenEvidence={openEvidence}
             onAnalyzeSystem={analyzeSystem}
             uploadInputRef={overviewUploadInputRef}
             onSelectCsv={openOverviewFilePicker}
@@ -289,7 +290,7 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem, uploadInputRef, onSelectCsv, onFileSelection, onResumePreviousSession, onViewSystems }) {
+function OverviewSection({ model, onOpenInsight, onAnalyzeSystem, uploadInputRef, onSelectCsv, onFileSelection, onResumePreviousSession, onViewSystems }) {
   if (model.overviewState === "noCsvUploaded") {
     return (
       <div className="operational-grid operational-grid--empty">
@@ -317,7 +318,7 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
 
   function renderPrimaryAction() {
     if (model.analysisComplete && primaryInsight) {
-      return <button type="button" className="command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open insight</button>;
+      return <button type="button" className="command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open Insight</button>;
     }
     return (
       <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>
@@ -328,7 +329,7 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
 
   function renderSecondaryAction() {
     if (showSystemsAction) {
-      return <button type="button" className="secondary-command-button" onClick={onViewSystems}>View systems</button>;
+      return <button type="button" className="secondary-command-button" onClick={onViewSystems}>View Systems</button>;
     }
     if (model.canResumePrevious && typeof onResumePreviousSession === "function") {
       return <button type="button" className="operational-link-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>;
@@ -351,9 +352,6 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
           </div>
           <div className="operational-actions operational-actions--hero">
             {renderPrimaryAction()}
-            {model.analysisComplete && primaryInsight?.hasEvidence ? (
-              <button type="button" className="secondary-command-button" onClick={() => onOpenEvidence(primaryInsight.id)}>Review details</button>
-            ) : null}
             {renderSecondaryAction()}
           </div>
         </div>
@@ -404,7 +402,7 @@ function SystemsSection({ model, onOpenInsight }) {
                 </div>
                 <div className="system-summary-row__meta">
                   {system.primaryInsightId && typeof onOpenInsight === "function" ? (
-                    <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open insight</button>
+                    <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open Insight</button>
                   ) : null}
                 </div>
               </article>
@@ -536,13 +534,14 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const lastAnalysis = deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result });
   const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation });
   const fingerprintEvidence = resolveEvidenceRefs(analysisExplanation?.fingerprint, analysisExplanation);
-  const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) : [];
-  const evidenceGroups = analysisComplete ? buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }) : [];
   const identifiedSystems = analysisComplete ? collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) : [];
   const identifiedSystemCount = identifiedSystems.length;
+  const signals = buildSignals(result);
+  const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation, systems: identifiedSystems, signals }) : [];
+  const activeInsightSystemCount = countActiveInsightSystems(insights);
+  const evidenceGroups = analysisComplete ? buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }) : [];
   const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, insights }) : [];
   const systemSummary = buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected });
-  const signals = buildSignals(result);
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const siteLabel = firstText(result?.facility_name, snapshot?.facility_name, "Current Site");
@@ -562,7 +561,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     highestSeverity,
     behaviorState,
   });
-  const overviewSummarySentence = buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, behaviorState });
+  const overviewSummarySentence = buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, activeInsightSystemCount, behaviorState });
   const advancedRelationshipDetails = buildAdvancedRelationshipDetails(relationshipRows);
 
   const resultTabsReady = analysisComplete;
@@ -794,12 +793,20 @@ function buildOverviewSummaryRows({ analysisComplete, uiState, sourceLabel, iden
   ];
 }
 
-function buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, behaviorState }) {
+function buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, activeInsightSystemCount, behaviorState }) {
   if (!analysisComplete) return "Telemetry is ready for analysis.";
   if (insights.length > 0) {
-    return `${insights.length} active insight${insights.length === 1 ? "" : "s"} across ${identifiedSystemCount || "available"} system${identifiedSystemCount === 1 ? "" : "s"}.`;
+    const activeSystems = activeInsightSystemCount || Math.min(insights.length, identifiedSystemCount || insights.length);
+    if (identifiedSystemCount > 0) {
+      return `${insights.length} active insight${insights.length === 1 ? "" : "s"} across ${activeSystems} of ${identifiedSystemCount} system${identifiedSystemCount === 1 ? "" : "s"}.`;
+    }
+    return `${insights.length} active insight${insights.length === 1 ? "" : "s"} across ${activeSystems || "available"} system${activeSystems === 1 ? "" : "s"}.`;
   }
   return behaviorState === "Stable" ? "No active insight was detected." : "Behavior changed, with no active insight selected.";
+}
+
+function countActiveInsightSystems(insights) {
+  return new Set((insights ?? []).map((insight) => insight.system).filter((name) => name && name !== UNASSIGNED_SYSTEM_NAME)).size;
 }
 
 function deriveHighestSeverity({ insights, fingerprintDrift }) {
@@ -965,10 +972,11 @@ function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExpl
       const relationshipSummaries = relationshipChanges
         .map((item) => firstText(item.explanation, item.what_changed, item.summary, item.change_type))
         .filter(Boolean);
+      const name = formatDisplayName(firstText(system.name, system.label), "System " + (index + 1));
       return {
         ...system,
         id: system.id ?? system.name ?? "system-" + index,
-        name: firstText(system.name, system.label, "System " + (index + 1)),
+        name,
         relationships: toList(system.relationships, relationshipSummaries),
       };
     });
@@ -985,11 +993,12 @@ function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExpl
   const systems = candidates.find((items) => Array.isArray(items) && items.length > 0) ?? [];
   if (systems.length > 0) {
     return systems.map((system, index) => ({
+      ...system,
       id: system.id ?? system.name ?? system.label ?? `system-${index}`,
-      name: firstText(system.name, system.label, system.system_name, `System ${index + 1}`),
+      name: formatDisplayName(firstText(system.name, system.label, system.system_name), `System ${index + 1}`),
     }));
   }
-  return [{ id: "primary", name: primarySystem }];
+  return [{ id: "primary", name: formatDisplayName(primarySystem, UNASSIGNED_SYSTEM_NAME) }];
 }
 
 function resolveEvidenceRefs(item, analysisExplanation) {
@@ -1001,25 +1010,61 @@ function resolveEvidenceRefs(item, analysisExplanation) {
 }
 
 function summarizeEvidence(items) {
-  return items
-    .map((item) => firstText(item.description, item.summary, item.type))
-    .filter(Boolean)
-    .slice(0, 4)
-    .join("; ");
+  return formatEvidenceItems(items).slice(0, 4).join("; ");
 }
 
-function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation }) {
+function resolveMetricName(insight, index = 0) {
+  const direct = firstText(
+    insight?.metric_name,
+    insight?.metricName,
+    insight?.metric,
+    insight?.signal,
+    insight?.source_metric,
+    insight?.sourceMetric,
+    insight?.source_tag,
+    insight?.sourceTag
+  );
+  const fromMetric = Array.isArray(insight?.contributing_metrics) ? insight.contributing_metrics.map((item, metricIndex) => normalizeSignalName(item, metricIndex + 1)).find(Boolean) : "";
+  const fromRelationship = toList(insight?.contributing_relationships)
+    .flatMap(relationshipSignalCandidates)
+    .map((item, signalIndex) => normalizeSignalName(item, signalIndex + 1))
+    .find(Boolean);
+  return normalizeSignalName(direct || fromMetric || fromRelationship, index + 1) || `Metric ${index + 1}`;
+}
+
+function firstMetricValue(metrics, key) {
+  const metric = Array.isArray(metrics) ? metrics.find((item) => item && typeof item === "object") : null;
+  if (!metric) return "";
+  if (key === "baseline") return firstText(metric.baseline_value, metric.baselineValue, metric.baseline_range, metric.baselineRange, metric.baseline_average, metric.baselineAverage, metric.baseline);
+  if (key === "current") return firstText(metric.current_value, metric.currentValue, metric.current_average, metric.currentAverage, metric.current);
+  if (key === "direction") return firstText(metric.deviation_direction, metric.direction, metric.trend);
+  return "";
+}
+
+function relationshipSignalCandidates(value) {
+  if (!value || typeof value !== "object") return [value];
+  return [
+    ...toList(value.display_columns, value.displayColumns, value.source_tag_display_names, value.sourceTagDisplayNames),
+    ...toList(value.columns, value.source_columns, value.sourceColumns, value.source_tags, value.sourceTags, value.supporting_metrics, value.supportingMetrics),
+    ...toList(value.source, value.target),
+    ...toList(value.source_column_metadata, value.sourceColumnMetadata).map((item, index) => metricDisplayName(item, index + 1)),
+  ];
+}
+
+function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation, systems = [], signals = [] }) {
   const explanatoryInsights = Array.isArray(analysisExplanation?.insights) ? analysisExplanation.insights : [];
   if (explanatoryInsights.length > 0) {
     const insights = explanatoryInsights.map((item, index) => {
       const resolvedEvidence = resolveEvidenceRefs(item, analysisExplanation);
-      const evidence = resolvedEvidence.length ? resolvedEvidence : (Array.isArray(item.evidence_items) ? item.evidence_items : (Array.isArray(item.evidence) ? item.evidence : []));
-      return {
+      const evidence = resolvedEvidence.length ? resolvedEvidence : toList(item.evidence_items, item.evidence);
+      const contributingRelationships = Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [];
+      const affectedRelationships = relationshipContributionLabels(contributingRelationships);
+      const insight = {
         id: item.id ?? "insight-" + index,
-        system: cleanDisplayText(firstText(item.system, toList(item.affected_systems)[0], primarySystem)),
+        rawSystemName: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
         status: normalizeInsightStatus(item.status ?? item.severity),
         severity: normalizeSeverity(item.severity),
-        summary: operatorText(item.title, item.explanation),
+        rawSummary: firstText(item.title, item.explanation),
         whatHappened: operatorText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
         whyItMatters: operatorText(item.why_it_matters, item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence, item.likely_cause, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likelyCause),
         whyNeraiumThinks: operatorText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
@@ -1027,11 +1072,17 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         recommendedAction: operatorText(firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check)),
         operatorCheck: operatorText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
         possibleOperationalCauses: dedupeText(toList(item.possible_operational_causes, item.possibleOperationalCauses, item.possible_operational_causes_summary).flatMap(splitPriorityText).map(operatorText)),
-        contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(splitPriorityText).map(cleanDisplayText)),
-        contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
-        affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
+        contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(formatEvidenceItems)),
+        contributingRelationships,
+        affectedRelationships,
+        changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount) ?? affectedRelationships.length,
         contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
+        metricName: resolveMetricName(item, index),
+        baselineValue: firstText(item.baseline_value, item.baselineValue, item.baseline_range, item.baselineRange, item.baseline, firstMetricValue(item.contributing_metrics, "baseline")),
+        currentValue: firstText(item.current_value, item.currentValue, item.current, firstMetricValue(item.contributing_metrics, "current")),
+        deviationDirection: formatDisplayName(firstText(item.deviation_direction, item.direction, firstMetricValue(item.contributing_metrics, "direction"))),
         evidence,
+        publicEvidenceItems: formatEvidenceItems(evidence.length ? evidence : item.evidence_summary),
         hasEvidence: evidence.length > 0,
         evidenceSummary: operatorEvidenceSummary(item.evidence_summary, summarizeEvidence(resolvedEvidence)),
         sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
@@ -1040,7 +1091,11 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         confidenceRationale: operatorText(item.confidence_rationale),
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
+        type: getInsightType(item),
       };
+      insight.system = resolveSystemName(insight, systems, signals);
+      insight.summary = formatInsightTitle(insight);
+      return insight;
     }).filter((item) => item.summary);
     return dedupeInsights(insights).slice(0, 8);
   }
@@ -1053,16 +1108,14 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
     .filter(Boolean)
     .map((item, index) => {
       const summary = firstText(item.summary, item.detail, item.title, result?.operator_report?.summary);
-      const supporting = toList(item.supportingEvidence, item.relationshipEvidence, result?.operator_report?.evidence_summary, result?.finding_evidence_chains)
-        .flatMap(splitPriorityText)
-        .map(operatorText);
+      const supporting = formatEvidenceItems(toList(item.supportingEvidence, item.relationshipEvidence, result?.operator_report?.evidence_summary, result?.finding_evidence_chains));
       const evidence = supporting.length ? [{ supporting_signals: supporting }] : [];
-      return {
+      const insight = {
         id: "insight-" + index,
-        system: cleanDisplayText(firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem)),
+        rawSystemName: firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem),
         status: normalizeInsightStatus(item.status ?? result?.operating_state),
         severity: normalizeSeverity(item.confidence ?? result?.drift_status),
-        summary: operatorText(summary),
+        rawSummary: summary,
         whatHappened: operatorText(summary),
         whyItMatters: operatorText(item.whyItMatters, item.possibleConsequence),
         whyNeraiumThinks: operatorText(item.whyItMatters),
@@ -1070,11 +1123,24 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         recommendedAction: operatorText(item.recommendation, item.reviewNext),
         operatorCheck: operatorText(item.operator_focus),
         possibleOperationalCauses: dedupeText(toList(item.possibleOperationalCauses, item.possible_operational_causes).flatMap(splitPriorityText).map(operatorText)),
+        contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
+        affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
+        changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount),
+        contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
+        metricName: resolveMetricName(item, index),
+        baselineValue: firstText(item.baseline_value, item.baselineValue, item.baseline_range, item.baselineRange, item.baseline),
+        currentValue: firstText(item.current_value, item.currentValue, item.current),
+        deviationDirection: formatDisplayName(firstText(item.deviation_direction, item.direction)),
         evidence,
+        publicEvidenceItems: supporting,
         hasEvidence: evidence.length > 0,
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
+        type: getInsightType(item),
       };
+      insight.system = resolveSystemName(insight, systems, signals);
+      insight.summary = formatInsightTitle(insight);
+      return insight;
     })
     .filter((item) => item.summary);
 
@@ -1124,8 +1190,8 @@ function evidenceKey(item) {
 
 function buildSystemCards({ systems, primarySystem, insights }) {
   const safeSystems = Array.isArray(systems) && systems.length > 0
-    ? systems.slice(0, 6).map((system, index) => ({ ...system, id: system.id ?? system.name ?? "system-" + index, name: system.name ?? system.label ?? "System " + (index + 1) }))
-    : [{ id: "primary", name: primarySystem }];
+    ? systems.map((system, index) => ({ ...system, id: system.id ?? system.name ?? "system-" + index, name: formatDisplayName(firstText(system.name, system.label, system.system_name), "System " + (index + 1)) }))
+    : [{ id: "primary", name: formatDisplayName(primarySystem, UNASSIGNED_SYSTEM_NAME) }];
 
   const cards = safeSystems.map((system) => {
     const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
@@ -1285,7 +1351,7 @@ function buildSignals(result) {
   const normalizedTags = Array.isArray(result?.analysis_result?.normalized_telemetry?.tags)
     ? result.analysis_result.normalized_telemetry.tags.map((tag) => tag.display_name ?? tag.tag_name ?? tag.original_header)
     : [];
-  return dedupeDisplayValues([...columns, ...detected, ...normalizedTags], signalDisplayKey).slice(0, 24);
+  return dedupeDisplayValues([...columns, ...detected, ...normalizedTags].map((item, index) => normalizeSignalName(item, index + 1)), signalDisplayKey).slice(0, 24);
 }
 
 function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete }) {
@@ -1314,8 +1380,8 @@ function SignalList({ signals }) {
   if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Detected signals will appear after telemetry is uploaded." />;
   return (
     <ul className="operational-list operational-list--signals">
-      {signals.map((signal) => {
-        const label = cleanDisplayText(signal);
+      {signals.map((signal, index) => {
+        const label = normalizeSignalName(signal, index + 1);
         return <li key={signalDisplayKey(label)}><strong>{label}</strong></li>;
       })}
     </ul>
@@ -1328,9 +1394,10 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
     <div className="insight-feed insight-feed--cards">
       {insights.map((insight) => {
         const selected = selectedId === insight.id;
-        const title = formatInsightTitle(insight.summary);
+        const title = formatInsightTitle(insight);
         const relationships = insightRelationshipLabels(insight).slice(0, 8);
         const summary = operatorSummaryBriefing(insight, relationships)[0] || title;
+        const rows = insightCardRows(insight, relationships);
         return (
           <article
             key={insight.id}
@@ -1345,12 +1412,9 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
               </div>
             </div>
             <h3>{title}</h3>
-            <DetailGrid rows={[
-              ["Affected System", formatSubsystemName(insight.system)],
-              ["Changed Relationships", String(relationships.length)],
-            ]} />
+            <DetailGrid rows={rows} />
             <p className="insight-card__summary">{summary}</p>
-            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open detail</button>
+            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open Insight</button>
           </article>
         );
       })}
@@ -1358,7 +1422,29 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
   );
 }
 
+function insightCardRows(insight, relationships) {
+  const type = getInsightType(insight);
+  if (type === "relationship_shift") {
+    return [
+      ["Affected System", formatSubsystemName(insight.system)],
+      shouldShowRelationshipCount(insight) ? ["Changed relationships", String(insight.changedRelationshipCount ?? relationships.length)] : null,
+      ["Key relationship", relationships[0]],
+    ];
+  }
+  if (type === "metric_deviation") {
+    return [
+      ["Metric", normalizeSignalName(insight.metricName)],
+      ["Baseline value/range", insight.baselineValue],
+      ["Current value", insight.currentValue],
+      ["Deviation direction", insight.deviationDirection],
+    ];
+  }
+  return [["Affected System", formatSubsystemName(insight.system)]];
+}
+
 function evidenceBriefing(insight) {
+  const direct = formatEvidenceItems(insight.publicEvidenceItems);
+  if (direct.length) return direct.slice(0, 4);
   return briefingSentences(firstText(insight.evidenceSummary, insight.whyNeraiumThinks, insight.whyItMatters), 3);
 }
 
@@ -1370,7 +1456,7 @@ function InsightDetail({ insight }) {
       <summary>Insight detail</summary>
       <div className="insight-briefing__header">
         <span className="section-token">{formatSubsystemName(insight.system)}</span>
-        <h3>{formatInsightTitle(insight.summary)}</h3>
+        <h3>{formatInsightTitle(insight)}</h3>
       </div>
       <dl className="insight-briefing__status" aria-label="Insight status">
         <div>
@@ -1383,7 +1469,7 @@ function InsightDetail({ insight }) {
         </div>
       </dl>
       <BriefingTextBlock title="What Changed" lines={operatorSummaryBriefing(insight, relationships)} />
-      <BriefingTextBlock title="Evidence" lines={evidenceBriefing(insight)} />
+      <BriefingList title="Evidence" items={evidenceBriefing(insight)} />
       {relationships.length ? <RelationshipObservedList title="Changed Relationships" items={relationships} /> : null}
       <BriefingList title="Possible Causes" items={causes} />
       <BriefingList
@@ -1458,9 +1544,9 @@ function EvidencePanel({ evidence }) {
 }
 
 function EvidenceDetails({ evidence }) {
-  const supportingSignals = toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals).flatMap(splitPriorityText).map(operatorText);
-  const metricChanges = toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(formatEvidenceDelta).flatMap(splitPriorityText);
-  const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(splitPriorityText).map(cleanDisplayText);
+  const supportingSignals = formatEvidenceItems(toList(evidence.description, evidence.supporting_signals, evidence.supportingSignals));
+  const metricChanges = formatEvidenceItems(toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges).flatMap(formatEvidenceDelta));
+  const sourceColumns = toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags).flatMap(formatEvidenceItems).map((item, index) => normalizeSignalName(item, index + 1));
   const sourceRanges = Array.isArray(evidence.source_time_ranges) ? evidence.source_time_ranges.map(formatEvidenceRange).filter(Boolean) : [];
   return (
     <div className="evidence-details-body">
@@ -1780,6 +1866,127 @@ function humanizeSignalName(value) {
     .trim();
 }
 
+function formatDisplayName(value, fallback = "") {
+  const text = cleanDisplayText(value)
+    .replace(/^[\s,;:]+/, "")
+    .replace(/\s+([,;:!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text || isBackendFallbackLabel(text)) return fallback;
+  return text;
+}
+
+function normalizeSignalName(value, index = 0) {
+  const raw = value && typeof value === "object" ? metricDisplayName(value, index) : value;
+  const label = formatDisplayName(raw, index ? `Signal ${index}` : "");
+  if (!label) return "";
+  if (isGenericRelationshipLabel(label)) return index ? `Signal ${index}` : "";
+  return label;
+}
+
+function resolveSystemName(insight, systems = [], signals = []) {
+  const candidates = [
+    insight?.rawSystemName,
+    insight?.systemName,
+    insight?.system_name,
+    insight?.system,
+    insight?.affectedSystem,
+    insight?.affected_system,
+    ...toList(insight?.affectedSystems, insight?.affected_systems),
+  ];
+  const byId = systems.find((system) => candidates.some((candidate) => normalizeDisplayKey(candidate) && normalizeDisplayKey(candidate) === normalizeDisplayKey(system?.id)));
+  if (byId) return formatDisplayName(firstText(byId.name, byId.label, byId.system_name), UNASSIGNED_SYSTEM_NAME);
+  const direct = candidates.map((item) => formatDisplayName(item)).find(Boolean);
+  if (direct) return direct;
+
+  const relatedSignals = dedupeText([
+    ...toList(signals).map((item, index) => normalizeSignalName(item, index + 1)),
+    ...toList(insight?.contributingMetrics).map((item, index) => normalizeSignalName(item, index + 1)),
+    ...toList(insight?.contributingRelationships).flatMap(relationshipSignalCandidates).map((item, index) => normalizeSignalName(item, index + 1)),
+    ...toList(insight?.affectedRelationships).map((item, index) => normalizeSignalName(item, index + 1)),
+  ]);
+  const matchedSystem = systems.find((system) => {
+    const systemKey = normalizeDisplayKey(firstText(system?.name, system?.label, system?.system_name));
+    return systemKey && relatedSignals.some((signal) => {
+      const signalKey = normalizeDisplayKey(signal);
+      return signalKey.includes(systemKey) || systemKey.includes(signalKey);
+    });
+  });
+  if (matchedSystem) return formatDisplayName(firstText(matchedSystem.name, matchedSystem.label, matchedSystem.system_name), UNASSIGNED_SYSTEM_NAME);
+
+  const inferred = inferSystemNameFromSignals(relatedSignals);
+  return inferred || UNASSIGNED_SYSTEM_NAME;
+}
+
+function inferSystemNameFromSignals(signals) {
+  const tokenRows = signals
+    .map((signal) => normalizeDisplayKey(signal).split(" ").filter(Boolean))
+    .filter((tokens) => tokens.length > 1);
+  if (!tokenRows.length) return "";
+  const common = [];
+  for (let index = 0; index < Math.min(...tokenRows.map((tokens) => tokens.length)); index += 1) {
+    const token = tokenRows[0][index];
+    if (!tokenRows.every((tokens) => tokens[index] === token)) break;
+    common.push(token);
+  }
+  const useful = common.filter((token) => !/^(signal|numeric|column|delta|value|current|baseline|temp|temperature|pressure|flow|speed|status|level|rate)$/.test(token));
+  if (!useful.length) return "";
+  return formatDisplayName(useful.join(" ").replace(/\b(ahu|vav|vfd|chw)\s*(\d+)\b/gi, (match, prefix, number) => `${prefix.toUpperCase()} ${number}`));
+}
+
+function formatEvidenceItems(evidence) {
+  if (Array.isArray(evidence)) return dedupeText(evidence.flatMap(formatEvidenceItems));
+  if (evidence === null || evidence === undefined || evidence === "") return [];
+  if (typeof evidence === "object") {
+    return formatEvidenceItems(toList(
+      evidence.description,
+      evidence.summary,
+      evidence.what_changed,
+      evidence.whatChanged,
+      evidence.supporting_signals,
+      evidence.supportingSignals,
+      evidence.relevant_metric_changes,
+      evidence.relevantMetricChanges,
+      evidence.metric_delta
+    ));
+  }
+  return String(evidence)
+    .split(/\n|;|\u2022/g)
+    .map((item) => formatDisplayName(item.replace(/^[\s,;:.-]+/, "")))
+    .filter(Boolean)
+    .filter((item) => !isBackendFallbackLabel(item));
+}
+
+function getInsightType(insight) {
+  const text = [
+    insight?.type,
+    insight?.insight_type,
+    insight?.insightType,
+    insight?.category,
+    insight?.change_type,
+    insight?.rawSummary,
+    insight?.title,
+    insight?.summary,
+    insight?.whatHappened,
+    insight?.what_changed,
+    insight?.explanation,
+  ].map((item) => String(item ?? "").toLowerCase()).join(" ");
+  const relationships = toList(insight?.contributing_relationships, insight?.contributingRelationships, insight?.affectedRelationships);
+  const changedRelationshipCount = numberOrNull(insight?.changedRelationshipCount ?? insight?.changed_relationship_count);
+  if (/relationship|correlation|coupling|interaction|pair/.test(text) || relationships.length > 0 || (changedRelationshipCount ?? 0) > 0) return "relationship_shift";
+  if (/metric|signal|deviation|deviat|anomaly|threshold|baseline|current value/.test(text) || toList(insight?.contributing_metrics, insight?.contributingMetrics, insight?.metric, insight?.metric_name).length > 0) return "metric_deviation";
+  return "behavior_change";
+}
+
+function shouldShowRelationshipCount(insight) {
+  return getInsightType(insight) === "relationship_shift" && Number(insight?.changedRelationshipCount ?? insightRelationshipLabels(insight).length) > 0;
+}
+
+function isBackendFallbackLabel(value) {
+  const key = normalizeDisplayKey(value);
+  return GENERIC_FALLBACK_LABELS.has(key);
+}
+
 function cleanDisplayText(value) {
   const text = sanitizeOperatorText(firstText(value))
     .replace(/^tag:/i, "")
@@ -1886,21 +2093,27 @@ const OPERATIONAL_CAUSE_SETS = [
 ];
 
 function formatInsightTitle(value) {
-  return formatSubsystemName(value)
+  if (value && typeof value === "object") {
+    const type = getInsightType(value);
+    if (type === "relationship_shift") return `${formatSubsystemName(value.system)} relationship shift detected`;
+    if (type === "metric_deviation") return `${normalizeSignalName(value.metricName) || "Metric"} deviation detected`;
+    return `${formatSubsystemName(value.system)} behavior changed`;
+  }
+  return formatDisplayName(value)
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function formatSubsystemName(value) {
-  return cleanDisplayText(value)
+  return formatDisplayName(value, UNASSIGNED_SYSTEM_NAME)
     .replace(/\s+\/\s+/g, " & ")
     .replace(/\bsubsystem\b/gi, "system")
-    .replace(/\bSystem\b/g, "system")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function whatChangedBriefing(insight, relationships) {
-  const system = formatSubsystemName(insight.system || "subsystem");
+  const system = formatSubsystemName(insight.system);
   if (relationships.length > 0) {
     const count = relationships.length;
     return [
@@ -1908,8 +2121,8 @@ function whatChangedBriefing(insight, relationships) {
       count === 1 ? "One operating relationship shifted." : "Multiple operating relationships shifted together.",
     ];
   }
-  const lines = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.summary), 2);
-  return lines.length ? lines : ["Subsystem behavior changed from its historical operating pattern."];
+  const lines = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 2);
+  return lines.length ? lines : [`${system} behavior changed from its historical operating pattern.`];
 }
 
 function operatorSummaryBriefing(insight, relationships) {

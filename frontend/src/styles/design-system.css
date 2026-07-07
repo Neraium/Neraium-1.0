@@ -6,7 +6,7 @@
 
 body {
   background:
-    radial-gradient(900px 420px at 50% -160px, rgba(37, 99, 235, 0.16), transparent 70%),
+    radial-gradient(900px 420px at 50% -160px, rgba(0, 122, 116, 0.18), transparent 70%),
     linear-gradient(180deg, var(--bg-app) 0%, #050812 100%);
   color: var(--text-primary);
   font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -204,8 +204,8 @@ button:disabled {
 .operational-mobile-nav button:hover,
 .system-summary-row__action:hover {
   transform: translateY(-1px);
-  border-color: rgba(96, 165, 250, 0.42);
-  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(0, 122, 116, 0.42);
+  background: rgba(0, 122, 116, 0.16);
   color: var(--text-primary);
 }
 
@@ -299,8 +299,8 @@ button:focus-visible {
 .cultivation-tab.is-active,
 .operator-status-controls button.is-active,
 .operator-action-button--active {
-  border-color: rgba(96, 165, 250, 0.46);
-  background: rgba(37, 99, 235, 0.16);
+  border-color: rgba(0, 122, 116, 0.46);
+  background: rgba(0, 122, 116, 0.18);
   color: var(--text-primary);
 }
 
@@ -368,7 +368,7 @@ button:focus-visible {
 .system-gate,
 .auth-shell {
   background:
-    radial-gradient(900px 420px at 50% -120px, rgba(37, 99, 235, 0.16), transparent 70%),
+    radial-gradient(900px 420px at 50% -120px, rgba(0, 122, 116, 0.18), transparent 70%),
     linear-gradient(180deg, rgba(11, 15, 23, 0.99), rgba(7, 11, 18, 0.99));
 }
 
@@ -424,7 +424,7 @@ button:focus-visible {
   padding: 16px 18px;
   border: 1px solid var(--surface-border);
   border-radius: var(--card-radius);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(15, 23, 42, 0.9));
+  background: linear-gradient(135deg, rgba(0, 122, 116, 0.16), rgba(15, 23, 42, 0.9));
 }
 
 .intake-flow__hero-copy h3,
@@ -450,7 +450,7 @@ button:focus-visible {
   gap: 4px;
   min-width: 108px;
   padding: 12px 14px;
-  border: 1px solid rgba(96, 165, 250, 0.34);
+  border: 1px solid rgba(0, 122, 116, 0.34);
   border-radius: var(--card-radius);
   background: rgba(7, 13, 23, 0.74);
   text-align: right;
@@ -547,8 +547,8 @@ button:focus-visible {
 
 .intake-stage-rail__item--active,
 .intake-stage-list__item--active {
-  border-color: rgba(96, 165, 250, 0.38);
-  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(0, 122, 116, 0.38);
+  background: rgba(0, 122, 116, 0.14);
 }
 
 .intake-stage-list__item--failed {
