@@ -1,0 +1,48 @@
+name: Validate operational workflow
+
+on:
+  push:
+    branches:
+      - validate-operational-workflow
+    paths:
+      - .github/workflows/validate-operational-workflow.yml
+      - frontend/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/validate-operational-workflow.yml
+      - frontend/**
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run focused component tests
+        id: focused_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --run src/components/OperationalWorkflowWorkspace.test.js 2>&1 | tee focused-test-output.txt
+      - name: Build frontend
+        if: always()
+        run: npm run build
+      - name: Upload focused test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-test-output
+          path: frontend/focused-test-output.txt
