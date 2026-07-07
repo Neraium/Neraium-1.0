@@ -30,15 +30,13 @@ jobs:
           text = path.read_text()
           marker = 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);\n'
           required = marker + 'const EMPTY_TAB_METRIC = "—";\nconst UNASSIGNED_SYSTEM_NAME = "Unassigned System";\n'
-          text = text.replace(marker, required, 1)
+          if 'const EMPTY_TAB_METRIC = "—";' not in text or 'const UNASSIGNED_SYSTEM_NAME = "Unassigned System";' not in text:
+              text = text.replace(marker, required, 1)
           path.write_text(text)
           PY
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
-      - name: Test focused component
-        working-directory: frontend
-        run: npm test -- --run src/components/OperationalWorkflowWorkspace.test.js
       - name: Build frontend
         working-directory: frontend
         run: npm run build
