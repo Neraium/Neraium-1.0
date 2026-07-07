@@ -1,0 +1,56 @@
+name: Apply operational workflow cleanup
+
+on:
+  push:
+    branches:
+      - remove-fingerprint-nav
+    paths:
+      - .github/workflows/apply-remove-fingerprint-nav.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: remove-fingerprint-nav
+
+      - name: Update OperationalWorkflowWorkspace
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/components/OperationalWorkflowWorkspace.jsx')
+          text = path.read_text()
+
+          text = text.replace('  { id: "fingerprint", label: "Fingerprint" },\n', '')
+          text = text.replace('const RESULT_TAB_IDS = new Set(["systems", "insights", "fingerprint", "signals", "advanced"]);', 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);')
+          text = text.replace('    fingerprint: model.fingerprintTabMetric,\n', '')
+          text = text.replace('''        {visibleSection === "fingerprint" ? (\n          <FingerprintSection model={model} />\n        ) : null}\n\n''', '')
+          text = text.replace('    fingerprintTabMetric: resultTabsReady ? fingerprintDrift.label : EMPTY_TAB_METRIC,\n', '')
+          text = text.replace('  if (section === "fingerprint") return "Fingerprint";\n', '')
+          text = text.replace('  "subsystem behavher changed system",\n', '')
+
+          start = text.find('function FingerprintSection({ model }) {')
+          if start != -1:
+              end = text.find('\nfunction SignalsSection({ model }) {', start)
+              if end == -1:
+                  raise SystemExit('Could not find end of FingerprintSection')
+              text = text[:start] + text[end + 1:]
+
+          path.write_text(text)
+          PY
+
+      - name: Remove temporary workflow
+        run: rm .github/workflows/apply-remove-fingerprint-nav.yml
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/components/OperationalWorkflowWorkspace.jsx .github/workflows/apply-remove-fingerprint-nav.yml
+          git commit -m "fix: remove fingerprint navigation remnants"
+          git push origin HEAD:remove-fingerprint-nav
