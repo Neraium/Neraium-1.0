@@ -1,0 +1,32 @@
+name: Check workspace cases
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  case:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - opens the native CSV picker and forwards the selected file
+          - maps two changed relationships to two evidence lines
+          - shows an explicit message when a relationship has no quantitative evidence
+          - formats evidence to two decimals and explains the weakening direction
+          - describes a coupling sign reversal explicitly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npm test -- --run src/components/OperationalWorkflowWorkspace.current.test.js -t "${{ matrix.test }}"
