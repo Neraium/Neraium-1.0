@@ -1484,6 +1484,95 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
   );
 }
 
+function InsightDetail({ insight }) {
+  const causes = operationalCauseHypotheses(insight).slice(0, 6);
+  const relationships = insightRelationshipLabels(insight).slice(0, 8);
+
+  return (
+    <details className="insight-detail-card" aria-label="Insight detail">
+      <summary>Insight detail</summary>
+
+      <div className="insight-briefing__header">
+        <span className="section-token">
+          {formatSubsystemName(insight.system)}
+        </span>
+
+        <h3>{formatInsightTitle(insight)}</h3>
+      </div>
+
+      <dl
+        className="insight-briefing__status"
+        aria-label="Insight status"
+      >
+        <div>
+          <dt>Severity</dt>
+          <dd>
+            <StatusBadge
+              label={insight.severity}
+              tone={severityToTone(insight.severity)}
+            />
+          </dd>
+        </div>
+
+        <div>
+          <dt>Confidence</dt>
+          <dd>
+            <StatusBadge
+              label={formatConfidenceLevel(
+                insight.confidence,
+                insight.confidenceScore
+              )}
+              tone="unknown"
+            />
+          </dd>
+        </div>
+      </dl>
+
+      <BriefingTextBlock
+        title="What Changed"
+        lines={operatorSummaryBriefing(
+          insight,
+          relationships
+        )}
+      />
+
+      <BriefingList
+        title="Evidence"
+        items={evidenceBriefing(
+          insight,
+          relationships
+        )}
+        limit={8}
+      />
+
+      {relationships.length ? (
+        <RelationshipObservedList
+          title="Changed Relationships"
+          items={relationships}
+        />
+      ) : null}
+
+      <BriefingList
+        title="Possible Causes"
+        items={causes}
+      />
+
+      <BriefingList
+        title="Recommended Review"
+        items={recommendedReviewItems(
+          insight,
+          relationships
+        )}
+        limit={6}
+      />
+
+      {insight.hasEvidence ? (
+        <InsightEvidenceDrawer insight={insight} />
+      ) : null}
+    </details>
+  );
+}
+
 function insightCardRows(insight, relationships) {
   const type = getInsightType(insight);
   if (type === "relationship_shift") {
