@@ -528,7 +528,88 @@
 .system-summary-row,
 .insight-card,
 .operational-empty,
-.operational-block,
+.operational-block {
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+}
+
+.operational-grid--dashboard {
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.operational-panel--status {
+  display: grid;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.operational-dashboard-status__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.operational-dashboard-status__header h2 {
+  margin: 4px 0 0;
+  color: var(--ops-ink);
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  font-weight: 620;
+  line-height: 1.12;
+}
+
+.operational-actions--dashboard {
+  padding-top: 4px;
+}
+
+.operational-dashboard-resume {
+  justify-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ops-ink-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.operational-dashboard-resume:hover,
+.operational-dashboard-resume:focus-visible {
+  color: var(--ops-ink);
+}
+
+.systems-list--dashboard {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.system-summary-row--dashboard {
+  min-height: 118px;
+}
+
+.system-summary-row--dashboard > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.system-summary-row--dashboard > div:first-child span {
+  color: var(--ops-ink-soft);
+  font-size: 0.9rem;
+}
+
+.system-summary-row--dashboard .system-summary-row__meta strong {
+  font-size: 0.9rem;
+}
+
+.system-summary-row--dashboard small {
+  max-width: 24ch;
+  line-height: 1.35;
+}
+
+
 .operational-timeline li {
   border: 1px solid var(--ops-line);
   border-radius: 8px;
@@ -975,6 +1056,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--dashboard,
   .operational-grid--command-center,
   .operational-grid--split {
     grid-template-columns: 1fr;
@@ -1022,6 +1104,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--dashboard,
   .operational-grid--command-center,
   .operational-grid--split,
   .overview-support-grid,

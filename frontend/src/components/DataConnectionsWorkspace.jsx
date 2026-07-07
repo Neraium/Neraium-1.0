@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
 import {
   normalizeUploadJob,
@@ -172,8 +172,10 @@ export default function DataConnectionsWorkspace({
   onResetDemo,
   initialSelectedFiles = [],
   onInitialSelectedFilesConsumed,
+  autoStartInitialFiles = false,
+  headless = false,
 }) {
-  const seededSelectedFiles = Array.isArray(initialSelectedFiles) ? initialSelectedFiles : [];
+  const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState(() => seededSelectedFiles.length ? "validated" : "idle");
@@ -208,6 +210,7 @@ export default function DataConnectionsWorkspace({
   const lastProgressSignatureRef = useRef("");
   const uploadInFlightRef = useRef(false);
   const telemetryStageLogRef = useRef(new Set());
+  const autoStartedSignatureRef = useRef("");
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -244,6 +247,22 @@ export default function DataConnectionsWorkspace({
       onInitialSelectedFilesConsumed();
     }
   }, [onInitialSelectedFilesConsumed, seededSelectedFiles.length]);
+
+  useEffect(() => {
+    if (!autoStartInitialFiles || seededSelectedFiles.length === 0) return;
+    const signature = seededSelectedFiles
+      .map((file) => [file?.name ?? "", file?.size ?? "", file?.lastModified ?? ""].join(":"))
+      .join("|");
+    if (!signature || signature === autoStartedSignatureRef.current) return;
+    autoStartedSignatureRef.current = signature;
+    resetTelemetryStageLogs();
+    setSelectedFiles(seededSelectedFiles);
+    setUploadError("");
+    setUploadTransfer(null);
+    setUploadJob(null);
+    setUploadResult(null);
+    setUploadState("validated");
+  }, [autoStartInitialFiles, seededSelectedFiles]);
 
   useEffect(() => {
     uploadStateRef.current = uploadState;
@@ -710,6 +729,14 @@ export default function DataConnectionsWorkspace({
     }
   }
 
+  useEffect(() => {
+    if (!autoStartInitialFiles || !selectedFiles.length) return;
+    if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) return;
+    if (uploadStateRef.current !== "validated") return;
+    void handleUpload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStartInitialFiles, selectedFiles, uploadState]);
+
   const readiness = uploadReadinessMessage(selectedFiles[0]);
   const hasActiveProgress = isActiveUploadProgressState(uploadState);
   const progressUploadJob = hasActiveProgress ? uploadJob : null;
@@ -811,6 +838,14 @@ export default function DataConnectionsWorkspace({
       logUploadFailureDiagnostics(classified);
       markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: currentJobId, keepStoredJobId: true, diagnostics: classified });
     }
+  }
+
+  if (headless) {
+    return (
+      <div className="data-connections-workspace data-connections-workspace--headless" data-testid="headless-upload-workspace" aria-live="polite">
+        <span className="sr-only">{deferredLatestStatusMessage}</span>
+      </div>
+    );
   }
 
   return (

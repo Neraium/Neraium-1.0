@@ -13,6 +13,7 @@ function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
   const [activeWorkspace, setActiveWorkspace] = useState("system-body");
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
+  const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
 
@@ -182,6 +183,14 @@ function App() {
     await logoutUser();
   }, []);
 
+  const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
+    await handleGateUploadComplete(completedPayload, options);
+    setPendingUploadFiles([]);
+    if (options.navigateToGate !== false) {
+      setResultsNavigationKey((current) => current + 1);
+    }
+  }, [handleGateUploadComplete]);
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (domainMode) {
@@ -222,7 +231,7 @@ function App() {
       formatClockTime={formatClockTime}
       handleBackToGate={handleBackToGate}
       handleRetryWorkspace={handleRetryWorkspace}
-      handleGateUploadComplete={handleGateUploadComplete}
+      handleGateUploadComplete={handleTelemetryAnalysisComplete}
       handleResumePreviousSession={handleResumePreviousSession}
       handleResetDemo={handleResetDemo}
       handleReplayFrameChange={handleReplayFrameChange}
@@ -231,6 +240,7 @@ function App() {
       setActiveWorkspace={setActiveWorkspace}
       pendingUploadFiles={pendingUploadFiles}
       setPendingUploadFiles={setPendingUploadFiles}
+      resultsNavigationKey={resultsNavigationKey}
     />
   );
 }

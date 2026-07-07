@@ -231,7 +231,7 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getByRole("heading", { name: "Analyze infrastructure behavior" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Analyze new telemetry" })).toBeTruthy();
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
@@ -246,8 +246,8 @@ it("selected file state shows filename, size, and Analyze System", () => {
   });
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
-  expect(screen.getByText("CSV - 15.7 MB")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Select Another CSV" })).toBeNull();
+  expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Select Another File" })).toBeNull();
   expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
 });
 
@@ -290,7 +290,7 @@ it("failed state shows retry and choose another file", () => {
   expect(screen.getByRole("heading", { name: "Analysis failed" })).toBeTruthy();
   expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Select Another CSV" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Select Another File" })).toBeTruthy();
 });
 
 it("complete state shows View Results", () => {

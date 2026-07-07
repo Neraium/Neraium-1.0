@@ -75,6 +75,7 @@ export default function AppWorkspaceRouter({
   setActiveWorkspace,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
+  resultsNavigationKey = 0,
 }) {
   if (activeWorkspace === "data-connections") {
     return (
@@ -178,7 +179,6 @@ export default function AppWorkspaceRouter({
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
             onReviewEvidence={() => setActiveWorkspace("observation-center")}
-            onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -223,15 +223,35 @@ export default function AppWorkspaceRouter({
             domainMode={domainMode}
             domainDetection={domainDetection}
             gateProcessing={gateProcessing}
+            resultsNavigationKey={resultsNavigationKey}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
-            onCsvSelected={(files) => {
+            onTelemetrySelected={(files) => {
               setPendingUploadFiles(files);
-              setActiveWorkspace("data-connections");
             }}
-            onUploadComplete={handleGateUploadComplete}
             onResumePreviousSession={handleResumePreviousSession}
           />
+          {pendingUploadFiles.length > 0 ? (
+            <DataConnectionsWorkspace
+              accessCode={accessCode}
+              apiFetch={apiFetch}
+              apiStatus={apiStatus}
+              latestUploadSnapshot={effectiveLatestUploadSnapshot}
+              latestUploadResult={effectiveLatestUploadResult}
+              hasActiveSession={hasActiveSession}
+              hasResumedSession={hasResumedSession}
+              hasCurrentUploadResult={hasCurrentUploadResult}
+              hasRealSiiOutput={hasRealSiiOutput}
+              roomContext={roomContext}
+              onUploadComplete={handleGateUploadComplete}
+              sessionStore={liveOps.session}
+              onResetDemo={handleResetDemo}
+              formatClockTime={formatClockTime}
+              initialSelectedFiles={pendingUploadFiles}
+              autoStartInitialFiles={true}
+              headless={true}
+            />
+          ) : null}
         </Suspense>
       </div>
     </AppErrorBoundary>
