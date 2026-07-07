@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
-  { id: "fingerprint", label: "Fingerprint" },
   { id: "signals", label: "Signals" },
   { id: "advanced", label: "Advanced Details" },
 ];
@@ -17,14 +16,11 @@ const MOBILE_PRIMARY_NAV = [
   { id: "overview", label: "Overview" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
-  { id: "fingerprint", label: "Fingerprint" },
   { id: "signals", label: "Signals" },
   { id: "advanced", label: "Advanced Details" },
 ];
 
-const RESULT_TAB_IDS = new Set(["systems", "insights", "fingerprint", "signals", "advanced"]);
-const EMPTY_TAB_METRIC = "—";
-const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
+const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);
 
 // Known-bad literal strings that have previously leaked through as fallback
 // system/insight names. Kept as an exact-match fast path, but NOT relied on
