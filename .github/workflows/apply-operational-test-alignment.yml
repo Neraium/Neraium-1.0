@@ -1,0 +1,371 @@
+name: Apply operational workflow alignment
+
+on:
+  push:
+    branches:
+      - main-validation-20260707
+    paths:
+      - .github/workflows/apply-operational-test-alignment.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main-validation-20260707
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Align component and tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          component = Path('frontend/src/components/OperationalWorkflowWorkspace.jsx')
+          text = component.read_text()
+          text = text.replace('  { id: "fingerprint", label: "Fingerprint" },\n', '')
+          text = text.replace('const RESULT_TAB_IDS = new Set(["systems", "insights", "fingerprint", "signals", "advanced"]);', 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);')
+          text = text.replace('    fingerprint: model.fingerprintTabMetric,\n', '')
+          text = text.replace('''        {visibleSection === "fingerprint" ? (\n          <FingerprintSection model={model} />\n        ) : null}\n\n''', '')
+          text = text.replace('    fingerprintTabMetric: resultTabsReady ? fingerprintDrift.label : EMPTY_TAB_METRIC,\n', '')
+          text = text.replace('  if (section === "fingerprint") return "Fingerprint";\n', '')
+          start = text.find('function FingerprintSection({ model }) {')
+          if start != -1:
+              end = text.find('\nfunction SignalsSection({ model }) {', start)
+              if end == -1:
+                  raise SystemExit('Could not find FingerprintSection end')
+              text = text[:start] + text[end + 1:]
+          component.write_text(text)
+
+          test_path = Path('frontend/src/components/OperationalWorkflowWorkspace.test.js')
+          tests = test_path.read_text()
+
+          replacements = {
+          'shows telemetry loaded but not analyzed as ready to analyze': '''  it("shows telemetry loaded but not analyzed as ready to analyze", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult({ sii_intelligence: { facility_state: "stable" } }),
+      effectiveLatestUploadSnapshot: { status: "uploaded", current_upload: { job_id: "telemetry-job" } },
+      liveOps: { systems: [{ id: "system-1", name: "Chilled Water Loop" }] },
+    });
+
+    expect(screen.getAllByText("CSV loaded / Ready to analyze").length).toBeGreaterThan(0);
+    expect(screen.getByText("Telemetry is ready for analysis.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze CSV" })).toBeTruthy();
+    expect(screen.queryByText("Systems Pending")).toBeNull();
+  });''',
+          'shows analysis running and disables duplicate analyze actions': '''  it("shows analysis running and disables duplicate analyze actions", () => {
+    const onWorkspaceNavigate = vi.fn();
+    renderWorkspace({
+      effectiveLatestUploadResult: telemetryResult({ processing_state: "processing" }),
+      effectiveLatestUploadSnapshot: { status: "processing", current_upload: { job_id: "telemetry-job" } },
+      gateProcessing: { active: true, status: "processing" },
+      onWorkspaceNavigate,
+    });
+
+    const analyzeButton = screen.getByRole("button", { name: "Analyzing" });
+    expect(screen.getAllByText("Analyzing").length).toBeGreaterThan(0);
+    expect(screen.getByText("Building the operational view.")).toBeTruthy();
+    expect(analyzeButton.disabled).toBe(true);
+    fireEvent.click(analyzeButton);
+    expect(onWorkspaceNavigate).not.toHaveBeenCalled();
+  });''',
+          'shows completed analysis with compact results and historical telemetry copy': '''  it("shows completed analysis with compact results and historical telemetry copy", () => {
+    renderWorkspace({
+      liveOps: {
+        systems: [
+          { id: "system-1", name: "Chilled Water Loop" },
+          { id: "system-2", name: "Condenser Water Loop" },
+          { id: "system-3", name: "Boiler Loop" },
+          { id: "system-4", name: "Air Handling" },
+          { id: "system-5", name: "Electrical" },
+          { id: "system-6", name: "Pumps" },
+        ],
+        relationshipRows: [{ columns: ["flow", "temperature"] }, { columns: ["pressure", "valve"] }],
+        siiVerification: { verified: true },
+      },
+      effectiveLatestUploadResult: completeResult(),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Analysis Complete")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Overview Summary/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Systems 6/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Insights 0/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Signals 2/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Advanced Details Raw/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Fingerprint/i })).toBeNull();
+  });''',
+          'uses monitored copy only when completed analysis has live telemetry': '''  it("uses monitored copy only when completed analysis has live telemetry", () => {
+    renderWorkspace({
+      liveOps: {
+        systems: [{ id: "system-1", name: "Chilled Water Loop" }],
+        relationshipRows: [],
+        siiVerification: { verified: true },
+        telemetryConnected: true,
+        connectionStatusLine: "Live telemetry connected",
+      },
+      effectiveLatestUploadResult: completeResult(),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Monitoring Live")).toBeTruthy();
+    expect(screen.getByText("Live telemetry is connected and current behavior is being monitored.")).toBeTruthy();
+    expect(screen.queryByText("Telemetry Needs Review")).toBeNull();
+  });''',
+          'renders explanatory analysis outputs with evidence and hides unavailable fields': '''  it("renders explanatory analysis outputs with evidence and hides unavailable fields", () => {
+    const analysisExplanation = {
+      insights: [{
+        id: "pressure-flow",
+        title: "Pressure and flow relationship shifted",
+        severity: "high",
+        explanation: "Pressure increased while flow decreased in the recent window.",
+        operator_check: "Inspect pump runtime and downstream valve position.",
+        confidence: "high",
+        confidence_score: 0.91,
+        system: "Flow and pressure system",
+        contributing_relationships: [{ id: "relationship-0", columns: ["pressure", "flow"], change_type: "weakened" }],
+        evidence_items: [{
+          description: "Pressure and flow relationship weakened.",
+          supporting_signals: ["Pressure increased 18%", "Flow decreased 9%"],
+          source_columns: ["pressure", "flow"],
+        }],
+      }],
+      systems: [{ id: "flow-pressure", name: "Flow and pressure system" }],
+      fingerprint: { status: "changed", meaning: "The operating fingerprint is changing." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_explanation: analysisExplanation }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getByText("What Changed")).toBeTruthy();
+    expect(screen.getByText("Evidence")).toBeTruthy();
+    expect(screen.getByText("Changed Relationships")).toBeTruthy();
+    expect(screen.getByText("Possible Causes")).toBeTruthy();
+    expect(screen.getByText("Recommended Review")).toBeTruthy();
+    expect(screen.getAllByText("pressure ↔ flow").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/correlation delta/i)).toBeNull();
+  });''',
+          'keeps overall status consistent when a finding contradicts baseline wording': '''  it("keeps overall status consistent when a finding contradicts baseline wording", () => {
+    const analysisResult = {
+      insights: [{
+        id: "flow-pressure-change",
+        title: "Flow / Pressure subsystem behavior changed",
+        severity: "moderate",
+        possible_consequence: "Pressure response may drift from normal control behavior.",
+        operator_check: "Check pressure valve response.",
+        system: "Flow / Pressure subsystem",
+        contributing_relationships: [{ columns: ["flow", "pressure"], change_type: "changed" }],
+      }],
+      systems: [{ id: "flow-pressure", name: "Flow / Pressure subsystem" }],
+      relationships: [{ columns: ["flow", "pressure"], change_type: "changed" }],
+      fingerprint: { status: "changed", meaning: "Flow and pressure behavior changed against baseline." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Behavior Shift Detected")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getAllByText("flow ↔ pressure").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Baseline-aligned")).toBeNull();
+  });''',
+          'formats confidence, dedupes factors, and summarizes missing telemetry': '''  it("formats confidence, dedupes factors, and summarizes missing telemetry", () => {
+    const analysisResult = {
+      data_quality: {
+        warnings: [],
+        signal_integrity: [
+          { signal_id: "supply_pressure", gap_type: "short_drop", completeness: 0.996, suppress_confidence: false },
+          { signal_id: "pump_vibration", gap_type: "short_drop", completeness: 0.996, suppress_confidence: false },
+        ],
+        missing_values: [],
+      },
+      insights: [{
+        id: "pump-vibration",
+        title: "Pump vibration increased sharply",
+        severity: "high",
+        what_happened: "Pump vibration increased by 440% versus baseline.",
+        operator_check: "Inspect pump bearings and mounting condition.",
+        confidence: "high",
+        confidence_score: 1,
+        system: "Flow and pressure system",
+      }],
+      systems: [],
+      relationships: [],
+      fingerprint: { drift_status: "changed", explanation: "Persistent structural drift is present." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+    });
+
+    expect(screen.getByText("Analysis Complete")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getAllByText("High").length).toBeGreaterThan(0);
+    expect(screen.queryByText("high (1)")).toBeNull();
+  });''',
+          'renders canonical analysis evidence and hides unavailable fields': '''  it("renders canonical analysis evidence and hides unavailable fields", () => {
+    const analysisResult = {
+      analysis_id: "analysis-1",
+      upload_id: "upload-1",
+      source_file: "canonical.csv",
+      insights: [{
+        id: "insight-1",
+        title: "Pump subsystem behavior changed",
+        severity: "moderate",
+        confidence: "moderate",
+        affected_systems: ["Pump system"],
+        what_changed: "Pump power increased in the current window.",
+        recommended_check: "Check pump schedule",
+        evidence_refs: ["ev-1"],
+      }],
+      systems: [{ id: "pump", name: "Pump system" }],
+      relationships: [],
+      fingerprint: { drift_status: "changed", explanation: "The operating fingerprint changed against the baseline window." },
+      evidence_index: {
+        "ev-1": {
+          evidence_id: "ev-1",
+          description: "Pump power baseline average increased in the current window.",
+          source_tags: ["pump_power"],
+          metric_delta: [{ tag_name: "pump_power", percent_change: 22 }],
+          confidence: "moderate",
+        },
+      },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getAllByText("Pump system behavior changed").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Advanced")));
+    expect(screen.getAllByText("Pump power baseline average increased in the current window.").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Percent change: 22.00%/)).toBeTruthy();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+  });''',
+          'does not render replay artifacts in normal result sections': '''  it("does not render replay artifacts in normal result sections", () => {
+    const analysisResult = {
+      insights: [{ id: "insight-1", title: "Pump power moved up", severity: "moderate", confidence: "moderate", what_changed: "Pump power increased in the current window.", recommended_check: "Check pump schedule", evidence_refs: ["ev-1"] }],
+      systems: [{ id: "pump", name: "Pump system", health_status: "Needs review" }],
+      relationships: [],
+      fingerprint: { status: "changed", explanation: "The operating fingerprint changed." },
+      evidence_index: { "ev-1": { evidence_id: "ev-1", description: "Pump power increased in the current window." } },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({
+        analysis_result: analysisResult,
+        replay_ready: true,
+        replay_frame_count: 3,
+        replay_timeline: { timeline: [{ frame_number: 0, summary: "legacy replay frame" }] },
+      }),
+      effectiveLatestUploadSnapshot: completeSnapshot({ replay_ready: true, replay_frame_count: 3 }),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const main = screen.getByLabelText("Neraium operational workspace");
+    expect(main.textContent).not.toMatch(/legacy replay frame/i);
+    for (const label of ["Insights", "Systems", "Signals", "Advanced"]) {
+      const tab = screen.getAllByRole("button").find((button) => button.textContent.includes(label));
+      expect(tab).toBeTruthy();
+      fireEvent.click(tab);
+      expect(main.textContent).not.toMatch(/legacy replay frame/i);
+    }
+  });''',
+          'removes internal pipeline copy from rendered result pages': '''  it("removes internal pipeline copy from rendered result pages", () => {
+    const analysisResult = {
+      insights: [{
+        id: "internal-copy",
+        title: "Observed subsystem behavior changed",
+        severity: "high",
+        confidence: "high",
+        system: "Pump system",
+        contributing_relationships: [{ columns: ["pump pressure", "flow"] }],
+      }],
+      systems: [{ id: "pump", name: "Pump system" }],
+      relationships: [{ columns: ["pump pressure", "flow"] }],
+      fingerprint: { status: "changed", explanation: "Behavior changed." },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const main = screen.getByLabelText("Neraium operational workspace");
+    expect(main.textContent).not.toContain("Observed subsystem behavior changed");
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(main.textContent).toContain("Pump system relationship shift detected");
+  });''',
+          'renders the operator interpretation report around subsystem behavior': '''  it("renders the operator interpretation report around subsystem behavior", () => {
+    const analysisResult = {
+      insights: [{
+        id: "flow-pressure",
+        title: "Flow & Pressure subsystem behavior changed",
+        severity: "moderate",
+        confidence: "high",
+        system: "Flow & Pressure",
+        contributing_relationships: [{ columns: ["Pump Power", "Filter Differential Pressure"] }],
+      }],
+      systems: [{ id: "flow-pressure", name: "Flow & Pressure" }],
+      relationships: [{ columns: ["Pump Power", "Filter Differential Pressure"] }],
+      fingerprint: { status: "changed", meaning: "Flow & Pressure changed against baseline.", confidence: "high" },
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisResult }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByText("Analysis Complete")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button").find((button) => button.textContent.includes("Insights")));
+    expect(screen.getAllByText("Flow & Pressure relationship shift detected").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pump Power ↔ Filter Differential Pressure").length).toBeGreaterThan(0);
+    expect(screen.getByText("Changed Relationships")).toBeTruthy();
+    expect(screen.getByText("Recommended Review")).toBeTruthy();
+  });''',
+          }
+
+          for title, replacement in replacements.items():
+              pattern = re.compile(r'  it\("' + re.escape(title) + r'", \(\) => \{.*?\n  \}\);', re.S)
+              tests, count = pattern.subn(replacement, tests, count=1)
+              if count != 1:
+                  raise SystemExit(f'Could not replace test: {title}')
+
+          test_path.write_text(tests)
+          PY
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run focused tests
+        working-directory: frontend
+        run: npm test -- --run src/components/OperationalWorkflowWorkspace.test.js
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: fix: align operational workflow tests with current UI
+          branch: main-validation-20260707
+          file_pattern: frontend/src/components/OperationalWorkflowWorkspace.jsx frontend/src/components/OperationalWorkflowWorkspace.test.js
