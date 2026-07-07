@@ -6,6 +6,11 @@ on:
       - fix-empty-tab-metric
     paths:
       - .github/workflows/fix-empty-tab-metric.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-empty-tab-metric.yml
 
 permissions:
   contents: write
@@ -41,13 +46,25 @@ jobs:
         run: npm ci
       - name: Run focused component tests
         working-directory: frontend
-        run: npm test -- --run src/components/OperationalWorkflowWorkspace.test.js
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --run src/components/OperationalWorkflowWorkspace.test.js 2>&1 | tee focused-test-output.txt
       - name: Build frontend
+        if: always()
         working-directory: frontend
         run: npm run build
+      - name: Upload focused test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fix-empty-tab-metric-test-output
+          path: frontend/focused-test-output.txt
       - name: Remove temporary workflow
+        if: success()
         run: rm .github/workflows/fix-empty-tab-metric.yml
       - name: Commit fix
+        if: success() && github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
