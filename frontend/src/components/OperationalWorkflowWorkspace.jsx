@@ -1,28 +1,26 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
-import { sanitizeOperatorList, sanitizeOperatorText } from "../viewModels/operatorFinding";
+import { sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
-  { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-  { id: "fingerprint", label: "Behavior" },
-  { id: "evidence", label: "Advanced" },
-  { id: "more", label: "More" },
+  { id: "insights", label: "Insights" },
+  { id: "signals", label: "Signals" },
+  { id: "advanced", label: "Advanced Details" },
 ];
 
 const MOBILE_PRIMARY_NAV = [
   { id: "overview", label: "Overview" },
-  { id: "insights", label: "Insights" },
   { id: "systems", label: "Systems" },
-  { id: "fingerprint", label: "Behavior" },
-  { id: "evidence", label: "Advanced" },
-  { id: "more", label: "More" },
+  { id: "insights", label: "Insights" },
+  { id: "signals", label: "Signals" },
+  { id: "advanced", label: "Advanced Details" },
 ];
 
-const RESULT_TAB_IDS = new Set(["insights", "systems", "fingerprint", "evidence"]);
+const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);
 const EMPTY_TAB_METRIC = "—";
 
 const hiddenFileInputStyle = {
@@ -57,17 +55,17 @@ const WAITING_FOR_TELEMETRY_STATUS = {
 const READY_TO_ANALYZE_STATUS = {
   label: "CSV loaded / Ready to analyze",
   tone: "unknown",
-  detail: "Upload is available. Run analysis to identify systems, relationships, anomalies, and baseline behavior.",
+  detail: "Telemetry is ready for analysis.",
 };
 const ANALYZING_STATUS = {
-  label: "Building Behavior Pattern",
+  label: "Analyzing",
   tone: "changed",
-  detail: "Analyzing telemetry, identifying system behavior, and mapping relationships.",
+  detail: "Building the operational view.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
-  label: "Operational Assessment",
+  label: "Analysis Complete",
   tone: "changed",
-  detail: "Attention needed.",
+  detail: "Result ready.",
 };
 const MONITORING_LIVE_STATUS = {
   label: "Monitoring Live",
@@ -75,9 +73,9 @@ const MONITORING_LIVE_STATUS = {
   detail: "Live telemetry is connected and current behavior is being monitored.",
 };
 const NO_BASELINE_AVAILABLE = {
-  label: "No Behavior Pattern Yet",
+  label: "Not analyzed",
   tone: "unknown",
-  detail: "Run analysis to establish a baseline.",
+  detail: "Run analysis to compare operating behavior.",
 };
 const SYSTEMS_PENDING = {
   title: "Systems Pending",
@@ -136,11 +134,10 @@ export default function OperationalWorkflowWorkspace({
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
   const navMetrics = {
     overview: model.overviewTabMetric,
-    insights: model.insightsTabMetric,
     systems: model.systemsTabMetric,
-    fingerprint: model.fingerprintTabMetric,
-    evidence: model.evidenceTabMetric,
-    more: model.moreTabMetric,
+    insights: model.insightsTabMetric,
+    signals: model.signalsTabMetric,
+    advanced: model.advancedTabMetric,
   };
   const visibleSection = !model.resultTabsReady || (model.disableResultTabs && RESULT_TAB_IDS.has(activeSection)) ? "overview" : activeSection;
   const shellClassName = model.resultTabsReady ? "operational-workflow" : "operational-workflow operational-workflow--intake";
@@ -156,7 +153,7 @@ export default function OperationalWorkflowWorkspace({
 
   function openEvidence(insightId) {
     setSelectedInsightId(insightId);
-    navigate("evidence");
+    navigate("advanced");
   }
 
   function openOverviewFilePicker() {
@@ -278,16 +275,12 @@ export default function OperationalWorkflowWorkspace({
           <SystemsSection model={model} onOpenInsight={openInsight} />
         ) : null}
 
-        {visibleSection === "fingerprint" ? (
-          <FingerprintSection model={model} />
+        {visibleSection === "signals" ? (
+          <SignalsSection model={model} />
         ) : null}
 
-        {visibleSection === "evidence" ? (
-          <EvidenceSection model={model} selectedInsightId={selectedInsightId} />
-        ) : null}
-
-        {visibleSection === "more" ? (
-          <MoreSection model={model} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} />
+        {visibleSection === "advanced" ? (
+          <AdvancedDetailsSection model={model} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} />
         ) : null}
 
         {typeof onUploadComplete === "function" ? null : null}
@@ -352,24 +345,10 @@ function OverviewSection({ model, onOpenInsight, onOpenEvidence, onAnalyzeSystem
             <h2>{model.heroStatus.label}</h2>
             <p>{model.heroStatus.detail}</p>
           </div>
-          {model.analysisComplete ? (
-            <ExecutiveSummary
-              checklist={model.completionChecklist}
-              notice={model.dataQualityNotice}
-              report={model.operatorReport}
-              rows={model.executiveSummaryRows}
-            />
-          ) : (
-            <div className="operator-summary-card__rows" aria-label="Source summary">
-              <SummaryRows rows={[
-                ["Source", model.sourceLabel],
-                ["Status", model.sourceStatusLabel],
-                ["Rows", model.sourceRowCount],
-                ["Telemetry", model.telemetryStatus.label],
-                model.overviewState === "analyzing" ? ["Progress", model.storyProgressLabel] : null,
-              ]} />
-            </div>
-          )}
+          <div className="operator-summary-card__rows" aria-label="Overview status">
+            <SummaryRows rows={model.overviewSummaryRows} />
+            {model.overviewSummarySentence ? <p className="overview-summary-sentence">{model.overviewSummarySentence}</p> : null}
+          </div>
           <div className="operational-actions operational-actions--hero">
             {renderPrimaryAction()}
             {model.analysisComplete && primaryInsight?.hasEvidence ? (
@@ -391,7 +370,7 @@ function InsightsSection({
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
-        <PanelHeader eyebrow="Insights" title="Insights" subtitle="Priority findings from the completed analysis." />
+        <PanelHeader eyebrow="Insights" title="Insights" subtitle="" />
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No insights yet." : model.uiState.status.detail}
@@ -407,32 +386,23 @@ function InsightsSection({
 
 function SystemsSection({ model, onOpenInsight }) {
   return (
-    <div className="operational-grid operational-grid--overview">
+    <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label={model.systemsSectionTitle}>
-        <PanelHeader eyebrow="Systems" title={model.systemsSectionTitle} subtitle={model.systemsSectionSubtitle} />
+        <PanelHeader eyebrow="Systems" title={model.systemsSectionTitle} subtitle="" />
         {model.systemCards.length ? (
           <div className="systems-list">
             {model.systemCards.map((system) => (
               <article className="system-summary-row" key={system.id}>
                 <div>
                   <strong>{system.name}</strong>
-                  <p>Behavior: {system.behavior}</p>
                   <DetailGrid rows={[
                     ["Status", system.status],
                     ["Active Insights", system.activeInsights],
-                    ["Confidence", system.confidence],
-                    ["What changed", system.whatChanged],
-                    ["Relationships", system.relationships],
+                    ["Severity", system.severity],
+                    ["Key Changed Relationship", system.keyChangedRelationship],
                   ]} />
-                  {system.keyBehaviors?.length ? (
-                    <ul className="compact-list">
-                      {system.keyBehaviors.map((item) => <li key={item}>{item}</li>)}
-                    </ul>
-                  ) : null}
                 </div>
                 <div className="system-summary-row__meta">
-                  <span>{system.lastAnalysis}</span>
-                  <span>{system.insightSummary}</span>
                   {system.primaryInsightId && typeof onOpenInsight === "function" ? (
                     <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open insight</button>
                   ) : null}
@@ -444,103 +414,98 @@ function SystemsSection({ model, onOpenInsight }) {
           <EmptyOperationalState title={SYSTEMS_PENDING.title} body={SYSTEMS_PENDING.summary} />
         )}
       </section>
-
-      <section className="operational-panel" aria-label="Signal relationship summary">
-        <PanelHeader eyebrow="Relationships" title="Signal Relationship Summary" subtitle="Relationships with the largest behavior shift." />
-        <RelationshipList rows={model.relationshipRows} />
-      </section>
     </div>
   );
 }
 
-function FingerprintSection({ model }) {
-  return (
-    <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="Behavior interpretation">
-        <PanelHeader eyebrow="Behavior" title="Behavior Pattern" subtitle="Plain-language meaning of the baseline comparison." />
-        <FingerprintStatus drift={model.fingerprintDrift} />
-        <DetailGrid rows={model.fingerprintRows} />
-      </section>
-    </div>
-  );
-}
-
-function EvidenceSection({ model, selectedInsightId }) {
-  const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
+function SignalsSection({ model }) {
   return (
     <div className="operational-grid operational-grid--command-center">
-      <section className="operational-panel operational-panel--wide" aria-label="Advanced Details">
-        <PanelHeader eyebrow="Advanced" title="Advanced Details" subtitle="Raw measurements and source windows are collapsed until opened." />
-        {groups.length ? (
-          <div className="evidence-group-list">
-            {groups.map((group) => (
-              <article className={group.id === selectedInsightId ? "evidence-group is-selected" : "evidence-group"} key={group.id}>
-                <div className="evidence-group__header">
-                  <div>
-                    <span className="section-token">{group.system}</span>
-                    <h3>{group.title}</h3>
-                  </div>
-                  <div className="evidence-group__badges">
-                    {group.severity ? <StatusBadge label={group.severity} tone={severityToTone(group.severity)} /> : null}
-                    {group.confidence ? <StatusBadge label={formatConfidenceDisplay(group.confidence, group.confidenceScore)} tone="unknown" /> : null}
-                  </div>
-                </div>
-                <div className="evidence-group__items">
-                  {group.evidence.map((item, index) => <EvidencePanel key={item.evidence_id ?? index} evidence={item} />)}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyOperationalState title="No supporting telemetry yet" body={model.analysisComplete ? "No detailed evidence was reported for this result." : model.uiState.status.detail} />
-        )}
+      <section className="operational-panel operational-panel--wide" aria-label="Signals">
+        <PanelHeader eyebrow="Signals" title="Signals" subtitle="" />
+        <SignalList signals={model.signals} />
       </section>
     </div>
   );
 }
 
-function MoreSection({ model, onAnalyzeSystem, onResumePreviousSession }) {
+function AdvancedDetailsSection({ model, selectedInsightId, onAnalyzeSystem, onResumePreviousSession }) {
+  const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
   return (
     <div className="operational-grid operational-grid--overview">
+      <section className="operational-panel operational-panel--wide" aria-label="Advanced Details">
+        <PanelHeader eyebrow="Advanced Details" title="Advanced Details" subtitle="Technical fields are collapsed until opened." />
+        <details className="advanced-details-panel">
+          <summary>Model Metadata</summary>
+          <DetailGrid rows={model.analysisMetadataRows} technical />
+        </details>
+        <details className="advanced-details-panel">
+          <summary>Behavior Windows</summary>
+          <DetailGrid rows={model.behaviorWindowRows} technical />
+        </details>
+        <details className="advanced-details-panel">
+          <summary>Technical Diagnostics</summary>
+          <QualityList title="Warnings" items={model.qualityWarnings} empty={model.analysisComplete ? "No data quality warnings reported." : model.uiState.status.detail} />
+          <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : model.uiState.status.detail} />
+          <QualityList title="Timestamp quality" items={model.timestampNotes} empty={model.analysisComplete ? "Timestamp quality is acceptable or not yet reported." : model.uiState.status.detail} />
+        </details>
+        {model.advancedRelationshipDetails.length ? (
+          <details className="advanced-details-panel">
+            <summary>Raw Relationship Identifiers</summary>
+            <QualityList title="Identifiers" items={model.advancedRelationshipDetails} empty="" codeItems />
+          </details>
+        ) : null}
+        {groups.length ? (
+          <details className="advanced-details-panel">
+            <summary>Evidence</summary>
+            <div className="evidence-group-list">
+              {groups.map((group) => (
+                <article className={group.id === selectedInsightId ? "evidence-group is-selected" : "evidence-group"} key={group.id}>
+                  <div className="evidence-group__header">
+                    <div>
+                      <span className="section-token">{group.system}</span>
+                      <h3>{group.title}</h3>
+                    </div>
+                    <div className="evidence-group__badges">
+                      {group.severity ? <StatusBadge label={group.severity} tone={severityToTone(group.severity)} /> : null}
+                      {group.confidence ? <StatusBadge label={formatConfidenceDisplay(group.confidence, group.confidenceScore)} tone="unknown" /> : null}
+                    </div>
+                  </div>
+                  <div className="evidence-group__items">
+                    {group.evidence.map((item, index) => <EvidencePanel key={item.evidence_id ?? index} evidence={item} />)}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        ) : null}
+        <details className="advanced-details-panel">
+          <summary>Raw Result JSON</summary>
+          <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
+        </details>
+      </section>
+
       <section className="operational-panel" aria-label="Upload details">
-        <PanelHeader eyebrow="Upload" title="Upload Details" subtitle="Source file and last completed review." />
+        <PanelHeader eyebrow="Upload" title="Upload" subtitle="" />
         <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
         <DetailGrid rows={[
-          ["Source", model.sourceLabel],
+          ["Source file", model.sourceLabel],
           ["Last analysis", model.lastAnalysis],
           ["Detected data type", model.domainLabel],
-        ]} />
-      </section>
-      <section className="operational-panel" aria-label="Analysis metadata">
-        <PanelHeader eyebrow="Analysis" title="Analysis Metadata" subtitle="Source file, references, and generation time." />
-        <DetailGrid rows={model.analysisMetadataRows} />
-      </section>
-      <section className="operational-panel" aria-label="Detected signals">
-        <PanelHeader eyebrow="Signals" title="Detected Signals" subtitle="Telemetry headers found in the uploaded file." />
-        <SignalList signals={model.signals} integrity={model.telemetryStatus} />
-      </section>
-      <section className="operational-panel" aria-label="Data quality">
-        <PanelHeader eyebrow="Integrity" title="Data Quality" subtitle="Warnings, missing values, and timestamp conditions." />
-        <QualityList title="Warnings" items={model.qualityWarnings} empty={model.analysisComplete ? "No data quality warnings reported." : model.uiState.status.detail} />
-        <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : model.uiState.status.detail} />
-        <QualityList title="Timestamp quality" items={model.timestampNotes} empty={model.analysisComplete ? "Timestamp quality is acceptable or not yet reported." : model.uiState.status.detail} />
+        ]} technical />
         <div className="operational-actions">
           <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
         </div>
       </section>
-      {model.advancedRelationshipDetails.length ? (
-        <section className="operational-panel" aria-label="Advanced details">
-          <PanelHeader eyebrow="Advanced" title="Advanced Details" subtitle="Raw relationship identifiers used for traceability." />
-          <QualityList title="Raw relationship identifiers" items={model.advancedRelationshipDetails} empty="" codeItems />
-        </section>
-      ) : null}
-      <section className="operational-panel operational-panel--wide" aria-label="Analysis history">
-        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Saved operational reviews." />
+
+      <section className="operational-panel" aria-label="Analysis history">
+        <PanelHeader eyebrow="History" title="History" subtitle="" />
         <Timeline items={model.historyItems} />
       </section>
+
       {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
         <section className="operational-panel" aria-label="Previous analysis">
-          <PanelHeader eyebrow="Previous" title="Previous Analysis" subtitle="Continue a saved review." />
+          <PanelHeader eyebrow="Previous" title="Previous Analysis" subtitle="" />
           <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
         </section>
       ) : null}
@@ -575,7 +540,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const evidenceGroups = analysisComplete ? buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }) : [];
   const identifiedSystems = analysisComplete ? collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) : [];
   const identifiedSystemCount = identifiedSystems.length;
-  const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) : [];
+  const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, insights }) : [];
   const systemSummary = buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected });
   const signals = buildSignals(result);
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
@@ -586,26 +551,18 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
   const sourceRowCount = deriveSourceRowCount({ result, snapshot });
   const overviewState = deriveOverviewState(uiState.key);
-  const executiveSummaryRows = buildExecutiveSummaryRows({
+  const behaviorState = overallBehaviorState(fingerprintDrift);
+  const highestSeverity = analysisComplete ? deriveHighestSeverity({ insights, fingerprintDrift }) : "Not available";
+  const overviewSummaryRows = buildOverviewSummaryRows({
     analysisComplete,
+    uiState,
+    sourceLabel,
     identifiedSystemCount,
     insights,
-    fingerprintDrift,
-    result,
-    liveOps,
-    finding,
-    analysisExplanation,
+    highestSeverity,
+    behaviorState,
   });
-  const operatorReport = analysisComplete ? buildOperatorInterpretationReport({
-    analysisExplanation,
-    insights,
-    relationshipRows,
-    fingerprintDrift,
-    result,
-    finding,
-    identifiedSystems,
-    quality,
-  }) : null;
+  const overviewSummarySentence = buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, behaviorState });
   const advancedRelationshipDetails = buildAdvancedRelationshipDetails(relationshipRows);
 
   const resultTabsReady = analysisComplete;
@@ -619,10 +576,10 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     headerSubtitle: isEmptyTelemetryState ? siteLabel : contextLabel,
     overviewState,
     overviewTabMetric: isEmptyTelemetryState ? "Start" : (resultTabsReady ? "Summary" : heroStatus.label),
-    moreTabMetric: "Details",
-    insightsTabMetric: resultTabsReady ? "Findings" : EMPTY_TAB_METRIC,
-    fingerprintTabMetric: resultTabsReady ? "Pattern" : EMPTY_TAB_METRIC,
-    evidenceTabMetric: resultTabsReady ? "Details" : EMPTY_TAB_METRIC,
+    systemsTabMetric: resultTabsReady ? String(identifiedSystemCount) : EMPTY_TAB_METRIC,
+    insightsTabMetric: resultTabsReady ? String(insights.length) : EMPTY_TAB_METRIC,
+    signalsTabMetric: resultTabsReady ? String(signals.length) : EMPTY_TAB_METRIC,
+    advancedTabMetric: resultTabsReady ? "Raw" : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
     resultTabsReady,
     showTopbarStatus: !isEmptyTelemetryState && !analysisComplete,
@@ -632,15 +589,14 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     storyProgressLabel: uiState.storyProgressLabel,
     primaryCtaLabel: uiState.primaryCtaLabel,
     analyzeDisabled: uiState.key === "analyzing",
-    showBaselineClaim: baselineAvailable,
-    executiveSummaryRows,
-    completionChecklist: [],
+    overviewSummaryRows,
+    overviewSummarySentence,
+    behaviorState,
+    highestSeverity,
     dataQualityNotice,
     advancedRelationshipDetails,
     uiState,
     heroStatus,
-    operatorReport,
-    baselineStatus: baselineAvailable ? { label: "Baseline Established", tone: "normal" } : NO_BASELINE_AVAILABLE,
     telemetryStatus,
     lastAnalysis,
     analysisComplete,
@@ -648,10 +604,10 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     telemetryConnected,
     identifiedSystemCount,
     fingerprintDrift,
-    fingerprintRows: buildFingerprintRows(analysisExplanation),
+    behaviorWindowRows: buildBehaviorWindowRows(analysisExplanation),
+    rawResultJson: compactJson({ result, snapshot, analysisExplanation }),
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
-    systemsTabMetric: resultTabsReady ? "Inventory" : EMPTY_TAB_METRIC,
     systemsSectionTitle: systemSummary.sectionTitle,
     systemsSectionSubtitle: systemSummary.sectionSubtitle,
     insights,
@@ -700,7 +656,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYZING_STATUS,
       sourceStatusLabel: "Analyzing telemetry",
       storyProgressLabel: "Analysis in progress",
-      primaryCtaLabel: "Building Behavior Pattern",
+      primaryCtaLabel: "Analyzing",
     };
   }
   if (!telemetryAvailable && !telemetryConnected) {
@@ -777,20 +733,20 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
     };
   }
 
-  const noun = identifiedSystemCount === 1 ? "subsystem" : "subsystems";
-  const descriptor = telemetryConnected ? "subsystems monitored" : "subsystems reviewed";
+  const noun = identifiedSystemCount === 1 ? "system" : "systems";
+  const descriptor = telemetryConnected ? "systems monitored" : "systems reviewed";
   const label = telemetryConnected
     ? `${identifiedSystemCount} ${noun} monitored`
     : `${identifiedSystemCount} ${noun} reviewed`;
 
   return {
     tabMetric: String(identifiedSystemCount),
-    title: "Subsystem Review",
+    title: "Systems",
     label,
     countLabel: String(identifiedSystemCount),
     descriptor,
-    sectionTitle: telemetryConnected ? "Monitored Subsystems" : "Subsystem Review",
-    sectionSubtitle: telemetryConnected ? "Live telemetry is connected." : "Subsystems represented in the completed assessment.",
+    sectionTitle: "Systems",
+    sectionSubtitle: "",
   };
 }
 
@@ -807,22 +763,57 @@ function extractAnalysisExplanation(result, snapshot) {
   return explanation && typeof explanation === "object" ? explanation : {};
 }
 
-function buildFingerprintRows(analysisExplanation) {
-  const fingerprint = analysisExplanation?.fingerprint ?? {};
-  const normalBehavior = fingerprint.normal_operating_behavior ?? fingerprint.baseline_summary;
-  const currentBehavior = fingerprint.current_behavior ?? fingerprint.current_behavior_summary;
+function buildBehaviorWindowRows(analysisExplanation) {
+  const metadata = analysisExplanation?.analysis_metadata ?? {};
   return [
-    ["Explanation", operatorText(fingerprint.explanation, fingerprint.plain_language_explanation, fingerprint.meaning)],
-    ["Behavior pattern", behaviorPatternLabel(fingerprint.drift_status ?? fingerprint.status)],
-    ["Confidence", formatConfidenceDisplay(fingerprint.confidence, fingerprint.confidence_score)],
-    ...formatBehaviorSummaryRows("Normal behavior", normalBehavior),
-    ...formatBehaviorSummaryRows("Current behavior", currentBehavior),
-    ["Largest deviations", formatLargestDeviations(fingerprint.largest_deviations, fingerprint.largest_deviation)],
+    ["Baseline window", formatBehaviorWindow(analysisExplanation?.stable_window ?? metadata.baseline_window)],
+    ["Current window", formatBehaviorWindow(analysisExplanation?.current_state_window ?? analysisExplanation?.deviation_window ?? metadata.current_window)],
     ["Change onset", analysisExplanation?.change_onset],
-    ["Stable window", formatBehaviorWindow(analysisExplanation?.stable_window)],
-    ["Deviation window", formatBehaviorWindow(analysisExplanation?.deviation_window)],
-    ["Current state window", formatBehaviorWindow(analysisExplanation?.current_state_window)],
+    ["Comparison method", metadata.comparison_method ?? metadata.method],
   ];
+}
+
+function buildOverviewSummaryRows({ analysisComplete, uiState, sourceLabel, identifiedSystemCount, insights, highestSeverity, behaviorState }) {
+  if (!analysisComplete) {
+    return [
+      ["Analysis Status", uiState.sourceStatusLabel],
+      ["File Name", sourceLabel],
+      ["Systems", "Not analyzed"],
+      ["Insights", "Not analyzed"],
+      ["Highest Severity", "Not available"],
+      ["Overall Behavior State", uiState.status.label],
+    ];
+  }
+  return [
+    ["Analysis Status", "Complete"],
+    ["File Name", sourceLabel],
+    ["Systems", String(identifiedSystemCount)],
+    ["Insights", String(insights.length)],
+    ["Highest Severity", highestSeverity],
+    ["Overall Behavior State", behaviorState],
+  ];
+}
+
+function buildOverviewSummarySentence({ analysisComplete, insights, identifiedSystemCount, behaviorState }) {
+  if (!analysisComplete) return "Telemetry is ready for analysis.";
+  if (insights.length > 0) {
+    return `${insights.length} active insight${insights.length === 1 ? "" : "s"} across ${identifiedSystemCount || "available"} system${identifiedSystemCount === 1 ? "" : "s"}.`;
+  }
+  return behaviorState === "Stable" ? "No active insight was detected." : "Behavior changed, with no active insight selected.";
+}
+
+function deriveHighestSeverity({ insights, fingerprintDrift }) {
+  const ranked = ["Low", "Moderate", "High"];
+  const severities = insights.map((item) => normalizeSeverity(item.severity));
+  if (!severities.length) return hasMeaningfulOperationalChange({ insights, fingerprintDrift }) ? "Moderate" : "Low";
+  return severities.sort((left, right) => ranked.indexOf(right) - ranked.indexOf(left))[0];
+}
+
+function overallBehaviorState(fingerprintDrift) {
+  const label = String(fingerprintDrift?.label ?? "").toLowerCase();
+  const tone = String(fingerprintDrift?.tone ?? "").toLowerCase();
+  if (tone === "changed" || tone === "investigate" || label.includes("change") || label.includes("drift")) return "Behavior Shift Detected";
+  return "Stable";
 }
 
 function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
@@ -837,141 +828,6 @@ function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
   ];
 }
 
-function buildExecutiveSummaryRows({ analysisComplete, identifiedSystemCount, insights, fingerprintDrift, result, liveOps, finding, analysisExplanation }) {
-  if (!analysisComplete) return [];
-  const severity = insights[0]?.severity ?? (hasMeaningfulOperationalChange({ insights, fingerprintDrift }) ? "Moderate" : "Low");
-  return [
-    ["Systems", identifiedSystemCount ? `${identifiedSystemCount} reviewed` : "Not available"],
-    ["Insights", `${insights.length} active`],
-    ["Severity", severity],
-    ["Confidence", deriveAssessmentConfidence({ insights, fingerprintDrift, result })],
-  ];
-}
-
-
-function buildOperatorInterpretationReport({ analysisExplanation, insights, relationshipRows, fingerprintDrift, result, finding, identifiedSystems, quality }) {
-  const source = analysisExplanation?.operator_interpretation
-    ?? result?.operator_interpretation
-    ?? result?.operator_report?.operator_interpretation
-    ?? null;
-  if (source && typeof source === "object") {
-    return normalizeOperatorInterpretationReport(source, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
-  }
-  if (!hasMeaningfulOperationalChange({ insights, fingerprintDrift }) && !finding?.exists) {
-    return normalizeOperatorInterpretationReport({
-      title: "Operational Assessment",
-      overall_condition: "Normal",
-      confidence: formatConfidenceLevel(fingerprintDrift?.confidence, null),
-      subsystem: identifiedSystems?.[0]?.name ?? "Uploaded telemetry",
-      summary: [
-        "Behavior stayed within the historical operating pattern during the analyzed period.",
-        "No subsystem-level operating shift was flagged for review.",
-      ],
-      what_changed: [
-        "No reviewed operational relationship moved outside the baseline threshold",
-        "Current behavior remained consistent with the established baseline",
-      ],
-      potential_operational_causes: DEFAULT_POTENTIAL_OPERATIONAL_CAUSES,
-      recommended_review: DEFAULT_RECOMMENDED_REVIEW,
-      relationship_changes: [],
-      advanced_details: {},
-    }, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
-  }
-
-  const primaryInsight = insights[0] ?? {};
-  const relationshipLabels = dedupeText([
-    ...insightRelationshipLabels(primaryInsight),
-    ...(Array.isArray(relationshipRows) ? relationshipRows.map((row, index) => relationshipDisplayName(row, index)) : []),
-  ].filter(Boolean)).slice(0, 8);
-  const subsystem = formatSubsystemName(firstText(primaryInsight.system, identifiedSystems?.[0]?.name, "Uploaded telemetry"));
-  const relationshipCount = relationshipLabels.length;
-  return normalizeOperatorInterpretationReport({
-    title: "Operational Assessment",
-    overall_condition: "Attention Needed",
-    confidence: formatConfidenceLevel(primaryInsight.confidence, primaryInsight.confidenceScore),
-    subsystem,
-    summary: [
-      "Behavior within this subsystem deviated from its historical operating pattern during the analyzed period.",
-      relationshipCount > 1
-        ? "Multiple operational relationships changed together, suggesting a system-level operational shift rather than an isolated sensor anomaly."
-        : "One operational relationship changed enough to warrant operator review.",
-    ],
-    what_changed: [
-      relationshipCount ? `${relationshipCount} operational relationship${relationshipCount === 1 ? "" : "s"} changed` : "Operational relationships changed",
-      `Changes occurred within the ${subsystem} subsystem`,
-      "Relationship fingerprint differs from the established baseline",
-    ],
-    potential_operational_causes: DEFAULT_POTENTIAL_OPERATIONAL_CAUSES,
-    recommended_review: DEFAULT_RECOMMENDED_REVIEW,
-    relationship_changes: relationshipLabels.map((label) => ({ label })),
-    advanced_details: { raw_relationship_identifiers: buildAdvancedRelationshipDetails(relationshipRows) },
-  }, { quality, fallbackRelationships: relationshipRows, insights, identifiedSystems, fingerprintDrift });
-}
-
-function normalizeOperatorInterpretationReport(source, options = {}) {
-  const status = source.overall_status ?? {};
-  const primary = source.primary_finding ?? {};
-  const evidence = source.supporting_evidence ?? {};
-  const advanced = source.advanced_details ?? source.advancedDetails ?? {};
-  const subsystem = formatSubsystemName(operatorText(source.subsystem, status.subsystem, primary.system));
-  const relationshipChanges = normalizeRelationshipChanges(
-    firstNonEmptyList(source.relationship_changes, source.relationshipChanges, evidence.relationships, primary.relationship_changes, primary.relationshipChanges, primary.affected_relationships, primary.affectedRelationships),
-    options.fallbackRelationships
-  );
-  const insightCount = Array.isArray(options.insights) ? options.insights.length : 0;
-  const activeInsightCount = relationshipChanges.length && insightCount === 0 ? 1 : insightCount;
-  const systemCount = Array.isArray(options.identifiedSystems) && options.identifiedSystems.length ? options.identifiedSystems.length : (subsystem ? 1 : 0);
-  const condition = normalizeAssessmentCondition(firstText(source.overall_condition, source.overallCondition, status.condition, status.overall_condition, source.condition), relationshipChanges.length);
-  const confidence = formatConfidenceLevel(
-    firstText(source.confidence, status.confidence, options.fingerprintDrift?.confidence),
-    source.confidence_score ?? status.confidence_score ?? options.fingerprintDrift?.confidenceScore
-  );
-  const severity = normalizeSeverity(firstText(source.severity, status.severity, primary.severity, options.insights?.[0]?.severity, condition));
-  const summary = sanitizeOperatorList(toList(source.summary, source.executive_summary).flatMap(splitPriorityText)).slice(0, 3);
-  const whatChanged = sanitizeOperatorList(toList(source.what_changed, source.whatChanged, primary.what_changed, primary.whatChanged).flatMap(splitPriorityText)).slice(0, 8);
-  const possibleOperationalCauses = sanitizeOperatorList(toList(source.potential_operational_causes, source.potentialOperationalCauses, source.possible_operational_causes, source.possibleOperationalCauses).flatMap(splitPriorityText)).slice(0, 8);
-  const recommendedReview = sanitizeOperatorList(toList(source.recommended_review, source.recommendedReview, source.suggested_investigation, source.suggestedInvestigation).flatMap(splitPriorityText)).slice(0, 8);
-  return {
-    title: operatorText(source.title, "Operational Assessment"),
-    condition,
-    subsystem,
-    systems: systemCount ? `${systemCount} reviewed` : "Not available",
-    insights: `${activeInsightCount} active`,
-    severity,
-    confidence,
-    summary: summary.length ? summary : ["Behavior within this subsystem deviated from its historical operating pattern during the analyzed period."],
-    whatChanged: whatChanged.length ? whatChanged : ["Relationship pattern differs from the established baseline"],
-    possibleOperationalCauses: possibleOperationalCauses.length ? possibleOperationalCauses : DEFAULT_POTENTIAL_OPERATIONAL_CAUSES,
-    recommendedReview: recommendedReview.length ? recommendedReview : DEFAULT_RECOMMENDED_REVIEW,
-    relationshipChanges,
-    advancedDetails: sanitizeOperatorList(toList(advanced.raw_relationship_identifiers, advanced.rawRelationshipIdentifiers, buildAdvancedRelationshipDetails(options.fallbackRelationships)).flatMap(splitPriorityText)).slice(0, 12),
-    dataQuality: dataQualitySummaryItems(options.quality),
-  };
-}
-
-function normalizeAssessmentCondition(value, relationshipCount = 0) {
-  const text = firstText(value).toLowerCase();
-  if (text.includes("attention")) return "Attention Needed";
-  if (text.includes("normal") || text.includes("stable") || text.includes("consistent")) return "Normal";
-  if (relationshipCount > 0 || text.includes("deviat") || text.includes("changed") || text.includes("drift")) return "Attention Needed";
-  return firstText(value, "Attention Needed");
-}
-
-function normalizeRelationshipChanges(values, fallbackRows = []) {
-  const labels = [];
-  toList(values).forEach((item) => {
-    if (Array.isArray(item)) {
-      item.forEach((nested) => labels.push(relationshipLabelFromValue(nested, labels.length)));
-      return;
-    }
-    labels.push(relationshipLabelFromValue(item, labels.length));
-  });
-  if (!labels.filter(Boolean).length && Array.isArray(fallbackRows)) {
-    fallbackRows.forEach((row, index) => labels.push(relationshipDisplayName(row, index)));
-  }
-  return dedupeText(labels.filter(Boolean).map((label, index) => publicRelationshipLabel(label, index))).slice(0, 8);
-}
-
 function relationshipLabelFromValue(value, index = 0) {
   if (!value || typeof value !== "object") return firstText(value);
   return firstText(relationshipDisplayName(value, index), value.label, value.name, value.display_name, value.displayName);
@@ -983,24 +839,6 @@ function firstNonEmptyList(...values) {
     if (value !== null && value !== undefined && value !== "" && !Array.isArray(value)) return [value];
   }
   return [];
-}
-
-function dataQualitySummaryItems(quality) {
-  if (!quality) return [];
-  const items = [];
-  if (Number.isFinite(quality.rowsDropped) && quality.rowsDropped > 0) {
-    items.push(`${quality.rowsDropped} row${quality.rowsDropped === 1 ? "" : "s"} removed during validation.`);
-  }
-  if (Number.isFinite(quality.invalidNumericRows) && quality.invalidNumericRows > 0) {
-    items.push(`${quality.invalidNumericRows} row${quality.invalidNumericRows === 1 ? "" : "s"} contained non-numeric values that were ignored.`);
-  }
-  if (!items.length && quality.warnings?.length) {
-    items.push(`${quality.warnings.length} data quality warning${quality.warnings.length === 1 ? "" : "s"} reported.`);
-  }
-  if (!items.length && quality.missingValues?.length) {
-    items.push(quality.missingValues[0]);
-  }
-  return dedupeText(items).slice(0, 4);
 }
 
 function relationshipDisplayName(row, index = 0) {
@@ -1104,13 +942,6 @@ function normalizeSystemStatus(value) {
   return firstText(value, "Monitoring");
 }
 
-function deriveAssessmentConfidence({ insights, fingerprintDrift, result }) {
-  const topInsight = insights[0] ?? {};
-  return formatConfidenceLevel(
-    topInsight.confidence ?? fingerprintDrift?.confidence ?? result?.confidence,
-    topInsight.confidenceScore ?? fingerprintDrift?.confidenceScore ?? result?.confidence_score
-  );
-}
 
 function hasMeaningfulOperationalChange({ insights, fingerprintDrift }) {
   if (insights.length > 0) return true;
@@ -1274,9 +1105,9 @@ function buildEvidenceGroups({ insights, fingerprintEvidence, fingerprintDrift }
 
   if (uniqueFingerprintEvidence.length) {
     groups.push({
-      id: "fingerprint",
-      title: "Operating fingerprint evidence",
-      system: "Operating fingerprint",
+      id: "behavior",
+      title: "Behavior evidence",
+      system: "Operating behavior",
       severity: fingerprintDrift.label,
       confidence: "",
       confidenceScore: null,
@@ -1291,7 +1122,7 @@ function evidenceKey(item) {
   return firstText(item?.evidence_id, item?.id, item?.description, item?.summary, compactJson(item));
 }
 
-function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, insights, fingerprintDrift }) {
+function buildSystemCards({ systems, primarySystem, insights }) {
   const safeSystems = Array.isArray(systems) && systems.length > 0
     ? systems.slice(0, 6).map((system, index) => ({ ...system, id: system.id ?? system.name ?? "system-" + index, name: system.name ?? system.label ?? "System " + (index + 1) }))
     : [{ id: "primary", name: primarySystem }];
@@ -1299,26 +1130,18 @@ function buildSystemCards({ systems, primarySystem, heroStatus, lastAnalysis, in
   const cards = safeSystems.map((system) => {
     const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
     const activeInsightCount = relatedInsights.length;
-    const rawStatus = firstText(system.health_status, system.status, heroStatus.label);
+    const rawStatus = firstText(system.health_status, system.status, "Stable");
     const status = activeInsightCount > 0 ? "Monitoring" : normalizeSystemStatus(rawStatus);
-    const behavior = activeInsightCount > 0 || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate"
-      ? "Shift Detected"
-      : "Baseline Aligned";
+    const relationships = relationshipContributionLabels(toList(system.relationships, system.relationship_summary));
+    const topInsight = relatedInsights[0] ?? null;
     return {
       id: system.id,
       name: system.name,
       status,
-      behavior,
       activeInsights: String(activeInsightCount),
-      tone: heroStatus.tone,
-      summary: firstText(system.summary, fingerprintDrift.detail),
-      confidence: system.confidence,
-      keyBehaviors: toList(system.key_behaviors, system.keyBehaviors).flatMap(splitPriorityText),
-      whatChanged: toList(system.what_changed, system.whatChanged).flatMap(splitPriorityText),
-      relationships: relationshipContributionLabels(toList(system.relationships, system.relationship_summary)),
-      lastAnalysis,
-      insightSummary: `Active Insights: ${activeInsightCount}`,
-      primaryInsightId: relatedInsights[0]?.id ?? null,
+      severity: topInsight?.severity ?? (activeInsightCount ? "Moderate" : "Low"),
+      keyChangedRelationship: relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? "None",
+      primaryInsightId: topInsight?.id ?? null,
     };
   });
   return dedupeSystemCards(cards);
@@ -1430,7 +1253,7 @@ function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysis
     return {
       label: changed ? "Changed" : "Stable",
       tone: changed ? "changed" : "normal",
-      detail: fingerprintDetail || (changed ? "The operating fingerprint is changing." : "Current behavior remains close to the historical operating fingerprint."),
+      detail: fingerprintDetail || (changed ? "Operating behavior changed." : "Current behavior is stable."),
     };
   }
   if (!baselineAvailable) {
@@ -1448,12 +1271,12 @@ function deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysis
   const magnitudes = relationshipRows.map((row) => Math.abs(Number(row.percent_change ?? row.absolute_change ?? row.pair_weight ?? row.change ?? 0))).filter(Number.isFinite);
   const max = magnitudes.length ? Math.max(...magnitudes) : 0;
   if (max > 30 || hasFinding || String(result?.drift_status ?? "").toLowerCase().includes("unstable")) {
-    return { label: "Significant Change", tone: "investigate", detail: "Current behavior is materially different from the historical baseline." };
+    return { label: "Significant Change", tone: "investigate", detail: "Current behavior is materially different from normal operation." };
   }
   if (max > 10 || String(result?.drift_status ?? "").toLowerCase().includes("review")) {
-    return { label: "Drifting", tone: "changed", detail: "Current behavior is moving away from the historical baseline." };
+    return { label: "Drifting", tone: "changed", detail: "Current behavior is moving away from normal operation." };
   }
-  return { label: "Stable", tone: "normal", detail: "Current behavior remains close to the historical operating fingerprint." };
+  return { label: "Stable", tone: "normal", detail: "Current behavior is stable." };
 }
 
 function buildSignals(result) {
@@ -1487,29 +1310,13 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
   return items;
 }
 
-function RelationshipList({ rows }) {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return <EmptyOperationalState title="No relationship shifts" body="Relationship drift will appear after baseline comparison is available." />;
-  }
-  const displayRows = dedupeRelationships(rows).slice(0, 8);
-  return (
-    <ul className="operational-list">
-      {displayRows.map((row, index) => {
-        const label = relationshipDisplayName(row, index) || `Relationship ${relationshipOrdinal(index)}`;
-        const detail = operatorText(row.explanation, row.what_changed, row.detail, row.summary, row.change_type, "Relationship behavior changed against baseline.");
-        return <li key={relationshipDisplayKey(label) + "-" + index}><strong>{label}</strong><span>{detail}</span></li>;
-      })}
-    </ul>
-  );
-}
-
-function SignalList({ signals, integrity }) {
+function SignalList({ signals }) {
   if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Detected signals will appear after telemetry is uploaded." />;
   return (
     <ul className="operational-list operational-list--signals">
       {signals.map((signal) => {
         const label = cleanDisplayText(signal);
-        return <li key={signalDisplayKey(label)}><strong>{label}</strong><span>{integrity.label}</span></li>;
+        return <li key={signalDisplayKey(label)}><strong>{label}</strong></li>;
       })}
     </ul>
   );
@@ -1538,8 +1345,12 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
               </div>
             </div>
             <h3>{title}</h3>
+            <DetailGrid rows={[
+              ["Affected System", formatSubsystemName(insight.system)],
+              ["Changed Relationships", String(relationships.length)],
+            ]} />
             <p className="insight-card__summary">{summary}</p>
-            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open</button>
+            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open detail</button>
           </article>
         );
       })}
@@ -1547,11 +1358,16 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
   );
 }
 
+function evidenceBriefing(insight) {
+  return briefingSentences(firstText(insight.evidenceSummary, insight.whyNeraiumThinks, insight.whyItMatters), 3);
+}
+
 function InsightDetail({ insight }) {
   const causes = operationalCauseHypotheses(insight).slice(0, 6);
   const relationships = insightRelationshipLabels(insight).slice(0, 8);
   return (
-    <article className="insight-detail-card" aria-label="Insight detail">
+    <details className="insight-detail-card" aria-label="Insight detail">
+      <summary>Insight detail</summary>
       <div className="insight-briefing__header">
         <span className="section-token">{formatSubsystemName(insight.system)}</span>
         <h3>{formatInsightTitle(insight.summary)}</h3>
@@ -1566,17 +1382,17 @@ function InsightDetail({ insight }) {
           <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
         </div>
       </dl>
-      <BriefingTextBlock title="Summary" lines={operatorSummaryBriefing(insight, relationships)} />
-      <BriefingTextBlock title="Why It Matters" lines={whyItMattersBriefing(insight)} />
-      {relationships.length ? <RelationshipObservedList items={relationships} /> : null}
-      <BriefingList title="Possible Operational Causes" items={causes} />
+      <BriefingTextBlock title="What Changed" lines={operatorSummaryBriefing(insight, relationships)} />
+      <BriefingTextBlock title="Evidence" lines={evidenceBriefing(insight)} />
+      {relationships.length ? <RelationshipObservedList title="Changed Relationships" items={relationships} /> : null}
+      <BriefingList title="Possible Causes" items={causes} />
       <BriefingList
         title="Recommended Review"
         items={recommendedReviewItems(insight, relationships)}
         limit={6}
       />
       {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
-    </article>
+    </details>
   );
 }
 
@@ -1726,42 +1542,11 @@ function displayText(value) {
 
 function plainObjectSummary(value) {
   if (!isPlainObject(value)) return "";
-  const rows = behaviorObjectRows(value);
-  if (!rows.length) return "";
-  return rows.map(([label, rowValue]) => `${label}: ${displayText(rowValue)}`).join("; ");
-}
-
-function formatBehaviorSummaryRows(prefix, value) {
-  if (!hasDisplayValue(value)) return [];
-  if (!isPlainObject(value)) return [[prefix, operatorText(value)]];
-  const rows = behaviorObjectRows(value);
-  if (!rows.length) return [[prefix, "Details available in Advanced Details"]];
-  return rows.map(([label, rowValue]) => [label, rowValue]);
-}
-
-function behaviorObjectRows(value) {
-  if (!isPlainObject(value)) return [];
-  const knownRows = [
-    ["Baseline window", value.baseline_window_rows ?? value.baselineRows ?? value.baseline_rows],
-    ["Current window", value.current_window_rows ?? value.currentRows ?? value.current_rows],
-    ["Comparison method", value.comparison_method ?? value.method ?? value.analysis_method ?? "Relationship change analysis"],
-    ["Normal pattern", value.summary ?? value.description ?? value.normal_pattern],
-    ["Current pattern", value.current_pattern ?? value.current_summary],
-    ["Relationship changes", value.relationship_changes ?? value.relationshipChanges],
-    ["Signals reviewed", value.signals_reviewed ?? value.signalsReviewed ?? value.columns],
-  ].filter(([, rowValue]) => hasDisplayValue(rowValue));
-  if (knownRows.length) return knownRows;
   return Object.entries(value)
     .filter(([, rowValue]) => hasDisplayValue(rowValue) && !isPlainObject(rowValue))
     .slice(0, 5)
-    .map(([key, rowValue]) => [formatTechnicalKey(key), rowValue]);
-}
-
-function behaviorPatternLabel(value) {
-  const text = firstText(value).toLowerCase();
-  if (text.includes("stable") || text.includes("normal") || text.includes("baseline")) return "Baseline aligned";
-  if (text.includes("changed") || text.includes("drift") || text.includes("review") || text.includes("unstable")) return "Shift detected";
-  return firstText(value, "Shift detected");
+    .map(([label, rowValue]) => `${formatTechnicalKey(label)}: ${displayText(rowValue)}`)
+    .join("; ");
 }
 
 function isPlainObject(value) {
@@ -1780,28 +1565,6 @@ function formatTechnicalKey(value) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatLargestDeviations(...values) {
-  return dedupeText(toList(...values)
-    .flatMap((item, index) => {
-      if (Array.isArray(item)) return item.map((nested, nestedIndex) => formatDeviationItem(nested, nestedIndex));
-      return [formatDeviationItem(item, index)];
-    })
-    .flatMap(splitPriorityText)
-    .map(operatorText))
-    .join("; ");
-}
-
-function formatDeviationItem(value, index = 0) {
-  if (!value || typeof value !== "object") return firstText(value);
-  const label = metricDisplayName(value, index + 1);
-  const details = [
-    value.direction ? String(value.direction) : "",
-    value.percent_change !== undefined ? "percent change: " + value.percent_change : "",
-    value.change_type ? String(value.change_type) : "",
-  ].filter(Boolean).join(", ");
-  return [label, details].filter(Boolean).join(" - ");
 }
 
 function formatEvidenceDelta(value) {
@@ -1874,15 +1637,6 @@ function DetailGrid({ rows, technical = false }) {
   );
 }
 
-function FingerprintStatus({ drift }) {
-  return (
-    <div className={`fingerprint-status fingerprint-status--${drift.tone}`}>
-      <strong>{drift.label}</strong>
-      <p>{drift.detail}</p>
-    </div>
-  );
-}
-
 function PanelHeader({ eyebrow, title, subtitle }) {
   return (
     <div className="operational-panel__header">
@@ -1902,11 +1656,10 @@ function EmptyOperationalState({ title, body }) {
 }
 
 function sectionTitle(section) {
-  if (section === "insights") return "Insights";
   if (section === "systems") return "Systems";
-  if (section === "fingerprint") return "Behavior";
-  if (section === "evidence") return "Advanced";
-  if (section === "more") return "More";
+  if (section === "insights") return "Insights";
+  if (section === "signals") return "Signals";
+  if (section === "advanced") return "Advanced Details";
   return "Overview";
 }
 
@@ -1939,52 +1692,6 @@ function prioritizeEvidenceGroups(groups, selectedInsightId) {
     if (right.id === selectedInsightId) return 1;
     return 0;
   });
-}
-
-function ExecutiveSummary({ checklist, notice, report, rows }) {
-  return (
-    <div className="operator-executive-summary" aria-label="Operational assessment">
-      {report ? <OperatorInterpretation report={report} /> : <SummaryRows rows={rows} />}
-    </div>
-  );
-}
-
-function OperatorInterpretation({ report }) {
-  const statusRows = [
-    ["Systems", report.systems],
-    ["Insights", report.insights],
-    ["Severity", report.severity],
-    ["Confidence", report.confidence],
-  ];
-  const topFinding = firstText(report.whatChanged?.[0], report.relationshipChanges?.[0], report.summary?.[0]);
-
-  return (
-    <div className="operator-interpretation" aria-label="Operational assessment report">
-      <section className="operator-interpretation__block" aria-label="Overall condition">
-        <h3>{report.title || "Operational Assessment"}</h3>
-        <DetailGrid rows={statusRows} />
-      </section>
-
-      <section className="operator-interpretation__block" aria-label="Summary">
-        <h3>Summary</h3>
-        {report.summary.slice(0, 2).map((line) => <p key={line}>{ensureSentence(line)}</p>)}
-        {topFinding ? <p><strong>Top finding:</strong> {ensureSentence(topFinding)}</p> : null}
-      </section>
-
-      {report.relationshipChanges?.length ? <RelationshipObservedList title="Relationship Changes" items={report.relationshipChanges.slice(0, 3)} /> : null}
-
-      {report.advancedDetails?.length ? (
-        <details className="insight-evidence-drawer">
-          <summary>Advanced Details</summary>
-          <div className="insight-evidence-drawer__body">
-            <BriefingList title="Raw Relationship Identifiers" items={report.advancedDetails} limit={12} codeItems />
-          </div>
-        </details>
-      ) : null}
-
-      {report.dataQuality?.length ? <BriefingList title="Data Quality" items={report.dataQuality} limit={4} /> : null}
-    </div>
-  );
 }
 
 function SummaryRows({ rows }) {
@@ -2130,14 +1837,6 @@ const DEFAULT_POTENTIAL_OPERATIONAL_CAUSES = [
   "Sensor calibration change",
 ];
 
-const DEFAULT_RECOMMENDED_REVIEW = [
-  "Operator logs",
-  "Maintenance activity",
-  "Control mode changes",
-  "Setpoint changes",
-  "Equipment state changes",
-  "Demand during the detected window",
-];
 
 const OPERATIONAL_CAUSE_SETS = [
   {
@@ -2195,7 +1894,7 @@ function formatInsightTitle(value) {
 function formatSubsystemName(value) {
   return cleanDisplayText(value)
     .replace(/\s+\/\s+/g, " & ")
-    .replace(/\bSubsystem\b/g, "subsystem")
+    .replace(/\bsubsystem\b/gi, "system")
     .replace(/\bSystem\b/g, "system")
     .trim();
 }
@@ -2217,15 +1916,6 @@ function operatorSummaryBriefing(insight, relationships) {
   return dedupeText(whatChangedBriefing(insight, relationships)).slice(0, 2);
 }
 
-function whyItMattersBriefing(insight) {
-  const lines = briefingSentences(firstText(insight.possibleConsequence, insight.whyItMatters, insight.whyNeraiumThinks), 2);
-  if (lines.length) return lines;
-  return [
-    "When several operating relationships change together, the subsystem may have shifted operating state.",
-    "This often appears before a single sensor clearly identifies the underlying cause.",
-  ];
-}
-
 function operationalCauseHypotheses(insight) {
   const relationships = insightRelationshipLabels(insight);
   const direct = dedupeText(toList(insight.possibleOperationalCauses).flatMap(splitPriorityText).map(cleanBriefingText));
@@ -2243,6 +1933,7 @@ function recommendedReviewItems(insight, relationships = []) {
 }
 
 function insightRelationshipLabels(insight) {
+  if (!insight) return [];
   if (Array.isArray(insight.affectedRelationships) && insight.affectedRelationships.length) {
     return insight.affectedRelationships;
   }
@@ -2355,24 +2046,10 @@ function dedupeDisplayValues(items, keyFormatter = displayText) {
   return values;
 }
 
-function dedupeRelationships(rows) {
-  const seen = new Set();
-  return rows.filter((row, index) => {
-    const key = relationshipDisplayKey(relationshipDisplayName(row, index));
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function signalDisplayKey(value) {
   return normalizeDisplayKey(value)
     .replace(/\b(kw|kwh|psi|gpm|rpm|pct|percent|f|c|ph|orp)\b/g, "")
     .trim();
-}
-
-function relationshipDisplayKey(value) {
-  return normalizeDisplayKey(value).replace(/\b(and|with)\b/g, "").trim();
 }
 
 function normalizeDisplayKey(value) {
