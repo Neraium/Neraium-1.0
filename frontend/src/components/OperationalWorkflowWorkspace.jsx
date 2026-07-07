@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
+  { id: "fingerprint", label: "Fingerprint" },
   { id: "signals", label: "Signals" },
   { id: "advanced", label: "Advanced Details" },
 ];
@@ -16,19 +17,36 @@ const MOBILE_PRIMARY_NAV = [
   { id: "overview", label: "Overview" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
+  { id: "fingerprint", label: "Fingerprint" },
   { id: "signals", label: "Signals" },
   { id: "advanced", label: "Advanced Details" },
 ];
 
-const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);
+const RESULT_TAB_IDS = new Set(["systems", "insights", "fingerprint", "signals", "advanced"]);
 const EMPTY_TAB_METRIC = "—";
 const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
+
+// Known-bad literal strings that have previously leaked through as fallback
+// system/insight names. Kept as an exact-match fast path, but NOT relied on
+// as the only defense -- see isBackendFallbackLabel below, which also runs a
+// structural/pattern check so that a slightly reworded fallback sentence
+// from the backend doesn't silently slip through this filter again.
 const GENERIC_FALLBACK_LABELS = new Set([
   "observed system behavior changed",
   "observed subsystem behavior changed",
   "subsystem behavior changed subsystem",
+  "subsystem behavher changed system",
   "subsystem behavior changed system",
 ]);
+
+// Structural pattern for the same class of fallback text. This exists
+// because pattern-matching specific known-bad strings is inherently
+// brittle: if the backend's template wording shifts even slightly (e.g.
+// "Observed subsystem behavior shifted" instead of "changed"), an
+// exact-match Set silently stops catching it. This regex targets the
+// *shape* of the fallback sentence (subject = generic "system"/"subsystem"
+// noun, verb = behavior changed/shifted) rather than one fixed phrasing.
+const GENERIC_FALLBACK_PATTERN = /^(observed\s+)?(system|subsystem)(\s+behavior)?\s+(changed|shifted)(\s+(system|subsystem))?$/;
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -143,6 +161,7 @@ export default function OperationalWorkflowWorkspace({
     overview: model.overviewTabMetric,
     systems: model.systemsTabMetric,
     insights: model.insightsTabMetric,
+    fingerprint: model.fingerprintTabMetric,
     signals: model.signalsTabMetric,
     advanced: model.advancedTabMetric,
   };
@@ -274,6 +293,10 @@ export default function OperationalWorkflowWorkspace({
 
         {visibleSection === "systems" ? (
           <SystemsSection model={model} onOpenInsight={openInsight} />
+        ) : null}
+
+        {visibleSection === "fingerprint" ? (
+          <FingerprintSection model={model} />
         ) : null}
 
         {visibleSection === "signals" ? (
@@ -411,6 +434,43 @@ function SystemsSection({ model, onOpenInsight }) {
         ) : (
           <EmptyOperationalState title={SYSTEMS_PENDING.title} body={SYSTEMS_PENDING.summary} />
         )}
+      </section>
+    </div>
+  );
+}
+
+function FingerprintSection({ model }) {
+  const drift = model.fingerprintDrift ?? NO_BASELINE_AVAILABLE;
+  const hasEvidence = Array.isArray(model.fingerprintEvidence) && model.fingerprintEvidence.length > 0;
+
+  return (
+    <div className="operational-grid operational-grid--overview">
+      <section className="operational-panel operational-panel--wide" aria-label="Fingerprint">
+        <PanelHeader eyebrow="Fingerprint" title="Operating Fingerprint" subtitle="Plain-language meaning of the baseline comparison." />
+        <div className="operational-actions">
+          <StatusBadge label={drift.label} tone={drift.tone} />
+        </div>
+        <p className="overview-summary-sentence">{drift.detail}</p>
+        <DetailGrid rows={[
+          ["Drift status", drift.label],
+          ["Baseline available", model.baselineAvailable ? "Yes" : "No"],
+        ]} />
+        {model.analysisComplete ? (
+          <details className="advanced-details-panel" open>
+            <summary>Behavior Windows</summary>
+            <DetailGrid rows={model.behaviorWindowRows} technical />
+          </details>
+        ) : null}
+        {hasEvidence ? (
+          <details className="advanced-details-panel">
+            <summary>Fingerprint Evidence</summary>
+            <div className="evidence-group-list">
+              {model.fingerprintEvidence.map((item, index) => (
+                <EvidencePanel key={item.evidence_id ?? index} evidence={item} />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </section>
     </div>
   );
@@ -577,6 +637,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     overviewTabMetric: isEmptyTelemetryState ? "Start" : (resultTabsReady ? "Summary" : heroStatus.label),
     systemsTabMetric: resultTabsReady ? String(identifiedSystemCount) : EMPTY_TAB_METRIC,
     insightsTabMetric: resultTabsReady ? String(insights.length) : EMPTY_TAB_METRIC,
+    fingerprintTabMetric: resultTabsReady ? fingerprintDrift.label : EMPTY_TAB_METRIC,
     signalsTabMetric: resultTabsReady ? String(signals.length) : EMPTY_TAB_METRIC,
     advancedTabMetric: resultTabsReady ? "Raw" : EMPTY_TAB_METRIC,
     disableResultTabs: !resultTabsReady,
@@ -603,6 +664,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     telemetryConnected,
     identifiedSystemCount,
     fingerprintDrift,
+    fingerprintEvidence,
     behaviorWindowRows: buildBehaviorWindowRows(analysisExplanation),
     rawResultJson: compactJson({ result, snapshot, analysisExplanation }),
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
@@ -1990,6 +2052,7 @@ function EmptyOperationalState({ title, body }) {
 function sectionTitle(section) {
   if (section === "systems") return "Systems";
   if (section === "insights") return "Insights";
+  if (section === "fingerprint") return "Fingerprint";
   if (section === "signals") return "Signals";
   if (section === "advanced") return "Advanced Details";
   return "Overview";
@@ -2228,9 +2291,25 @@ function shouldShowRelationshipCount(insight) {
   return getInsightType(insight) === "relationship_shift" && Number(insight?.changedRelationshipCount ?? insightRelationshipLabels(insight).length) > 0;
 }
 
+// Hardened fallback-label detector.
+//
+// Previously this only checked an exact Set of known-bad literal strings.
+// The problem with that approach: it only catches phrasing the team has
+// already seen leak through once. If the backend's generator produces a
+// slightly different fallback sentence (different verb, different word
+// order, a system vs subsystem swap), the exact-match Set misses it
+// silently and the bug resurfaces under a new guise.
+//
+// This version keeps the Set as a fast, cheap first check, but backs it
+// with a structural regex that targets the *shape* of a generic
+// system/subsystem fallback sentence rather than one fixed wording. That
+// makes the filter resilient to small copy changes on the backend without
+// needing a UI patch every time a new fallback phrasing appears.
 function isBackendFallbackLabel(value) {
   const key = normalizeDisplayKey(value);
-  return GENERIC_FALLBACK_LABELS.has(key);
+  if (!key) return false;
+  if (GENERIC_FALLBACK_LABELS.has(key)) return true;
+  return GENERIC_FALLBACK_PATTERN.test(key);
 }
 
 function cleanDisplayText(value) {
