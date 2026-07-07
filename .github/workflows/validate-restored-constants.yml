@@ -1,0 +1,52 @@
+name: Validate restored constants
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/validate-restored-constants.yml
+      - frontend/**
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Patch constants for validation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/components/OperationalWorkflowWorkspace.jsx')
+          text = path.read_text()
+          marker = 'const RESULT_TAB_IDS = new Set(["systems", "insights", "signals", "advanced"]);\n'
+          replacement = marker + 'const EMPTY_TAB_METRIC = "—";\nconst UNASSIGNED_SYSTEM_NAME = "Unassigned System";\n'
+          text = text.replace(marker, replacement, 1)
+          path.write_text(text)
+          PY
+      - working-directory: frontend
+        run: npm ci
+      - name: Run focused tests
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --run src/components/OperationalWorkflowWorkspace.test.js 2>&1 | tee focused-test-output.txt
+      - name: Build frontend
+        if: always()
+        working-directory: frontend
+        run: npm run build
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restored-constants-test-output
+          path: frontend/focused-test-output.txt
