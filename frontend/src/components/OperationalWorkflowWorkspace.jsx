@@ -695,7 +695,7 @@ function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insig
 
 function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifiedSystemCount, activeInsightSystemCount, highestSeverity, lastAnalysis, lastUpdated }) {
   return [
-    ["Overall Operational State", dashboardStatus.label],
+    ["Overall State", dashboardStatus.label],
     ["Operational Fingerprint", analysisComplete ? "Established" : EMPTY_TELEMETRY_COPY.label],
     ["Systems Monitored", analysisComplete ? String(identifiedSystemCount) : "Awaiting telemetry"],
     ["Active Insights", analysisComplete ? String(activeInsightSystemCount) : "Pending fingerprint"],
@@ -721,7 +721,7 @@ function buildPlaceholderSystemCards() {
     scope: system.scope,
     status: "Awaiting Operational Fingerprint",
     activeInsights: "0",
-    severity: "Placeholder",
+    severity: "Awaiting relationship baseline",
     relationshipDrift: "Not analyzed",
     keyChangedRelationship: "Awaiting relationship baseline",
     primaryInsightId: null,

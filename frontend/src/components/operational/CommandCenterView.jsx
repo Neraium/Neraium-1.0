@@ -3,7 +3,8 @@ import OperationalOrb from "./OperationalOrb";
 export default function CommandCenterView({ model, helpers, onOpenInsight, onAnalyzeHistoricalData, onConnectLiveData, onResumePreviousSession, onViewSystems }) {
   const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, formatActiveInsightCount, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing } = helpers;
   const primaryInsight = model.insights[0] ?? null;
-  const systems = model.dashboardSystemCards;
+  const systems = model.analysisComplete ? model.dashboardSystemCards : model.dashboardSystemCards.slice(0, 3);
+  const systemsSubtitle = model.analysisComplete ? "" : "Telemetry has not established system relationships yet.";
 
   function reviewCurrentInsight() {
     if (primaryInsight) {
@@ -34,12 +35,12 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="Operational State">
+      <section className="operational-panel operational-panel--state" aria-label="Operational State">
         <PanelHeader eyebrow="Operational State" title="Current Operating Picture" subtitle="" />
         <SummaryRows rows={model.dashboardSummaryRows} />
       </section>
 
-      <section className="operational-panel" aria-label="Top Operational Insight">
+      <section className="operational-panel operational-panel--top-insight" aria-label="Top Operational Insight">
         <PanelHeader eyebrow="Top Insight" title="Operational Insight" subtitle="" />
         {primaryInsight ? (
           <div className="command-center-insight">
@@ -52,8 +53,8 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         )}
       </section>
 
-      <section className="operational-panel operational-panel--wide" aria-label="Systems requiring attention">
-        <PanelHeader eyebrow="Systems" title="Systems Monitored" subtitle={model.analysisComplete ? "" : "Awaiting telemetry. Resort infrastructure placeholders are shown for orientation."} />
+      <section className="operational-panel operational-panel--dashboard-systems operational-panel--wide" aria-label="Systems requiring attention">
+        <PanelHeader eyebrow="Systems" title={model.analysisComplete ? "Systems Monitored" : "Systems Awaiting Telemetry"} subtitle={systemsSubtitle} />
         <div className="systems-list systems-list--dashboard">
           {systems.map((system) => (
             <article className="system-summary-row system-summary-row--dashboard" key={system.id}>
@@ -71,7 +72,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         </div>
       </section>
 
-      <section className="operational-panel operational-panel--wide" aria-label="Recent Activity">
+      <section className="operational-panel operational-panel--recent-activity operational-panel--wide" aria-label="Recent Activity">
         <PanelHeader eyebrow="Recent Activity" title="Recent Operational Activity" subtitle="" />
         <Timeline items={model.dashboardActivityItems} />
       </section>
