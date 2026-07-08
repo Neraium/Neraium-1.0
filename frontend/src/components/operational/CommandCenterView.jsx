@@ -4,6 +4,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
   const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, formatActiveInsightCount, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing } = helpers;
   const primaryInsight = model.insights[0] ?? null;
   const systems = model.analysisComplete ? model.dashboardSystemCards : model.dashboardSystemCards.slice(0, 3);
+  const awaitingTelemetryCategories = systems.slice(0, 3);
   const systemsSubtitle = model.analysisComplete ? "" : "Telemetry has not established system relationships yet.";
 
   function reviewCurrentInsight() {
@@ -56,7 +57,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
       <section className="operational-panel operational-panel--dashboard-systems operational-panel--wide" aria-label="Systems requiring attention">
         <PanelHeader eyebrow="Systems" title={model.analysisComplete ? "Systems Monitored" : "Systems Awaiting Telemetry"} subtitle={systemsSubtitle} />
         <div className="systems-list systems-list--dashboard">
-          {systems.map((system) => (
+          {model.analysisComplete ? systems.map((system) => (
             <article className="system-summary-row system-summary-row--dashboard" key={system.id}>
               <div>
                 <strong>{system.name}</strong>
@@ -68,7 +69,19 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
                 <small>{system.keyChangedRelationship}</small>
               </div>
             </article>
-          ))}
+          )) : (
+            <article className="system-summary-row system-summary-row--dashboard system-summary-row--awaiting-telemetry">
+              <div>
+                <strong>Systems Awaiting Telemetry</strong>
+                <span>Awaiting relationship baseline</span>
+              </div>
+              <div className="system-summary-row__meta system-summary-row__meta--categories">
+                {awaitingTelemetryCategories.map((system) => (
+                  <span key={system.id}>{system.name}</span>
+                ))}
+              </div>
+            </article>
+          )}
         </div>
       </section>
 

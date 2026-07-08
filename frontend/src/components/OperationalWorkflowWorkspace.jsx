@@ -105,7 +105,7 @@ const NO_BASELINE_AVAILABLE = {
 const SYSTEMS_PENDING = {
   title: "Awaiting Telemetry",
   countLabel: "Pending",
-  summary: "Resort infrastructure placeholders are shown until telemetry establishes detected systems.",
+  summary: "Example resort infrastructure categories are shown until telemetry establishes detected systems.",
 };
 
 export default function OperationalWorkflowWorkspace({

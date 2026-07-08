@@ -124,6 +124,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Last Analysis")).toBeTruthy();
     expect(screen.getByText("Data Source Status")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Systems Awaiting Telemetry" })).toBeTruthy();
+    const commandCenterSystems = screen.getByLabelText("Systems requiring attention");
+    expect(commandCenterSystems.querySelectorAll(".system-summary-row--dashboard")).toHaveLength(1);
     expect(screen.getByText("HVAC and Central Plant")).toBeTruthy();
     expect(screen.getByText("Pools, Spas, and Water Features")).toBeTruthy();
     expect(screen.getByText("Water Treatment and Pumping")).toBeTruthy();

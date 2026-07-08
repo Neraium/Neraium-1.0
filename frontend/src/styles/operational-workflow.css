@@ -1923,6 +1923,34 @@ button.insight-card {
 
 
 /* Command Center mobile repair */
+.system-summary-row--awaiting-telemetry {
+  min-height: 0;
+  align-items: stretch;
+}
+
+.system-summary-row__meta--categories {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.system-summary-row__meta--categories span {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--ops-radius);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px 12px;
+  color: var(--ops-ink-soft);
+  font-size: 0.84rem;
+  font-weight: 560;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
 @media (max-width: 700px) {
   .operational-workflow,
   .operational-workflow * {
@@ -1930,6 +1958,7 @@ button.insight-card {
   }
 
   .operational-workflow {
+    display: block;
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -1946,21 +1975,40 @@ button.insight-card {
   .operational-topbar,
   .operational-mobile-nav,
   .operational-grid,
+  .operational-grid--dashboard,
   .operational-panel,
   .command-center-hero,
   .command-center-hero__copy,
   .summary-row-list,
   .systems-list--dashboard,
-  .operational-timeline {
+  .system-summary-row,
+  .operational-timeline,
+  .operational-timeline li,
+  .operational-empty,
+  .command-center-insight {
     width: 100%;
     max-width: 100%;
     min-width: 0;
   }
 
   .operational-grid--dashboard {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     align-items: stretch;
+    overflow: hidden;
+  }
+
+  .operational-grid--dashboard > .operational-panel,
+  .operational-panel--command,
+  .operational-panel--state,
+  .operational-panel--top-insight,
+  .operational-panel--dashboard-systems,
+  .operational-panel--recent-activity,
+  .operational-panel--wide {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    align-self: stretch;
   }
 
   .operational-panel,
@@ -1973,11 +2021,6 @@ button.insight-card {
   .operational-panel {
     padding: 20px;
     overflow: hidden;
-  }
-
-  .operational-panel--command,
-  .operational-panel--wide {
-    grid-column: auto;
   }
 
   .command-center-hero {
@@ -1993,30 +2036,47 @@ button.insight-card {
   }
 
   .command-center-hero__copy h2 {
-    font-size: clamp(1.8rem, 9vw, 2.7rem);
+    font-size: clamp(1.75rem, 8vw, 2.55rem);
+    overflow-wrap: anywhere;
   }
 
-  .command-center-hero__copy p {
+  .command-center-hero__copy p,
+  .command-center-insight p {
     max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .operational-actions--dashboard {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
     width: 100%;
+    max-width: 320px;
     justify-content: center;
+    padding-top: 2px;
   }
 
   .operational-actions--dashboard > * {
-    flex: 1 1 min(100%, 220px);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .operational-dashboard-resume {
+    justify-self: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .operational-orb {
-    width: min(72vw, 220px);
+    width: min(68vw, 220px);
     min-width: 0;
     max-width: 220px;
   }
 
   .operational-orb span {
-    max-width: min(10rem, 70%);
+    max-width: min(10rem, 72%);
+    overflow-wrap: anywhere;
   }
 
   .operational-panel--state .summary-row-list {
@@ -2025,24 +2085,38 @@ button.insight-card {
   }
 
   .operational-panel--state .summary-row {
+    min-width: 0;
     padding: 20px;
+    overflow: hidden;
+  }
+
+  .operational-panel--state .summary-row strong,
+  .operational-panel--state .summary-row span {
+    overflow-wrap: anywhere;
   }
 
   .systems-list--dashboard {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
 
   .system-summary-row--dashboard {
     min-height: 0;
+    width: 100%;
   }
 
   .system-summary-row--dashboard small {
     max-width: 100%;
   }
 
+  .system-summary-row__meta--categories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .operational-panel--top-insight,
   .operational-panel--recent-activity {
-    align-self: stretch;
+    position: static;
+    margin: 0;
   }
 }
 
