@@ -2,58 +2,49 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
 import OperationalWorkflowWorkspace from "./OperationalWorkflowWorkspace";
 
 const h = React.createElement;
+const snapshot = { status: "complete", sii_completed: true, processed_at: "2026-06-23T12:00:00Z", current_upload: { job_id: "ready-job", filename: "uploaded telemetry.csv", row_count: 120 } };
 
 function renderWorkspace(props = {}) {
   return render(h(OperationalWorkflowWorkspace, {
-    liveOps: {},
-    canonicalFinding: { exists: false },
-    currentSession: { hasReliableOperatorEvidence: false },
-    effectiveLatestUploadResult: null,
-    effectiveLatestUploadSnapshot: { status: "empty" },
-    roomContext: { primary: "Primary System" },
-    domainDetection: { mode: "water_system" },
-    gateProcessing: null,
-    ...props,
+    liveOps: {}, canonicalFinding: { exists: false }, currentSession: { hasReliableOperatorEvidence: false },
+    effectiveLatestUploadResult: null, effectiveLatestUploadSnapshot: { status: "empty" },
+    roomContext: { primary: "Primary System" }, domainDetection: { mode: "water_system" }, gateProcessing: null, ...props,
   }));
 }
 
-function telemetryResult(overrides = {}) {
-  return {
-    job_id: "telemetry-job",
-    processed_at: "2026-06-23T12:00:00Z",
-    columns: ["flow", "temperature"],
-    result_source: "uploaded telemetry.csv",
-    row_count: 120,
-    data_quality: { warnings: [] },
-    ...overrides,
-  };
+function result(analysisResult) {
+  return { job_id: "ready-job", processed_at: "2026-06-23T12:00:00Z", columns: ["flow", "temperature"], result_source: "uploaded telemetry.csv", row_count: 120,
+    sii_reliable_enough_to_show: true, sii_completed: true, sii_intelligence: { facility_state: "stable", baseline: { state: "stable" } },
+    baseline_analysis: { status: "available" }, analysis_result: analysisResult };
 }
 
 function completeResult(overrides = {}) {
   return {
-    ...telemetryResult(),
-    job_id: "ready-job",
-    sii_reliable_enough_to_show: true,
-    sii_completed: true,
+    ...result(overrides.analysis_result ?? {}),
     sii_intelligence: { facility_state: "stable", baseline: { state: "stable", confidence: 0.82 } },
-    baseline_analysis: { status: "available" },
     operator_report: { recommended_action: "Continue monitoring" },
     ...overrides,
   };
 }
 
 function completeSnapshot(overrides = {}) {
-  return {
-    status: "complete",
-    sii_completed: true,
-    processed_at: "2026-06-23T12:00:00Z",
-    current_upload: { job_id: "ready-job", filename: "uploaded telemetry.csv", row_count: 120 },
-    ...overrides,
-  };
+  return { ...snapshot, ...overrides };
+}
+
+function analysis({ second = true, reverse = false } = {}) {
+  const evidence = [{ description: "Pump power and filter pressure relationship changed.", metric_delta: [{ tag_name: "pump_power_filter_dp", baseline_strength: 0.775497, current_strength: 0.063807, correlation_delta: 0.839304 }] }];
+  if (second) evidence.push({ description: "Pump power and flow relationship changed.", metric_delta: [{ tag_name: "pump_power_flow", baseline_strength: reverse ? 0.61 : 0.72, current_strength: reverse ? -0.44 : 0.31, correlation_delta: reverse ? -1.05 : 0.41 }] });
+  return { insights: [{ id: "pump-relationships", title: "Pump relationships changed", severity: "high", confidence: "high", system: "Pump system",
+    contributing_relationships: [{ display_columns: ["Pump Power", "Filter DP"] }, { display_columns: ["Pump Power", "Flow"] }], evidence_items: evidence }],
+    systems: [{ id: "pump", name: "Pump system" }], relationships: [], fingerprint: { status: "changed", meaning: "Pump behavior changed." } };
+}
+
+function openInsights() {
+  const button = screen.getAllByRole("button").find((item) => item.textContent.includes("Insights"));
+  fireEvent.click(button);
 }
 
 function clickNav(label) {
@@ -220,6 +211,56 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);
     expect(screen.queryByText("[object Object]")).toBeNull();
     expect(screen.queryByText(/1\.111111/)).toBeNull();
+  });
+
+  it("maps two changed relationships to two evidence lines", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    expect(screen.getByText(/Pump Power \u2194 Filter DP: Unitless coupling score changed from 0\.78 to 0\.06/)).toBeTruthy();
+    expect(screen.getByText(/Pump Power \u2194 Flow: Unitless coupling score changed from 0\.72 to 0\.31/)).toBeTruthy();
+  });
+
+  it("shows an explicit message when relationship evidence is missing", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis({ second: false }) }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    expect(screen.getByText(/Pump Power \u2194 Flow: change detected, but no quantitative measurement was included in this result/)).toBeTruthy();
+  });
+
+  it("formats evidence to two decimals and explains weakening", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    const text = screen.getByLabelText("Neraium operational workspace").textContent;
+    expect(text).toContain("0.78");
+    expect(text).toContain("0.06");
+    expect(text).toContain("0.84");
+    expect(text).toContain("weakened sharply toward little linear coupling");
+    expect(text).not.toMatch(/0\.775497|0\.063807|0\.839304/);
+  });
+
+  it("describes coupling sign reversal explicitly", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis({ reverse: true }) }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    expect(screen.getAllByText(/the relationship reversed direction/).length).toBeGreaterThan(0);
   });
 
   it("keeps raw identifiers and JSON in Advanced instead of Command Center", () => {

@@ -24,12 +24,28 @@ const MOBILE_PRIMARY_NAV = NAV_ITEMS;
 
 const EMPTY_TAB_METRIC = "—";
 const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
+
+// Known-bad literal strings that have previously leaked through as fallback
+// system/insight names. Kept as an exact-match fast path, but NOT relied on
+// as the only defense -- see isBackendFallbackLabel below, which also runs a
+// structural/pattern check so that a slightly reworded fallback sentence
+// from the backend doesn't silently slip through this filter again.
 const GENERIC_FALLBACK_LABELS = new Set([
   "observed system behavior changed",
   "observed subsystem behavior changed",
   "subsystem behavior changed subsystem",
+  "subsystem behavher changed system",
   "subsystem behavior changed system",
 ]);
+
+// Structural pattern for the same class of fallback text. This exists
+// because pattern-matching specific known-bad strings is inherently
+// brittle: if the backend's template wording shifts even slightly (e.g.
+// "Observed subsystem behavior shifted" instead of "changed"), an
+// exact-match Set silently stops catching it. This regex targets the
+// *shape* of the fallback sentence (subject = generic "system"/"subsystem"
+// noun, verb = behavior changed/shifted) rather than one fixed phrasing.
+const GENERIC_FALLBACK_PATTERN = /^(observed\s+)?(system|subsystem)(\s+behavior)?\s+(changed|shifted)(\s+(system|subsystem))?$/;
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -1396,6 +1412,95 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
   );
 }
 
+function InsightDetail({ insight }) {
+  const causes = operationalCauseHypotheses(insight).slice(0, 6);
+  const relationships = insightRelationshipLabels(insight).slice(0, 8);
+
+  return (
+    <details className="insight-detail-card" aria-label="Insight detail">
+      <summary>Insight detail</summary>
+
+      <div className="insight-briefing__header">
+        <span className="section-token">
+          {formatSubsystemName(insight.system)}
+        </span>
+
+        <h3>{formatInsightTitle(insight)}</h3>
+      </div>
+
+      <dl
+        className="insight-briefing__status"
+        aria-label="Insight status"
+      >
+        <div>
+          <dt>Severity</dt>
+          <dd>
+            <StatusBadge
+              label={insight.severity}
+              tone={severityToTone(insight.severity)}
+            />
+          </dd>
+        </div>
+
+        <div>
+          <dt>Confidence</dt>
+          <dd>
+            <StatusBadge
+              label={formatConfidenceLevel(
+                insight.confidence,
+                insight.confidenceScore
+              )}
+              tone="unknown"
+            />
+          </dd>
+        </div>
+      </dl>
+
+      <BriefingTextBlock
+        title="What Changed"
+        lines={operatorSummaryBriefing(
+          insight,
+          relationships
+        )}
+      />
+
+      <BriefingList
+        title="Evidence"
+        items={evidenceBriefing(
+          insight,
+          relationships
+        )}
+        limit={8}
+      />
+
+      {relationships.length ? (
+        <RelationshipObservedList
+          title="Changed Relationships"
+          items={relationships}
+        />
+      ) : null}
+
+      <BriefingList
+        title="Possible Causes"
+        items={causes}
+      />
+
+      <BriefingList
+        title="Recommended Review"
+        items={recommendedReviewItems(
+          insight,
+          relationships
+        )}
+        limit={6}
+      />
+
+      {insight.hasEvidence ? (
+        <InsightEvidenceDrawer insight={insight} />
+      ) : null}
+    </details>
+  );
+}
+
 function insightCardRows(insight, relationships) {
   const type = getInsightType(insight);
   if (type === "relationship_shift") {
@@ -1416,43 +1521,56 @@ function insightCardRows(insight, relationships) {
   return [["Affected System", formatSubsystemName(insight.system)]];
 }
 
-function evidenceBriefing(insight) {
-  const direct = formatEvidenceItems(insight.publicEvidenceItems);
-  if (direct.length) return direct.slice(0, 4);
-  return briefingSentences(firstText(insight.evidenceSummary, insight.whyNeraiumThinks, insight.whyItMatters), 3);
-}
+function evidenceBriefing(insight, relationships = []) {
+  const evidenceItems = Array.isArray(insight?.evidence)
+    ? insight.evidence
+    : [];
 
-function InsightDetail({ insight }) {
-  const causes = operationalCauseHypotheses(insight).slice(0, 6);
-  const relationships = insightRelationshipLabels(insight).slice(0, 8);
-  return (
-    <details className="insight-detail-card" aria-label="Insight detail">
-      <summary>Insight detail</summary>
-      <div className="insight-briefing__header">
-        <span className="section-token">{formatSubsystemName(insight.system)}</span>
-        <h3>{formatInsightTitle(insight)}</h3>
-      </div>
-      <dl className="insight-briefing__status" aria-label="Insight status">
-        <div>
-          <dt>Severity</dt>
-          <dd><StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} /></dd>
-        </div>
-        <div>
-          <dt>Confidence</dt>
-          <dd><StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" /></dd>
-        </div>
-      </dl>
-      <BriefingTextBlock title="What Changed" lines={operatorSummaryBriefing(insight, relationships)} />
-      <BriefingList title="Evidence" items={evidenceBriefing(insight)} />
-      {relationships.length ? <RelationshipObservedList title="Changed Relationships" items={relationships} /> : null}
-      <BriefingList title="Possible Causes" items={causes} />
-      <BriefingList
-        title="Recommended Review"
-        items={recommendedReviewItems(insight, relationships)}
-        limit={6}
-      />
-      {insight.hasEvidence ? <InsightEvidenceDrawer insight={insight} /> : null}
-    </details>
+  if (relationships.length > 0) {
+    return relationships
+      .map((relationship, index) => {
+        const relationshipName =
+          formatRelationshipObservedLabel(relationship, index);
+
+        const evidence = evidenceItems[index];
+
+        const quantitativeSummary =
+          relationshipEvidenceSummary(evidence);
+
+        if (quantitativeSummary) {
+          return `${relationshipName}: ${quantitativeSummary}`;
+        }
+
+        const fallbackEvidence =
+          firstReadableEvidenceText(evidence);
+
+        if (fallbackEvidence) {
+          return `${relationshipName}: ${fallbackEvidence}`;
+        }
+
+        return `${relationshipName}: change detected, but no quantitative measurement was included in this result.`;
+      })
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  const direct = formatEvidenceItems(
+    insight.publicEvidenceItems
+  )
+    .map(cleanEvidenceText)
+    .filter(Boolean);
+
+  if (direct.length) {
+    return direct.slice(0, 8);
+  }
+
+  return briefingSentences(
+    firstText(
+      insight.evidenceSummary,
+      insight.whyNeraiumThinks,
+      insight.whyItMatters
+    ),
+    3
   );
 }
 
@@ -1465,6 +1583,239 @@ function BriefingTextBlock({ title, lines }) {
       {visibleLines.map((line) => <p key={line}>{line}</p>)}
     </section>
   );
+}
+function firstReadableEvidenceText(evidence) {
+  if (!evidence || typeof evidence !== "object") {
+    return "";
+  }
+
+  const candidates = [
+    evidence.description,
+    evidence.summary,
+    evidence.what_changed,
+    evidence.whatChanged,
+  ];
+
+  for (const candidate of candidates) {
+    const text = cleanEvidenceText(candidate);
+
+    if (text) {
+      return text;
+    }
+  }
+
+  const supportingSignals = formatEvidenceItems(
+    toList(
+      evidence.supporting_signals,
+      evidence.supportingSignals
+    )
+  )
+    .map(cleanEvidenceText)
+    .filter(Boolean);
+
+  if (supportingSignals.length > 0) {
+    return supportingSignals.join("; ");
+  }
+
+  return "";
+}
+
+function cleanEvidenceText(value) {
+  return cleanBriefingText(value)
+    .replace(/^\s*[;,]+\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function relationshipEvidenceSummary(evidence) {
+  const measurement =
+    extractRelationshipMeasurement(evidence);
+
+  if (!measurement) {
+    return "";
+  }
+
+  const { baseline, current, delta } =
+    measurement;
+
+  const interpretation =
+    interpretCouplingChange(
+      baseline,
+      current
+    );
+
+  const changeMagnitude =
+    delta !== null
+      ? ` Overall change magnitude: ${formatEvidenceNumber(
+          Math.abs(delta)
+        )}.`
+      : "";
+
+  return (
+    `Unitless coupling score changed from ` +
+    `${formatEvidenceNumber(baseline)} to ` +
+    `${formatEvidenceNumber(current)}; ` +
+    `${interpretation}.${changeMagnitude}`
+  );
+}
+
+function extractRelationshipMeasurement(evidence) {
+  if (!evidence || typeof evidence !== "object") {
+    return null;
+  }
+
+  const candidates = [];
+
+  appendMeasurementCandidates(
+    candidates,
+    evidence.metric_delta
+  );
+
+  appendMeasurementCandidates(
+    candidates,
+    evidence.relevant_metric_changes
+  );
+
+  appendMeasurementCandidates(
+    candidates,
+    evidence.relevantMetricChanges
+  );
+
+  appendMeasurementCandidates(
+    candidates,
+    evidence.relationship_delta
+  );
+
+  appendMeasurementCandidates(
+    candidates,
+    evidence.relationshipDelta
+  );
+
+  for (const candidate of candidates) {
+    if (
+      !candidate ||
+      typeof candidate !== "object"
+    ) {
+      continue;
+    }
+
+    const baseline = numberOrNull(
+      candidate.baseline_strength ??
+        candidate.baselineStrength ??
+        candidate.baseline_coupling ??
+        candidate.baselineCoupling
+    );
+
+    const current = numberOrNull(
+      candidate.current_strength ??
+        candidate.currentStrength ??
+        candidate.current_coupling ??
+        candidate.currentCoupling
+    );
+
+    if (
+      baseline === null ||
+      current === null
+    ) {
+      continue;
+    }
+
+    const delta = numberOrNull(
+      candidate.correlation_delta ??
+        candidate.correlationDelta ??
+        candidate.coupling_delta ??
+        candidate.couplingDelta
+    );
+
+    return {
+      baseline,
+      current,
+      delta,
+    };
+  }
+
+  return null;
+}
+
+function appendMeasurementCandidates(
+  destination,
+  value
+) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      appendMeasurementCandidates(
+        destination,
+        item
+      );
+    });
+
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    destination.push(value);
+  }
+}
+
+function interpretCouplingChange(
+  baseline,
+  current
+) {
+  const baselineSign = Math.sign(baseline);
+  const currentSign = Math.sign(current);
+
+  if (
+    baselineSign !== 0 &&
+    currentSign !== 0 &&
+    baselineSign !== currentSign
+  ) {
+    return "the relationship reversed direction";
+  }
+
+  const strengthChange =
+    Math.abs(baseline) - Math.abs(current);
+
+  if (strengthChange >= 0.5) {
+    return "the relationship weakened sharply toward little linear coupling";
+  }
+
+  if (strengthChange >= 0.2) {
+    return "the relationship weakened materially";
+  }
+
+  if (strengthChange > 0.05) {
+    return "the relationship weakened";
+  }
+
+  if (strengthChange <= -0.2) {
+    return "the relationship strengthened materially";
+  }
+
+  if (strengthChange < -0.05) {
+    return "the relationship strengthened";
+  }
+
+  return "the relationship remained similar in strength";
+}
+
+function formatEvidenceNumber(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "Not available";
+  }
+
+  return number.toFixed(2);
+}
+
+function formatQuantitativeValue(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return displayText(value);
+  }
+
+  return formatEvidenceNumber(number);
 }
 
 function BriefingList({ title, items, limit = 6, codeItems = false }) {
@@ -1628,19 +1979,103 @@ function formatTechnicalKey(value) {
 }
 
 function formatEvidenceDelta(value) {
-  if (Array.isArray(value)) return value.map(formatEvidenceDelta).filter(Boolean);
-  if (!value || typeof value !== "object") return value ? [String(value)] : [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(formatEvidenceDelta)
+      .filter(Boolean);
+  }
+  if (!value || typeof value !== "object") {
+    return value
+      ? [cleanEvidenceText(String(value))]
+      : [];
+  }
   const label = metricDisplayName(value);
+  const baselineStrength = numberOrNull(
+    value.baseline_strength ??
+      value.baselineStrength ??
+      value.baseline_coupling ??
+      value.baselineCoupling
+  );
+  const currentStrength = numberOrNull(
+    value.current_strength ??
+      value.currentStrength ??
+      value.current_coupling ??
+      value.currentCoupling
+  );
+  const correlationDelta = numberOrNull(
+    value.correlation_delta ??
+      value.correlationDelta ??
+      value.coupling_delta ??
+      value.couplingDelta
+  );
+  if (
+    baselineStrength !== null &&
+    currentStrength !== null
+  ) {
+    const interpretation =
+      interpretCouplingChange(
+        baselineStrength,
+        currentStrength
+      );
+    const magnitude =
+      correlationDelta !== null
+        ? ` Overall change magnitude: ${formatEvidenceNumber(
+            Math.abs(correlationDelta)
+          )}.`
+        : "";
+    const summary =
+      `Unitless coupling score changed from ` +
+      `${formatEvidenceNumber(baselineStrength)} to ` +
+      `${formatEvidenceNumber(currentStrength)}; ` +
+      `${interpretation}.${magnitude}`;
+    return [
+      label
+        ? `${label}: ${summary}`
+        : summary,
+    ];
+  }
   const details = [
-    value.percent_change !== undefined ? `percent change: ${value.percent_change}` : "",
-    value.absolute_change !== undefined ? `absolute change: ${value.absolute_change}` : "",
-    value.baseline_average !== undefined ? `baseline average: ${value.baseline_average}` : "",
-    value.current_average !== undefined ? `current average: ${value.current_average}` : "",
-    value.baseline_strength !== undefined ? `baseline operating coupling: ${value.baseline_strength}` : "",
-    value.current_strength !== undefined ? `current operating coupling: ${value.current_strength}` : "",
-    value.correlation_delta !== undefined ? `operating pattern change: ${value.correlation_delta}` : "",
-  ].filter(Boolean).join(", ");
-  return [firstText([label, details].filter(Boolean).join(" - "), compactJson(value))];
+    value.percent_change !== undefined
+      ? `Percent change: ${formatQuantitativeValue(
+          value.percent_change
+        )}%`
+      : "",
+    value.absolute_change !== undefined
+      ? `Absolute change: ${formatQuantitativeValue(
+          value.absolute_change
+        )}`
+      : "",
+    value.baseline_average !== undefined
+      ? `Baseline average: ${formatQuantitativeValue(
+          value.baseline_average
+        )}`
+      : "",
+    value.current_average !== undefined
+      ? `Current average: ${formatQuantitativeValue(
+          value.current_average
+        )}`
+      : "",
+    correlationDelta !== null
+      ? `Operating pattern change magnitude: ${formatEvidenceNumber(
+          Math.abs(correlationDelta)
+        )}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  if (!details) {
+    return [
+      firstText(
+        label,
+        compactJson(value)
+      ),
+    ];
+  }
+  return [
+    label
+      ? `${label}: ${details}`
+      : details,
+  ];
 }
 
 function formatBehaviorWindow(window) {
@@ -1957,9 +2392,25 @@ function shouldShowRelationshipCount(insight) {
   return getInsightType(insight) === "relationship_shift" && Number(insight?.changedRelationshipCount ?? insightRelationshipLabels(insight).length) > 0;
 }
 
+// Hardened fallback-label detector.
+//
+// Previously this only checked an exact Set of known-bad literal strings.
+// The problem with that approach: it only catches phrasing the team has
+// already seen leak through once. If the backend's generator produces a
+// slightly different fallback sentence (different verb, different word
+// order, a system vs subsystem swap), the exact-match Set misses it
+// silently and the bug resurfaces under a new guise.
+//
+// This version keeps the Set as a fast, cheap first check, but backs it
+// with a structural regex that targets the *shape* of a generic
+// system/subsystem fallback sentence rather than one fixed wording. That
+// makes the filter resilient to small copy changes on the backend without
+// needing a UI patch every time a new fallback phrasing appears.
 function isBackendFallbackLabel(value) {
   const key = normalizeDisplayKey(value);
-  return GENERIC_FALLBACK_LABELS.has(key);
+  if (!key) return false;
+  if (GENERIC_FALLBACK_LABELS.has(key)) return true;
+  return GENERIC_FALLBACK_PATTERN.test(key);
 }
 
 function cleanDisplayText(value) {
