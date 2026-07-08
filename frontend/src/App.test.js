@@ -141,6 +141,7 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
 }));
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/");
   window.localStorage.clear();
   window.sessionStorage.clear();
   runtimeState.latestUploadResult = null;
@@ -160,9 +161,30 @@ afterEach(() => {
 it("starts on the operational intelligence landing page", () => {
   render(h(App));
 
+  expect(window.location.pathname).toBe("/");
   expect(screen.getByRole("heading", { name: "Operational Intelligence for Critical Infrastructure" })).toBeTruthy();
   expect(screen.getByText("Behavior Intelligence")).toBeTruthy();
   expect(screen.queryByTestId("gate-workspace")).toBeNull();
+});
+
+it("launches the operational workspace at the workspace route", async () => {
+  render(h(App));
+
+  await launchWorkspace();
+
+  expect(window.location.pathname).toBe("/workspace");
+  expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+});
+
+it("opens the operational workspace only for direct workspace route entry", async () => {
+  window.history.replaceState({}, "", "/workspace");
+
+  render(h(App));
+
+  await waitFor(() => {
+    expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+  });
+  expect(screen.queryByTestId("home-page")).toBeNull();
 });
 
 it("keeps a fresh session empty when a persisted latest analysis exists", async () => {
