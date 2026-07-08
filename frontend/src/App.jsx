@@ -13,9 +13,10 @@ const HOME_PATH = "/";
 const WORKSPACE_PATH = "/workspace";
 
 function readInitialWorkspaceRoute() {
-  if (typeof window === "undefined") return "home";
+  if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
-  return pathname === WORKSPACE_PATH ? "system-body" : "home";
+  if (pathname === "/home") return "home";
+  return "system-body";
 }
 
 function App() {
@@ -31,7 +32,7 @@ function App() {
     setActiveWorkspaceState(nextWorkspace);
 
     if (typeof window === "undefined") return;
-    const nextPath = nextWorkspace === "home" ? HOME_PATH : WORKSPACE_PATH;
+    const nextPath = nextWorkspace === "home" ? "/home" : WORKSPACE_PATH;
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
