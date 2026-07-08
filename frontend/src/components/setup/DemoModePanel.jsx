@@ -18,7 +18,7 @@ export const DEMO_STEPS = [
   },
   {
     title: "System Monitoring",
-    message: "Live or uploaded telemetry is compared against usual system behavior.",
+    message: "Live streams, historian exports, and telemetry imports are compared against usual system behavior.",
     workspace: "system-body",
   },
   {
@@ -38,7 +38,7 @@ export const DEMO_STEPS = [
   },
   {
     title: "Behavior Timeline",
-    message: "Uploaded telemetry can describe when behavior moved from stable to the current observation.",
+    message: "Historical telemetry can describe when behavior moved from stable to the current observation.",
     workspace: "system-body",
   },
 ];

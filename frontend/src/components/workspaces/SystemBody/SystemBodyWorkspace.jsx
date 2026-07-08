@@ -220,7 +220,7 @@ export default function SystemBodyWorkspace({
           <ul>
             <li>
               <button data-testid="upload-workspace-entry" type="button" className="system-gate__settings-action" aria-label="Data connections" onClick={() => navigateWorkspace("data-connections")}>
-                Upload Telemetry
+                Telemetry Intake
               </button>
             </li>
             {resultSections.map((section) => (
@@ -266,7 +266,7 @@ export default function SystemBodyWorkspace({
 
         {hasPostUploadDashboard ? (
           <>
-        <nav className="result-section-tabs" aria-label="Post-upload result sections">
+        <nav className="result-section-tabs" aria-label="Analysis result sections">
           {resultSections.map((section) => (
             <button
               key={section.id}
@@ -282,7 +282,7 @@ export default function SystemBodyWorkspace({
 
         <div className="post-upload-result" data-testid="post-upload-result">
           {activeResultSection === "overview" ? (
-            <section className="post-upload-overview" aria-label="Post-upload overview">
+            <section className="post-upload-overview" aria-label="Analysis overview">
               <div className="post-upload-overview__header">
                 <p className="section-token">System Status</p>
                 <span className={"post-upload-status post-upload-status--" + overviewStatus.tone}>{overviewStatus.label}</span>
@@ -484,28 +484,28 @@ export default function SystemBodyWorkspace({
         </div>
           </>
         ) : (
-          <section className="post-upload-empty" aria-label="No upload state">
+          <section className="post-upload-empty" aria-label="No telemetry state">
             <div className="post-upload-overview__header">
-              <span className="post-upload-status post-upload-status--pending">No telemetry file</span>
-              <h1>Analyze a system to begin</h1>
-              <p>Select a telemetry file to see health, issues, system story, actions, data quality, and technical details.</p>
+              <span className="post-upload-status post-upload-status--pending">No telemetry source</span>
+              <h1>Start operational intelligence</h1>
+              <p>Select a telemetry source to learn behavior, monitor relationships, and review operational changes.</p>
             </div>
-            <div className="post-upload-actions" aria-label="Upload actions">
-              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Analyze System</button>
+            <div className="post-upload-actions" aria-label="Telemetry actions">
+              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Analyze New Telemetry</button>
               {canResumePreviousUpload ? (
                 <button type="button" className="secondary-command-button" onClick={onResumePreviousUpload}>Resume Previous Analysis</button>
               ) : null}
             </div>
             {previousUploadSummary ? (
-              <section className="previous-upload-summary" aria-label="Previous upload">
-                <span>Previous upload</span>
+              <section className="previous-upload-summary" aria-label="Previous analysis">
+                <span>Previous analysis</span>
                 <strong>{previousUploadSummary.title}</strong>
                 <p>{previousUploadSummary.detail}</p>
               </section>
             ) : null}
             <section className="post-upload-review-next" aria-label="Recommended next checks">
               <span>Recommended next check</span>
-              <strong>Analyze the latest BAS or historian export from the equipment you want to review.</strong>
+              <strong>Analyze the latest live stream, historian export, connector feed, or telemetry import from the systems you want to review.</strong>
             </section>
           </section>
         )}
@@ -712,7 +712,7 @@ function isPlaceholderValue(value) {
 
 function buildOverviewNextAction({ assessmentState, dataQualityReport, evidenceReport, finding }) {
   if (assessmentState.mode === "analysis_error") {
-    return { label: "Return to data intake and correct the upload.", section: null, button: "" };
+    return { label: "Return to telemetry intake and correct the source.", section: null, button: "" };
   }
   if (assessmentState.mode === "analysis_pending") {
     return { label: "Wait for ingestion and analysis to finish.", section: null, button: "" };
@@ -933,7 +933,7 @@ function buildDomainDetectionSummary(domainDetection) {
 function buildPreviousUploadSummary(persistedLatestUpload, previousUploadHistory = []) {
   const latest = persistedLatestUpload ?? null;
   const historyEntry = Array.isArray(previousUploadHistory) ? previousUploadHistory[0] : null;
-  const title = latest?.filename ?? historyEntry?.filename ?? latest?.jobId ?? historyEntry?.job_id ?? "Previous upload available";
+  const title = latest?.filename ?? historyEntry?.filename ?? latest?.jobId ?? historyEntry?.job_id ?? "Previous analysis available";
   const processedAt = latest?.processedAt ?? historyEntry?.last_processed_at ?? historyEntry?.processed_at ?? null;
   if (!latest && !historyEntry) return null;
   return {
@@ -998,7 +998,7 @@ function resolveAssessmentState({
     return {
       mode: "awaiting_telemetry",
       headerStatus: "Awaiting Telemetry",
-      dataPosture: "No telemetry attached yet.",
+      dataPosture: "No telemetry source connected yet.",
       finding: {
         ...fallbackFinding,
         exists: false,
@@ -1028,20 +1028,20 @@ function resolveAssessmentState({
     return {
       mode: "analysis_error",
       headerStatus: "Analysis Error",
-      dataPosture: "Uploaded telemetry cannot be trusted until the error is resolved.",
+      dataPosture: "Telemetry cannot be trusted until the error is resolved.",
       finding: {
         ...fallbackFinding,
         exists: false,
         title: "Analysis Error",
         status: "Error",
         confidence: "Pending",
-        summary: errorMessage || "Analysis could not complete for the uploaded telemetry.",
-        whyItMatters: "The upload cannot be used for operator review until the error is resolved.",
-        reviewNext: "Return to data intake and correct the upload.",
+        summary: errorMessage || "Analysis could not complete for the selected telemetry.",
+        whyItMatters: "The telemetry source cannot be used for operator review until the error is resolved.",
+        reviewNext: "Return to telemetry intake and correct the source.",
         emptyState: {
           title: "Analysis Error",
-          subtitle: "Upload requires attention.",
-          detail: errorMessage || "Return to data intake and correct the upload.",
+          subtitle: "Telemetry source requires attention.",
+          detail: errorMessage || "Return to telemetry intake and correct the source.",
         },
       },
       stability: {
@@ -1062,7 +1062,7 @@ function resolveAssessmentState({
         title: "Analysis running",
         status: "Pending",
         confidence: "Pending",
-        summary: "Backend processing has not finished for this upload.",
+        summary: "Processing has not finished for this telemetry source.",
         whyItMatters: "Issues appear when data readiness is complete.",
         reviewNext: "Wait for ingestion and analysis to finish.",
         emptyState: {
@@ -1083,7 +1083,7 @@ function resolveAssessmentState({
     return {
       mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
       headerStatus: degraded ? "Ready with warnings" : "Analysis ready",
-      dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is ready for review.",
+      dataPosture: degraded ? "Telemetry is usable with data-quality warnings." : "Telemetry is ready for review.",
       finding: {
         ...fallbackFinding,
         exists: false,
@@ -1093,12 +1093,12 @@ function resolveAssessmentState({
         summary: degraded ? "Usable telemetry is available with warnings." : "Usable telemetry is available. No operational issues are currently flagged.",
         whyItMatters: degraded
           ? "Warnings may limit confidence, but they do not block review of available operating patterns."
-          : "The telemetry file is ready and no operational issue is flagged.",
-        reviewNext: degraded ? "Review data quality warnings before acting on issues." : "Continue monitoring or analyze more telemetry.",
+          : "Telemetry is ready and no operational issue is flagged.",
+        reviewNext: degraded ? "Review data quality warnings before acting on issues." : "Continue monitoring or analyze another telemetry source.",
         emptyState: {
           title: degraded ? "Ready with warnings" : "Analysis ready",
           subtitle: degraded ? "Usable telemetry has data-quality warnings." : "No operational issues are currently flagged.",
-          detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or analyze more telemetry.",
+          detail: degraded ? "Review the warnings below before making operational decisions." : "Continue monitoring or analyze another telemetry source.",
         },
         dataQuality: {
           ...fallbackFinding.dataQuality,
@@ -1112,7 +1112,7 @@ function resolveAssessmentState({
   return {
     mode: degraded ? "analysis_degraded_ready" : "analysis_ready",
     headerStatus: degraded ? "Ready with warnings" : "Analysis ready",
-    dataPosture: degraded ? "Uploaded telemetry is usable with data-quality warnings." : "Uploaded telemetry is ready for review.",
+    dataPosture: degraded ? "Telemetry is usable with data-quality warnings." : "Telemetry is ready for review.",
     finding: fallbackFinding,
     stability: stabilitySnapshot,
   };

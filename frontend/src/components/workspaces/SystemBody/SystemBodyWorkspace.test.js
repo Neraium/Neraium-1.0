@@ -29,10 +29,10 @@ function renderWorkspace(overrides = {}) {
       uiState: "ready",
       coherence: 1,
       stateLabel: "No data yet",
-      subtitle: "Upload data to begin.",
+      subtitle: "Connect telemetry to begin.",
       connectionStatus: "idle",
       connectionTone: "pending",
-      primaryMessage: "Upload data to begin.",
+      primaryMessage: "Connect telemetry to begin.",
       lastUpdate: null,
       focusLabel: "No data yet",
       latestUploadSnapshot: { status: "empty" },
@@ -63,12 +63,12 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getByRole("button", { name: "Data connections" })).toBeTruthy();
   });
 
-  it("shows the no-upload state when no current session upload exists", () => {
+  it("shows the empty telemetry state when no current session analysis exists", () => {
     renderWorkspace();
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Analyze a system to begin" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Start operational intelligence" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Issues" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
@@ -76,7 +76,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.queryByText("Rows loaded")).toBeNull();
   });
 
-  it("renders persisted latest upload only as previous upload until resumed", () => {
+  it("renders persisted latest analysis only as previous analysis until resumed", () => {
     const onResumePreviousUpload = vi.fn();
     renderWorkspace({
       persistedLatestUpload: {
@@ -95,10 +95,10 @@ describe("SystemBodyWorkspace empty state", () => {
       onResumePreviousUpload,
     });
 
-    expect(screen.getByRole("heading", { name: "Analyze a system to begin" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Start operational intelligence" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
-    expect(screen.getByLabelText("Previous upload").textContent).toContain("old-upload.csv");
+    expect(screen.getByLabelText("Previous analysis").textContent).toContain("old-upload.csv");
     expect(screen.queryByText("Ready with warnings")).toBeNull();
     expect(screen.queryByText("51841")).toBeNull();
     expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();

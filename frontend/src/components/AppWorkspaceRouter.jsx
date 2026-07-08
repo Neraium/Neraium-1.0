@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
+import HomePage from "./HomePage";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
@@ -30,9 +31,9 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
               type="button"
               className="system-gate__settings-action"
               onClick={handleBackToGate}
-              aria-label="Back to Overview"
+              aria-label="Back to Workspace"
             >
-              Back to Overview
+              Back to Workspace
             </button>
           </div>
           {children}
@@ -75,7 +76,18 @@ export default function AppWorkspaceRouter({
   setActiveWorkspace,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
+  resultsNavigationKey = 0,
 }) {
+  if (activeWorkspace === "home") {
+    return (
+      <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
+        <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+          <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
+        </div>
+      </AppErrorBoundary>
+    );
+  }
+
   if (activeWorkspace === "data-connections") {
     return (
       <WorkspaceWithBackControl
@@ -84,7 +96,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Upload Workspace", "Preparing telemetry intake...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Telemetry Workspace", "Preparing telemetry intake...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
@@ -178,7 +190,6 @@ export default function AppWorkspaceRouter({
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
             onReviewEvidence={() => setActiveWorkspace("observation-center")}
-            onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -223,15 +234,35 @@ export default function AppWorkspaceRouter({
             domainMode={domainMode}
             domainDetection={domainDetection}
             gateProcessing={gateProcessing}
+            resultsNavigationKey={resultsNavigationKey}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
-            onCsvSelected={(files) => {
+            onTelemetrySelected={(files) => {
               setPendingUploadFiles(files);
-              setActiveWorkspace("data-connections");
             }}
-            onUploadComplete={handleGateUploadComplete}
             onResumePreviousSession={handleResumePreviousSession}
           />
+          {pendingUploadFiles.length > 0 ? (
+            <DataConnectionsWorkspace
+              accessCode={accessCode}
+              apiFetch={apiFetch}
+              apiStatus={apiStatus}
+              latestUploadSnapshot={effectiveLatestUploadSnapshot}
+              latestUploadResult={effectiveLatestUploadResult}
+              hasActiveSession={hasActiveSession}
+              hasResumedSession={hasResumedSession}
+              hasCurrentUploadResult={hasCurrentUploadResult}
+              hasRealSiiOutput={hasRealSiiOutput}
+              roomContext={roomContext}
+              onUploadComplete={handleGateUploadComplete}
+              sessionStore={liveOps.session}
+              onResetDemo={handleResetDemo}
+              formatClockTime={formatClockTime}
+              initialSelectedFiles={pendingUploadFiles}
+              autoStartInitialFiles={true}
+              headless={true}
+            />
+          ) : null}
         </Suspense>
       </div>
     </AppErrorBoundary>

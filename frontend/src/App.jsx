@@ -9,12 +9,34 @@ import { logoutUser } from "./services/api/authApi";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
+const HOME_PATH = "/";
+const WORKSPACE_PATH = "/workspace";
+
+function readInitialWorkspaceRoute() {
+  if (typeof window === "undefined") return "system-body";
+  const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
+  if (pathname === "/home") return "home";
+  return "system-body";
+}
+
 function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
-  const [activeWorkspace, setActiveWorkspace] = useState("system-body");
+  const [activeWorkspace, setActiveWorkspaceState] = useState(() => readInitialWorkspaceRoute());
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
+  const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
+
+  const setActiveWorkspace = useCallback((workspaceId) => {
+    const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
+    setActiveWorkspaceState(nextWorkspace);
+
+    if (typeof window === "undefined") return;
+    const nextPath = nextWorkspace === "home" ? "/home" : WORKSPACE_PATH;
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+  }, []);
 
   const {
     apiStatus,
@@ -182,6 +204,14 @@ function App() {
     await logoutUser();
   }, []);
 
+  const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
+    await handleGateUploadComplete(completedPayload, options);
+    setPendingUploadFiles([]);
+    if (options.navigateToGate !== false) {
+      setResultsNavigationKey((current) => current + 1);
+    }
+  }, [handleGateUploadComplete]);
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (domainMode) {
@@ -195,6 +225,17 @@ function App() {
     if (typeof window === "undefined") return;
     setAppReady(true);
     window.__NERAIUM_APP_READY__ = true;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handlePopState = () => {
+      setActiveWorkspaceState(readInitialWorkspaceRoute());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   return (
@@ -222,7 +263,7 @@ function App() {
       formatClockTime={formatClockTime}
       handleBackToGate={handleBackToGate}
       handleRetryWorkspace={handleRetryWorkspace}
-      handleGateUploadComplete={handleGateUploadComplete}
+      handleGateUploadComplete={handleTelemetryAnalysisComplete}
       handleResumePreviousSession={handleResumePreviousSession}
       handleResetDemo={handleResetDemo}
       handleReplayFrameChange={handleReplayFrameChange}
@@ -231,6 +272,7 @@ function App() {
       setActiveWorkspace={setActiveWorkspace}
       pendingUploadFiles={pendingUploadFiles}
       setPendingUploadFiles={setPendingUploadFiles}
+      resultsNavigationKey={resultsNavigationKey}
     />
   );
 }

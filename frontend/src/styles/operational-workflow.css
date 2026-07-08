@@ -528,7 +528,178 @@
 .system-summary-row,
 .insight-card,
 .operational-empty,
-.operational-block,
+.operational-block {
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+}
+
+.operational-grid--dashboard {
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.operational-panel--status {
+  display: grid;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.operational-dashboard-status__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.operational-dashboard-status__header h2 {
+  margin: 4px 0 0;
+  color: var(--ops-ink);
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  font-weight: 620;
+  line-height: 1.12;
+}
+
+.operational-actions--dashboard {
+  padding-top: 4px;
+}
+
+.operational-dashboard-resume {
+  justify-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ops-ink-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.operational-dashboard-resume:hover,
+.operational-dashboard-resume:focus-visible {
+  color: var(--ops-ink);
+}
+
+.telemetry-source-chooser {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--ops-line);
+  padding-top: 14px;
+}
+
+.telemetry-source-chooser__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.telemetry-source-chooser__header h3 {
+  margin: 3px 0 0;
+  color: var(--ops-ink);
+  font-size: 1.05rem;
+  font-weight: 620;
+  line-height: 1.22;
+}
+
+.telemetry-source-chooser__close {
+  border: 0;
+  background: transparent;
+  color: var(--ops-ink-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+
+.telemetry-source-chooser__close:hover,
+.telemetry-source-chooser__close:focus-visible {
+  color: var(--ops-ink);
+}
+
+.telemetry-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.telemetry-source-card {
+  display: grid;
+  gap: 7px;
+  min-height: 134px;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+  color: inherit;
+  cursor: not-allowed;
+  font: inherit;
+  padding: 12px;
+  text-align: left;
+}
+
+.telemetry-source-card--available {
+  cursor: pointer;
+  border-color: rgba(0, 163, 154, 0.34);
+  background: linear-gradient(180deg, rgba(0, 122, 116, 0.14), var(--ops-surface-subtle));
+}
+
+.telemetry-source-card--available:hover,
+.telemetry-source-card--available:focus-visible {
+  border-color: var(--ops-accent-strong);
+  transform: translateY(-1px);
+}
+
+.telemetry-source-card strong {
+  color: var(--ops-ink);
+  font-size: 0.95rem;
+  line-height: 1.24;
+}
+
+.telemetry-source-card span {
+  color: var(--ops-ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.telemetry-source-card small {
+  align-self: end;
+  color: var(--ops-ink-muted);
+  font-size: 0.72rem;
+  font-weight: 580;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.systems-list--dashboard {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.system-summary-row--dashboard {
+  min-height: 118px;
+}
+
+.system-summary-row--dashboard > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.system-summary-row--dashboard > div:first-child span {
+  color: var(--ops-ink-soft);
+  font-size: 0.9rem;
+}
+
+.system-summary-row--dashboard .system-summary-row__meta strong {
+  font-size: 0.9rem;
+}
+
+.system-summary-row--dashboard small {
+  max-width: 24ch;
+  line-height: 1.35;
+}
+
+
 .operational-timeline li {
   border: 1px solid var(--ops-line);
   border-radius: 8px;
@@ -975,6 +1146,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--dashboard,
   .operational-grid--command-center,
   .operational-grid--split {
     grid-template-columns: 1fr;
@@ -1022,6 +1194,7 @@ button.insight-card {
   }
 
   .operational-grid--overview,
+  .operational-grid--dashboard,
   .operational-grid--command-center,
   .operational-grid--split,
   .overview-support-grid,
@@ -1583,5 +1756,167 @@ button.insight-card {
 @media (max-width: 700px) {
   .technical-value > div {
     grid-template-columns: 1fr;
+  }
+}
+
+.operational-panel--command {
+  grid-column: span 2;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 42%, rgba(0, 163, 154, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(17, 27, 42, 0.98), rgba(8, 12, 20, 0.98));
+}
+
+.command-center-hero {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.32fr) minmax(0, 1fr);
+  gap: clamp(18px, 4vw, 44px);
+  align-items: center;
+  min-height: 280px;
+}
+
+.command-center-hero__copy {
+  display: grid;
+  gap: 14px;
+  align-content: center;
+  min-width: 0;
+}
+
+.command-center-hero__copy h2 {
+  margin: 0;
+  color: var(--ops-ink);
+  font-size: clamp(2rem, 4vw, 4.2rem);
+  font-weight: 620;
+  line-height: 1.02;
+}
+
+.command-center-hero__copy p,
+.command-center-insight p {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--ops-ink-soft);
+  line-height: 1.55;
+}
+
+.command-center-insight {
+  display: grid;
+  gap: 12px;
+}
+
+.command-center-insight strong {
+  color: var(--ops-ink);
+  font-size: 1.08rem;
+  line-height: 1.3;
+}
+
+.operational-orb {
+  --orb-color: var(--ops-accent-strong);
+  --orb-shadow: rgba(0, 163, 154, 0.45);
+  position: relative;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: min(34vw, 220px);
+  min-width: 156px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  color: var(--ops-ink-soft);
+  isolation: isolate;
+}
+
+.operational-orb__core,
+.operational-orb__ring {
+  position: absolute;
+  inset: 11%;
+  border-radius: 999px;
+}
+
+.operational-orb__core {
+  background:
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.2), transparent 16%),
+    radial-gradient(circle at 52% 58%, var(--orb-color), rgba(0, 78, 76, 0.56) 52%, rgba(3, 19, 24, 0.9) 100%);
+  box-shadow: 0 0 34px var(--orb-shadow), inset 0 0 32px rgba(255, 255, 255, 0.08);
+  animation: neraium-orb-pulse 5.8s ease-in-out infinite;
+}
+
+.operational-orb__ring {
+  border: 1px solid rgba(145, 232, 226, 0.24);
+  box-shadow: inset 0 0 22px rgba(0, 163, 154, 0.16);
+  animation: neraium-orb-ring 9s linear infinite;
+}
+
+.operational-orb span {
+  position: relative;
+  z-index: 1;
+  max-width: 11rem;
+  color: var(--ops-ink);
+  font-size: 0.82rem;
+  font-weight: 620;
+  line-height: 1.25;
+  text-align: center;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.72);
+}
+
+.operational-orb--no-data {
+  --orb-color: #0b6f6b;
+  --orb-shadow: rgba(0, 122, 116, 0.22);
+}
+
+.operational-orb--monitoring {
+  --orb-color: #22d3c5;
+  --orb-shadow: rgba(34, 211, 197, 0.42);
+}
+
+.operational-orb--behavior-change {
+  --orb-color: #00a39a;
+  --orb-shadow: rgba(245, 158, 11, 0.32);
+}
+
+.operational-orb--behavior-change .operational-orb__core {
+  background:
+    radial-gradient(circle at 70% 36%, rgba(245, 158, 11, 0.62), transparent 17%),
+    radial-gradient(circle at 44% 56%, var(--orb-color), rgba(0, 78, 76, 0.62) 54%, rgba(3, 19, 24, 0.94) 100%);
+}
+
+.operational-orb--analyzing .operational-orb__ring {
+  background: linear-gradient(115deg, transparent 20%, rgba(145, 232, 226, 0.18) 48%, transparent 72%);
+}
+
+@keyframes neraium-orb-pulse {
+  0%, 100% { transform: scale(0.985); opacity: 0.9; }
+  50% { transform: scale(1.015); opacity: 1; }
+}
+
+@keyframes neraium-orb-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.telemetry-source-grid--full {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.systems-list--systems-view {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.system-summary-row--systems-view {
+  min-height: 180px;
+}
+
+.system-summary-row--systems-view p {
+  max-width: 60ch;
+  margin: 6px 0 14px;
+  color: var(--ops-ink-soft);
+}
+
+@media (max-width: 860px) {
+  .command-center-hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .operational-orb {
+    width: min(62vw, 220px);
   }
 }
