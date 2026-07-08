@@ -80,7 +80,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.getAllByText("Current Site").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Operational Intelligence" })).toBeTruthy();
     expect(screen.getAllByText("Overall Status").length).toBeGreaterThan(0);
-    expect(screen.getByText("Current operational status will update after telemetry is analyzed.")).toBeTruthy();
+    expect(screen.getByText("Current operational status will update after a telemetry source is analyzed.")).toBeTruthy();
     expect(screen.getByText("No analysis performed yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
     expect(screen.getByTestId("overview-csv-upload-input")).toBeTruthy();
@@ -105,7 +105,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByRole("button", { name: /More/i })).toBeNull();
   });
 
-  it("opens the native CSV picker from the overview without navigating first", () => {
+  it("opens telemetry source choices before the native CSV picker", () => {
     const onWorkspaceNavigate = vi.fn();
     const onCsvSelected = vi.fn();
     renderWorkspace({ onWorkspaceNavigate, onCsvSelected });
@@ -114,6 +114,16 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     const inputClick = vi.spyOn(input, "click");
 
     fireEvent.click(screen.getByRole("button", { name: "Analyze New Telemetry" }));
+
+    expect(inputClick).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /CSV Import/i })).toBeTruthy();
+    expect(screen.getByText("Live telemetry")).toBeTruthy();
+    expect(screen.getByText("Historian connectors")).toBeTruthy();
+    expect(screen.getByText("OPC-UA")).toBeTruthy();
+    expect(screen.getByText("MQTT")).toBeTruthy();
+    expect(screen.getByText("PI System")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /CSV Import/i }));
 
     expect(inputClick).toHaveBeenCalledTimes(1);
     expect(onWorkspaceNavigate).not.toHaveBeenCalled();
@@ -136,7 +146,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
     expect(screen.queryByText("Waiting for Telemetry")).toBeNull();
     expect(screen.queryByText("No telemetry uploaded")).toBeNull();
     expect(screen.getAllByText("Overall Status").length).toBeGreaterThan(0);
-    expect(screen.getByText("Current operational status will update after telemetry is analyzed.")).toBeTruthy();
+    expect(screen.getByText("Current operational status will update after a telemetry source is analyzed.")).toBeTruthy();
     expect(screen.queryByText("Data source")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
     expect(screen.queryByText("Telemetry Loaded")).toBeNull();
@@ -196,7 +206,7 @@ describe("OperationalWorkflowWorkspace product story states", () => {
 
     const analyzeButton = screen.getByRole("button", { name: "Analyze New Telemetry" });
     expect(screen.getAllByText("Analyze New Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Telemetry is being parsed and evaluated.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Telemetry is being evaluated against learned operating behavior.").length).toBeGreaterThan(0);
     expect(analyzeButton.disabled).toBe(true);
     fireEvent.click(analyzeButton);
     expect(onWorkspaceNavigate).not.toHaveBeenCalled();

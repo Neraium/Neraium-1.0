@@ -7,9 +7,9 @@ export const WORKSPACES = [
   },
   {
     id: "data-connections",
-    label: "Upload Data",
+    label: "Telemetry Intake",
     eyebrow: "Telemetry",
-    description: "Upload a CSV, analyze it, view results, and investigate findings.",
+    description: "Connect telemetry sources, run behavior analysis, and investigate findings.",
   },
   {
     id: "system-story",

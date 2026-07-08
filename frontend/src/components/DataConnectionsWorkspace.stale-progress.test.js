@@ -238,7 +238,7 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Analyze System", () => {
+it("selected file state shows filename, size, and Analyze Telemetry", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -248,7 +248,7 @@ it("selected file state shows filename, size, and Analyze System", () => {
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Select Another File" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Telemetry" })).toBeTruthy();
 });
 
 it("processing state shows one progress bar", () => {
@@ -315,7 +315,7 @@ it("complete state shows View Results", () => {
   expect(screen.getByText("Insights")).toBeTruthy();
   expect(screen.getByText("Fingerprint")).toBeTruthy();
   expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Fingerprint"]);
 
@@ -426,7 +426,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze System" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Telemetry" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -438,10 +438,10 @@ it("analyze another CSV resets the completed workspace", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Analyze Another CSV" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Analyze Another CSV" }));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze Another Source" }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);

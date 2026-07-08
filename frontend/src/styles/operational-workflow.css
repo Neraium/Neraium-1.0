@@ -582,6 +582,96 @@
   color: var(--ops-ink);
 }
 
+.telemetry-source-chooser {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--ops-line);
+  padding-top: 14px;
+}
+
+.telemetry-source-chooser__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.telemetry-source-chooser__header h3 {
+  margin: 3px 0 0;
+  color: var(--ops-ink);
+  font-size: 1.05rem;
+  font-weight: 620;
+  line-height: 1.22;
+}
+
+.telemetry-source-chooser__close {
+  border: 0;
+  background: transparent;
+  color: var(--ops-ink-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+
+.telemetry-source-chooser__close:hover,
+.telemetry-source-chooser__close:focus-visible {
+  color: var(--ops-ink);
+}
+
+.telemetry-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.telemetry-source-card {
+  display: grid;
+  gap: 7px;
+  min-height: 134px;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+  color: inherit;
+  cursor: not-allowed;
+  font: inherit;
+  padding: 12px;
+  text-align: left;
+}
+
+.telemetry-source-card--available {
+  cursor: pointer;
+  border-color: rgba(0, 163, 154, 0.34);
+  background: linear-gradient(180deg, rgba(0, 122, 116, 0.14), var(--ops-surface-subtle));
+}
+
+.telemetry-source-card--available:hover,
+.telemetry-source-card--available:focus-visible {
+  border-color: var(--ops-accent-strong);
+  transform: translateY(-1px);
+}
+
+.telemetry-source-card strong {
+  color: var(--ops-ink);
+  font-size: 0.95rem;
+  line-height: 1.24;
+}
+
+.telemetry-source-card span {
+  color: var(--ops-ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.telemetry-source-card small {
+  align-self: end;
+  color: var(--ops-ink-muted);
+  font-size: 0.72rem;
+  font-weight: 580;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .systems-list--dashboard {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }

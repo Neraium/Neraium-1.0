@@ -11,7 +11,7 @@ import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/syst
 
 function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
-  const [activeWorkspace, setActiveWorkspace] = useState("system-body");
+  const [activeWorkspace, setActiveWorkspace] = useState("home");
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);

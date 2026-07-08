@@ -514,7 +514,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       connectionTest: results,
       connectionTestState: "passed",
       connectionTestMessage: flow.dataSource === "CSV Upload"
-        ? "Uploaded telemetry is ready for mapping review."
+        ? "Telemetry is ready for mapping review."
         : "Readiness checks passed for the selected data source.",
       connectionTestError: "",
       step: 5,

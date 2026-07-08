@@ -44,6 +44,13 @@ function suppressExpectedGateRenderWindowError() {
   return () => window.removeEventListener("error", handleWindowError);
 }
 
+async function launchWorkspace() {
+  fireEvent.click(screen.getAllByRole("button", { name: "Launch Workspace" })[0]);
+  await waitFor(() => {
+    expect(screen.queryByTestId("gate-workspace") ?? screen.queryByTestId("app-render-fallback")).toBeTruthy();
+  });
+}
+
 vi.mock("./config", () => ({
   apiFetch: vi.fn(),
   ENABLE_ADMISSION_GATE: false,
@@ -84,8 +91,8 @@ vi.mock("./components/OperationalWorkflowWorkspace", () => ({
       h("span", { "data-testid": "gate-processing-active" }, String(Boolean(gateProcessing?.active))),
       h("span", { "data-testid": "gate-processing-label" }, gateProcessing?.label ?? "none"),
       h("span", { "data-testid": "gate-previous-upload" }, liveOps.persistedLatestUpload?.jobId ?? "none"),
-      liveOps.persistedLatestUpload ? h("button", { type: "button", onClick: onResumePreviousSession }, "Resume Previous Upload") : null,
-      h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open uploads"),
+      liveOps.persistedLatestUpload ? h("button", { type: "button", onClick: onResumePreviousSession }, "Resume Previous Analysis") : null,
+      h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
     );
   },
@@ -104,7 +111,7 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 vi.mock("./components/DataConnectionsWorkspace", () => ({
   default: ({ onUploadComplete, onResetDemo }) => h(
     "div",
-    { "data-testid": "upload-workspace" },
+    { "data-testid": "telemetry-workspace" },
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -114,7 +121,7 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
           sii_intelligence: { facility_state: "Monitoring" },
         },
       }),
-    }, "Finish upload"),
+    }, "Finish analysis"),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -122,14 +129,14 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
         status: "running_sii",
         message: "Telemetry active. Analysis pending.",
       }),
-    }, "Finish pending upload"),
+    }, "Finish pending analysis"),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
         latest_result: { job_id: "restored-job-7", sii_intelligence: { facility_state: "Monitoring" } },
       }, { navigateToGate: false }),
-    }, "Restore upload"),
-    h("button", { type: "button", onClick: onResetDemo }, "Clear Upload Workspace"),
+    }, "Restore analysis"),
+    h("button", { type: "button", onClick: onResetDemo }, "Clear Telemetry Workspace"),
   ),
 }));
 
@@ -150,7 +157,15 @@ afterEach(() => {
 });
 
 
-it("keeps a fresh session empty when a persisted latest upload exists", async () => {
+it("starts on the operational intelligence landing page", () => {
+  render(h(App));
+
+  expect(screen.getByRole("heading", { name: "Operational Intelligence for Critical Infrastructure" })).toBeTruthy();
+  expect(screen.getByText("Behavior Intelligence")).toBeTruthy();
+  expect(screen.queryByTestId("gate-workspace")).toBeNull();
+});
+
+it("keeps a fresh session empty when a persisted latest analysis exists", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-42",
     row_count: 51841,
@@ -165,17 +180,18 @@ it("keeps a fresh session empty when a persisted latest upload exists", async ()
   };
 
   render(h(App));
+  await launchWorkspace();
 
   await waitFor(() => {
     expect(screen.getByTestId("gate-result").textContent).toBe("empty");
   });
   expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
   expect(screen.getByTestId("gate-previous-upload").textContent).toBe("persisted-job-42");
-  expect(screen.getByRole("button", { name: "Resume Previous Upload" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
   expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
 });
 
-it("resumes a persisted upload only after explicit resume", async () => {
+it("resumes a persisted analysis only after explicit resume", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-99",
     sii_reliable_enough_to_show: true,
@@ -189,9 +205,10 @@ it("resumes a persisted upload only after explicit resume", async () => {
   };
 
   render(h(App));
+  await launchWorkspace();
 
   expect(screen.getByTestId("gate-result").textContent).toBe("empty");
-  fireEvent.click(screen.getByRole("button", { name: "Resume Previous Upload" }));
+  fireEvent.click(screen.getByRole("button", { name: "Resume Previous Analysis" }));
 
   await waitFor(() => {
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-99");
@@ -199,16 +216,17 @@ it("resumes a persisted upload only after explicit resume", async () => {
   expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
 });
 
-describe("App upload completion navigation", () => {
+describe("App telemetry completion navigation", () => {
   it("refreshes persisted upload state and returns to the Gate", async () => {
     render(h(App));
+    await launchWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
     await waitFor(() => {
-      expect(screen.getByTestId("upload-workspace")).toBeTruthy();
+      expect(screen.getByTestId("telemetry-workspace")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Finish upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish analysis" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("gate-workspace")).toBeTruthy();
@@ -219,11 +237,12 @@ describe("App upload completion navigation", () => {
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
   });
 
-  it("reset workspace clears the current upload state", async () => {
+  it("reset workspace clears the current analysis state", async () => {
     render(h(App));
+    await launchWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear Upload Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Telemetry Workspace" }));
 
     await waitFor(() => {
       expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalledTimes(1);
@@ -231,25 +250,27 @@ describe("App upload completion navigation", () => {
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false });
   });
 
-  it("does not leave Data Connections when an existing upload is restored", async () => {
+  it("does not leave Data Connections when an existing analysis is restored", async () => {
     render(h(App));
+    await launchWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
-    fireEvent.click(screen.getByRole("button", { name: "Restore upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore analysis" }));
 
     await waitFor(() => {
       expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
     });
 
-    expect(screen.getByTestId("upload-workspace")).toBeTruthy();
+    expect(screen.getByTestId("telemetry-workspace")).toBeTruthy();
     expect(screen.queryByTestId("gate-workspace")).toBeNull();
   });
 
-  it("forces a canonical current-upload refetch after upload completion", async () => {
+  it("forces a canonical current telemetry refetch after upload completion", async () => {
     render(h(App));
+    await launchWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
-    fireEvent.click(screen.getByRole("button", { name: "Finish upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish analysis" }));
 
     await waitFor(() => {
       expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
@@ -262,9 +283,10 @@ describe("App upload completion navigation", () => {
     runtimeMocks.loadFacilitySystems.mockResolvedValueOnce(true);
 
     render(h(App));
+    await launchWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open uploads" }));
-    fireEvent.click(screen.getByRole("button", { name: "Finish pending upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish pending analysis" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("gate-workspace")).toBeTruthy();
@@ -275,13 +297,14 @@ describe("App upload completion navigation", () => {
     expect(screen.getByTestId("gate-processing-label").textContent).toMatch(/analysis pending/i);
   });
 
-  it("shows a safe fallback when the post-upload route render throws", async () => {
+  it("shows a safe fallback when the post-analysis route render throws", async () => {
     runtimeState.throwGateError = true;
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const restoreWindowError = suppressExpectedGateRenderWindowError();
 
     try {
       render(h(App));
+    await launchWorkspace();
 
       await waitFor(() => {
         expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
@@ -301,6 +324,7 @@ describe("App upload completion navigation", () => {
 
     try {
       render(h(App));
+    await launchWorkspace();
 
       await waitFor(() => {
         expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
@@ -344,6 +368,7 @@ describe("App upload completion navigation", () => {
 
     window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
+    await launchWorkspace();
 
     const gateSummary = screen.getByTestId("gate-finding-summary").textContent;
     expect(gateSummary).toMatch(/historical operating pattern/i);
@@ -376,6 +401,7 @@ describe("App upload completion navigation", () => {
 
     window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
+    await launchWorkspace();
 
     expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Analysis pending verification.");
 

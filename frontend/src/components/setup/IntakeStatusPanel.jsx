@@ -75,7 +75,7 @@ export default function IntakeStatusPanel({
       ) : (
         <Panel title="No Active System Review" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <div className="intake-flow__controls">
-            <button type="button" className="command-button" onClick={onOpenUpload}>Analyze System</button>
+            <button type="button" className="command-button" onClick={onOpenUpload}>Analyze New Telemetry</button>
             <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
           </div>
         </Panel>

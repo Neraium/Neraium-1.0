@@ -278,7 +278,7 @@ export default function IntakeFlowPanel({
               ) : null}
               {hasSelectedFiles ? (
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
-                  Analyze System
+                  Analyze Telemetry
                 </button>
               ) : null}
             </div>
@@ -325,7 +325,7 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-simple-actions">
               <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
-              <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another CSV</button>
+              <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
             </div>
           </section>
         ) : null}

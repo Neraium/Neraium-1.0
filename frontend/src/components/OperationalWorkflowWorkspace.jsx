@@ -44,7 +44,7 @@ const hiddenFileInputStyle = {
 
 const EMPTY_TELEMETRY_COPY = {
   label: "Operational status pending",
-  detail: "Connect or upload telemetry to identify relationship changes across operational systems.",
+  detail: "Connect a telemetry source to identify relationship changes across operational systems.",
   fileStatus: "No file selected",
   cta: "Analyze New Telemetry",
   headerStatus: "Waiting for telemetry",
@@ -107,6 +107,7 @@ export default function OperationalWorkflowWorkspace({
 }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [selectedInsightId, setSelectedInsightId] = useState(null);
+  const [sourceChooserOpen, setSourceChooserOpen] = useState(false);
   const overviewUploadInputRef = useRef(null);
   const resultsNavigationHandledRef = useRef(resultsNavigationKey);
 
@@ -172,7 +173,17 @@ export default function OperationalWorkflowWorkspace({
   }
 
   function openOverviewFilePicker() {
+    setSourceChooserOpen(false);
     overviewUploadInputRef.current?.click();
+  }
+
+  function openTelemetrySourceChooser() {
+    if (model.uiState.key === "analyzing") return;
+    setSourceChooserOpen(true);
+  }
+
+  function closeTelemetrySourceChooser() {
+    setSourceChooserOpen(false);
   }
 
   function handleOverviewFileSelection(event) {
@@ -186,7 +197,8 @@ export default function OperationalWorkflowWorkspace({
 
   function analyzeSystem() {
     if (model.uiState.key === "analyzing") return;
-    openOverviewFilePicker();
+    setActiveSection("overview");
+    setSourceChooserOpen(true);
   }
 
   function viewSystems() {
@@ -268,7 +280,10 @@ export default function OperationalWorkflowWorkspace({
             model={model}
             onOpenInsight={openInsight}
             uploadInputRef={overviewUploadInputRef}
+            onOpenSourceChooser={openTelemetrySourceChooser}
+            sourceChooserOpen={sourceChooserOpen}
             onSelectCsv={openOverviewFilePicker}
+            onCloseSourceChooser={closeTelemetrySourceChooser}
             onFileSelection={handleOverviewFileSelection}
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
@@ -299,7 +314,7 @@ export default function OperationalWorkflowWorkspace({
   );
 }
 
-function OverviewSection({ model, onOpenInsight, uploadInputRef, onSelectCsv, onFileSelection, onResumePreviousSession, onViewSystems }) {
+function OverviewSection({ model, onOpenInsight, uploadInputRef, onOpenSourceChooser, sourceChooserOpen, onSelectCsv, onCloseSourceChooser, onFileSelection, onResumePreviousSession, onViewSystems }) {
   const primaryInsight = model.insights[0] ?? null;
   const systems = model.dashboardSystemCards;
 
@@ -327,7 +342,7 @@ function OverviewSection({ model, onOpenInsight, uploadInputRef, onSelectCsv, on
         </div>
         <SummaryRows rows={model.dashboardSummaryRows} />
         <div className="operational-actions operational-actions--dashboard" aria-label="Primary actions">
-          <button type="button" className="command-button" onClick={onSelectCsv} disabled={model.analyzeDisabled}>
+          <button type="button" className="command-button" onClick={onOpenSourceChooser} disabled={model.analyzeDisabled}>
             Analyze New Telemetry
           </button>
           <button type="button" className="secondary-command-button" onClick={viewResults} disabled={!model.analysisComplete}>
@@ -336,6 +351,9 @@ function OverviewSection({ model, onOpenInsight, uploadInputRef, onSelectCsv, on
         </div>
         {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
           <button type="button" className="operational-dashboard-resume" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
+        ) : null}
+        {sourceChooserOpen ? (
+          <TelemetrySourceChooser onSelectCsv={onSelectCsv} onClose={onCloseSourceChooser} />
         ) : null}
       </section>
 
@@ -366,6 +384,44 @@ function OverviewSection({ model, onOpenInsight, uploadInputRef, onSelectCsv, on
   );
 }
 
+
+function TelemetrySourceChooser({ onSelectCsv, onClose }) {
+  const sources = [
+    { id: "live", label: "Live telemetry", detail: "Stream current operating signals from connected systems.", available: false },
+    { id: "historian", label: "Historian connectors", detail: "Connect governed historical sources for baseline learning.", available: false },
+    { id: "opcua", label: "OPC-UA", detail: "Map industrial tags into operational system relationships.", available: false },
+    { id: "mqtt", label: "MQTT", detail: "Subscribe to telemetry topics from monitored infrastructure.", available: false },
+    { id: "pi", label: "PI System", detail: "Bring PI historian data into the operational workspace.", available: false },
+    { id: "csv", label: "CSV Import", detail: "Import exported telemetry for operational behavior learning.", available: true },
+  ];
+
+  return (
+    <section className="telemetry-source-chooser" aria-label="Telemetry source options">
+      <div className="telemetry-source-chooser__header">
+        <div>
+          <span className="section-token">Telemetry Sources</span>
+          <h3>Select a source</h3>
+        </div>
+        <button type="button" className="telemetry-source-chooser__close" onClick={onClose} aria-label="Close telemetry source options">Close</button>
+      </div>
+      <div className="telemetry-source-grid">
+        {sources.map((source) => (
+          <button
+            key={source.id}
+            type="button"
+            className={source.available ? "telemetry-source-card telemetry-source-card--available" : "telemetry-source-card"}
+            onClick={source.available ? onSelectCsv : undefined}
+            disabled={!source.available}
+          >
+            <strong>{source.label}</strong>
+            <span>{source.detail}</span>
+            <small>{source.available ? "Available now" : "Connector ready"}</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function formatActiveInsightCount(value) {
   const count = Number(value);
@@ -496,11 +552,11 @@ function AdvancedDetailsSection({ model, selectedInsightId, onAnalyzeSystem, onR
         </details>
       </section>
 
-      <section className="operational-panel" aria-label="Upload details">
-        <PanelHeader eyebrow="Upload" title="Upload" subtitle="" />
+      <section className="operational-panel" aria-label="Telemetry source details">
+        <PanelHeader eyebrow="Telemetry" title="Telemetry Source" subtitle="" />
         <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
         <DetailGrid rows={[
-          ["Source file", model.sourceLabel],
+          ["Source", model.sourceLabel],
           ["Last analysis", model.lastAnalysis],
           ["Detected data type", model.domainLabel],
         ]} technical />
@@ -667,8 +723,8 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
 
 
 function deriveOverviewState(uiStateKey) {
-  if (uiStateKey === "noTelemetry") return "noCsvUploaded";
-  if (uiStateKey === "readyToAnalyze") return "csvUploadedReady";
+  if (uiStateKey === "noTelemetry") return "noTelemetrySource";
+  if (uiStateKey === "readyToAnalyze") return "telemetrySourceReady";
   if (uiStateKey === "analyzing") return "analyzing";
   return "analysisComplete";
 }
@@ -724,7 +780,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       key: "analysisComplete",
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Operational assessment ready",
-      storyProgressLabel: "Assessment based on uploaded telemetry",
+      storyProgressLabel: "Assessment based on selected telemetry",
       primaryCtaLabel: "Analyze New Telemetry",
     };
   }
@@ -751,7 +807,7 @@ function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
     snapshot?.current_upload?.source,
     liveOps?.telemetrySession?.source,
     liveOps?.telemetrySession?.sessionMode,
-    uiState.key === "monitoringLive" ? "Live telemetry" : "Uploaded telemetry"
+    uiState.key === "monitoringLive" ? "Live telemetry" : "Telemetry import"
   );
 }
 
@@ -849,7 +905,7 @@ function buildDashboardSystemCards({ analysisComplete, systemCards, detectedSyst
 
 function buildDashboardActivityItems({ historyItems, insights, analysisComplete, analysisRunning, lastAnalysis }) {
   if (analysisRunning) {
-    return [{ id: "analysis-running", title: "New analysis running", time: "Now", detail: "Telemetry is being parsed and evaluated." }];
+    return [{ id: "analysis-running", title: "New analysis running", time: "Now", detail: "Telemetry is being evaluated against learned operating behavior." }];
   }
   if (analysisComplete) {
     const insightItems = insights.slice(0, 3).map((insight, index) => ({
@@ -862,7 +918,7 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     if (historyItems.length) return historyItems.slice(0, 3);
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
-  return [{ id: "no-analysis", title: "No analysis performed yet", time: "Awaiting telemetry", detail: "Current operational status will update after telemetry is analyzed." }];
+  return [{ id: "no-analysis", title: "No analysis performed yet", time: "Awaiting telemetry", detail: "Current operational status will update after a telemetry source is analyzed." }];
 }
 
 function deriveLastUpdatedLabel({ liveOps, snapshot, result }) {
@@ -881,7 +937,7 @@ function buildOverviewSummaryRows({ analysisComplete, uiState, sourceLabel, iden
   if (!analysisComplete) {
     return [
       ["Analysis Status", uiState.sourceStatusLabel],
-      ["File Name", sourceLabel],
+      ["Telemetry Source", sourceLabel],
       ["Systems", "Not analyzed"],
       ["Insights", "Not analyzed"],
       ["Highest Severity", "Not available"],
@@ -890,7 +946,7 @@ function buildOverviewSummaryRows({ analysisComplete, uiState, sourceLabel, iden
   }
   return [
     ["Analysis Status", "Complete"],
-    ["File Name", sourceLabel],
+    ["Telemetry Source", sourceLabel],
     ["Systems", String(identifiedSystemCount)],
     ["Insights", String(insights.length)],
     ["Highest Severity", highestSeverity],
@@ -932,8 +988,8 @@ function buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }) {
   const metadata = analysisExplanation?.analysis_metadata ?? {};
   return [
     ["Analysis reference", firstText(analysisExplanation?.analysis_id, metadata.analysis_id, result?.analysis_id, result?.run_id, result?.job_id)],
-    ["Upload reference", firstText(analysisExplanation?.upload_id, metadata.upload_id, result?.upload_id, result?.job_id, snapshot?.upload_id)],
-    ["Source file", firstText(analysisExplanation?.source_file, result?.source_file, result?.filename, snapshot?.filename, snapshot?.current_upload?.filename)],
+    ["Analysis reference", firstText(analysisExplanation?.upload_id, metadata.upload_id, result?.upload_id, result?.job_id, snapshot?.upload_id)],
+    ["Source", firstText(analysisExplanation?.source_file, result?.source_file, result?.filename, snapshot?.filename, snapshot?.current_upload?.filename)],
     ["Generated at", firstText(analysisExplanation?.generated_at, result?.completed_at, result?.last_processed_at, snapshot?.last_processed_at)],
     ["Rows", firstText(metadata.row_count, result?.row_count, snapshot?.rows_processed)],
     ["Columns", firstText(metadata.column_count, result?.column_count, snapshot?.columns_detected)],
@@ -1663,7 +1719,7 @@ function EvidenceDetails({ evidence }) {
         ["Calculated change", evidence.calculated_delta ?? evidence.calculatedDelta],
         ["Relationship measurements", evidence.relationship_delta],
         ["Calculated percent change", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
-        ["Upload reference", evidence.source_upload_id ?? evidence.upload_id],
+        ["Analysis reference", evidence.source_upload_id ?? evidence.upload_id],
         ["Analysis reference", evidence.analysis_id],
       ]} technical />
       {sourceColumns.length ? <QualityList title="Source signals" items={sourceColumns} empty="" /> : null}

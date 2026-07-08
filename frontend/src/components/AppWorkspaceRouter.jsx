@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
+import HomePage from "./HomePage";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
@@ -30,9 +31,9 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
               type="button"
               className="system-gate__settings-action"
               onClick={handleBackToGate}
-              aria-label="Back to Overview"
+              aria-label="Back to Workspace"
             >
-              Back to Overview
+              Back to Workspace
             </button>
           </div>
           {children}
@@ -77,6 +78,16 @@ export default function AppWorkspaceRouter({
   setPendingUploadFiles = () => {},
   resultsNavigationKey = 0,
 }) {
+  if (activeWorkspace === "home") {
+    return (
+      <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
+        <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+          <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
+        </div>
+      </AppErrorBoundary>
+    );
+  }
+
   if (activeWorkspace === "data-connections") {
     return (
       <WorkspaceWithBackControl
@@ -85,7 +96,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Upload Workspace", "Preparing telemetry intake...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Telemetry Workspace", "Preparing telemetry intake...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
