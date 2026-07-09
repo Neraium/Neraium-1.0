@@ -19,7 +19,7 @@ const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs) && configuredApiT
   ? configuredApiTimeoutMs
   : 45000;
 const WRITE_API_TIMEOUT_MS = Math.max(API_TIMEOUT_MS, 300000);
-const productionDefaultApiBaseUrl = isProductionBuild ? "" : (configuredApiBaseUrl || "http://127.0.0.1:8010");
+const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ? "" : "http://127.0.0.1:8010");
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 export const CONFIGURED_API_BASE_URL = configuredApiBaseUrl;

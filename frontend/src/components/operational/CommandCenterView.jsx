@@ -17,7 +17,12 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
     <div className="operational-grid operational-grid--dashboard">
       <section className="operational-panel operational-panel--command" aria-label="Command Center">
         <div className="command-center-hero">
-          <OperationalOrb state={model.orb} />
+          <OperationalOrb
+            state={model.orb}
+            status={model.orb.status}
+            hotspotCount={model.orb.hotspotCount}
+            hotspots={model.orb.hotspots}
+          />
           <div className="command-center-hero__copy">
             <span className="section-token">Neraium</span>
             <h2>{model.commandCenterTitle}</h2>

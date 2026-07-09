@@ -62,126 +62,49 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
   throw new Error(`Upload job ${activeJobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
 }
 
-async function openDataConnections(page) {
-  const uploadTab = page.getByRole("tab", { name: /^Upload$/i });
-  const dataConnectionsHeading = page.getByRole("heading", { name: /^Data Connections$/i });
-  const uploadDataHeading = page.getByRole("heading", { name: /^Analyze System$/i });
-  const uploadInput = page.locator("input#csv-upload");
-  const processUploadButton = page.getByRole("button", { name: /Analyze System|Processing telemetry/i });
-  const primaryUploadEntry = page.getByTestId("primary-upload-entry");
-  const workspaceMenuButton = page.getByTestId("workspace-menu-button");
-  const uploadWorkspaceEntry = page.getByTestId("upload-workspace-entry");
-  const legacyDirectDataConnections = page.getByRole("button", { name: /Setup & data connections|Data connections|Analyze System|Upload CSV \/ Connect Data/i });
-  const legacySettingsButton = page.getByRole("button", { name: /Open Gate settings|Gate settings|Views/i });
+async function startCommandCenterUpload(page, { name, csv }) {
+  await page.goto("/", { waitUntil: "load" });
+  await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+  await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
 
-  const isDataConnectionsReady = async () => {
-    const checks = await Promise.all([
-      uploadTab.isVisible().catch(() => false),
-      dataConnectionsHeading.isVisible().catch(() => false),
-      uploadDataHeading.isVisible().catch(() => false),
-      uploadInput.isVisible().catch(() => false),
-    ]);
-    return checks.some(Boolean);
-  };
-
-  const expectDataConnectionsReady = async () => {
-    await expect.poll(
-      async () => isDataConnectionsReady(),
-      { timeout: 30000, message: "Expected Data Connections workspace to be visible." },
-    ).toBe(true);
-  };
-
-  const hasEntrySignal = async () => {
-    const checks = await Promise.all([
-      uploadTab.isVisible().catch(() => false),
-      dataConnectionsHeading.isVisible().catch(() => false),
-      uploadDataHeading.isVisible().catch(() => false),
-      uploadInput.isVisible().catch(() => false),
-      primaryUploadEntry.isVisible().catch(() => false),
-      workspaceMenuButton.isVisible().catch(() => false),
-      legacyDirectDataConnections.isVisible().catch(() => false),
-      legacySettingsButton.isVisible().catch(() => false),
-    ]);
-    return checks.some(Boolean);
-  };
-
-  let entryReady = false;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.goto("/", { waitUntil: "load" });
-    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < 15000) {
-      if (await hasEntrySignal()) {
-        entryReady = true;
-        break;
-      }
-      await page.waitForTimeout(500);
-    }
-    if (entryReady) break;
-    await page.reload({ waitUntil: "load" }).catch(() => {});
-  }
-  expect(entryReady).toBe(true);
-
-  if (await isDataConnectionsReady()) {
-    return;
-  }
-
-  if (await primaryUploadEntry.isVisible().catch(() => false)) {
-    await primaryUploadEntry.click();
-    await expectDataConnectionsReady();
-    return;
-  }
-
-  if (await legacyDirectDataConnections.isVisible().catch(() => false)) {
-    await legacyDirectDataConnections.click();
-    await expectDataConnectionsReady();
-    return;
-  }
-
-  if (await workspaceMenuButton.isVisible().catch(() => false)) {
-    await workspaceMenuButton.click();
-    await expect(uploadWorkspaceEntry).toBeVisible({ timeout: 30000 });
-    await uploadWorkspaceEntry.click();
-    await expectDataConnectionsReady();
-    return;
-  }
-
-  await expect(legacySettingsButton).toBeVisible({ timeout: 30000 });
-  await legacySettingsButton.click();
-  await page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i }).click();
-  await expectDataConnectionsReady();
+  const uploadAcceptedPromise = page.waitForResponse(
+    (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
+    { timeout: 30000 },
+  );
+  await page.getByTestId("overview-csv-upload-input").setInputFiles({
+    name,
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv, "utf8"),
+  });
+  await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
+  const uploadAccepted = await uploadAcceptedPromise;
+  expect(uploadAccepted.ok()).toBeTruthy();
+  const uploadPayload = await uploadAccepted.json();
+  const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
+  expect(uploadJobId.length).toBeGreaterThan(0);
+  return uploadJobId;
 }
 
 test.describe("Functional verification", () => {
-  test("medium upload exposes System Story details and workspace data", async ({ page }) => {
+  test("medium upload exposes Operational Fingerprint results and workspace data", async ({ page }) => {
     test.setTimeout(180000);
-    await openDataConnections(page);
-
-    const input = page.locator("input#csv-upload");
-    await input.setInputFiles({
+    const uploadJobId = await startCommandCenterUpload(page, {
       name: "functional-medium.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(buildCsvRows(48), "utf8"),
+      csv: buildCsvRows(48),
     });
-    const processButton = page.getByTestId("process-upload-button");
-    await expect(processButton).toBeEnabled();
-    const uploadAcceptedPromise = page.waitForResponse(
-      (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
-      { timeout: 30000 },
-    );
-    await processButton.click();
-    const uploadAccepted = await uploadAcceptedPromise;
-    expect(uploadAccepted.ok()).toBeTruthy();
-    const uploadPayload = await uploadAccepted.json();
-    const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
-    expect(uploadJobId.length).toBeGreaterThan(0);
 
     await waitForUploadComplete(page, uploadJobId, 180000);
+    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toBeVisible({ timeout: 30000 });
 
-    await page.getByRole("button", { name: /Back to Gate/i }).click();
-    await expect(page.locator(".system-gate__state")).toBeVisible();
+    const viewResults = page.getByRole("button", { name: "View Results" });
+    if (await viewResults.isVisible().catch(() => false)) {
+      await viewResults.click();
+    } else {
+      await page.getByRole("button", { name: "Back to Workspace" }).click();
+    }
 
-    await page.getByTestId("workspace-menu-button").click();
-    await expect(page.getByTestId("upload-workspace-entry")).toBeVisible();
+    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId("operational-orb")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Fingerprint/i }).first()).toBeVisible();
   });
 });

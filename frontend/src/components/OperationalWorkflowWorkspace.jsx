@@ -509,14 +509,59 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
 }
 
 
+function countHighSeverityInsights(insights) {
+  return (insights ?? []).filter((insight) => normalizeSeverity(insight?.severity) === "High").length;
+}
+
+function buildOrbHotspots(insights, count) {
+  const fallbackPositions = [
+    { x: 70, y: 34, scale: 1 },
+    { x: 38, y: 66, scale: 0.84 },
+    { x: 62, y: 70, scale: 1.12 },
+    { x: 31, y: 39, scale: 0.76 },
+    { x: 77, y: 57, scale: 0.92 },
+  ];
+  const driftInsights = (insights ?? []).filter(Boolean);
+  return Array.from({ length: count }, (_, index) => {
+    const insight = driftInsights[index % Math.max(driftInsights.length, 1)] ?? {};
+    const fallback = fallbackPositions[index % fallbackPositions.length];
+    return {
+      ...fallback,
+      subsystem: firstText(insight.system, insight.rawSystemName, insight.metricName, `Drift ${index + 1}`),
+    };
+  });
+}
+
 function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetryConnected, insights }) {
-  if (uiState.key === "analyzing") return { key: "analyzing", label: ANALYZING_STATUS.label, tone: "learning", visualLabel: "Neraium SII" };
-  if (!analysisComplete) return { key: "no-data", label: NO_TELEMETRY_STATUS.label, tone: "ready", visualLabel: "Neraium SII" };
-  if (insights.length || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate") {
-    return { key: "behavior-change", label: "Relationship Drift Detected", tone: "drift", visualLabel: "SII Drift" };
+  if (uiState.key === "analyzing") {
+    return { key: "analyzing", status: "learning", label: ANALYZING_STATUS.label, tone: "learning", visualLabel: "Operational Fingerprint" };
   }
-  if (telemetryConnected) return { key: "monitoring", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "SII Active" };
-  return { key: "stable", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "SII Active" };
+  if (!analysisComplete) {
+    return { key: "no-data", status: "awaiting", label: "Awaiting Operational Fingerprint", tone: "ready", visualLabel: "Neraium" };
+  }
+
+  const hasDrift = insights.length || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate";
+  if (hasDrift) {
+    const highSeverityCount = countHighSeverityInsights(insights);
+    const status = highSeverityCount > 1 ? "critical" : "warning";
+    const hotspotCount = status === "critical"
+      ? Math.min(5, Math.max(3, highSeverityCount))
+      : Math.min(2, Math.max(1, highSeverityCount || insights.length || 1));
+    return {
+      key: status === "critical" ? "multiple-high-severity-drift" : "relationship-drift",
+      status,
+      label: status === "critical" ? "Critical / Multiple High Severity Drift" : "Relationship Drift Detected",
+      tone: "drift",
+      visualLabel: "Operational Fingerprint",
+      hotspotCount,
+      hotspots: buildOrbHotspots(insights, hotspotCount),
+    };
+  }
+
+  if (telemetryConnected) {
+    return { key: "monitoring", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Fingerprint" };
+  }
+  return { key: "stable", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Fingerprint" };
 }
 
 function buildFingerprintRows({ fingerprintDrift, analysisComplete, baselineAvailable, behaviorState, relationshipRows }) {

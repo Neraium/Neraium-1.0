@@ -5,11 +5,15 @@ test.describe("Accessibility audit", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "Open Gate settings" })).toBeFocused();
+    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
 
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: /Setup & data connections|Data connections/i })).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect.poll(async () => page.evaluate(() => {
+      const active = document.activeElement;
+      return Boolean(active?.matches?.("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])"));
+    }), { timeout: 10000 }).toBe(true);
   });
 
   test("reduced-motion preference is respected", async ({ browser }) => {
@@ -19,7 +23,7 @@ test.describe("Accessibility audit", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     const animationDuration = await page.evaluate(() => {
-      const node = document.querySelector(".system-gate");
+      const node = document.querySelector(".operational-orb__surface");
       if (!node) return null;
       return window.getComputedStyle(node).animationDuration;
     });

@@ -28,59 +28,44 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
   throw new Error(`Upload job ${activeJobId} did not complete in time.`);
 }
 
-async function openUploads(page) {
+async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
 
-  if (await page.getByTestId("upload-workspace").isVisible().catch(() => false)) {
-    return;
-  }
-
-  await page.getByTestId("workspace-menu-button").click();
-  await expect(page.getByTestId("views-overlay")).toBeVisible();
-  await page.getByTestId("upload-workspace-entry").click();
-
+  const uploadAcceptedPromise = page.waitForResponse(
+    (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
+    { timeout: 30000 },
+  );
+  await page.getByTestId("overview-csv-upload-input").setInputFiles({
+    name,
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv, "utf8"),
+  });
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
-  await expect(page.getByTestId("csv-upload-input")).toBeVisible({ timeout: 30000 });
-  await expect(page.getByTestId("process-upload-button")).toBeVisible({ timeout: 30000 });
+  const uploadAccepted = await uploadAcceptedPromise;
+  expect(uploadAccepted.ok()).toBeTruthy();
+  const uploadPayload = await uploadAccepted.json();
+  const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
+  expect(uploadJobId).not.toBe("");
+  return uploadJobId;
 }
 
 test.describe("Mobile post-upload transition", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("client-side upload transition shows pending or canonical gate state without a blank screen", async ({ page }) => {
+  test("client-side upload transition shows pending or canonical workspace state without a blank screen", async ({ page }) => {
     test.setTimeout(180000);
-    await openUploads(page);
-
-    const input = page.getByTestId("csv-upload-input");
-    await input.setInputFiles({
+    const uploadJobId = await startCommandCenterUpload(page, {
       name: "mobile-post-upload.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(buildCsvRows(48), "utf8"),
+      csv: buildCsvRows(48),
     });
-
-    const processButton = page.getByTestId("process-upload-button");
-    await expect(processButton).toBeEnabled();
-    const uploadAcceptedPromise = page.waitForResponse(
-      (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
-      { timeout: 30000 },
-    );
-    await processButton.click();
-    const uploadAccepted = await uploadAcceptedPromise;
-    expect(uploadAccepted.ok()).toBeTruthy();
-    const uploadPayload = await uploadAccepted.json();
-    const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
-    expect(uploadJobId).not.toBe("");
 
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-
-    const gateStatus = page.getByText(/Telemetry active|Analysis running|Behavior Change Detected|No current issues/i).first();
-    await expect(gateStatus).toBeVisible({ timeout: 30000 });
-    await expect(page.getByText(/Story readiness/i)).toBeVisible();
-    await expect(page.getByText(/Operating pattern duration|What changed today|Recommended priorities/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toBeVisible({ timeout: 30000 });
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });

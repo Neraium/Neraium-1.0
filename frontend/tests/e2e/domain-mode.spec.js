@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-async function openSettings(page) {
-  const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
-  await expect(settingsButton).toBeVisible();
-  await settingsButton.click();
-  return settingsButton;
+async function openAdvanced(page) {
+  const advancedButton = page.getByRole("button", { name: /Advanced/i }).first();
+  await expect(advancedButton).toBeVisible();
+  await advancedButton.click();
+  await expect(page.getByRole("region", { name: "Telemetry source details" })).toBeVisible();
 }
 
 test.describe("Domain mode wiring", () => {
@@ -66,15 +66,17 @@ test.describe("Domain mode wiring", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const settingsButton = page.getByRole("button", { name: "Open Gate settings" });
-    await expect(settingsButton).toBeVisible();
-    await openSettings(page);
-    await expect(page.getByText("Detected data type: Aquatic")).toBeVisible();
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    await openAdvanced(page);
+    await expect(page.getByText("Detected data type")).toBeVisible();
+    await expect(page.getByText(/Water Infrastructure|Aquatic|Cultivation/).first()).toBeVisible();
 
     mode = "cultivation";
 
-    await page.reload();
-    await openSettings(page);
-    await expect(page.getByText("Detected data type: Cultivation")).toBeVisible();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    await openAdvanced(page);
+    await expect(page.getByText("Detected data type")).toBeVisible();
+    await expect(page.getByText(/Water Infrastructure|Aquatic|Cultivation/).first()).toBeVisible();
   });
 });

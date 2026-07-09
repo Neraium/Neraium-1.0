@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-
 async function visibleButtonRects(page) {
   return page.evaluate(() => {
     const nodes = Array.from(document.querySelectorAll("button, [role='button'], .command-button, .secondary-command-button, .btn"));
@@ -53,21 +52,21 @@ async function expectNoVisibleButtonOverlap(page) {
   expect(overlaps, overlaps.join("\n")).toEqual([]);
 }
 
-async function mobileLayoutMetrics(page) {
+async function operationalLayoutMetrics(page) {
   return page.evaluate(() => {
-    const gate = document.querySelector('.system-gate');
-    const hero = document.querySelector('.system-gate__hero');
+    const main = document.querySelector('.operational-main');
+    const hero = document.querySelector('.command-center-hero');
     const root = document.documentElement;
     const body = document.body;
-    const gateRect = gate?.getBoundingClientRect() ?? null;
+    const mainRect = main?.getBoundingClientRect() ?? null;
     const heroRect = hero?.getBoundingClientRect() ?? null;
     return {
       viewportWidth: window.innerWidth,
       scrollWidth: root.scrollWidth,
       bodyScrollWidth: body.scrollWidth,
-      gateLeft: gateRect?.left ?? null,
-      gateRight: gateRect?.right ?? null,
-      gateWidth: gateRect?.width ?? null,
+      mainLeft: mainRect?.left ?? null,
+      mainRight: mainRect?.right ?? null,
+      mainWidth: mainRect?.width ?? null,
       heroLeft: heroRect?.left ?? null,
       heroRight: heroRect?.right ?? null,
       heroWidth: heroRect?.width ?? null,
@@ -75,89 +74,54 @@ async function mobileLayoutMetrics(page) {
   });
 }
 
-async function openGate(page, viewport) {
+async function openWorkspace(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
 }
 
 test.describe("Responsive layout audit", () => {
-  test("desktop gate uses full workspace width", async ({ page }) => {
-    await openGate(page, { width: 1440, height: 900 });
-    const gate = page.locator(".system-gate");
-    await expect(gate).toBeVisible();
-    const box = await gate.boundingBox();
+  test("desktop operational workspace uses full available width", async ({ page }) => {
+    await openWorkspace(page, { width: 1440, height: 900 });
+    const main = page.locator(".operational-main");
+    await expect(main).toBeVisible();
+    const box = await main.boundingBox();
     expect(box).not.toBeNull();
     expect(box.width).toBeGreaterThan(900);
   });
 
-  test("tablet gate remains centered and usable", async ({ page }) => {
-    await openGate(page, { width: 1024, height: 1366 });
-    const gate = page.locator(".system-gate");
-    await expect(gate).toBeVisible();
-    const box = await gate.boundingBox();
+  test("tablet operational workspace remains centered and usable", async ({ page }) => {
+    await openWorkspace(page, { width: 1024, height: 1366 });
+    const main = page.locator(".operational-main");
+    await expect(main).toBeVisible();
+    const box = await main.boundingBox();
     expect(box).not.toBeNull();
     expect(box.width).toBeGreaterThan(700);
   });
 
-  test("mobile gate is centered with no horizontal overflow", async ({ page }) => {
-    await openGate(page, { width: 390, height: 844 });
+  test("mobile operational workspace has no horizontal overflow", async ({ page }) => {
+    await openWorkspace(page, { width: 390, height: 844 });
 
-    const metrics = await mobileLayoutMetrics(page);
+    const metrics = await operationalLayoutMetrics(page);
 
     expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
-    expect(metrics.gateWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.mainWidth).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.heroWidth).toBeLessThanOrEqual(metrics.viewportWidth);
-    expect(metrics.gateLeft).toBeGreaterThanOrEqual(0);
+    expect(metrics.mainLeft).toBeGreaterThanOrEqual(0);
     expect(metrics.heroLeft).toBeGreaterThanOrEqual(0);
-    expect(metrics.gateRight).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.mainRight).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.heroRight).toBeLessThanOrEqual(metrics.viewportWidth);
-    expect(Math.abs((metrics.viewportWidth - metrics.gateWidth) / 2 - metrics.gateLeft)).toBeLessThanOrEqual(2);
 
-    await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
-    await expect(page.getByRole("button", { name: /Setup & data connections|Data connections|Upload CSV \/ Connect Data/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Data Sources/i }).first()).toBeVisible();
   });
 
-  test("mobile views overlay covers the viewport and restores the gate on dismiss", async ({ page }) => {
-    await openGate(page, { width: 390, height: 844 });
-    await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
-
-    const overlay = page.getByTestId("views-overlay");
-    await expect(overlay).toBeVisible();
-    await expect(page.getByRole("button", { name: "Close workspace menu" })).toBeVisible();
-
-    const metrics = await overlay.evaluate((node) => {
-      const overlayStyle = window.getComputedStyle(node);
-      const panel = node.querySelector(".system-gate__settings-panel");
-      const panelStyle = panel ? window.getComputedStyle(panel) : null;
-      const overlayRect = node.getBoundingClientRect();
-      const panelRect = panel ? panel.getBoundingClientRect() : null;
-      return {
-        overlayPosition: overlayStyle.position,
-        overlayZIndex: overlayStyle.zIndex,
-        bodyOverflow: window.getComputedStyle(document.body).overflow,
-        documentOverflow: window.getComputedStyle(document.documentElement).overflow,
-        overlayWidth: overlayRect.width,
-        overlayHeight: overlayRect.height,
-        panelMinHeight: panelStyle?.minHeight ?? null,
-        panelTop: panelRect?.top ?? null,
-      };
-    });
-
-    expect(metrics.overlayPosition).toBe("fixed");
-    expect(Number(metrics.overlayZIndex)).toBeGreaterThan(100);
-    expect(metrics.bodyOverflow).toBe("hidden");
-    expect(metrics.documentOverflow).toBe("hidden");
-    expect(metrics.overlayWidth).toBe(390);
-    expect(metrics.overlayHeight).toBe(844);
-    expect(metrics.panelMinHeight).toBe("844px");
-    expect(metrics.panelTop).toBe(0);
-
-    await page.getByRole("button", { name: "Close workspace menu" }).click();
-    await expect(overlay).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ })).toBeVisible();
+  test("mobile workflow navigation remains visible and usable", async ({ page }) => {
+    await openWorkspace(page, { width: 390, height: 844 });
+    await page.getByRole("button", { name: /Data Sources/i }).first().click();
+    await expect(page.getByRole("region", { name: "Data Sources" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /CSV Import/i })).toBeVisible();
   });
 
   test("buttons do not overlap across responsive widths", async ({ page }) => {
@@ -171,16 +135,8 @@ test.describe("Responsive layout audit", () => {
     ];
 
     for (const viewport of viewports) {
-      await openGate(page, viewport);
+      await openWorkspace(page, viewport);
       await expectNoVisibleButtonOverlap(page);
-
-      await page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ }).click();
-      await expect(page.getByRole("button", { name: "Close workspace menu" })).toBeVisible();
-      await expectNoVisibleButtonOverlap(page);
-
-      await page.getByRole("button", { name: "Close workspace menu" }).click();
-      await expect(page.getByRole("button", { name: /Open Gate settings|Open workspace menu/ })).toBeVisible();
     }
   });
-
 });
