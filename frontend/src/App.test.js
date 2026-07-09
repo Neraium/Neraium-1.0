@@ -78,7 +78,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/OperationalWorkflowWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, gateProcessing }) => {
+  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, gateProcessing, onCsvSelected }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
     }
@@ -95,6 +95,11 @@ vi.mock("./components/OperationalWorkflowWorkspace", () => ({
       h("span", { "data-testid": "gate-processing-label" }, gateProcessing?.label ?? "none"),
       h("span", { "data-testid": "gate-previous-upload" }, liveOps.persistedLatestUpload?.jobId ?? "none"),
       liveOps.persistedLatestUpload ? h("button", { type: "button", onClick: onResumePreviousSession }, "Resume Previous Analysis") : null,
+      h("input", {
+        "data-testid": "mock-overview-csv-upload-input",
+        type: "file",
+        onChange: (event) => onCsvSelected?.(Array.from(event.target.files ?? [])),
+      }),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
     );
@@ -112,9 +117,11 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete, onResetDemo }) => h(
+  default: ({ onUploadComplete, onResetDemo, initialSelectedFiles = [], autoStartInitialFiles = false }) => h(
     "div",
     { "data-testid": "telemetry-workspace" },
+    h("span", { "data-testid": "telemetry-initial-file-count" }, String(initialSelectedFiles.length)),
+    h("span", { "data-testid": "telemetry-auto-start" }, String(Boolean(autoStartInitialFiles))),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -189,6 +196,21 @@ it("opens the operational workspace only for direct workspace route entry", asyn
     expect(screen.getByTestId("gate-workspace")).toBeTruthy();
   });
   expect(screen.queryByTestId("home-page")).toBeNull();
+});
+
+it("routes Command Center CSV selections into the visible auto-start upload workflow", async () => {
+  render(h(App));
+  await launchWorkspace();
+
+  const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
+  fireEvent.change(screen.getByTestId("mock-overview-csv-upload-input"), { target: { files: [file] } });
+
+  await waitFor(() => {
+    expect(screen.getByTestId("telemetry-workspace")).toBeTruthy();
+  });
+  expect(screen.queryByTestId("gate-workspace")).toBeNull();
+  expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("1");
+  expect(screen.getByTestId("telemetry-auto-start").textContent).toBe("true");
 });
 
 it("keeps a fresh session empty when a persisted latest analysis exists", async () => {

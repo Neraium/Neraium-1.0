@@ -224,11 +224,16 @@ export default function OperationalWorkflowWorkspace({
 
   function handleOverviewFileSelection(event) {
     const files = Array.from(event?.target?.files ?? []);
-    if (!files.length) return;
-    const telemetrySelectionHandler = onTelemetrySelected ?? onCsvSelected;
-    if (typeof telemetrySelectionHandler === "function") {
-      telemetrySelectionHandler(files);
+    if (!files.length) {
+      if (event?.target) event.target.value = "";
+      return;
     }
+    const csvSelectionHandler = onCsvSelected ?? onTelemetrySelected;
+    if (typeof csvSelectionHandler === "function") {
+      csvSelectionHandler(files);
+    }
+    setActiveSection("data-sources");
+    if (event?.target) event.target.value = "";
   }
 
   function analyzeSystem() {

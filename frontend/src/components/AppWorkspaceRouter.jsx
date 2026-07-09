@@ -114,6 +114,7 @@ export default function AppWorkspaceRouter({
             formatClockTime={formatClockTime}
             initialSelectedFiles={pendingUploadFiles}
             onInitialSelectedFilesConsumed={() => setPendingUploadFiles([])}
+            autoStartInitialFiles={pendingUploadFiles.length > 0}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -237,8 +238,9 @@ export default function AppWorkspaceRouter({
             resultsNavigationKey={resultsNavigationKey}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
-            onTelemetrySelected={(files) => {
+            onCsvSelected={(files) => {
               setPendingUploadFiles(files);
+              setActiveWorkspace("data-connections");
             }}
             onResumePreviousSession={handleResumePreviousSession}
           />

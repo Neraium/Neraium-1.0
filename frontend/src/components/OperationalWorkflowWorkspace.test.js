@@ -159,6 +159,41 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
   });
 
+  it("Selecting a CSV prefers onCsvSelected, clears the input, and does not reset to Command Center", () => {
+    const onCsvSelected = vi.fn();
+    const onTelemetrySelected = vi.fn();
+    renderWorkspace({ onCsvSelected, onTelemetrySelected });
+
+    const input = screen.getByTestId("overview-csv-upload-input");
+    const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(onCsvSelected).toHaveBeenCalledTimes(1);
+    expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
+    expect(onTelemetrySelected).not.toHaveBeenCalled();
+    expect(input.value).toBe("");
+    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Operational Fingerprint Not Yet Established" })).toBeNull();
+  });
+
+  it("Data Sources CSV Import uses the same hidden file-selection path", () => {
+    const onCsvSelected = vi.fn();
+    renderWorkspace({ onCsvSelected });
+
+    clickNav("Data Sources");
+    const input = screen.getByTestId("overview-csv-upload-input");
+    const inputClick = vi.spyOn(input, "click");
+    fireEvent.click(screen.getByRole("button", { name: /CSV Import/i }));
+    expect(inputClick).toHaveBeenCalledTimes(1);
+
+    const file = new File(["timestamp,flow\n2026-01-01,2"], "sources.csv", { type: "text/csv" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(onCsvSelected).toHaveBeenCalledTimes(1);
+    expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
+    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
+  });
+
   it("Data Sources owns CSV import and planned telemetry connectors", () => {
     renderWorkspace();
 
