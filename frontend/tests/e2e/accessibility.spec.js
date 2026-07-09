@@ -7,7 +7,7 @@ test.describe("Accessibility audit", () => {
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze New Dataset" })).toBeVisible();
 
     await page.keyboard.press("Tab");
     await expect.poll(async () => page.evaluate(() => {

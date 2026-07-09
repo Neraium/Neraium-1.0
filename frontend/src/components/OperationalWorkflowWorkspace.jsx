@@ -66,8 +66,8 @@ const EMPTY_TELEMETRY_COPY = {
   commandTitle: "Operational Fingerprint Pending",
   commandDetail: "Import historical telemetry or connect a live read-only source to establish the facility's Operational Fingerprint.",
   fileStatus: "No source connected",
-  cta: "Analyze Historical Data",
-  secondaryCta: "Connect Live Data",
+  cta: "Analyze New Dataset",
+  secondaryCta: "Connect Live Telemetry",
   headerStatus: "Operational Fingerprint Pending",
 };
 const NO_TELEMETRY_STATUS = {
@@ -345,7 +345,8 @@ export default function OperationalWorkflowWorkspace({
 
 function formatActiveInsightCount(value) {
   const count = Number(value);
-  if (!Number.isFinite(count)) return String(value ?? "0");
+  if (!Number.isFinite(count)) return String(value ?? "No Active Insights");
+  if (count <= 0) return "No Active Insights";
   return String(count) + " Active Insight" + (count === 1 ? "" : "s");
 }
 
@@ -405,15 +406,18 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   });
   const lastUpdated = deriveLastUpdatedLabel({ liveOps, snapshot, result });
   const dashboardStatus = deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insights });
-  const commandCenterTitle = analysisComplete ? dashboardStatus.label : EMPTY_TELEMETRY_COPY.commandTitle;
+  const commandCenterTitle = analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : EMPTY_TELEMETRY_COPY.commandTitle;
+  const commandCenterStatus = dashboardStatus;
   const dashboardSummaryRows = buildDashboardSummaryRows({
     dashboardStatus,
     analysisComplete,
     identifiedSystemCount,
     activeInsightSystemCount,
+    activeInsightCount: insights.length,
     highestSeverity,
     lastAnalysis,
     lastUpdated,
+    telemetryConnected,
   });
   const dashboardSystemCards = buildDashboardSystemCards({
     analysisComplete,
@@ -463,6 +467,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     analyzeDisabled: uiState.key === "analyzing",
     overviewSummaryRows,
     commandCenterTitle,
+    commandCenterStatus,
     commandCenterMessage,
     emptyInsightMessage,
     orb,
@@ -503,7 +508,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     qualityWarnings: quality.warnings,
     missingValues: quality.missingValues,
     timestampNotes: quality.timestampNotes,
-    canResumePrevious: Boolean(liveOps?.persistedLatestUpload || liveOps?.previousUploadHistory?.length),
+    canResumePrevious: isAnalysisResumable({ liveOps, currentSession, result, snapshot, gateProcessing }),
     currentSession,
   };
 }
@@ -593,9 +598,9 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) 
 function buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS.detail;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.commandDetail;
-  if (insights.length) return "Neraium detected a system-level relationship change that should be investigated.";
-  if (behaviorState === "Stable") return "Current operating relationships remain aligned with the learned Operational Fingerprint.";
-  return "Current behavior is moving away from the learned Operational Fingerprint.";
+  if (insights.length) return "Neraium detected a system-level behavioral change that should be investigated.";
+  if (behaviorState === "Stable") return "Current operation remains aligned with the learned baseline.";
+  return "Current operation is moving away from the learned baseline.";
 }
 
 
@@ -649,7 +654,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Analyze Historical Data",
+      primaryCtaLabel: "Analyze New Dataset",
     };
   }
   if (analysisComplete) {
@@ -658,7 +663,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Operational assessment ready",
       storyProgressLabel: "Assessment based on selected telemetry",
-      primaryCtaLabel: "Analyze Historical Data",
+      primaryCtaLabel: "Analyze New Dataset",
     };
   }
   return {
@@ -666,7 +671,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Analyze Historical Data",
+    primaryCtaLabel: "Analyze New Dataset",
   };
 }
 
@@ -692,7 +697,18 @@ function deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result }) {
   if (uiState.key === "noTelemetry") return "No analysis yet";
   if (uiState.key === "readyToAnalyze") return "Not analyzed yet";
   if (uiState.key === "analyzing") return "Analysis in progress";
-  return firstText(snapshot?.processed_at, snapshot?.last_processed_at, result?.processed_at, result?.timestamp_profile?.last_timestamp, liveOps?.connectionSummary, "Analysis complete");
+  return formatOperationalTimestamp(firstText(snapshot?.processed_at, snapshot?.last_processed_at, result?.processed_at, result?.timestamp_profile?.last_timestamp, liveOps?.connectionSummary, "Analysis complete"));
+}
+
+function formatOperationalTimestamp(value) {
+  const text = firstText(value);
+  const passthrough = /^(now|pending|previous period|current period|analysis complete|no analysis yet|not analyzed yet|analysis in progress|not updated yet)$/i;
+  if (!text || passthrough.test(text)) return text;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  const dateLabel = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+  const timeLabel = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(date);
+  return dateLabel + ", " + timeLabel;
 }
 
 function isPlaceholderResortSystem(system) {
@@ -734,7 +750,7 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
     label,
     countLabel: String(identifiedSystemCount),
     descriptor,
-    sectionTitle: "Systems",
+    sectionTitle: telemetryConnected ? "Systems Monitored" : "Operational Systems Identified",
     sectionSubtitle: "",
   };
 }
@@ -765,7 +781,7 @@ function buildBehaviorWindowRows(analysisExplanation) {
 function dashboardHeaderSubtitle({ analysisComplete, analysisRunning, insights, behaviorState }) {
   if (analysisRunning) return ANALYZING_STATUS.label;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.detail;
-  if (insights.length || behaviorState === "Behavior Shift Detected") return "Relationship Drift Detected";
+  if (insights.length || behaviorState === "Behavior Shift Detected") return "Investigation recommended";
   return "Operational Fingerprint Active";
 }
 
@@ -777,7 +793,7 @@ function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insig
   return ANALYSIS_COMPLETE_STATUS;
 }
 
-function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifiedSystemCount, activeInsightSystemCount, highestSeverity, lastAnalysis, lastUpdated }) {
+function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifiedSystemCount, activeInsightSystemCount, activeInsightCount, lastAnalysis, lastUpdated, telemetryConnected }) {
   if (!analysisComplete) {
     return [
       ["Systems", "Pending"],
@@ -789,13 +805,12 @@ function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifi
   }
 
   return [
-    ["Overall State", dashboardStatus.label],
-    ["Operational Fingerprint", "Established"],
-    ["Systems Monitored", String(identifiedSystemCount)],
-    ["Active Insights", String(activeInsightSystemCount)],
-    ["Systems with Relationship Drift", highestSeverity],
+    ["Operating Baseline", "Established"],
+    [telemetryConnected ? "Systems Monitored" : "Operational Systems Identified", String(identifiedSystemCount)],
+    ["Systems Requiring Review", String(activeInsightSystemCount)],
+    ["Active Insights", String(activeInsightCount)],
     ["Last Analysis", lastAnalysis],
-    ["Data Source Status", lastUpdated],
+    ["Data Source Updated", lastUpdated],
   ];
 }
 
@@ -808,18 +823,33 @@ function buildPlaceholderSystemCards() {
   return [];
 }
 
+function activityDetailForInsight(insight) {
+  const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Pressure and flow signals shifted during the analysis window.";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "A water-quality operating relationship changed during the analysis window.";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal operating relationships moved away from the baseline.";
+  return "Operation changed relative to the learned baseline.";
+}
+
 function buildDashboardActivityItems({ historyItems, insights, analysisComplete, analysisRunning, lastAnalysis }) {
   if (analysisRunning) {
     return [{ id: "analysis-running", title: "Operational behavior analysis running", time: "Now", detail: "Telemetry is being evaluated against learned operating relationships." }];
   }
   if (analysisComplete) {
     const insightItems = insights.slice(0, 3).map((insight, index) => ({
-      id: "insight-activity-" + index,
-      title: insight.summary,
-      time: insight.detectedAt ?? lastAnalysis,
-      detail: insight.system ? "Behavioral change detected in " + formatSubsystemName(insight.system) + "." : "Major detected change available for review.",
+      id: "insight-activity-entry-" + index,
+      title: formatSubsystemName(insight.system),
+      detail: activityDetailForInsight(insight),
     }));
-    if (insightItems.length) return insightItems;
+    if (insightItems.length) {
+      return [{
+        id: "relationship-changes-detected",
+        title: "Relationship Changes Detected",
+        time: insights[0]?.detectedAt ?? lastAnalysis,
+        detail: "Review the systems below for changes from normal operation.",
+        entries: insightItems,
+      }];
+    }
     if (historyItems.length) return historyItems.slice(0, 3);
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
@@ -831,7 +861,7 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
 }
 
 function deriveLastUpdatedLabel({ liveOps, snapshot, result }) {
-  return firstText(
+  return formatOperationalTimestamp(firstText(
     liveOps?.connectionSummary,
     liveOps?.lastDataHeartbeat,
     snapshot?.updated_at,
@@ -839,7 +869,7 @@ function deriveLastUpdatedLabel({ liveOps, snapshot, result }) {
     result?.updated_at,
     result?.processed_at,
     "Not updated yet"
-  );
+  ));
 }
 
 function buildOverviewSummaryRows({ analysisComplete, uiState, sourceLabel, identifiedSystemCount, insights, highestSeverity, behaviorState }) {
@@ -1258,6 +1288,14 @@ function evidenceKey(item) {
   return firstText(item?.evidence_id, item?.id, item?.description, item?.summary, compactJson(item));
 }
 
+function buildSystemOperationalSummary({ activeInsightCount, topInsight, relationships }) {
+  if (activeInsightCount <= 0) return "No active operational changes require review.";
+  const relationship = relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0];
+  if (relationship) return "The " + relationshipSentenceLabel(relationship) + " has shifted from its historical baseline.";
+  const summary = conciseOperatorSentence(topInsight?.whatHappened, topInsight?.rawSummary, topInsight?.summary);
+  return summary || "Current operation no longer matches the expected baseline.";
+}
+
 function buildSystemCards({ systems, primarySystem, insights }) {
   const safeSystems = Array.isArray(systems) && systems.length > 0
     ? systems.map((system, index) => ({ ...system, id: system.id ?? system.name ?? "system-" + index, name: formatDisplayName(firstText(system.name, system.label, system.system_name), "System " + (index + 1)) }))
@@ -1276,9 +1314,11 @@ function buildSystemCards({ systems, primarySystem, insights }) {
       status,
       scope: firstText(system.scope, system.description, "Detected from analyzed telemetry."),
       activeInsights: String(activeInsightCount),
-      severity: topInsight?.severity ?? (activeInsightCount ? "Moderate" : "Low"),
-      relationshipDrift: activeInsightCount ? "Relationship drift present" : "No drift reported",
-      keyChangedRelationship: relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? "None",
+      severity: activeInsightCount ? (topInsight?.severity ?? "Moderate") : "",
+      hasActiveIssue: activeInsightCount > 0,
+      relationshipDrift: activeInsightCount ? "Operating relationship changed" : "No active change",
+      keyChangedRelationship: relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? "",
+      operationalSummary: buildSystemOperationalSummary({ activeInsightCount, topInsight, relationships }),
       primaryInsightId: topInsight?.id ?? null,
       placeholder: false,
     };
@@ -1434,7 +1474,7 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
     items.push({
       id: `previous-${index}`,
       title: entry.filename ?? entry.job_id ?? "Previous analysis",
-      time: entry.last_processed_at ?? entry.processed_at ?? "Previous period",
+      time: formatOperationalTimestamp(entry.last_processed_at ?? entry.processed_at ?? "Previous period"),
       detail: "Previous telemetry analysis available for review.",
     });
   });
@@ -1442,7 +1482,7 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
     items.unshift({
       id: "current-analysis",
       title: insights.length ? "Current insight generated" : "Current analysis completed",
-      time: snapshot?.processed_at ?? result?.processed_at ?? result?.last_processed_at ?? result?.completed_at ?? "Current period",
+      time: formatOperationalTimestamp(snapshot?.processed_at ?? result?.processed_at ?? result?.last_processed_at ?? result?.completed_at ?? "Current period"),
       detail: insights[0]?.summary ? `Top finding: ${insights[0].summary}` : "Current telemetry was analyzed for system behavior changes.",
     });
   }
@@ -2320,7 +2360,23 @@ function Timeline({ items }) {
   if (!items.length) return <EmptyOperationalState title="No history yet" body="Previous analyses and insight events will appear here over time." />;
   return (
     <ol className="operational-timeline">
-      {items.map((item) => <li key={item.id}><span>{item.time}</span><strong>{item.title}</strong><p>{item.detail}</p></li>)}
+      {items.map((item) => (
+        <li key={item.id}>
+          <span>{item.time}</span>
+          <strong>{item.title}</strong>
+          <p>{item.detail}</p>
+          {Array.isArray(item.entries) && item.entries.length ? (
+            <ul className="operational-timeline__entries">
+              {item.entries.map((entry) => (
+                <li key={entry.id}>
+                  <strong>{entry.title}</strong>
+                  <p>{entry.detail}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </li>
+      ))}
     </ol>
   );
 }
@@ -2796,18 +2852,18 @@ function formatInsightTitle(value) {
     const context = insightTitleContext(value);
     const type = getInsightType(value);
     if (type === "relationship_shift") {
-      if (/cool|chill|tower|thermal|condenser|chw/i.test(context)) return "Cooling distribution relationship shifted";
-      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Pump performance relationship changed";
-      return `${formatSubsystemName(value.system)} operating relationship shifted`;
+      if (/cool|chill|tower|thermal|condenser|chw/i.test(context)) return "Cooling Distribution Relationship Shifted";
+      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Pump Performance Relationship Changed";
+      return `${formatSubsystemName(value.system)} Operating Relationship Shifted`;
     }
     if (type === "metric_deviation") {
-      if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller operating behavior changed";
-      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic performance changed";
-      return `${formatSubsystemName(value.system)} operating behavior changed`;
+      if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
+      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
+      return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
     }
-    if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller operating behavior changed";
-    if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic performance changed";
-    return `${formatSubsystemName(value.system)} operating behavior changed`;
+    if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
+    if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
+    return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
   }
   return formatDisplayName(value)
     .replace(/\s+/g, " ")
@@ -2837,11 +2893,11 @@ function whatChangedBriefing(insight, relationships) {
   const system = formatSubsystemName(insight.system);
   if (relationships.length > 0) {
     const relationshipText = relationships.length === 1
-      ? `The relationship between ${formatRelationshipObservedLabel(relationships[0], 0)} no longer follows its established operating pattern.`
-      : `The relationships among ${system} support variables no longer follow their established operating pattern.`;
+      ? `The relationship between ${relationshipSentenceLabel(relationships[0], 0)} has shifted from its historical baseline.`
+      : `The ${system} operating relationships have shifted from their historical baseline.`;
     const scopeText = relationships.length === 1
-      ? "One operating relationship shifted enough to warrant field review."
-      : `${relationships.length} operating relationships shifted together, which points to a system-level behavior change.`;
+      ? "One operating relationship changed enough to warrant field review."
+      : `${relationships.length} operating relationships changed together, which points to a system-level behavior change.`;
     return [relationshipText, scopeText];
   }
 
@@ -2892,6 +2948,14 @@ function insightRelationshipLabels(insight) {
 function formatRelationshipObservedLabel(value, index = 0) {
   const label = value && typeof value === "object" ? relationshipLabelFromValue(value, index) : value;
   return publicRelationshipLabel(label, index);
+}
+
+function relationshipSentenceLabel(value, index = 0) {
+  return formatRelationshipObservedLabel(value, index)
+    .replace(/\s*↔\s*/g, " and ")
+    .replace(/\s+\/\s+/g, " and ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function formatRelationshipObservedLabelRaw(value) {
@@ -3104,6 +3168,33 @@ function isAnalysisRunning({ gateProcessing, result, snapshot, currentSession, l
     || statusText.includes("analyzing")
     || statusText.includes("running")
     || statusText.includes("queued")
+  );
+}
+
+function isAnalysisResumable({ liveOps, currentSession, result, snapshot, gateProcessing }) {
+  const statusText = [
+    gateProcessing?.status,
+    gateProcessing?.state,
+    gateProcessing?.processing_state,
+    currentSession?.status,
+    currentSession?.state,
+    liveOps?.latestStatus,
+    liveOps?.uploadState,
+    result?.status,
+    result?.processing_state,
+    snapshot?.status,
+    snapshot?.processing_state,
+  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+  return Boolean(
+    currentSession?.paused === true
+      || currentSession?.resumable === true
+      || liveOps?.canResumePrevious === true
+      || liveOps?.pausedUpload === true
+      || liveOps?.resumableUpload === true
+      || statusText.includes("paused")
+      || statusText.includes("interrupted")
+      || statusText.includes("resumable")
+      || statusText.includes("incomplete")
   );
 }
 

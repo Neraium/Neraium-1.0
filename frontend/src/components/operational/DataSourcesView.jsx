@@ -39,15 +39,15 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <PanelHeader eyebrow="Primary Actions" title="Start Analysis" subtitle="Use exported records when a live source is not connected." />
         <div className="data-source-action-grid">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>
-            <strong>Analyze Historical Data</strong>
-            <span>Run the existing import and analysis workflow.</span>
+            <strong>Analyze New Dataset</strong>
+            <span>Run the import and analysis workflow.</span>
           </button>
           <button type="button" className="secondary-command-button data-source-action" onClick={onSelectCsv} disabled={model.analyzeDisabled}>
             <strong>Import Historical CSV</strong>
             <span>Select an exported CSV file.</span>
           </button>
           <button type="button" className="secondary-command-button data-source-action" disabled>
-            <strong>Connect Live Data</strong>
+            <strong>Connect Live Telemetry</strong>
             <span>Planned connector workflow.</span>
           </button>
         </div>

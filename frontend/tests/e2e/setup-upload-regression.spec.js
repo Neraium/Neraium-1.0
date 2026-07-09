@@ -39,7 +39,7 @@ test.describe("Setup + Upload regression", () => {
   test("opens command-center upload entry without the setup wizard", async ({ page }) => {
     await openCommandCenter(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze New Dataset" })).toBeVisible();
     await expect(page.getByTestId("overview-csv-upload-input")).toBeAttached();
   });
 

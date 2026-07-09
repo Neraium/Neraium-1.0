@@ -151,22 +151,22 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(commandCenterSystems.textContent).not.toContain("Energy Infrastructure");
     expect(commandCenterSystems.textContent).not.toContain("Utility Distribution");
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder/);
-    expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze New Dataset" })).toBeTruthy();
     expect(screen.getByText("Platform initialized")).toBeTruthy();
     expect(screen.getByText("Waiting for telemetry connection")).toBeTruthy();
     expect(screen.getByText("Operational Fingerprint will be created after the first successful analysis")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connect Live Data" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/Current\s+Site/);
     expect(screen.queryByRole("heading", { name: /Import Historical CSV/i })).toBeNull();
   });
 
-  it("Analyze Historical Data opens the existing hidden file picker path", () => {
+  it("Analyze New Dataset opens the existing hidden file picker path", () => {
     const onCsvSelected = vi.fn();
     renderWorkspace({ onCsvSelected });
 
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: "Analyze Historical Data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze New Dataset" }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
@@ -216,8 +216,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Data Sources");
     expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Import Historical CSV/i })).toBeTruthy();
-    expect(screen.getByText("Analyze Historical Data")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Connect Live Data/i })).toBeTruthy();
+    expect(screen.getByText("Analyze New Dataset")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Connect Live Telemetry/i })).toBeTruthy();
     expect(screen.getByText("OPC-UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
     expect(screen.getByText("PI System")).toBeTruthy();
@@ -292,7 +292,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump Performance Relationship Changed/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Current Operating Picture" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Command Center/)).toBe(false);
@@ -311,7 +311,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump Performance Relationship Changed/i).length).toBeGreaterThan(0);
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
@@ -326,7 +326,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Current Operating Picture" })).toBeTruthy();
 
     clickNav("Systems");
-    expect(screen.getAllByRole("heading", { name: "Systems" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Relationship Drift")).toBeTruthy();
 
     clickNav("Insights");
@@ -354,7 +354,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Insights");
-    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump Performance Relationship Changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
     expect(screen.getByText("Persistence score")).toBeTruthy();
