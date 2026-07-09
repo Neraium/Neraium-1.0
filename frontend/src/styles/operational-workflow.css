@@ -1525,33 +1525,99 @@ button.insight-card {
 
 .insight-briefing__section {
   display: grid;
-  gap: 6px;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.insight-briefing__section + .insight-briefing__section,
+.insight-briefing__section + .insight-evidence-drawer,
+.insight-evidence-drawer + .insight-briefing__section {
+  margin-top: 10px;
 }
 
 .insight-briefing__section h4 {
   margin: 0;
+  color: var(--ops-ink);
+  font-size: 0.9rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .insight-briefing__section p {
   margin: 0;
-  max-width: 760px;
+  max-width: 820px;
   color: var(--ops-ink);
-  font-size: 0.96rem;
+  font-size: 1rem;
   font-weight: 520;
-  line-height: 1.45;
+  line-height: 1.55;
+}
+
+.evidence-metric-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.evidence-metric-card {
+  min-width: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.evidence-metric-card dt {
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.evidence-metric-card dd {
+  margin: 6px 0 0;
+  color: var(--ops-ink);
+  font-size: 1.14rem;
+  font-weight: 760;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.cause-group {
+  display: grid;
+  gap: 8px;
+}
+
+.cause-group + .cause-group {
+  margin-top: 8px;
+}
+
+.cause-group h5 {
+  margin: 0;
+  color: var(--ops-muted);
+  font-size: 0.86rem;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.cause-group--featured {
+  border-left: 3px solid rgba(127, 179, 255, 0.75);
+  padding-left: 12px;
 }
 
 .operator-briefing-list {
   display: grid;
-  gap: 6px;
+  gap: 9px;
   margin: 0;
-  padding-left: 18px;
+  padding-left: 20px;
   color: var(--ops-ink);
 }
 
 .operator-briefing-list li {
-  line-height: 1.4;
-  padding-left: 2px;
+  line-height: 1.48;
+  padding-left: 4px;
 }
 
 .insight-briefing__select {
@@ -1663,7 +1729,8 @@ button.insight-card {
 }
 
 @media (max-width: 1040px) {
-  .summary-row-list {
+  .summary-row-list,
+  .evidence-metric-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1681,7 +1748,8 @@ button.insight-card {
 @media (max-width: 520px) {
   .summary-row-list,
   .executive-summary-list,
-  .operational-detail-grid {
+  .operational-detail-grid,
+  .evidence-metric-cards {
     grid-template-columns: 1fr;
   }
 
@@ -1746,7 +1814,7 @@ button.insight-card {
 
 .insight-detail-card {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   border: 1px solid var(--ops-line);
   border-radius: var(--ops-radius);
   background: linear-gradient(180deg, rgba(17, 27, 42, 0.92), rgba(11, 18, 29, 0.96));

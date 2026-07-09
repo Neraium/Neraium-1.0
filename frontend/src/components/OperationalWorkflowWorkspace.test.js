@@ -291,7 +291,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getAllByText(/Pump system relationship shift detected/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Current Operating Picture" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Command Center/)).toBe(false);
@@ -310,7 +310,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getAllByText(/Pump system relationship shift detected/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
@@ -353,11 +353,15 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Insights");
-    expect(screen.getAllByText(/Flow and pressure system relationship shift detected/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pump performance relationship changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
+    expect(screen.getByText("Persistence score")).toBeTruthy();
     expect(screen.getByText("Changed Relationships")).toBeTruthy();
+    expect(screen.getByText("Most Likely")).toBeTruthy();
+    expect(screen.getByText("Other Possibilities")).toBeTruthy();
     expect(screen.getByText("Recommended Review")).toBeTruthy();
+    expect(screen.getByText("Technical Details")).toBeTruthy();
     expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);
     expect(screen.queryByText("[object Object]")).toBeNull();
@@ -400,7 +404,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(text).toContain("0.06");
     expect(text).toContain("0.84");
     expect(text).toContain("weakened sharply toward little linear coupling");
-    expect(text).not.toMatch(/0\.775497|0\.063807|0\.839304/);
+    expect(screen.getByText("Technical Details")).toBeTruthy();
+    expect(text).toMatch(/0\.775497|0\.063807|0\.839304/);
   });
 
   it("describes coupling sign reversal explicitly", () => {

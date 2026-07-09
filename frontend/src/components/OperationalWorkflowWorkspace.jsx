@@ -979,37 +979,37 @@ function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight })
   const searchText = [subsystem, relationshipLabels.join(" "), insight?.summary].join(" ").toLowerCase();
   if (/flow|pressure|pump|valve|vfd|filter|hydraulic/.test(searchText)) {
     return [
-      "Review filter differential pressure trends.",
-      "Verify current pump operating point.",
-      "Compare valve positions with historical operation.",
-      "Review recent maintenance and operator logs.",
-      "Confirm VFD commands match expected operation.",
+      "Check filter differential pressure for signs of fouling.",
+      "Confirm the pump is operating on its expected performance curve.",
+      "Compare valve positions against the normal operating range for this load condition.",
+      "Review recent maintenance and operator logs for changes affecting flow or pressure.",
+      "Verify VFD commands match the expected control response.",
     ];
   }
   if (/chemical|chlor|dose|feed|quality|ph|orp/.test(searchText)) {
     return [
-      "Review chemical feed trends.",
-      "Verify current dosing setpoints and feed pump status.",
-      "Compare water quality readings with historical operation.",
-      "Review recent chemical changes and operator logs.",
-      "Confirm control commands match expected operation.",
+      "Check chemical feed trends for dosing instability or step changes.",
+      "Confirm dosing setpoints and feed pump status match the current treatment objective.",
+      "Compare water quality readings against the normal operating range.",
+      "Review recent chemical deliveries, dilution changes, and operator logs.",
+      "Verify control commands match the expected treatment response.",
     ];
   }
   if (/thermal|cooling|heat|chiller|condenser|tower/.test(searchText)) {
     return [
-      "Review heat transfer and temperature approach trends.",
-      "Verify current equipment staging and operating point.",
-      "Compare flow and valve positions with historical operation.",
-      "Review recent maintenance and load changes.",
-      "Confirm control commands match expected operation.",
+      "Check heat-transfer and approach-temperature trends for fouling or degraded rejection.",
+      "Confirm equipment staging and operating point match the current load.",
+      "Compare flow, valve position, and temperature response against historical operation.",
+      "Review recent maintenance, weather, and load changes that could explain the shift.",
+      "Verify control commands match the expected cooling response.",
     ];
   }
   return [
-    firstText(insight?.operatorCheck, insight?.recommendedAction, "Review the contributing signal trends."),
-    "Verify current operating mode and setpoints.",
-    "Compare equipment states with historical operation.",
-    "Review recent maintenance and operator logs.",
-    "Monitor the next operating window for persistence.",
+    actionizeRecommendation(firstText(insight?.operatorCheck, insight?.recommendedAction, "Review the contributing signal trends.")),
+    "Confirm current operating mode and setpoints match the intended sequence.",
+    "Compare equipment states against historical operation for the same load condition.",
+    "Review recent maintenance and operator logs for changes near the start of the shift.",
+    "Monitor the next operating window to confirm whether the change persists.",
   ];
 }
 
@@ -1487,8 +1487,10 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
 }
 
 function InsightDetail({ insight }) {
-  const causes = operationalCauseHypotheses(insight).slice(0, 6);
   const relationships = insightRelationshipLabels(insight).slice(0, 8);
+  const causes = rankedOperationalCauses(insight);
+  const evidenceSummary = prioritizedEvidenceMetrics(insight);
+  const technicalEvidence = technicalEvidenceBriefing(insight, relationships);
 
   return (
     <details className="insight-detail-card" aria-label="Insight detail">
@@ -1538,13 +1540,9 @@ function InsightDetail({ insight }) {
         )}
       />
 
-      <BriefingList
+      <EvidenceMetricCards
         title="Evidence"
-        items={evidenceBriefing(
-          insight,
-          relationships
-        )}
-        limit={8}
+        metrics={evidenceSummary}
       />
 
       {relationships.length ? (
@@ -1554,10 +1552,7 @@ function InsightDetail({ insight }) {
         />
       ) : null}
 
-      <BriefingList
-        title="Possible Causes"
-        items={causes}
-      />
+      <RankedCauseList causes={causes} />
 
       <BriefingList
         title="Recommended Review"
@@ -1568,8 +1563,8 @@ function InsightDetail({ insight }) {
         limit={6}
       />
 
-      {insight.hasEvidence ? (
-        <InsightEvidenceDrawer insight={insight} />
+      {technicalEvidence.length || insight.hasEvidence ? (
+        <InsightEvidenceDrawer insight={insight} summaryItems={technicalEvidence} />
       ) : null}
     </details>
   );
@@ -1645,6 +1640,150 @@ function evidenceBriefing(insight, relationships = []) {
       insight.whyItMatters
     ),
     3
+  );
+}
+
+function prioritizedEvidenceMetrics(insight) {
+  const rows = [
+    {
+      label: "Baseline average",
+      value: firstEvidenceMetricValue(insight, "baseline_average", "baselineAverage", "baseline_value", "baselineValue", "baseline"),
+      fallback: insight?.baselineValue,
+    },
+    {
+      label: "Current average",
+      value: firstEvidenceMetricValue(insight, "current_average", "currentAverage", "recent_average", "recentAverage", "current_value", "currentValue", "current"),
+      fallback: insight?.currentValue,
+    },
+    {
+      label: "Percent change",
+      value: firstEvidenceMetricValue(insight, "percent_change", "percentChange", "calculated_percent_delta", "calculatedPercentDelta"),
+      suffix: "%",
+    },
+    {
+      label: "Persistence score",
+      value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore"),
+      fallback: insight?.confidenceScore,
+    },
+  ];
+
+  return rows
+    .map((row) => {
+      const value = firstText(row.value, row.fallback);
+      if (!hasDisplayValue(value)) return null;
+      return {
+        label: row.label,
+        value: formatEvidenceMetricValue(value, row.suffix),
+      };
+    })
+    .filter(Boolean);
+}
+
+function firstEvidenceMetricValue(insight, ...keys) {
+  const sources = [
+    insight,
+    ...(Array.isArray(insight?.contributingMetrics) ? insight.contributingMetrics : []),
+    ...(Array.isArray(insight?.evidence) ? insight.evidence : []),
+  ];
+
+  for (const source of sources) {
+    const value = findMetricValue(source, keys);
+    if (hasDisplayValue(value)) return value;
+  }
+
+  return "";
+}
+
+function findMetricValue(value, keys) {
+  if (!value || typeof value !== "object") return "";
+
+  for (const key of keys) {
+    if (hasDisplayValue(value[key])) return value[key];
+  }
+
+  const nestedKeys = [
+    "metric_delta",
+    "metricDelta",
+    "relevant_metric_changes",
+    "relevantMetricChanges",
+    "relationship_delta",
+    "relationshipDelta",
+  ];
+
+  for (const nestedKey of nestedKeys) {
+    const nested = value[nestedKey];
+    if (Array.isArray(nested)) {
+      for (const item of nested) {
+        const found = findMetricValue(item, keys);
+        if (hasDisplayValue(found)) return found;
+      }
+    } else {
+      const found = findMetricValue(nested, keys);
+      if (hasDisplayValue(found)) return found;
+    }
+  }
+
+  return "";
+}
+
+function formatEvidenceMetricValue(value, suffix = "") {
+  const number = numberOrNull(value);
+  if (number === null) return renderDisplayValue(value);
+  return suffix === "%" ? `${formatEvidenceNumber(number)}%` : formatEvidenceNumber(number);
+}
+
+function technicalEvidenceBriefing(insight, relationships = []) {
+  const items = [
+    ...relationships.map((relationship, index) => `Signal identifiers: ${formatRelationshipObservedLabel(relationship, index)}`),
+    ...toList(insight?.metricName).map((item) => `Internal metric name: ${normalizeSignalName(item) || displayText(item)}`),
+    ...evidenceBriefing(insight, relationships).map((item) => `Raw evidence: ${item}`),
+    ...toList(insight?.confidenceRationale).map((item) => `Diagnostic metadata: ${cleanBriefingText(item)}`),
+  ];
+
+  return dedupeText(items).filter(Boolean);
+}
+
+function EvidenceMetricCards({ title, metrics }) {
+  const visibleMetrics = toList(metrics)
+    .filter((item) => item?.label && hasDisplayValue(item?.value))
+    .slice(0, 4);
+  if (!visibleMetrics.length) return null;
+  return (
+    <section className="insight-briefing__section insight-briefing__section--evidence">
+      <h4>{title}</h4>
+      <dl className="evidence-metric-cards">
+        {visibleMetrics.map((item) => (
+          <div className="evidence-metric-card" key={item.label}>
+            <dt>{item.label}</dt>
+            <dd>{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function RankedCauseList({ causes }) {
+  const mostLikely = toList(causes?.mostLikely).slice(0, 3);
+  const otherPossibilities = toList(causes?.otherPossibilities).slice(0, 5);
+  if (!mostLikely.length && !otherPossibilities.length) return null;
+  return (
+    <section className="insight-briefing__section insight-briefing__section--causes">
+      <h4>Possible Causes</h4>
+      {mostLikely.length ? <CauseGroup title="Most Likely" items={mostLikely} featured /> : null}
+      {otherPossibilities.length ? <CauseGroup title="Other Possibilities" items={otherPossibilities} /> : null}
+    </section>
+  );
+}
+
+function CauseGroup({ title, items, featured = false }) {
+  return (
+    <div className={featured ? "cause-group cause-group--featured" : "cause-group"}>
+      <h5>{title}</h5>
+      <ul className="operator-briefing-list">
+        {items.map((item) => <li key={item}>{cleanBriefingText(item)}</li>)}
+      </ul>
+    </div>
   );
 }
 
@@ -1916,13 +2055,21 @@ function RelationshipObservedList({ items, title = "Relationships Involved" }) {
   );
 }
 
-function InsightEvidenceDrawer({ insight }) {
+function InsightEvidenceDrawer({ insight, summaryItems = [] }) {
   const evidenceItems = Array.isArray(insight.evidence) ? insight.evidence : [];
-  if (!evidenceItems.length) return null;
+  const diagnosticRows = [
+    ["Insight identifier", insight.id],
+    ["Signal identifier", insight.metricName],
+    ["Internal metric names", insight.contributingMetrics],
+    ["Diagnostic metadata", insight.confidenceRationale],
+  ];
+  if (!evidenceItems.length && !summaryItems.length) return null;
   return (
     <details className="insight-evidence-drawer">
-      <summary>Advanced Details</summary>
+      <summary>Technical Details</summary>
       <div className="insight-evidence-drawer__body">
+        {summaryItems.length ? <BriefingList title="Raw evidence" items={summaryItems} limit={10} codeItems /> : null}
+        <DetailGrid rows={diagnosticRows} technical />
         {evidenceItems.map((item, index) => (
           <div className="insight-evidence-item" key={item.evidence_id ?? index}>
             <EvidenceDetails evidence={item} />
@@ -1936,7 +2083,7 @@ function InsightEvidenceDrawer({ insight }) {
 function EvidencePanel({ evidence }) {
   return (
     <details className="evidence-panel">
-      <summary>Advanced Details</summary>
+      <summary>Technical Details</summary>
       <EvidenceDetails evidence={evidence} />
     </details>
   );
@@ -1959,6 +2106,9 @@ function EvidenceDetails({ evidence }) {
         ["Calculated percent change", evidence.calculated_percent_delta ?? evidence.calculatedPercentDelta],
         ["Analysis reference", evidence.source_upload_id ?? evidence.upload_id],
         ["Analysis reference", evidence.analysis_id],
+        ["Signal identifiers", toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags)],
+        ["Internal metric names", toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges)],
+        ["Raw evidence", evidence],
       ]} technical />
       {sourceColumns.length ? <QualityList title="Source signals" items={sourceColumns} empty="" /> : null}
       {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
@@ -2585,16 +2735,96 @@ const OPERATIONAL_CAUSE_SETS = [
   },
 ];
 
+function rankedOperationalCauses(insight) {
+  const candidates = operationalCauseHypotheses(insight);
+  const context = [
+    insight?.system,
+    insight?.summary,
+    insight?.rawSummary,
+    insight?.metricName,
+    insightRelationshipLabels(insight).join(" "),
+    evidenceBriefing(insight, insightRelationshipLabels(insight)).join(" "),
+  ].join(" ").toLowerCase();
+
+  const scored = candidates.map((cause, index) => ({
+    cause,
+    score: operationalCauseScore(cause, context) - index * 0.01,
+  }));
+
+  const ordered = scored
+    .sort((left, right) => right.score - left.score)
+    .map((item) => item.cause);
+
+  return {
+    mostLikely: ordered.slice(0, 3),
+    otherPossibilities: ordered.slice(3),
+  };
+}
+
+function operationalCauseScore(cause, context) {
+  const text = String(cause ?? "").toLowerCase();
+  let score = 0;
+  const keywordGroups = [
+    ["filter", "foul", "loading", "differential pressure"],
+    ["pump", "vfd", "speed", "operating point", "curve"],
+    ["valve", "position", "damper"],
+    ["load", "demand", "process"],
+    ["maintenance", "operator"],
+    ["sensor", "calibration", "drift"],
+    ["tower", "chiller", "condenser", "heat exchanger", "cooling"],
+    ["chemical", "feed", "water quality", "dose"],
+  ];
+
+  keywordGroups.forEach((group, groupIndex) => {
+    const causeMatches = group.some((keyword) => text.includes(keyword));
+    const contextMatches = group.some((keyword) => context.includes(keyword));
+    if (causeMatches && contextMatches) score += 10 - groupIndex * 0.2;
+  });
+
+  if (/filter|pump|valve|tower|chiller|heat exchanger|chemical|sensor/.test(text)) score += 2;
+  if (/maintenance|operator|recent/.test(text)) score -= 1;
+  return score;
+}
+
+function actionizeRecommendation(value) {
+  const text = cleanBriefingText(value);
+  if (!text) return "Review the contributing signal trends.";
+  if (/^(check|confirm|compare|review|verify|monitor|inspect|trend|validate)\b/i.test(text)) return text;
+  return `Review ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+}
+
 function formatInsightTitle(value) {
   if (value && typeof value === "object") {
+    const context = insightTitleContext(value);
     const type = getInsightType(value);
-    if (type === "relationship_shift") return `${formatSubsystemName(value.system)} relationship shift detected`;
-    if (type === "metric_deviation") return `${normalizeSignalName(value.metricName) || "Metric"} deviation detected`;
-    return `${formatSubsystemName(value.system)} behavior changed`;
+    if (type === "relationship_shift") {
+      if (/cool|chill|tower|thermal|condenser|chw/i.test(context)) return "Cooling distribution relationship shifted";
+      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Pump performance relationship changed";
+      return `${formatSubsystemName(value.system)} operating relationship shifted`;
+    }
+    if (type === "metric_deviation") {
+      if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller operating behavior changed";
+      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic performance changed";
+      return `${formatSubsystemName(value.system)} operating behavior changed`;
+    }
+    if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller operating behavior changed";
+    if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic performance changed";
+    return `${formatSubsystemName(value.system)} operating behavior changed`;
   }
   return formatDisplayName(value)
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function insightTitleContext(insight) {
+  return [
+    insight?.system,
+    insight?.rawSystemName,
+    insight?.metricName,
+    insight?.summary,
+    insight?.rawSummary,
+    insightRelationshipLabels(insight).join(" "),
+  ].join(" ");
 }
 
 function formatSubsystemName(value) {
@@ -2608,14 +2838,26 @@ function formatSubsystemName(value) {
 function whatChangedBriefing(insight, relationships) {
   const system = formatSubsystemName(insight.system);
   if (relationships.length > 0) {
-    const count = relationships.length;
-    return [
-      `${system} no longer follows its historical operating pattern.`,
-      count === 1 ? "One operating relationship shifted." : "Multiple operating relationships shifted together.",
-    ];
+    const relationshipText = relationships.length === 1
+      ? `The relationship between ${formatRelationshipObservedLabel(relationships[0], 0)} no longer follows its established operating pattern.`
+      : `The relationships among ${system} support variables no longer follow their established operating pattern.`;
+    const scopeText = relationships.length === 1
+      ? "One operating relationship shifted enough to warrant field review."
+      : `${relationships.length} operating relationships shifted together, which points to a system-level behavior change.`;
+    return [relationshipText, scopeText];
   }
-  const lines = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 2);
-  return lines.length ? lines : [`${system} behavior changed from its historical operating pattern.`];
+
+  const metric = normalizeSignalName(insight.metricName);
+  const direction = String(insight.deviationDirection ?? "").toLowerCase();
+  const directionText = direction.includes("down") || direction.includes("low") || direction.includes("below")
+    ? "below"
+    : "above";
+  const baselineText = metric
+    ? `The ${metric} is operating significantly ${directionText} its historical baseline.`
+    : `The ${system} is operating significantly ${directionText} its historical baseline.`;
+  const supplied = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 1)
+    .filter((line) => !/moved\s+(up|down)\s+from\s+the\s+historical\s+pattern\s+to\s+the\s+analysis\s+period/i.test(line));
+  return supplied.length ? [baselineText, ...supplied].slice(0, 2) : [baselineText];
 }
 
 function operatorSummaryBriefing(insight, relationships) {
