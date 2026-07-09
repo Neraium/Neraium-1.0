@@ -775,7 +775,7 @@ export default function DataConnectionsWorkspace({
       if (event?.target) event.target.value = "";
       return;
     }
-    const files = Array.from(event?.target?.files ?? []);
+    const files = Array.from(event?.target?.files ?? event?.dataTransfer?.files ?? []);
     resetTelemetryStageLogs();
     if (files[0]) {
       logTelemetryStage("file selected", { filename: files[0].name, size: files[0].size });

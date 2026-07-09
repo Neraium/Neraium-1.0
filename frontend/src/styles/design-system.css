@@ -952,3 +952,241 @@ button:focus-visible {
     min-height: 44px;
   }
 }
+
+.upload-ops-panel--command {
+  --upload-bg: #04070c;
+  --upload-surface: rgba(9, 16, 25, 0.78);
+  --upload-surface-strong: rgba(13, 25, 37, 0.92);
+  --upload-line: rgba(121, 150, 164, 0.18);
+  --upload-line-strong: rgba(52, 210, 197, 0.34);
+  --upload-ink: #f4f8fb;
+  --upload-ink-soft: #c2ced7;
+  --upload-ink-muted: #7f94a3;
+  --upload-accent: #00a39a;
+  --upload-accent-dark: #007a74;
+  --upload-accent-soft: rgba(0, 163, 154, 0.15);
+  overflow: hidden;
+  border-color: var(--upload-line);
+  background:
+    radial-gradient(circle at 18% 24%, rgba(0, 163, 154, 0.14), transparent 30rem),
+    linear-gradient(180deg, rgba(13, 25, 37, 0.92), rgba(9, 16, 25, 0.78));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  color: var(--upload-ink);
+}
+
+.upload-ops-panel--command .ops-panel__header h2 {
+  color: var(--upload-ink);
+  font-size: clamp(2rem, 4vw, 4rem);
+  font-weight: 650;
+  line-height: 1;
+}
+
+.upload-ops-panel--command .intake-flow__subtitle {
+  margin: 0;
+  color: var(--upload-ink-soft);
+  font-size: clamp(1rem, 1.45vw, 1.12rem);
+  line-height: 1.58;
+}
+
+.upload-analysis-card {
+  display: grid;
+  grid-template-columns: minmax(178px, 0.36fr) minmax(0, 1fr);
+  gap: clamp(18px, 4vw, 34px);
+  align-items: center;
+  min-width: 0;
+  padding: clamp(18px, 2.4vw, 26px);
+  border: 1px solid var(--upload-line);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 18% 42%, rgba(0, 163, 154, 0.16), transparent 34%),
+    linear-gradient(180deg, var(--upload-surface-strong), var(--upload-surface));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.upload-analysis-card--drag-active {
+  border-color: var(--upload-line-strong);
+  background:
+    radial-gradient(circle at 18% 42%, rgba(0, 163, 154, 0.22), transparent 34%),
+    linear-gradient(180deg, var(--upload-surface-strong), var(--upload-surface));
+}
+
+.upload-analysis-card--processing {
+  border-color: var(--upload-line-strong);
+}
+
+.upload-analysis-card__visual,
+.upload-analysis-card__content,
+.upload-analysis-card__copy,
+.upload-analysis-card__sources,
+.upload-analysis-card__file,
+.upload-analysis-card__status {
+  display: grid;
+  min-width: 0;
+}
+
+.upload-analysis-card__visual {
+  justify-items: center;
+  gap: 14px;
+}
+
+.upload-analysis-card__visual .operational-orb {
+  width: min(38vw, 220px);
+  min-width: 156px;
+}
+
+.upload-analysis-card__content {
+  gap: 16px;
+}
+
+.upload-analysis-card__copy {
+  gap: 10px;
+}
+
+.upload-analysis-card__copy h3 {
+  margin: 0;
+  color: var(--upload-ink);
+  font-size: clamp(1.35rem, 2.4vw, 2.25rem);
+  font-weight: 650;
+  line-height: 1.08;
+}
+
+.upload-analysis-card__copy p:not(.section-token),
+.upload-analysis-card__file strong,
+.upload-analysis-card__status strong,
+.upload-simple-card__file span,
+.upload-simple-note,
+.upload-error-message {
+  color: var(--upload-ink-soft);
+}
+
+.upload-analysis-card__copy p,
+.upload-analysis-card__sources ul,
+.upload-error-message {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.upload-analysis-card__sources {
+  gap: 8px;
+}
+
+.upload-analysis-card__sources > span,
+.upload-analysis-card__file span,
+.upload-analysis-card__status span {
+  color: var(--upload-ink-muted);
+  font-size: var(--type-label-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-analysis-card__sources ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.upload-analysis-card__sources li {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--upload-line);
+  border-radius: 8px;
+  background: rgba(8, 18, 28, 0.72);
+  color: var(--upload-ink-soft);
+  font-size: var(--type-body-sm);
+  font-weight: 650;
+}
+
+.upload-analysis-card__file {
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--upload-line);
+  border-radius: 8px;
+  background: rgba(8, 18, 28, 0.72);
+}
+
+.upload-analysis-card__file strong,
+.upload-simple-card__file strong {
+  color: var(--upload-ink);
+  overflow-wrap: anywhere;
+}
+
+.upload-analysis-card__status {
+  gap: 4px;
+  width: min(100%, 260px);
+  padding: 12px;
+  border: 1px solid var(--upload-line);
+  border-radius: 8px;
+  background: rgba(8, 18, 28, 0.72);
+  text-align: center;
+}
+
+.upload-analysis-card__status strong {
+  font-size: 0.95rem;
+  line-height: 1.28;
+}
+
+.upload-analysis-card__actions {
+  align-items: center;
+}
+
+.upload-analysis-card .command-button {
+  border-color: var(--upload-accent-dark);
+  background: linear-gradient(180deg, var(--upload-accent), var(--upload-accent-dark));
+  color: #ffffff;
+  box-shadow: 0 14px 32px rgba(0, 122, 116, 0.24);
+}
+
+.upload-analysis-card .secondary-command-button {
+  border-color: var(--upload-line-strong);
+  background: rgba(8, 18, 28, 0.72);
+  color: var(--upload-ink-soft);
+}
+
+.upload-analysis-card .secondary-command-button:hover:enabled {
+  background: var(--upload-accent-soft);
+  color: var(--upload-ink);
+}
+
+.upload-analysis-card .upload-progress-summary span,
+.upload-analysis-card .upload-progress-summary strong,
+.upload-analysis-card .upload-complete-header h3,
+.upload-analysis-card .upload-result-summary__item strong {
+  color: var(--upload-ink);
+}
+
+.upload-analysis-card .upload-result-summary__item {
+  border-color: var(--upload-line);
+  background: rgba(8, 18, 28, 0.72);
+}
+
+.upload-analysis-card .upload-progress-meter--single {
+  height: 10px;
+  background: rgba(8, 18, 28, 0.72);
+  box-shadow: inset 0 0 0 1px var(--upload-line);
+}
+
+.upload-analysis-card .upload-progress-meter--single > span {
+  background: linear-gradient(90deg, var(--upload-accent-dark), var(--upload-accent));
+}
+
+.upload-analysis-card.upload-simple-card--failed {
+  border-color: var(--upload-line-strong);
+  background:
+    radial-gradient(circle at 18% 42%, rgba(0, 163, 154, 0.13), transparent 34%),
+    linear-gradient(180deg, var(--upload-surface-strong), var(--upload-surface));
+}
+
+@media (max-width: 760px) {
+  .upload-analysis-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .upload-analysis-card__visual .operational-orb {
+    width: min(62vw, 220px);
+  }
+}

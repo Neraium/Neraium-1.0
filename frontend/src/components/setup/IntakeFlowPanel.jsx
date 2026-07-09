@@ -1,5 +1,9 @@
+import { useState } from "react";
+
 import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
+import OperationalOrb from "../operational/OperationalOrb";
 import { Panel } from "../workspacePrimitives";
+import "../../styles/operational-workflow.css";
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -56,24 +60,21 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
   const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return cleanMessage || "Uploading CSV...";
+  if (viewState === "uploading") return "Uploading Historical Data...";
   if (viewState === "complete") return "Analysis Complete";
-  if (viewState === "finalizing") return "Finalizing results...";
-  if (viewState === "failed") return "Analysis failed";
+  if (viewState === "finalizing") return "Generating Operational Insights...";
+  if (viewState === "failed") return "Upload Error";
   if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["building_fingerprint", "baseline_modeling", "structural_scoring"].includes(normalized)) {
-    return "Building operating fingerprint...";
-  }
   if (["writing_state", "cognition_ready", "saving_result"].includes(normalized)) {
-    return "Generating results...";
+    return "Generating Operational Insights...";
   }
-  if (["accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
-    return "Processing telemetry...";
+  if (["building_fingerprint", "baseline_modeling", "building_baseline", "structural_scoring", "running_sii", "accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
+    return "Learning Operational Fingerprint...";
   }
 
-  return cleanMessage || "Processing telemetry...";
+  return cleanMessage || "Learning Operational Fingerprint...";
 }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
@@ -156,6 +157,22 @@ function completionSummary({ analysisResult }) {
     { label: "Insights", value: String(analysisResult.insights.length) },
     { label: "Fingerprint", value: fingerprintStatus },
   ];
+}
+
+const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA Export", "Historian Export"];
+
+function uploadOrbStatus(viewState) {
+  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "learning";
+  if (viewState === "complete") return "healthy";
+  return "awaiting";
+}
+
+function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
+  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning Operational Fingerprint";
+  if (viewState === "complete") return "Operational Fingerprint Active";
+  if (viewState === "failed") return hasSelectedFiles ? "Historical Data Ready" : "Awaiting Operational Fingerprint";
+  if (hasSelectedFiles) return "Historical Data Ready";
+  return "Awaiting Operational Fingerprint";
 }
 
 function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
@@ -242,6 +259,7 @@ export default function IntakeFlowPanel({
 }) {
   void uploadStateMessage;
   void batchResults;
+  const [isDragActive, setIsDragActive] = useState(false);
 
   const hasSelectedFiles = selectedFiles?.length > 0;
   const selectedFileLabel = hasSelectedFiles
@@ -257,89 +275,186 @@ export default function IntakeFlowPanel({
   const errorMessage = String(latestMessage || "Choose another telemetry file and try again.").trim();
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
+  const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
+  const resolvedOrbStatus = uploadOrbStatus(viewState);
+  const chooseFileButtonText = "Choose File";
+  const selectedFileDetail = hasSelectedFiles ? `${fileKind} telemetry - ${selectedFileSize}` : "No file selected";
+  const dragClassName = isDragActive ? " upload-analysis-card--drag-active" : "";
 
-  const chooseFileButtonText = hasSelectedFiles ? "Select Another File" : "Select Telemetry";
+  function handleUploadDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragActive(true);
+  }
+
+  function handleUploadDragLeave(event) {
+    if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
+    setIsDragActive(false);
+  }
+
+  function handleUploadDrop(event) {
+    event.preventDefault();
+    setIsDragActive(false);
+    handleFileSelection(event);
+  }
 
   return (
-    <Panel title="Analyze new telemetry" className="span-7 upload-ops-panel">
+    <Panel title="Historical Data Analysis" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
-        <p className="intake-flow__subtitle">Select telemetry to identify relationship changes across operational systems.</p>
+        <p className="intake-flow__subtitle">Upload historical telemetry to establish an Operational Fingerprint for this facility.</p>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
-          <section className="upload-simple-card" aria-label="Selected telemetry">
-            <div className="upload-simple-card__file">
-              <strong>{selectedFileLabel}</strong>
-              <span>{hasSelectedFiles ? `${fileKind} telemetry - ${selectedFileSize}` : "No file selected"}</span>
+          <section
+            className={`upload-analysis-card${dragClassName}`}
+            aria-label="Historical data upload"
+            onDragOver={handleUploadDragOver}
+            onDragLeave={handleUploadDragLeave}
+            onDrop={handleUploadDrop}
+          >
+            <div className="upload-analysis-card__visual">
+              <OperationalOrb
+                status={resolvedOrbStatus}
+                state={{
+                  label: fingerprintStatus,
+                  visualLabel: "Operational Fingerprint",
+                }}
+              />
+              <div className="upload-analysis-card__status" aria-live="polite">
+                <span>Status</span>
+                <strong>{fingerprintStatus}</strong>
+              </div>
             </div>
-            <div className="upload-simple-actions">
-              {!hasSelectedFiles ? (
+
+            <div className="upload-analysis-card__content">
+              <div className="upload-analysis-card__copy">
+                <p className="section-token">Historical Data Analysis</p>
+                <h3>Historical Data Analysis</h3>
+                <p>Upload historical telemetry to establish an Operational Fingerprint for this facility.</p>
+              </div>
+
+              <div className="upload-analysis-card__sources" aria-label="Supported Sources">
+                <span>Supported Sources</span>
+                <ul>
+                  {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
+                </ul>
+              </div>
+
+              <div className="upload-analysis-card__file">
+                <span>{selectedFileLabel}</span>
+                <strong>{selectedFileDetail}</strong>
+              </div>
+
+              <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
-              ) : null}
-              {hasSelectedFiles ? (
-                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={isUploadProcessing(uploadState)}>
-                  Analyze Telemetry
+                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)}>
+                  Analyze Historical Data
                 </button>
-              ) : null}
+              </div>
             </div>
           </section>
         ) : null}
 
         {showProgress ? (
-          <section className="upload-simple-card upload-simple-card--processing" aria-live="polite" aria-label="Analysis progress">
-            <div className="upload-simple-card__file">
-              <strong>{selectedFileLabel}</strong>
-              <span>{fileKind} - {selectedFileSize}</span>
+          <section className="upload-analysis-card upload-analysis-card--processing" aria-live="polite" aria-label="Analysis progress">
+            <div className="upload-analysis-card__visual">
+              <OperationalOrb
+                status={resolvedOrbStatus}
+                state={{
+                  label: fingerprintStatus,
+                  visualLabel: "Operational Fingerprint",
+                }}
+              />
+              <div className="upload-analysis-card__status">
+                <span>Status</span>
+                <strong>{fingerprintStatus}</strong>
+              </div>
             </div>
-            <div className="upload-progress-summary">
-              <span>{statusText}</span>
-              <strong>{mainPercent}% complete</strong>
+            <div className="upload-analysis-card__content">
+              <div className="upload-simple-card__file">
+                <strong>{selectedFileLabel}</strong>
+                <span>{fileKind} - {selectedFileSize}</span>
+              </div>
+              <div className="upload-progress-summary">
+                <span>{statusText}</span>
+                <strong>{mainPercent}% complete</strong>
+              </div>
+              <div
+                className="upload-progress-meter upload-progress-meter--single"
+                aria-label={`Analysis ${mainPercent}% complete`}
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={mainPercent}
+                role="progressbar"
+              >
+                <span style={{ width: `${mainPercent}%` }} />
+              </div>
+              {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
             </div>
-            <div
-              className="upload-progress-meter upload-progress-meter--single"
-              aria-label={`Analysis ${mainPercent}% complete`}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={mainPercent}
-              role="progressbar"
-            >
-              <span style={{ width: `${mainPercent}%` }} />
-            </div>
-            {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
           </section>
         ) : null}
 
         {viewState === "complete" ? (
-          <section className="upload-simple-card upload-simple-card--complete" aria-label="Analysis complete">
-            <div className="upload-complete-header">
-              <h3>Analysis Complete</h3>
-              <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
+          <section className="upload-analysis-card upload-simple-card--complete" aria-label="Analysis complete">
+            <div className="upload-analysis-card__visual">
+              <OperationalOrb
+                status={resolvedOrbStatus}
+                state={{
+                  label: fingerprintStatus,
+                  visualLabel: "Operational Fingerprint",
+                }}
+              />
+              <div className="upload-analysis-card__status">
+                <span>Status</span>
+                <strong>{fingerprintStatus}</strong>
+              </div>
             </div>
-            <div className="upload-result-summary">
-              {summary.map((item) => (
-                <div key={item.label} className="upload-result-summary__item">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-            <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
-              <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
+            <div className="upload-analysis-card__content">
+              <div className="upload-complete-header">
+                <h3>Analysis Complete</h3>
+                <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
+              </div>
+              <div className="upload-result-summary">
+                {summary.map((item) => (
+                  <div key={item.label} className="upload-result-summary__item">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="upload-simple-actions">
+                <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
+              </div>
             </div>
           </section>
         ) : null}
 
         {viewState === "failed" ? (
-          <section className="upload-simple-card upload-simple-card--failed" role="alert" aria-live="assertive">
-            <div className="upload-complete-header">
-              <h3>Analysis failed</h3>
-              <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
+          <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
+            <div className="upload-analysis-card__visual">
+              <OperationalOrb
+                status={resolvedOrbStatus}
+                state={{
+                  label: fingerprintStatus,
+                  visualLabel: "Operational Fingerprint",
+                }}
+              />
+              <div className="upload-analysis-card__status">
+                <span>Status</span>
+                <strong>{fingerprintStatus}</strong>
+              </div>
             </div>
-            <p className="upload-error-message">{errorMessage}</p>
-            <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry</button>
-              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Select Another File</button>
+            <div className="upload-analysis-card__content">
+              <div className="upload-complete-header">
+                <h3>Upload Error</h3>
+                <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
+              </div>
+              <p className="upload-error-message">{errorMessage}</p>
+              <div className="upload-simple-actions">
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry</button>
+                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose File</button>
+              </div>
             </div>
           </section>
         ) : null}

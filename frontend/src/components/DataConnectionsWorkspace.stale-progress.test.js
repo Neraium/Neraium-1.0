@@ -231,14 +231,14 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getByRole("heading", { name: "Analyze new telemetry" })).toBeTruthy();
+  expect(screen.getAllByRole("heading", { name: "Historical Data Analysis" }).length).toBeGreaterThan(0);
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Analyze Telemetry", () => {
+it("selected file state shows filename, size, and Analyze Historical Data", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -247,8 +247,24 @@ it("selected file state shows filename, size, and Analyze Telemetry", () => {
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Select Another File" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Analyze Telemetry" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+  expect(screen.getByText("Historical Data Ready")).toBeTruthy();
+});
+
+it("drag-over and drop use the premium upload card", () => {
+  const handleFileSelection = vi.fn();
+  renderPanel({ handleFileSelection });
+
+  const card = screen.getByLabelText("Historical data upload");
+  fireEvent.dragOver(card, { dataTransfer: { dropEffect: "" } });
+  expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(true);
+
+  const file = selectedCsv("dropped.csv");
+  fireEvent.drop(card, { dataTransfer: { files: [file] } });
+  expect(handleFileSelection).toHaveBeenCalledTimes(1);
+  expect(handleFileSelection.mock.calls[0][0].dataTransfer.files[0]).toBe(file);
+  expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(false);
 });
 
 it("processing state shows one progress bar", () => {
@@ -268,7 +284,7 @@ it("processing state shows one progress bar", () => {
     latestMessage: "Building fingerprint...",
   });
 
-  expect(screen.getByText("Building operating fingerprint...")).toBeTruthy();
+  expect(screen.getByText("Learning Operational Fingerprint...")).toBeTruthy();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
 });
@@ -287,10 +303,10 @@ it("failed state shows retry and choose another file", () => {
     },
   });
 
-  expect(screen.getByRole("heading", { name: "Analysis failed" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Upload Error" })).toBeTruthy();
   expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
   expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Select Another File" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
 });
 
 it("complete state shows View Results", () => {
@@ -395,7 +411,7 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByText("Finalizing results...")).toBeTruthy();
+  expect(screen.getByText("Generating Operational Insights...")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
   expect(screen.queryByText("Systems")).toBeNull();
   expect(screen.queryByText("Insights")).toBeNull();
@@ -426,7 +442,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze Telemetry" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {

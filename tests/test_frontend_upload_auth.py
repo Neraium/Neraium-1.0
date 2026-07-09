@@ -59,7 +59,7 @@ def test_upload_and_polling_use_shared_api_helper() -> None:
 
 def test_frontend_polling_uses_bounded_backoff_under_failures() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
-    assert "const cooldownMs = Math.min(120000, 20000 + statusEndpointFailureCountRef.current * 10000);" in source
+    assert "const cooldownMs = Math.min(15000, STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS * statusEndpointFailureCountRef.current);" in source
     assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
     assert "Math.min(30000, baseDelay * (1.5 ** failureCount))" in source
     assert "Math.min(Math.max(backoff, 1000), 45000)" in source
@@ -114,10 +114,12 @@ def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> Non
 
     assert "uploadJob?.propagation_progress" in source
     assert "propagationPercent" in source
-    assert "[uploadTransferPercent, propagationPercent, backendPercent, statusFallbackPercent]" in source
+    assert "[uploadTransferPercent, backendPercent, statusFallbackPercent]" in source
+    assert "[propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
-    assert "const primaryProgressText = String(uploadJob?.progress_label || latestMessage || \"\").trim();" in panel
-    assert "const secondaryProgressText = String(propagationLabel || uploadStateMessage(uploadState) || \"\").trim();" in panel
+    assert "Uploading Historical Data..." in panel
+    assert "Learning Operational Fingerprint..." in panel
+    assert "Generating Operational Insights..." in panel
 
 
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
@@ -205,7 +207,7 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Upload Data"' in workspaces_source
+    assert 'label: "Data Sources"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source
@@ -228,7 +230,7 @@ def test_upload_normalization_uses_upload_contract_with_compat_exports() -> None
     assert "export function normalizeUploadStatus(status)" in flow_source
     assert "return normalizeUploadContractStatus(status);" in flow_source
     assert "export function normalizeErrorMessage(error)" in flow_source
-    assert "return normalizeUploadContractErrorMessage(error);" in flow_source
+    assert "return sanitizeUploadUserMessage(normalizeUploadContractErrorMessage(error), \"Unknown error\");" in flow_source
 
     assert "normalizeUploadStatus as normalizeUploadContractStatus" in state_source
     assert "normalizeErrorMessage as normalizeUploadContractErrorMessage" in state_source
@@ -254,7 +256,7 @@ def test_queued_worker_status_is_folded_into_single_upload_line() -> None:
     assert "workerState === \"starting\"" in source
     assert "Worker starting..." in source
     assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" not in panel
-    assert "customerUploadMessage" in panel
+    assert "statusText" in panel
     assert "uploadTransfer?.label" in panel
 
 
@@ -307,6 +309,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "File selected. Upload is required before analysis." in panel_source
-    assert "Upload and Analyze" in panel_source
+    assert "Analyze Historical Data" in panel_source
+    assert "Choose File" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source
