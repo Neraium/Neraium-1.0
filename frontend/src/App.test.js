@@ -213,7 +213,7 @@ it("routes Command Center CSV selections into the visible auto-start upload work
   expect(screen.getByTestId("telemetry-auto-start").textContent).toBe("true");
 });
 
-it("keeps a fresh session empty when a persisted latest analysis exists", async () => {
+it("automatically restores a completed persisted latest analysis", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-42",
     row_count: 51841,
@@ -231,15 +231,15 @@ it("keeps a fresh session empty when a persisted latest analysis exists", async 
   await launchWorkspace();
 
   await waitFor(() => {
-    expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+    expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
   });
-  expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
-  expect(screen.getByTestId("gate-previous-upload").textContent).toBe("persisted-job-42");
-  expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
-  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
+  expect(screen.getByTestId("gate-session-job").textContent).toBe("persisted-job-42");
+  expect(screen.getByTestId("gate-previous-upload").textContent).toBe("none");
+  expect(screen.queryByRole("button", { name: "Resume Previous Analysis" })).toBeNull();
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Data stream active");
 });
 
-it("resumes a persisted analysis only after explicit resume", async () => {
+it("opens a completed persisted analysis without explicit resume", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-99",
     sii_reliable_enough_to_show: true,
@@ -255,13 +255,10 @@ it("resumes a persisted analysis only after explicit resume", async () => {
   render(h(App));
   await launchWorkspace();
 
-  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
-  fireEvent.click(screen.getByRole("button", { name: "Resume Previous Analysis" }));
-
   await waitFor(() => {
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-99");
   });
-  expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+  expect(screen.queryByRole("button", { name: "Resume Previous Analysis" })).toBeNull();
 });
 
 describe("App telemetry completion navigation", () => {

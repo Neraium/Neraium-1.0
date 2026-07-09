@@ -6,6 +6,7 @@ export function deriveSessionActivity({
   gateUploadCompleteSeen = false,
   hasCompletedUploadOverride = false,
   resetGuardActive = false,
+  autoResumeCompleted = false,
 }) {
   const hasObservableUploadSession = !resetGuardActive && (
     telemetrySession?.hasTelemetry
@@ -14,7 +15,7 @@ export function deriveSessionActivity({
   );
   const effectiveIntent = !hasObservableUploadSession
     ? "neutral"
-    : (sessionIntent === "current" || gateUploadCompleteSeen || hasCompletedUploadOverride)
+    : (autoResumeCompleted || sessionIntent === "current" || gateUploadCompleteSeen || hasCompletedUploadOverride)
       ? "current"
       : sessionIntent === "resumed"
         ? "resumed"

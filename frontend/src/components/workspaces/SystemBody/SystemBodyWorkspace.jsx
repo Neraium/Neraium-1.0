@@ -338,7 +338,7 @@ export default function SystemBodyWorkspace({
                   </section>
                   <ResultList title="Possible Operational Causes" items={findingBriefing.possibleCauses} />
                   <ResultList title="Relationships Involved" items={findingBriefing.relationships} />
-                  <ResultList title="Recommended Review" items={findingBriefing.investigation} />
+                  <ResultList title="Recommended Actions" items={findingBriefing.investigation} />
                   <details className="technical-details-panel finding-evidence-drawer">
                     <summary>Advanced Details</summary>
                     <dl className="result-detail-grid">

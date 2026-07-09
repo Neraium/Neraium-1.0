@@ -21,6 +21,8 @@ const NAV_ITEMS = [
 ];
 
 const MOBILE_PRIMARY_NAV = NAV_ITEMS;
+const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
+const SELECTED_INSIGHT_STORAGE_KEY = "neraium.operational.selected_insight";
 
 const EMPTY_TAB_METRIC = "—";
 const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
@@ -130,10 +132,12 @@ export default function OperationalWorkflowWorkspace({
   onTelemetrySelected,
   onCsvSelected,
   onResumePreviousSession,
+  onReopenHistoricalAnalysis,
+  onDeleteHistoricalAnalysis,
   onSignOut,
 }) {
-  const [activeSection, setActiveSection] = useState("command-center");
-  const [selectedInsightId, setSelectedInsightId] = useState(null);
+  const [activeSection, setActiveSection] = useState(() => readStoredOperationalSection());
+  const [selectedInsightId, setSelectedInsightId] = useState(() => readStoredSelectedInsightId());
   const overviewUploadInputRef = useRef(null);
   const resultsNavigationHandledRef = useRef(resultsNavigationKey);
 
@@ -179,6 +183,20 @@ export default function OperationalWorkflowWorkspace({
   }, [model.insights, model.resultTabsReady, resultsNavigationKey]);
 
   const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, activeSection);
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedInsight?.id) {
+      window.localStorage.setItem(SELECTED_INSIGHT_STORAGE_KEY, selectedInsight.id);
+    } else {
+      window.localStorage.removeItem(SELECTED_INSIGHT_STORAGE_KEY);
+    }
+  }, [selectedInsight?.id]);
   const viewHelpers = useMemo(() => ({
     DetailGrid,
     EmptyOperationalState,
@@ -336,11 +354,22 @@ export default function OperationalWorkflowWorkspace({
         ) : null}
 
         {visibleSection === "advanced" ? (
-          <AdvancedDetailsView model={model} helpers={viewHelpers} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} />
+          <AdvancedDetailsView model={model} helpers={viewHelpers} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} onReopenHistoricalAnalysis={onReopenHistoricalAnalysis} onDeleteHistoricalAnalysis={onDeleteHistoricalAnalysis} />
         ) : null}
       </main>
     </PageContainer>
   );
+}
+
+function readStoredOperationalSection() {
+  if (typeof window === "undefined") return "command-center";
+  const stored = window.localStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
+  return NAV_ITEMS.some((item) => item.id === stored) ? stored : "command-center";
+}
+
+function readStoredSelectedInsightId() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(SELECTED_INSIGHT_STORAGE_KEY) || null;
 }
 
 function formatActiveInsightCount(value) {
@@ -384,6 +413,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const systemCards = analysisComplete ? buildSystemCards({ systems: identifiedSystems, primarySystem, insights }) : buildPlaceholderSystemCards();
   const systemSummary = buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected });
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
+  const analysisHistory = Array.isArray(liveOps?.analysisHistory) ? liveOps.analysisHistory : [];
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const facilityName = firstMeaningfulText(result?.facility_name, snapshot?.facility_name, liveOps?.facilityName, liveOps?.facility_name, currentSession?.facilityName, currentSession?.facility_name);
   const siteLabel = facilityName || "Operational Intelligence";
@@ -505,6 +535,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     relationshipRows,
     signals,
     historyItems,
+    analysisHistory,
     qualityWarnings: quality.warnings,
     missingValues: quality.missingValues,
     timestampNotes: quality.timestampNotes,
@@ -1509,8 +1540,8 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
             <div className="insight-card__header">
               <span className="section-token">{formatSubsystemName(insight.system)}</span>
               <div className="insight-card__badges">
-                <StatusBadge label={insight.severity} tone={severityToTone(insight.severity)} />
-                <StatusBadge label={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" />
+                <LabeledStatusChip label="Severity" value={insight.severity} tone={severityToTone(insight.severity)} />
+                <LabeledStatusChip label="Confidence" value={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" />
               </div>
             </div>
             <h3>{title}</h3>
@@ -1583,17 +1614,10 @@ function InsightDetail({ insight }) {
         metrics={evidenceSummary}
       />
 
-      {relationships.length ? (
-        <RelationshipObservedList
-          title="Changed Relationships"
-          items={relationships}
-        />
-      ) : null}
-
       <RankedCauseList causes={causes} />
 
       <BriefingList
-        title="Recommended Review"
+        title="Recommended Actions"
         items={recommendedReviewItems(
           insight,
           relationships
@@ -1612,9 +1636,8 @@ function insightCardRows(insight, relationships) {
   const type = getInsightType(insight);
   if (type === "relationship_shift") {
     return [
-      ["Affected System", formatSubsystemName(insight.system)],
-      shouldShowRelationshipCount(insight) ? ["Changed relationships", String(insight.changedRelationshipCount ?? relationships.length)] : null,
       ["Key relationship", relationships[0]],
+      shouldShowRelationshipCount(insight) ? ["Changed relationships", String(insight.changedRelationshipCount ?? relationships.length)] : null,
     ];
   }
   if (type === "metric_deviation") {
@@ -1625,7 +1648,7 @@ function insightCardRows(insight, relationships) {
       ["Deviation direction", insight.deviationDirection],
     ];
   }
-  return [["Affected System", formatSubsystemName(insight.system)]];
+  return relationships.length ? [["Key relationship", relationships[0]]] : [];
 }
 
 function evidenceBriefing(insight, relationships = []) {
@@ -2425,6 +2448,15 @@ function StatusBadge({ label, tone, statusKey }) {
   return <span className={classes}><span className="operational-status__icon" aria-hidden="true" />{label}</span>;
 }
 
+function LabeledStatusChip({ label, value, tone, statusKey }) {
+  return (
+    <span className="labeled-status-chip">
+      <span className="labeled-status-chip__label">{label}</span>
+      <StatusBadge label={value} tone={tone} statusKey={statusKey} />
+    </span>
+  );
+}
+
 function EmptyOperationalState({ title, body }) {
   return <div className="operational-empty"><strong>{title}</strong><p>{body}</p></div>;
 }
@@ -2851,10 +2883,13 @@ function formatInsightTitle(value) {
   if (value && typeof value === "object") {
     const context = insightTitleContext(value);
     const type = getInsightType(value);
+    const relationshipTitle = relationshipTitleFromLabels(insightRelationshipLabels(value));
     if (type === "relationship_shift") {
-      if (/cool|chill|tower|thermal|condenser|chw/i.test(context)) return "Cooling Distribution Relationship Shifted";
-      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Pump Performance Relationship Changed";
-      return `${formatSubsystemName(value.system)} Operating Relationship Shifted`;
+      if (relationshipTitle) return relationshipTitle;
+      if (/water quality|chemical|chlor|dose|ph|orp|conductivity/i.test(context)) return "Water Quality Relationship Changed";
+      if (/flow|pressure/i.test(context)) return "Flow and Pressure Relationship Changed";
+      if (/pump|valve|vfd|filter|hydraulic/i.test(context)) return "Pump Performance Relationship Changed";
+      return `${formatSubsystemName(value.system)} Operating Relationship Changed`;
     }
     if (type === "metric_deviation") {
       if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
@@ -2867,6 +2902,26 @@ function formatInsightTitle(value) {
   }
   return formatDisplayName(value)
     .replace(/\s+/g, " ")
+    .trim();
+}
+
+function relationshipTitleFromLabels(relationships = []) {
+  const label = relationships
+    .map((item, index) => formatRelationshipObservedLabel(item, index))
+    .find((item) => item && !/^Relationship [A-Z]$/.test(item));
+  if (!label) return "";
+  const endpoints = label.split(/\s*↔\s*|\s+\/\s+|\s+and\s+/i).map(titleEndpoint).filter(Boolean);
+  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} Relationship Changed`;
+  return `${titleEndpoint(label)} Relationship Changed`;
+}
+
+function titleEndpoint(value) {
+  return formatDisplayName(value)
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+    .replace(/Dp/gi, "DP")
+    .replace(/Ph/gi, "pH")
+    .replace(/Orp/gi, "ORP")
+    .replace(/Vfd/gi, "VFD")
     .trim();
 }
 
@@ -3200,6 +3255,12 @@ function isAnalysisResumable({ liveOps, currentSession, result, snapshot, gatePr
 
 function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) {
   const hasIntelligenceData = Boolean(result?.analysis_result || result?.sii_intelligence || result?.engine_result);
+  const statusText = [
+    result?.status,
+    result?.processing_state,
+    snapshot?.status,
+    snapshot?.processing_state,
+  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
   const completed = Boolean(
     currentSession?.hasReliableOperatorEvidence === true
     || result?.sii_reliable_enough_to_show === true
@@ -3207,6 +3268,7 @@ function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) 
     || result?.processing_trace?.sii_completed === true
     || snapshot?.sii_completed === true
     || liveOps?.siiVerification?.verified === true
+    || (/\b(complete|completed|ready|active|processed|success)\b/.test(statusText) && result?.analysis_result)
   );
   return hasIntelligenceData && completed;
 }

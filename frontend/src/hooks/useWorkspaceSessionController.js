@@ -4,6 +4,14 @@ import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/curre
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
 import { isUploadProcessingStatus, uploadStageLabel, uploadStagePercent } from "../viewModels/uploadContract";
+import {
+  createAnalysisRecord,
+  deleteAnalysisRecord,
+  isCompletedAnalysisPayload,
+  readAnalysisHistory,
+  upsertCompletedAnalysis,
+  writeAnalysisHistory,
+} from "../viewModels/analysisHistory";
 
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
@@ -42,13 +50,22 @@ export default function useWorkspaceSessionController({
   const [postUploadExpectedJobId, setPostUploadExpectedJobId] = useState(null);
   const [gateUploadCompleteSeen, setGateUploadCompleteSeen] = useState(false);
   const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
+  const [analysisHistory, setAnalysisHistory] = useState(() => readAnalysisHistory());
+  const [restoredAnalysisOverride, setRestoredAnalysisOverride] = useState(null);
 
   const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
-  const guardedLatestUploadResult = resetGuardActive ? null : (completedUploadOverride ?? sessionStore?.latestUploadResult ?? null);
+  const localLatestCompletedAnalysis = allowPersistedLatest ? (analysisHistory[0] ?? null) : null;
+  const restoredAnalysisResult = restoredAnalysisOverride?.result ?? null;
+  const restoredAnalysisSnapshot = restoredAnalysisOverride?.snapshot ?? null;
+  const localLatestResult = localLatestCompletedAnalysis?.result ?? null;
+  const localLatestSnapshot = localLatestCompletedAnalysis?.snapshot ?? null;
+  const guardedLatestUploadResult = resetGuardActive
+    ? null
+    : (completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? localLatestResult ?? null);
   const guardedLatestUploadSnapshot = resetGuardActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
-    : (postUploadPendingSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
+    : (postUploadPendingSnapshot ?? restoredAnalysisSnapshot ?? sessionStore?.latestUploadSnapshot ?? localLatestSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
 
   const observableTelemetrySession = useMemo(
     () => uploadStateView.deriveTelemetrySessionState({
@@ -58,6 +75,10 @@ export default function useWorkspaceSessionController({
     }),
     [guardedLatestUploadResult, guardedLatestUploadSnapshot, historianReplayState.frame],
   );
+  const hasCompletedAnalysisAvailable = isCompletedAnalysisPayload({
+    result: guardedLatestUploadResult,
+    snapshot: guardedLatestUploadSnapshot,
+  });
   const sessionActivity = useMemo(
     () => deriveSessionActivity({
       telemetrySession: observableTelemetrySession,
@@ -65,8 +86,9 @@ export default function useWorkspaceSessionController({
       gateUploadCompleteSeen,
       hasCompletedUploadOverride: Boolean(completedUploadOverride),
       resetGuardActive,
+      autoResumeCompleted: hasCompletedAnalysisAvailable,
     }),
-    [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, observableTelemetrySession],
+    [completedUploadOverride, gateUploadCompleteSeen, hasCompletedAnalysisAvailable, resetGuardActive, sessionIntent, observableTelemetrySession],
   );
   const effectiveSessionIntent = sessionActivity.effectiveIntent;
 
@@ -147,6 +169,13 @@ export default function useWorkspaceSessionController({
     [guardedLatestUploadSnapshot],
   );
 
+  useEffect(() => {
+    if (resetGuardActive) return;
+    const record = createAnalysisRecord({ result: guardedLatestUploadResult, snapshot: guardedLatestUploadSnapshot });
+    if (!record) return;
+    setAnalysisHistory((current) => upsertCompletedAnalysis(current, record));
+  }, [guardedLatestUploadResult, guardedLatestUploadSnapshot, resetGuardActive]);
+
   const handleReplayFrameChange = useCallback((frame, meta) => {
     setHistorianReplayState((current) => ({ ...current, frame, meta }));
   }, []);
@@ -160,6 +189,7 @@ export default function useWorkspaceSessionController({
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
+    setRestoredAnalysisOverride(null);
     const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload)
       ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
     const expectedJobId = uploadStateView.resolveCurrentUploadJobId(completedPayload)
@@ -199,6 +229,7 @@ export default function useWorkspaceSessionController({
 
   const handleResumePreviousSession = useCallback(async () => {
     setResetGuardActive(false);
+    setRestoredAnalysisOverride(null);
     setAllowPersistedLatest(true);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
@@ -214,6 +245,28 @@ export default function useWorkspaceSessionController({
     await loadFacilitySystems();
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
+
+  const handleReopenHistoricalAnalysis = useCallback((recordId) => {
+    const record = analysisHistory.find((item) => item.id === recordId);
+    if (!record) return;
+    setResetGuardActive(false);
+    setRestoredAnalysisOverride(record);
+    setCompletedUploadOverride(null);
+    setPostUploadPendingSnapshot(null);
+    setPostUploadExpectedJobId(null);
+    setGateUploadCompleteSeen(false);
+    setAllowPersistedLatest(true);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
+    }
+    setSessionIntent("current");
+    setActiveWorkspace("system-body");
+  }, [analysisHistory, setActiveWorkspace, setAllowPersistedLatest]);
+
+  const handleDeleteHistoricalAnalysis = useCallback((recordId) => {
+    setAnalysisHistory((current) => deleteAnalysisRecord(current, recordId));
+    setRestoredAnalysisOverride((current) => current?.id === recordId ? null : current);
+  }, []);
 
   const handleResetDemo = useCallback(async () => {
     const [uploadResetResponse, connectionResetResponse] = await Promise.all([
@@ -247,6 +300,8 @@ export default function useWorkspaceSessionController({
     setAllowPersistedLatest(false);
     clearUploadSessionState();
     setCompletedUploadOverride(null);
+    setRestoredAnalysisOverride(null);
+    setAnalysisHistory(writeAnalysisHistory([]));
     setPostUploadPendingSnapshot(null);
     setPostUploadExpectedJobId(null);
     setGateUploadCompleteSeen(false);
@@ -323,10 +378,13 @@ export default function useWorkspaceSessionController({
     gateProcessing,
     persistedLatestUpload,
     previousUploadHistory,
+    analysisHistory,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
     handleResumePreviousSession,
+    handleReopenHistoricalAnalysis,
+    handleDeleteHistoricalAnalysis,
     handleResetDemo,
     handleBackToGate,
     handleRetryWorkspace,

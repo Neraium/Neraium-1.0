@@ -707,7 +707,7 @@ export default function ObservationCenterWorkspace({
               />
               <IssueBriefingList title="Possible Operational Causes" items={activeBriefing.possibleCauses} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
-              <IssueBriefingList title="Recommended Review" items={activeBriefing.investigation} />
+              <IssueBriefingList title="Recommended Actions" items={activeBriefing.investigation} />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Details</button>
               </div>

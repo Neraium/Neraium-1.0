@@ -1,4 +1,4 @@
-export default function AdvancedDetailsView({ model, helpers, selectedInsightId, onAnalyzeSystem, onResumePreviousSession }) {
+export default function AdvancedDetailsView({ model, helpers, selectedInsightId, onAnalyzeSystem, onResumePreviousSession, onReopenHistoricalAnalysis, onDeleteHistoricalAnalysis }) {
   const { DetailGrid, EvidencePanel, PanelHeader, QualityList, StatusBadge, Timeline, formatConfidenceDisplay, prioritizeEvidenceGroups, severityToTone } = helpers;
   const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
   return (
@@ -69,7 +69,16 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
       </section>
 
       <section className="operational-panel" aria-label="Analysis history">
-        <PanelHeader eyebrow="History" title="History" subtitle="" />
+        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Completed analyses can be reopened without reprocessing source telemetry." />
+        <AnalysisHistoryList
+          history={model.analysisHistory}
+          onReopen={onReopenHistoricalAnalysis}
+          onDelete={onDeleteHistoricalAnalysis}
+        />
+      </section>
+
+      <section className="operational-panel" aria-label="Recent activity">
+        <PanelHeader eyebrow="Activity" title="Recent Activity" subtitle="" />
         <Timeline items={model.historyItems} />
       </section>
 
@@ -81,4 +90,38 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
       ) : null}
     </div>
   );
+}
+
+
+function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
+  if (!history.length) {
+    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed Operational Fingerprints will appear here after analysis.</p></div>;
+  }
+  return (
+    <div className="analysis-history-list">
+      {history.map((entry) => (
+        <article className="analysis-history-card" key={entry.id}>
+          <div className="analysis-history-card__main">
+            <span className="section-token">{formatHistoryTimestamp(entry.timestamp)}</span>
+            <strong>{entry.datasetName}</strong>
+            <dl>
+              <div><dt>Fingerprint</dt><dd>{entry.fingerprintStatus}</dd></div>
+              <div><dt>Systems</dt><dd>{entry.systemsCount}</dd></div>
+              <div><dt>Insights</dt><dd>{entry.insightsCount}</dd></div>
+            </dl>
+          </div>
+          <div className="analysis-history-card__actions">
+            <button type="button" className="secondary-command-button" onClick={() => onReopen?.(entry.id)}>Reopen</button>
+            <button type="button" className="operational-link-button operational-link-button--danger" onClick={() => onDelete?.(entry.id)}>Delete</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function formatHistoryTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "Analysis saved";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
 }

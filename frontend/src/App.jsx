@@ -86,10 +86,13 @@ function App() {
     gateProcessing,
     persistedLatestUpload,
     previousUploadHistory,
+    analysisHistory,
     handleReplayFrameChange,
     handleReplayModeChange,
     handleGateUploadComplete,
     handleResumePreviousSession,
+    handleReopenHistoricalAnalysis,
+    handleDeleteHistoricalAnalysis,
     handleResetDemo,
     handleBackToGate,
     handleRetryWorkspace,
@@ -192,13 +195,14 @@ function App() {
       telemetrySession,
       persistedLatestUpload,
       previousUploadHistory,
+      analysisHistory,
       session: resolvedSessionStore,
       systems,
       systemsState,
       intelligenceStatus,
       telemetryTick,
     };
-  }, [apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
+  }, [analysisHistory, apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
 
   const handleSignOut = useCallback(async () => {
     await logoutUser();
@@ -265,6 +269,8 @@ function App() {
       handleRetryWorkspace={handleRetryWorkspace}
       handleGateUploadComplete={handleTelemetryAnalysisComplete}
       handleResumePreviousSession={handleResumePreviousSession}
+      handleReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
+      handleDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
       handleResetDemo={handleResetDemo}
       handleReplayFrameChange={handleReplayFrameChange}
       handleReplayModeChange={handleReplayModeChange}

@@ -2,13 +2,13 @@ const AVAILABLE_SOURCES = [
   {
     icon: "CSV",
     label: "Historical CSV Import",
-    detail: "Upload exported operating data for offline review.",
+    detail: "Use exported telemetry when historian access is not connected.",
     status: "Available Today",
   },
   {
     icon: "SII",
     label: "Historical Analysis",
-    detail: "Establish or refresh the facility baseline from imported records.",
+    detail: "Establish or refresh the Operational Fingerprint from available operating records.",
     status: "Available Today",
   },
 ];
@@ -30,21 +30,21 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <PanelHeader
           eyebrow="Status"
           title="Telemetry Sources"
-          subtitle="Prepare operating data for analysis without changing facility control systems."
+          subtitle="Connect read-only telemetry sources for Operational Fingerprint review."
         />
         <StatusBadge label={model.dashboardStatus.label} tone={model.dashboardStatus.tone} statusKey={model.dashboardStatus.statusKey} />
       </section>
 
       <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Primary Actions">
-        <PanelHeader eyebrow="Primary Actions" title="Start Analysis" subtitle="Use exported records when a live source is not connected." />
+        <PanelHeader eyebrow="Primary Actions" title="Start Analysis" subtitle="CSV import is one source path for establishing operational intelligence." />
         <div className="data-source-action-grid">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>
             <strong>Analyze New Dataset</strong>
-            <span>Run the import and analysis workflow.</span>
+            <span>Create or refresh the Operational Fingerprint.</span>
           </button>
           <button type="button" className="secondary-command-button data-source-action" onClick={onSelectCsv} disabled={model.analyzeDisabled}>
             <strong>Import Historical CSV</strong>
-            <span>Select an exported CSV file.</span>
+            <span>Use exported telemetry when no live source is connected.</span>
           </button>
           <button type="button" className="secondary-command-button data-source-action" disabled>
             <strong>Connect Live Telemetry</strong>

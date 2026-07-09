@@ -70,6 +70,8 @@ export default function AppWorkspaceRouter({
   handleGateUploadComplete,
   handleResetDemo,
   handleResumePreviousSession,
+  handleReopenHistoricalAnalysis,
+  handleDeleteHistoricalAnalysis,
   handleReplayFrameChange,
   handleReplayModeChange,
   handleSignOut,
@@ -243,6 +245,8 @@ export default function AppWorkspaceRouter({
               setActiveWorkspace("data-connections");
             }}
             onResumePreviousSession={handleResumePreviousSession}
+            onReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
+            onDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
           />
           {pendingUploadFiles.length > 0 ? (
             <DataConnectionsWorkspace
