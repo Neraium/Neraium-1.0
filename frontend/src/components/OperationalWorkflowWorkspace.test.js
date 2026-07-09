@@ -107,22 +107,26 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
   it("opens to Command Center with Neraium branding, orb, and fingerprint empty state", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("heading", { name: "Command Center" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "No Operational Fingerprint Established" })).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
-    expect(screen.getAllByText("Awaiting Operational Fingerprint").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Connect telemetry or analyze historical data to establish an Operational Fingerprint.").length).toBeGreaterThan(0);
-    expect(screen.getByText("Overall State")).toBeTruthy();
-    expect(screen.getByText("Operational Fingerprint")).toBeTruthy();
-    expect(screen.getByText("Systems Monitored")).toBeTruthy();
-    expect(screen.getByText("Active Insights")).toBeTruthy();
-    expect(screen.getByText("Systems with Relationship Drift")).toBeTruthy();
-    expect(screen.getByText("Last Analysis")).toBeTruthy();
-    expect(screen.getByText("Data Source Status")).toBeTruthy();
+    expect(screen.getAllByText("Ready for Analysis")).toHaveLength(1);
+    expect(screen.getByText("Connect historical or live telemetry to begin learning operational behavior.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Not Yet Established" })).toBeTruthy();
+    expect(screen.getByText("Connect live telemetry or analyze historical operational data to establish a behavioral baseline for this facility.")).toBeTruthy();
+    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Insights").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Fingerprint").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not Established").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Data Sources").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Advanced").length).toBeGreaterThan(0);
     const commandCenterSystems = screen.getByLabelText("Systems requiring attention");
     expect(commandCenterSystems.querySelectorAll(".system-summary-row--dashboard")).toHaveLength(1);
-    expect(commandCenterSystems.textContent).toContain("Systems Awaiting Telemetry");
-    expect(commandCenterSystems.textContent).toContain("Connect telemetry or analyze historical data to identify operational systems and establish relationship baselines.");
+    expect(commandCenterSystems.textContent).toContain("Systems Awaiting Discovery");
+    expect(commandCenterSystems.textContent).toContain("Operational systems will automatically be identified after telemetry has been analyzed.");
     expect(commandCenterSystems.textContent).not.toContain("HVAC and Central Plant");
     expect(commandCenterSystems.textContent).not.toContain("Pools, Spas, and Water Features");
     expect(commandCenterSystems.textContent).not.toContain("Water Treatment and Pumping");
@@ -132,7 +136,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(commandCenterSystems.textContent).not.toContain("Utility Distribution");
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder/);
     expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+    expect(screen.getByText("Platform initialized")).toBeTruthy();
+    expect(screen.getByText("Waiting for telemetry connection")).toBeTruthy();
+    expect(screen.getByText("Operational Fingerprint will be created after the first successful analysis")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Live Data" })).toBeTruthy();
+    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/Current\s+Site/);
     expect(screen.queryByRole("heading", { name: /CSV Import/i })).toBeNull();
   });
 
@@ -155,7 +163,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     renderWorkspace();
 
     clickNav("Data Sources");
-    expect(screen.getByRole("heading", { name: "Data Sources" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /CSV Import/i })).toBeTruthy();
     expect(screen.getByText("Analyze Historical Data")).toBeTruthy();
     expect(screen.getByText("Connect Live Telemetry")).toBeTruthy();
@@ -167,17 +175,17 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Disabled")).toBeTruthy();
   });
 
-  it("Systems view uses resort infrastructure placeholders before telemetry", () => {
+  it("Systems view shows discovery guidance before telemetry", () => {
     renderWorkspace();
 
     clickNav("Systems");
-    expect(screen.getByRole("heading", { name: "Expected Resort Domains" })).toBeTruthy();
-    expect(screen.getByText("Examples of resort infrastructure domains are shown for orientation only; detected systems appear after telemetry analysis.")).toBeTruthy();
-    expect(screen.getByText("HVAC and Central Plant")).toBeTruthy();
-    expect(screen.getByText("Pools, Spas, and Water Features")).toBeTruthy();
-    expect(screen.getByText("Cooling Towers and Heat Rejection")).toBeTruthy();
-    expect(screen.getAllByText("Expected resort domain example, not a detected system").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Example, not detected").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Systems Awaiting Discovery" })).toBeTruthy();
+    expect(screen.getAllByText("Operational systems will automatically be identified after telemetry has been analyzed.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
+    expect(screen.queryByText("Pools, Spas, and Water Features")).toBeNull();
+    expect(screen.queryByText("Cooling Towers and Heat Rejection")).toBeNull();
+    expect(screen.queryByText("Expected resort domain example, not a detected system")).toBeNull();
+    expect(screen.queryByText("Example, not detected")).toBeNull();
   });
 
   it("shows no numeric systems nav metric before telemetry analysis", () => {
@@ -227,7 +235,6 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByRole("heading", { name: "Command Center" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Current Operating Picture" })).toBeTruthy();
 
     clickNav("Systems");

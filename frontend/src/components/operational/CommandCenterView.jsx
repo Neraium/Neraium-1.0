@@ -20,7 +20,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
           <OperationalOrb state={model.orb} />
           <div className="command-center-hero__copy">
             <span className="section-token">Neraium</span>
-            <h2>{model.dashboardStatus.label}</h2>
+            <h2>{model.commandCenterTitle}</h2>
             <p>{model.commandCenterMessage}</p>
             <div className="operational-actions operational-actions--dashboard" aria-label="Primary actions">
               <button type="button" className="command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>Analyze Historical Data</button>
@@ -76,8 +76,8 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
           <div className="systems-list systems-list--dashboard">
             <article className="system-summary-row system-summary-row--dashboard system-summary-row--awaiting-telemetry">
               <div>
-                <strong>Systems Awaiting Telemetry</strong>
-                <span>Connect telemetry or analyze historical data to identify operational systems and establish relationship baselines.</span>
+                <strong>Systems Awaiting Discovery</strong>
+                <span>Operational systems will automatically be identified after telemetry has been analyzed.</span>
               </div>
             </article>
           </div>

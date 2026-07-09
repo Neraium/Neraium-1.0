@@ -1057,6 +1057,7 @@ button.insight-card {
 .operational-status {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   width: fit-content;
   min-height: 30px;
   border-radius: 999px;
@@ -1067,18 +1068,72 @@ button.insight-card {
   white-space: nowrap;
 }
 
-.operational-status--normal {
+.operational-status__icon {
+  position: relative;
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  flex: 0 0 auto;
+}
+
+.operational-status__icon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.88;
+}
+
+.operational-status--learning .operational-status__icon::before {
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  background: transparent;
+}
+
+.operational-status--active .operational-status__icon::before {
+  inset: 1px 0 0 1px;
+  width: 0.46rem;
+  height: 0.26rem;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  background: transparent;
+  transform: rotate(-45deg);
+}
+
+.operational-status--drift .operational-status__icon::before {
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  border-left: 0.34rem solid transparent;
+  border-right: 0.34rem solid transparent;
+  border-bottom: 0.62rem solid currentColor;
+  border-radius: 1px;
+  background: transparent;
+}
+
+.operational-status--normal,
+.operational-status--active {
   background: var(--ops-success-soft);
   color: var(--ops-success);
 }
 
+.operational-status--ready {
+  background: var(--ops-accent-soft);
+  color: var(--ops-accent-strong);
+}
+
 .operational-status--changed,
-.operational-status--warning {
+.operational-status--warning,
+.operational-status--learning {
   background: var(--ops-warning-soft);
   color: var(--ops-warning);
 }
 
-.operational-status--investigate {
+.operational-status--investigate,
+.operational-status--drift {
   background: var(--ops-danger-soft);
   color: var(--ops-danger);
 }
