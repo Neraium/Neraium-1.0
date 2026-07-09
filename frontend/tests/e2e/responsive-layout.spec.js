@@ -121,7 +121,7 @@ test.describe("Responsive layout audit", () => {
     await openWorkspace(page, { width: 390, height: 844 });
     await page.getByRole("button", { name: /Data Sources/i }).first().click();
     await expect(page.getByRole("region", { name: "Data Sources" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /CSV Import/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Import Historical CSV/i })).toBeVisible();
   });
 
   test("buttons do not overlap across responsive widths", async ({ page }) => {

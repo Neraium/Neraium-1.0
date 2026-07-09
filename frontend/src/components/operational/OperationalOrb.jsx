@@ -1,7 +1,7 @@
 const ORB_STATUS = {
   awaiting: {
     label: "Awaiting Operational Fingerprint",
-    visualLabel: "Neraium",
+    visualLabel: "Operational Status",
     particleCount: 0,
   },
   learning: {
@@ -79,7 +79,7 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
       className={`operational-orb operational-orb--${resolvedStatus}`}
       data-testid="operational-orb"
       data-status={resolvedStatus}
-      aria-label={`Operational Fingerprint: ${label}`}
+      aria-label={`Operational status: ${label}`}
     >
       <div className="operational-orb__glow" aria-hidden="true" />
       <div className="operational-orb__surface" aria-hidden="true">

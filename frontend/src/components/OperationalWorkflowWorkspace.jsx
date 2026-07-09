@@ -61,29 +61,29 @@ const hiddenFileInputStyle = {
 };
 
 const EMPTY_TELEMETRY_COPY = {
-  label: "No Operational Fingerprint Established",
-  detail: "Connect historical or live telemetry to begin learning operational behavior.",
-  commandTitle: "Operational Fingerprint Not Yet Established",
-  commandDetail: "Connect live telemetry or analyze historical operational data to establish a behavioral baseline for this facility.",
+  label: "Operational Fingerprint Pending",
+  detail: "Import historical telemetry or connect a live source to establish the facility's operating baseline.",
+  commandTitle: "Operational Fingerprint Pending",
+  commandDetail: "Import historical telemetry or connect a live read-only source to establish the facility's Operational Fingerprint.",
   fileStatus: "No source connected",
   cta: "Analyze Historical Data",
   secondaryCta: "Connect Live Data",
-  headerStatus: "No Operational Fingerprint Established",
+  headerStatus: "Operational Fingerprint Pending",
 };
 const NO_TELEMETRY_STATUS = {
-  label: "Ready for Analysis",
+  label: "Ready for Historical Analysis",
   tone: "ready",
   statusKey: "ready",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const WAITING_FOR_TELEMETRY_STATUS = {
-  label: "Ready for Analysis",
+  label: "Ready for Historical Analysis",
   tone: "ready",
   statusKey: "ready",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const READY_TO_ANALYZE_STATUS = {
-  label: "Ready for Analysis",
+  label: "Ready for Historical Analysis",
   tone: "ready",
   statusKey: "ready",
   detail: "Telemetry is ready for analysis.",
@@ -386,7 +386,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const facilityName = firstMeaningfulText(result?.facility_name, snapshot?.facility_name, liveOps?.facilityName, liveOps?.facility_name, currentSession?.facilityName, currentSession?.facility_name);
   const siteLabel = facilityName || "Operational Intelligence";
-  const headerTitle = facilityName || (analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : EMPTY_TELEMETRY_COPY.headerStatus);
+  const headerTitle = facilityName || (analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : "Command Center");
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
   const sourceRowCount = deriveSourceRowCount({ result, snapshot });
@@ -537,7 +537,7 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
     return { key: "analyzing", status: "learning", label: ANALYZING_STATUS.label, tone: "learning", visualLabel: "Operational Fingerprint" };
   }
   if (!analysisComplete) {
-    return { key: "no-data", status: "awaiting", label: "Awaiting Operational Fingerprint", tone: "ready", visualLabel: "Neraium" };
+    return { key: "no-data", status: "awaiting", label: "Operational Fingerprint Pending", tone: "ready", visualLabel: "Operational Status" };
   }
 
   const hasDrift = insights.length || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate";
@@ -581,14 +581,12 @@ function buildRelationshipChangeRows(relationshipRows) {
     .slice(0, 12);
 }
 
-function buildDataSourceRows({ sourceLabel, telemetryStatus, lastAnalysis, sourceRowCount, telemetryConnected }) {
+function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) {
   return [
-    ["Current source", sourceLabel],
-    ["Source state", telemetryStatus.label],
-    ["Live telemetry", telemetryConnected ? "Connected" : "Not connected"],
-    ["Rows / records", sourceRowCount],
-    ["Last analysis", lastAnalysis],
-    ["Control-system writeback", "Disabled"],
+    ["Historical Source", sourceLabel === "None" ? "None Connected" : sourceLabel],
+    ["Live Telemetry", telemetryConnected ? "Connected" : "Not Connected"],
+    ["Last Analysis", lastAnalysis === "No analysis yet" || lastAnalysis === "Not analyzed yet" ? "No Analysis Yet" : lastAnalysis],
+    ["Writeback", "Disabled (Read Only)"],
   ];
 }
 

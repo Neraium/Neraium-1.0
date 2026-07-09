@@ -123,13 +123,13 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
   it("opens to Command Center with Neraium branding, orb, and fingerprint empty state", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("heading", { name: "No Operational Fingerprint Established" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Pending" })).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
-    expect(screen.getAllByText("Ready for Analysis")).toHaveLength(1);
-    expect(screen.getByText("Connect historical or live telemetry to begin learning operational behavior.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Operational Fingerprint Not Yet Established" })).toBeTruthy();
-    expect(screen.getByText("Connect live telemetry or analyze historical operational data to establish a behavioral baseline for this facility.")).toBeTruthy();
+    expect(screen.getAllByText("Ready for Historical Analysis")).toHaveLength(1);
+    expect(screen.getByText("Import historical telemetry or connect a live source to establish the facility's operating baseline.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Pending" })).toBeTruthy();
+    expect(screen.getByText("Import historical telemetry or connect a live read-only source to establish the facility's Operational Fingerprint.")).toBeTruthy();
     expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Insights").length).toBeGreaterThan(0);
@@ -157,7 +157,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Operational Fingerprint will be created after the first successful analysis")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Live Data" })).toBeTruthy();
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/Current\s+Site/);
-    expect(screen.queryByRole("heading", { name: /CSV Import/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Import Historical CSV/i })).toBeNull();
   });
 
   it("Analyze Historical Data opens the existing hidden file picker path", () => {
@@ -189,7 +189,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(onTelemetrySelected).not.toHaveBeenCalled();
     expect(input.value).toBe("");
     expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Operational Fingerprint Not Yet Established" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Operational Fingerprint Pending" })).toBeNull();
   });
 
   it("Data Sources CSV Import uses the same hidden file-selection path", () => {
@@ -199,7 +199,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Data Sources");
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: /CSV Import/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Import Historical CSV/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,2"], "sources.csv", { type: "text/csv" });
@@ -215,15 +215,16 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Data Sources");
     expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /CSV Import/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Import Historical CSV/i })).toBeTruthy();
     expect(screen.getByText("Analyze Historical Data")).toBeTruthy();
-    expect(screen.getByText("Connect Live Telemetry")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Connect Live Data/i })).toBeTruthy();
     expect(screen.getByText("OPC-UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
     expect(screen.getByText("PI System")).toBeTruthy();
-    expect(screen.getByText("SCADA/BMS connectors")).toBeTruthy();
-    expect(screen.getByText("Control-system writeback")).toBeTruthy();
-    expect(screen.getByText("Disabled")).toBeTruthy();
+    expect(screen.getByText("SCADA / BMS")).toBeTruthy();
+    expect(screen.getByText("Writeback")).toBeTruthy();
+    expect(screen.getByText("Disabled (Read Only)")).toBeTruthy();
+    expect(screen.getAllByText("Read-Only Architecture").length).toBeGreaterThan(0);
   });
 
   it("Systems view shows discovery guidance before telemetry", () => {
