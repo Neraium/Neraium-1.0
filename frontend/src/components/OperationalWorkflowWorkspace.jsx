@@ -214,7 +214,8 @@ export default function OperationalWorkflowWorkspace({
   }
 
   function openInsight(insightId) {
-    setSelectedInsightId(insightId);
+    const resolvedInsight = model.insights.find((item) => item.id === insightId) ?? model.insights[0] ?? null;
+    setSelectedInsightId(resolvedInsight?.id ?? null);
     navigate("insights");
   }
 
@@ -1086,7 +1087,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       const contributingRelationships = Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [];
       const affectedRelationships = relationshipContributionLabels(contributingRelationships);
       const insight = {
-        id: item.id ?? "insight-" + index,
+        id: normalizeInsightId(item, index),
         rawSystemName: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
         status: normalizeInsightStatus(item.status ?? item.severity),
         severity: normalizeSeverity(item.severity),
@@ -1137,7 +1138,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       const supporting = formatEvidenceItems(toList(item.supportingEvidence, item.relationshipEvidence, result?.operator_report?.evidence_summary, result?.finding_evidence_chains));
       const evidence = supporting.length ? [{ supporting_signals: supporting }] : [];
       const insight = {
-        id: "insight-" + index,
+        id: normalizeInsightId(item, index),
         rawSystemName: firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem),
         status: normalizeInsightStatus(item.status ?? result?.operating_state),
         severity: normalizeSeverity(item.confidence ?? result?.drift_status),
@@ -2719,6 +2720,24 @@ function normalizeDisplayKey(value) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeInsightId(item, index) {
+  const directId = firstText(item?.id, item?.insight_id, item?.insightId).trim();
+  if (directId) return directId;
+  const basis = firstText(
+    item?.title,
+    item?.summary,
+    item?.explanation,
+    item?.what_changed,
+    item?.whatChanged,
+    item?.detail,
+    item?.label,
+    item?.system,
+    toList(item?.affected_systems)[0],
+  );
+  const slug = normalizeDisplayKey(basis).replace(/\s+/g, "-").slice(0, 80);
+  return slug ? `insight-${slug}-${index}` : `insight-${index}`;
 }
 
 function dedupeInsights(items) {

@@ -6,7 +6,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
   const systems = model.analysisComplete ? model.dashboardSystemCards : [];
 
   function reviewCurrentInsight() {
-    if (primaryInsight) {
+    if (primaryInsight && typeof onOpenInsight === "function") {
       onOpenInsight(primaryInsight.id);
       return;
     }
@@ -45,7 +45,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
           <div className="command-center-insight">
             <strong>{formatInsightTitle(primaryInsight)}</strong>
             <p>{operatorSummaryBriefing(primaryInsight, insightRelationshipLabels(primaryInsight))[0]}</p>
-            <button type="button" className="secondary-command-button" onClick={() => onOpenInsight(primaryInsight.id)}>Open Insight</button>
+            <button type="button" className="secondary-command-button" onClick={() => onOpenInsight?.(primaryInsight.id)}>Open Insight</button>
           </div>
         ) : (
           <EmptyOperationalState title="No active operational insight" body={model.emptyInsightMessage} />

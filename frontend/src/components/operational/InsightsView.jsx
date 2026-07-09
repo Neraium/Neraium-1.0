@@ -1,5 +1,15 @@
+import { useEffect, useRef } from "react";
+
 export default function InsightsView({ model, helpers, selectedInsight, onSelectInsight }) {
   const { InsightDetail, InsightList, PanelHeader } = helpers;
+  const selectedDetailRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedInsight?.id || !selectedDetailRef.current) return;
+    selectedDetailRef.current.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    selectedDetailRef.current.focus?.({ preventScroll: true });
+  }, [selectedInsight?.id]);
+
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
@@ -11,7 +21,11 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}
         />
-        {selectedInsight ? <InsightDetail insight={selectedInsight} /> : null}
+        {selectedInsight ? (
+          <div ref={selectedDetailRef} tabIndex={-1}>
+            <InsightDetail insight={selectedInsight} />
+          </div>
+        ) : null}
       </section>
     </div>
   );

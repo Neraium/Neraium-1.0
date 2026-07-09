@@ -42,12 +42,28 @@ function analysis({ second = true, reverse = false } = {}) {
     systems: [{ id: "pump", name: "Pump system" }], relationships: [], fingerprint: { status: "changed", meaning: "Pump behavior changed." } };
 }
 
+function analysisWithoutInsightIds() {
+  const base = analysis();
+  return {
+    ...base,
+    insights: base.insights.map((insight) => {
+      const withoutId = { ...insight };
+      delete withoutId.id;
+      return withoutId;
+    }),
+  };
+}
+
 
 function clickNav(label) {
   const button = screen.getAllByRole("button").find((node) => node.textContent.includes(label));
   expect(button).toBeTruthy();
   fireEvent.click(button);
   return button;
+}
+
+function hasActiveNavButton(labelPattern) {
+  return screen.getAllByRole("button", { name: labelPattern }).some((button) => button.getAttribute("aria-current") === "page");
 }
 
 function analysisWithRelationshipEvidence() {
@@ -261,6 +277,42 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     expect(screen.getByText("Pump system")).toBeTruthy();
     expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
+  });
+
+  it("opens the top Command Center insight in the Insights view", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
+
+    expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
+    expect(screen.getByLabelText("Insight detail")).toBeTruthy();
+    expect(screen.getByText("What Changed")).toBeTruthy();
+    expect(screen.getAllByText(/Pump system relationship shift detected/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Current Operating Picture" })).toBeNull();
+    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
+    expect(hasActiveNavButton(/Command Center/)).toBe(false);
+  });
+
+  it("keeps Systems card Open Insight wired to the shared insight selection flow", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Systems");
+    fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
+
+    expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
+    expect(screen.getByLabelText("Insight detail")).toBeTruthy();
+    expect(screen.getByText("What Changed")).toBeTruthy();
+    expect(screen.getAllByText(/Pump system relationship shift detected/i).length).toBeGreaterThan(0);
+    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
+    expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
 
   it("six primary views have distinct responsibilities and layouts", () => {
