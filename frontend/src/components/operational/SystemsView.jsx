@@ -10,6 +10,7 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
               <article className="system-summary-row system-summary-row--systems-view" key={system.id}>
                 <div>
                   <strong>{system.name}</strong>
+                  {system.placeholder ? <small>Expected resort domain example, not a detected system</small> : null}
                   <p>{system.scope}</p>
                   <DetailGrid rows={[
                     ["Status", system.status],
@@ -19,7 +20,7 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
                   ]} />
                 </div>
                 <div className="system-summary-row__meta">
-                  <span>{system.placeholder ? "Awaiting telemetry" : system.severity}</span>
+                  <span>{system.placeholder ? "Example, not detected" : system.severity}</span>
                   {system.primaryInsightId && typeof onOpenInsight === "function" ? (
                     <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open Insight</button>
                   ) : null}

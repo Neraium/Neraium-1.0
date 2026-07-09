@@ -45,7 +45,10 @@ function suppressExpectedGateRenderWindowError() {
 }
 
 async function launchWorkspace() {
-  fireEvent.click(screen.getAllByRole("button", { name: "Launch Workspace" })[0]);
+  const launchButtons = screen.queryAllByRole("button", { name: "Launch Workspace" });
+  if (launchButtons.length) {
+    fireEvent.click(launchButtons[0]);
+  }
   await waitFor(() => {
     expect(screen.queryByTestId("gate-workspace") ?? screen.queryByTestId("app-render-fallback")).toBeTruthy();
   });
@@ -158,21 +161,22 @@ afterEach(() => {
 });
 
 
-it("starts on the operational intelligence landing page", () => {
-  render(h(App));
-
-  expect(window.location.pathname).toBe("/");
-  expect(screen.getByRole("heading", { name: "Operational Intelligence for Critical Infrastructure" })).toBeTruthy();
-  expect(screen.getByText("Behavior Intelligence")).toBeTruthy();
-  expect(screen.queryByTestId("gate-workspace")).toBeNull();
-});
-
-it("launches the operational workspace at the workspace route", async () => {
+it("starts on the operational workspace at the root route", async () => {
   render(h(App));
 
   await launchWorkspace();
 
-  expect(window.location.pathname).toBe("/workspace");
+  expect(window.location.pathname).toBe("/");
+  expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+  expect(screen.queryByTestId("home-page")).toBeNull();
+});
+
+it("renders the operational workspace without a landing-page launch step", async () => {
+  render(h(App));
+
+  await launchWorkspace();
+
+  expect(window.location.pathname).toBe("/");
   expect(screen.getByTestId("gate-workspace")).toBeTruthy();
 });
 

@@ -37,6 +37,7 @@ const GENERIC_FALLBACK_LABELS = new Set([
   "subsystem behavher changed system",
   "subsystem behavior changed system",
 ]);
+const FALLBACK_SYSTEM_NAMES = new Set(FALLBACK_SYSTEMS.map((system) => system.name.toLowerCase()));
 
 // Structural pattern for the same class of fallback text. This exists
 // because pattern-matching specific known-bad strings is inherently
@@ -103,9 +104,9 @@ const NO_BASELINE_AVAILABLE = {
   detail: "Run analysis to compare operating behavior.",
 };
 const SYSTEMS_PENDING = {
-  title: "Awaiting Telemetry",
+  title: "Expected Resort Domains",
   countLabel: "Pending",
-  summary: "Example resort infrastructure categories are shown until telemetry establishes detected systems.",
+  summary: "Examples of resort infrastructure domains are shown for orientation only; detected systems appear after telemetry analysis.",
 };
 
 export default function OperationalWorkflowWorkspace({
@@ -359,7 +360,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const fingerprintDrift = deriveFingerprintDrift({ relationshipRows, result, hasFinding, analysisComplete, baselineAvailable, analysisExplanation });
   const fingerprintEvidence = resolveEvidenceRefs(analysisExplanation?.fingerprint, analysisExplanation);
   const detectedSystems = collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation });
-  const identifiedSystems = analysisComplete ? detectedSystems : detectedSystems.filter((system) => system.name !== UNASSIGNED_SYSTEM_NAME);
+  const identifiedSystems = analysisComplete ? detectedSystems.filter((system) => !isPlaceholderResortSystem(system)) : [];
   const identifiedSystemCount = identifiedSystems.length;
   const signals = buildSignals(result);
   const insights = analysisComplete ? buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation, systems: identifiedSystems, signals }) : [];
@@ -370,7 +371,6 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
   const siteLabel = firstText(result?.facility_name, snapshot?.facility_name, "Current Site");
-  const isEmptyTelemetryState = uiState.key === "noTelemetry";
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
   const sourceRowCount = deriveSourceRowCount({ result, snapshot });
@@ -431,7 +431,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     headerSubtitle: siteLabel,
     overviewState,
     commandCenterTabMetric: orb.label,
-    systemsTabMetric: analysisComplete ? String(identifiedSystemCount) : String(systemCards.length),
+    systemsTabMetric: systemSummary.tabMetric,
     insightsTabMetric: analysisComplete ? String(insights.length) : EMPTY_TAB_METRIC,
     fingerprintTabMetric: fingerprintDrift.label,
     dataSourcesTabMetric: telemetryConnected ? "Live" : sourceLabel === "None" ? "Connect" : "Import",
@@ -632,6 +632,20 @@ function deriveLastAnalysisLabel({ uiState, liveOps, snapshot, result }) {
   return firstText(snapshot?.processed_at, snapshot?.last_processed_at, result?.processed_at, result?.timestamp_profile?.last_timestamp, liveOps?.connectionSummary, "Analysis complete");
 }
 
+function isPlaceholderResortSystem(system) {
+  if (!system || typeof system !== "object") return false;
+  const name = firstText(system.name, system.label, system.system_name);
+  const sourceType = firstText(system.source, system.type, system.connector_type, system.connectorType, system.category, system.status).toLowerCase();
+  return Boolean(
+    system.placeholder
+      || system.isPlaceholder
+      || system.example
+      || system.detected === false
+      || sourceType.includes("placeholder")
+      || FALLBACK_SYSTEM_NAMES.has(name.toLowerCase())
+  );
+}
+
 function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected }) {
   if (!analysisComplete) {
     return {
@@ -696,7 +710,7 @@ function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insig
 function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifiedSystemCount, activeInsightSystemCount, highestSeverity, lastAnalysis, lastUpdated }) {
   return [
     ["Overall State", dashboardStatus.label],
-    ["Operational Fingerprint", analysisComplete ? "Established" : EMPTY_TELEMETRY_COPY.label],
+    ["Operational Fingerprint", analysisComplete ? "Established" : "Not established"],
     ["Systems Monitored", analysisComplete ? String(identifiedSystemCount) : "Awaiting telemetry"],
     ["Active Insights", analysisComplete ? String(activeInsightSystemCount) : "Pending fingerprint"],
     ["Systems with Relationship Drift", analysisComplete ? highestSeverity : "Not available"],
@@ -705,25 +719,21 @@ function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifi
   ];
 }
 
-function buildDashboardSystemCards({ analysisComplete, systemCards, uiState }) {
+function buildDashboardSystemCards({ analysisComplete, systemCards }) {
   if (analysisComplete && systemCards.length) return systemCards;
-  return buildPlaceholderSystemCards().map((system) => ({
-    ...system,
-    status: uiState.key === "analyzing" ? "Analysis Running" : "Awaiting Operational Fingerprint",
-    keyChangedRelationship: uiState.key === "analyzing" ? "Telemetry analysis in progress" : "Awaiting relationship baseline",
-  }));
+  return [];
 }
 
 function buildPlaceholderSystemCards() {
   return FALLBACK_SYSTEMS.map((system, index) => ({
     id: "fallback-system-" + index,
     name: system.name,
-    scope: system.scope,
-    status: "Awaiting Operational Fingerprint",
+    scope: "Expected resort domain example: " + system.scope,
+    status: "Awaiting telemetry",
     activeInsights: "0",
-    severity: "Awaiting relationship baseline",
+    severity: "Example, not detected",
     relationshipDrift: "Not analyzed",
-    keyChangedRelationship: "Awaiting relationship baseline",
+    keyChangedRelationship: "No relationship baseline yet",
     primaryInsightId: null,
     placeholder: true,
   }));
@@ -744,7 +754,7 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     if (historyItems.length) return historyItems.slice(0, 3);
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
-  return [{ id: "no-analysis", title: EMPTY_TELEMETRY_COPY.label, time: "Awaiting telemetry", detail: EMPTY_TELEMETRY_COPY.detail }];
+  return [{ id: "no-analysis", title: "No telemetry analyzed", time: "Awaiting telemetry", detail: EMPTY_TELEMETRY_COPY.detail }];
 }
 
 function deriveLastUpdatedLabel({ liveOps, snapshot, result }) {
@@ -1366,17 +1376,6 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
   return items;
 }
 
-function SignalList({ signals }) {
-  if (!signals.length) return <EmptyOperationalState title="No signals detected" body="Detected signals will appear after telemetry is uploaded." />;
-  return (
-    <ul className="operational-list operational-list--signals">
-      {signals.map((signal, index) => {
-        const label = normalizeSignalName(signal, index + 1);
-        return <li key={signalDisplayKey(label)}><strong>{label}</strong></li>;
-      })}
-    </ul>
-  );
-}
 
 function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId }) {
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;

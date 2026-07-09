@@ -42,10 +42,6 @@ function analysis({ second = true, reverse = false } = {}) {
     systems: [{ id: "pump", name: "Pump system" }], relationships: [], fingerprint: { status: "changed", meaning: "Pump behavior changed." } };
 }
 
-function openInsights() {
-  const button = screen.getAllByRole("button").find((item) => item.textContent.includes("Insights"));
-  fireEvent.click(button);
-}
 
 function clickNav(label) {
   const button = screen.getAllByRole("button").find((node) => node.textContent.includes(label));
@@ -123,14 +119,17 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Systems with Relationship Drift")).toBeTruthy();
     expect(screen.getByText("Last Analysis")).toBeTruthy();
     expect(screen.getByText("Data Source Status")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Systems Awaiting Telemetry" })).toBeTruthy();
     const commandCenterSystems = screen.getByLabelText("Systems requiring attention");
     expect(commandCenterSystems.querySelectorAll(".system-summary-row--dashboard")).toHaveLength(1);
-    expect(screen.getByText("HVAC and Central Plant")).toBeTruthy();
-    expect(screen.getByText("Pools, Spas, and Water Features")).toBeTruthy();
-    expect(screen.getByText("Water Treatment and Pumping")).toBeTruthy();
-    expect(screen.queryByText("Cooling Towers and Heat Rejection")).toBeNull();
-    expect(screen.getAllByText("Awaiting relationship baseline").length).toBeGreaterThan(0);
+    expect(commandCenterSystems.textContent).toContain("Systems Awaiting Telemetry");
+    expect(commandCenterSystems.textContent).toContain("Connect telemetry or analyze historical data to identify operational systems and establish relationship baselines.");
+    expect(commandCenterSystems.textContent).not.toContain("HVAC and Central Plant");
+    expect(commandCenterSystems.textContent).not.toContain("Pools, Spas, and Water Features");
+    expect(commandCenterSystems.textContent).not.toContain("Water Treatment and Pumping");
+    expect(commandCenterSystems.textContent).not.toContain("Cooling Towers and Heat Rejection");
+    expect(commandCenterSystems.textContent).not.toContain("Building Automation");
+    expect(commandCenterSystems.textContent).not.toContain("Energy Infrastructure");
+    expect(commandCenterSystems.textContent).not.toContain("Utility Distribution");
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder/);
     expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Live Data" })).toBeTruthy();
@@ -172,11 +171,53 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     renderWorkspace();
 
     clickNav("Systems");
-    expect(screen.getByRole("heading", { name: "Awaiting Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Expected Resort Domains" })).toBeTruthy();
+    expect(screen.getByText("Examples of resort infrastructure domains are shown for orientation only; detected systems appear after telemetry analysis.")).toBeTruthy();
     expect(screen.getByText("HVAC and Central Plant")).toBeTruthy();
     expect(screen.getByText("Pools, Spas, and Water Features")).toBeTruthy();
     expect(screen.getByText("Cooling Towers and Heat Rejection")).toBeTruthy();
-    expect(screen.getAllByText("Awaiting Operational Fingerprint").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Expected resort domain example, not a detected system").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Example, not detected").length).toBeGreaterThan(0);
+  });
+
+  it("shows no numeric systems nav metric before telemetry analysis", () => {
+    renderWorkspace();
+
+    expect(screen.getAllByRole("button", { name: /Systems\s+(Pending|—)/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Systems\s+7\b/ })).toBeNull();
+    const systemsNavText = screen.getAllByRole("button")
+      .filter((button) => button.textContent.includes("Systems"))
+      .map((button) => button.textContent.trim());
+    expect(systemsNavText).not.toContain("Systems7");
+  });
+
+  it("counts only real detected systems after telemetry analysis", () => {
+    const placeholderSystems = [
+      "HVAC and Central Plant",
+      "Pools, Spas, and Water Features",
+      "Water Treatment and Pumping",
+      "Cooling Towers and Heat Rejection",
+      "Building Automation",
+      "Energy Infrastructure",
+      "Utility Distribution",
+    ].map((name, index) => ({ id: "placeholder-" + index, name, placeholder: true }));
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: {
+        ...analysis(),
+        systems: [...placeholderSystems, { id: "pump", name: "Pump system" }],
+      } }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getAllByRole("button", { name: /Systems\s+1\b/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Systems\s+7\b/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Systems\s+8\b/ })).toBeNull();
+
+    clickNav("Systems");
+    expect(screen.getByText("Pump system")).toBeTruthy();
+    expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
   });
 
   it("six primary views have distinct responsibilities and layouts", () => {
