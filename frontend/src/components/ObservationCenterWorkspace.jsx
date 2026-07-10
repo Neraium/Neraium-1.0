@@ -206,7 +206,7 @@ function buildObservationRelationships(finding, run) {
 function buildObservationInvestigation(finding, run) {
   const text = observationBriefingText(finding, run);
   if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
-    return ["Review filter differential pressure trend", "Verify valve positions", "Compare with recent maintenance activity"];
+    return ["Review recent maintenance activity", "Inspect filter condition and differential pressure trend", "Verify pump loading and operating setpoints"];
   }
   if (/temperature|cool|chw|thermal|humidity/.test(text)) {
     return ["Review affected trend lines", "Verify current equipment mode", "Compare with recent load changes"];

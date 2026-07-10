@@ -583,9 +583,9 @@ function buildRecommendedInvestigation(finding, evidenceReport) {
   const text = briefingSearchText(finding, evidenceReport);
   if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
     return [
-      "Review filter differential pressure trend",
-      "Verify valve positions",
-      "Compare with recent maintenance activity",
+      "Review recent maintenance activity",
+      "Inspect filter condition and differential pressure trend",
+      "Verify pump loading and operating setpoints",
     ];
   }
   if (/temperature|cool|chw|thermal/.test(text)) {

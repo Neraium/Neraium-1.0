@@ -38,7 +38,7 @@ function analysis({ second = true, reverse = false } = {}) {
   const evidence = [{ description: "Pump power and filter pressure relationship changed.", metric_delta: [{ tag_name: "pump_power_filter_dp", baseline_strength: 0.775497, current_strength: 0.063807, correlation_delta: 0.839304 }] }];
   if (second) evidence.push({ description: "Pump power and flow relationship changed.", metric_delta: [{ tag_name: "pump_power_flow", baseline_strength: reverse ? 0.61 : 0.72, current_strength: reverse ? -0.44 : 0.31, correlation_delta: reverse ? -1.05 : 0.41 }] });
   return { insights: [{ id: "pump-relationships", title: "Pump relationships changed", severity: "high", confidence: "high", system: "Pump system",
-    why_it_matters: "Operational impact: This change may indicate increasing hydraulic resistance, pump efficiency changes, control adjustments, or recent maintenance that altered system behavior.",
+    why_it_matters: "Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause.",
     contributing_relationships: [{ display_columns: ["Pump Power", "Filter DP"] }, { display_columns: ["Pump Power", "Flow"] }], evidence_items: evidence }],
     systems: [{ id: "pump", name: "Pump system" }], relationships: [], fingerprint: { status: "changed", meaning: "Pump behavior changed." } };
 }
@@ -93,7 +93,7 @@ function analysisWithRelationshipEvidence() {
       confidence_score: 0.91,
       system: "Flow and pressure system",
       what_changed: "Pressure increased while flow decreased in the recent window.",
-      why_it_matters: "Operational impact: This change may indicate increasing hydraulic resistance, pump efficiency changes, control adjustments, or recent maintenance that altered system behavior.",
+      why_it_matters: "Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause.",
       recommended_check: "Check pump schedule and valve position",
       contributing_relationships: [{ id: "relationship-0", columns: ["pressure", "flow"], change_type: "weakened" }],
       evidence_refs: ["ev-1"],
@@ -297,7 +297,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getByText(/Operational impact: This change may indicate increasing hydraulic resistance/)).toBeTruthy();
+    expect(screen.getByText("Why It Matters")).toBeTruthy();
+    expect(screen.getByText(/Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance/)).toBeTruthy();
     expect(screen.getAllByText(/Pump Power and Filter DP Relationship Changed/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "System Readiness" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);

@@ -1048,11 +1048,11 @@ function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight })
   const searchText = [subsystem, relationshipLabels.join(" "), insight?.summary].join(" ").toLowerCase();
   if (/flow|pressure|pump|valve|vfd|filter|hydraulic/.test(searchText)) {
     return [
-      "Check filter differential pressure for signs of fouling.",
-      "Confirm the pump is operating on its expected performance curve.",
-      "Compare valve positions against the normal operating range for this load condition.",
-      "Review recent maintenance and operator logs for changes affecting flow or pressure.",
-      "Verify VFD commands match the expected control response.",
+      "Review recent maintenance activity and operator logs for changes affecting flow or pressure.",
+      "Inspect filter condition and differential pressure trends for signs of fouling.",
+      "Verify current pump loading and operating point against the expected performance curve.",
+      "Review operating setpoints, valve positions, and VFD commands for this load condition.",
+      "Compare current flow and pressure response with historical operation.",
     ];
   }
   if (/chemical|chlor|dose|feed|quality|ph|orp/.test(searchText)) {
@@ -1626,6 +1626,11 @@ function InsightDetail({ insight }) {
           insight,
           relationships
         )}
+      />
+
+      <BriefingTextBlock
+        title="Why It Matters"
+        lines={whyItMattersBriefing(insight)}
       />
 
       <EvidenceMetricCards
@@ -2962,13 +2967,12 @@ function whatChangedBriefing(insight, relationships) {
   const system = formatSubsystemName(insight.system);
   if (relationships.length > 0) {
     const relationshipText = relationships.length === 1
-      ? `The relationship between ${relationshipSentenceLabel(relationships[0], 0)} has shifted from its historical baseline.`
-      : `The ${system} operating relationships have shifted from their historical baseline.`;
+      ? "The " + relationshipSentenceLabel(relationships[0], 0) + " relationship changed from its historical baseline."
+      : "The " + system + " operating relationships changed from their historical baseline.";
     const scopeText = relationships.length === 1
       ? "One operating relationship changed enough to warrant field review."
-      : `${relationships.length} operating relationships changed together, which points to a system-level behavior change.`;
-    const impactText = briefingSentences(firstText(insight.whyItMatters, insight.possibleConsequence), 1)[0];
-    return [relationshipText, impactText || scopeText];
+      : relationships.length + " operating relationships changed together, which may point to a system-level behavior change.";
+    return [relationshipText, scopeText];
   }
 
   const metric = normalizeSignalName(insight.metricName);
@@ -2986,6 +2990,12 @@ function whatChangedBriefing(insight, relationships) {
 
 function operatorSummaryBriefing(insight, relationships) {
   return dedupeText(whatChangedBriefing(insight, relationships)).slice(0, 2);
+}
+
+function whyItMattersBriefing(insight) {
+  const supplied = briefingSentences(firstText(insight?.whyItMatters, insight?.possibleConsequence), 2);
+  if (supplied.length) return supplied;
+  return ["This change may indicate reduced operating efficiency or a change in operating conditions."];
 }
 
 function operationalCauseHypotheses(insight) {

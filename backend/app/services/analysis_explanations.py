@@ -926,11 +926,11 @@ def operator_investigation_steps(
     combined = " ".join([system, *relationship_labels]).lower()
     if any(token in combined for token in ["flow", "pressure", "pump", "valve", "vfd", "filter", "hydraulic"]):
         steps = [
-            "Review filter differential pressure trends.",
-            "Verify current pump operating point.",
-            "Compare valve positions with historical operation.",
-            "Review recent maintenance and operator logs.",
-            "Confirm VFD commands match expected operation.",
+            "Review recent maintenance activity and operator logs.",
+            "Inspect filter condition and differential pressure trends.",
+            "Verify current pump loading and operating point.",
+            "Review operating setpoints, valve positions, and VFD commands.",
+            "Compare current flow and pressure response with historical operation.",
         ]
     elif any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality", "ph", "orp"]):
         steps = [
@@ -1999,16 +1999,16 @@ def relationship_recommended_action(system: str) -> str:
 def relationship_operational_impact_sentence(system: str, names: list[str], causes: list[str]) -> str:
     combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        return "Operational impact: This change may indicate increasing hydraulic resistance, pump efficiency changes, control adjustments, or recent maintenance that altered system behavior."
+        return "Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
-        return "Operational impact: This change may indicate feed calibration drift, water quality variation, control loop changes, or recent maintenance that altered treatment behavior."
+        return "Operational impact: This relationship change is consistent with conditions such as feed calibration drift, water quality variation, control loop changes, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return "Operational impact: This change may indicate heat transfer degradation, equipment staging changes, load variation, or recent maintenance that altered thermal behavior."
+        return "Operational impact: This relationship change is consistent with conditions such as heat transfer degradation, equipment staging changes, load variation, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["humidity", "moisture", "vpd"]):
-        return "Operational impact: This change may indicate airflow balance changes, latent load variation, control adjustments, or recent maintenance that altered moisture behavior."
+        return "Operational impact: This relationship change is consistent with conditions such as airflow balance changes, latent load variation, control adjustments, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["energy", "schedule", "runtime"]):
-        return "Operational impact: This change may indicate schedule changes, load profile shifts, control mode adjustments, or recent maintenance that altered runtime behavior."
-    return "Operational impact: This change may indicate a control mode change, equipment state change, sensor calibration issue, demand shift, or recent maintenance that altered system behavior."
+        return "Operational impact: This relationship change is consistent with conditions such as schedule changes, load profile shifts, control mode adjustments, or recent maintenance. Investigation is recommended to determine the cause."
+    return "Operational impact: This relationship change is consistent with conditions such as a control mode change, equipment state change, sensor calibration issue, demand shift, or recent maintenance. Investigation is recommended to determine the cause."
 
 
 def operational_cause_check(label: str, causes: list[str]) -> str:
