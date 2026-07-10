@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 
+import OperatorInsightDetail from "./OperatorInsightDetail";
+
 export default function InsightsView({ model, helpers, selectedInsight, onSelectInsight }) {
-  const { InsightDetail, InsightList, PanelHeader } = helpers;
+  const { InsightList, PanelHeader } = helpers;
   const selectedDetailRef = useRef(null);
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
         />
         {selectedInsight ? (
           <div ref={selectedDetailRef} tabIndex={-1}>
-            <InsightDetail insight={selectedInsight} />
+            <OperatorInsightDetail insight={selectedInsight} />
           </div>
         ) : null}
       </section>
