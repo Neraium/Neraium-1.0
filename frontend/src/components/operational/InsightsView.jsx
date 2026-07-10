@@ -16,8 +16,8 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
         <PanelHeader eyebrow="Insights" title="Operational Insights" subtitle="Prioritized operational changes requiring investigation." />
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No active operational insights were detected." : "Operational insights will appear after an Operational Fingerprint is established."}
-          emptyTitle={model.analysisComplete ? "No active insights" : "No telemetry analyzed"}
+          empty={model.analysisComplete ? "No active operational insights were detected." : "Insights are generated automatically once an Operational Fingerprint has been established."}
+          emptyTitle="No Operational Insights Yet"
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}
         />

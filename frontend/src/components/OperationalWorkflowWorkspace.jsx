@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { id: "command-center", label: "Command Center" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
-  { id: "fingerprint", label: "Fingerprint" },
+  { id: "fingerprint", label: "Operational Fingerprint" },
   { id: "data-sources", label: "Data Sources" },
   { id: "advanced", label: "Advanced" },
 ];
@@ -24,7 +24,6 @@ const MOBILE_PRIMARY_NAV = NAV_ITEMS;
 const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
 const SELECTED_INSIGHT_STORAGE_KEY = "neraium.operational.selected_insight";
 
-const EMPTY_TAB_METRIC = "—";
 const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
 
 // Known-bad literal strings that have previously leaked through as fallback
@@ -63,47 +62,47 @@ const hiddenFileInputStyle = {
 };
 
 const EMPTY_TELEMETRY_COPY = {
-  label: "Operational Fingerprint Pending",
-  detail: "Import historical telemetry or connect a live source to establish the facility's operating baseline.",
-  commandTitle: "Operational Fingerprint Pending",
-  commandDetail: "Import historical telemetry or connect a live read-only source to establish the facility's Operational Fingerprint.",
+  label: "Awaiting Initial Baseline",
+  detail: "Connect telemetry or analyze historical data to establish the facility's Operational Fingerprint.",
+  commandTitle: "Awaiting Initial Baseline",
+  commandDetail: "The facility has not yet established an Operational Fingerprint.",
   fileStatus: "No source connected",
-  cta: "Analyze New Dataset",
+  cta: "Analyze Historical Data",
   secondaryCta: "Connect Live Telemetry",
-  headerStatus: "Operational Fingerprint Pending",
+  headerStatus: "Waiting for telemetry",
 };
 const NO_TELEMETRY_STATUS = {
-  label: "Ready for Historical Analysis",
+  label: "Ready to Build Operational Fingerprint",
   tone: "ready",
   statusKey: "ready",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const WAITING_FOR_TELEMETRY_STATUS = {
-  label: "Ready for Historical Analysis",
+  label: "Waiting for telemetry",
   tone: "ready",
-  statusKey: "ready",
+  statusKey: "waiting",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const READY_TO_ANALYZE_STATUS = {
-  label: "Ready for Historical Analysis",
+  label: "Ready to Analyze Historical Telemetry",
   tone: "ready",
   statusKey: "ready",
   detail: "Telemetry is ready for analysis.",
 };
 const ANALYZING_STATUS = {
-  label: "Learning Operational Fingerprint",
+  label: "Building Operational Fingerprint...",
   tone: "learning",
   statusKey: "learning",
   detail: "Neraium is comparing current relationships against historical operating behavior.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
-  label: "Operational Fingerprint Active",
+  label: "Connected: Ready",
   tone: "active",
   statusKey: "active",
   detail: "Result ready.",
 };
 const MONITORING_LIVE_STATUS = {
-  label: "Operational Fingerprint Active",
+  label: "Connected: Ready",
   tone: "active",
   statusKey: "active",
   detail: "Live telemetry is connected and current behavior is being monitored.",
@@ -114,9 +113,9 @@ const NO_BASELINE_AVAILABLE = {
   detail: "Run analysis to compare operating behavior.",
 };
 const SYSTEMS_PENDING = {
-  title: "Systems Awaiting Discovery",
-  countLabel: "Pending",
-  summary: "Operational systems will automatically be identified after telemetry has been analyzed.",
+  title: "0 Systems Discovered",
+  countLabel: "0 Discovered",
+  summary: "Systems will be identified automatically after the first successful telemetry analysis.",
 };
 
 export default function OperationalWorkflowWorkspace({
@@ -470,7 +469,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const relationshipChangeRows = buildRelationshipChangeRows(relationshipRows);
   const dataSourceRows = buildDataSourceRows({ sourceLabel, telemetryStatus, lastAnalysis, sourceRowCount, telemetryConnected });
   const commandCenterMessage = buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState });
-  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned operating fingerprint." : "Operational insights will populate after the first successful behavioral baseline analysis.";
+  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned operating fingerprint." : "Insights are generated automatically once an Operational Fingerprint has been established.";
 
   const resultTabsReady = analysisComplete;
 
@@ -485,10 +484,10 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     overviewState,
     commandCenterTabMetric: "Overview",
     systemsTabMetric: systemSummary.tabMetric,
-    insightsTabMetric: analysisComplete ? String(insights.length) : EMPTY_TAB_METRIC,
-    fingerprintTabMetric: analysisComplete ? fingerprintDrift.label : "Not Established",
-    dataSourcesTabMetric: telemetryConnected ? "Live" : sourceLabel === "None" ? "Not Connected" : "Import",
-    advancedTabMetric: resultTabsReady ? "Raw" : EMPTY_TAB_METRIC,
+    insightsTabMetric: analysisComplete ? String(insights.length) : "0 Insights",
+    fingerprintTabMetric: analysisComplete ? fingerprintDrift.label : "Pending",
+    dataSourcesTabMetric: telemetryConnected ? "Connected" : sourceLabel === "None" ? "Not Connected" : "Import",
+    advancedTabMetric: resultTabsReady ? "Raw" : "Ready",
     resultTabsReady,
     sourceStatusLabel: uiState.sourceStatusLabel,
     sourceRowCount,
@@ -573,7 +572,7 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
     return { key: "analyzing", status: "learning", label: ANALYZING_STATUS.label, tone: "learning", visualLabel: "Operational Fingerprint" };
   }
   if (!analysisComplete) {
-    return { key: "no-data", status: "awaiting", label: "Operational Fingerprint Pending", tone: "ready", visualLabel: "Operational Status" };
+    return { key: "no-data", status: "awaiting", label: EMPTY_TELEMETRY_COPY.commandTitle, tone: "ready", visualLabel: "Operational Status" };
   }
 
   const hasDrift = insights.length || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate";
@@ -602,10 +601,10 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
 
 function buildFingerprintRows({ fingerprintDrift, analysisComplete, baselineAvailable, behaviorState, relationshipRows }) {
   return [
-    ["Fingerprint status", analysisComplete ? fingerprintDrift.label : EMPTY_TELEMETRY_COPY.label],
-    ["Baseline status", baselineAvailable ? "Available" : "Awaiting baseline"],
-    ["Drift status", analysisComplete ? behaviorState : "Not analyzed"],
-    ["Relationship changes", analysisComplete ? String(relationshipRows.length) : "Pending"],
+    ["Fingerprint status", analysisComplete ? fingerprintDrift.label : "Pending"],
+    ["Baseline status", baselineAvailable ? "Available" : "Waiting for telemetry"],
+    ["Drift status", analysisComplete ? behaviorState : "Waiting for telemetry"],
+    ["Relationship changes", analysisComplete ? String(relationshipRows.length) : "0"],
     ["Read-only enforcement", "Decision support only"],
   ];
 }
@@ -619,7 +618,7 @@ function buildRelationshipChangeRows(relationshipRows) {
 
 function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) {
   return [
-    ["Historical Source", sourceLabel === "None" ? "None Connected" : sourceLabel],
+    ["Historical Source", sourceLabel === "None" ? "Not Connected" : sourceLabel],
     ["Live Telemetry", telemetryConnected ? "Connected" : "Not Connected"],
     ["Last Analysis", lastAnalysis === "No analysis yet" || lastAnalysis === "Not analyzed yet" ? "No Analysis Yet" : lastAnalysis],
     ["Writeback", "Disabled (Read Only)"],
@@ -763,7 +762,7 @@ function buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetry
       title: SYSTEMS_PENDING.title,
       label: SYSTEMS_PENDING.summary,
       countLabel: SYSTEMS_PENDING.countLabel,
-      descriptor: "Pending",
+      descriptor: "Waiting for telemetry",
       sectionTitle: SYSTEMS_PENDING.title,
       sectionSubtitle: SYSTEMS_PENDING.summary,
     };
@@ -813,7 +812,7 @@ function dashboardHeaderSubtitle({ analysisComplete, analysisRunning, insights, 
   if (analysisRunning) return ANALYZING_STATUS.label;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.detail;
   if (insights.length || behaviorState === "Behavior Shift Detected") return "Investigation recommended";
-  return "Operational Fingerprint Active";
+  return ANALYSIS_COMPLETE_STATUS.label;
 }
 
 function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insights }) {
@@ -827,11 +826,11 @@ function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insig
 function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifiedSystemCount, activeInsightSystemCount, activeInsightCount, lastAnalysis, lastUpdated, telemetryConnected }) {
   if (!analysisComplete) {
     return [
-      ["Systems", "Pending"],
-      ["Insights", EMPTY_TAB_METRIC],
-      ["Fingerprint", "Not Established"],
-      ["Data Sources", "Not Connected"],
-      ["Advanced", EMPTY_TAB_METRIC],
+      ["Connection State", "Not Connected"],
+      ["Telemetry", "Waiting for telemetry"],
+      ["Systems", SYSTEMS_PENDING.countLabel],
+      ["Operational Fingerprint", "Pending"],
+      ["Insights", "0 Insights"],
     ];
   }
 
@@ -885,9 +884,9 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
   return [
-    { id: "platform-initialized", title: "Platform initialized", time: "Now", detail: "Neraium Operational Intelligence is ready for SII analysis." },
-    { id: "waiting-for-telemetry", title: "Waiting for telemetry connection", time: "Pending", detail: "Connect historical or live telemetry when the facility source is ready." },
-    { id: "fingerprint-pending", title: "Operational Fingerprint will be created after the first successful analysis", time: "Pending", detail: "The behavioral baseline is established from facility telemetry evidence." },
+    { id: "platform-initialized", icon: "✓", title: "Platform initialized", time: "Ready", detail: "Neraium Operational Intelligence is ready to build an operational fingerprint." },
+    { id: "waiting-for-telemetry", icon: "⏳", title: "Waiting for telemetry", time: "Not Connected", detail: "Connect historical or live telemetry when the facility source is ready." },
+    { id: "fingerprint-pending", icon: "○", title: "Operational Fingerprint pending", time: "Pending", detail: "The baseline will be created after the first successful telemetry analysis." },
   ];
 }
 
@@ -2105,17 +2104,6 @@ function BriefingList({ title, items, limit = 6, codeItems = false }) {
   );
 }
 
-function RelationshipObservedList({ items, title = "Relationships Involved" }) {
-  const visibleItems = dedupeText(items.map((item, index) => formatRelationshipObservedLabel(item, index))).slice(0, 8);
-  if (!visibleItems.length) return null;
-  return (
-    <section className="insight-briefing__section">
-      <h4>{title}</h4>
-      <ul className="operator-briefing-list">{visibleItems.map((item) => <li key={item}>{item}</li>)}</ul>
-    </section>
-  );
-}
-
 function InsightEvidenceDrawer({ insight, summaryItems = [] }) {
   const evidenceItems = Array.isArray(insight.evidence) ? insight.evidence : [];
   const diagnosticRows = [
@@ -2385,7 +2373,10 @@ function Timeline({ items }) {
     <ol className="operational-timeline">
       {items.map((item) => (
         <li key={item.id}>
-          <span>{item.time}</span>
+          <div className="operational-timeline__meta">
+            {item.icon ? <span className="operational-timeline__icon" aria-hidden="true">{item.icon}</span> : null}
+            <span>{item.time}</span>
+          </div>
           <strong>{item.title}</strong>
           <p>{item.detail}</p>
           {Array.isArray(item.entries) && item.entries.length ? (

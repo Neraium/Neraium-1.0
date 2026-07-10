@@ -29,7 +29,7 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
             ))}
           </div>
         ) : (
-          <EmptyOperationalState title="Systems Awaiting Discovery" body="Operational systems will automatically be identified after telemetry has been analyzed." />
+          <EmptyOperationalState title={model.systemsSectionTitle} body={model.systemsSectionSubtitle} />
         )}
       </section>
     </div>

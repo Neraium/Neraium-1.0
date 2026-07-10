@@ -4,7 +4,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
   const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, StatusBadge, formatActiveInsightCount, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing, severityToTone } = helpers;
   const primaryInsight = model.insights[0] ?? null;
   const systems = model.analysisComplete ? model.dashboardSystemCards : [];
-  const showHeroStatusChip = model.analysisComplete && model.commandCenterStatus?.label && model.commandCenterStatus.label !== model.commandCenterTitle;
+  const showHeroStatusChip = model.commandCenterStatus?.label && model.commandCenterStatus.label !== model.commandCenterTitle;
 
   function reviewCurrentInsight() {
     if (primaryInsight && typeof onOpenInsight === "function") {
@@ -25,7 +25,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
             hotspots={model.orb.hotspots}
           />
           <div className="command-center-hero__copy">
-            <span className="section-token">Status</span>
+            <span className="section-token">Operational Status</span>
             <h2>{model.commandCenterTitle}</h2>
             {showHeroStatusChip ? (
               <StatusBadge
@@ -39,7 +39,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
               {model.analysisComplete ? (
                 <button type="button" className="command-button" onClick={reviewCurrentInsight}>Review Insights</button>
               ) : (
-                <button type="button" className="command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>Analyze New Dataset</button>
+                <button type="button" className="command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
               )}
               {model.analysisComplete ? (
                 <button type="button" className="secondary-command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>Analyze New Dataset</button>
@@ -53,22 +53,32 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         </div>
       </section>
 
-      <section className="operational-panel operational-panel--state" aria-label="Operational State">
-        <PanelHeader eyebrow="Operational State" title="Current Operating Picture" subtitle="" />
+      <section className="operational-panel operational-panel--state" aria-label="System Readiness">
+        <PanelHeader eyebrow="Operational State" title="System Readiness" subtitle="" />
         <SummaryRows rows={model.dashboardSummaryRows} />
       </section>
 
       <section className="operational-panel operational-panel--top-insight" aria-label="Top Operational Insight">
-        <PanelHeader eyebrow="Top Insight" title={primaryInsight ? formatInsightTitle(primaryInsight) : "No Active Insight"} subtitle="" />
+        <PanelHeader eyebrow="Top Insight" title={primaryInsight ? formatInsightTitle(primaryInsight) : "No Operational Insights Yet"} subtitle="" />
         {primaryInsight ? (
           <div className="command-center-insight">
             <p>{operatorSummaryBriefing(primaryInsight, insightRelationshipLabels(primaryInsight))[0]}</p>
             <button type="button" className="secondary-command-button" onClick={() => onOpenInsight?.(primaryInsight.id)}>Open Insight</button>
           </div>
         ) : (
-          <EmptyOperationalState title="No active operational insight" body={model.emptyInsightMessage} />
+          <EmptyOperationalState title="No Operational Insights Yet" body={model.emptyInsightMessage} />
         )}
       </section>
+
+      {!model.analysisComplete ? (
+        <section className="operational-panel operational-panel--value-prop" aria-label="Operational Intelligence">
+          <PanelHeader
+            eyebrow="What Neraium Does"
+            title="Operational Intelligence"
+            subtitle="Neraium establishes a behavioral baseline from facility telemetry, automatically identifies operational systems, and detects changes in system behavior before traditional alarms indicate a problem."
+          />
+        </section>
+      ) : null}
 
       <section className="operational-panel operational-panel--dashboard-systems operational-panel--wide" aria-label="Systems requiring attention">
         {model.analysisComplete ? (
@@ -104,8 +114,8 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
           <div className="systems-list systems-list--dashboard">
             <article className="system-summary-row system-summary-row--dashboard system-summary-row--awaiting-telemetry">
               <div>
-                <strong>Systems Awaiting Discovery</strong>
-                <span>Operational systems will automatically be identified after telemetry has been analyzed.</span>
+                <strong>{model.systemsSectionTitle}</strong>
+                <span>{model.systemsSectionSubtitle}</span>
               </div>
             </article>
           </div>

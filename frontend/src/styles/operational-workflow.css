@@ -824,6 +824,30 @@
   background: var(--ops-surface-subtle);
 }
 
+.operational-timeline__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.operational-timeline__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--ops-line-strong);
+  border-radius: 999px;
+  color: var(--ops-accent);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.operational-panel--value-prop .operational-panel__header p {
+  max-width: 66ch;
+  color: var(--ops-ink-soft);
+  line-height: 1.55;
+}
+
 .status-tile {
   min-height: 82px;
   padding: 12px;
@@ -838,6 +862,11 @@
 .system-summary-row small {
   color: var(--ops-ink-muted);
   font-size: 0.82rem;
+}
+
+.operational-timeline li .operational-timeline__icon {
+  color: var(--ops-accent);
+  font-size: 0.78rem;
 }
 
 .status-tile span,
