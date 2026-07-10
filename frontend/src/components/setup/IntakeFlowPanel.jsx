@@ -183,18 +183,18 @@ const FINGERPRINT_BUILD_STAGES = [
 ];
 
 const FINGERPRINT_RIDGES = [
-  "M78 26c-19 1-36 12-45 28-7 14-7 31-1 45",
-  "M88 29c20 5 34 20 37 40 2 13-1 27-8 39",
-  "M70 44c-13 7-21 20-22 35-1 16 7 31 20 39",
-  "M91 48c12 5 21 16 23 30 2 17-7 33-21 42",
-  "M63 61c-6 9-9 21-7 33 4 22 21 39 42 43",
-  "M82 61c12 0 22 9 24 22 3 17-9 33-25 36",
-  "M71 76c-4 13 2 28 15 36 8 5 18 7 28 5",
-  "M88 76c7 4 11 12 10 21-1 12-10 20-21 22",
-  "M67 107c3 18 17 32 36 37",
-  "M56 127c13 18 32 29 55 31",
-  "M105 55c15 18 16 44 1 62-7 9-17 15-29 17",
-  "M48 52c9-19 29-32 51-31",
+  { phase: 0, path: "M78 26c-19 1-36 12-45 28-7 14-7 31-1 45" },
+  { phase: 0, path: "M88 29c20 5 34 20 37 40 2 13-1 27-8 39" },
+  { phase: 0, path: "M48 52c9-19 29-32 51-31" },
+  { phase: 1, path: "M82 61c12 0 22 9 24 22 3 17-9 33-25 36" },
+  { phase: 1, path: "M71 76c-4 13 2 28 15 36 8 5 18 7 28 5" },
+  { phase: 1, path: "M88 76c7 4 11 12 10 21-1 12-10 20-21 22" },
+  { phase: 2, path: "M70 44c-13 7-21 20-22 35-1 16 7 31 20 39" },
+  { phase: 2, path: "M91 48c12 5 21 16 23 30 2 17-7 33-21 42" },
+  { phase: 2, path: "M105 55c15 18 16 44 1 62-7 9-17 15-29 17" },
+  { phase: 3, path: "M63 61c-6 9-9 21-7 33 4 22 21 39 42 43" },
+  { phase: 3, path: "M67 107c3 18 17 32 36 37" },
+  { phase: 3, path: "M56 127c13 18 32 29 55 31" },
 ];
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
@@ -222,10 +222,15 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   return { ...FINGERPRINT_BUILD_STAGES[index], index };
 }
 
-function ridgeProgress(percent, index, total) {
-  const start = (index / total) * 76;
-  const span = 26;
-  return Math.max(0, Math.min(100, Math.round(((percent - start) / span) * 100)));
+function ridgeProgress({ displayPercent, ridge, stageIndex, complete }) {
+  if (complete || stageIndex > ridge.phase) return 100;
+  if (stageIndex < ridge.phase) return 0;
+
+  const phaseStartPercent = [0, 35, 62, 84][ridge.phase] ?? 0;
+  const phaseEndPercent = [35, 62, 84, 99][ridge.phase] ?? 100;
+  const phaseSpan = Math.max(1, phaseEndPercent - phaseStartPercent);
+  const withinPhase = ((displayPercent - phaseStartPercent) / phaseSpan) * 100;
+  return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
 function OperationalFingerprintBuild({ percent, stage, complete = false }) {
@@ -243,7 +248,7 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
     >
       <div className="upload-fingerprint-build__header">
         <span>{stage?.label || "Learning Operational Fingerprint"}</span>
-        <strong>{displayPercent}%</strong>
+        <strong>{complete ? "Established" : `Stage ${Math.min(stageIndex + 1, FINGERPRINT_BUILD_STAGES.length)}/${FINGERPRINT_BUILD_STAGES.length}`}</strong>
       </div>
       <div className="upload-fingerprint-build__stage" aria-hidden="true">
         {FINGERPRINT_BUILD_STAGES.map((item, index) => (
@@ -262,17 +267,19 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
           </linearGradient>
         </defs>
         <path className="upload-fingerprint-build__outline" d="M79 8c37 0 66 30 66 70 0 53-29 93-66 93S14 131 14 78C14 38 43 8 79 8Z" />
-        {FINGERPRINT_RIDGES.map((path, index) => {
-          const fill = ridgeProgress(displayPercent, index, FINGERPRINT_RIDGES.length);
+        {FINGERPRINT_RIDGES.map((ridge, index) => {
+          const fill = ridgeProgress({ displayPercent, ridge, stageIndex, complete });
           return (
             <path
-              key={path}
+              key={ridge.path}
               className="upload-fingerprint-build__ridge"
-              d={path}
+              d={ridge.path}
+              data-ridge-phase={ridge.phase}
               pathLength="100"
               style={{
                 "--ridge-offset": 100 - fill,
-                "--ridge-opacity": 0.16 + (fill / 100) * 0.84,
+                "--ridge-opacity": fill > 0 ? 0.18 + (fill / 100) * 0.82 : 0.04,
+                "--ridge-delay": (index * 42) + "ms",
               }}
             />
           );
@@ -521,9 +528,10 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Analysis Complete</h3>
+                <h3>Operational Fingerprint Established</h3>
                 <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
               </div>
+              <p className="upload-complete-message">Behavioral baseline successfully created.</p>
               <div className="upload-result-summary">
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
@@ -533,7 +541,7 @@ export default function IntakeFlowPanel({
                 ))}
               </div>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
+                <button type="button" className="command-button" onClick={onViewResults}>Open Command Center</button>
                 <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
               </div>
             </div>

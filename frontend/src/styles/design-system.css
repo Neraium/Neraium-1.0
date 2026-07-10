@@ -856,7 +856,8 @@ button:focus-visible {
   stroke-dasharray: 100;
   stroke-dashoffset: var(--ridge-offset);
   opacity: var(--ridge-opacity);
-  transition: stroke-dashoffset 420ms ease, opacity 420ms ease, stroke-width 420ms ease;
+  transition: stroke-dashoffset 520ms ease, opacity 520ms ease, stroke-width 420ms ease;
+  transition-delay: var(--ridge-delay, 0ms);
 }
 
 .upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
@@ -902,6 +903,12 @@ button:focus-visible {
     transition: none;
   }
 }
+.upload-complete-message {
+  margin: -2px 0 2px;
+  color: var(--muted-text);
+  font-size: var(--type-body-sm);
+}
+
 .upload-result-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));

@@ -310,7 +310,7 @@ it("failed state shows retry and choose another file", () => {
   expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
 });
 
-it("complete state shows View Results", () => {
+it("complete state shows the fingerprint completion moment", () => {
   renderPanel({
     uploadState: "complete",
     selectedFiles: [selectedCsv("complete.csv")],
@@ -327,11 +327,12 @@ it("complete state shows View Results", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Analysis Complete" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Operational Fingerprint Established" })).toBeTruthy();
+  expect(screen.getByText("Behavioral baseline successfully created.")).toBeTruthy();
   expect(screen.getByText("Systems")).toBeTruthy();
   expect(screen.getByText("Insights")).toBeTruthy();
   expect(screen.getByText("Fingerprint")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Fingerprint"]);
@@ -478,7 +479,7 @@ it("previous completed upload does not leak progress into new idle upload screen
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
-it("treats the first complete payload with a saved result as terminal and waits for View Results navigation", async () => {
+it("treats the first complete payload with a saved result as terminal and auto-opens Command Center after the completion hold", async () => {
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
@@ -519,12 +520,12 @@ it("treats the first complete payload with a saved result as terminal and waits 
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "View Results" }));
+  expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
+  expect(screen.getByText("Behavioral baseline successfully created.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
-  });
+  }, { timeout: 2500 });
 });
 
 it("continues polling when stream status includes a placeholder analysis result", async () => {

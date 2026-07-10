@@ -26,6 +26,7 @@ const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
 const MAX_STATUS_POLL_ATTEMPTS = 240;
 const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1500;
+const COMPLETION_HOLD_MS = 1000;
 const PARSING_COMPLETE_STATUSES = new Set([
   "validating_schema",
   "processing",
@@ -211,6 +212,8 @@ export default function DataConnectionsWorkspace({
   const uploadInFlightRef = useRef(false);
   const telemetryStageLogRef = useRef(new Set());
   const autoStartedSignatureRef = useRef("");
+  const completionNavigationTimerRef = useRef(null);
+  const completionNavigationEligibleRef = useRef(false);
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -256,6 +259,8 @@ export default function DataConnectionsWorkspace({
     if (!signature || signature === autoStartedSignatureRef.current) return;
     autoStartedSignatureRef.current = signature;
     resetTelemetryStageLogs();
+    completionNavigationEligibleRef.current = false;
+    clearCompletionNavigationTimer();
     setSelectedFiles(seededSelectedFiles);
     setUploadError("");
     setUploadTransfer(null);
@@ -332,12 +337,39 @@ export default function DataConnectionsWorkspace({
   useEffect(() => () => {
     pollSessionRef.current += 1;
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
+    clearCompletionNavigationTimer();
     pollTimerRef.current = null;
     pollInFlightRef.current = null;
     pollOwnerJobIdRef.current = null;
   }, []);
 
   useEffect(() => { setUploadResult(latestUploadResult); }, [latestUploadResult]);
+
+  useEffect(() => {
+    if (headless || uploadState !== "complete" || typeof onUploadComplete !== "function") return undefined;
+    if (!completionNavigationEligibleRef.current) return undefined;
+    const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
+    const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
+    if (!payload || !hasResults) return undefined;
+
+    clearCompletionNavigationTimer();
+    completionNavigationTimerRef.current = window.setTimeout(() => {
+      completionNavigationTimerRef.current = null;
+      completionNavigationEligibleRef.current = false;
+      void onUploadComplete(payload, { navigateToGate: true });
+    }, COMPLETION_HOLD_MS);
+
+    return () => {
+      clearCompletionNavigationTimer();
+    };
+  }, [headless, latestUploadResult, latestUploadSnapshot, onUploadComplete, uploadJob, uploadResult, uploadState]);
+
+  function clearCompletionNavigationTimer() {
+    if (completionNavigationTimerRef.current && typeof window !== "undefined") {
+      window.clearTimeout(completionNavigationTimerRef.current);
+    }
+    completionNavigationTimerRef.current = null;
+  }
 
   function clearStoredUploadJobId() {
     if (typeof window !== "undefined") window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
@@ -355,6 +387,8 @@ export default function DataConnectionsWorkspace({
     setUploadError("");
     setUploadState("idle");
     setBatchResults([]);
+    completionNavigationEligibleRef.current = false;
+    clearCompletionNavigationTimer();
     clearStoredUploadJobId();
     if (uploadInputRef.current) uploadInputRef.current.value = "";
     if (typeof window !== "undefined") {
@@ -450,6 +484,7 @@ export default function DataConnectionsWorkspace({
                 const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "complete", progress_label: streamed?.progress_label || "Analysis ready.", message: streamed?.message || "Analysis ready." };
                 logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
+                completionNavigationEligibleRef.current = true;
                 setUploadState("complete");
                 setUploadProcessingFlag(false);
                 return completedPayload;
@@ -532,6 +567,7 @@ export default function DataConnectionsWorkspace({
               message: normalizedPayload.message || "Analysis ready.",
             };
             setUploadJob(completePayload);
+            completionNavigationEligibleRef.current = true;
             setUploadState("complete");
             setUploadProcessingFlag(false);
             clearStoredUploadJobId();
@@ -777,6 +813,8 @@ export default function DataConnectionsWorkspace({
     }
     const files = Array.from(event?.target?.files ?? event?.dataTransfer?.files ?? []);
     resetTelemetryStageLogs();
+    completionNavigationEligibleRef.current = false;
+    clearCompletionNavigationTimer();
     if (files[0]) {
       logTelemetryStage("file selected", { filename: files[0].name, size: files[0].size });
     }
@@ -804,6 +842,8 @@ export default function DataConnectionsWorkspace({
 
   async function viewCompletedResults() {
     if (typeof onUploadComplete !== "function") return;
+    completionNavigationEligibleRef.current = false;
+    clearCompletionNavigationTimer();
     const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
     const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
     if (!hasResults) {
