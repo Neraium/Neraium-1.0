@@ -1094,6 +1094,100 @@ button:focus-visible {
   100% { opacity: 1; transform: translate(-50%, -42%) scale(1); }
 }
 
+
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .upload-fingerprint-build {
+    min-height: clamp(360px, 92vw, 500px);
+    padding: 18px 14px 20px;
+    background: #041018;
+    box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.06);
+    transform: none;
+  }
+
+  .upload-fingerprint-build::before {
+    inset: 16%;
+    border-color: rgba(29, 216, 196, 0.2);
+    box-shadow: none;
+    opacity: 0.34;
+    transform: none;
+    animation: fingerprint-mobile-opacity-pulse 4.8s ease-in-out infinite;
+  }
+
+  .upload-fingerprint-build--complete::before {
+    border-color: rgba(218, 255, 249, 0.3);
+    box-shadow: none;
+    animation: fingerprint-mobile-opacity-pulse 5.4s ease-in-out infinite;
+  }
+
+  .upload-fingerprint-build__halo,
+  .upload-fingerprint-build__particles {
+    display: none;
+  }
+
+  .upload-fingerprint-build__print {
+    width: min(88%, 340px);
+    overflow: visible;
+    filter: none;
+    transform: none;
+    animation: none;
+  }
+
+  .upload-fingerprint-build__field {
+    fill: rgba(8, 28, 38, 0.62);
+    opacity: 1;
+  }
+
+  .upload-fingerprint-build__outline {
+    fill: rgba(6, 18, 27, 0.22);
+    stroke: rgba(218, 255, 249, 0.18);
+  }
+
+  .upload-fingerprint-build__ridge {
+    stroke: rgba(146, 245, 235, 0.92);
+    stroke-width: 4.4;
+    filter: none;
+    transition: stroke-dashoffset 420ms ease, opacity 300ms ease;
+    transition-delay: 0ms;
+  }
+
+  .upload-fingerprint-build__ridge[data-ridge-phase="0"] {
+    filter: none;
+  }
+
+  .upload-fingerprint-build__ridge[data-ridge-detail="fine"] {
+    display: none;
+  }
+
+  .upload-fingerprint-build--complete .upload-fingerprint-build__print {
+    filter: none;
+  }
+
+  .upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
+    stroke-width: 4.6;
+  }
+
+  .upload-fingerprint-build__check {
+    box-shadow: none;
+    animation: none;
+  }
+
+  .upload-fingerprint-build__nodes span.is-complete::before,
+  .upload-fingerprint-build__nodes span.is-active::before,
+  .upload-fingerprint-build__nodes span.is-complete i,
+  .upload-fingerprint-build__nodes span.is-active i {
+    box-shadow: none;
+  }
+
+  .upload-fingerprint-build__nodes span.is-active i {
+    background: rgba(244, 210, 132, 0.94);
+  }
+}
+
+@keyframes fingerprint-mobile-opacity-pulse {
+  0%, 100% { opacity: 0.24; }
+  50% { opacity: 0.42; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .upload-fingerprint-build::before,
   .upload-fingerprint-build--complete::before,

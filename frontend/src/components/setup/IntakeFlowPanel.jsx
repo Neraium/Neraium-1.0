@@ -186,6 +186,8 @@ const FINGERPRINT_BUILD_STAGES = [
   },
 ];
 
+const FINGERPRINT_PARTICLE_COUNT = 4;
+
 const FINGERPRINT_RIDGES = [
   { phase: 0, detail: "core", path: "M80 83c8-1 15 4 17 12 2 10-5 20-16 22-12 2-23-6-25-18-2-15 9-28 24-30 19-2 35 11 38 30" },
   { phase: 0, detail: "core", path: "M72 91c1-7 7-12 15-11 8 1 14 8 13 16-1 10-9 17-20 18" },
@@ -256,7 +258,7 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
     >
       <div className="upload-fingerprint-build__halo" aria-hidden="true" />
       <div className="upload-fingerprint-build__particles" aria-hidden="true">
-        {Array.from({ length: 10 }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
+        {Array.from({ length: FINGERPRINT_PARTICLE_COUNT }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
       </div>
       <div className="upload-fingerprint-build__status">
         <strong>{complete ? "Operational Fingerprint Established" : stage?.label || "Learning Operational Relationships"}</strong>

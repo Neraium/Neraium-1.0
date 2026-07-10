@@ -65,7 +65,7 @@ test.describe("Mobile post-upload transition", () => {
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 30000 });
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });

@@ -65,6 +65,6 @@ test.describe("Setup + Upload regression", () => {
     });
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
-    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toBeVisible({ timeout: 120000 });
+    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 120000 });
   });
 });

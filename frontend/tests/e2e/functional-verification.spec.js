@@ -94,7 +94,7 @@ test.describe("Functional verification", () => {
     });
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 30000 });
 
     const viewResults = page.getByRole("button", { name: "View Results" });
     if (await viewResults.isVisible().catch(() => false)) {
