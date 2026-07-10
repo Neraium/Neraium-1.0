@@ -374,6 +374,31 @@ export default function SystemBodyWorkspace({
                 <p className="section-token">Evidence</p>
                 <h2>{finding.exists ? "Review the evidence behind this issue." : "Review behavior evidence for this telemetry window."}</h2>
               </div>
+              <ResultList title="Evidence" items={evidenceReport.traceability} empty="No supporting evidence reported." />
+              {evidenceReport.relationshipTimeline.events.length > 0 ? (
+                <section className="result-list-block" aria-label="Relationship timeline">
+                  <h3>Relationship Timeline</h3>
+                  <ul className="system-body-timeline-list">
+                    {evidenceReport.relationshipTimeline.events.map((item, index) => (
+                      <li key={`${item.label}-${index}`}>
+                        <span className="metadata-text">{item.time}</span>
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </li>
+                    ))}
+                  </ul>
+                  {evidenceReport.relationshipTimeline.facts.length > 0 ? (
+                    <dl className="result-detail-grid">
+                      {evidenceReport.relationshipTimeline.facts.map((item) => (
+                        <div key={item.label}>
+                          <dt>{item.label}</dt>
+                          <dd>{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </section>
+              ) : null}
               <details className="technical-details-panel finding-evidence-drawer">
                 <summary>Advanced Details</summary>
                 <dl className="result-detail-grid">
@@ -384,8 +409,8 @@ export default function SystemBodyWorkspace({
                     </div>
                   ))}
                 </dl>
-                <ResultList title="Raw Evidence" items={evidenceReport.traceability} empty="No supporting evidence reported." />
               </details>
+
               <section className="post-upload-review-next" aria-label="Recommended next checks">
                 <span>What to inspect next</span>
                 <strong>{finding.exists ? finding.reviewNext : "Review supporting evidence when an engineer needs the operating narrative."}</strong>
@@ -815,9 +840,15 @@ function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestR
     frame?.primary_driver,
     sii.primary_driver,
   ]);
+  const systemInterpretation = result.system_interpretation ?? latestUploadSnapshot?.system_interpretation ?? {};
+  const relationshipDivergence = systemInterpretation.relationship_divergence ?? {};
+  const relationshipTimeline = relationshipDivergence.relationship_timeline && typeof relationshipDivergence.relationship_timeline === "object"
+    ? relationshipDivergence.relationship_timeline
+    : null;
   const traceability = dedupeText([
     ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
     ...(Array.isArray(result.operator_report?.evidence_summary) ? result.operator_report.evidence_summary : []),
+    ...(Array.isArray(relationshipDivergence.evidence) ? relationshipDivergence.evidence : []),
   ]);
   const confidence = normalizeReadyConfidence({
     value: finding.confidence,
@@ -834,9 +865,27 @@ function buildEvidenceReport({ latestUploadResult, latestUploadSnapshot, latestR
       { label: "Historical comparison", value: formatScalar(assessmentState.stability.regime) },
       { label: "Change strength", value: formatScalar(stabilitySnapshot.driftMagnitude) },
       { label: "Operating pattern duration", value: formatScalar(stabilitySnapshot.deformationAge) },
-      { label: "Evidence readiness", value: confidence },
+      { label: "Detection confidence", value: confidence },
     ]),
+    relationshipTimeline: normalizeRelationshipTimeline(relationshipTimeline),
   };
+}
+
+function normalizeRelationshipTimeline(value) {
+  const events = Array.isArray(value?.events)
+    ? value.events.map((item) => ({
+      time: formatScalar(item?.time),
+      label: formatScalar(item?.label),
+      detail: formatScalar(item?.detail),
+    })).filter((item) => !isPlaceholderValue(item.label))
+    : [];
+  const facts = Array.isArray(value?.facts)
+    ? value.facts.map((item) => ({
+      label: formatScalar(item?.label),
+      value: formatScalar(item?.value),
+    })).filter((item) => !isPlaceholderValue(item.label) && !isPlaceholderValue(item.value))
+    : [];
+  return { events, facts };
 }
 
 function buildTechnicalReport({ latestUploadResult, latestUploadSnapshot, assessmentState }) {

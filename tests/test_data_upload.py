@@ -1665,7 +1665,8 @@ def test_relationship_baseline_drift_emits_evidence_backed_top_changes() -> None
 
     assert isinstance(top_changes, list) and top_changes
     first = top_changes[0]
-    assert "summary" in first and "temperature" in first["summary"] and "humidity" in first["summary"]
+    first_summary = first.get("summary", "").lower()
+    assert "temperature" in first_summary and "humidity" in first_summary
     assert isinstance(first.get("evidence_refs"), list)
     columns = {ref.get("column") for ref in first["evidence_refs"] if isinstance(ref, dict)}
     assert {"temperature", "humidity"}.issubset(columns)
@@ -1678,6 +1679,18 @@ def test_relationship_baseline_drift_emits_evidence_backed_top_changes() -> None
     assert relationship_chain["source_rows"]
     stages = [step["stage"] for step in relationship_chain["evidence_chain"]]
     assert stages[:4] == ["baseline_comparison", "engine_corroboration", "persistence_check", "operator_conclusion"]
+
+    divergence = payload["system_interpretation"]["relationship_divergence"]
+    assert any("operating relationship" in item for item in divergence["evidence"])
+    assert any("Detection confidence:" in item for item in divergence["evidence"])
+    assert any("Historical baseline established from" in item for item in divergence["evidence"])
+    timeline = divergence["relationship_timeline"]
+    assert any(event["label"] == "Current state" for event in timeline["events"])
+    assert {fact["label"] for fact in timeline["facts"]} >= {
+        "Drift first detected",
+        "Became statistically significant",
+        "Current severity",
+    }
 
 
 def test_relationship_baseline_ignores_weak_or_no_coupling() -> None:

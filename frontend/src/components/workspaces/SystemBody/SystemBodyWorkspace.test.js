@@ -126,6 +126,65 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.queryByText("Operating pattern duration")).toBeNull();
   });
 
+  it("renders relationship evidence and timeline details after analysis", () => {
+    renderWorkspace({
+      latestUploadSnapshot: { status: "complete", sii_completed: true, current_upload: { job_id: "relationship-job" } },
+      latestUploadResult: {
+        job_id: "relationship-job",
+        status: "complete",
+        sii_completed: true,
+        sii_reliable_enough_to_show: true,
+        drift_status: "elevated",
+        data_quality: { analysis_gate_state: "READY", readiness: "ready", warnings: [] },
+        timestamp_profile: { first_timestamp: "2026-07-06T00:00:00Z", last_timestamp: "2026-07-08T00:00:00Z" },
+        sii_intelligence: { facility_state: "drift", baseline_regime: "Historical operating pattern", confidence: 0.91 },
+        system_interpretation: {
+          relationship_divergence: {
+            evidence: [
+              "3 operating relationships shifted simultaneously.",
+              "Drift persisted across the full 4 replay frames in this analysis window.",
+              "Detection confidence: High.",
+              "Historical baseline established from 187 operating periods.",
+            ],
+            relationship_timeline: {
+              events: [
+                { time: "Jul 6", label: "Relationship begins diverging", detail: "Relationship behavior moved outside the expected operating pattern." },
+                { time: "Jul 8", label: "Current state", detail: "Current severity: High." },
+              ],
+              facts: [
+                { label: "Drift first detected", value: "Jul 6" },
+                { label: "Became statistically significant", value: "Jul 8" },
+                { label: "Current severity", value: "High" },
+              ],
+            },
+          },
+        },
+      },
+      canonicalFinding: {
+        exists: true,
+        title: "Relationship drift detected",
+        status: "Issue Detected",
+        confidence: "High",
+        summary: "Pump power and filter DP changed from their historical pattern.",
+        whyItMatters: "The relationship change can indicate an emerging operating constraint.",
+        reviewNext: "Inspect pump and filter response.",
+        supportingEvidence: [],
+        technicalDetails: [],
+        dataQuality: {},
+        affectedVariables: ["pump_power", "filter_dp"],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    const section = screen.getByLabelText("Evidence");
+
+    expect(within(section).getByText("Detection confidence").nextElementSibling?.textContent).toBe("High");
+    expect(within(section).getByText("3 operating relationships shifted simultaneously.")).toBeTruthy();
+    expect(within(section).getByRole("heading", { name: "Relationship Timeline" })).toBeTruthy();
+    expect(within(section).getByText("Relationship begins diverging")).toBeTruthy();
+    expect(within(section).getByText("Drift first detected").nextElementSibling?.textContent).toBe("Jul 6");
+  });
+
   it("does not render pending copy for a READY upload result", () => {
     renderWorkspace({
       latestUploadSnapshot: { status: "complete", sii_completed: true, current_upload: { job_id: "ready-job" } },

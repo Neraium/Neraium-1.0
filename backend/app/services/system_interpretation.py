@@ -156,6 +156,115 @@ def _build_relationship_divergence_metrics(result: dict[str, Any], replay_frame:
     }
 
 
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    return f"{count} {singular if count == 1 else (plural or singular + 's')}"
+
+
+def _frame_drift_score(frame: dict[str, Any]) -> float:
+    topology = frame.get("topology_state") if isinstance(frame.get("topology_state"), dict) else {}
+    raw = frame.get("relationship_drift_score") or topology.get("drift_index") or topology.get("instability_score") or 0.0
+    try:
+        score = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return score * 100.0 if score <= 1.0 else score
+
+
+def _frame_time(frame: dict[str, Any]) -> str:
+    return _to_text(frame.get("timestamp_start") or frame.get("timestamp") or frame.get("timestamp_end"))
+
+
+def _first_frame_at_or_above(frames: list[dict[str, Any]], threshold: float) -> dict[str, Any] | None:
+    for frame in frames:
+        if not isinstance(frame, dict):
+            continue
+        if _frame_drift_score(frame) >= threshold:
+            return frame
+        relationship_changes = frame.get("relationship_changes")
+        if threshold <= 24.0 and isinstance(relationship_changes, list) and relationship_changes:
+            return frame
+    return None
+
+
+def _build_relationship_evidence_lines(relationship_metrics: dict[str, Any], frames: list[dict[str, Any]]) -> list[str]:
+    entries = relationship_metrics.get("entries") if isinstance(relationship_metrics.get("entries"), list) else []
+    shifted_count = len(entries)
+    baseline_periods = max((int(entry.get("baseline_sample_size") or 0) for entry in entries if isinstance(entry, dict)), default=0)
+    recent_periods = max((int(entry.get("recent_sample_size") or 0) for entry in entries if isinstance(entry, dict)), default=0)
+    confidence = _to_text(relationship_metrics.get("confidence")).title() or "Unknown"
+
+    evidence: list[str] = []
+    if shifted_count > 0:
+        evidence.append(f"{_pluralize(shifted_count, 'operating relationship')} shifted simultaneously.")
+    if len(frames) > 1:
+        evidence.append(f"Drift persisted across the full {_pluralize(len(frames), 'replay frame')} in this analysis window.")
+    elif recent_periods > 0:
+        evidence.append(f"Current behavior was compared across {_pluralize(recent_periods, 'recent operating period')}.")
+    evidence.append(f"Detection confidence: {confidence}.")
+    if baseline_periods > 0:
+        evidence.append(f"Historical baseline established from {_pluralize(baseline_periods, 'operating period')}.")
+    return evidence
+
+
+def _build_relationship_timeline(frames: list[dict[str, Any]], relationship_metrics: dict[str, Any]) -> dict[str, Any]:
+    valid_frames = [frame for frame in frames if isinstance(frame, dict)]
+    first = valid_frames[0] if valid_frames else {}
+    last = valid_frames[-1] if valid_frames else {}
+    detected = _first_frame_at_or_above(valid_frames, 24.0)
+    significant = _first_frame_at_or_above(valid_frames, 65.0)
+    aggregate_drift = float(relationship_metrics.get("aggregate_drift_score") or 0.0)
+    if detected is None and aggregate_drift > 0 and valid_frames:
+        detected = valid_frames[0]
+    if significant is None and aggregate_drift >= 65.0 and valid_frames:
+        significant = detected or valid_frames[-1]
+    current_severity = _to_text(relationship_metrics.get("severity")).title() or "Contained"
+    if not valid_frames and aggregate_drift > 0:
+        return {
+            "events": [
+                {"time": "Baseline window", "label": "Normal", "detail": "Historical operating relationship pattern established."},
+                {"time": "Current window", "label": "Current state", "detail": f"Current severity: {current_severity}."},
+            ],
+            "facts": [
+                {"label": "Drift first detected", "value": "Current analysis window"},
+                {"label": "Became statistically significant", "value": "Current analysis window" if aggregate_drift >= 65.0 else "Not available"},
+                {"label": "Current severity", "value": current_severity},
+            ],
+        }
+
+    events: list[dict[str, str]] = []
+    if first:
+        events.append({
+            "time": _frame_time(first) or "Window start",
+            "label": "Normal",
+            "detail": "Historical operating relationship pattern established.",
+        })
+    if detected:
+        events.append({
+            "time": _frame_time(detected) or "Detected",
+            "label": "Relationship begins diverging",
+            "detail": "Relationship behavior moved outside the expected operating pattern.",
+        })
+    if significant:
+        events.append({
+            "time": _frame_time(significant) or "Significant",
+            "label": "Drift becomes significant",
+            "detail": "Relationship drift crossed the statistical review threshold.",
+        })
+    if last:
+        events.append({
+            "time": _frame_time(last) or "Current",
+            "label": "Current state",
+            "detail": f"Current severity: {current_severity}.",
+        })
+
+    facts = [
+        {"label": "Drift first detected", "value": _frame_time(detected) if detected else "Not available"},
+        {"label": "Became statistically significant", "value": _frame_time(significant) if significant else "Not available"},
+        {"label": "Current severity", "value": current_severity},
+    ]
+    return {"events": events, "facts": facts}
+
+
 def _format_metric(value: Any, digits: int = 2) -> str:
     try:
         number = float(value)
@@ -636,6 +745,8 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
             _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room"))
         ] if _to_text(replay_frame.get("affected_subsystem") or replay_frame.get("affected_area") or intelligence.get("primary_room") or result.get("primary_room")) else [],
         "top_relationship_changes": relationship_change_entries,
+        "evidence": _build_relationship_evidence_lines(relationship_metrics, frames),
+        "relationship_timeline": _build_relationship_timeline(frames, relationship_metrics),
     }
 
     if relationship_changes or dominant_paths or relationship_change_entries:
