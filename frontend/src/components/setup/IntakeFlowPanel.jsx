@@ -162,39 +162,46 @@ function completionSummary({ analysisResult }) {
 const FINGERPRINT_BUILD_STAGES = [
   {
     id: "telemetry",
-    label: "Collecting telemetry evidence",
+    label: "Collecting Telemetry Evidence",
+    shortLabel: "Evidence",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
   },
   {
     id: "relationships",
-    label: "Learning operational relationships",
+    label: "Learning Operational Relationships",
+    shortLabel: "Relationships",
     states: ["processing", "building_fingerprint", "baseline_modeling"],
   },
   {
     id: "systems",
-    label: "Identifying operational systems",
+    label: "Identifying Operational Systems",
+    shortLabel: "Systems",
     states: ["running_sii", "structural_scoring", "building_baseline"],
   },
   {
     id: "baseline",
-    label: "Establishing behavioral baseline",
+    label: "Establishing Behavioral Baseline",
+    shortLabel: "Baseline",
     states: ["writing_state", "cognition_ready", "saving_result"],
   },
 ];
 
 const FINGERPRINT_RIDGES = [
-  { phase: 0, path: "M78 26c-19 1-36 12-45 28-7 14-7 31-1 45" },
-  { phase: 0, path: "M88 29c20 5 34 20 37 40 2 13-1 27-8 39" },
-  { phase: 0, path: "M48 52c9-19 29-32 51-31" },
-  { phase: 1, path: "M82 61c12 0 22 9 24 22 3 17-9 33-25 36" },
-  { phase: 1, path: "M71 76c-4 13 2 28 15 36 8 5 18 7 28 5" },
-  { phase: 1, path: "M88 76c7 4 11 12 10 21-1 12-10 20-21 22" },
-  { phase: 2, path: "M70 44c-13 7-21 20-22 35-1 16 7 31 20 39" },
-  { phase: 2, path: "M91 48c12 5 21 16 23 30 2 17-7 33-21 42" },
-  { phase: 2, path: "M105 55c15 18 16 44 1 62-7 9-17 15-29 17" },
-  { phase: 3, path: "M63 61c-6 9-9 21-7 33 4 22 21 39 42 43" },
-  { phase: 3, path: "M67 107c3 18 17 32 36 37" },
-  { phase: 3, path: "M56 127c13 18 32 29 55 31" },
+  { phase: 0, detail: "core", path: "M80 83c8-1 15 4 17 12 2 10-5 20-16 22-12 2-23-6-25-18-2-15 9-28 24-30 19-2 35 11 38 30" },
+  { phase: 0, detail: "core", path: "M72 91c1-7 7-12 15-11 8 1 14 8 13 16-1 10-9 17-20 18" },
+  { phase: 0, detail: "core", path: "M88 98c-1 6-6 11-13 12" },
+  { phase: 1, detail: "branch", path: "M63 78c-7 11-9 25-5 38 5 17 19 29 36 33" },
+  { phase: 1, detail: "branch", path: "M95 69c16 6 27 20 29 38 2 17-5 34-19 45" },
+  { phase: 1, detail: "branch", path: "M56 105c-9 14-8 33 3 48" },
+  { phase: 1, detail: "branch", path: "M109 86c8 13 9 30 2 44-5 10-13 18-24 22" },
+  { phase: 2, detail: "outer", path: "M53 58c12-17 32-27 55-24 23 4 41 21 47 44 6 26-3 56-25 76" },
+  { phase: 2, detail: "outer", path: "M43 73c-8 22-4 48 12 67 15 18 37 28 62 29" },
+  { phase: 2, detail: "outer", path: "M72 43c20-5 42 1 57 17 18 19 23 48 11 75" },
+  { phase: 2, detail: "outer", path: "M38 98c1 38 29 70 67 77" },
+  { phase: 3, detail: "fine", path: "M46 125c11 25 34 42 63 46" },
+  { phase: 3, detail: "fine", path: "M68 59c13-7 29-7 43 0" },
+  { phase: 3, detail: "fine", path: "M72 132c8 13 21 22 38 26" },
+  { phase: 3, detail: "fine", path: "M121 64c11 16 14 35 9 54" },
 ];
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
@@ -236,6 +243,8 @@ function ridgeProgress({ displayPercent, ridge, stageIndex, complete }) {
 function OperationalFingerprintBuild({ percent, stage, complete = false }) {
   const displayPercent = clampPercent(percent);
   const stageIndex = stage?.index ?? 0;
+  const stageCount = FINGERPRINT_BUILD_STAGES.length;
+  const stageNumber = Math.min(stageIndex + 1, stageCount);
   return (
     <div
       className={`upload-fingerprint-build${complete ? " upload-fingerprint-build--complete" : ""}`}
@@ -244,48 +253,63 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
       aria-valuemax="100"
       aria-valuenow={displayPercent}
       role="progressbar"
-      style={{ "--fingerprint-scan-top": `${62 + (150 * displayPercent) / 100}px` }}
     >
-      <div className="upload-fingerprint-build__header">
-        <span>{stage?.label || "Learning Operational Fingerprint"}</span>
-        <strong>{complete ? "Established" : `Stage ${Math.min(stageIndex + 1, FINGERPRINT_BUILD_STAGES.length)}/${FINGERPRINT_BUILD_STAGES.length}`}</strong>
+      <div className="upload-fingerprint-build__halo" aria-hidden="true" />
+      <div className="upload-fingerprint-build__particles" aria-hidden="true">
+        {Array.from({ length: 10 }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
       </div>
-      <div className="upload-fingerprint-build__stage" aria-hidden="true">
+      <div className="upload-fingerprint-build__status">
+        <strong>{complete ? "Operational Fingerprint Established" : stage?.label || "Learning Operational Relationships"}</strong>
+        <span>{complete ? "Facility behavior profile is ready" : `Stage ${stageNumber} of ${stageCount}`}</span>
+      </div>
+      <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="upload-fingerprint-ridge" x1="42" y1="24" x2="124" y2="170" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(218, 255, 249, 0.98)" />
+            <stop offset="0.54" stopColor="rgba(29, 216, 196, 0.96)" />
+            <stop offset="1" stopColor="rgba(244, 210, 132, 0.9)" />
+          </linearGradient>
+          <radialGradient id="upload-fingerprint-core" cx="50%" cy="52%" r="58%">
+            <stop offset="0" stopColor="rgba(29, 216, 196, 0.24)" />
+            <stop offset="0.7" stopColor="rgba(29, 216, 196, 0.06)" />
+            <stop offset="1" stopColor="rgba(29, 216, 196, 0)" />
+          </radialGradient>
+        </defs>
+        <path className="upload-fingerprint-build__field" d="M79 8c37 0 66 30 66 70 0 53-29 93-66 93S14 131 14 78C14 38 43 8 79 8Z" />
+        <path className="upload-fingerprint-build__outline" d="M79 8c37 0 66 30 66 70 0 53-29 93-66 93S14 131 14 78C14 38 43 8 79 8Z" />
+        <g className="upload-fingerprint-build__ridges">
+          {FINGERPRINT_RIDGES.map((ridge, index) => {
+            const fill = ridgeProgress({ displayPercent, ridge, stageIndex, complete });
+            return (
+              <path
+                key={ridge.path}
+                className="upload-fingerprint-build__ridge"
+                d={ridge.path}
+                data-ridge-phase={ridge.phase}
+                data-ridge-detail={ridge.detail}
+                pathLength="100"
+                style={{
+                  "--ridge-offset": 100 - fill,
+                  "--ridge-opacity": fill > 0 ? 0.16 + (fill / 100) * 0.84 : 0.03,
+                  "--ridge-delay": (index * 38) + "ms",
+                }}
+              />
+            );
+          })}
+        </g>
+      </svg>
+      {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
+      <div className="upload-fingerprint-build__nodes" aria-hidden="true">
         {FINGERPRINT_BUILD_STAGES.map((item, index) => (
           <span
             key={item.id}
             className={index < stageIndex ? "is-complete" : index === stageIndex ? "is-active" : ""}
-          />
+          >
+            <i />
+            <b>{item.shortLabel}</b>
+          </span>
         ))}
       </div>
-      <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id="upload-fingerprint-ridge" x1="38" y1="22" x2="122" y2="158" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(218, 255, 249, 0.98)" />
-            <stop offset="0.55" stopColor="rgba(29, 216, 196, 0.95)" />
-            <stop offset="1" stopColor="rgba(244, 210, 132, 0.9)" />
-          </linearGradient>
-        </defs>
-        <path className="upload-fingerprint-build__outline" d="M79 8c37 0 66 30 66 70 0 53-29 93-66 93S14 131 14 78C14 38 43 8 79 8Z" />
-        {FINGERPRINT_RIDGES.map((ridge, index) => {
-          const fill = ridgeProgress({ displayPercent, ridge, stageIndex, complete });
-          return (
-            <path
-              key={ridge.path}
-              className="upload-fingerprint-build__ridge"
-              d={ridge.path}
-              data-ridge-phase={ridge.phase}
-              pathLength="100"
-              style={{
-                "--ridge-offset": 100 - fill,
-                "--ridge-opacity": fill > 0 ? 0.18 + (fill / 100) * 0.82 : 0.04,
-                "--ridge-delay": (index * 42) + "ms",
-              }}
-            />
-          );
-        })}
-      </svg>
-      <div className="upload-fingerprint-build__scan" aria-hidden="true" />
     </div>
   );
 }
@@ -488,28 +512,12 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {showProgress ? (
-          <section className="upload-analysis-card upload-analysis-card--processing" aria-live="polite" aria-label="Analysis progress">
-            <div className="upload-analysis-card__visual">
-              <OperationalOrb
-                status={resolvedOrbStatus}
-                state={{
-                  label: fingerprintStatus,
-                  visualLabel: "Operational Fingerprint",
-                }}
-              />
-              <div className="upload-analysis-card__status">
-                <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
-              </div>
-            </div>
+          <section className="upload-analysis-card upload-analysis-card--processing" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
             <div className="upload-analysis-card__content">
-              <div className="upload-simple-card__file">
-                <strong>{selectedFileLabel}</strong>
-                <span>{fileKind} - {selectedFileSize}</span>
-              </div>
-              <div className="upload-progress-summary">
-                <span>{statusText}</span>
-                <strong>{mainPercent}% complete</strong>
+              <div className="upload-file-chip" title={`${selectedFileLabel} - ${selectedFileSize}`}>
+                <span className="upload-file-chip__icon" aria-hidden="true" />
+                <span className="upload-file-chip__name">{selectedFileLabel}</span>
+                <span className="upload-file-chip__meta">{selectedFileSize}</span>
               </div>
               <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}

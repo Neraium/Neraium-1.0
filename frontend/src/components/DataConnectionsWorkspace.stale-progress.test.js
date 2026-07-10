@@ -190,7 +190,7 @@ it("continues polling after temporary stream and status HTML 503 responses", asy
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("temporary.csv")] } });
   fireEvent.click(screen.getByTestId("process-upload-button"));
 
-  expect(await screen.findByText(SERVICE_UNAVAILABLE_RETRY_MESSAGE)).toBeTruthy();
+  expect(await screen.findByLabelText(`Analysis progress: ${SERVICE_UNAVAILABLE_RETRY_MESSAGE}`)).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-temporary-503" }), { navigateToGate: false });
@@ -267,7 +267,7 @@ it("drag-over and drop use the premium upload card", () => {
   expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(false);
 });
 
-it("processing state shows one progress bar", () => {
+it("processing state uses the fingerprint as the progress indicator", () => {
   renderPanel({
     uploadState: "running_sii",
     selectedFiles: [selectedCsv("progress.csv")],
@@ -284,10 +284,13 @@ it("processing state shows one progress bar", () => {
     latestMessage: "Building fingerprint...",
   });
 
-  expect(screen.getByText("Learning Operational Fingerprint...")).toBeTruthy();
-  expect(screen.getByText("Learning operational relationships")).toBeTruthy();
+  expect(screen.getByText("Learning Operational Relationships")).toBeTruthy();
+  expect(screen.getByText("Stage 2 of 4")).toBeTruthy();
+  expect(screen.getByText("progress.csv")).toBeTruthy();
+  expect(screen.getByText("1.0 KB")).toBeTruthy();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
+  expect(screen.queryByText("65% complete")).toBeNull();
 });
 
 it("failed state shows retry and choose another file", () => {
@@ -329,14 +332,10 @@ it("complete state shows the fingerprint completion moment", () => {
 
   expect(screen.getByRole("heading", { name: "Operational Fingerprint Established" })).toBeTruthy();
   expect(screen.getByText("Behavioral baseline successfully created.")).toBeTruthy();
-  expect(screen.getByText("Systems")).toBeTruthy();
-  expect(screen.getByText("Insights")).toBeTruthy();
-  expect(screen.getByText("Fingerprint")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Fingerprint"]);
-
+  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   const details = screen.getByText("Advanced Details").closest("details");
   expect(details.open).toBe(false);
 });
@@ -364,7 +363,7 @@ it("completed upload screen count matches AnalysisResult systems length", () => 
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = screen.getByText("Systems").closest(".upload-result-summary__item");
+  const item = Array.from(document.querySelectorAll(".upload-result-summary__item")).find((node) => node.textContent?.includes("Systems"));
   expect(item.textContent).toContain("3");
 });
 
@@ -413,11 +412,10 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByText("Generating Operational Insights...")).toBeTruthy();
-  expect(screen.getByText("Establishing behavioral baseline")).toBeTruthy();
+  expect(screen.getByLabelText("Analysis progress: Generating Operational Insights...")).toBeTruthy();
+  expect(screen.getByText("Establishing Behavioral Baseline")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
-  expect(screen.queryByText("Systems")).toBeNull();
-  expect(screen.queryByText("Insights")).toBeNull();
+  expect(document.querySelector(".upload-result-summary")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
 });
 
@@ -613,7 +611,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Identifying operational systems")).toBeTruthy();
+  expect(screen.getByText("Identifying Operational Systems")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });
