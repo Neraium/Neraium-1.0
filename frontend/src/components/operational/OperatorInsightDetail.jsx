@@ -42,11 +42,116 @@ function confidenceLabel(insight) {
   return "Low";
 }
 
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateTime(value) {
+  const date = parseDate(value);
+  if (!date) return text(value);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDuration(startValue, endValue) {
+  const start = parseDate(startValue);
+  const end = parseDate(endValue);
+  if (!start || !end || end <= start) return "";
+  const hours = Math.round((end.getTime() - start.getTime()) / 3600000);
+  if (hours < 48) return `${hours} hours`;
+  const days = Math.round(hours / 24);
+  if (days < 60) return `${days} days`;
+  const months = Math.round(days / 30.44);
+  return `${months} months`;
+}
+
+function relationshipMeasurement(evidence) {
+  const delta = Number(evidence?.relationship_delta?.correlation_delta ?? evidence?.relationshipDelta?.correlationDelta);
+  const metricItems = toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges);
+  const metricText = metricItems.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(" ");
+  const baselineMatch = metricText.match(/Baseline operating coupling:\s*(-?\d+(?:\.\d+)?)/i);
+  const currentMatch = metricText.match(/Current operating coupling:\s*(-?\d+(?:\.\d+)?)/i);
+  return {
+    delta: Number.isFinite(delta) ? Math.abs(delta) : null,
+    baseline: baselineMatch ? Number(baselineMatch[1]) : null,
+    current: currentMatch ? Number(currentMatch[1]) : null,
+  };
+}
+
 function evidenceSummary(evidence, index) {
   const label = text(evidence?.description ?? evidence?.summary) || `Supporting relationship ${index + 1}`;
-  const delta = Number(evidence?.relationship_delta?.correlation_delta ?? evidence?.relationshipDelta?.correlationDelta);
-  if (!Number.isFinite(delta)) return label;
-  return `${label} Change magnitude: ${Math.abs(delta).toFixed(2)}.`;
+  const { delta } = relationshipMeasurement(evidence);
+  if (delta === null) return label;
+  return `${label} Relationship change magnitude: ${delta.toFixed(2)}.`;
+}
+
+function comparisonRanges(evidence) {
+  return evidence.flatMap((item) => toList(item?.source_time_ranges, item?.sourceTimeRanges))
+    .filter((range) => range && typeof range === "object");
+}
+
+function buildChangeContext(insight, evidence) {
+  const ranges = comparisonRanges(evidence);
+  const currentStarts = ranges.map((range) => range.current_start ?? range.currentStart).filter(Boolean);
+  const currentEnds = ranges.map((range) => range.current_end ?? range.currentEnd).filter(Boolean);
+  const baselineStarts = ranges.map((range) => range.baseline_start ?? range.baselineStart).filter(Boolean);
+  const baselineEnds = ranges.map((range) => range.baseline_end ?? range.baselineEnd).filter(Boolean);
+
+  const earliestCurrent = currentStarts
+    .map(parseDate)
+    .filter(Boolean)
+    .sort((a, b) => a - b)[0];
+  const latestCurrent = currentEnds
+    .map(parseDate)
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0];
+  const earliestBaseline = baselineStarts
+    .map(parseDate)
+    .filter(Boolean)
+    .sort((a, b) => a - b)[0];
+  const latestBaseline = baselineEnds
+    .map(parseDate)
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0];
+
+  const measurements = evidence.map(relationshipMeasurement);
+  const deltas = measurements.map((item) => item.delta).filter((value) => value !== null);
+  const largestDelta = deltas.length ? Math.max(...deltas) : null;
+  const changedCount = Number(insight?.changedRelationshipCount);
+
+  const rows = [];
+  if (earliestCurrent) rows.push(["Current comparison window began", formatDateTime(earliestCurrent)]);
+  if (latestCurrent) rows.push(["Observed through", formatDateTime(latestCurrent)]);
+  const currentDuration = formatDuration(earliestCurrent, latestCurrent);
+  if (currentDuration) rows.push(["Current comparison span", currentDuration]);
+  if (earliestBaseline && latestBaseline) rows.push(["Historical baseline period", `${formatDateTime(earliestBaseline)} to ${formatDateTime(latestBaseline)}`]);
+  if (Number.isFinite(changedCount) && changedCount > 0) rows.push(["Relationships changed together", String(changedCount)]);
+  if (largestDelta !== null) rows.push(["Largest relationship change magnitude", largestDelta.toFixed(2)]);
+  if (insight?.detectedAt) rows.push(["Insight generated", formatDateTime(insight.detectedAt)]);
+
+  return rows;
+}
+
+function buildOperationalMemory(insight) {
+  const priorOccurrences = Number(
+    insight?.priorOccurrenceCount ?? insight?.prior_occurrence_count ?? insight?.recurrenceCount ?? insight?.recurrence_count
+  );
+  const similarEvents = toList(
+    insight?.similarHistoricalEvents,
+    insight?.similar_historical_events,
+    insight?.priorMatches,
+    insight?.prior_matches
+  );
+  const rows = [];
+  if (Number.isFinite(priorOccurrences)) rows.push(["Prior matching occurrences", String(priorOccurrences)]);
+  return { rows, similarEvents };
 }
 
 function usefulDiagnosticEntries(evidence) {
@@ -92,6 +197,15 @@ function BulletList({ items }) {
   return <ul className="operator-briefing-list">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
 }
 
+function ContextGrid({ rows }) {
+  if (!rows.length) return null;
+  return (
+    <dl className="operational-detail-grid">
+      {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl>
+  );
+}
+
 export default function OperatorInsightDetail({ insight }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
   const evidenceLines = unique([
@@ -114,6 +228,8 @@ export default function OperatorInsightDetail({ insight }) {
   const confidence = confidenceLabel(insight);
   const whatChanged = unique(toList(insight?.whatHappened, insight?.rawSummary, insight?.summary).map(text)).slice(0, 2);
   const whyItMatters = unique(toList(insight?.whyItMatters, insight?.possibleConsequence).map(text)).slice(0, 3);
+  const changeContext = buildChangeContext(insight, evidence);
+  const operationalMemory = buildOperationalMemory(insight);
 
   return (
     <details className="insight-detail-card" aria-label="Insight detail">
@@ -129,9 +245,11 @@ export default function OperatorInsightDetail({ insight }) {
         {confidence ? <div><dt>Confidence</dt><dd>{confidence}</dd></div> : null}
       </dl>
 
-      <Section title="Executive Summary">
+      <Section title="What Changed">
         {whatChanged.map((line) => <p key={line}>{line}</p>)}
       </Section>
+
+      {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
 
       {whyItMatters.length ? <Section title="Why It Matters">{whyItMatters.map((line) => <p key={line}>{line}</p>)}</Section> : null}
 
@@ -139,7 +257,14 @@ export default function OperatorInsightDetail({ insight }) {
 
       {causes.length ? <Section title="Possible Causes"><BulletList items={causes} /></Section> : null}
 
-      {evidenceLines.length ? <Section title="Supporting Evidence"><BulletList items={evidenceLines} /></Section> : null}
+      {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
+
+      {operationalMemory.rows.length || operationalMemory.similarEvents.length ? (
+        <Section title="Operational Memory">
+          <ContextGrid rows={operationalMemory.rows} />
+          <BulletList items={operationalMemory.similarEvents} />
+        </Section>
+      ) : null}
 
       {evidence.length || insight?.id || insight?.metricName ? (
         <details className="insight-evidence-drawer">
