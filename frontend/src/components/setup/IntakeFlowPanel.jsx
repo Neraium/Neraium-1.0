@@ -159,6 +159,130 @@ function completionSummary({ analysisResult }) {
   ];
 }
 
+const FINGERPRINT_BUILD_STAGES = [
+  {
+    id: "telemetry",
+    label: "Collecting telemetry evidence",
+    states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
+  },
+  {
+    id: "relationships",
+    label: "Learning operational relationships",
+    states: ["processing", "building_fingerprint", "baseline_modeling"],
+  },
+  {
+    id: "systems",
+    label: "Identifying operational systems",
+    states: ["running_sii", "structural_scoring", "building_baseline"],
+  },
+  {
+    id: "baseline",
+    label: "Establishing behavioral baseline",
+    states: ["writing_state", "cognition_ready", "saving_result"],
+  },
+];
+
+const FINGERPRINT_RIDGES = [
+  "M78 26c-19 1-36 12-45 28-7 14-7 31-1 45",
+  "M88 29c20 5 34 20 37 40 2 13-1 27-8 39",
+  "M70 44c-13 7-21 20-22 35-1 16 7 31 20 39",
+  "M91 48c12 5 21 16 23 30 2 17-7 33-21 42",
+  "M63 61c-6 9-9 21-7 33 4 22 21 39 42 43",
+  "M82 61c12 0 22 9 24 22 3 17-9 33-25 36",
+  "M71 76c-4 13 2 28 15 36 8 5 18 7 28 5",
+  "M88 76c7 4 11 12 10 21-1 12-10 20-21 22",
+  "M67 107c3 18 17 32 36 37",
+  "M56 127c13 18 32 29 55 31",
+  "M105 55c15 18 16 44 1 62-7 9-17 15-29 17",
+  "M48 52c9-19 29-32 51-31",
+];
+
+function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
+  if (viewState === "complete") {
+    return { id: "complete", label: "Operational Fingerprint Established", index: FINGERPRINT_BUILD_STAGES.length };
+  }
+  if (viewState === "finalizing") {
+    return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
+  }
+  if (viewState === "uploading") {
+    return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
+  }
+
+  const rawStage = String(
+    uploadJob?.processing_state
+      ?? uploadJob?.processingState
+      ?? uploadJob?.status
+      ?? uploadState
+      ?? ""
+  ).trim().toLowerCase();
+  const normalized = primaryJobStatus(uploadJob, uploadState);
+  const rawMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(rawStage));
+  const normalizedMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(normalized));
+  const index = rawMatchedIndex >= 0 ? rawMatchedIndex : normalizedMatchedIndex >= 0 ? normalizedMatchedIndex : 1;
+  return { ...FINGERPRINT_BUILD_STAGES[index], index };
+}
+
+function ridgeProgress(percent, index, total) {
+  const start = (index / total) * 76;
+  const span = 26;
+  return Math.max(0, Math.min(100, Math.round(((percent - start) / span) * 100)));
+}
+
+function OperationalFingerprintBuild({ percent, stage, complete = false }) {
+  const displayPercent = clampPercent(percent);
+  const stageIndex = stage?.index ?? 0;
+  return (
+    <div
+      className={`upload-fingerprint-build${complete ? " upload-fingerprint-build--complete" : ""}`}
+      aria-label={`Analysis ${displayPercent}% complete`}
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow={displayPercent}
+      role="progressbar"
+      style={{ "--fingerprint-scan-top": `${62 + (150 * displayPercent) / 100}px` }}
+    >
+      <div className="upload-fingerprint-build__header">
+        <span>{stage?.label || "Learning Operational Fingerprint"}</span>
+        <strong>{displayPercent}%</strong>
+      </div>
+      <div className="upload-fingerprint-build__stage" aria-hidden="true">
+        {FINGERPRINT_BUILD_STAGES.map((item, index) => (
+          <span
+            key={item.id}
+            className={index < stageIndex ? "is-complete" : index === stageIndex ? "is-active" : ""}
+          />
+        ))}
+      </div>
+      <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="upload-fingerprint-ridge" x1="38" y1="22" x2="122" y2="158" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(218, 255, 249, 0.98)" />
+            <stop offset="0.55" stopColor="rgba(29, 216, 196, 0.95)" />
+            <stop offset="1" stopColor="rgba(244, 210, 132, 0.9)" />
+          </linearGradient>
+        </defs>
+        <path className="upload-fingerprint-build__outline" d="M79 8c37 0 66 30 66 70 0 53-29 93-66 93S14 131 14 78C14 38 43 8 79 8Z" />
+        {FINGERPRINT_RIDGES.map((path, index) => {
+          const fill = ridgeProgress(displayPercent, index, FINGERPRINT_RIDGES.length);
+          return (
+            <path
+              key={path}
+              className="upload-fingerprint-build__ridge"
+              d={path}
+              pathLength="100"
+              style={{
+                "--ridge-offset": 100 - fill,
+                "--ridge-opacity": 0.16 + (fill / 100) * 0.84,
+              }}
+            />
+          );
+        })}
+      </svg>
+      <div className="upload-fingerprint-build__scan" aria-hidden="true" />
+    </div>
+  );
+}
+
 const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA Export", "Historian Export"];
 
 function uploadOrbStatus(viewState) {
@@ -271,6 +395,7 @@ export default function IntakeFlowPanel({
   const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
   const statusText = operatorStatusText({ viewState, uploadJob, uploadState, latestMessage });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
+  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
   const remaining = estimateRemaining(uploadTransfer);
   const errorMessage = String(latestMessage || "Choose another telemetry file and try again.").trim();
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
@@ -379,16 +504,7 @@ export default function IntakeFlowPanel({
                 <span>{statusText}</span>
                 <strong>{mainPercent}% complete</strong>
               </div>
-              <div
-                className="upload-progress-meter upload-progress-meter--single"
-                aria-label={`Analysis ${mainPercent}% complete`}
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow={mainPercent}
-                role="progressbar"
-              >
-                <span style={{ width: `${mainPercent}%` }} />
-              </div>
+              <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
             </div>
           </section>
@@ -397,16 +513,10 @@ export default function IntakeFlowPanel({
         {viewState === "complete" ? (
           <section className="upload-analysis-card upload-simple-card--complete" aria-label="Analysis complete">
             <div className="upload-analysis-card__visual">
-              <OperationalOrb
-                status={resolvedOrbStatus}
-                state={{
-                  label: fingerprintStatus,
-                  visualLabel: "Operational Fingerprint",
-                }}
-              />
+              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
+                <strong>Operational Fingerprint Established</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">

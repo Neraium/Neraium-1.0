@@ -754,6 +754,154 @@ button:focus-visible {
   transition: width 320ms ease;
 }
 
+.upload-fingerprint-build {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-height: 278px;
+  overflow: hidden;
+  padding: 14px;
+  border: 1px solid var(--upload-line);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(29, 216, 196, 0.14), transparent 48%),
+    linear-gradient(180deg, rgba(8, 18, 28, 0.84), rgba(5, 12, 20, 0.88));
+  box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.03);
+  isolation: isolate;
+}
+
+.upload-fingerprint-build::before {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border: 1px solid rgba(29, 216, 196, 0.22);
+  border-radius: 48% 52% 46% 54% / 42% 44% 56% 58%;
+  box-shadow: 0 0 34px rgba(29, 216, 196, 0.14);
+  opacity: 0.82;
+  animation: fingerprint-build-pulse 2.6s ease-in-out infinite;
+}
+
+.upload-fingerprint-build--complete::before {
+  border-color: rgba(218, 255, 249, 0.46);
+  box-shadow: 0 0 48px rgba(29, 216, 196, 0.36), 0 0 24px rgba(244, 210, 132, 0.18);
+  animation: fingerprint-complete-glow 1.8s ease-in-out 1, fingerprint-build-pulse 3.8s ease-in-out infinite 1.8s;
+}
+
+.upload-fingerprint-build__header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.upload-fingerprint-build__header span {
+  color: var(--upload-ink);
+  font-size: var(--type-body-sm);
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.upload-fingerprint-build__header strong {
+  color: rgba(244, 210, 132, 0.96);
+  font-size: 0.95rem;
+}
+
+.upload-fingerprint-build__stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.upload-fingerprint-build__stage span {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(128, 161, 178, 0.28);
+}
+
+.upload-fingerprint-build__stage span.is-active,
+.upload-fingerprint-build__stage span.is-complete {
+  background: linear-gradient(90deg, rgba(29, 216, 196, 0.95), rgba(244, 210, 132, 0.88));
+  box-shadow: 0 0 12px rgba(29, 216, 196, 0.24);
+}
+
+.upload-fingerprint-build__print {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 245px);
+  height: 190px;
+  overflow: visible;
+  filter: drop-shadow(0 0 18px rgba(29, 216, 196, 0.18));
+}
+
+.upload-fingerprint-build__outline {
+  fill: rgba(6, 18, 27, 0.5);
+  stroke: rgba(218, 255, 249, 0.22);
+  stroke-width: 2;
+}
+
+.upload-fingerprint-build__ridge {
+  fill: none;
+  stroke: url(#upload-fingerprint-ridge);
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: var(--ridge-offset);
+  opacity: var(--ridge-opacity);
+  transition: stroke-dashoffset 420ms ease, opacity 420ms ease, stroke-width 420ms ease;
+}
+
+.upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
+  stroke-width: 4.6;
+}
+
+.upload-fingerprint-build__scan {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: var(--fingerprint-scan-top);
+  z-index: 2;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(218, 255, 249, 0.82), transparent);
+  box-shadow: 0 0 16px rgba(29, 216, 196, 0.46);
+  transition: top 420ms ease;
+}
+
+.upload-fingerprint-build--complete .upload-fingerprint-build__scan {
+  opacity: 0;
+}
+
+@keyframes fingerprint-build-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.985); }
+  50% { opacity: 0.95; transform: scale(1.01); }
+}
+
+@keyframes fingerprint-complete-glow {
+  0% { opacity: 0.6; transform: scale(0.98); }
+  45% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 0.82; transform: scale(1); }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-fingerprint-build::before,
+  .upload-fingerprint-build--complete::before {
+    animation: none;
+  }
+
+  .upload-fingerprint-build__ridge,
+  .upload-fingerprint-build__scan {
+    transition: none;
+  }
+}
 .upload-result-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));

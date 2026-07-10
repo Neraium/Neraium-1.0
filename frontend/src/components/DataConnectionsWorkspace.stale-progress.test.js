@@ -285,6 +285,7 @@ it("processing state shows one progress bar", () => {
   });
 
   expect(screen.getByText("Learning Operational Fingerprint...")).toBeTruthy();
+  expect(screen.getByText("Learning operational relationships")).toBeTruthy();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
 });
@@ -412,6 +413,7 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
   });
 
   expect(screen.getByText("Generating Operational Insights...")).toBeTruthy();
+  expect(screen.getByText("Establishing behavioral baseline")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
   expect(screen.queryByText("Systems")).toBeNull();
   expect(screen.queryByText("Insights")).toBeNull();
@@ -610,6 +612,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  expect(screen.getByText("Identifying operational systems")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });
