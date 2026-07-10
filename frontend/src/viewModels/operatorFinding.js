@@ -219,7 +219,12 @@ export function sanitizeOperatorText(value) {
   for (const [pattern, replacement] of DISALLOWED_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }
-  return text.replace(/\s+/g, " ").trim();
+  return text
+    .replace(/\b(The)\s+\1\b/gi, "$1")
+    .replace(/\.\s+(has|have|had|is|are|was|were)\b/g, " $1")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 

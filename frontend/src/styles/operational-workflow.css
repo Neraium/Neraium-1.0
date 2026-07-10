@@ -1323,6 +1323,16 @@ button.insight-card {
   color: var(--ops-accent-strong);
 }
 
+.secondary-command-button--outline {
+  background: transparent;
+  color: var(--ops-ink-muted);
+}
+
+.secondary-command-button--outline:hover {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--ops-ink-soft);
+}
+
 .command-button:disabled,
 .secondary-command-button:disabled {
   cursor: not-allowed;
@@ -2075,13 +2085,54 @@ button.insight-card {
 
 .command-center-insight {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .command-center-insight strong {
   color: var(--ops-ink);
   font-size: 1.08rem;
   line-height: 1.3;
+}
+
+.operational-panel--top-insight {
+  border-color: rgba(0, 163, 154, 0.34);
+  background:
+    linear-gradient(180deg, rgba(0, 122, 116, 0.14), rgba(17, 27, 42, 0.98) 46%, var(--ops-surface));
+  box-shadow: var(--ops-shadow-strong);
+}
+
+.operational-panel--top-insight .operational-panel__header h2 {
+  font-size: clamp(1.42rem, 2vw, 1.9rem);
+}
+
+.top-insight-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.top-insight-facts div {
+  min-width: 0;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: rgba(8, 12, 20, 0.38);
+  padding: 10px;
+}
+
+.top-insight-facts dt {
+  color: var(--ops-ink-muted);
+  font-size: 0.68rem;
+  font-weight: 560;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.top-insight-facts dd {
+  margin: 5px 0 0;
+  color: var(--ops-ink);
+  font-weight: 620;
+  line-height: 1.35;
 }
 
 .command-center-hero__copy > .section-token {

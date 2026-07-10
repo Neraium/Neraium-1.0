@@ -96,13 +96,13 @@ const ANALYZING_STATUS = {
   detail: "Neraium is comparing current relationships against historical operating behavior.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
-  label: "Connected: Ready",
+  label: "System Online",
   tone: "active",
   statusKey: "active",
   detail: "Result ready.",
 };
 const MONITORING_LIVE_STATUS = {
-  label: "Connected: Ready",
+  label: "Monitoring Active",
   tone: "active",
   statusKey: "active",
   detail: "Live telemetry is connected and current behavior is being monitored.",
@@ -435,7 +435,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   });
   const lastUpdated = deriveLastUpdatedLabel({ liveOps, snapshot, result });
   const dashboardStatus = deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insights });
-  const commandCenterTitle = analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : EMPTY_TELEMETRY_COPY.commandTitle;
+  const commandCenterTitle = analysisComplete ? "System Online" : EMPTY_TELEMETRY_COPY.commandTitle;
   const commandCenterStatus = dashboardStatus;
   const dashboardSummaryRows = buildDashboardSummaryRows({
     dashboardStatus,
@@ -836,8 +836,8 @@ function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifi
 
   return [
     ["Operating Baseline", "Established"],
-    [telemetryConnected ? "Systems Monitored" : "Operational Systems Identified", String(identifiedSystemCount)],
-    ["Systems Requiring Review", String(activeInsightSystemCount)],
+    [telemetryConnected ? "Systems Monitored" : "Operational Systems", String(identifiedSystemCount)],
+    ["Systems with Active Insights", String(activeInsightSystemCount)],
     ["Active Insights", String(activeInsightCount)],
     ["Last Analysis", lastAnalysis],
     ["Data Source Updated", lastUpdated],
@@ -855,10 +855,20 @@ function buildPlaceholderSystemCards() {
 
 function activityDetailForInsight(insight) {
   const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
-  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Pressure and flow signals shifted during the analysis window.";
-  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "A water-quality operating relationship changed during the analysis window.";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal operating relationships moved away from the baseline.";
-  return "Operation changed relative to the learned baseline.";
+  const relationships = insightRelationshipLabels(insight);
+  if (relationships.length) return `${relationships[0]} correlation changed.`;
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Flow and pressure correlation changed.";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality relationship changed.";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal relationship changed.";
+  return "Operating relationship changed.";
+}
+
+function activityTitleForInsight(insight) {
+  const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Pumping System relationship drift detected";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water Quality relationship change detected";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal System relationship change detected";
+  return `${formatSubsystemName(insight?.system)} relationship change detected`;
 }
 
 function buildDashboardActivityItems({ historyItems, insights, analysisComplete, analysisRunning, lastAnalysis }) {
@@ -868,7 +878,8 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
   if (analysisComplete) {
     const insightItems = insights.slice(0, 3).map((insight, index) => ({
       id: "insight-activity-entry-" + index,
-      title: formatSubsystemName(insight.system),
+      title: activityTitleForInsight(insight),
+      time: insight.detectedAt ?? lastAnalysis,
       detail: activityDetailForInsight(insight),
     }));
     if (insightItems.length) {
@@ -1073,10 +1084,20 @@ function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight })
 
 function normalizeSystemStatus(value) {
   const text = firstText(value).toLowerCase();
-  if (text.includes("review") || text.includes("attention") || text.includes("changed") || text.includes("drift") || text.includes("shift")) return "Monitoring";
+  if (text.includes("critical") || text.includes("unstable")) return "Critical";
+  if (text.includes("review") || text.includes("attention") || text.includes("changed") || text.includes("drift") || text.includes("shift")) return "Investigation Recommended";
+  if (text.includes("advisory") || text.includes("watch") || text.includes("warning")) return "Advisory";
   if (text.includes("normal") || text.includes("stable") || text.includes("baseline")) return "Normal";
-  if (text.includes("connected") || text.includes("monitor")) return "Monitoring";
-  return firstText(value, "Monitoring");
+  if (text.includes("connected") || text.includes("monitor")) return "Normal";
+  return firstText(value, "Normal");
+}
+
+function operationalStateForSystem(activeInsightCount, topInsight, rawStatus) {
+  if (activeInsightCount <= 0) return normalizeSystemStatus(rawStatus);
+  const severity = normalizeSeverity(topInsight?.severity);
+  if (severity === "High") return "Critical";
+  if (severity === "Moderate") return "Investigation Recommended";
+  return "Advisory";
 }
 
 
@@ -1335,13 +1356,12 @@ function buildSystemCards({ systems, primarySystem, insights }) {
     const relatedInsights = insights.filter((item) => item.system === system.name || safeSystems.length === 1);
     const activeInsightCount = relatedInsights.length;
     const rawStatus = firstText(system.health_status, system.status, "Stable");
-    const status = activeInsightCount > 0 ? "Monitoring" : normalizeSystemStatus(rawStatus);
     const relationships = relationshipContributionLabels(toList(system.relationships, system.relationship_summary));
     const topInsight = relatedInsights[0] ?? null;
     return {
       id: system.id,
       name: system.name,
-      status,
+      status: operationalStateForSystem(activeInsightCount, topInsight, rawStatus),
       scope: firstText(system.scope, system.description, "Detected from analyzed telemetry."),
       activeInsights: String(activeInsightCount),
       severity: activeInsightCount ? (topInsight?.severity ?? "Moderate") : "",
@@ -2383,7 +2403,7 @@ function Timeline({ items }) {
             <ul className="operational-timeline__entries">
               {item.entries.map((entry) => (
                 <li key={entry.id}>
-                  <strong>{entry.title}</strong>
+                  <strong>{entry.time ? entry.time + " - " + entry.title : entry.title}</strong>
                   <p>{entry.detail}</p>
                 </li>
               ))}
@@ -2715,6 +2735,9 @@ function cleanDisplayText(value) {
     .replace(/\bColumn\s+(\d+)\b/gi, (match, number) => "Signal " + number)
     .replace(/_+/g, " ")
     .replace(/\s+\/\s+/g, " / ")
+    .replace(/\b(The)\s+\1\b/gi, "$1")
+    .replace(/\.\s+(has|have|had|is|are|was|were)\b/g, " $1")
+    .replace(/\s+([,.!?;:])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
   return text || firstText(value);
