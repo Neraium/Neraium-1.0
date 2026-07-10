@@ -522,7 +522,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                     "status": "FAILED",
                     "processing_state": "failed",
                     "error_type": "csv_parse_error",
-                    "message": "CSV could not be parsed. The file is empty.",
+                    "message": "CSV file is empty.",
                 },
             )
 

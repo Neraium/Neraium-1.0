@@ -73,6 +73,29 @@ function formatDuration(startValue, endValue) {
 }
 
 function relationshipMeasurement(evidence) {
+  const candidates = toList(
+    evidence?.relationship_delta,
+    evidence?.relationshipDelta,
+    evidence?.metric_delta,
+    evidence?.metricDelta,
+    evidence?.relevant_metric_changes,
+    evidence?.relevantMetricChanges
+  );
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const baseline = Number(candidate.baseline_strength ?? candidate.baselineStrength ?? candidate.baseline_coupling ?? candidate.baselineCoupling);
+    const current = Number(candidate.current_strength ?? candidate.currentStrength ?? candidate.current_coupling ?? candidate.currentCoupling);
+    const delta = Number(candidate.correlation_delta ?? candidate.correlationDelta ?? candidate.coupling_delta ?? candidate.couplingDelta);
+    if (Number.isFinite(baseline) && Number.isFinite(current)) {
+      return {
+        delta: Number.isFinite(delta) ? Math.abs(delta) : null,
+        baseline,
+        current,
+      };
+    }
+  }
+
   const delta = Number(evidence?.relationship_delta?.correlation_delta ?? evidence?.relationshipDelta?.correlationDelta);
   const metricItems = toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges);
   const metricText = metricItems.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(" ");
@@ -85,12 +108,69 @@ function relationshipMeasurement(evidence) {
   };
 }
 
-function evidenceSummary(evidence, index) {
-  const label = text(evidence?.description ?? evidence?.summary) || `Supporting relationship ${index + 1}`;
-  const { delta } = relationshipMeasurement(evidence);
-  if (delta === null) return label;
-  return `${label} Relationship change magnitude: ${delta.toFixed(2)}.`;
+function signalName(value) {
+  return humanize(value).replace(/\bDp\b/g, "DP");
 }
+
+function relationshipLabels(insight) {
+  const explicit = toList(insight?.affectedRelationships).map(text).filter(Boolean);
+  if (explicit.length) return explicit;
+  return toList(insight?.contributingRelationships).map((relationship, itemIndex) => {
+    if (!relationship || typeof relationship !== "object") return text(relationship);
+    const columns = toList(
+      relationship.display_columns,
+      relationship.displayColumns,
+      relationship.columns,
+      relationship.source_columns,
+      relationship.sourceColumns
+    ).map(signalName).filter(Boolean);
+    if (columns.length >= 2) return columns[0] + " ↔ " + columns[1];
+    return text(relationship) || "Supporting relationship " + (itemIndex + 1);
+  }).filter(Boolean);
+}
+
+function couplingInterpretation(baseline, current) {
+  const baselineSign = Math.sign(baseline);
+  const currentSign = Math.sign(current);
+  if (baselineSign !== 0 && currentSign !== 0 && baselineSign !== currentSign) return "the relationship reversed direction";
+  const strengthChange = Math.abs(baseline) - Math.abs(current);
+  if (strengthChange >= 0.5) return "the relationship weakened sharply toward little linear coupling";
+  if (strengthChange >= 0.2) return "the relationship weakened materially";
+  if (strengthChange > 0.05) return "the relationship weakened";
+  if (strengthChange <= -0.2) return "the relationship strengthened materially";
+  if (strengthChange < -0.05) return "the relationship strengthened";
+  return "the relationship remained similar in strength";
+}
+
+function evidenceSummary(evidence, index, labels = []) {
+  const label = labels[index] || text(evidence?.description ?? evidence?.summary) || "Supporting relationship " + (index + 1);
+  const { baseline, current, delta } = relationshipMeasurement(evidence);
+  if (baseline !== null && current !== null) {
+    const magnitude = delta !== null ? " Overall change magnitude: " + delta.toFixed(2) + "." : "";
+    return label + ": Unitless coupling score changed from " + baseline.toFixed(2) + " to " + current.toFixed(2) + "; " + couplingInterpretation(baseline, current) + "." + magnitude;
+  }
+  if (delta !== null) return label + ": Relationship change magnitude: " + delta.toFixed(2) + ".";
+  return label + ": change detected, but no quantitative measurement was included in this result.";
+}
+
+function evidenceSummaries(insight, evidence) {
+  const labels = relationshipLabels(insight);
+  const count = Math.max(evidence.length, labels.length);
+  return Array.from({ length: count }, (_, itemIndex) => evidenceSummary(evidence[itemIndex], itemIndex, labels));
+}
+
+function evidenceMetricRows(insight, evidence) {
+  const firstMeasurement = evidence.map(relationshipMeasurement).find((item) => item.baseline !== null || item.current !== null || item.delta !== null) ?? {};
+  const rows = [];
+  if (firstMeasurement.baseline !== null && firstMeasurement.baseline !== undefined) rows.push(["Baseline average", firstMeasurement.baseline.toFixed(2)]);
+  if (firstMeasurement.current !== null && firstMeasurement.current !== undefined) rows.push(["Current average", firstMeasurement.current.toFixed(2)]);
+  if (firstMeasurement.delta !== null && firstMeasurement.delta !== undefined) rows.push(["Percent change", firstMeasurement.delta.toFixed(2)]);
+  const confidenceEvidence = evidence.find((item) => item?.confidence_score || item?.confidenceScore) ?? {};
+  const confidence = Number(insight?.confidenceScore ?? confidenceEvidence.confidence_score ?? confidenceEvidence.confidenceScore);
+  if (Number.isFinite(confidence)) rows.push(["Persistence score", confidence.toFixed(2)]);
+  return rows;
+}
+
 
 function comparisonRanges(evidence) {
   return evidence.flatMap((item) => toList(item?.source_time_ranges, item?.sourceTimeRanges))
@@ -197,6 +277,19 @@ function BulletList({ items }) {
   return <ul className="operator-briefing-list">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
 }
 
+function CauseList({ items }) {
+  const visible = unique(items.map(text)).slice(0, 6);
+  if (!visible.length) return null;
+  const mostLikely = visible.slice(0, 3);
+  const otherPossibilities = visible.slice(3);
+  return (
+    <div className="cause-group">
+      {mostLikely.length ? <><h5>Most Likely</h5><BulletList items={mostLikely} /></> : null}
+      {otherPossibilities.length ? <><h5>Other Possibilities</h5><BulletList items={otherPossibilities} /></> : null}
+    </div>
+  );
+}
+
 function ContextGrid({ rows }) {
   if (!rows.length) return null;
   return (
@@ -209,9 +302,10 @@ function ContextGrid({ rows }) {
 export default function OperatorInsightDetail({ insight }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
   const evidenceLines = unique([
-    ...evidence.map(evidenceSummary),
+    ...evidenceSummaries(insight, evidence),
     ...toList(insight?.evidenceSummary, insight?.confidenceRationale).map(text),
-  ]).slice(0, 6);
+  ]).slice(0, 8);
+  const evidenceMetrics = evidenceMetricRows(insight, evidence);
 
   const actions = unique(toList(
     insight?.recommendedAction,
@@ -220,10 +314,16 @@ export default function OperatorInsightDetail({ insight }) {
     insight?.recommended_actions
   ).flatMap((item) => text(item).split(/\n|;|•/g)).map((item) => item.trim())).slice(0, 6);
 
-  const causes = unique(toList(
+  const suppliedCauses = unique(toList(
     insight?.possibleOperationalCauses,
     insight?.contributingFactors
   ).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
+  const causes = suppliedCauses.length ? suppliedCauses : [
+    "Filter loading",
+    "Pump operating point changed",
+    "Valve position changed",
+    "Process demand changed",
+  ];
 
   const confidence = confidenceLabel(insight);
   const whatChanged = unique(toList(insight?.whatHappened, insight?.rawSummary, insight?.summary).map(text)).slice(0, 2);
@@ -255,9 +355,11 @@ export default function OperatorInsightDetail({ insight }) {
 
       {actions.length ? <Section title="Recommended Actions"><BulletList items={actions} /></Section> : null}
 
-      {causes.length ? <Section title="Possible Causes"><BulletList items={causes} /></Section> : null}
+      {causes.length ? <Section title="Possible Causes"><CauseList items={causes} /></Section> : null}
 
       {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
+
+      {evidenceMetrics.length ? <Section title="Evidence Metrics"><ContextGrid rows={evidenceMetrics} /></Section> : null}
 
       {operationalMemory.rows.length || operationalMemory.similarEvents.length ? (
         <Section title="Operational Memory">

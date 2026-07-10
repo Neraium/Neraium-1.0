@@ -74,6 +74,7 @@ UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOB_DIR = RUNTIME_DIR / "upload_jobs"
 LEGACY_JOB_DIR = RUNTIME_DIR / "jobs"
 JOBS = UPLOAD_RUNTIME_STATE.jobs
+JOB_RUNTIME_DIRS: dict[str, Path] = {}
 LATEST_UPLOAD_CACHE = UPLOAD_RUNTIME_STATE.latest_upload_cache
 MAX_ANALYSIS_ROWS = None
 MAX_SII_ROWS = None
@@ -133,8 +134,25 @@ def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
     _invalidate_router_latest_cache()
 
 
+def _read_upload_status_from_recorded_runtime(job_id: str) -> dict[str, Any] | None:
+    runtime_dir = JOB_RUNTIME_DIRS.get(str(job_id))
+    if runtime_dir is None:
+        return None
+    path = Path(runtime_dir) / f"upload_status_{job_id}.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
     status = repository_read_upload_status(job_id)
+    if isinstance(status, dict):
+        return status
+    status = _read_upload_status_from_recorded_runtime(str(job_id))
     if isinstance(status, dict):
         return status
     return read_upload_job(job_id)
@@ -167,6 +185,7 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     }
     payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower())
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
+    JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
     upsert_upload_job(payload)
@@ -1032,6 +1051,7 @@ def write_job(*args) -> None:
         status=str(payload.get("processing_state") or payload.get("status") or "active").lower(),
     )
     UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
+    JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
     if (

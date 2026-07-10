@@ -464,16 +464,21 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
                 source_file=normalized.get("filename"),
                 status=str(normalized.get("processing_state") or normalized.get("status") or "processing").lower(),
             )
+        session_scope = normalized.get("session_scope") if isinstance(normalized.get("session_scope"), dict) else {}
+        normalized_status = str(normalized.get("processing_state") or normalized.get("status") or "").lower()
+        terminal_status = normalized_status in {"complete", "completed", "failed", "cancelled", "timeout"}
+        is_active_session = requested_id == current_job_id or (session_scope.get("active") is True and not terminal_status)
+        session_source = SESSION_SOURCE_MEMORY if is_active_session else SESSION_SOURCE_HISTORY
         state = _resolve_session_state(
             status=str(normalized.get("processing_state") or normalized.get("status") or ""),
             result=result_payload if isinstance(result_payload, dict) else None,
-            source=SESSION_SOURCE_MEMORY if requested_id == current_job_id else SESSION_SOURCE_HISTORY,
+            source=session_source,
             summary=normalized,
         )
         normalized.update(
             {
                 "session_state": state,
-                "session_source": SESSION_SOURCE_MEMORY if requested_id == current_job_id else SESSION_SOURCE_HISTORY,
+                "session_source": session_source,
                 "upload_session_id": requested_id,
                 "request_id": request_id,
                 "state_backend": upload_state_backend(),

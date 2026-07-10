@@ -284,7 +284,6 @@ def is_upload_analysis_path(path: str) -> bool:
     normalized = str(path or "")
     return (
         normalized.startswith("/api/data/upload")
-        or normalized.startswith("/api/data/latest-upload")
         or bool(re.match(r"^/api/data/intake/[^/]+/result$", normalized))
     )
 

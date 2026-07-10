@@ -161,6 +161,27 @@ def _confidence_level(score: float) -> str:
     return "limited"
 
 
+def _should_promote_relationship_change(
+    *,
+    change_type: str,
+    baseline_strength: float,
+    current_strength: float,
+    drift: float,
+    relationship_context: dict[str, Any],
+) -> bool:
+    if change_type == "stable" or drift < 0.25:
+        return False
+    if relationship_context.get("operator_primary_eligible") is False:
+        return False
+    if change_type in {"disrupted", "missing", "weakened"}:
+        return baseline_strength >= 0.65
+    if change_type == "strengthened":
+        return baseline_strength >= 0.5 and current_strength >= 0.65
+    if change_type == "new":
+        return current_strength >= 0.75
+    return False
+
+
 def _system_label_for_columns(left_col: str, right_col: str) -> str:
     text = f"{left_col} {right_col}".lower()
     if any(token in text for token in ("flow", "pressure", "pump", "valve", "air")):
@@ -565,7 +586,13 @@ def build_relationship_baseline(
             graph_edges.append(edge)
 
             relationship_context = edge.get("relationship_context") if isinstance(edge.get("relationship_context"), dict) else {}
-            if change_type == "stable" or drift < 0.25 or relationship_context.get("operator_primary_eligible") is False:
+            if not _should_promote_relationship_change(
+                change_type=change_type,
+                baseline_strength=baseline_strength,
+                current_strength=current_strength,
+                drift=drift,
+                relationship_context=relationship_context,
+            ):
                 continue
 
             candidates.append(

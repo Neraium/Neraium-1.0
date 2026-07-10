@@ -1578,6 +1578,7 @@ function InsightDetail({ insight }) {
   const relationships = insightRelationshipLabels(insight).slice(0, 8);
   const causes = rankedOperationalCauses(insight);
   const evidenceSummary = prioritizedEvidenceMetrics(insight);
+  const relationshipEvidence = evidenceBriefing(insight, relationships);
   const technicalEvidence = technicalEvidenceBriefing(insight, relationships);
 
   return (
@@ -1633,8 +1634,14 @@ function InsightDetail({ insight }) {
         lines={whyItMattersBriefing(insight)}
       />
 
-      <EvidenceMetricCards
+      <BriefingList
         title="Evidence"
+        items={relationshipEvidence}
+        limit={8}
+      />
+
+      <EvidenceMetricCards
+        title="Evidence Metrics"
         metrics={evidenceSummary}
       />
 
@@ -1732,22 +1739,22 @@ function prioritizedEvidenceMetrics(insight) {
   const rows = [
     {
       label: "Baseline average",
-      value: firstEvidenceMetricValue(insight, "baseline_average", "baselineAverage", "baseline_value", "baselineValue", "baseline"),
+      value: firstEvidenceMetricValue(insight, "baseline_average", "baselineAverage", "baseline_value", "baselineValue", "baseline_strength", "baselineStrength", "baseline_coupling", "baselineCoupling", "baseline"),
       fallback: insight?.baselineValue,
     },
     {
       label: "Current average",
-      value: firstEvidenceMetricValue(insight, "current_average", "currentAverage", "recent_average", "recentAverage", "current_value", "currentValue", "current"),
+      value: firstEvidenceMetricValue(insight, "current_average", "currentAverage", "recent_average", "recentAverage", "current_value", "currentValue", "current_strength", "currentStrength", "current_coupling", "currentCoupling", "current"),
       fallback: insight?.currentValue,
     },
     {
       label: "Percent change",
-      value: firstEvidenceMetricValue(insight, "percent_change", "percentChange", "calculated_percent_delta", "calculatedPercentDelta"),
+      value: firstEvidenceMetricValue(insight, "percent_change", "percentChange", "calculated_percent_delta", "calculatedPercentDelta", "correlation_delta", "correlationDelta", "coupling_delta", "couplingDelta"),
       suffix: "%",
     },
     {
       label: "Persistence score",
-      value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore"),
+      value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore", "confidence_score", "confidenceScore"),
       fallback: insight?.confidenceScore,
     },
   ];

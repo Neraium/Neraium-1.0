@@ -8,7 +8,7 @@ from app.services.engine_identity import build_engine_identity
 from app.services.sii_intelligence import REQUIRED_INTELLIGENCE_FIELDS, build_empty_intelligence_status, build_intelligence_status
 from app.services.sii_runner import build_runner_status, read_latest_sii_state
 from app.services.upload_state import has_active_session_artifact
-from app.services.upload_state_repository import read_current_upload_result
+from app.services.upload_state_repository import read_current_upload_result, read_latest_upload_summary, read_upload_result_by_job_id
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
 
@@ -18,7 +18,7 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
     detection = detect_domain_mode()
     selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
     profile = domain_profile(selected_mode)
-    latest_result = read_current_upload_result() if include_persisted else None
+    latest_result = resolve_latest_facility_result(include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     has_active_analysis = has_active_session_artifact(latest_result)
     return {
@@ -37,14 +37,14 @@ def read_facility_systems(include_persisted: bool = Query(True), domain_mode: st
 
 @router.get("/intelligence/status")
 def read_intelligence_status(include_persisted: bool = Query(True)) -> dict[str, Any]:
-    latest_result = read_current_upload_result() if include_persisted else None
+    latest_result = resolve_latest_facility_result(include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     return build_intelligence_status(intelligence) if intelligence else build_empty_intelligence_status()
 
 
 @router.get("/facility/cognition-state")
 def read_cognition_state(include_persisted: bool = Query(True)) -> dict[str, Any]:
-    latest_result = read_current_upload_result() if include_persisted else None
+    latest_result = resolve_latest_facility_result(include_persisted)
     intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=include_persisted)
     if not intelligence:
         return {
@@ -63,6 +63,22 @@ def read_cognition_state(include_persisted: bool = Query(True)) -> dict[str, Any
     response = build_canonical_cognition_state_response(intelligence)
     response["source_mode"] = "live"
     return response
+
+
+def resolve_latest_facility_result(include_persisted: bool) -> dict[str, Any] | None:
+    if not include_persisted:
+        return None
+    latest_result = read_current_upload_result()
+    if isinstance(latest_result, dict):
+        return latest_result
+    latest_summary = read_latest_upload_summary()
+    if not has_active_session_artifact(latest_summary):
+        return None
+    job_id = str(latest_summary.get("job_id") or "").strip()
+    if not job_id:
+        return None
+    fallback_result = read_upload_result_by_job_id(job_id)
+    return fallback_result if has_active_session_artifact(fallback_result, job_id=job_id) else None
 
 
 def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, include_persisted: bool = False) -> dict[str, Any] | None:
