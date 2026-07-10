@@ -2967,7 +2967,8 @@ function whatChangedBriefing(insight, relationships) {
     const scopeText = relationships.length === 1
       ? "One operating relationship changed enough to warrant field review."
       : `${relationships.length} operating relationships changed together, which points to a system-level behavior change.`;
-    return [relationshipText, scopeText];
+    const impactText = briefingSentences(firstText(insight.whyItMatters, insight.possibleConsequence), 1)[0];
+    return [relationshipText, impactText || scopeText];
   }
 
   const metric = normalizeSignalName(insight.metricName);

@@ -192,6 +192,11 @@ def build_insights(
         why = merged_relationship_reason(group, primary, label)
         persistence_duration = sample_window_phrase(primary.get("baseline_sample_size"), primary.get("recent_sample_size"))
         title = merged_relationship_title(group, primary, system, confidence_score)
+        operational_impact = relationship_operational_impact_sentence(
+            system,
+            all_signal_names or all_columns or primary_columns,
+            possible_causes,
+        )
         insight = compact_dict(
             {
                 "id": f"relationship-{index}",
@@ -209,10 +214,11 @@ def build_insights(
                 "explanation": what_changed,
                 "why_neraium_thinks_it_happened": why,
                 "why_neraium_thinks": why,
+                "why_it_matters": operational_impact,
                 "likely_cause": why,
                 "contributing_factors": [relationship_label(entry) for entry in group],
-                "possible_operational_consequence": "This may indicate a subsystem operating condition changed rather than a single sensor moving by itself.",
-                "possible_consequence": "This may indicate a subsystem operating condition changed rather than a single sensor moving by itself.",
+                "possible_operational_consequence": operational_impact,
+                "possible_consequence": operational_impact,
                 "possible_operational_causes": possible_causes,
                 "possible_operational_causes_summary": "; ".join(possible_causes),
                 "recommended_operator_check": operational_cause_check(label, possible_causes),
@@ -456,6 +462,12 @@ def build_relationships(
             item.get("confidence_score"),
             sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
         )
+        system = relationship_subsystem_name([*columns, *display_columns], confidence_score=confidence_score)
+        why_it_matters = relationship_operational_impact_sentence(
+            system,
+            [*columns, *display_columns],
+            possible_operational_causes(system, [*columns, *display_columns]),
+        )
         relationships.append(
             compact_dict(
                 {
@@ -463,7 +475,7 @@ def build_relationships(
                     "name": label,
                     "columns": columns,
                     "display_columns": display_columns,
-                    "system": relationship_subsystem_name([*columns, *display_columns], confidence_score=confidence_score),
+                    "system": system,
                     "relationship_type": item.get("relationship_type"),
                     "change_type": item.get("change_type"),
                     "strength": item.get("strength"),
@@ -490,7 +502,7 @@ def build_relationships(
                         relationship_operator_summary(item, label),
                         relationship_change_sentence(label, item),
                     ),
-                    "why_it_matters": "Coupled signals changing together can reveal a subsystem state change before a single metric explains it.",
+                    "why_it_matters": why_it_matters,
                     "operator_check": f"Compare {label} timing against operator logs, setpoint changes, and equipment activity.",
                     "supporting_metric_pairs": item.get("supporting_metric_pairs"),
                     "time_window": item.get("time_window"),
@@ -1982,6 +1994,21 @@ def relationship_observable_sentence(columns: list[str], item: dict[str, Any]) -
 
 def relationship_recommended_action(system: str) -> str:
     return f"Review {system.lower()} trends, operator logs, setpoint changes, maintenance activity, and demand changes for the same window."
+
+
+def relationship_operational_impact_sentence(system: str, names: list[str], causes: list[str]) -> str:
+    combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
+        return "Operational impact: This change may indicate increasing hydraulic resistance, pump efficiency changes, control adjustments, or recent maintenance that altered system behavior."
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
+        return "Operational impact: This change may indicate feed calibration drift, water quality variation, control loop changes, or recent maintenance that altered treatment behavior."
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
+        return "Operational impact: This change may indicate heat transfer degradation, equipment staging changes, load variation, or recent maintenance that altered thermal behavior."
+    if any(token in combined for token in ["humidity", "moisture", "vpd"]):
+        return "Operational impact: This change may indicate airflow balance changes, latent load variation, control adjustments, or recent maintenance that altered moisture behavior."
+    if any(token in combined for token in ["energy", "schedule", "runtime"]):
+        return "Operational impact: This change may indicate schedule changes, load profile shifts, control mode adjustments, or recent maintenance that altered runtime behavior."
+    return "Operational impact: This change may indicate a control mode change, equipment state change, sensor calibration issue, demand shift, or recent maintenance that altered system behavior."
 
 
 def operational_cause_check(label: str, causes: list[str]) -> str:

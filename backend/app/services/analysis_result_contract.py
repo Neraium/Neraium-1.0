@@ -435,9 +435,11 @@ def build_analysis_result(
                     "what_changed": first_present(item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
                     "what_happened": first_present(item.get("what_happened"), item.get("what_changed"), item.get("whatHappened"), item.get("explanation")),
                     "why_it_matters": first_present(
+                        item.get("why_it_matters"),
+                        item.get("possible_operational_consequence"),
+                        item.get("possible_consequence"),
                         item.get("why_neraium_thinks_it_happened"),
                         item.get("why_neraium_thinks"),
-                        item.get("why_it_matters"),
                         item.get("likely_cause"),
                     ),
                     "why_neraium_thinks_it_happened": first_present(

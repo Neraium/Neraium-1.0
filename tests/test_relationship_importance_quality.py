@@ -160,6 +160,8 @@ def test_analysis_result_preserves_relationship_importance_fields() -> None:
     assert result["relationships"][0]["relationship_importance_rationale"]
     assert result["relationships"][0]["ranking_factors"]
     assert result["insights"][0]["relationship_importance_score"] == 82.0
+    assert result["insights"][0]["why_it_matters"].startswith("Operational impact: ")
+    assert "hydraulic resistance" in result["insights"][0]["why_it_matters"]
 
 
 def test_relationship_stats_stay_out_of_main_insight_contract_and_remain_in_evidence() -> None:
