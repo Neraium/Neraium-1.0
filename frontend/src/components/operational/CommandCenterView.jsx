@@ -9,12 +9,15 @@ function confidenceFallback(severity) {
 
 
 function dashboardInsightTitle(insight, relationships, fallback) {
+  const supplied = String(insight?.summary || insight?.rawSummary || fallback || "").trim();
+  if (supplied && !/relationship\s+(changed|shifted)|behavior\s+changed/i.test(supplied)) return supplied;
   const relationshipContext = (relationships ?? []).join(" ").toLowerCase();
   const context = [insight?.system, insight?.rawSystemName, insight?.title, insight?.summary, relationshipContext].join(" ").toLowerCase();
-  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality Behavior Changed";
-  if (/pump|vfd|hydraulic/.test(context)) return "Pumping System Behavior Changed";
-  if (/(flow|pressure|dp|differential pressure|filter)/.test(relationshipContext)) return "Flow and Pressure Behavior Changed";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal System Behavior Changed";
+  if (/pump.*(filter|pressure|flow)|filter.*(pump|pressure)|hydraulic/.test(context)) return "Pump Efficiency Degrading";
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality Control Drift";
+  if (/pump|vfd|hydraulic/.test(context)) return "Pump Efficiency Degrading";
+  if (/(flow|pressure|dp|differential pressure|filter)/.test(relationshipContext)) return "Hydraulic Resistance Increasing";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat Transfer Performance Degrading";
   return String(fallback ?? "Operating Behavior Changed").replace(/Relationship Changed/i, "Behavior Changed");
 }
 
@@ -40,6 +43,8 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
     ? (formatConfidenceDisplay(primaryInsight.confidence, primaryInsight.confidenceScore) || confidenceFallback(primaryInsight.severity))
     : "";
   const primaryInsightTitle = primaryInsight ? dashboardInsightTitle(primaryInsight, primaryInsightRelationships, formatInsightTitle(primaryInsight)) : "No Operational Insights Yet";
+  const primaryObservedFacts = Array.isArray(primaryInsight?.observedFacts) ? primaryInsight.observedFacts.slice(0, 3) : [];
+  const primaryFirstAction = primaryInsight?.recommendedFirstAction || primaryInsight?.recommendedAction || primaryInsight?.operatorCheck || "";
 
   function reviewCurrentInsight() {
     if (primaryInsight && typeof onOpenInsight === "function") {
@@ -119,7 +124,18 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
                 <dt>Severity</dt>
                 <dd><span className={`severity-chip severity-chip--${severityToTone(primaryInsight.severity)}`}>{primaryInsight.severity}</span></dd>
               </div>
+              {primaryFirstAction ? (
+                <div>
+                  <dt>First check</dt>
+                  <dd>{primaryFirstAction}</dd>
+                </div>
+              ) : null}
             </dl>
+            {primaryObservedFacts.length ? (
+              <ul className="operator-briefing-list command-center-insight__observed">
+                {primaryObservedFacts.map((fact) => <li key={fact}>{fact}</li>)}
+              </ul>
+            ) : null}
             <button type="button" className="secondary-command-button" onClick={() => onOpenInsight?.(primaryInsight.id)}>Open Insight</button>
           </div>
         ) : (
@@ -161,7 +177,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
                   </div>
                   <div className="system-summary-row__meta">
                     <strong>{formatActiveInsightCount(system.activeInsights)}</strong>
-                    <small>{system.operationalSummary}</small>
+                    <small>{system.recommendedFirstAction || system.operationalSummary}</small>
                   </div>
                 </article>
               ))}

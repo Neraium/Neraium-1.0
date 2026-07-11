@@ -869,6 +869,23 @@
   font-size: 0.78rem;
 }
 
+.system-summary-row__briefing {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.system-summary-row__briefing > span {
+  color: var(--ops-ink-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.command-center-insight__observed {
+  margin-top: 0.9rem;
+}
+
 .status-tile span,
 .system-summary-row__meta span,
 .insight-card small,

@@ -135,8 +135,8 @@ def test_duplicate_relationship_insights_are_merged_and_preserve_relationships()
 
     titles = [insight["title"] for insight in explanation["insights"]]
     assert titles.count("Thermal relationship changed") == 0
-    assert "Heat Rejection behavior changed" in titles
-    assert "Thermal Performance behavior changed" in titles
+    assert "Heat Rejection Performance Degrading" in titles
+    assert "Thermal Performance Degrading" in titles
     contributing_relationships = [
         relationship
         for insight in explanation["insights"]
@@ -221,7 +221,7 @@ def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Flow & Pressure behavior changed"
+    assert explanation["insights"][0]["title"] == "Flow & Pressure Degrading"
     assert explanation["insights"][0]["affected_systems"] == ["Flow & Pressure"]
     assert len(explanation["insights"][0]["contributing_relationships"]) == 3
 
@@ -244,7 +244,7 @@ def test_individual_variable_changes_are_down_ranked_when_relationship_changes_e
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Chemical Feed behavior changed"
+    assert explanation["insights"][0]["title"] == "Chemical Feed Control Drift"
     assert not any(insight["title"].lower().startswith("turbidity") for insight in explanation["insights"])
 
 

@@ -297,9 +297,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getByText("Why It Matters")).toBeTruthy();
-    expect(screen.getByText(/Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance/)).toBeTruthy();
-    expect(screen.getAllByText(/Pump Power and Filter DP Relationship Changed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Why This Matters")).toBeTruthy();
+    expect(screen.getAllByText(/Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Evidence")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "System Readiness" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Command Center/)).toBe(false);
@@ -318,7 +318,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getAllByText(/Pump Power and Filter DP Relationship Changed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Evidence")).toBeTruthy();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
@@ -334,7 +334,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Systems");
     expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Relationship Drift")).toBeTruthy();
+    expect(screen.getByText("Primary Finding")).toBeTruthy();
 
     clickNav("Insights");
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
@@ -361,13 +361,13 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Insights");
-    expect(screen.getAllByText(/Pressure and Flow Relationship Changed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
     expect(screen.getByText("Persistence score")).toBeTruthy();
     expect(screen.getByText("Most Likely")).toBeTruthy();
     expect(screen.getByText("Other Possibilities")).toBeTruthy();
-    expect(screen.getByText("Recommended Actions")).toBeTruthy();
+    expect(screen.getByText("Likely Causes")).toBeTruthy();
     expect(screen.getByText("Technical Details")).toBeTruthy();
     expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);

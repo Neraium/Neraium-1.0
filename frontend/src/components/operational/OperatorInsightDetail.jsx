@@ -308,13 +308,16 @@ export default function OperatorInsightDetail({ insight }) {
   const evidenceMetrics = evidenceMetricRows(insight, evidence);
 
   const actions = unique(toList(
+    insight?.recommendedFirstAction,
     insight?.recommendedAction,
+    insight?.recommendedInvestigation,
     insight?.operatorCheck,
     insight?.recommendedActions,
     insight?.recommended_actions
   ).flatMap((item) => text(item).split(/\n|;|•/g)).map((item) => item.trim())).slice(0, 6);
 
   const suppliedCauses = unique(toList(
+    insight?.likelyCauses,
     insight?.possibleOperationalCauses,
     insight?.contributingFactors
   ).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
@@ -326,8 +329,9 @@ export default function OperatorInsightDetail({ insight }) {
   ];
 
   const confidence = confidenceLabel(insight);
-  const whatChanged = unique(toList(insight?.whatHappened, insight?.rawSummary, insight?.summary).map(text)).slice(0, 2);
-  const whyItMatters = unique(toList(insight?.whyItMatters, insight?.possibleConsequence).map(text)).slice(0, 3);
+  const observedFacts = unique(toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 8);
+  const whatChanged = unique(toList(insight?.whatHappened, insight?.behaviorInterpretation, insight?.whyNeraiumThinks, insight?.rawSummary, insight?.summary).map(text)).slice(0, 3);
+  const whyItMatters = unique(toList(insight?.whyThisMatters, insight?.whyItMatters, insight?.possibleConsequence).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
 
@@ -349,13 +353,15 @@ export default function OperatorInsightDetail({ insight }) {
         {whatChanged.map((line) => <p key={line}>{line}</p>)}
       </Section>
 
+      {observedFacts.length ? <Section title="Observed"><BulletList items={observedFacts} /></Section> : null}
+
       {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
 
-      {whyItMatters.length ? <Section title="Why It Matters">{whyItMatters.map((line) => <p key={line}>{line}</p>)}</Section> : null}
+      {whyItMatters.length ? <Section title="Why This Matters"><BulletList items={whyItMatters} /></Section> : null}
 
-      {actions.length ? <Section title="Recommended Actions"><BulletList items={actions} /></Section> : null}
+      {actions.length ? <Section title="Recommended Investigation"><BulletList items={actions} /></Section> : null}
 
-      {causes.length ? <Section title="Possible Causes"><CauseList items={causes} /></Section> : null}
+      {causes.length ? <Section title="Likely Causes"><CauseList items={causes} /></Section> : null}
 
       {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
 

@@ -644,7 +644,7 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) 
 function buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS.detail;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.commandDetail;
-  if (insights.length) return "Highest-severity insight indicates a relationship no longer follows its learned operating behavior.";
+  if (insights.length) return "Highest-severity insight identifies equipment behavior that no longer matches the learned operating fingerprint.";
   if (behaviorState === "Stable") return "Current operation remains aligned with the learned operating fingerprint.";
   return "Current operation is moving away from its established operating pattern.";
 }
@@ -872,22 +872,22 @@ function buildPlaceholderSystemCards() {
 function activityDetailForInsight(insight) {
   const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
   const relationships = insightRelationshipLabels(insight);
-  if (relationships.length) return relationshipActivitySentence(relationships[0]);
-  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Flow and pressure correlation changed.";
-  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality relationship changed.";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal relationship changed.";
-  return "Operating relationship changed.";
+  if (relationships.length) return behaviorActivitySentence(relationships[0]);
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Hydraulic behavior no longer matches the learned fingerprint.";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality control behavior deviated from the learned fingerprint.";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal response deviated from learned equipment behavior.";
+  return "Equipment behavior changed from its learned operating fingerprint.";
 }
 
 function activityTitleForInsight(insight) {
   const relationshipContext = insightRelationshipLabels(insight).join(" ").toLowerCase();
   const context = [insight?.system, insight?.summary, relationshipContext].join(" ").toLowerCase();
-  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality relationship change detected";
-  if (/(flow|pressure|dp|differential pressure)/.test(relationshipContext)) return "Flow and Pressure relationship change detected";
-  if (/pump|valve|vfd|filter|hydraulic/.test(context)) return "Pumping System relationship change detected";
-  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water Quality relationship change detected";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal System relationship change detected";
-  return `${formatSubsystemName(insight?.system)} relationship change detected`;
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water quality control drift classified";
+  if (/(flow|pressure|dp|differential pressure)/.test(relationshipContext)) return "Hydraulic resistance behavior classified";
+  if (/pump|valve|vfd|filter|hydraulic/.test(context)) return "Pumping system degradation classified";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality control drift classified";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat transfer degradation classified";
+  return `${formatSubsystemName(insight?.system)} behavior change classified`;
 }
 
 function buildDashboardActivityItems({ historyItems, insights, analysisComplete, analysisRunning, lastAnalysis }) {
@@ -895,19 +895,30 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     return [{ id: "analysis-running", title: "Operational behavior analysis running", time: "Now", detail: "Telemetry is being evaluated against learned operating relationships." }];
   }
   if (analysisComplete) {
-    const insightItems = insights.slice(0, 3).map((insight, index) => ({
-      id: "insight-activity-entry-" + index,
-      title: activityTitleForInsight(insight),
-      time: insight.detectedAt ?? lastAnalysis,
-      detail: activityDetailForInsight(insight),
-    }));
-    if (insightItems.length) {
+    const timelineEntries = insights.slice(0, 2).flatMap((insight, insightIndex) => {
+      const suppliedTimeline = Array.isArray(insight.activityTimeline) ? insight.activityTimeline : [];
+      if (suppliedTimeline.length) {
+        return suppliedTimeline.slice(0, 4).map((entry, entryIndex) => ({
+          id: `insight-activity-entry-${insightIndex}-${entryIndex}`,
+          title: entry.title || activityTitleForInsight(insight),
+          time: entry.time || insight.detectedAt || lastAnalysis,
+          detail: entry.detail || activityDetailForInsight(insight),
+        }));
+      }
       return [{
-        id: "relationship-changes-detected",
-        title: "Relationship Changes Detected",
+        id: "insight-activity-entry-" + insightIndex,
+        title: activityTitleForInsight(insight),
+        time: insight.detectedAt ?? lastAnalysis,
+        detail: activityDetailForInsight(insight),
+      }];
+    });
+    if (timelineEntries.length) {
+      return [{
+        id: "equipment-behavior-timeline",
+        title: "Equipment Behavior Timeline",
         time: insights[0]?.detectedAt ?? lastAnalysis,
-        detail: "Review the systems below for changes from normal operation.",
-        entries: insightItems,
+        detail: "Neraium translated the detected behavior change into the sequence an operator should review.",
+        entries: timelineEntries.slice(0, 6),
       }];
     }
     if (historyItems.length) return historyItems.slice(0, 3);
@@ -1234,15 +1245,21 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         rawSystemName: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
         status: normalizeInsightStatus(item.status ?? item.severity),
         severity: normalizeSeverity(item.severity),
-        rawSummary: firstText(item.title, item.explanation),
+        rawSummary: firstText(item.primary_finding, item.primaryFinding, item.title, item.explanation),
         whatHappened: operatorText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
+        observedFacts: dedupeText(toList(item.observed, item.observed_facts, item.observedFacts).flatMap(formatEvidenceItems).map(operatorText)),
         whyItMatters: operatorText(item.why_it_matters, item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence, item.likely_cause, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likelyCause),
-        whyNeraiumThinks: operatorText(item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
+        whyThisMatters: dedupeText(toList(item.why_this_matters, item.whyThisMatters, item.if_ignored, item.ifIgnored).flatMap(formatEvidenceItems).map(operatorText)),
+        whyNeraiumThinks: operatorText(item.behavior_interpretation, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likely_cause, item.why_it_matters, item.likelyCause),
+        behaviorInterpretation: operatorText(item.behavior_interpretation, item.behaviorInterpretation),
         possibleConsequence: operatorText(item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence),
-        recommendedAction: operatorText(firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check)),
+        recommendedAction: operatorText(firstDistinctText(firstText(item.operator_check, item.recommended_operator_check, item.recommended_check), item.recommended_first_action, item.recommendedFirstAction, item.recommended_action, item.recommendedAction, item.recommendation, item.recommended_check)),
+        recommendedFirstAction: operatorText(item.recommended_first_action, item.recommendedFirstAction, item.first_check, item.firstCheck),
+        recommendedInvestigation: dedupeText(toList(item.recommended_investigation, item.recommendedInvestigation, item.recommended_actions, item.recommendedActions).flatMap(splitPriorityText).map(operatorText)),
         operatorCheck: operatorText(item.operator_check, item.operatorCheck, item.recommended_operator_check, item.recommended_check),
-        possibleOperationalCauses: dedupeText(toList(item.possible_operational_causes, item.possibleOperationalCauses, item.possible_operational_causes_summary).flatMap(splitPriorityText).map(operatorText)),
+        possibleOperationalCauses: dedupeText(toList(item.likely_causes, item.likelyCauses, item.possible_operational_causes, item.possibleOperationalCauses, item.possible_operational_causes_summary).flatMap(splitPriorityText).map(operatorText)),
         contributingFactors: dedupeText(toList(item.likely_contributors, item.contributing_factors, item.contributingFactors, item.source_tags).flatMap(formatEvidenceItems)),
+        activityTimeline: toList(item.activity_timeline, item.activityTimeline).filter((entry) => entry && typeof entry === "object"),
         contributingRelationships,
         affectedRelationships,
         changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount) ?? affectedRelationships.length,
@@ -1287,12 +1304,18 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         severity: normalizeSeverity(item.confidence ?? result?.drift_status),
         rawSummary: summary,
         whatHappened: operatorText(summary),
+        observedFacts: dedupeText(toList(item.observedFacts, item.observed_facts, item.observed).flatMap(formatEvidenceItems).map(operatorText)),
         whyItMatters: operatorText(item.whyItMatters, item.possibleConsequence),
-        whyNeraiumThinks: operatorText(item.whyItMatters),
+        whyThisMatters: dedupeText(toList(item.whyThisMatters, item.why_this_matters, item.ifIgnored, item.if_ignored).flatMap(formatEvidenceItems).map(operatorText)),
+        whyNeraiumThinks: operatorText(item.behaviorInterpretation, item.whyItMatters),
+        behaviorInterpretation: operatorText(item.behaviorInterpretation, item.behavior_interpretation),
         possibleConsequence: operatorText(item.possibleConsequence),
-        recommendedAction: operatorText(item.recommendation, item.reviewNext),
+        recommendedAction: operatorText(item.recommendedFirstAction, item.firstCheck, item.recommendation, item.reviewNext),
+        recommendedFirstAction: operatorText(item.recommendedFirstAction, item.firstCheck),
+        recommendedInvestigation: dedupeText(toList(item.recommendedInvestigation, item.recommended_investigation).flatMap(splitPriorityText).map(operatorText)),
         operatorCheck: operatorText(item.operator_focus),
-        possibleOperationalCauses: dedupeText(toList(item.possibleOperationalCauses, item.possible_operational_causes).flatMap(splitPriorityText).map(operatorText)),
+        possibleOperationalCauses: dedupeText(toList(item.likelyCauses, item.likely_causes, item.possibleOperationalCauses, item.possible_operational_causes).flatMap(splitPriorityText).map(operatorText)),
+        activityTimeline: toList(item.activityTimeline, item.activity_timeline).filter((entry) => entry && typeof entry === "object"),
         contributingRelationships: Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [],
         affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
         changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount),
@@ -1385,8 +1408,12 @@ function buildSystemCards({ systems, primarySystem, insights }) {
       activeInsights: String(activeInsightCount),
       severity: activeInsightCount ? (topInsight?.severity ?? "Moderate") : "",
       hasActiveIssue: activeInsightCount > 0,
-      relationshipDrift: activeInsightCount ? "Operating relationship changed" : "No active change",
+      relationshipDrift: activeInsightCount ? "Equipment behavior changed" : "No active change",
       keyChangedRelationship: relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? "",
+      primaryFinding: topInsight?.summary ?? "",
+      potentialCauses: Array.isArray(topInsight?.possibleOperationalCauses) ? topInsight.possibleOperationalCauses.slice(0, 3) : [],
+      recommendedFirstAction: topInsight?.recommendedFirstAction ?? topInsight?.recommendedAction ?? "",
+      observedFacts: Array.isArray(topInsight?.observedFacts) ? topInsight.observedFacts.slice(0, 3) : [],
       operationalSummary: buildSystemOperationalSummary({ activeInsightCount, topInsight, relationships }),
       primaryInsightId: topInsight?.id ?? null,
       placeholder: false,
@@ -2928,13 +2955,19 @@ function formatInsightTitle(value) {
   if (value && typeof value === "object") {
     const context = insightTitleContext(value);
     const type = getInsightType(value);
+    const suppliedOperationalTitle = operationalFindingTitle(value.rawSummary ?? value.title ?? value.primaryFinding);
     const relationshipTitle = relationshipTitleFromLabels(insightRelationshipLabels(value));
     if (type === "relationship_shift") {
-      if (relationshipTitle) return relationshipTitle;
-      if (/water quality|chemical|chlor|dose|ph|orp|conductivity/i.test(context)) return "Water Quality Relationship Changed";
-      if (/flow|pressure/i.test(context)) return "Flow and Pressure Relationship Changed";
-      if (/pump|valve|vfd|filter|hydraulic/i.test(context)) return "Pump Performance Relationship Changed";
-      return `${formatSubsystemName(value.system)} Operating Relationship Changed`;
+      if (suppliedOperationalTitle) return suppliedOperationalTitle;
+      if (/pump.*(filter|dp|differential pressure|flow)|filter.*(pump|pressure)|hydraulic resistance/i.test(context)) return "Pump Efficiency Degrading";
+      if (/water quality|chemical|chlor|dose|ph|orp|conductivity/i.test(context)) return `${formatSubsystemName(value.system)} Control Drift`;
+      if (/thermal|cooling|chiller|condenser|tower|heat/i.test(context)) {
+        const systemName = formatSubsystemName(value.system);
+        return /performance/i.test(systemName) ? `${systemName} Degrading` : `${systemName} Performance Degrading`;
+      }
+      if (relationshipTitle) return relationshipTitle.replace(/ Relationship Changed$/i, " Behavior Changed");
+      if (/flow|pressure|pump|valve|vfd|filter|hydraulic/i.test(context)) return `${formatSubsystemName(value.system)} Degrading`;
+      return `${formatSubsystemName(value.system)} Behavior Changed`;
     }
     if (type === "metric_deviation") {
       if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
@@ -2948,6 +2981,13 @@ function formatInsightTitle(value) {
   return formatDisplayName(value)
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function operationalFindingTitle(value) {
+  const title = firstText(value).trim();
+  if (!title) return "";
+  if (/relationship\s+(changed|shifted|weakened)|behavior\s+changed|observed subsystem behavior changed/i.test(title)) return "";
+  return title;
 }
 
 function relationshipTitleFromLabels(relationships = []) {
@@ -3000,10 +3040,10 @@ function emergingRelationshipSentence(value, index = 0) {
   return `A new operating relationship emerged in ${relationshipSentenceLabel(value, index)}.`;
 }
 
-function relationshipActivitySentence(value, index = 0) {
+function behaviorActivitySentence(value, index = 0) {
   const endpoints = relationshipEndpointLabels(value, index);
-  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} relationship changed.`;
-  return `${relationshipSentenceLabel(value, index)} relationship changed.`;
+  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} stopped matching learned equipment behavior.`;
+  return `${relationshipSentenceLabel(value, index)} stopped matching learned equipment behavior.`;
 }
 
 function insightTitleContext(insight) {

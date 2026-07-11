@@ -15,9 +15,26 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
                   <DetailGrid rows={[
                     ["Status", system.status],
                     ["Active Insights", system.activeInsights],
-                    ["Relationship Drift", system.relationshipDrift],
+                    ["Primary Finding", system.primaryFinding],
+                    ["Recommended First Action", system.recommendedFirstAction],
                     ["Key Changed Relationship", system.keyChangedRelationship],
                   ]} />
+                  {Array.isArray(system.potentialCauses) && system.potentialCauses.length ? (
+                    <div className="system-summary-row__briefing">
+                      <span>Potential causes</span>
+                      <ul className="operator-briefing-list">
+                        {system.potentialCauses.map((cause) => <li key={cause}>{cause}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {Array.isArray(system.observedFacts) && system.observedFacts.length ? (
+                    <div className="system-summary-row__briefing">
+                      <span>Observed</span>
+                      <ul className="operator-briefing-list">
+                        {system.observedFacts.map((fact) => <li key={fact}>{fact}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="system-summary-row__meta">
                   <span>{system.placeholder ? "Example, not detected" : system.severity}</span>

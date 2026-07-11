@@ -187,20 +187,38 @@ def build_insights(
                 adjusted["id"] = f"relationship-{index}-{group_index}-evidence-0"
                 evidence_items.append(adjusted)
             contributions.append(relationship_contribution(entry, group_index, columns))
-        possible_causes = possible_operational_causes(system, all_signal_names or all_columns or primary_columns)
+        signal_context = all_signal_names or all_columns or primary_columns
+        possible_causes = possible_operational_causes(system, signal_context)
         what_changed = merged_relationship_observable_sentence(group, primary)
         why = merged_relationship_reason(group, primary, label)
         persistence_duration = sample_window_phrase(primary.get("baseline_sample_size"), primary.get("recent_sample_size"))
-        title = merged_relationship_title(group, primary, system, confidence_score)
+        title = operational_diagnosis_title(system, signal_context, group, confidence_score)
         operational_impact = relationship_operational_impact_sentence(
             system,
-            all_signal_names or all_columns or primary_columns,
+            signal_context,
             possible_causes,
+        )
+        deduped_source_ranges = dedupe_ranges(group_source_ranges)
+        observed_facts = relationship_observed_facts(
+            group=group,
+            baseline=baseline,
+            source_ranges=deduped_source_ranges,
+        )
+        likely_impacts = relationship_why_this_matters(system, signal_context)
+        investigation_steps = recommended_investigation_steps(system, signal_context, label)
+        first_check = first_item(investigation_steps)
+        behavior_interpretation = relationship_behavior_interpretation(system, signal_context, possible_causes)
+        activity_timeline = relationship_activity_timeline(
+            system=system,
+            facts=observed_facts,
+            first_check=first_check,
+            source_ranges=deduped_source_ranges,
         )
         insight = compact_dict(
             {
                 "id": f"relationship-{index}",
                 "title": title,
+                "primary_finding": title,
                 "severity": severity_from_number(primary.get("correlation_delta")),
                 "confidence": confidence,
                 "confidence_score": confidence_score,
@@ -212,18 +230,28 @@ def build_insights(
                 "system": system,
                 "what_changed": what_changed,
                 "explanation": what_changed,
+                "observed": observed_facts,
+                "observed_facts": observed_facts,
                 "why_neraium_thinks_it_happened": why,
                 "why_neraium_thinks": why,
+                "behavior_interpretation": behavior_interpretation,
                 "why_it_matters": operational_impact,
+                "why_this_matters": likely_impacts,
+                "if_ignored": likely_impacts,
                 "likely_cause": why,
                 "contributing_factors": [relationship_label(entry) for entry in group],
                 "possible_operational_consequence": operational_impact,
                 "possible_consequence": operational_impact,
                 "possible_operational_causes": possible_causes,
+                "likely_causes": possible_causes,
                 "possible_operational_causes_summary": "; ".join(possible_causes),
                 "recommended_operator_check": operational_cause_check(label, possible_causes),
                 "recommended_action": relationship_recommended_action(system),
+                "recommended_investigation": investigation_steps,
+                "recommended_first_action": first_check,
                 "operator_check": operational_cause_check(label, possible_causes),
+                "first_check": first_check,
+                "activity_timeline": activity_timeline,
                 "evidence_summary": evidence_summary(evidence_items),
                 "evidence_items": evidence_items,
                 "evidence": evidence_items,
@@ -232,7 +260,7 @@ def build_insights(
                 "contributing_metrics": metric_contributions(all_columns),
                 "source_metrics": all_columns,
                 "source_tags": all_columns,
-                "source_time_ranges": dedupe_ranges(group_source_ranges),
+                "source_time_ranges": deduped_source_ranges,
                 "time_window": time_window,
                 "persistence_duration": persistence_duration,
                 "upload_id": upload_id,
@@ -1751,6 +1779,260 @@ def relationship_cluster_key(item: dict[str, Any]) -> str:
     return subsystem.lower().replace(" / ", "_").replace(" ", "_")
 
 
+def operational_diagnosis_title(
+    system: str,
+    names: list[str],
+    group: list[dict[str, Any]],
+    confidence_score: float,
+) -> str:
+    if system == GENERIC_SUBSYSTEM_NAME or confidence_label_from_score(confidence_score) == "limited":
+        return GENERIC_SUBSYSTEM_NAME
+    combined = relationship_context_text(system, names, group)
+    evidence_context = relationship_context_text("", names, group)
+    if all(token in evidence_context for token in ["pump", "power"]) and any(token in evidence_context for token in ["filter", "dp", "differential pressure", "flow", "hydraulic resistance"]):
+        return "Pump Efficiency Degrading"
+    if system == "Pumping System" and "pump" in combined and any(token in combined for token in ["vibration", "bearing", "current", "amp"]):
+        return "Pump Mechanical Behavior Degrading"
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "filter", "valve", "suction", "discharge"]):
+        return f"{system} Degrading" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Hydraulic Resistance Increasing"
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "conductivity"]):
+        return f"{system} Control Drift" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Water Quality Control Drift"
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
+        if system in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"}:
+            return "Heat Transfer Performance Degrading"
+        return f"{system} Degrading" if "performance" in system.lower() else f"{system} Performance Degrading"
+    return f"{system} Behavior Degrading"
+
+
+def relationship_context_text(system: str, names: list[str], group: list[dict[str, Any]]) -> str:
+    values: list[str] = [system, *[str(name or "") for name in names]]
+    for item in group:
+        values.extend(relationship_columns(item))
+        values.extend(relationship_display_columns(item))
+        values.extend([str(item.get("summary") or ""), str(item.get("relationship") or "")])
+    return " ".join(values).lower().replace("_", " ").replace("-", " ")
+
+
+def relationship_observed_facts(
+    *,
+    group: list[dict[str, Any]],
+    baseline: dict[str, Any],
+    source_ranges: list[dict[str, Any]],
+) -> list[str]:
+    facts: list[str] = []
+    drift_by_column = {
+        str(item.get("column") or ""): item
+        for item in baseline.get("column_drift", [])
+        if isinstance(item, dict) and item.get("column")
+    }
+    seen_columns: set[str] = set()
+    for relationship in group:
+        for column in relationship_columns(relationship):
+            if column in seen_columns:
+                continue
+            seen_columns.add(column)
+            drift_item = drift_by_column.get(column)
+            if drift_item:
+                facts.append(metric_observed_fact(drift_item))
+        facts.append(relationship_strength_fact(relationship))
+    window = observed_window_fact(source_ranges)
+    if window:
+        facts.append(window)
+    trajectory = baseline.get("drift_trajectory") if isinstance(baseline.get("drift_trajectory"), dict) else {}
+    direction = first_text(trajectory.get("direction"), trajectory.get("trend"))
+    if direction:
+        facts.append(f"Drift trajectory: {direction}.")
+    return dedupe([fact for fact in facts if fact])[:8]
+
+
+def metric_observed_fact(item: dict[str, Any]) -> str:
+    label = signal_label_from_item(item)
+    direction = str(item.get("direction") or "changed")
+    percent = item.get("percent_change")
+    absolute = item.get("absolute_change")
+    if percent is not None:
+        return f"{label} {direction_word(direction)} {format_signed_percent(percent)}."
+    if absolute is not None:
+        return f"{label} {direction_word(direction)} by {absolute}."
+    return f"{label} moved {direction} from its learned operating range."
+
+
+def relationship_strength_fact(item: dict[str, Any]) -> str:
+    label = " / ".join(relationship_display_columns(item)) or first_text(item.get("display_relationship"), item.get("relationship"), "Operating relationship")
+    baseline = first_text(item.get("baseline_strength"), item.get("baseline_correlation"), item.get("coupling_strength"))
+    current = first_text(item.get("current_strength"), item.get("recent_correlation"), item.get("strength"))
+    change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
+    if baseline and current:
+        return f"{label} operating coupling {change_type} from {baseline} to {current}."
+    delta = first_text(item.get("correlation_delta"), item.get("change_percentage"))
+    if delta:
+        return f"{label} operating behavior changed; magnitude {delta}."
+    return f"{label} operating behavior changed from the learned fingerprint."
+
+
+def observed_window_fact(source_ranges: list[dict[str, Any]]) -> str:
+    for item in source_ranges:
+        if not isinstance(item, dict):
+            continue
+        start = first_text(item.get("current_start"), item.get("start"), item.get("baseline_start"))
+        end = first_text(item.get("current_end"), item.get("end"), item.get("baseline_end"))
+        if start and end:
+            return f"Observed during {start} to {end}."
+        if start:
+            return f"Started around {start}."
+        if item.get("window"):
+            return f"Observed during {item.get('window')}."
+    return ""
+
+
+def direction_word(direction: str) -> str:
+    text = str(direction or "").lower()
+    if text in {"up", "increase", "increased", "rising", "high"}:
+        return "increased"
+    if text in {"down", "decrease", "decreased", "falling", "low"}:
+        return "decreased"
+    return "changed"
+
+
+def format_signed_percent(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return f"by {value}%"
+    sign = "+" if number > 0 else ""
+    if number.is_integer():
+        return f"{sign}{int(number)}%"
+    return f"{sign}{number:.1f}%"
+
+
+def relationship_why_this_matters(system: str, names: list[str]) -> list[str]:
+    combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
+        return [
+            "Higher energy consumption for the same hydraulic output",
+            "Reduced filtration or flow performance",
+            "Increased risk of cavitation, overload, or nuisance trips",
+            "More rapid equipment wear if restriction continues",
+        ]
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality"]):
+        return [
+            "Reduced treatment consistency",
+            "Higher chemical use or under-dosing risk",
+            "Water quality excursions may develop before alarms trigger",
+            "Operator response may be delayed if sensor drift is not ruled out",
+        ]
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
+        return [
+            "Higher energy consumption for the same cooling load",
+            "Reduced heat-transfer capacity",
+            "Increased risk of equipment staging or limit problems",
+            "Fouling or flow imbalance can compound if left unresolved",
+        ]
+    return [
+        "Operating behavior may continue moving away from the learned fingerprint",
+        "Energy, quality, or reliability risk can increase if the cause is not isolated",
+        "Operators may spend more time troubleshooting without a first-check path",
+    ]
+
+
+def recommended_investigation_steps(system: str, names: list[str], label: str) -> list[str]:
+    combined = " ".join([system, label, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
+        return [
+            "Inspect filter differential pressure trend.",
+            "Confirm valve lineup and suction restrictions.",
+            "Review maintenance or cleaning performed within the last week.",
+            "Compare pump power, speed, flow, and pressure against the expected operating curve.",
+        ]
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality"]):
+        return [
+            "Verify chemical feed setpoint and feed pump status.",
+            "Check water quality sensor calibration and sample timing.",
+            "Review chemical deliveries, dilution changes, and maintenance activity.",
+            "Compare dosing response against turbidity, ORP, and pH trends.",
+        ]
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
+        return [
+            "Check approach temperature and heat-transfer trends.",
+            "Confirm equipment staging, valve position, and flow state.",
+            "Review recent cleaning, weather, and load changes.",
+            "Compare current power and temperature response against historical operation.",
+        ]
+    return [
+        "Review the contributing signal trends.",
+        "Confirm current operating mode and setpoints.",
+        "Review recent maintenance and operator logs.",
+        "Monitor the next operating window to confirm persistence.",
+    ]
+
+
+def relationship_behavior_interpretation(system: str, names: list[str], causes: list[str]) -> str:
+    combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
+    if any(token in combined for token in ["pump", "flow", "pressure", "hydraulic", "filter"]):
+        return "The system is requiring different hydraulic behavior than its established fingerprint. This pattern is more consistent with increasing restriction or changed pump operating point than normal demand variation."
+    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality"]):
+        return "Treatment response no longer matches the learned control fingerprint. This pattern is consistent with feed, sensor, or source-water changes that should be separated before changing controls."
+    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
+        return "Thermal output no longer matches the learned equipment response. This pattern is consistent with fouling, staging, flow imbalance, or load changes."
+    return "Current equipment behavior no longer matches its established operating fingerprint. Review the first listed check before treating the finding as a sensor-only issue."
+
+
+def relationship_activity_timeline(
+    *,
+    system: str,
+    facts: list[str],
+    first_check: str,
+    source_ranges: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    base_time = timeline_base_time(source_ranges)
+    entries = []
+    for index, fact in enumerate(facts[:3]):
+        entries.append(
+            compact_dict(
+                {
+                    "time": timeline_time_label(base_time, index),
+                    "title": timeline_title_from_fact(fact),
+                    "detail": fact,
+                }
+            )
+        )
+    entries.append(
+        compact_dict(
+            {
+                "time": timeline_time_label(base_time, len(entries)),
+                "title": f"Behavior classified as {system} degradation.",
+                "detail": first_check or "Investigation recommended.",
+            }
+        )
+    )
+    return entries[:4]
+
+
+def timeline_base_time(source_ranges: list[dict[str, Any]]) -> str:
+    for item in source_ranges:
+        if not isinstance(item, dict):
+            continue
+        value = first_text(item.get("current_start"), item.get("start"), item.get("baseline_start"))
+        if value:
+            return value
+    return "Current window"
+
+
+def timeline_time_label(base_time: str, index: int) -> str:
+    if not base_time or base_time == "Current window":
+        return "Current window" if index == 0 else f"+{index * 3} min"
+    return base_time if index == 0 else f"+{index * 3} min"
+
+
+def timeline_title_from_fact(fact: str) -> str:
+    clean = fact.rstrip(".")
+    if " operating coupling " in clean:
+        return "Operating relationship deviated from learned behavior."
+    if "Observed during" in clean or "Started around" in clean:
+        return "Change window established."
+    return clean
+
+
 def merged_relationship_title(group: list[dict[str, Any]], primary: dict[str, Any], subsystem: str, confidence_score: float) -> str:
     if subsystem == GENERIC_SUBSYSTEM_NAME or confidence_label_from_score(confidence_score) == "limited":
         return GENERIC_SUBSYSTEM_NAME
@@ -1993,6 +2275,8 @@ def relationship_observable_sentence(columns: list[str], item: dict[str, Any]) -
 
 
 def relationship_recommended_action(system: str) -> str:
+    if any(token in str(system or "").lower() for token in ["pump", "flow", "pressure", "hydraulic"]):
+        return "Inspect filter differential pressure trend before checking pump performance."
     return f"Review {system.lower()} trends, operator logs, setpoint changes, maintenance activity, and demand changes for the same window."
 
 
@@ -2019,7 +2303,17 @@ def operational_cause_check(label: str, causes: list[str]) -> str:
 
 def possible_operational_causes(system: str, names: list[str]) -> list[str]:
     combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
-    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd"]):
+    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
+        if any(token in combined for token in ["filter", "dp", "differential pressure"]):
+            return [
+                "Dirty filter",
+                "Partial blockage",
+                "Pump wear",
+                "Valve position change",
+                "Restricted suction",
+                "Recent maintenance activity",
+                "Sensor calibration issue",
+            ]
         return [
             "Increasing filter resistance",
             "Pump operating point shifted",
