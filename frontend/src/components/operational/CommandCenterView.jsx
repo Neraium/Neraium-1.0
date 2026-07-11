@@ -7,7 +7,29 @@ function confidenceFallback(severity) {
   return "Low";
 }
 
-export default function CommandCenterView({ model, helpers, onOpenInsight, onAnalyzeHistoricalData, onConnectLiveData, onResumePreviousSession, onViewSystems }) {
+
+function dashboardInsightTitle(insight, relationships, fallback) {
+  const relationshipContext = (relationships ?? []).join(" ").toLowerCase();
+  const context = [insight?.system, insight?.rawSystemName, insight?.title, insight?.summary, relationshipContext].join(" ").toLowerCase();
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality Behavior Changed";
+  if (/pump|vfd|hydraulic/.test(context)) return "Pumping System Behavior Changed";
+  if (/(flow|pressure|dp|differential pressure|filter)/.test(relationshipContext)) return "Flow and Pressure Behavior Changed";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal System Behavior Changed";
+  return String(fallback ?? "Operating Behavior Changed").replace(/Relationship Changed/i, "Behavior Changed");
+}
+
+function FingerprintMark() {
+  return (
+    <svg className="fingerprint-summary-mark" viewBox="0 0 44 54" aria-hidden="true" focusable="false">
+      <path d="M22 6c9 0 16 7 16 17 0 12-6 22-16 25" />
+      <path d="M14 12c5-5 14-6 20-1 6 5 8 14 4 23" />
+      <path d="M10 23c0-8 5-14 12-14 7 0 12 5 12 12 0 9-6 16-14 17" />
+      <path d="M17 22c0-3 2-5 5-5s5 2 5 5c0 6-5 10-10 10" />
+      <path d="M22 24c-1 6-4 11-9 14" />
+    </svg>
+  );
+}
+export default function CommandCenterView({ model, helpers, onOpenInsight, onAnalyzeHistoricalData, onConnectLiveData, onResumePreviousSession, onViewSystems, onViewFingerprint }) {
   const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, StatusBadge, formatActiveInsightCount, formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing, severityToTone } = helpers;
   const primaryInsight = model.insights[0] ?? null;
   const systems = model.analysisComplete ? model.dashboardSystemCards : [];
@@ -17,6 +39,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
   const primaryInsightConfidence = primaryInsight
     ? (formatConfidenceDisplay(primaryInsight.confidence, primaryInsight.confidenceScore) || confidenceFallback(primaryInsight.severity))
     : "";
+  const primaryInsightTitle = primaryInsight ? dashboardInsightTitle(primaryInsight, primaryInsightRelationships, formatInsightTitle(primaryInsight)) : "No Operational Insights Yet";
 
   function reviewCurrentInsight() {
     if (primaryInsight && typeof onOpenInsight === "function") {
@@ -37,7 +60,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
             hotspots={model.orb.hotspots}
           />
           <div className="command-center-hero__copy">
-            <span className="section-token">System Status</span>
+            <span className="section-token">Operational Status</span>
             <h2>{model.commandCenterTitle}</h2>
             {showHeroStatusChip ? (
               <StatusBadge
@@ -70,11 +93,23 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         <SummaryRows rows={model.dashboardSummaryRows} />
       </section>
 
+
+      {model.analysisComplete ? (
+        <section className="operational-panel operational-panel--fingerprint-summary" aria-label="Operational Fingerprint">
+          <PanelHeader eyebrow="Operational Fingerprint" title="Established" subtitle="" />
+          <div className="fingerprint-summary-card">
+            <FingerprintMark />
+            <SummaryRows rows={model.dashboardFingerprintRows} />
+            <button type="button" className="secondary-command-button" onClick={onViewFingerprint}>View History</button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="operational-panel operational-panel--top-insight" aria-label="Top Operational Insight">
-        <PanelHeader eyebrow="Highest Priority" title={primaryInsight ? formatInsightTitle(primaryInsight) : "No Operational Insights Yet"} subtitle="" />
+        <PanelHeader eyebrow="Highest Priority" title={primaryInsightTitle} subtitle="" />
         {primaryInsight ? (
           <div className="command-center-insight">
-            <p>{primaryInsightBriefing[0] || "Historical operating behavior deviated from baseline."}</p>
+            <p>{primaryInsightBriefing[0] || "Operating behavior changed from the learned operating pattern."}</p>
             <dl className="top-insight-facts">
               <div>
                 <dt>Confidence</dt>

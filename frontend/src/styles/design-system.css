@@ -810,8 +810,8 @@ button:focus-visible {
   border: 0;
   border-radius: 8px;
   background:
-    radial-gradient(circle at 50% 48%, rgba(29, 216, 196, 0.2), transparent 43%),
-    radial-gradient(circle at 50% 52%, rgba(244, 210, 132, 0.08), transparent 54%),
+    radial-gradient(circle at 50% 48%, rgba(41, 53, 62, 0.34), transparent 44%),
+    radial-gradient(circle at 52% 54%, rgba(29, 216, 196, 0.07), transparent 52%),
     linear-gradient(180deg, rgba(6, 15, 24, 0.7), rgba(4, 10, 17, 0.8));
   box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.04), 0 24px 60px rgba(0, 0, 0, 0.22);
   isolation: isolate;
@@ -821,10 +821,10 @@ button:focus-visible {
   content: "";
   position: absolute;
   inset: clamp(42px, 8vw, 76px);
-  border: 1px solid rgba(29, 216, 196, 0.28);
+  border: 1px solid rgba(146, 160, 170, 0.14);
   border-radius: 48% 52% 46% 54% / 42% 44% 56% 58%;
-  box-shadow: 0 0 52px rgba(29, 216, 196, 0.18), inset 0 0 38px rgba(29, 216, 196, 0.06);
-  opacity: 0.78;
+  box-shadow: inset 0 0 34px rgba(146, 160, 170, 0.04);
+  opacity: 0.34;
   animation: fingerprint-build-breathe 3.2s ease-in-out infinite;
 }
 
@@ -894,7 +894,7 @@ button:focus-visible {
   width: min(92%, 430px);
   height: auto;
   overflow: visible;
-  filter: drop-shadow(0 0 24px rgba(29, 216, 196, 0.24));
+  filter: drop-shadow(0 0 10px rgba(29, 216, 196, 0.1));
   animation: fingerprint-print-breathe 3.6s ease-in-out infinite;
 }
 
@@ -904,15 +904,15 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build__outline {
-  fill: rgba(6, 18, 27, 0.18);
-  stroke: rgba(218, 255, 249, 0.2);
-  stroke-width: 1.4;
+  fill: rgba(12, 20, 28, 0.12);
+  stroke: rgba(146, 160, 170, 0.12);
+  stroke-width: 0.8;
 }
 
 .upload-fingerprint-build__ridge {
   fill: none;
   stroke: url(#upload-fingerprint-ridge);
-  stroke-width: 4.9;
+  stroke-width: 2.15;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 100;
@@ -923,11 +923,11 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build__ridge[data-ridge-detail="fine"] {
-  stroke-width: 3.4;
+  stroke-width: 1.45;
 }
 
 .upload-fingerprint-build__ridge[data-ridge-phase="0"] {
-  filter: drop-shadow(0 0 8px rgba(29, 216, 196, 0.34));
+  filter: none;
 }
 
 .upload-fingerprint-build--complete::before {
@@ -946,7 +946,7 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
-  stroke-width: 5.3;
+  stroke-width: 2.35;
 }
 
 .upload-fingerprint-build__check {
@@ -1205,12 +1205,12 @@ button:focus-visible {
 .upload-fingerprint-build--safe .upload-fingerprint-build__ridge[data-ridge-phase="0"] {
   filter: none;
   stroke: rgba(146, 245, 235, 0.92);
-  stroke-width: 4.4;
+  stroke-width: 2.1;
   transition: none;
 }
 
 .upload-fingerprint-build--safe.upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
-  stroke-width: 4.6;
+  stroke-width: 2.25;
 }
 
 .upload-fingerprint-build--safe .upload-fingerprint-build__check {

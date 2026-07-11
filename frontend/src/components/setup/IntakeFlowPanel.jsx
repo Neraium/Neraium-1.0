@@ -427,13 +427,13 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="upload-fingerprint-ridge" x1="42" y1="24" x2="124" y2="170" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(218, 255, 249, 0.98)" />
-            <stop offset="0.54" stopColor="rgba(29, 216, 196, 0.96)" />
-            <stop offset="1" stopColor="rgba(244, 210, 132, 0.9)" />
+            <stop offset="0" stopColor="rgba(226, 232, 236, 0.88)" />
+            <stop offset="0.58" stopColor="rgba(113, 128, 139, 0.72)" />
+            <stop offset="1" stopColor="rgba(29, 216, 196, 0.74)" />
           </linearGradient>
           <radialGradient id="upload-fingerprint-core" cx="50%" cy="52%" r="58%">
-            <stop offset="0" stopColor="rgba(29, 216, 196, 0.24)" />
-            <stop offset="0.7" stopColor="rgba(29, 216, 196, 0.06)" />
+            <stop offset="0" stopColor="rgba(92, 107, 118, 0.18)" />
+            <stop offset="0.7" stopColor="rgba(29, 216, 196, 0.05)" />
             <stop offset="1" stopColor="rgba(29, 216, 196, 0)" />
           </radialGradient>
         </defs>

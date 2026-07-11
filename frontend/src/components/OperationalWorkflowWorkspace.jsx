@@ -263,6 +263,10 @@ export default function OperationalWorkflowWorkspace({
     navigate("systems");
   }
 
+  function viewFingerprint() {
+    navigate("fingerprint");
+  }
+
   function connectLiveData() {
     navigate("data-sources");
   }
@@ -337,6 +341,7 @@ export default function OperationalWorkflowWorkspace({
             onConnectLiveData={connectLiveData}
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
+            onViewFingerprint={viewFingerprint}
           />
         ) : null}
 
@@ -435,7 +440,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   });
   const lastUpdated = deriveLastUpdatedLabel({ liveOps, snapshot, result });
   const dashboardStatus = deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insights });
-  const commandCenterTitle = analysisComplete ? "System Online" : EMPTY_TELEMETRY_COPY.commandTitle;
+  const commandCenterTitle = analysisComplete ? "Operational Status" : EMPTY_TELEMETRY_COPY.commandTitle;
   const commandCenterStatus = dashboardStatus;
   const dashboardSummaryRows = buildDashboardSummaryRows({
     dashboardStatus,
@@ -448,6 +453,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     lastUpdated,
     telemetryConnected,
   });
+  const dashboardFingerprintRows = buildDashboardFingerprintRows({ analysisComplete, fingerprintDrift, lastUpdated, relationshipRows });
   const dashboardSystemCards = buildDashboardSystemCards({
     analysisComplete,
     systemCards,
@@ -502,6 +508,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     orb,
     dashboardStatus,
     dashboardSummaryRows,
+    dashboardFingerprintRows,
     dashboardSystemCards,
     dashboardActivityItems,
     overviewSummarySentence,
@@ -545,7 +552,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
 
 
 function countHighSeverityInsights(insights) {
-  return (insights ?? []).filter((insight) => normalizeSeverity(insight?.severity) === "High").length;
+  return (insights ?? []).filter((insight) => ["High", "Critical"].includes(normalizeSeverity(insight?.severity))).length;
 }
 
 function buildOrbHotspots(insights, count) {
@@ -569,7 +576,7 @@ function buildOrbHotspots(insights, count) {
 
 function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetryConnected, insights }) {
   if (uiState.key === "analyzing") {
-    return { key: "analyzing", status: "learning", label: ANALYZING_STATUS.label, tone: "learning", visualLabel: "Operational Fingerprint" };
+    return { key: "analyzing", status: "learning", label: "Learning", tone: "learning", visualLabel: "Operational Fingerprint" };
   }
   if (!analysisComplete) {
     return { key: "no-data", status: "awaiting", label: EMPTY_TELEMETRY_COPY.commandTitle, tone: "ready", visualLabel: "Operational Status" };
@@ -578,14 +585,14 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
   const hasDrift = insights.length || fingerprintDrift.tone === "changed" || fingerprintDrift.tone === "investigate";
   if (hasDrift) {
     const highSeverityCount = countHighSeverityInsights(insights);
-    const status = highSeverityCount > 1 ? "critical" : "warning";
+    const status = highSeverityCount > 1 ? "critical" : highSeverityCount === 1 ? "elevated" : "warning";
     const hotspotCount = status === "critical"
       ? Math.min(5, Math.max(3, highSeverityCount))
       : Math.min(2, Math.max(1, highSeverityCount || insights.length || 1));
     return {
-      key: status === "critical" ? "multiple-high-severity-drift" : "relationship-drift",
+      key: status === "critical" ? "multiple-critical-systems" : status === "elevated" ? "elevated-risk" : "investigation-recommended",
       status,
-      label: status === "critical" ? "Critical / Multiple High Severity Drift" : "Relationship Drift Detected",
+      label: status === "critical" ? "Immediate Investigation Recommended" : status === "elevated" ? "Operational Changes Detected" : "Investigation Recommended",
       tone: "drift",
       visualLabel: "Operational Fingerprint",
       hotspotCount,
@@ -609,6 +616,15 @@ function buildFingerprintRows({ fingerprintDrift, analysisComplete, baselineAvai
   ];
 }
 
+function buildDashboardFingerprintRows({ analysisComplete, fingerprintDrift, lastUpdated, relationshipRows }) {
+  return [
+    ["Status", analysisComplete ? "Established" : "Pending"],
+    ["Current state", analysisComplete ? fingerprintDrift.label : "Waiting for telemetry"],
+    ["Relationship changes", analysisComplete ? String(relationshipRows.length) : "0"],
+    ["Last updated", analysisComplete ? lastUpdated : "Not updated yet"],
+  ];
+}
+
 function buildRelationshipChangeRows(relationshipRows) {
   return relationshipRows
     .map((row, index) => relationshipDisplayName(row, index))
@@ -628,9 +644,9 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) 
 function buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS.detail;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.commandDetail;
-  if (insights.length) return "Neraium detected a system-level behavioral change that should be investigated.";
-  if (behaviorState === "Stable") return "Current operation remains aligned with the learned baseline.";
-  return "Current operation is moving away from the learned baseline.";
+  if (insights.length) return "Highest-severity insight indicates a relationship no longer follows its learned operating behavior.";
+  if (behaviorState === "Stable") return "Current operation remains aligned with the learned operating fingerprint.";
+  return "Current operation is moving away from its established operating pattern.";
 }
 
 
@@ -811,15 +827,15 @@ function buildBehaviorWindowRows(analysisExplanation) {
 function dashboardHeaderSubtitle({ analysisComplete, analysisRunning, insights, behaviorState }) {
   if (analysisRunning) return ANALYZING_STATUS.label;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.detail;
-  if (insights.length || behaviorState === "Behavior Shift Detected") return "Investigation recommended";
+  if (insights.length || behaviorState === "Behavior Shift Detected") return "Investigation Recommended";
   return ANALYSIS_COMPLETE_STATUS.label;
 }
 
 function deriveDashboardStatus({ uiState, analysisComplete, behaviorState, insights }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS;
   if (!analysisComplete) return NO_TELEMETRY_STATUS;
-  if (insights.length > 0) return { label: "Relationship Drift Detected", tone: "drift", statusKey: "drift" };
-  if (behaviorState === "Behavior Shift Detected") return { label: "Relationship Drift Detected", tone: "drift", statusKey: "drift" };
+  if (insights.length > 0) return { label: "Investigation Recommended", tone: "drift", statusKey: "drift" };
+  if (behaviorState === "Behavior Shift Detected") return { label: "Investigation Recommended", tone: "drift", statusKey: "drift" };
   return ANALYSIS_COMPLETE_STATUS;
 }
 
@@ -856,7 +872,7 @@ function buildPlaceholderSystemCards() {
 function activityDetailForInsight(insight) {
   const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
   const relationships = insightRelationshipLabels(insight);
-  if (relationships.length) return `${relationships[0]} correlation changed.`;
+  if (relationships.length) return relationshipActivitySentence(relationships[0]);
   if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Flow and pressure correlation changed.";
   if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality relationship changed.";
   if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal relationship changed.";
@@ -864,8 +880,11 @@ function activityDetailForInsight(insight) {
 }
 
 function activityTitleForInsight(insight) {
-  const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
-  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Pumping System relationship drift detected";
+  const relationshipContext = insightRelationshipLabels(insight).join(" ").toLowerCase();
+  const context = [insight?.system, insight?.summary, relationshipContext].join(" ").toLowerCase();
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality relationship change detected";
+  if (/(flow|pressure|dp|differential pressure)/.test(relationshipContext)) return "Flow and Pressure relationship change detected";
+  if (/pump|valve|vfd|filter|hydraulic/.test(context)) return "Pumping System relationship change detected";
   if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water Quality relationship change detected";
   if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal System relationship change detected";
   return `${formatSubsystemName(insight?.system)} relationship change detected`;
@@ -1342,7 +1361,7 @@ function evidenceKey(item) {
 function buildSystemOperationalSummary({ activeInsightCount, topInsight, relationships }) {
   if (activeInsightCount <= 0) return "No active operational changes require review.";
   const relationship = relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0];
-  if (relationship) return "The " + relationshipSentenceLabel(relationship) + " has shifted from its historical baseline.";
+  if (relationship) return relationshipBriefingSentence(relationship);
   const summary = conciseOperatorSentence(topInsight?.whatHappened, topInsight?.rawSummary, topInsight?.summary);
   return summary || "Current operation no longer matches the expected baseline.";
 }
@@ -2951,6 +2970,42 @@ function titleEndpoint(value) {
     .trim();
 }
 
+function formatOperationalSignalName(value) {
+  return titleEndpoint(value)
+    .replace(/\bDP\b/g, "Differential Pressure")
+    .replace(/\bUs Cm\b/gi, "uS/cm")
+    .replace(/\bU S Cm\b/gi, "uS/cm")
+    .trim();
+}
+
+function relationshipEndpointLabels(value, index = 0) {
+  const label = formatRelationshipObservedLabel(value, index);
+  return label
+    .split(/\s*↔\s*|\s+\/\s+|\s+and\s+/i)
+    .map(formatOperationalSignalName)
+    .filter(Boolean)
+    .slice(0, 2);
+}
+
+function relationshipBriefingSentence(value, index = 0) {
+  const endpoints = relationshipEndpointLabels(value, index);
+  if (endpoints.length >= 2) return `The relationship between ${endpoints[0]} and ${endpoints[1]} has shifted from its established operational baseline.`;
+  return `The ${relationshipSentenceLabel(value, index)} relationship no longer follows its established operating pattern.`;
+}
+
+
+function emergingRelationshipSentence(value, index = 0) {
+  const endpoints = relationshipEndpointLabels(value, index);
+  if (endpoints.length >= 2) return `A new operating relationship emerged between ${endpoints[0]} and ${endpoints[1]}.`;
+  return `A new operating relationship emerged in ${relationshipSentenceLabel(value, index)}.`;
+}
+
+function relationshipActivitySentence(value, index = 0) {
+  const endpoints = relationshipEndpointLabels(value, index);
+  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} relationship changed.`;
+  return `${relationshipSentenceLabel(value, index)} relationship changed.`;
+}
+
 function insightTitleContext(insight) {
   return [
     insight?.system,
@@ -2973,9 +3028,11 @@ function formatSubsystemName(value) {
 function whatChangedBriefing(insight, relationships) {
   const system = formatSubsystemName(insight.system);
   if (relationships.length > 0) {
+    const insightContext = [insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary, insight.title].join(" ");
+    const emergingRelationship = /\b(new operating relationship|new relationship|emerged)\b/i.test(insightContext);
     const relationshipText = relationships.length === 1
-      ? "The " + relationshipSentenceLabel(relationships[0], 0) + " relationship changed from its historical baseline."
-      : "The " + system + " operating relationships changed from their historical baseline.";
+      ? emergingRelationship ? emergingRelationshipSentence(relationships[0], 0) : relationshipBriefingSentence(relationships[0], 0)
+      : emergingRelationship ? "New operating relationships emerged in " + system + "." : "Multiple " + system + " operating relationships changed from their normal operating pattern.";
     const scopeText = relationships.length === 1
       ? "One operating relationship changed enough to warrant field review."
       : relationships.length + " operating relationships changed together, which may point to a system-level behavior change.";
@@ -2988,8 +3045,8 @@ function whatChangedBriefing(insight, relationships) {
     ? "below"
     : "above";
   const baselineText = metric
-    ? `The ${metric} is operating significantly ${directionText} its historical baseline.`
-    : `The ${system} is operating significantly ${directionText} its historical baseline.`;
+    ? `The ${metric} is operating significantly ${directionText} its learned operating range.`
+    : `The ${system} is operating significantly ${directionText} its learned operating range.`;
   const supplied = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 1)
     .filter((line) => !/moved\s+(up|down)\s+from\s+the\s+historical\s+pattern\s+to\s+the\s+analysis\s+period/i.test(line));
   return supplied.length ? [baselineText, ...supplied].slice(0, 2) : [baselineText];

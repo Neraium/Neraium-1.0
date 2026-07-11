@@ -15,12 +15,17 @@ const ORB_STATUS = {
     particleCount: 8,
   },
   warning: {
-    label: "Relationship Drift Detected",
+    label: "Investigation Recommended",
     visualLabel: "Operational Fingerprint",
     particleCount: 8,
   },
+  elevated: {
+    label: "Operational Changes Detected",
+    visualLabel: "Operational Fingerprint",
+    particleCount: 9,
+  },
   critical: {
-    label: "Multiple High Severity Drift",
+    label: "Immediate Investigation Recommended",
     visualLabel: "Operational Fingerprint",
     particleCount: 10,
   },
@@ -40,6 +45,7 @@ function normalizeStatus(status, state) {
   if (["learning", "analyzing", "building"].includes(value)) return "learning";
   if (["healthy", "active", "monitoring", "stable"].includes(value)) return "healthy";
   if (["critical", "severe"].includes(value)) return "critical";
+  if (["elevated", "risk", "high"].includes(value)) return "elevated";
   if (["warning", "drift", "behavior-change", "changed", "investigate"].includes(value)) return "warning";
   return "awaiting";
 }
