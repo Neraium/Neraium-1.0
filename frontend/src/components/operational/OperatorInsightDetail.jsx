@@ -42,6 +42,13 @@ function confidenceLabel(insight) {
   return "Low";
 }
 
+function confidencePercent(insight) {
+  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
+  if (!Number.isFinite(score)) return "";
+  const normalized = score > 1 ? score : score * 100;
+  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`;
+}
+
 function parseDate(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -234,6 +241,82 @@ function buildOperationalMemory(insight) {
   return { rows, similarEvents };
 }
 
+function cleanOperationalImpact(value) {
+  return text(value)
+    .replace(/^Operational impact:\s*/i, "")
+    .replace(/^If this persists,\s*/i, "If nothing is done, ");
+}
+
+function splitOperationalImpacts(values) {
+  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|•/g))
+    .flatMap((value) => value.split(/(?<=\.)\s+(?=[A-Z])/g))
+    .map((item) => item.trim())
+    .filter(Boolean));
+}
+
+function defaultOperationalImpacts(causes, relationships) {
+  const causeText = causes.join(" ").toLowerCase();
+  const relationshipText = relationships.join(" ").toLowerCase();
+  if (/filter|dp|pressure|pump|flow|hydraulic/.test(`${causeText} ${relationshipText}`)) {
+    return [
+      "Increased energy consumption",
+      "Reduced filtration efficiency",
+      "Elevated cavitation risk",
+      "Potential accelerated pump wear",
+    ];
+  }
+  return [
+    "Continued movement away from the learned operating fingerprint",
+    "Reduced confidence in downstream operating assumptions",
+    "Higher likelihood of manual investigation on the next operating cycle",
+  ];
+}
+
+function confidenceEvidenceItems(insight, evidence) {
+  const supportingSignals = evidence.flatMap((item) => toList(
+    item?.supporting_signals,
+    item?.supportingSignals,
+    item?.relevant_metric_changes,
+    item?.relevantMetricChanges
+  ));
+  const relationshipItems = relationshipLabels(insight).map((label) => `${label} drift`);
+  const rationaleItems = toList(insight?.confidenceBreakdown, insight?.confidence_breakdown, insight?.confidenceRationale)
+    .flatMap((item) => text(item).split(/\n|;|,/g));
+  const evidenceQuality = evidence.some((item) => humanize(item?.confidence).toLowerCase() === "high") ? ["High-confidence evidence source"] : [];
+  const fallback = confidenceLabel(insight) ? ["Signal strength", "Relationship support", "Persistence evidence", "Telemetry quality acceptable"] : [];
+  return unique([
+    ...supportingSignals,
+    ...relationshipItems,
+    ...rationaleItems,
+    ...evidenceQuality,
+    ...fallback,
+  ].map(text)).slice(0, 5);
+}
+
+function whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships) {
+  const explicit = text(
+    insight?.whyNeraiumBelievesThis
+    ?? insight?.why_neraium_believes_this
+    ?? insight?.whyNeraiumThinks
+    ?? insight?.why_neraium_thinks
+  );
+  if (explicit) return explicit;
+
+  const observed = observedFacts[0];
+  const relationship = relationships[0];
+  const evidenceLine = evidenceSummaries(insight, evidence)[0];
+  if (observed && relationship) {
+    return `Neraium detected that ${observed.charAt(0).toLowerCase()}${observed.slice(1)} while the ${relationship} relationship moved away from its learned operating pattern. This combination most closely matches a real operational behavior change rather than normal demand movement.`;
+  }
+  if (relationship) {
+    return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
+  }
+  if (evidenceLine) {
+    return `Neraium generated this insight because the supporting evidence changed from the learned operating fingerprint: ${evidenceLine}`;
+  }
+  return "";
+}
+
 function usefulDiagnosticEntries(evidence) {
   const rows = [
     ["Summary", text(evidence?.description ?? evidence?.summary)],
@@ -277,17 +360,10 @@ function BulletList({ items }) {
   return <ul className="operator-briefing-list">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
 }
 
-function CauseList({ items }) {
+function CheckedList({ items }) {
   const visible = unique(items.map(text)).slice(0, 6);
   if (!visible.length) return null;
-  const mostLikely = visible.slice(0, 3);
-  const otherPossibilities = visible.slice(3);
-  return (
-    <div className="cause-group">
-      {mostLikely.length ? <><h5>Most Likely</h5><BulletList items={mostLikely} /></> : null}
-      {otherPossibilities.length ? <><h5>Other Possibilities</h5><BulletList items={otherPossibilities} /></> : null}
-    </div>
-  );
+  return <ul className="operator-briefing-list operator-briefing-list--checked">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
 }
 
 function ContextGrid({ rows }) {
@@ -310,28 +386,52 @@ export default function OperatorInsightDetail({ insight }) {
   const actions = unique(toList(
     insight?.recommendedFirstAction,
     insight?.recommendedAction,
+    insight?.recommended_action,
     insight?.recommendedInvestigation,
+    insight?.recommended_investigation,
     insight?.operatorCheck,
+    insight?.operator_check,
     insight?.recommendedActions,
-    insight?.recommended_actions
+    insight?.recommended_actions,
+    insight?.recommendedFirstChecks,
+    insight?.recommended_first_checks,
+    insight?.recommendedCheck,
+    insight?.recommended_check
   ).flatMap((item) => text(item).split(/\n|;|•/g)).map((item) => item.trim())).slice(0, 6);
 
   const suppliedCauses = unique(toList(
     insight?.likelyCauses,
     insight?.possibleOperationalCauses,
-    insight?.contributingFactors
+    insight?.possible_operational_causes,
+    insight?.contributingFactors,
+    insight?.contributing_factors,
+    insight?.likely_causes
   ).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
   const causes = suppliedCauses.length ? suppliedCauses : [
-    "Filter loading",
-    "Pump operating point changed",
+    "Filter fouling",
     "Valve position changed",
-    "Process demand changed",
+    "Pump efficiency degradation",
+    "Instrument drift",
   ];
 
   const confidence = confidenceLabel(insight);
+  const confidenceValue = confidencePercent(insight) || confidence;
   const observedFacts = unique(toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 8);
   const whatChanged = unique(toList(insight?.whatHappened, insight?.behaviorInterpretation, insight?.whyNeraiumThinks, insight?.rawSummary, insight?.summary).map(text)).slice(0, 3);
-  const whyItMatters = unique(toList(insight?.whyThisMatters, insight?.whyItMatters, insight?.possibleConsequence).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
+  const relationships = relationshipLabels(insight);
+  const suppliedImpacts = splitOperationalImpacts(toList(
+    insight?.expectedOperationalImpact,
+    insight?.expected_operational_impact,
+    insight?.possibleOperationalConsequence,
+    insight?.possible_operational_consequence,
+    insight?.whyThisMatters,
+    insight?.whyItMatters,
+    insight?.possibleConsequence,
+    insight?.possible_consequence
+  ).flatMap((item) => Array.isArray(item) ? item : [item]));
+  const expectedImpacts = (suppliedImpacts.length ? suppliedImpacts : defaultOperationalImpacts(causes, relationships)).slice(0, 6);
+  const confidenceEvidence = confidenceEvidenceItems(insight, evidence);
+  const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships);
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
 
@@ -346,22 +446,40 @@ export default function OperatorInsightDetail({ insight }) {
 
       <dl className="insight-briefing__status" aria-label="Insight status">
         {insight?.severity ? <div><dt>Severity</dt><dd>{humanize(insight.severity)}</dd></div> : null}
-        {confidence ? <div><dt>Confidence</dt><dd>{confidence}</dd></div> : null}
+        {confidenceValue ? <div><dt>Overall Confidence</dt><dd>{confidenceValue}</dd></div> : null}
       </dl>
 
       <Section title="What Changed">
         {whatChanged.map((line) => <p key={line}>{line}</p>)}
       </Section>
 
-      {observedFacts.length ? <Section title="Observed"><BulletList items={observedFacts} /></Section> : null}
+      {observedFacts.length ? <Section title="Observed Behavior"><BulletList items={observedFacts} /></Section> : null}
 
       {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
 
-      {whyItMatters.length ? <Section title="Why This Matters"><BulletList items={whyItMatters} /></Section> : null}
+      {expectedImpacts.length ? <Section title="Expected Operational Impact"><BulletList items={expectedImpacts} /></Section> : null}
 
-      {actions.length ? <Section title="Recommended Investigation"><BulletList items={actions} /></Section> : null}
+      {actions.length ? <Section title="Recommended First Checks"><BulletList items={actions} /></Section> : null}
 
-      {causes.length ? <Section title="Likely Causes"><CauseList items={causes} /></Section> : null}
+      {causes.length ? <Section title="Most Probable Operational Causes"><BulletList items={causes} /></Section> : null}
+
+      {confidenceValue || confidenceEvidence.length ? (
+        <Section title="Confidence Breakdown">
+          {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
+          {confidenceEvidence.length ? (
+            <>
+              <p className="insight-briefing__list-label">Evidence supporting this assessment</p>
+              <CheckedList items={confidenceEvidence} />
+            </>
+          ) : null}
+        </Section>
+      ) : null}
+
+      {whyGenerated ? (
+        <Section title="Why Neraium Believes This">
+          <p>{whyGenerated}</p>
+        </Section>
+      ) : null}
 
       {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
 

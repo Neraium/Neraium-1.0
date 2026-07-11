@@ -297,8 +297,10 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getByText("Why This Matters")).toBeTruthy();
-    expect(screen.getAllByText(/Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Expected Operational Impact")).toBeTruthy();
+    expect(screen.getAllByText(/This relationship change is consistent with conditions such as increasing hydraulic resistance/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Confidence Breakdown")).toBeTruthy();
+    expect(screen.getByText("Why Neraium Believes This")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "System Readiness" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
@@ -365,9 +367,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
     expect(screen.getByText("Persistence score")).toBeTruthy();
-    expect(screen.getByText("Most Likely")).toBeTruthy();
-    expect(screen.getByText("Other Possibilities")).toBeTruthy();
-    expect(screen.getByText("Likely Causes")).toBeTruthy();
+    expect(screen.getByText("Most Probable Operational Causes")).toBeTruthy();
+    expect(screen.getByText("Confidence Breakdown")).toBeTruthy();
+    expect(screen.getByText("Why Neraium Believes This")).toBeTruthy();
     expect(screen.getByText("Technical Details")).toBeTruthy();
     expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);

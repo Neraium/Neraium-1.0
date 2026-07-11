@@ -39,6 +39,16 @@ const DEFAULT_HOTSPOTS = [
   { x: 77, y: 57, scale: 0.92 },
 ];
 
+const FINGERPRINT_RIDGES = [
+  "M50 19c-11 0-20 8-21 19-.4 7 4 12 11 13 8 1 14-4 14-11 0-5-4-9-9-9-4 0-7 3-7 7 0 3 2 5 5 5",
+  "M39 72c-12-5-20-17-18-31 2-16 15-28 31-27 18 1 31 16 30 34-.6 14-9 26-22 31",
+  "M28 62c-7-8-10-17-9-27 2-18 17-32 35-31 20 1 36 18 35 39-.5 11-5 21-13 29",
+  "M36 41c.4-8 7-15 15-15 9 0 16 7 16 16 0 10-8 18-18 18-8 0-15-5-18-12",
+  "M45 86c14-4 25-15 29-29 4-15-3-30-16-37-9-5-20-4-28 2",
+  "M24 79c-10-11-15-25-13-40 3-23 22-40 45-39 26 2 46 24 44 50-.9 18-10 34-25 43",
+  "M50 38c4 0 7 3 7 7 0 5-4 9-9 9-4 0-8-2-10-5",
+];
+
 function normalizeStatus(status, state) {
   const value = String(status ?? state?.status ?? state?.tone ?? state?.key ?? "").toLowerCase();
   if (["awaiting", "no-data", "ready", "neutral"].includes(value)) return "awaiting";
@@ -71,11 +81,20 @@ function resolveHotspots({ hotspots, hotspotCount }) {
   });
 }
 
+function resolveRidgeCount(state, status, hotspotCount) {
+  const relationshipCount = Number(state?.relationshipCount ?? state?.relationships?.length ?? state?.relationship_count);
+  const explicit = Number(state?.ridgeCount ?? state?.fingerprintRidgeCount ?? state?.fingerprint_ridge_count);
+  const count = Number.isFinite(explicit) ? explicit : Number.isFinite(relationshipCount) ? relationshipCount + 3 : hotspotCount + 4;
+  const minimum = status === "awaiting" ? 2 : status === "learning" ? 4 : 5;
+  return Math.max(minimum, Math.min(Math.round(count), FINGERPRINT_RIDGES.length));
+}
+
 export default function OperationalOrb({ state, status, hotspotCount, hotspots }) {
   const resolvedStatus = normalizeStatus(status, state);
   const config = ORB_STATUS[resolvedStatus];
   const resolvedHotspotCount = clampHotspotCount(hotspotCount ?? state?.hotspotCount, resolvedStatus);
   const resolvedHotspots = resolveHotspots({ hotspots: hotspots ?? state?.hotspots, hotspotCount: resolvedHotspotCount });
+  const ridgeCount = resolveRidgeCount(state, resolvedStatus, resolvedHotspotCount);
   const particles = Array.from({ length: config.particleCount }, (_, index) => index);
   const label = state?.label ?? config.label;
   const visualLabel = state?.visualLabel ?? config.visualLabel;
@@ -106,9 +125,16 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
           ))}
         </div>
         <div className="operational-orb__fingerprint">
-          <i />
-          <i />
-          <i />
+          <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            {FINGERPRINT_RIDGES.map((ridge, index) => (
+              <path
+                className={index < ridgeCount ? "is-active" : undefined}
+                d={ridge}
+                key={ridge}
+                style={{ "--ridge-index": index }}
+              />
+            ))}
+          </svg>
         </div>
         <div className="operational-orb__hotspots">
           {resolvedHotspots.map((hotspot, index) => (

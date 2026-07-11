@@ -182,8 +182,8 @@ function buildObservationBriefing(finding, run) {
 function buildObservationCauses(finding, run) {
   const text = observationBriefingText(finding, run);
   const causes = [];
-  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter loading", "Increased hydraulic resistance");
-  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump operating point changed", "VFD control adjustment");
+  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter fouling", "Increased hydraulic resistance");
+  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump efficiency degradation", "Instrument drift");
   if (/valve|damper/.test(text)) causes.push("Valve position changed");
   if (/temperature|cool|chw|thermal|humidity/.test(text)) causes.push("Load shift", "Heat transfer changed");
   if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
@@ -705,9 +705,9 @@ export default function ObservationCenterWorkspace({
                 ]}
                 compact
               />
-              <IssueBriefingList title="Possible Operational Causes" items={activeBriefing.possibleCauses} />
+              <IssueBriefingList title="Most Probable Operational Causes" items={activeBriefing.possibleCauses} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
-              <IssueBriefingList title="Recommended Actions" items={activeBriefing.investigation} />
+              <IssueBriefingList title="Recommended First Checks" items={activeBriefing.investigation} />
               <div className="intake-flow__controls">
                 <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Details</button>
               </div>

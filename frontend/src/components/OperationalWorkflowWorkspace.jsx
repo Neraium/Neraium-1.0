@@ -1626,6 +1626,9 @@ function InsightDetail({ insight }) {
   const evidenceSummary = prioritizedEvidenceMetrics(insight);
   const relationshipEvidence = evidenceBriefing(insight, relationships);
   const technicalEvidence = technicalEvidenceBriefing(insight, relationships);
+  const confidenceDisplay = formatConfidenceDisplay(insight.confidence, insight.confidenceScore);
+  const confidenceEvidence = confidenceBreakdownEvidence(insight, relationships, relationshipEvidence);
+  const whyBelieved = whyNeraiumBelievesInsight(insight, relationships, relationshipEvidence);
 
   return (
     <details className="insight-detail-card" aria-label="Insight detail">
@@ -1654,13 +1657,10 @@ function InsightDetail({ insight }) {
         </div>
 
         <div>
-          <dt>Confidence</dt>
+          <dt>Overall Confidence</dt>
           <dd>
             <StatusBadge
-              label={formatConfidenceLevel(
-                insight.confidence,
-                insight.confidenceScore
-              )}
+              label={confidenceDisplay}
               tone="unknown"
             />
           </dd>
@@ -1676,7 +1676,7 @@ function InsightDetail({ insight }) {
       />
 
       <BriefingTextBlock
-        title="Why It Matters"
+        title="Expected Operational Impact"
         lines={whyItMattersBriefing(insight)}
       />
 
@@ -1693,8 +1693,15 @@ function InsightDetail({ insight }) {
 
       <RankedCauseList causes={causes} />
 
+      <ConfidenceBreakdown confidence={confidenceDisplay} items={confidenceEvidence} />
+
+      <BriefingTextBlock
+        title="Why Neraium Believes This"
+        lines={[whyBelieved]}
+      />
+
       <BriefingList
-        title="Recommended Actions"
+        title="Recommended First Checks"
         items={recommendedReviewItems(
           insight,
           relationships
@@ -1707,6 +1714,33 @@ function InsightDetail({ insight }) {
       ) : null}
     </details>
   );
+}
+
+function confidenceBreakdownEvidence(insight, relationships, evidenceLines) {
+  const confidenceText = toList(insight.confidenceRationale, insight.confidenceBasis, insight.confidence_basis)
+    .flatMap((item) => cleanBriefingText(item).split(/\n|;|,/g));
+  const fallback = relationships.length || evidenceLines.length
+    ? ["Signal relationship drift", "Historical pattern match", "Persistence evidence", "Telemetry quality acceptable"]
+    : [];
+  return dedupeText([
+    ...relationships.map((item) => `${item} drift`),
+    ...evidenceLines.slice(0, 2),
+    ...confidenceText,
+    ...fallback,
+  ].map(cleanBriefingText)).filter(Boolean).slice(0, 5);
+}
+
+function whyNeraiumBelievesInsight(insight, relationships, evidenceLines) {
+  const explicit = cleanBriefingText(insight.whyNeraiumBelievesThis ?? insight.why_neraium_believes_this ?? insight.whyNeraiumThinks ?? insight.why_neraium_thinks);
+  if (explicit) return explicit;
+  const relationship = relationships[0];
+  if (relationship) {
+    return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed while the surrounding telemetry stayed comparable to its learned operating pattern. This combination most closely matches a real operational behavior change rather than an isolated reading.`;
+  }
+  if (evidenceLines[0]) {
+    return `Neraium generated this insight because the supporting evidence moved away from the learned operating fingerprint: ${evidenceLines[0]}`;
+  }
+  return "";
 }
 
 function insightCardRows(insight, relationships) {
@@ -1905,23 +1939,33 @@ function RankedCauseList({ causes }) {
   const mostLikely = toList(causes?.mostLikely).slice(0, 3);
   const otherPossibilities = toList(causes?.otherPossibilities).slice(0, 5);
   if (!mostLikely.length && !otherPossibilities.length) return null;
+  const visibleCauses = dedupeText([...mostLikely, ...otherPossibilities]).slice(0, 6);
   return (
     <section className="insight-briefing__section insight-briefing__section--causes">
-      <h4>Possible Causes</h4>
-      {mostLikely.length ? <CauseGroup title="Most Likely" items={mostLikely} featured /> : null}
-      {otherPossibilities.length ? <CauseGroup title="Other Possibilities" items={otherPossibilities} /> : null}
+      <h4>Most Probable Operational Causes</h4>
+      <ul className="operator-briefing-list">
+        {visibleCauses.map((item) => <li key={item}>{cleanBriefingText(item)}</li>)}
+      </ul>
     </section>
   );
 }
 
-function CauseGroup({ title, items, featured = false }) {
+function ConfidenceBreakdown({ confidence, items }) {
+  const visibleItems = toList(items).filter(Boolean).slice(0, 5);
+  if (!confidence && !visibleItems.length) return null;
   return (
-    <div className={featured ? "cause-group cause-group--featured" : "cause-group"}>
-      <h5>{title}</h5>
-      <ul className="operator-briefing-list">
-        {items.map((item) => <li key={item}>{cleanBriefingText(item)}</li>)}
-      </ul>
-    </div>
+    <section className="insight-briefing__section">
+      <h4>Confidence Breakdown</h4>
+      {confidence ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidence}</strong></div> : null}
+      {visibleItems.length ? (
+        <>
+          <p className="insight-briefing__list-label">Evidence supporting this assessment</p>
+          <ul className="operator-briefing-list operator-briefing-list--checked">
+            {visibleItems.map((item) => <li key={item}>{cleanBriefingText(item)}</li>)}
+          </ul>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -2837,12 +2881,12 @@ function relationshipContributionLabels(values) {
 
 
 const DEFAULT_POTENTIAL_OPERATIONAL_CAUSES = [
-  "Operating setpoint modification",
-  "Control sequence adjustment",
-  "Process demand change",
-  "Equipment operating state change",
+  "Filter fouling",
+  "Valve position changed",
+  "Pump efficiency degradation",
+  "Instrument drift",
+  "Process demand changed",
   "Recent maintenance activity",
-  "Sensor calibration change",
 ];
 
 
@@ -2850,10 +2894,10 @@ const OPERATIONAL_CAUSE_SETS = [
   {
     pattern: /flow|pressure|pump|valve|vfd|filter/i,
     causes: [
-      "Filter loading",
-      "Pump operating point changed",
+      "Filter fouling",
       "Valve position changed",
-      "VFD control adjustment",
+      "Pump efficiency degradation",
+      "Instrument drift",
       "Process demand changed",
       "Recent maintenance activity",
     ],
@@ -3097,14 +3141,15 @@ function operatorSummaryBriefing(insight, relationships) {
 }
 
 function whyItMattersBriefing(insight) {
-  const supplied = briefingSentences(firstText(insight?.whyItMatters, insight?.possibleConsequence), 2);
+  const supplied = briefingSentences(firstText(insight?.whyItMatters, insight?.possibleConsequence), 2)
+    .map((line) => cleanBriefingText(line).replace(/^Operational impact:\s*/i, ""));
   if (supplied.length) return supplied;
   return ["This change may indicate reduced operating efficiency or a change in operating conditions."];
 }
 
 function operationalCauseHypotheses(insight) {
   const relationships = insightRelationshipLabels(insight);
-  const direct = dedupeText(toList(insight.possibleOperationalCauses).flatMap(splitPriorityText).map(cleanBriefingText));
+  const direct = dedupeText(toList(insight.possibleOperationalCauses, insight.possible_operational_causes).flatMap(splitPriorityText).map(cleanBriefingText));
   const context = [insight.system, insight.summary, relationships.join(" ")].join(" ");
   const matched = OPERATIONAL_CAUSE_SETS.find((set) => set.pattern.test(context));
   return dedupeText([...direct, ...(matched?.causes ?? DEFAULT_POTENTIAL_OPERATIONAL_CAUSES)]).slice(0, 6);
@@ -3152,8 +3197,8 @@ function formatRelationshipObservedLabelRaw(value) {
 
 function cleanBriefingText(value) {
   return cleanDisplayText(value)
-    .replace(/\bincreasing filter resistance\b/gi, "Filter loading")
-    .replace(/\bfilter resistance increasing\b/gi, "Filter loading")
+    .replace(/\bincreasing filter resistance\b/gi, "Filter fouling")
+    .replace(/\bfilter resistance increasing\b/gi, "Filter fouling")
     .replace(/\bbaseline\/current comparison\b/gi, "historical comparison")
     .replace(/\bbaseline window\b/gi, "historical pattern")
     .replace(/\bcurrent window\b/gi, "analysis period")
