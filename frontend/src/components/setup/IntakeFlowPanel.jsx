@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 
 import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
 import OperationalOrb from "../operational/OperationalOrb";
@@ -186,7 +186,14 @@ const FINGERPRINT_BUILD_STAGES = [
   },
 ];
 
-const FINGERPRINT_PARTICLE_COUNT = 4;
+const FINGERPRINT_RENDERER_RECOVERY_KEY = "neraium.upload_fingerprint.compatibility_mode";
+const FINGERPRINT_RENDERER_REPORTED_KEY = "neraium.upload_fingerprint.compatibility_reported";
+const FINGERPRINT_RENDERER_MOUNT_KEY = "neraium.upload_fingerprint.mounts";
+const FINGERPRINT_RENDERER_PARTICLES = {
+  premium: 8,
+  enhanced: 3,
+  safe: 0,
+};
 
 const FINGERPRINT_RIDGES = [
   { phase: 0, detail: "core", path: "M80 83c8-1 15 4 17 12 2 10-5 20-16 22-12 2-23-6-25-18-2-15 9-28 24-30 19-2 35 11 38 30" },
@@ -242,14 +249,165 @@ function ridgeProgress({ displayPercent, ridge, stageIndex, complete }) {
   return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
-function OperationalFingerprintBuild({ percent, stage, complete = false }) {
+function safeStorage(storageName) {
+  if (typeof window === "undefined") return null;
+  try {
+    return window[storageName] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readStorageValue(storageName, key) {
+  try {
+    return safeStorage(storageName)?.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStorageValue(storageName, key, value) {
+  try {
+    safeStorage(storageName)?.setItem(key, value);
+  } catch {
+    // Storage may be disabled in private or constrained browser contexts.
+  }
+}
+
+function mediaMatches(query) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  try {
+    return window.matchMedia(query).matches;
+  } catch {
+    return false;
+  }
+}
+
+function markFingerprintRendererRecovery(reason) {
+  writeStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY, reason || "renderer-recovery");
+}
+
+function detectFingerprintRenderTier() {
+  if (typeof window === "undefined") return { tier: "safe", reason: "server-render" };
+  const recoveryReason = readStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY);
+  if (recoveryReason) return { tier: "safe", reason: recoveryReason };
+
+  const navigatorInfo = window.navigator ?? {};
+  const memory = Number(navigatorInfo.deviceMemory);
+  const cores = Number(navigatorInfo.hardwareConcurrency);
+  const reducedMotion = mediaMatches("(prefers-reduced-motion: reduce)");
+  const constrainedMemory = Number.isFinite(memory) && memory > 0 && memory <= 2;
+  const limitedMemory = Number.isFinite(memory) && memory > 0 && memory <= 4;
+  const constrainedCpu = Number.isFinite(cores) && cores > 0 && cores <= 2;
+  const mobileLike = mediaMatches("(max-width: 760px)") || mediaMatches("(hover: none) and (pointer: coarse)");
+  const svgPathSupported = !window.CSS || typeof window.CSS.supports !== "function" || window.CSS.supports("stroke-dashoffset", "1");
+
+  if (reducedMotion) return { tier: "safe", reason: "reduced-motion" };
+  if (constrainedMemory || !svgPathSupported) return { tier: "safe", reason: constrainedMemory ? "low-memory" : "svg-path-support" };
+  if (mobileLike || limitedMemory || constrainedCpu) return { tier: "enhanced", reason: mobileLike ? "mobile-capability" : "limited-capability" };
+  return { tier: "premium", reason: "capable-device" };
+}
+
+function registerFingerprintRendererMount() {
+  if (typeof window === "undefined") return false;
+  const now = window.performance?.now?.() ?? Date.now();
+  const raw = readStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY);
+  const previous = raw ? raw.split(",").map(Number).filter((value) => Number.isFinite(value)) : [];
+  const recent = [...previous.filter((value) => now - value < 5000), now].slice(-5);
+  writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY, recent.join(","));
+  return recent.length >= 4;
+}
+
+class FingerprintRendererBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    markFingerprintRendererRecovery("renderer-error");
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <OperationalFingerprintBuildVisual {...this.props} forcedTier="safe" recoveryReason="renderer-error" />;
+    }
+    return <OperationalFingerprintBuildVisual {...this.props} />;
+  }
+}
+
+function OperationalFingerprintBuild(props) {
+  return <FingerprintRendererBoundary {...props} />;
+}
+
+function OperationalFingerprintBuildVisual({ percent, stage, complete = false, forcedTier = "", recoveryReason = "" }) {
   const displayPercent = clampPercent(percent);
   const stageIndex = stage?.index ?? 0;
   const stageCount = FINGERPRINT_BUILD_STAGES.length;
   const stageNumber = Math.min(stageIndex + 1, stageCount);
+  const rootRef = useRef(null);
+  const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectFingerprintRenderTier());
+  const renderTier = forcedTier || renderProfile.tier;
+  const compatibilityMode = renderTier === "safe";
+  const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
+  const statusTitle = complete
+    ? "Operational Fingerprint Established"
+    : compatibilityMode
+      ? "Continuing analysis in compatibility mode"
+      : stage?.label || "Learning Operational Relationships";
+  const statusDetail = complete ? "Facility behavior profile is ready" : `Stage ${stageNumber} of ${stageCount}`;
+
+  useEffect(() => {
+    if (forcedTier) return undefined;
+    if (registerFingerprintRendererMount()) {
+      markFingerprintRendererRecovery("repeated-remounts");
+      setRenderProfile({ tier: "safe", reason: "repeated-remounts" });
+      return undefined;
+    }
+
+    let active = true;
+    const recover = (reason) => {
+      if (!active) return;
+      markFingerprintRendererRecovery(reason);
+      setRenderProfile({ tier: "safe", reason });
+    };
+    const handleRendererError = () => recover("renderer-error");
+    const handleCompatibilityRecovery = () => recover("black-screen-recovery");
+
+    window.addEventListener("error", handleRendererError);
+    window.addEventListener("unhandledrejection", handleRendererError);
+    window.addEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
+
+    const frame = window.requestAnimationFrame?.(() => {
+      const box = rootRef.current?.getBoundingClientRect?.();
+      if (box && box.width > 0 && box.height > 0 && (box.width < 24 || box.height < 24)) recover("black-screen-recovery");
+    });
+
+    return () => {
+      active = false;
+      window.removeEventListener("error", handleRendererError);
+      window.removeEventListener("unhandledrejection", handleRendererError);
+      window.removeEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
+      if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
+    };
+  }, [forcedTier]);
+
+  useEffect(() => {
+    if (!compatibilityMode || complete) return;
+    if (readStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY)) return;
+    writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY, "1");
+  }, [compatibilityMode, complete]);
+
   return (
     <div
-      className={`upload-fingerprint-build${complete ? " upload-fingerprint-build--complete" : ""}`}
+      ref={rootRef}
+      className={`upload-fingerprint-build upload-fingerprint-build--${renderTier}${complete ? " upload-fingerprint-build--complete" : ""}`}
+      data-render-tier={renderTier}
+      data-render-reason={renderProfile.reason}
       aria-label={`Analysis ${displayPercent}% complete`}
       aria-valuemin="0"
       aria-valuemax="100"
@@ -257,12 +415,14 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
       role="progressbar"
     >
       <div className="upload-fingerprint-build__halo" aria-hidden="true" />
-      <div className="upload-fingerprint-build__particles" aria-hidden="true">
-        {Array.from({ length: FINGERPRINT_PARTICLE_COUNT }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
-      </div>
+      {particleCount > 0 ? (
+        <div className="upload-fingerprint-build__particles" aria-hidden="true">
+          {Array.from({ length: particleCount }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
+        </div>
+      ) : null}
       <div className="upload-fingerprint-build__status">
-        <strong>{complete ? "Operational Fingerprint Established" : stage?.label || "Learning Operational Relationships"}</strong>
-        <span>{complete ? "Facility behavior profile is ready" : `Stage ${stageNumber} of ${stageCount}`}</span>
+        <strong>{statusTitle}</strong>
+        <span>{statusDetail}</span>
       </div>
       <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
         <defs>
@@ -291,15 +451,16 @@ function OperationalFingerprintBuild({ percent, stage, complete = false }) {
                 data-ridge-detail={ridge.detail}
                 pathLength="100"
                 style={{
-                  "--ridge-offset": 100 - fill,
+                  "--ridge-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill,
                   "--ridge-opacity": fill > 0 ? 0.16 + (fill / 100) * 0.84 : 0.03,
-                  "--ridge-delay": (index * 38) + "ms",
+                  "--ridge-delay": compatibilityMode ? "0ms" : (index * 38) + "ms",
                 }}
               />
             );
           })}
         </g>
       </svg>
+      {complete ? <div className="upload-fingerprint-build__ripple" aria-hidden="true" /> : null}
       {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
       <div className="upload-fingerprint-build__nodes" aria-hidden="true">
         {FINGERPRINT_BUILD_STAGES.map((item, index) => (

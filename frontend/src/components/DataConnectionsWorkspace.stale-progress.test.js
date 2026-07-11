@@ -130,6 +130,8 @@ function uploadHtml503Error() {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  window.sessionStorage.clear();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -291,6 +293,66 @@ it("processing state uses the fingerprint as the progress indicator", () => {
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByText("65% complete")).toBeNull();
+});
+
+
+it("fingerprint renderer fallback keeps the active analysis job visible", () => {
+  window.localStorage.setItem("neraium.upload_fingerprint.compatibility_mode", "black-screen-recovery");
+
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [selectedCsv("fallback.csv")],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "active-job",
+      status: "PROCESSING",
+      processing_state: "building_fingerprint",
+      percent: 65,
+      progress: 65,
+      result_available: false,
+    },
+    latestMessage: "Building fingerprint...",
+  });
+
+  expect(screen.getByText("Continuing analysis in compatibility mode")).toBeTruthy();
+  expect(screen.getByText("fallback.csv")).toBeTruthy();
+  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
+  const renderer = document.querySelector(".upload-fingerprint-build");
+  expect(renderer?.getAttribute("data-render-tier")).toBe("safe");
+  expect(renderer?.querySelector(".upload-fingerprint-build__particles")).toBeNull();
+});
+
+it("fingerprint renderer uses enhanced mode on mobile-capable constraints", () => {
+  vi.stubGlobal("matchMedia", (query) => ({
+    matches: /max-width: 760px|hover: none/.test(query),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+
+  renderPanel({
+    uploadState: "running_sii",
+    selectedFiles: [selectedCsv("mobile.csv")],
+    selectedFileSize: "1.0 KB",
+    uploadJob: {
+      job_id: "mobile-job",
+      status: "PROCESSING",
+      processing_state: "building_fingerprint",
+      percent: 65,
+      progress: 65,
+      result_available: false,
+    },
+    latestMessage: "Building fingerprint...",
+  });
+
+  const renderer = document.querySelector(".upload-fingerprint-build");
+  expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
+  expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
+  expect(screen.getByText("Learning Operational Relationships")).toBeTruthy();
 });
 
 it("failed state shows retry and choose another file", () => {
