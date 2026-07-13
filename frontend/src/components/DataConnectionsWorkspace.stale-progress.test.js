@@ -22,7 +22,7 @@ function renderPanel(overrides = {}) {
     selectedFiles: [],
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "processing", "running_sii", "structural_scoring", "building_fingerprint"].includes(String(state)),
+    isUploadProcessing: (state) => ["uploading", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
@@ -539,7 +539,7 @@ it("previous completed upload does not leak progress into new idle upload screen
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
-it("treats the first complete payload with a saved result as terminal and auto-opens Command Center after the completion hold", async () => {
+it("treats the first complete payload with a saved result as terminal and auto-opens Command Center after the fallback is visible", async () => {
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
@@ -585,7 +585,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
-  }, { timeout: 2500 });
+  }, { timeout: 4000 });
 });
 
 it("continues polling when stream status includes a placeholder analysis result", async () => {

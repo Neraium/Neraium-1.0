@@ -50,8 +50,10 @@ function primaryJobStatus(uploadJob, uploadState) {
 
 function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) {
   const normalized = normalizeUploadLifecycle(uploadState);
+  if (normalized === "completion_error") return "completion_error";
   if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalized)) return "failed";
-  if (normalized === "complete") return "complete";
+  if (["save_complete", "complete"].includes(normalized)) return "complete";
+  if (["saving_results", "navigation_pending"].includes(normalized)) return "finalizing";
   if (normalized === "uploading") return "uploading";
   if (isUploadProcessing(uploadState)) return "analyzing";
   if (hasSelectedFiles || normalized === "validated") return "fileSelected";
@@ -62,8 +64,14 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
   const cleanMessage = String(latestMessage || "").trim();
   if (viewState === "uploading") return "Uploading Historical Data...";
   if (viewState === "complete") return "Analysis Complete";
-  if (viewState === "finalizing") return "Generating Operational Insights...";
+  if (viewState === "finalizing") {
+    const normalized = primaryJobStatus(uploadJob, uploadState);
+    if (normalized === "saving_results") return "Saving Operational Fingerprint";
+    if (normalized === "navigation_pending") return "Loading Command Center";
+    return "Generating Operational Insights...";
+  }
   if (viewState === "failed") return "Upload Error";
+  if (viewState === "completion_error") return "Command Center Unavailable";
   if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
@@ -91,7 +99,7 @@ function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer,
     const fallback = jobPercent ?? visibleProgressPercent ?? 0;
     return Math.min(99, clampPercent(fallback));
   }
-  if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalizeUploadLifecycle(uploadState))) return 100;
+  if (["failed", "error", "validation_error", "cancelled", "timeout", "completion_error"].includes(normalizeUploadLifecycle(uploadState))) return 100;
   return 0;
 }
 
@@ -196,21 +204,16 @@ const FINGERPRINT_RENDERER_PARTICLES = {
 };
 
 const FINGERPRINT_RIDGES = [
-  { phase: 0, detail: "core", path: "M80 83c8-1 15 4 17 12 2 10-5 20-16 22-12 2-23-6-25-18-2-15 9-28 24-30 19-2 35 11 38 30" },
-  { phase: 0, detail: "core", path: "M72 91c1-7 7-12 15-11 8 1 14 8 13 16-1 10-9 17-20 18" },
-  { phase: 0, detail: "core", path: "M88 98c-1 6-6 11-13 12" },
-  { phase: 1, detail: "branch", path: "M63 78c-7 11-9 25-5 38 5 17 19 29 36 33" },
-  { phase: 1, detail: "branch", path: "M95 69c16 6 27 20 29 38 2 17-5 34-19 45" },
-  { phase: 1, detail: "branch", path: "M56 105c-9 14-8 33 3 48" },
-  { phase: 1, detail: "branch", path: "M109 86c8 13 9 30 2 44-5 10-13 18-24 22" },
-  { phase: 2, detail: "outer", path: "M53 58c12-17 32-27 55-24 23 4 41 21 47 44 6 26-3 56-25 76" },
-  { phase: 2, detail: "outer", path: "M43 73c-8 22-4 48 12 67 15 18 37 28 62 29" },
-  { phase: 2, detail: "outer", path: "M72 43c20-5 42 1 57 17 18 19 23 48 11 75" },
-  { phase: 2, detail: "outer", path: "M38 98c1 38 29 70 67 77" },
-  { phase: 3, detail: "fine", path: "M46 125c11 25 34 42 63 46" },
-  { phase: 3, detail: "fine", path: "M68 59c13-7 29-7 43 0" },
-  { phase: 3, detail: "fine", path: "M72 132c8 13 21 22 38 26" },
-  { phase: 3, detail: "fine", path: "M121 64c11 16 14 35 9 54" },
+  { phase: 0, detail: "core", path: "M80 92c0-12 9-21 21-21 14 0 25 10 25 24 0 17-14 30-33 30-21 0-37-16-37-37 0-25 20-45 45-45 32 0 57 25 57 58" },
+  { phase: 0, detail: "core", path: "M91 92c0 9-7 16-16 16-8 0-15-7-15-16 0-14 12-25 27-25 19 0 35 15 36 35 1 26-21 48-48 48" },
+  { phase: 1, detail: "branch", path: "M48 104c-6-25 5-52 28-66 25-15 59-8 78 15 20 25 21 61 2 88-17 24-50 34-78 24" },
+  { phase: 1, detail: "branch", path: "M73 135c19 12 45 8 61-10 17-19 18-48 2-68-13-17-36-23-56-16" },
+  { phase: 2, detail: "outer", path: "M38 124c-17-40-4-86 32-109 38-24 89-13 116 24 26 37 24 89-7 123" },
+  { phase: 2, detail: "outer", path: "M60 160c35 28 91 19 116-20 23-36 18-84-12-114" },
+  { phase: 2, detail: "outer", path: "M27 145C0 97 16 38 62 8c47-30 111-17 143 30" },
+  { phase: 3, detail: "fine", path: "M52 164c28 21 68 23 98 5" },
+  { phase: 3, detail: "fine", path: "M57 40c24-16 57-15 80 3" },
+  { phase: 3, detail: "fine", path: "M73 116c10 16 30 22 48 13" },
 ];
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
@@ -218,6 +221,13 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
     return { id: "complete", label: "Operational Fingerprint Established", index: FINGERPRINT_BUILD_STAGES.length };
   }
   if (viewState === "finalizing") {
+    const normalized = primaryJobStatus(uploadJob, uploadState);
+    if (normalized === "saving_results") {
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving Operational Fingerprint", index: 3 };
+    }
+    if (normalized === "navigation_pending") {
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Loading Command Center", index: 3 };
+    }
     return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
   }
   if (viewState === "uploading") {
@@ -713,6 +723,29 @@ export default function IntakeFlowPanel({
               </div>
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={onViewResults}>Open Command Center</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {viewState === "completion_error" ? (
+          <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
+            <div className="upload-analysis-card__visual">
+              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <div className="upload-analysis-card__status">
+                <span>Status</span>
+                <strong>Operational Fingerprint Established</strong>
+              </div>
+            </div>
+            <div className="upload-analysis-card__content">
+              <div className="upload-complete-header">
+                <h3>Command Center Unavailable</h3>
+                <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
+              </div>
+              <p className="upload-error-message">{errorMessage || "Results saved, but the Command Center could not be loaded."}</p>
+              <div className="upload-simple-actions">
+                <button type="button" className="command-button" onClick={onViewResults}>Retry Command Center</button>
                 <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
               </div>
             </div>

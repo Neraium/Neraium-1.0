@@ -1,5 +1,9 @@
 const ANALYSIS_HISTORY_STORAGE_KEY = "neraium.completed_analysis_history";
-const MAX_ANALYSIS_HISTORY = 20;
+const MAX_ANALYSIS_HISTORY = 6;
+const MAX_ANALYSIS_HISTORY_STORAGE_BYTES = 1_500_000;
+const MAX_TEXT_LENGTH = 2_000;
+const MAX_OBJECT_KEYS = 40;
+const MAX_ARRAY_ITEMS = 20;
 
 export function readAnalysisHistory() {
   if (typeof window === "undefined") return [];
@@ -12,9 +16,9 @@ export function readAnalysisHistory() {
 }
 
 export function writeAnalysisHistory(records) {
-  const safeRecords = Array.isArray(records) ? records.filter(isAnalysisRecord).slice(0, MAX_ANALYSIS_HISTORY) : [];
+  const safeRecords = compactAnalysisRecords(records);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(safeRecords));
+    persistAnalysisHistory(safeRecords);
   }
   return safeRecords;
 }
@@ -121,6 +125,183 @@ function extractAnalysis(result, snapshot) {
     ?? interpretation?.analysis_explanation
     ?? snapshot?.analysis_explanation;
   return analysis && typeof analysis === "object" ? analysis : {};
+}
+
+function persistAnalysisHistory(records) {
+  const candidates = [
+    records,
+    records.slice(0, 3),
+    records.slice(0, 1),
+    records.slice(0, 1).map(compactRecordForStorageFallback),
+  ];
+  for (const candidate of candidates) {
+    const payload = JSON.stringify(candidate);
+    if (payload.length > MAX_ANALYSIS_HISTORY_STORAGE_BYTES) continue;
+    try {
+      window.localStorage.setItem(ANALYSIS_HISTORY_STORAGE_KEY, payload);
+      return candidate;
+    } catch (error) {
+      console.warn("[neraium] completed analysis history persistence failed", {
+        name: error?.name,
+        message: error?.message,
+      });
+    }
+  }
+  return [];
+}
+
+function compactAnalysisRecords(records) {
+  return (Array.isArray(records) ? records : [])
+    .filter(isAnalysisRecord)
+    .slice(0, MAX_ANALYSIS_HISTORY)
+    .map(compactAnalysisRecord);
+}
+
+function compactAnalysisRecord(record) {
+  const result = compactResult(record.result);
+  const snapshot = compactSnapshot(record.snapshot, result);
+  return {
+    id: record.id,
+    jobId: record.jobId,
+    datasetName: record.datasetName,
+    timestamp: record.timestamp,
+    fingerprintStatus: record.fingerprintStatus,
+    systemsCount: record.systemsCount,
+    insightsCount: record.insightsCount,
+    savedAt: record.savedAt,
+    result,
+    snapshot,
+  };
+}
+
+function compactRecordForStorageFallback(record) {
+  return {
+    id: record.id,
+    jobId: record.jobId,
+    datasetName: record.datasetName,
+    timestamp: record.timestamp,
+    fingerprintStatus: record.fingerprintStatus,
+    systemsCount: record.systemsCount,
+    insightsCount: record.insightsCount,
+    savedAt: record.savedAt,
+    result: {
+      job_id: record.jobId,
+      filename: record.datasetName,
+      status: "complete",
+      processing_state: "complete",
+      completed_at: record.timestamp,
+      analysis_result: {
+        source_file: record.datasetName,
+        generated_at: record.timestamp,
+        fingerprint: { status: record.fingerprintStatus },
+        systems: [],
+        insights: [],
+      },
+    },
+    snapshot: {
+      status: "complete",
+      processing_state: "complete",
+      current_upload: {
+        job_id: record.jobId,
+        filename: record.datasetName,
+      },
+      last_filename: record.datasetName,
+      last_processed_at: record.timestamp,
+      state_available: true,
+    },
+  };
+}
+
+function compactResult(result) {
+  const analysis = extractAnalysis(result, null);
+  return {
+    job_id: firstText(result?.job_id, result?.upload_id, result?.run_id),
+    upload_id: result?.upload_id,
+    run_id: result?.run_id,
+    filename: result?.filename,
+    source_file: result?.source_file,
+    status: result?.status ?? "complete",
+    processing_state: result?.processing_state ?? "complete",
+    completed_at: result?.completed_at,
+    processed_at: result?.processed_at,
+    last_processed_at: result?.last_processed_at,
+    rows_processed: result?.rows_processed,
+    row_count: result?.row_count,
+    columns: trimArray(result?.columns, 80),
+    timestamp_profile: compactValue(result?.timestamp_profile),
+    room_summary: compactValue(result?.room_summary),
+    data_quality: compactValue(result?.data_quality ?? analysis?.data_quality),
+    processing_trace: compactValue(result?.processing_trace),
+    operator_report: compactValue(result?.operator_report),
+    sii_intelligence: compactValue(result?.sii_intelligence),
+    engine_result: compactValue(result?.engine_result),
+    identified_systems: trimArray(result?.identified_systems, 20).map(compactValue),
+    analyzed_systems: trimArray(result?.analyzed_systems, 20).map(compactValue),
+    systems_identified: trimArray(result?.systems_identified, 20).map(compactValue),
+    systems: trimArray(result?.systems, 20).map(compactValue),
+    analysis_result: compactAnalysis(analysis),
+  };
+}
+
+function compactSnapshot(snapshot, result) {
+  return {
+    status: snapshot?.status ?? "complete",
+    processing_state: snapshot?.processing_state ?? "complete",
+    message: snapshot?.message,
+    last_filename: snapshot?.last_filename ?? result?.filename,
+    filename: snapshot?.filename ?? result?.filename,
+    rows_processed: snapshot?.rows_processed ?? result?.rows_processed ?? result?.row_count,
+    columns_detected: snapshot?.columns_detected,
+    last_processed_at: snapshot?.last_processed_at ?? result?.last_processed_at ?? result?.completed_at,
+    last_upload_at: snapshot?.last_upload_at,
+    processed_at: snapshot?.processed_at,
+    state_available: snapshot?.state_available ?? true,
+    result_source: snapshot?.result_source,
+    source: snapshot?.source,
+    baseline_source: snapshot?.baseline_source,
+    baseline_status: snapshot?.baseline_status,
+    adaptive_learning: compactValue(snapshot?.adaptive_learning),
+    history: trimArray(snapshot?.history, 5).map(compactValue),
+    latest_result: null,
+    current_upload: {
+      job_id: firstText(snapshot?.current_upload?.job_id, result?.job_id),
+      filename: snapshot?.current_upload?.filename ?? result?.filename,
+      status: snapshot?.current_upload?.status ?? result?.status ?? "complete",
+      processing_state: snapshot?.current_upload?.processing_state ?? result?.processing_state ?? "complete",
+      result,
+    },
+  };
+}
+
+function compactAnalysis(analysis) {
+  return {
+    analysis_id: analysis?.analysis_id,
+    generated_at: analysis?.generated_at,
+    source_file: analysis?.source_file,
+    fingerprint: compactValue(analysis?.fingerprint),
+    systems: trimArray(analysis?.systems, 20).map(compactValue),
+    insights: trimArray(analysis?.insights, 20).map(compactValue),
+    data_quality: compactValue(analysis?.data_quality),
+    analysis_metadata: compactValue(analysis?.analysis_metadata),
+  };
+}
+
+function compactValue(value, depth = 0) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return value.length > MAX_TEXT_LENGTH ? value.slice(0, MAX_TEXT_LENGTH) + "..." : value;
+  if (typeof value !== "object") return value;
+  if (depth >= 4) return Array.isArray(value) ? [] : {};
+  if (Array.isArray(value)) return trimArray(value, MAX_ARRAY_ITEMS).map((item) => compactValue(item, depth + 1));
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, nested]) => typeof nested !== "function")
+      .slice(0, MAX_OBJECT_KEYS)
+      .map(([key, nested]) => [key, compactValue(nested, depth + 1)]),
+  );
+}
+
+function trimArray(value, maxItems) {
+  return Array.isArray(value) ? value.slice(0, maxItems) : [];
 }
 
 function stableRecordId(jobId, datasetName, timestamp) {

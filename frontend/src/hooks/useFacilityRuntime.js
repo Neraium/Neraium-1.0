@@ -165,13 +165,20 @@ export default function useFacilityRuntime({
   }, [accessCode, buildProtectedRequestMessage, domainMode, hasAccess]);
 
   // Contract sentinel: const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
-  const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false } = {}) => {
-    if (!hasAccess) return false;
-    if (latestUploadRequestInFlightRef.current) return Boolean(latestUploadResultRef.current);
+  const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false, returnPayload = false } = {}) => {
+    const latestReturn = (hasRuntimeData, payload = null) => returnPayload
+      ? {
+        hasRuntimeData: Boolean(hasRuntimeData),
+        snapshot: payload?.snapshot ?? latestUploadSnapshot,
+        latestResult: payload?.latestResult ?? latestUploadResultRef.current,
+      }
+      : Boolean(hasRuntimeData);
+    if (!hasAccess) return latestReturn(false);
+    if (latestUploadRequestInFlightRef.current) return latestReturn(Boolean(latestUploadResultRef.current));
     latestUploadRequestInFlightRef.current = true;
     if (isUploadInProgress() || isUploadJobLocked()) {
       latestUploadRequestInFlightRef.current = false;
-      return Boolean(latestUploadResultRef.current);
+      return latestReturn(Boolean(latestUploadResultRef.current));
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
@@ -191,10 +198,10 @@ export default function useFacilityRuntime({
 
       const applyAntiFlapGate = !shouldIncludePersisted;
       if (applyAntiFlapGate && !stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
-        return Boolean(latestUploadResultRef.current);
+        return latestReturn(Boolean(latestUploadResultRef.current));
       }
       if (applyAntiFlapGate && stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
-        return Boolean(latestUploadResultRef.current);
+        return latestReturn(Boolean(latestUploadResultRef.current));
       }
 
       stability.hasData = nextHasData;
@@ -203,17 +210,17 @@ export default function useFacilityRuntime({
       setLatestUploadResult(payload.latestResult);
       setSessionStore(nextSessionStore);
       latestUploadResultRef.current = payload.latestResult;
-      return Boolean(nextSessionStore.hasRuntimeData);
+      return latestReturn(Boolean(nextSessionStore.hasRuntimeData), payload);
     } catch {
       if (!shouldIncludePersisted) {
         clearUploadSessionState();
-        return false;
+        return latestReturn(false);
       }
-      return Boolean(latestUploadResultRef.current);
+      return latestReturn(Boolean(latestUploadResultRef.current));
     } finally {
       latestUploadRequestInFlightRef.current = false;
     }
-  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess]);
+  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess, latestUploadSnapshot]);
 
   useEffect(() => {
     latestUploadResultRef.current = latestUploadResult;

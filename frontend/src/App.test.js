@@ -278,7 +278,7 @@ describe("App telemetry completion navigation", () => {
     });
 
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
-    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true, returnPayload: true });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
   });
 
@@ -303,7 +303,7 @@ describe("App telemetry completion navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restore analysis" }));
 
     await waitFor(() => {
-      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true, returnPayload: true });
     });
 
     expect(screen.getByTestId("telemetry-workspace")).toBeTruthy();
@@ -318,7 +318,7 @@ describe("App telemetry completion navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish analysis" }));
 
     await waitFor(() => {
-      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true, returnPayload: true });
     });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
   });

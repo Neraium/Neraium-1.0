@@ -42,20 +42,16 @@ const DEFAULT_HOTSPOTS = [
 ];
 
 export const FINGERPRINT_RIDGES = [
-  { id: "hvac-outer-a", system: "hvac", path: "M17 74C17 42 38 18 64 18C78 18 88 28 88 42C88 52 82 58 73 58H66" },
-  { id: "hvac-outer-b", system: "hvac", path: "M24 82C16 62 22 35 42 23C57 14 78 20 85 36C90 48 84 66 69 73C58 78 45 76 37 68" },
-  { id: "flow-upper-a", system: "flow-pressure", path: "M27 36H42C52 36 59 43 59 52V66C59 73 64 78 71 78H81" },
-  { id: "flow-upper-b", system: "flow-pressure", path: "M31 46C36 30 55 24 69 33C79 39 82 52C76 62 69 72 57 72H49" },
-  { id: "pumping-left-a", system: "pumping", path: "M21 63C21 43 36 27 55 27C67 27 77 35 80 46C82 56 77 67 67 72C57 77 44 74 38 65" },
-  { id: "pumping-left-b", system: "pumping", path: "M28 70V56C28 44 37 35 49 35H66C72 35 77 40 77 46V52" },
-  { id: "electrical-core-a", system: "electrical", path: "M39 54C39 47 44 42 51 42C58 42 63 47 63 54C63 61 58 66 51 66C44 66 39 61 39 54Z" },
-  { id: "electrical-core-b", system: "electrical", path: "M51 30V42M51 66V80M34 54H39M63 54H78" },
-  { id: "water-lower-a", system: "water-quality", path: "M34 82C46 89 65 86 76 74C87 62 87 43 76 31" },
-  { id: "water-lower-b", system: "water-quality", path: "M40 75C50 81 65 78 72 68C79 57 76 43 65 37" },
-  { id: "flow-upper-c", system: "flow-pressure", path: "M38 27H58C73 27 84 38 84 53V55" },
-  { id: "pumping-left-c", system: "pumping", path: "M32 57C35 47 43 42 52 42C61 42 68 49 68 58C68 67 61 74 52 74H45" },
-  { id: "water-lower-c", system: "water-quality", path: "M44 87H58C75 87 89 73 89 56V48" },
-  { id: "hvac-outer-c", system: "hvac", path: "M14 50C14 27 33 9 57 9C73 9 88 18 94 32" },
+  { id: "core-loop", system: "electrical", path: "M50 51C50 44 55 39 62 39C70 39 76 45 76 53C76 63 67 71 56 71C44 71 36 62 36 50C36 36 47 26 62 26C81 26 94 40 94 58" },
+  { id: "core-return", system: "pumping", path: "M58 50C58 55 54 59 49 59C44 59 40 55 40 50C40 42 47 36 56 35C67 34 78 42 79 54C80 69 67 82 51 82" },
+  { id: "inner-left", system: "water-quality", path: "M31 57C28 44 33 31 44 23C56 14 74 17 84 28C94 39 97 56 90 70C82 88 61 96 43 88" },
+  { id: "inner-right", system: "flow-pressure", path: "M45 75C55 81 69 78 78 68C87 58 87 43 78 33C70 24 57 21 46 26" },
+  { id: "middle-left", system: "hvac", path: "M24 68C17 47 23 26 40 14C57 2 82 7 96 25C109 42 111 66 100 85" },
+  { id: "middle-return", system: "pumping", path: "M36 88C52 101 78 97 94 80C110 62 109 34 92 18" },
+  { id: "outer-left", system: "water-quality", path: "M18 79C5 54 12 24 35 8C58 4 91 8 108 23C126 48 122 83 99 104" },
+  { id: "outer-right", system: "flow-pressure", path: "M31 97C52 116 88 111 108 88C127 67 128 34 111 11" },
+  { id: "base-arc", system: "electrical", path: "M42 105C56 112 74 111 88 102" },
+  { id: "top-arc", system: "hvac", path: "M41 18C55 9 75 10 89 21" },
 ];
 
 const STATUS_FALLBACK_FAMILIES = {

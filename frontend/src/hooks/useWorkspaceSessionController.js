@@ -213,18 +213,46 @@ export default function useWorkspaceSessionController({
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
-    await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+    console.info("[neraium] state hydration started", { jobId: expectedJobId });
+    const latestRefresh = await loadLatestUploadState({ includePersisted: true, forceRefresh: true, returnPayload: true });
     console.info("[neraium] current upload refetch requested", {
       expectedJobId,
       canonicalJobId: canonicalLatestUploadJobId,
       pendingJobId: pendingUploadJobId,
     });
+    const refreshedResult = latestRefresh?.latestResult ?? completedResult;
+    const refreshedSnapshot = latestRefresh?.snapshot ?? buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId });
+    const completionStatus = normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state);
+    const terminalCompletion = completionStatus === "complete"
+      || completionStatus === "save_complete"
+      || completedPayload?.result_available === true
+      || completedPayload?.sii_completed === true
+      || completedPayload?.sii_reliable_enough_to_show === true;
+    const payloadValid = isCompletedAnalysisPayload({ result: refreshedResult, snapshot: refreshedSnapshot });
+    console.info("[neraium] payload validation result", { jobId: expectedJobId, valid: payloadValid, terminal: terminalCompletion });
+    if (terminalCompletion && !payloadValid) {
+      throw new Error("Saved analysis payload was not valid after refresh.");
+    }
+    if (refreshedResult) {
+      setCompletedUploadOverride(refreshedResult);
+    }
     setSessionIntent("current");
-    await loadFacilitySystems({ forceRefresh: true });
+    const facilityRefreshed = await loadFacilitySystems({ forceRefresh: true });
+    console.info("[neraium] state hydration completed", { jobId: expectedJobId, facilityRefreshed });
+    if (!facilityRefreshed) {
+      throw new Error("Facility state refresh failed after results were saved.");
+    }
     if (options.navigateToGate !== false) {
-      console.info("[neraium] route transition target", { target: "system-body", jobId: expectedJobId });
+      console.info("[neraium] navigation started", { target: "system-body", jobId: expectedJobId });
       setActiveWorkspace("system-body");
     }
+    return {
+      jobId: expectedJobId,
+      latestResult: refreshedResult,
+      latestSnapshot: refreshedSnapshot,
+      payloadValid,
+      facilityRefreshed,
+    };
   }, [canonicalLatestUploadJobId, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {

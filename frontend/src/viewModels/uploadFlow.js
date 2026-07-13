@@ -137,7 +137,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
   const operatorReviewReady = result?.sii_reliable_enough_to_show === true;
   const finalStageIndex = INTAKE_STAGES.length - 1;
   return INTAKE_STAGES.map((stage, index) => {
-    if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "saving_result"]].includes(normalizeUploadStatus(uploadState))) {
+    if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "saving_result", "saving_results", "navigation_pending"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
       const terminalFailure = ["failed", "cancelled", "timeout"].includes(normalizedStatus);
       return {

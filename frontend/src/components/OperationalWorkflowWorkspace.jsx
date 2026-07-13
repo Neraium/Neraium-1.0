@@ -136,6 +136,10 @@ export default function OperationalWorkflowWorkspace({
   onDeleteHistoricalAnalysis,
   onSignOut,
 }) {
+  useEffect(() => {
+    console.info("[neraium] route mounted", { route: "system-body" });
+  }, []);
+
   const [activeSection, setActiveSection] = useState(() => readStoredOperationalSection());
   const [selectedInsightId, setSelectedInsightId] = useState(() => readStoredSelectedInsightId());
   const overviewUploadInputRef = useRef(null);
