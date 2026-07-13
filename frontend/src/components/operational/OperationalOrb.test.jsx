@@ -45,4 +45,20 @@ describe("OperationalOrb", () => {
     expect(orb.getAttribute("data-status")).toBe("warning");
     expect(orb.querySelectorAll(".operational-orb__hotspot")).toHaveLength(3);
   });
+
+  it("maps affected operational systems to changed fingerprint ridges", () => {
+    render(h(OperationalOrb, {
+      status: "warning",
+      state: {
+        label: "Water quality drift",
+        ridgeActivity: ["Water Quality", "pH dosing relationship"],
+      },
+    }));
+
+    const orb = screen.getByTestId("operational-orb");
+    const changedRidges = Array.from(orb.querySelectorAll(".operational-orb__fingerprint path.is-changed"));
+    expect(changedRidges.length).toBeGreaterThan(0);
+    expect(changedRidges.every((ridge) => ridge.getAttribute("data-system") === "water-quality")).toBe(true);
+    expect(orb.querySelectorAll(".operational-orb__ridge-particle[data-system='water-quality']").length).toBeGreaterThan(0);
+  });
 });

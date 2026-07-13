@@ -574,6 +574,19 @@ function buildOrbHotspots(insights, count) {
   });
 }
 
+function buildOrbRidgeActivity(insights) {
+  return dedupeText((insights ?? []).flatMap((insight) => [
+    insight?.system,
+    insight?.rawSystemName,
+    insight?.metricName,
+    insight?.summary,
+    insight?.whatHappened,
+    ...toList(insight?.affectedRelationships),
+    ...toList(insight?.contributingRelationships).flatMap(relationshipSignalCandidates),
+    ...toList(insight?.contributingMetrics).flatMap(relationshipSignalCandidates),
+  ]).filter(Boolean));
+}
+
 function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetryConnected, insights }) {
   if (uiState.key === "analyzing") {
     return { key: "analyzing", status: "learning", label: "Learning", tone: "learning", visualLabel: "Operational Fingerprint" };
@@ -597,6 +610,8 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
       visualLabel: "Operational Fingerprint",
       hotspotCount,
       hotspots: buildOrbHotspots(insights, hotspotCount),
+      ridgeActivity: buildOrbRidgeActivity(insights),
+      relationshipLabels: insights.flatMap((insight) => toList(insight.affectedRelationships)),
     };
   }
 
