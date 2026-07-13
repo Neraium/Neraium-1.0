@@ -948,6 +948,148 @@
   line-height: 1.5;
 }
 
+.operational-view-identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.operational-view-identity .operational-panel__header {
+  margin-bottom: 0;
+}
+
+.facility-fingerprint-mark {
+  --mark-fingerprint: #78f7ef;
+  --mark-fingerprint-soft: rgba(120, 247, 239, 0.24);
+  --mark-changed: #f2bd4d;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--mark-fingerprint) 32%, transparent);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--mark-fingerprint) 14%, transparent), transparent 62%),
+    rgba(8, 12, 20, 0.36);
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--mark-fingerprint) 10%, transparent);
+}
+
+.facility-fingerprint-mark svg {
+  width: 78%;
+  height: 78%;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px var(--mark-fingerprint-soft));
+}
+
+.facility-fingerprint-mark path {
+  fill: none;
+  stroke: var(--mark-fingerprint);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.76;
+  vector-effect: non-scaling-stroke;
+}
+
+.facility-fingerprint-mark path.is-changed {
+  stroke: var(--mark-changed);
+  opacity: 0.98;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mark-changed) 52%, transparent));
+}
+
+.facility-fingerprint-mark--awaiting {
+  --mark-fingerprint: #a8c3d7;
+  --mark-fingerprint-soft: rgba(168, 195, 215, 0.12);
+  opacity: 0.72;
+}
+
+.facility-fingerprint-mark--learning {
+  --mark-fingerprint: #8dfff5;
+  --mark-fingerprint-soft: rgba(141, 255, 245, 0.32);
+}
+
+.facility-fingerprint-mark--critical {
+  --mark-fingerprint: #8ff4f0;
+  --mark-fingerprint-soft: rgba(143, 244, 240, 0.18);
+  --mark-changed: #ff4f43;
+  border-color: color-mix(in srgb, var(--mark-changed) 34%, transparent);
+}
+
+.facility-fingerprint-mark--elevated {
+  --mark-changed: #ff9d3f;
+}
+
+.facility-fingerprint-mark--card,
+.facility-fingerprint-mark--timeline,
+.facility-fingerprint-mark--history {
+  width: 34px;
+  border-radius: 7px;
+}
+
+.system-summary-row__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.system-summary-row__heading strong {
+  min-width: 0;
+}
+
+.analysis-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.analysis-history-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: var(--ops-surface-subtle);
+  padding: 13px;
+}
+
+.analysis-history-card__main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.analysis-history-card__main dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.analysis-history-card__main dt {
+  color: var(--ops-ink-muted);
+  font-size: 0.68rem;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.analysis-history-card__main dd {
+  margin: 2px 0 0;
+  color: var(--ops-ink-soft);
+  font-size: 0.84rem;
+  font-weight: 560;
+}
+
+.analysis-history-card__actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
 .operator-interpretation {
   display: grid;
   gap: 14px;
@@ -2178,17 +2320,8 @@ button.insight-card {
 
 .fingerprint-summary-mark {
   grid-row: span 2;
-  width: 58px;
-  height: 72px;
-  overflow: visible;
-}
-
-.fingerprint-summary-mark path {
-  fill: none;
-  stroke: rgba(210, 221, 226, 0.76);
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 62px;
+  height: 62px;
 }
 
 .operational-panel--top-insight {
@@ -2676,10 +2809,10 @@ button.insight-card {
   --orb-glow: rgba(239, 68, 68, 0.38);
   --orb-glow-soft: rgba(249, 115, 22, 0.16);
   --orb-highlight: rgba(255, 190, 174, 0.24);
-  --orb-fingerprint: #ff765d;
-  --orb-fingerprint-soft: rgba(255, 118, 93, 0.32);
-  --orb-fingerprint-changed: #ff9d3f;
-  --orb-particle: #ffd1a1;
+  --orb-fingerprint: #8ff4f0;
+  --orb-fingerprint-soft: rgba(143, 244, 240, 0.2);
+  --orb-fingerprint-changed: #ff4f43;
+  --orb-particle: #ffb180;
   --orb-motion-duration: 6.2s;
   --orb-breath-scale: 1.018;
   --orb-particle-opacity: 0.58;
@@ -2705,9 +2838,19 @@ button.insight-card {
 }
 
 .operational-orb--critical .operational-orb__fingerprint svg {
+  animation: neraium-orb-print-breathe 8.4s cubic-bezier(0.42, 0, 0.22, 1) 1.7s infinite;
+}
+
+.operational-orb--critical .operational-orb__fingerprint path.is-active:not(.is-changed) {
+  opacity: 0.76;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--orb-fingerprint) 28%, transparent));
+}
+
+.operational-orb--critical .operational-orb__fingerprint path.is-active.is-changed {
   animation:
-    neraium-orb-print-breathe 6.4s cubic-bezier(0.42, 0, 0.22, 1) 1.7s infinite,
-    neraium-orb-critical-fingerprint-distort 8.8s steps(1, end) infinite;
+    neraium-orb-ridge-discover 1.25s cubic-bezier(0.2, 0.86, 0.24, 1) both,
+    neraium-orb-critical-ridge-pulse 6.8s ease-in-out calc(var(--ridge-index, 0) * 160ms) infinite,
+    neraium-orb-critical-fingerprint-distort 8.8s steps(1, end) calc(var(--ridge-index, 0) * 90ms) infinite;
 }
 
 .operational-orb--critical .operational-orb__hotspot {
@@ -2740,6 +2883,11 @@ button.insight-card {
 @keyframes neraium-orb-ridge-system-pulse {
   0%, 100% { opacity: 0.78; stroke-width: 1.85; }
   45% { opacity: 1; stroke-width: 2.28; }
+}
+
+@keyframes neraium-orb-critical-ridge-pulse {
+  0%, 100% { opacity: 0.78; stroke-width: 1.9; }
+  48% { opacity: 1; stroke-width: 2.5; }
 }
 
 @keyframes neraium-orb-fingerprint-lock {

@@ -41,21 +41,21 @@ const DEFAULT_HOTSPOTS = [
   { x: 77, y: 57, scale: 0.92, subsystem: "HVAC" },
 ];
 
-const FINGERPRINT_RIDGES = [
-  { id: "hvac-outer-a", system: "hvac", path: "M18 73C8 55 11 30 28 14C44-1 70 1 85 18C99 35 100 61 87 79C74 97 45 101 28 86" },
-  { id: "hvac-outer-b", system: "hvac", path: "M24 79C12 64 12 38 25 22C39 5 65 4 80 20C94 35 95 59 83 75C71 91 47 96 31 84" },
-  { id: "flow-upper-a", system: "flow-pressure", path: "M26 38C31 21 48 12 64 18C78 23 87 37 85 52C84 64 78 74 68 80" },
-  { id: "flow-upper-b", system: "flow-pressure", path: "M32 42C35 29 48 22 60 26C71 30 78 40 77 52C76 63 69 72 59 76" },
-  { id: "pumping-left-a", system: "pumping", path: "M24 64C17 48 22 29 36 20C49 12 67 16 76 29C84 41 82 58 72 68C62 79 45 81 34 72" },
-  { id: "pumping-left-b", system: "pumping", path: "M31 68C24 55 27 40 38 31C49 22 65 26 72 38C79 50 74 65 62 71C51 77 39 76 31 68" },
-  { id: "electrical-core-a", system: "electrical", path: "M48 43C55 39 64 43 66 51C68 60 61 68 52 69C43 70 36 63 37 54C38 49 42 45 48 43" },
-  { id: "electrical-core-b", system: "electrical", path: "M49 50C53 47 59 49 60 54C61 59 57 63 52 63C47 63 43 59 44 54C45 52 46 51 49 50" },
-  { id: "water-lower-a", system: "water-quality", path: "M36 78C47 86 66 82 74 69C81 58 79 43 69 34C60 26 46 25 37 33" },
-  { id: "water-lower-b", system: "water-quality", path: "M42 73C51 78 64 74 69 64C74 55 71 44 63 38C55 32 44 34 39 42" },
-  { id: "flow-upper-c", system: "flow-pressure", path: "M38 31C48 21 66 25 73 37C81 50 75 68 62 74" },
-  { id: "pumping-left-c", system: "pumping", path: "M30 56C28 46 33 36 42 32C52 28 63 33 66 43C70 54 63 65 52 67C44 69 36 65 32 59" },
-  { id: "water-lower-c", system: "water-quality", path: "M47 82C62 83 76 74 81 60C86 46 81 31 69 23" },
-  { id: "hvac-outer-c", system: "hvac", path: "M16 50C16 27 34 9 56 10C80 11 96 31 94 54" },
+export const FINGERPRINT_RIDGES = [
+  { id: "hvac-outer-a", system: "hvac", path: "M17 74C17 42 38 18 64 18C78 18 88 28 88 42C88 52 82 58 73 58H66" },
+  { id: "hvac-outer-b", system: "hvac", path: "M24 82C16 62 22 35 42 23C57 14 78 20 85 36C90 48 84 66 69 73C58 78 45 76 37 68" },
+  { id: "flow-upper-a", system: "flow-pressure", path: "M27 36H42C52 36 59 43 59 52V66C59 73 64 78 71 78H81" },
+  { id: "flow-upper-b", system: "flow-pressure", path: "M31 46C36 30 55 24 69 33C79 39 82 52C76 62 69 72 57 72H49" },
+  { id: "pumping-left-a", system: "pumping", path: "M21 63C21 43 36 27 55 27C67 27 77 35 80 46C82 56 77 67 67 72C57 77 44 74 38 65" },
+  { id: "pumping-left-b", system: "pumping", path: "M28 70V56C28 44 37 35 49 35H66C72 35 77 40 77 46V52" },
+  { id: "electrical-core-a", system: "electrical", path: "M39 54C39 47 44 42 51 42C58 42 63 47 63 54C63 61 58 66 51 66C44 66 39 61 39 54Z" },
+  { id: "electrical-core-b", system: "electrical", path: "M51 30V42M51 66V80M34 54H39M63 54H78" },
+  { id: "water-lower-a", system: "water-quality", path: "M34 82C46 89 65 86 76 74C87 62 87 43 76 31" },
+  { id: "water-lower-b", system: "water-quality", path: "M40 75C50 81 65 78 72 68C79 57 76 43 65 37" },
+  { id: "flow-upper-c", system: "flow-pressure", path: "M38 27H58C73 27 84 38 84 53V55" },
+  { id: "pumping-left-c", system: "pumping", path: "M32 57C35 47 43 42 52 42C61 42 68 49 68 58C68 67 61 74 52 74H45" },
+  { id: "water-lower-c", system: "water-quality", path: "M44 87H58C75 87 89 73 89 56V48" },
+  { id: "hvac-outer-c", system: "hvac", path: "M14 50C14 27 33 9 57 9C73 9 88 18 94 32" },
 ];
 
 const STATUS_FALLBACK_FAMILIES = {
@@ -104,7 +104,7 @@ function resolveRidgeCount(state, status, hotspotCount) {
   return Math.max(minimum, Math.min(Math.round(count), FINGERPRINT_RIDGES.length));
 }
 
-function normalizeRidgeFamily(value) {
+export function normalizeRidgeFamily(value) {
   const text = String(value ?? "").toLowerCase();
   if (!text) return "";
   if (/water|quality|chemical|chlor|dose|feed|ph|orp|conductivity|treatment/.test(text)) return "water-quality";
@@ -133,7 +133,7 @@ function collectFamilyCandidates(value) {
   return [value];
 }
 
-function resolveChangedFamilies({ state, hotspots, status }) {
+export function resolveChangedFamilies({ state, hotspots, status }) {
   const candidates = [
     ...collectFamilyCandidates(state?.ridgeActivity),
     ...collectFamilyCandidates(state?.systemFamilies),

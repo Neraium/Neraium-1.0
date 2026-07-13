@@ -4,6 +4,7 @@ import PageContainer from "./layout/PageContainer";
 import AdvancedDetailsView from "./operational/AdvancedDetailsView";
 import CommandCenterView from "./operational/CommandCenterView";
 import DataSourcesView from "./operational/DataSourcesView";
+import FacilityFingerprintMark from "./operational/FacilityFingerprintMark";
 import FingerprintView from "./operational/FingerprintView";
 import InsightsView from "./operational/InsightsView";
 import SystemsView from "./operational/SystemsView";
@@ -2504,14 +2505,14 @@ function formatEvidenceRange(range) {
   return [label, firstText(direct, comparison)].filter(Boolean).join(": ");
 }
 
-function Timeline({ items }) {
+function Timeline({ items, state, status }) {
   if (!items.length) return <EmptyOperationalState title="No history yet" body="Previous analyses and insight events will appear here over time." />;
   return (
     <ol className="operational-timeline">
       {items.map((item) => (
         <li key={item.id}>
           <div className="operational-timeline__meta">
-            {item.icon ? <span className="operational-timeline__icon" aria-hidden="true">{item.icon}</span> : null}
+            <FacilityFingerprintMark className="facility-fingerprint-mark--timeline" state={state} status={status} label={item.title + " fingerprint"} />
             <span>{item.time}</span>
           </div>
           <strong>{item.title}</strong>

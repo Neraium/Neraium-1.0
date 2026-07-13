@@ -1,9 +1,14 @@
+import FacilityFingerprintMark from "./FacilityFingerprintMark";
+
 export default function FingerprintView({ model, helpers }) {
   const { DetailGrid, EmptyOperationalState, PanelHeader, QualityList } = helpers;
   return (
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--wide" aria-label="Operational Fingerprint">
-        <PanelHeader eyebrow="Operational Fingerprint" title="Operational Fingerprint" subtitle="A learned baseline of how operational systems normally behave together." />
+        <div className="operational-view-identity operational-view-identity--fingerprint">
+          <PanelHeader eyebrow="Operational Fingerprint" title="Operational Fingerprint" subtitle="A learned baseline of how operational systems normally behave together." />
+          <FacilityFingerprintMark state={model.orb} status={model.orb.status} label="Facility operational identity" />
+        </div>
         <div className={`fingerprint-status fingerprint-status--${model.fingerprintDrift.tone}`}>
           <strong>{model.fingerprintStatusLabel}</strong>
           <p>{model.fingerprintSummary}</p>

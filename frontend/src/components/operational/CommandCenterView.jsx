@@ -1,3 +1,4 @@
+import FacilityFingerprintMark from "./FacilityFingerprintMark";
 import OperationalOrb from "./OperationalOrb";
 
 function confidenceFallback(severity) {
@@ -21,17 +22,6 @@ function dashboardInsightTitle(insight, relationships, fallback) {
   return String(fallback ?? "Operating Behavior Changed").replace(/Relationship Changed/i, "Behavior Changed");
 }
 
-function FingerprintMark() {
-  return (
-    <svg className="fingerprint-summary-mark" viewBox="0 0 44 54" aria-hidden="true" focusable="false">
-      <path d="M22 6c9 0 16 7 16 17 0 12-6 22-16 25" />
-      <path d="M14 12c5-5 14-6 20-1 6 5 8 14 4 23" />
-      <path d="M10 23c0-8 5-14 12-14 7 0 12 5 12 12 0 9-6 16-14 17" />
-      <path d="M17 22c0-3 2-5 5-5s5 2 5 5c0 6-5 10-10 10" />
-      <path d="M22 24c-1 6-4 11-9 14" />
-    </svg>
-  );
-}
 export default function CommandCenterView({ model, helpers, onOpenInsight, onAnalyzeHistoricalData, onConnectLiveData, onResumePreviousSession, onViewSystems, onViewFingerprint }) {
   const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, StatusBadge, formatActiveInsightCount, formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing, severityToTone } = helpers;
   const primaryInsight = model.insights[0] ?? null;
@@ -103,7 +93,7 @@ export default function CommandCenterView({ model, helpers, onOpenInsight, onAna
         <section className="operational-panel operational-panel--fingerprint-summary" aria-label="Operational Fingerprint">
           <PanelHeader eyebrow="Operational Fingerprint" title="Established" subtitle="" />
           <div className="fingerprint-summary-card">
-            <FingerprintMark />
+            <FacilityFingerprintMark className="fingerprint-summary-mark" state={model.orb} status={model.orb.status} label="Dashboard facility fingerprint" />
             <SummaryRows rows={model.dashboardFingerprintRows} />
             <button type="button" className="secondary-command-button" onClick={onViewFingerprint}>View History</button>
           </div>

@@ -1,3 +1,5 @@
+import FacilityFingerprintMark from "./FacilityFingerprintMark";
+
 export default function AdvancedDetailsView({ model, helpers, selectedInsightId, onAnalyzeSystem, onResumePreviousSession, onReopenHistoricalAnalysis, onDeleteHistoricalAnalysis }) {
   const { DetailGrid, EvidencePanel, PanelHeader, QualityList, StatusBadge, Timeline, formatConfidenceDisplay, prioritizeEvidenceGroups, severityToTone } = helpers;
   const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
@@ -79,7 +81,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
 
       <section className="operational-panel" aria-label="Recent activity">
         <PanelHeader eyebrow="Activity" title="Recent Activity" subtitle="" />
-        <Timeline items={model.historyItems} />
+        <Timeline items={model.historyItems} state={model.orb} status={model.orb.status} />
       </section>
 
       {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
@@ -101,6 +103,7 @@ function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
     <div className="analysis-history-list">
       {history.map((entry) => (
         <article className="analysis-history-card" key={entry.id}>
+          <FacilityFingerprintMark className="facility-fingerprint-mark--history" state={entry.orbState} status={entry.fingerprintStatus} label={entry.datasetName + " fingerprint"} />
           <div className="analysis-history-card__main">
             <span className="section-token">{formatHistoryTimestamp(entry.timestamp)}</span>
             <strong>{entry.datasetName}</strong>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import FacilityFingerprintMark from "./FacilityFingerprintMark";
 import OperatorInsightDetail from "./OperatorInsightDetail";
 
 export default function InsightsView({ model, helpers, selectedInsight, onSelectInsight }) {
@@ -15,7 +16,10 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
-        <PanelHeader eyebrow="Insights" title="Operational Insights" subtitle="Prioritized operational changes requiring investigation." />
+        <div className="operational-view-identity">
+          <PanelHeader eyebrow="Insights" title="Operational Insights" subtitle="Prioritized operational changes requiring investigation." />
+          <FacilityFingerprintMark state={model.orb} status={model.orb.status} label="Insights facility fingerprint" />
+        </div>
         <InsightList
           insights={model.insights}
           empty={model.analysisComplete ? "No active operational insights were detected." : "Insights are generated automatically once an Operational Fingerprint has been established."}
