@@ -20,3 +20,9 @@ Patch-based editing is broken in this environment.
 - Do not pause to explain patch-tool failures unless they prevent completion of the requested work.
 - After editing, inspect `git diff` and run `git diff --check`.
 - Finish requested implementation work with the appropriate build/tests, commit, and push unless the user says otherwise.
+
+## Frontend test environment
+
+- Before running frontend browser or end-to-end tests in a fresh Codex environment, run `cd frontend && npm run setup:codex`.
+- This installs locked frontend dependencies and the Chromium browser required by Playwright.
+- Do not attempt ad hoc `npm exec --package=...` fallbacks when dependencies are missing; use the repository setup script.
