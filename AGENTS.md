@@ -1,7 +1,22 @@
-Codex rules for this repo:
-- Never use apply_patch or patch helpers.
-- Never check for apply_patch.
-- Use direct file edits with python3, sed, perl, or cat.
-- If a file edit is needed, rewrite the file directly.
-- If a tool fails once, do not retry it.
-- Finish with git diff, build/test, commit, and git push.
+# Codex rules for this repository
+
+## File editing policy
+
+Patch-based editing is broken in this environment.
+
+- NEVER use the built-in patch helper.
+- NEVER use `apply_patch`.
+- NEVER use `git apply`.
+- NEVER check whether any patch helper is available.
+- Do not retry patch-based editing with absolute paths, relative paths, different syntax, or alternate wrappers.
+- Edit files only with ordinary shell tools or scripts.
+- Preferred methods:
+  - Python scripts that read, modify, and rewrite files
+  - `cat > file <<'EOF'`
+  - `perl -0pi`
+  - `sed` only for small, safe replacements
+- Before writing, verify the target file exists.
+- If an editing tool fails once, do not retry the same method; switch immediately to another non-patch method.
+- Do not pause to explain patch-tool failures unless they prevent completion of the requested work.
+- After editing, inspect `git diff` and run `git diff --check`.
+- Finish requested implementation work with the appropriate build/tests, commit, and push unless the user says otherwise.
