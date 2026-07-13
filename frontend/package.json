@@ -11,6 +11,7 @@
     "lint:ci": "npm exec eslint -- src --ext .jsx,.js --max-warnings=0",
     "test": "vitest --environment jsdom",
     "test:e2e": "playwright test",
+    "setup:codex": "npm ci && npx playwright install --with-deps chromium",
     "verify": "npm run lint:ci && npm run build && npm test -- --run"
   },
   "dependencies": {
