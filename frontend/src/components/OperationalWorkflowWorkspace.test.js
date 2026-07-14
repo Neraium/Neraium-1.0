@@ -292,7 +292,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
+    const openButton = screen.getByRole("button", { name: "Open Insight" });
+    fireEvent.click(openButton);
 
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByLabelText("Insight detail")).toBeTruthy();
@@ -305,6 +306,13 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByRole("heading", { name: "System Readiness" })).toBeNull();
     expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
     expect(hasActiveNavButton(/Command Center/)).toBe(false);
+
+    const expandedCard = screen.getByRole("button", { name: "Hide Insight" }).closest(".insight-card");
+    expect(expandedCard.textContent).toContain("What Changed");
+    expect(expandedCard.textContent).toContain("Evidence");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide Insight" }));
+    expect(expandedCard.textContent).not.toContain("What Changed");
   });
 
   it("keeps Systems card Open Insight wired to the shared insight selection flow", () => {
@@ -440,5 +448,96 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Raw Relationship Identifiers")).toBeTruthy();
     expect(screen.getByText("Source signals")).toBeTruthy();
     expect(screen.getByText("Source time ranges")).toBeTruthy();
+  });
+});
+
+
+function bugRegressionAnalysis() {
+  return {
+    systems: [{ id: "flow", name: "Flow & Pressure" }, { id: "disinfection", name: "Disinfection" }],
+    relationships: [],
+    fingerprint: { status: "changed", meaning: "Operational fingerprint changed." },
+    insights: [
+      {
+        id: "flow-cum",
+        title: "Flow & Pressure Degrading",
+        severity: "high",
+        confidence: "high",
+        confidence_score: 1,
+        system: "Flow & Pressure",
+        what_changed: "The historical relationship between Filter Diff Pressure and Cum Chemical Feed Gal shifted from its established operating pattern.",
+        contributing_relationships: [{ columns: ["filter_diff_pressure_psi", "cum_chemical_feed_gal"], display_columns: ["Filter Diff Pressure", "Cum Chemical Feed Gal"] }],
+        affected_relationships: ["The Historical Relationship Between Filter Diff Pressure and Cum Chemical Feed Gal Shifted From Its Established Operating Pattern."],
+        evidence_items: [{ source_columns: ["filter_diff_pressure_psi", "cum_chemical_feed_gal"] }],
+      },
+      {
+        id: "orp-chlorine",
+        title: "Disinfection Control Drift",
+        severity: "high",
+        confidence: "high",
+        confidence_score: 0.88,
+        system: "Disinfection",
+        what_changed: "ORP decoupled from free chlorine during the current window.",
+        contributing_relationships: [{ columns: ["orp_mv", "free_chlorine_ppm"], display_columns: ["ORP MV", "Free Chlorine PPM"] }],
+        evidence_items: [{ source_columns: ["orp_mv", "free_chlorine_ppm"] }],
+      },
+    ],
+  };
+}
+
+describe("OperationalWorkflowWorkspace bug regressions", () => {
+  it("renders raw relationship pairs without nesting headline sentences and caps cumulative confidence", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: bugRegressionAnalysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
+    expect(workspaceText).toContain("The relationship between Filter Diff Pressure and Cum Chemical Feed Gal has shifted from its established operational baseline.");
+    expect(workspaceText).not.toContain("The relationship between The Historical Relationship Between");
+
+    clickNav("Insights");
+    expect(screen.getByLabelText("Neraium operational workspace").textContent).toContain("74%");
+  });
+
+  it("labels recent activity entries from each insight subsystem", () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: bugRegressionAnalysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
+    expect(workspaceText).toContain("Flow & Pressure behavior change classified");
+    expect(workspaceText).toContain("Disinfection behavior change classified");
+  });
+
+  it("uses evidence source identifiers instead of Signal N fallback titles", () => {
+    const metricAnalysis = {
+      systems: [{ id: "quality", name: "Water Quality" }],
+      relationships: [],
+      fingerprint: { status: "changed", meaning: "Water quality changed." },
+      insights: [{
+        id: "delta-ph",
+        title: "Water Quality Operating Behavior Changed",
+        severity: "moderate",
+        confidence: "moderate",
+        confidence_score: 0.68,
+        system: "Water Quality",
+        metric_name: "Signal 4",
+        evidence_items: [{ source_columns: ["delta_ph"] }],
+      }],
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: metricAnalysis }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    expect(screen.getAllByText(/Delta pH Operating Behavior Changed/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Signal 4/)).toBeNull();
   });
 });

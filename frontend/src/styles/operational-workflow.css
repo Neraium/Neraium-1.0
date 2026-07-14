@@ -25,7 +25,7 @@
   --ops-shadow-strong: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 64px rgba(0, 0, 0, 0.38);
 
   display: grid;
-  grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
+  grid-template-columns: clamp(220px, 18vw, 272px) minmax(0, 1fr);
   min-height: 100svh;
   max-width: none;
   margin: 0;
@@ -60,6 +60,8 @@
   flex-direction: column;
   gap: 22px;
   height: 100svh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px;
   border-right: 1px solid var(--ops-line);
   background: rgba(8, 12, 20, 0.94);
@@ -209,7 +211,7 @@
 
 .operational-main {
   min-width: 0;
-  padding: 22px;
+  padding: clamp(18px, 2vw, 30px);
 }
 
 .operational-topbar {
@@ -298,7 +300,7 @@
 
 .operational-grid {
   display: grid;
-  gap: 12px;
+  gap: clamp(12px, 1.4vw, 18px);
 }
 
 .operational-grid--overview {
@@ -403,6 +405,7 @@
   margin: 0;
   color: var(--ops-ink-soft);
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .operational-block h3 {
@@ -1290,6 +1293,7 @@ button.insight-card {
   color: var(--ops-ink);
   font-weight: 560;
   line-height: 1.38;
+  overflow-wrap: anywhere;
 }
 
 .compact-list,
@@ -1565,8 +1569,19 @@ button.insight-card {
   }
 
   .operational-mobile-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
     display: flex;
     align-items: stretch;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    backdrop-filter: blur(14px);
+  }
+
+  .operational-mobile-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .operational-grid--overview,
@@ -1624,7 +1639,31 @@ button.insight-card {
 
   .operational-mobile-nav button {
     min-width: 0;
+    min-height: 44px;
     padding-inline: 6px;
+  }
+
+  .operational-panel {
+    padding: 14px;
+  }
+
+  .compact-list li,
+  .operational-list li {
+    display: grid;
+    justify-content: stretch;
+    gap: 4px;
+  }
+
+  .analysis-history-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analysis-history-card__actions {
+    justify-items: stretch;
+  }
+
+  .analysis-history-card__actions > * {
+    width: 100%;
   }
 
   .operational-mobile-nav button small {
@@ -2146,7 +2185,7 @@ button.insight-card {
 }
 
 .insight-feed--cards {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   margin-bottom: 14px;
 }
 
@@ -2174,6 +2213,20 @@ button.insight-card {
   width: fit-content;
   min-height: 36px;
   margin-top: 2px;
+}
+
+.insight-card.is-selected .insight-card__summary {
+  min-height: auto;
+  -webkit-line-clamp: unset;
+}
+
+.insight-card__inline-detail {
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.insight-card__inline-detail .insight-detail-card {
+  box-shadow: none;
 }
 
 .insight-detail-card {
@@ -3119,7 +3172,7 @@ button.insight-card {
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    padding: 16px;
+    padding: clamp(12px, 3.6vw, 16px);
     overflow-x: hidden;
   }
 
@@ -3173,7 +3226,7 @@ button.insight-card {
   }
 
   .operational-panel {
-    padding: 20px;
+    padding: clamp(14px, 4vw, 20px);
     overflow: hidden;
   }
 

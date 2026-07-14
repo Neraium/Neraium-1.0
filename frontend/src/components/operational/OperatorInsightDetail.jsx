@@ -374,7 +374,7 @@ function ContextGrid({ rows }) {
   );
 }
 
-export default function OperatorInsightDetail({ insight }) {
+export default function OperatorInsightDetail({ insight, defaultOpen = false }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
   const evidenceLines = unique([
     ...evidenceSummaries(insight, evidence),
@@ -435,7 +435,7 @@ export default function OperatorInsightDetail({ insight }) {
   const operationalMemory = buildOperationalMemory(insight);
 
   return (
-    <details className="insight-detail-card" aria-label="Insight detail">
+    <details className="insight-detail-card" aria-label="Insight detail" open={defaultOpen}>
       <summary>Insight detail</summary>
 
       <div className="insight-briefing__header">

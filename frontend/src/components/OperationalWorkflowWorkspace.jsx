@@ -186,7 +186,7 @@ export default function OperationalWorkflowWorkspace({
     setActiveSection("systems");
   }, [model.insights, model.resultTabsReady, resultsNavigationKey]);
 
-  const selectedInsight = model.insights.find((item) => item.id === selectedInsightId) ?? model.insights[0] ?? null;
+  const selectedInsight = selectedInsightId ? (model.insights.find((item) => item.id === selectedInsightId) ?? null) : null;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -232,6 +232,9 @@ export default function OperationalWorkflowWorkspace({
   const shellClassName = "operational-workflow";
 
   function navigate(sectionId) {
+    if (sectionId === "insights" && !model.insights.some((item) => item.id === selectedInsightId)) {
+      setSelectedInsightId(model.insights[0]?.id ?? null);
+    }
     setActiveSection(sectionId);
   }
 
@@ -900,6 +903,8 @@ function activityDetailForInsight(insight) {
 }
 
 function activityTitleForInsight(insight) {
+  const systemLabel = formatSubsystemName(insight?.system);
+  if (systemLabel && systemLabel !== UNASSIGNED_SYSTEM_NAME) return systemLabel + " behavior change classified";
   const relationshipContext = insightRelationshipLabels(insight).join(" ").toLowerCase();
   const context = [insight?.system, insight?.summary, relationshipContext].join(" ").toLowerCase();
   if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water quality control drift classified";
@@ -1214,7 +1219,7 @@ function summarizeEvidence(items) {
   return formatEvidenceItems(items).slice(0, 4).join("; ");
 }
 
-function resolveMetricName(insight, index = 0) {
+function resolveMetricName(insight, index = 0, evidenceItems = []) {
   const direct = firstText(
     insight?.metric_name,
     insight?.metricName,
@@ -1225,12 +1230,20 @@ function resolveMetricName(insight, index = 0) {
     insight?.source_tag,
     insight?.sourceTag
   );
+  const fromEvidence = toList(evidenceItems)
+    .flatMap((item) => item && typeof item === "object"
+      ? toList(item.display_name, item.displayName, item.source_columns, item.sourceColumns, item.source_metrics, item.sourceMetrics, item.source_tags, item.sourceTags)
+      : [])
+    .map((item, evidenceIndex) => normalizeSignalName(item, evidenceIndex + 1))
+    .find(Boolean);
   const fromMetric = Array.isArray(insight?.contributing_metrics) ? insight.contributing_metrics.map((item, metricIndex) => normalizeSignalName(item, metricIndex + 1)).find(Boolean) : "";
   const fromRelationship = toList(insight?.contributing_relationships)
     .flatMap(relationshipSignalCandidates)
     .map((item, signalIndex) => normalizeSignalName(item, signalIndex + 1))
     .find(Boolean);
-  return normalizeSignalName(direct || fromMetric || fromRelationship, index + 1) || `Metric ${index + 1}`;
+  return [direct, fromEvidence, fromMetric, fromRelationship]
+    .map((candidate, candidateIndex) => normalizeSignalName(candidate, candidateIndex + 1))
+    .find(Boolean) || "Metric " + (index + 1);
 }
 
 function firstMetricValue(metrics, key) {
@@ -1250,6 +1263,29 @@ function relationshipSignalCandidates(value) {
     ...toList(value.source, value.target),
     ...toList(value.source_column_metadata, value.sourceColumnMetadata).map((item, index) => metricDisplayName(item, index + 1)),
   ];
+}
+
+function isCumulativeRelationshipColumn(value) {
+  const text = normalizeDisplayKey(value);
+  if (!text || /\b(rate|delta|diff|change|per min|per hour)\b/i.test(text)) return false;
+  return /\b(cum|cumulative|totalizer|totalized|total|counter|meter|odometer|accum|accumulated|usage|consumption)\b/i.test(text);
+}
+
+function hasCumulativeAnchoredRelationship(insight) {
+  return toList(insight?.contributingRelationships)
+    .flatMap(relationshipSignalCandidates)
+    .some(isCumulativeRelationshipColumn);
+}
+
+function applyCumulativeRelationshipConfidenceCap(insight) {
+  if (!hasCumulativeAnchoredRelationship(insight)) return;
+  const current = numberOrNull(insight.confidenceScore);
+  insight.confidenceScore = current === null ? 0.74 : Math.min(current, 0.74);
+  if (String(insight.confidence ?? "").toLowerCase().includes("high")) insight.confidence = "moderate";
+  const rationale = "Confidence capped because the relationship is anchored on a monotonic cumulative counter; derived rates or non-cumulative process signals should drive ranking.";
+  insight.confidenceRationale = firstText(insight.confidenceRationale)
+    ? firstText(insight.confidenceRationale) + " " + rationale
+    : rationale;
 }
 
 function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation, systems = [], signals = [] }) {
@@ -1284,7 +1320,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         affectedRelationships,
         changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount) ?? affectedRelationships.length,
         contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
-        metricName: resolveMetricName(item, index),
+        metricName: resolveMetricName(item, index, evidence),
         baselineValue: firstText(item.baseline_value, item.baselineValue, item.baseline_range, item.baselineRange, item.baseline, firstMetricValue(item.contributing_metrics, "baseline")),
         currentValue: firstText(item.current_value, item.currentValue, item.current, firstMetricValue(item.contributing_metrics, "current")),
         deviationDirection: formatDisplayName(firstText(item.deviation_direction, item.direction, firstMetricValue(item.contributing_metrics, "direction"))),
@@ -1301,6 +1337,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         detectedAt: lastAnalysis,
         type: getInsightType(item),
       };
+      applyCumulativeRelationshipConfidenceCap(insight);
       insight.system = resolveSystemName(insight, systems, signals);
       insight.summary = formatInsightTitle(insight);
       return insight;
@@ -1341,7 +1378,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         affectedRelationships: relationshipContributionLabels(item.contributing_relationships),
         changedRelationshipCount: numberOrNull(item.changed_relationship_count ?? item.changedRelationshipCount),
         contributingMetrics: Array.isArray(item.contributing_metrics) ? item.contributing_metrics : [],
-        metricName: resolveMetricName(item, index),
+        metricName: resolveMetricName(item, index, evidence),
         baselineValue: firstText(item.baseline_value, item.baselineValue, item.baseline_range, item.baselineRange, item.baseline),
         currentValue: firstText(item.current_value, item.currentValue, item.current),
         deviationDirection: formatDisplayName(firstText(item.deviation_direction, item.direction)),
@@ -1352,6 +1389,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         detectedAt: lastAnalysis,
         type: getInsightType(item),
       };
+      applyCumulativeRelationshipConfidenceCap(insight);
       insight.system = resolveSystemName(insight, systems, signals);
       insight.summary = formatInsightTitle(insight);
       return insight;
@@ -1404,7 +1442,7 @@ function evidenceKey(item) {
 
 function buildSystemOperationalSummary({ activeInsightCount, topInsight, relationships }) {
   if (activeInsightCount <= 0) return "No active operational changes require review.";
-  const relationship = relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0];
+  const relationship = insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? relationships[0];
   if (relationship) return relationshipBriefingSentence(relationship);
   const summary = conciseOperatorSentence(topInsight?.whatHappened, topInsight?.rawSummary, topInsight?.summary);
   return summary || "Current operation no longer matches the expected baseline.";
@@ -1430,7 +1468,7 @@ function buildSystemCards({ systems, primarySystem, insights }) {
       severity: activeInsightCount ? (topInsight?.severity ?? "Moderate") : "",
       hasActiveIssue: activeInsightCount > 0,
       relationshipDrift: activeInsightCount ? "Equipment behavior changed" : "No active change",
-      keyChangedRelationship: relationships[0] ?? insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? "",
+      keyChangedRelationship: insightRelationshipLabels(topInsight).slice(0, 1)[0] ?? relationships[0] ?? "",
       primaryFinding: topInsight?.summary ?? "",
       potentialCauses: Array.isArray(topInsight?.possibleOperationalCauses) ? topInsight.possibleOperationalCauses.slice(0, 3) : [],
       recommendedFirstAction: topInsight?.recommendedFirstAction ?? topInsight?.recommendedAction ?? "",
@@ -1607,19 +1645,25 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
 }
 
 
-function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId }) {
+function insightDomId(value, index) {
+  const source = String(value ?? index + 1).replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return "insight-detail-" + (source || index + 1);
+}
+
+function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId, renderInsightDetail }) {
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;
   return (
     <div className="insight-feed insight-feed--cards">
-      {insights.map((insight) => {
-        const selected = selectedId === insight.id;
+      {insights.map((insight, index) => {
+        const selected = selectedId != null && selectedId === insight.id;
+        const detailId = insightDomId(insight.id, index);
         const title = formatInsightTitle(insight);
         const relationships = insightRelationshipLabels(insight).slice(0, 8);
         const summary = operatorSummaryBriefing(insight, relationships)[0] || title;
         const rows = insightCardRows(insight, relationships);
         return (
           <article
-            key={insight.id}
+            key={insight.id || index}
             className={selected ? "insight-card insight-card--compact is-selected" : "insight-card insight-card--compact"}
             aria-current={selected ? "true" : undefined}
           >
@@ -1633,7 +1677,20 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
             <h3>{title}</h3>
             <DetailGrid rows={rows} />
             <p className="insight-card__summary">{summary}</p>
-            <button type="button" className="secondary-command-button insight-card__open" onClick={() => onOpenInsight?.(insight.id)}>Open Insight</button>
+            <button
+              type="button"
+              className="secondary-command-button insight-card__open"
+              aria-expanded={selected}
+              aria-controls={selected ? detailId : undefined}
+              onClick={() => onOpenInsight?.(selected ? null : insight.id)}
+            >
+              {selected ? "Hide Insight" : "Open Insight"}
+            </button>
+            {selected && typeof renderInsightDetail === "function" ? (
+              <div id={detailId} className="insight-card__inline-detail">
+                {renderInsightDetail(insight)}
+              </div>
+            ) : null}
           </article>
         );
       })}
@@ -2724,7 +2781,7 @@ function formatDisplayName(value, fallback = "") {
 
 function normalizeSignalName(value, index = 0) {
   const raw = value && typeof value === "object" ? metricDisplayName(value, index) : value;
-  const label = formatDisplayName(raw, index ? `Signal ${index}` : "");
+  const label = formatDisplayName(raw);
   if (!label) return "";
   if (isGenericRelationshipLabel(label)) return index ? `Signal ${index}` : "";
   return label;
@@ -2846,6 +2903,7 @@ function isBackendFallbackLabel(value) {
   const key = normalizeDisplayKey(value);
   if (!key) return false;
   if (GENERIC_FALLBACK_LABELS.has(key)) return true;
+  if (/^signal\s+\d+$/i.test(key)) return true;
   return GENERIC_FALLBACK_PATTERN.test(key);
 }
 
@@ -3036,7 +3094,7 @@ function formatInsightTitle(value) {
     if (type === "metric_deviation") {
       const metricTitle = normalizeSignalName(value.metricName);
       if (suppliedOperationalTitle) return suppliedOperationalTitle;
-      if (metricTitle) return metricTitle + " Operating Behavior Changed";
+      if (metricTitle) return titleEndpoint(metricTitle) + " Operating Behavior Changed";
       if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
       if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
       return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
@@ -3053,7 +3111,7 @@ function formatInsightTitle(value) {
 function operationalFindingTitle(value) {
   const title = firstText(value).trim();
   if (!title) return "";
-  if (/relationship\s+(changed|shifted|weakened)|behavior\s+changed|observed subsystem behavior changed/i.test(title)) return "";
+  if (/relationship\s+(changed|shifted|weakened)|behavior\s+changed|operating behavior changed|hydraulic performance changed|observed subsystem behavior changed/i.test(title)) return "";
   return title;
 }
 
@@ -3087,6 +3145,8 @@ function formatOperationalSignalName(value) {
 
 function relationshipEndpointLabels(value, index = 0) {
   const label = formatRelationshipObservedLabel(value, index);
+  const sentencePair = label.match(/relationship between\s+(.+?)\s+and\s+(.+?)(?:\s+(?:shifted|weakened|emerged|changed|no longer|during)\b|\.|$)/i);
+  if (sentencePair) return [sentencePair[1], sentencePair[2]].map(formatOperationalSignalName).filter(Boolean).slice(0, 2);
   return label
     .split(/\s*↔\s*|\s+\/\s+|\s+and\s+/i)
     .map(formatOperationalSignalName)
@@ -3194,11 +3254,11 @@ function recommendedReviewItems(insight, relationships = []) {
 
 function insightRelationshipLabels(insight) {
   if (!insight) return [];
-  if (Array.isArray(insight.affectedRelationships) && insight.affectedRelationships.length) {
-    return insight.affectedRelationships;
-  }
   if (Array.isArray(insight.contributingRelationships) && insight.contributingRelationships.length) {
     return relationshipContributionLabels(insight.contributingRelationships);
+  }
+  if (Array.isArray(insight.affectedRelationships) && insight.affectedRelationships.length) {
+    return insight.affectedRelationships;
   }
   return [];
 }
