@@ -33,25 +33,25 @@ const ORB_STATUS = {
   },
 };
 
-const DEFAULT_HOTSPOTS = [
-  { x: 70, y: 34, scale: 1, subsystem: "Flow & Pressure" },
-  { x: 38, y: 66, scale: 0.84, subsystem: "Water Quality" },
-  { x: 62, y: 70, scale: 1.12, subsystem: "Pumping System" },
-  { x: 31, y: 39, scale: 0.76, subsystem: "Electrical" },
-  { x: 77, y: 57, scale: 0.92, subsystem: "HVAC" },
-];
+const SYSTEM_HOTSPOT_POSITIONS = {
+  "flow-pressure": { x: 70, y: 34, scale: 1, subsystem: "Flow & Pressure" },
+  "water-quality": { x: 38, y: 66, scale: 0.84, subsystem: "Water Quality" },
+  pumping: { x: 62, y: 70, scale: 1.12, subsystem: "Pumping System" },
+  electrical: { x: 31, y: 39, scale: 0.76, subsystem: "Electrical" },
+  hvac: { x: 77, y: 57, scale: 0.92, subsystem: "HVAC" },
+};
 
 export const FINGERPRINT_RIDGES = [
-  { id: "core-loop", system: "electrical", path: "M50 51C50 44 55 39 62 39C70 39 76 45 76 53C76 63 67 71 56 71C44 71 36 62 36 50C36 36 47 26 62 26C81 26 94 40 94 58" },
-  { id: "core-return", system: "pumping", path: "M58 50C58 55 54 59 49 59C44 59 40 55 40 50C40 42 47 36 56 35C67 34 78 42 79 54C80 69 67 82 51 82" },
-  { id: "inner-left", system: "water-quality", path: "M31 57C28 44 33 31 44 23C56 14 74 17 84 28C94 39 97 56 90 70C82 88 61 96 43 88" },
-  { id: "inner-right", system: "flow-pressure", path: "M45 75C55 81 69 78 78 68C87 58 87 43 78 33C70 24 57 21 46 26" },
-  { id: "middle-left", system: "hvac", path: "M24 68C17 47 23 26 40 14C57 2 82 7 96 25C109 42 111 66 100 85" },
-  { id: "middle-return", system: "pumping", path: "M36 88C52 101 78 97 94 80C110 62 109 34 92 18" },
-  { id: "outer-left", system: "water-quality", path: "M18 79C5 54 12 24 35 8C58 4 91 8 108 23C126 48 122 83 99 104" },
-  { id: "outer-right", system: "flow-pressure", path: "M31 97C52 116 88 111 108 88C127 67 128 34 111 11" },
-  { id: "base-arc", system: "electrical", path: "M42 105C56 112 74 111 88 102" },
-  { id: "top-arc", system: "hvac", path: "M41 18C55 9 75 10 89 21" },
+  { id: "core-loop", system: "electrical", confidence: 5, path: "M50 51C50 44 55 39 62 39C70 39 76 45 76 53C76 63 67 71 56 71C44 71 36 62 36 50C36 36 47 26 62 26C81 26 94 40 94 58" },
+  { id: "core-return", system: "pumping", confidence: 2, path: "M58 50C58 55 54 59 49 59C44 59 40 55 40 50C40 42 47 36 56 35C67 34 78 42 79 54C80 69 67 82 51 82" },
+  { id: "inner-left", system: "water-quality", confidence: 2, path: "M31 57C28 44 33 31 44 23C56 14 74 17 84 28C94 39 97 56 90 70C82 88 61 96 43 88" },
+  { id: "inner-right", system: "flow-pressure", confidence: 3, path: "M45 75C55 81 69 78 78 68C87 58 87 43 78 33C70 24 57 21 46 26" },
+  { id: "middle-left", system: "hvac", confidence: 3, path: "M24 68C17 47 23 26 40 14C57 2 82 7 96 25C109 42 111 66 100 85" },
+  { id: "middle-return", system: "pumping", confidence: 4, path: "M36 88C52 101 78 97 94 80C110 62 109 34 92 18" },
+  { id: "outer-left", system: "water-quality", confidence: 4, path: "M18 79C5 54 12 24 35 8C58 4 91 8 108 23C126 48 122 83 99 104" },
+  { id: "outer-right", system: "flow-pressure", confidence: 5, path: "M31 97C52 116 88 111 108 88C127 67 128 34 111 11" },
+  { id: "base-arc", system: "electrical", confidence: 5, path: "M42 105C56 112 74 111 88 102" },
+  { id: "top-arc", system: "hvac", confidence: 5, path: "M41 18C55 9 75 10 89 21" },
 ];
 
 const STATUS_FALLBACK_FAMILIES = {
@@ -71,32 +71,84 @@ function normalizeStatus(status, state) {
   return "awaiting";
 }
 
-function clampHotspotCount(value, status) {
-  const fallback = status === "critical" ? 3 : status === "warning" ? 1 : 0;
-  const count = Number(value ?? fallback);
+function clampHotspotCount(value) {
+  if (value == null) return undefined;
+  const count = Number(value);
   if (!Number.isFinite(count) || count <= 0) return 0;
-  return Math.min(Math.round(count), DEFAULT_HOTSPOTS.length);
+  return Math.min(
+    Math.round(count),
+    Object.keys(SYSTEM_HOTSPOT_POSITIONS).length
+  );
 }
 
-function resolveHotspots({ hotspots, hotspotCount }) {
+function resolveHotspots({ hotspots, hotspotCount, changedFamilies }) {
   const positionedHotspots = Array.isArray(hotspots) ? hotspots : [];
-  return Array.from({ length: hotspotCount }, (_, index) => {
-    const fallback = DEFAULT_HOTSPOTS[index % DEFAULT_HOTSPOTS.length];
-    const hotspot = positionedHotspots[index] ?? fallback;
-    return {
-      x: Number.isFinite(Number(hotspot.x)) ? Number(hotspot.x) : fallback.x,
-      y: Number.isFinite(Number(hotspot.y)) ? Number(hotspot.y) : fallback.y,
-      scale: Number.isFinite(Number(hotspot.scale)) ? Number(hotspot.scale) : fallback.scale,
-      subsystem: hotspot.subsystem ?? fallback.subsystem,
-    };
-  });
+  const meaningfulHotspots = positionedHotspots
+    .map((hotspot) => {
+      const family = normalizeRidgeFamily(
+        hotspot?.system
+        ?? hotspot?.subsystem
+        ?? hotspot?.label
+        ?? hotspot?.name
+        ?? hotspot?.relationship
+      );
+      const fallback = SYSTEM_HOTSPOT_POSITIONS[family];
+      if (!fallback) return null;
+      return {
+        x: Number.isFinite(Number(hotspot.x))
+          ? Number(hotspot.x)
+          : fallback.x,
+        y: Number.isFinite(Number(hotspot.y))
+          ? Number(hotspot.y)
+          : fallback.y,
+        scale: Number.isFinite(Number(hotspot.scale))
+          ? Number(hotspot.scale)
+          : fallback.scale,
+        subsystem:
+          hotspot.subsystem
+          ?? hotspot.label
+          ?? fallback.subsystem,
+        system: family,
+      };
+    })
+    .filter(Boolean);
+  if (hotspotCount === 0) return [];
+  if (meaningfulHotspots.length) {
+    return meaningfulHotspots.slice(
+      0,
+      hotspotCount ?? meaningfulHotspots.length
+    );
+  }
+  return Array.from(changedFamilies)
+    .map((family) => (
+      SYSTEM_HOTSPOT_POSITIONS[family]
+        ? {
+            ...SYSTEM_HOTSPOT_POSITIONS[family],
+            system: family,
+          }
+        : null
+    ))
+    .filter(Boolean)
+    .slice(0, hotspotCount ?? changedFamilies.size);
 }
 
 function resolveRidgeCount(state, status, hotspotCount) {
   const relationshipCount = Number(state?.relationshipCount ?? state?.relationships?.length ?? state?.relationship_count);
   const explicit = Number(state?.ridgeCount ?? state?.fingerprintRidgeCount ?? state?.fingerprint_ridge_count);
-  const count = Number.isFinite(explicit) ? explicit : Number.isFinite(relationshipCount) ? relationshipCount + 5 : hotspotCount + 8;
-  const minimum = status === "awaiting" ? 3 : status === "learning" ? 9 : 10;
+  const resolvedHotspotCount = Number.isFinite(hotspotCount)
+    ? hotspotCount
+    : 0;
+  const count = Number.isFinite(explicit)
+    ? explicit
+    : Number.isFinite(relationshipCount)
+      ? relationshipCount + 5
+      : resolvedHotspotCount + 8;
+  const minimum =
+    status === "awaiting"
+      ? 3
+      : status === "learning"
+        ? 0
+        : 10;
   return Math.max(minimum, Math.min(Math.round(count), FINGERPRINT_RIDGES.length));
 }
 
@@ -104,7 +156,7 @@ export function normalizeRidgeFamily(value) {
   const text = String(value ?? "").toLowerCase();
   if (!text) return "";
   if (/water|quality|chemical|chlor|dose|feed|ph|orp|conductivity|treatment/.test(text)) return "water-quality";
-  if (/flow|pressure|filter|hydraulic|valve|differential|dp/.test(text)) return "flow-pressure";
+  if (/flow|pressure|filter|filtration|filtr|hydraulic|valve|differential|dp/.test(text)) return "flow-pressure";
   if (/pump|pumping|vfd|motor|circulation|recirculation/.test(text)) return "pumping";
   if (/hvac|thermal|cool|chill|tower|condenser|air|heat/.test(text)) return "hvac";
   if (/electric|electrical|power|panel|breaker|current|voltage|controls|control/.test(text)) return "electrical";
@@ -147,8 +199,10 @@ export function resolveChangedFamilies({ state, hotspots, status }) {
 }
 
 function isRidgeVisible(ridge, index, ridgeCount, changedFamilies, status) {
-  if (index < ridgeCount) return true;
-  return status !== "awaiting" && changedFamilies.has(ridge.system);
+  if (changedFamilies.has(ridge.system)) return true;
+  if (status === "awaiting") return ridge.confidence <= 2;
+  if (status === "learning") return ridge.confidence <= 4;
+  return index < ridgeCount;
 }
 
 export default function OperationalOrb({ state, status, hotspotCount, hotspots }) {
@@ -156,10 +210,10 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
   const resolvedStatus = normalizeStatus(status, state);
   const config = ORB_STATUS[resolvedStatus];
   const explicitHotspots = hotspots ?? state?.hotspots;
-  const resolvedHotspotCount = clampHotspotCount(hotspotCount ?? state?.hotspotCount, resolvedStatus);
-  const resolvedHotspots = resolveHotspots({ hotspots: explicitHotspots, hotspotCount: resolvedHotspotCount });
-  const ridgeCount = resolveRidgeCount(state, resolvedStatus, resolvedHotspotCount);
   const changedFamilies = resolveChangedFamilies({ state, hotspots: explicitHotspots, status: resolvedStatus });
+  const resolvedHotspotCount = clampHotspotCount(hotspotCount ?? state?.hotspotCount);
+  const resolvedHotspots = resolveHotspots({ hotspots: explicitHotspots, hotspotCount: resolvedHotspotCount, changedFamilies });
+  const ridgeCount = resolveRidgeCount(state, resolvedStatus, resolvedHotspotCount);
   const visibleRidges = FINGERPRINT_RIDGES.map((ridge, index) => ({
     ...ridge,
     index,
