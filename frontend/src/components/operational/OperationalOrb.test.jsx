@@ -39,7 +39,14 @@ describe("OperationalOrb", () => {
   });
 
   it("keeps compatibility with the existing state object contract", () => {
-    render(h(OperationalOrb, { state: { key: "behavior-change", label: "Relationship Drift Detected", hotspotCount: 3 } }));
+    render(h(OperationalOrb, {
+      state: {
+        key: "behavior-change",
+        label: "Relationship Drift Detected",
+        hotspotCount: 3,
+        changedSystems: ["Water Quality", "Pump system", "Electrical"],
+      },
+    }));
 
     const orb = screen.getByTestId("operational-orb");
     expect(orb.getAttribute("data-status")).toBe("warning");
@@ -60,5 +67,122 @@ describe("OperationalOrb", () => {
     expect(changedRidges.length).toBeGreaterThan(0);
     expect(changedRidges.every((ridge) => ridge.getAttribute("data-system") === "water-quality")).toBe(true);
     expect(orb.querySelectorAll(".operational-orb__ridge-particle[data-system='water-quality']").length).toBeGreaterThan(0);
+  });
+
+  it("renders all meaningful supplied hotspots when hotspotCount is omitted", () => {
+    render(h(OperationalOrb, {
+      status: "warning",
+      hotspots: [
+        {
+          x: 24,
+          y: 42,
+          scale: 0.9,
+          subsystem: "Pump system",
+        },
+        {
+          x: 68,
+          y: 58,
+          scale: 1.1,
+          subsystem: "Filtration",
+        },
+      ],
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    const hotspots = orb.querySelectorAll(
+      ".operational-orb__hotspot"
+    );
+    expect(hotspots).toHaveLength(2);
+    expect(
+      hotspots[0].style.getPropertyValue("--hotspot-x")
+    ).toBe("24%");
+  });
+
+  it("renders all resolved changed-family hotspots when hotspotCount is omitted", () => {
+    render(h(OperationalOrb, {
+      status: "elevated",
+      state: {
+        ridgeActivity: [
+          "Pump system",
+          "Flow pressure differential",
+        ],
+      },
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    expect(
+      orb.querySelectorAll(".operational-orb__hotspot")
+    ).toHaveLength(2);
+  });
+
+  it("limits supplied hotspots when hotspotCount is positive", () => {
+    render(h(OperationalOrb, {
+      status: "warning",
+      hotspotCount: 1,
+      hotspots: [
+        {
+          x: 24,
+          y: 42,
+          scale: 0.9,
+          subsystem: "Pump system",
+        },
+        {
+          x: 68,
+          y: 58,
+          scale: 1.1,
+          subsystem: "Filtration",
+        },
+      ],
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    expect(
+      orb.querySelectorAll(".operational-orb__hotspot")
+    ).toHaveLength(1);
+  });
+
+  it("honors an explicit zero hotspot count", () => {
+    render(h(OperationalOrb, {
+      status: "warning",
+      hotspotCount: 0,
+      hotspots: [
+        {
+          x: 24,
+          y: 42,
+          scale: 0.9,
+          subsystem: "Pump system",
+        },
+      ],
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    expect(
+      orb.querySelectorAll(".operational-orb__hotspot")
+    ).toHaveLength(0);
+  });
+
+  it("renders the active fingerprint when counts are omitted", () => {
+    render(h(OperationalOrb, {
+      status: "healthy",
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    expect(
+      orb.querySelectorAll(
+        ".operational-orb__fingerprint path.is-active"
+      )
+    ).toHaveLength(10);
+  });
+
+  it("activates changed high-confidence ridges during early states", () => {
+    render(h(OperationalOrb, {
+      status: "learning",
+      state: {
+        changedSystems: ["Electrical"],
+      },
+    }));
+    const orb = screen.getByTestId("operational-orb");
+    const changedRidges = orb.querySelectorAll(
+      '.operational-orb__fingerprint path[data-system="electrical"].is-changed'
+    );
+    expect(changedRidges.length).toBeGreaterThan(0);
+    changedRidges.forEach((ridge) => {
+      expect(ridge.classList.contains("is-active")).toBe(true);
+    });
   });
 });
