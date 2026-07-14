@@ -366,7 +366,6 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
-    expect(screen.getByText("Persistence score")).toBeTruthy();
     expect(screen.getByText("Most Probable Operational Causes")).toBeTruthy();
     expect(screen.getByText("Confidence Breakdown")).toBeTruthy();
     expect(screen.getByText("Why Neraium Believes This")).toBeTruthy();

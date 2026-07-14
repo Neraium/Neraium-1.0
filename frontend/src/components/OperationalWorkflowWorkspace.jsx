@@ -1295,6 +1295,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         sourceTimeRanges: Array.isArray(item.source_time_ranges) ? item.source_time_ranges : [],
         confidence: item.confidence,
         confidenceScore: item.confidence_score,
+        persistenceScore: item.persistence_score ?? item.persistenceScore,
         confidenceRationale: operatorText(item.confidence_rationale),
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
@@ -1854,8 +1855,7 @@ function prioritizedEvidenceMetrics(insight) {
     },
     {
       label: "Persistence score",
-      value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore", "confidence_score", "confidenceScore"),
-      fallback: insight?.confidenceScore,
+      value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore"),
     },
   ];
 
@@ -3034,6 +3034,9 @@ function formatInsightTitle(value) {
       return `${formatSubsystemName(value.system)} Behavior Changed`;
     }
     if (type === "metric_deviation") {
+      const metricTitle = normalizeSignalName(value.metricName);
+      if (suppliedOperationalTitle) return suppliedOperationalTitle;
+      if (metricTitle) return metricTitle + " Operating Behavior Changed";
       if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
       if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
       return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
@@ -3145,14 +3148,20 @@ function whatChangedBriefing(insight, relationships) {
 
   const metric = normalizeSignalName(insight.metricName);
   const direction = String(insight.deviationDirection ?? "").toLowerCase();
+  const supplied = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 1)
+    .filter((line) => !/moved\s+(up|down)\s+from\s+the\s+historical\s+pattern\s+to\s+the\s+analysis\s+period/i.test(line));
+  if (direction.includes("flat")) {
+    const flatText = metric
+      ? "The " + metric + " moved flat from baseline to current."
+      : "The " + system + " moved flat from baseline to current.";
+    return supplied.length ? supplied.slice(0, 2) : [flatText];
+  }
   const directionText = direction.includes("down") || direction.includes("low") || direction.includes("below")
     ? "below"
     : "above";
   const baselineText = metric
-    ? `The ${metric} is operating significantly ${directionText} its learned operating range.`
-    : `The ${system} is operating significantly ${directionText} its learned operating range.`;
-  const supplied = briefingSentences(firstDistinctText(insight.summary, insight.whatHappened, insight.whatChanged, insight.rawSummary), 1)
-    .filter((line) => !/moved\s+(up|down)\s+from\s+the\s+historical\s+pattern\s+to\s+the\s+analysis\s+period/i.test(line));
+    ? "The " + metric + " is operating significantly " + directionText + " its learned operating range."
+    : "The " + system + " is operating significantly " + directionText + " its learned operating range.";
   return supplied.length ? [baselineText, ...supplied].slice(0, 2) : [baselineText];
 }
 

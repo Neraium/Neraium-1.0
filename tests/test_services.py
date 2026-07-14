@@ -98,6 +98,72 @@ def test_baseline_analysis_compares_first_and_last_windows() -> None:
     assert analysis["column_drift"][0]["drift_flag"] == "review"
 
 
+def test_near_zero_derivative_percent_change_does_not_outrank_real_orp_drop() -> None:
+    columns = ["timestamp", "delta_ph", "orp_mv"]
+    rows = []
+    for index in range(100):
+        delta_ph = "0.001" if index % 2 == 0 else "-0.001"
+        rows.append([f"sample-{index:03d}", delta_ph, "358"])
+    for index in range(100, 200):
+        rows.append([f"sample-{index:03d}", "-0.001", "273"])
+    numeric_profiles = [{"column": "delta_ph"}, {"column": "orp_mv"}]
+
+    analysis = build_baseline_analysis(columns, rows, numeric_profiles)
+    drift_by_column = {item["column"]: item for item in analysis["column_drift"]}
+
+    assert drift_by_column["delta_ph"]["baseline_average"] == 0.0
+    assert drift_by_column["delta_ph"]["absolute_change"] == -0.001
+    assert drift_by_column["delta_ph"]["percent_change"] is None
+    assert drift_by_column["delta_ph"]["drift_flag"] == "normal"
+    assert drift_by_column["orp_mv"]["percent_change"] == -23.743
+    assert drift_by_column["orp_mv"]["drift_flag"] == "review"
+
+    explanation = build_analysis_explanation(
+        {
+            "baseline_analysis": analysis,
+            "relationship_model": {"top_relationship_changes": []},
+            "engine_result": {"persistence_assessment": {"details": []}},
+        }
+    )
+
+    insight_titles = [insight["title"] for insight in explanation["insights"]]
+    assert any("Orp" in title for title in insight_titles)
+    assert not any("Delta ph" in title for title in insight_titles)
+
+
+def test_metric_insight_persistence_score_uses_metric_value_not_confidence() -> None:
+    explanation = build_analysis_explanation(
+        {
+            "baseline_analysis": {
+                "overall_assessment": "needs_review",
+                "baseline_window_rows": 40,
+                "recent_window_rows": 40,
+                "columns_analyzed": 1,
+                "column_drift": [
+                    {
+                        "column": "orp_mv",
+                        "direction": "down",
+                        "drift_flag": "review",
+                        "baseline_average": 358,
+                        "recent_average": 273,
+                        "absolute_change": -85,
+                        "percent_change": -23.743,
+                        "persistence_score": 0.14,
+                    }
+                ],
+            },
+            "relationship_model": {"top_relationship_changes": []},
+            "engine_result": {"persistence_assessment": {"details": []}},
+        }
+    )
+
+    insight = explanation["insights"][0]
+    assert insight["metric_name"] == "orp_mv"
+    assert insight["persistence_score"] == 0.14
+    assert insight["confidence_score"] != insight["persistence_score"]
+    assert "Persistence score: 0.14" in insight["evidence"][0]["relevant_metric_changes"]
+
+
 def test_operator_report_uses_existing_sections() -> None:
     data_quality = {
         "row_count": 6,

@@ -172,9 +172,8 @@ function evidenceMetricRows(insight, evidence) {
   if (firstMeasurement.baseline !== null && firstMeasurement.baseline !== undefined) rows.push(["Baseline average", firstMeasurement.baseline.toFixed(2)]);
   if (firstMeasurement.current !== null && firstMeasurement.current !== undefined) rows.push(["Current average", firstMeasurement.current.toFixed(2)]);
   if (firstMeasurement.delta !== null && firstMeasurement.delta !== undefined) rows.push(["Percent change", firstMeasurement.delta.toFixed(2)]);
-  const confidenceEvidence = evidence.find((item) => item?.confidence_score || item?.confidenceScore) ?? {};
-  const confidence = Number(insight?.confidenceScore ?? confidenceEvidence.confidence_score ?? confidenceEvidence.confidenceScore);
-  if (Number.isFinite(confidence)) rows.push(["Persistence score", confidence.toFixed(2)]);
+  const persistence = Number(insight?.persistenceScore ?? insight?.persistence_score);
+  if (Number.isFinite(persistence)) rows.push(["Persistence score", persistence.toFixed(2)]);
   return rows;
 }
 

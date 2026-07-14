@@ -85,7 +85,8 @@ def build_baseline_analysis(
         baseline_average = sum(baseline_values) / len(baseline_values)
         recent_average = sum(recent_values) / len(recent_values)
         absolute_change = recent_average - baseline_average
-        percent_change = safe_percent_change(baseline_average, absolute_change)
+        percent_change = safe_percent_change(baseline_average, absolute_change, baseline_values)
+        standardized_change = safe_standardized_change(baseline_values, recent_values, absolute_change)
         direction = drift_direction(absolute_change, baseline_average)
         velocity = drift_velocity(baseline_values, recent_values)
         metric_type = "cumulative_counter" if column in cumulative_counter_columns else "operational_signal"
@@ -96,7 +97,7 @@ def build_baseline_analysis(
             constant=bool(profile.get("constant_or_stuck")),
             numeric_profile=profile,
         )
-        flag = drift_flag(percent_change, absolute_change, baseline_average)
+        flag = drift_flag(percent_change, absolute_change, baseline_average, standardized_change)
         analysis_role = classification["analysis_role"]
         if classification.get("is_ignored"):
             flag = "ignored"
@@ -123,6 +124,7 @@ def build_baseline_analysis(
                 "recent_average": round_number(recent_average),
                 "absolute_change": round_number(absolute_change),
                 "percent_change": round_number(percent_change) if percent_change is not None else None,
+                "standardized_change": round_number(standardized_change),
                 "direction": direction,
                 "drift_velocity": velocity["velocity"],
                 "drift_acceleration": velocity["acceleration"],
@@ -196,7 +198,8 @@ def cumulative_delta_drift(
     baseline_average = sum(baseline_values) / len(baseline_values)
     recent_average = sum(recent_values) / len(recent_values)
     absolute_change = recent_average - baseline_average
-    percent_change = safe_percent_change(baseline_average, absolute_change)
+    percent_change = safe_percent_change(baseline_average, absolute_change, baseline_values)
+    standardized_change = safe_standardized_change(baseline_values, recent_values, absolute_change)
     direction = drift_direction(absolute_change, baseline_average)
     velocity = drift_velocity(baseline_values, recent_values)
     return {
@@ -206,11 +209,12 @@ def cumulative_delta_drift(
         "recent_average": round_number(recent_average),
         "absolute_change": round_number(absolute_change),
         "percent_change": round_number(percent_change) if percent_change is not None else None,
+        "standardized_change": round_number(standardized_change),
         "direction": direction,
         "drift_velocity": velocity["velocity"],
         "drift_acceleration": velocity["acceleration"],
         "persistence_score": persistence_score(baseline_values, recent_values, baseline_average),
-        "drift_flag": drift_flag(percent_change, absolute_change, baseline_average),
+        "drift_flag": drift_flag(percent_change, absolute_change, baseline_average, standardized_change),
         "metric_type": "counter_delta",
         "analysis_role": "derived_rate_feature",
         "telemetry_category": "counter_derived_rate",
@@ -276,10 +280,40 @@ def numeric_window_values(rows: list[list[str]], column_index: int) -> tuple[lis
     return values, missing_count
 
 
-def safe_percent_change(baseline_average: float, absolute_change: float) -> float | None:
-    if abs(baseline_average) < 0.000001:
+def safe_percent_change(
+    baseline_average: float,
+    absolute_change: float,
+    baseline_values: list[float] | None = None,
+) -> float | None:
+    denominator_floor = near_zero_percent_denominator_floor(baseline_values)
+    if abs(baseline_average) < denominator_floor:
         return None
     return absolute_change / abs(baseline_average) * 100
+
+
+def near_zero_percent_denominator_floor(baseline_values: list[float] | None = None) -> float:
+    if not baseline_values:
+        return 0.000001
+    average = sum(baseline_values) / len(baseline_values)
+    variance = sum((value - average) ** 2 for value in baseline_values) / len(baseline_values)
+    spread = math.sqrt(variance)
+    mean_absolute_value = sum(abs(value) for value in baseline_values) / len(baseline_values)
+    return max(0.000001, spread * 0.25, mean_absolute_value * 0.05)
+
+
+def safe_standardized_change(
+    baseline_values: list[float],
+    recent_values: list[float],
+    absolute_change: float,
+) -> float:
+    combined = baseline_values + recent_values
+    if not combined:
+        return 0.0
+    average = sum(combined) / len(combined)
+    variance = sum((value - average) ** 2 for value in combined) / len(combined)
+    spread = math.sqrt(variance)
+    scale = max(spread, 0.000001)
+    return abs(absolute_change) / scale
 
 
 def drift_direction(absolute_change: float, baseline_average: float) -> str:
@@ -295,9 +329,15 @@ def drift_flag(
     percent_change: float | None,
     absolute_change: float,
     baseline_average: float,
+    standardized_change: float | None = None,
 ) -> str:
     if percent_change is None:
-        return "watch" if abs(absolute_change) > 0.01 else "normal"
+        normalized_magnitude = abs(float(standardized_change or 0.0))
+        if normalized_magnitude >= 3.0 and drift_direction(absolute_change, baseline_average) != "flat":
+            return "review"
+        if normalized_magnitude >= 1.5 or abs(absolute_change) > 0.01:
+            return "watch"
+        return "normal"
 
     magnitude = abs(percent_change)
     if magnitude >= 20:

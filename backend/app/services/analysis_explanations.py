@@ -282,7 +282,7 @@ def build_insights(
             or str(item.get("column") or "") not in relationship_columns_in_primary_insights
         )
     ]
-    drift_items.sort(key=lambda item: abs(float(item.get("percent_change") or item.get("absolute_change") or 0)), reverse=True)
+    drift_items.sort(key=metric_deviation_sort_key, reverse=True)
     for index, item in enumerate(drift_items[: max(0, 5 - len(insights))]):
         column = str(item.get("column") or "Signal")
         column_label = signal_label_from_item(item)
@@ -332,6 +332,9 @@ def build_insights(
                     "why_neraium_thinks_it_happened": why,
                     "why_neraium_thinks": why,
                     "likely_cause": why,
+                    "metric_name": column,
+                    "persistence_score": item.get("persistence_score"),
+                    "standardized_change": item.get("standardized_change"),
                     "contributing_factors": [column],
                     "possible_operational_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
                     "possible_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
@@ -1333,16 +1336,26 @@ def relationship_evidence_items(
     ]
 
 
+def metric_deviation_sort_key(item: dict[str, Any]) -> float:
+    percent_change = item.get("percent_change")
+    if percent_change is not None:
+        try:
+            return abs(float(percent_change))
+        except (TypeError, ValueError):
+            return 0.0
+    try:
+        return abs(float(item.get("standardized_change") or 0.0)) * 10.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def persistence_detail_for_column(persistence: dict[str, Any], column: str) -> dict[str, Any]:
     details = persistence.get("details") if isinstance(persistence.get("details"), list) else []
     return next((detail for detail in details if isinstance(detail, dict) and detail.get("column") == column), {})
 
 
 def metric_confidence_score(item: dict[str, Any], persistence_detail: dict[str, Any]) -> float:
-    try:
-        magnitude = abs(float(item.get("percent_change") or 0.0))
-    except (TypeError, ValueError):
-        magnitude = abs(float(item.get("absolute_change") or 0.0))
+    magnitude = metric_deviation_sort_key(item)
     signal_factor = min(1.0, magnitude / 30.0)
     persistence_factor = 0.45 if item.get("drift_flag") in {"watch", "review"} else 0.2
     if persistence_detail.get("persistent"):
@@ -1449,6 +1462,8 @@ def metric_contributions(columns: list[str], drift_item: dict[str, Any] | None =
                     "current_average": drift_item.get("recent_average"),
                     "absolute_change": drift_item.get("absolute_change"),
                     "percent_change": drift_item.get("percent_change"),
+                    "standardized_change": drift_item.get("standardized_change"),
+                    "persistence_score": drift_item.get("persistence_score"),
                     "direction": drift_item.get("direction"),
                 }
             )
@@ -1464,9 +1479,10 @@ def largest_deviation_items(columns: list[dict[str, Any]], relationships: list[d
                 {
                     "type": "metric",
                     "label": signal_label_from_item(item),
-                    "magnitude": abs(float(item.get("percent_change") or item.get("absolute_change") or 0)),
+                    "magnitude": metric_deviation_sort_key(item),
                     "direction": item.get("direction"),
                     "percent_change": item.get("percent_change"),
+                    "standardized_change": item.get("standardized_change"),
                 }
             )
         )
@@ -1686,7 +1702,7 @@ def context_driver_drift_items(baseline: dict[str, Any]) -> list[dict[str, Any]]
         and is_supporting_context_item(item)
         and item.get("drift_flag") == "context"
     ]
-    items.sort(key=lambda item: abs(float(item.get("percent_change") or item.get("absolute_change") or 0)), reverse=True)
+    items.sort(key=metric_deviation_sort_key, reverse=True)
     return items[:4]
 
 
@@ -2245,7 +2261,7 @@ def metric_title(item: dict[str, Any]) -> str:
     label = human_metric_label(first_text(item.get("display_name"), column))
     direction = str(item.get("direction") or "changed")
     try:
-        magnitude = abs(float(item.get("percent_change") or item.get("absolute_change") or 0))
+        magnitude = metric_deviation_sort_key(item)
     except (TypeError, ValueError):
         magnitude = 0.0
     if direction == "up":
@@ -2382,7 +2398,7 @@ def largest_deviation(columns: list[dict[str, Any]], relationships: list[dict[st
     candidates: list[tuple[float, str]] = []
     for item in columns:
         direction = str(item.get("direction") or "changed")
-        magnitude = abs(float(item.get("percent_change") or item.get("absolute_change") or 0))
+        magnitude = metric_deviation_sort_key(item)
         candidates.append((magnitude, metric_title(item) if direction in {"up", "down", "flat"} else change_phrase(item)))
     for item in relationships:
         magnitude = abs(float(item.get("correlation_delta") or 0))
