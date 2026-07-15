@@ -99,12 +99,12 @@ export default function GovernanceAdminWorkspace({
           <article className="metric-card"><span className="metric-label">NO_PASS</span><strong className="metric-value">{payload?.no_pass_count ?? 0}</strong></article> 
         </div> 
       </Panel> 
-      <Panel title="Performance" subtitle="Runtime upload and queue performance window">
+      <Panel title="Performance" subtitle="Runtime analysis throughput window">
         <div className="metric-grid">
-          <article className="metric-card"><span className="metric-label">Queue Depth</span><strong className="metric-value">{performance?.queue_depth ?? 0}</strong></article>
+          <article className="metric-card"><span className="metric-label">Pending Analyses</span><strong className="metric-value">{performance?.queue_depth ?? 0}</strong></article>
           <article className="metric-card"><span className="metric-label">Upload p50 (s)</span><strong className="metric-value">{performance?.upload_duration_seconds?.p50 ?? "-"}</strong></article>
           <article className="metric-card"><span className="metric-label">Upload p95 (s)</span><strong className="metric-value">{performance?.upload_duration_seconds?.p95 ?? "-"}</strong></article>
-          <article className="metric-card"><span className="metric-label">Hash Cache Hit Rate</span><strong className="metric-value">{performance?.cache?.hash_cache_hit_rate != null ? `${Math.round(performance.cache.hash_cache_hit_rate * 100)}%` : "-"}</strong></article>
+          <article className="metric-card"><span className="metric-label">Processing Reuse Rate</span><strong className="metric-value">{performance?.cache?.hash_cache_hit_rate != null ? `${Math.round(performance.cache.hash_cache_hit_rate * 100)}%` : "-"}</strong></article>
         </div>
       </Panel>
 

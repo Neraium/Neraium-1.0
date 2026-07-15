@@ -495,7 +495,7 @@ export default function SystemBodyWorkspace({
               </dl>
               <ResultList title="Traceability" items={technicalReport.traceability} />
               <ResultList title="Processing trace" items={technicalReport.processingTrace} empty="No processing trace reported." />
-              <ResultList title="Backend warnings" items={technicalReport.backendWarnings} empty="No backend warnings reported." />
+              <ResultList title="Analysis service warnings" items={technicalReport.backendWarnings} empty="No analysis service warnings reported." />
               <details className="technical-details-panel">
                 <summary>Raw metadata</summary>
                 <pre>{technicalReport.rawMetadata}</pre>

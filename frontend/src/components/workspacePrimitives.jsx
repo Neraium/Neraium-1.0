@@ -268,7 +268,7 @@ export function SystemsMatrix({ systems, systemsState, roomContext, rows, system
     system.name,
     system.scope,
     systemRoomContext(system.name, roomContext),
-    systemsState === "ready" ? "Live telemetry sync" : "Backend connection unavailable",
+    systemsState === "ready" ? "Live telemetry sync" : "Analysis service unavailable",
   ]);
 
   return (
@@ -623,8 +623,8 @@ export function EngineIdentityPanel({
 }) {
   const trace = latestUploadResult?.processing_trace ?? null;
   const runnerResult = latestUploadResult?.sii_runner_result ?? null;
-  const version = identity?.engine_version ?? trace?.engine_version ?? "Awaiting backend identity";
-  const modulePath = identity?.production_runner ?? identity?.engine_module ?? runnerResult?.runner_module ?? "Awaiting backend identity";
+  const version = identity?.engine_version ?? trace?.engine_version ?? "Awaiting analysis service identity";
+  const modulePath = identity?.production_runner ?? identity?.engine_module ?? runnerResult?.runner_module ?? "Awaiting analysis service identity";
   const source = intelligenceStatus?.source ?? "none";
   const lastProcessed = intelligenceStatus?.last_processed_at ?? "Awaiting upload";
   const runnerAvailable = identity?.runner_available ?? runnerResult?.runner_used ?? false;
@@ -634,7 +634,7 @@ export function EngineIdentityPanel({
       <summary>
         <span>
           <strong>{identity?.engine_name ?? "Neraium SII"}</strong>
-          <small>{runnerAvailable ? "Production SII runner available" : "Production SII runner pending"}</small>
+          <small>{runnerAvailable ? "SII analysis engine available" : "SII analysis engine pending"}</small>
         </span>
         <span>{formatEmptyValue(source)}</span>
       </summary>
@@ -642,7 +642,7 @@ export function EngineIdentityPanel({
         metrics={[
           { label: "Engine version", value: version },
           { label: "Core engine", value: identity?.core_engine ?? runnerResult?.core_engine ?? "SIIEngine" },
-          { label: "Production runner", value: modulePath },
+          { label: "Analysis engine path", value: modulePath },
           { label: "Source", value: source },
           { label: "Last processed", value: lastProcessed },
           {
@@ -657,7 +657,7 @@ export function EngineIdentityPanel({
             ? runnerTraceLines(runnerResult)
             : trace
               ? processingTraceLines(trace)
-              : ["processing_trace=awaiting_upload"]
+              : ["analysis_trace=awaiting_upload"]
         }
       />
     </details>

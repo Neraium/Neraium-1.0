@@ -17,11 +17,11 @@ async function renderCompletionFixture(page) {
             <div class="upload-result-summary">
               <div class="upload-result-summary__item"><span>Systems</span><strong>4</strong></div>
               <div class="upload-result-summary__item"><span>Insights</span><strong>2</strong></div>
-              <div class="upload-result-summary__item"><span>Fingerprint</span><strong>Changed</strong></div>
+              <div class="upload-result-summary__item"><span>Baseline</span><strong>Changed</strong></div>
             </div>
             <div class="upload-simple-actions">
               <button type="button" class="command-button">View Results</button>
-              <button type="button" class="secondary-command-button">Analyze Another CSV</button>
+              <button type="button" class="secondary-command-button">Analyze New Telemetry</button>
             </div>
           </section>
           <details class="upload-advanced-details">
@@ -225,9 +225,9 @@ test.describe("Analysis complete mobile layout", () => {
     await renderCompletionFixture(page);
 
     await expect(page.getByRole("button", { name: "View Results" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Another CSV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze New Telemetry" })).toBeVisible();
 
-    const fingerprintValue = page.locator(".upload-result-summary__item", { hasText: "Fingerprint" }).locator("strong");
+    const fingerprintValue = page.locator(".upload-result-summary__item", { hasText: "Baseline" }).locator("strong");
     await expect(fingerprintValue).toHaveText("Changed");
     expect(await visibleAtCenter(fingerprintValue)).toBe(true);
 

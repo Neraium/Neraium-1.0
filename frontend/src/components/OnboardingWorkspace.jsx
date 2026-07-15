@@ -68,10 +68,10 @@ const MOCK_FIELDS = [
 ];
 
 const UPLOAD_STAGE_LABELS = {
-  validating: "validating",
+  validating: "validating evidence",
   uploading: "uploading",
-  queued: "queued",
-  processing: "processing",
+  queued: "preparing analysis",
+  processing: "analyzing behavior",
   complete: "complete",
   failed: "failed",
 };
@@ -418,14 +418,14 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
       const jobId = String(payload?.job_id ?? payload?.jobId ?? payload?.id ?? "").trim();
       if (!jobId) {
-        throw new Error("Upload accepted but no job_id returned.");
+        throw new Error("Telemetry accepted, but the analysis session was not created.");
       }
 
       setFlow((current) => ({
         ...current,
         uploadJobId: jobId,
         uploadStatus: "queued",
-        uploadMessage: String(payload?.message || "Upload accepted. Processing queued."),
+        uploadMessage: String(payload?.message || "Telemetry accepted. Analysis preparation started."),
         uploadError: "",
       }));
 
@@ -433,7 +433,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       setFlow((current) => ({
         ...current,
         uploadStatus: "processing",
-        uploadMessage: "Finalizing the active session state...",
+        uploadMessage: "Persisting the behavioral baseline...",
         uploadError: "",
       }));
       await refreshLatestUploadAndPropagate(jobId, completionPayload);
@@ -487,7 +487,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             ...readiness,
             sourceReachable: payload.connection_status !== "offline" && payload.connection_status !== "not_configured",
             telemetryReceived: Number(payload.records_ingested) > 0 || Number(payload.sensors_detected) > 0,
-            backendValidated: true,
+            serviceValidated: true,
             connectionStatus: payload.connection_status,
             sensorsDetected: Number(payload.sensors_detected ?? 0),
             recordsIngested: Number(payload.records_ingested ?? 0),
@@ -679,7 +679,6 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                 <span>
                   {flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}
                   {flow.uploadStatus ? ` | ${UPLOAD_STAGE_LABELS[flow.uploadStatus] || flow.uploadStatus}` : ""}
-                  {flow.uploadJobId ? ` | job ${flow.uploadJobId}` : ""}
                 </span>
                 {flow.uploadMessage ? <span>{flow.uploadMessage}</span> : null}
                 {flow.uploadError ? <span>{flow.uploadError}</span> : null}
@@ -692,7 +691,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             )}
             {!["API", "CSV Upload", "Demo Mode"].includes(flow.dataSource) && (
               <div className="onboarding-inline">
-                <span>Connector UI scaffolded. Production connector details can be wired to backend endpoints later.</span>
+                <span>Connector configuration will be available when this read-only source is enabled.</span>
               </div>
             )}
           </div>

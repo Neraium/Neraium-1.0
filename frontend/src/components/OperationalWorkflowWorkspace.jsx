@@ -67,7 +67,7 @@ const EMPTY_TELEMETRY_COPY = {
   commandTitle: "Awaiting Initial Baseline",
   commandDetail: "The facility has not yet established a learned operational baseline.",
   fileStatus: "No source connected",
-  cta: "Analyze Dataset",
+  cta: "Analyze Historical Telemetry",
   secondaryCta: "Connect Live Telemetry",
   headerStatus: "Waiting for telemetry",
 };
@@ -654,7 +654,7 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, teleme
     ? lastAnalysis
     : "No import yet";
   return [
-    ["Historical CSV", historicalImported ? "Historical dataset imported" : "Historical CSV available"],
+    ["Historical CSV", historicalImported ? "Historical telemetry available" : "Historical CSV available"],
     ["Historical rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "No historical dataset imported"],
     ["Live connector", telemetryConnected ? "Source healthy" : "Live connector unavailable"],
     ["Last import", lastImport],
@@ -722,7 +722,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Analyze Dataset",
+      primaryCtaLabel: "Analyze Historical Telemetry",
     };
   }
   if (analysisComplete) {
@@ -731,7 +731,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Operational assessment ready",
       storyProgressLabel: "Assessment based on selected telemetry",
-      primaryCtaLabel: "Analyze Dataset",
+      primaryCtaLabel: "Analyze Historical Telemetry",
     };
   }
   return {
@@ -739,7 +739,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Analyze Dataset",
+    primaryCtaLabel: "Analyze Historical Telemetry",
   };
 }
 
@@ -757,7 +757,7 @@ function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
     snapshot?.current_upload?.source,
     liveOps?.telemetrySession?.source,
     liveOps?.telemetrySession?.sessionMode,
-    uiState.key === "monitoringLive" ? "Live telemetry" : "Telemetry import"
+    uiState.key === "monitoringLive" ? "Live telemetry" : "Historical telemetry"
   );
 }
 
@@ -1005,7 +1005,7 @@ function countActiveInsightSystems(insights) {
 }
 
 function deriveHighestSeverity({ insights, fingerprintDrift }) {
-  const ranked = ["Low", "Moderate", "High"];
+  const ranked = ["Low", "Moderate", "High", "Critical"];
   const severities = insights.map((item) => normalizeSeverity(item.severity));
   if (!severities.length) return hasMeaningfulOperationalChange({ insights, fingerprintDrift }) ? "Moderate" : "Low";
   return severities.sort((left, right) => ranked.indexOf(right) - ranked.indexOf(left))[0];
@@ -1149,7 +1149,7 @@ function normalizeSystemStatus(value) {
 function operationalStateForSystem(activeInsightCount, topInsight, rawStatus) {
   if (activeInsightCount <= 0) return normalizeSystemStatus(rawStatus);
   const severity = normalizeSeverity(topInsight?.severity);
-  if (severity === "High") return "Critical";
+  if (severity === "Critical" || severity === "High") return "Critical";
   if (severity === "Moderate") return "Investigation Recommended";
   return "Advisory";
 }
@@ -1895,22 +1895,22 @@ function evidenceBriefing(insight, relationships = []) {
 function prioritizedEvidenceMetrics(insight) {
   const rows = [
     {
-      label: "Baseline average",
+      label: "Baseline Relationship Strength",
       value: firstEvidenceMetricValue(insight, "baseline_average", "baselineAverage", "baseline_value", "baselineValue", "baseline_strength", "baselineStrength", "baseline_coupling", "baselineCoupling", "baseline"),
       fallback: insight?.baselineValue,
     },
     {
-      label: "Current average",
+      label: "Current Relationship Strength",
       value: firstEvidenceMetricValue(insight, "current_average", "currentAverage", "recent_average", "recentAverage", "current_value", "currentValue", "current_strength", "currentStrength", "current_coupling", "currentCoupling", "current"),
       fallback: insight?.currentValue,
     },
     {
-      label: "Percent change",
+      label: "Relationship Change Magnitude",
       value: firstEvidenceMetricValue(insight, "percent_change", "percentChange", "calculated_percent_delta", "calculatedPercentDelta", "correlation_delta", "correlationDelta", "coupling_delta", "couplingDelta"),
       suffix: "%",
     },
     {
-      label: "Persistence score",
+      label: "Persistence Score",
       value: firstEvidenceMetricValue(insight, "persistence_score", "persistenceScore"),
     },
   ];
@@ -2123,7 +2123,7 @@ function relationshipEvidenceSummary(evidence) {
       : "";
 
   return (
-    `Unitless coupling score changed from ` +
+    `Behavioral Relationship Strength changed from ` +
     `${formatEvidenceNumber(baseline)} to ` +
     `${formatEvidenceNumber(current)}; ` +
     `${interpretation}.${changeMagnitude}`
@@ -2495,7 +2495,7 @@ function formatEvidenceDelta(value) {
           )}.`
         : "";
     const summary =
-      `Unitless coupling score changed from ` +
+      `Behavioral Relationship Strength changed from ` +
       `${formatEvidenceNumber(baselineStrength)} to ` +
       `${formatEvidenceNumber(currentStrength)}; ` +
       `${interpretation}.${magnitude}`;
@@ -2507,7 +2507,7 @@ function formatEvidenceDelta(value) {
   }
   const details = [
     value.percent_change !== undefined
-      ? `Percent change: ${formatQuantitativeValue(
+      ? `Relationship Change Magnitude: ${formatQuantitativeValue(
           value.percent_change
         )}%`
       : "",
@@ -2517,12 +2517,12 @@ function formatEvidenceDelta(value) {
         )}`
       : "",
     value.baseline_average !== undefined
-      ? `Baseline average: ${formatQuantitativeValue(
+      ? `Baseline Relationship Strength: ${formatQuantitativeValue(
           value.baseline_average
         )}`
       : "",
     value.current_average !== undefined
-      ? `Current average: ${formatQuantitativeValue(
+      ? `Current Relationship Strength: ${formatQuantitativeValue(
           value.current_average
         )}`
       : "",
@@ -2661,7 +2661,8 @@ function normalizeInsightStatus(value) {
 
 function normalizeSeverity(value) {
   const text = String(value ?? "").toLowerCase();
-  if (text.includes("high") || text.includes("unstable") || text.includes("critical")) return "High";
+  if (text.includes("critical")) return "Critical";
+  if (text.includes("high") || text.includes("unstable")) return "High";
   if (text.includes("moderate") || text.includes("review") || text.includes("elevated")) return "Moderate";
   return "Low";
 }

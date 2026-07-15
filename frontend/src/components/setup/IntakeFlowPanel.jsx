@@ -66,12 +66,12 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
   if (viewState === "complete") return "Analysis Complete";
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
-    if (normalized === "saving_results") return "Saving Behavior Baseline";
-    if (normalized === "navigation_pending") return "Loading Command Center";
+    if (normalized === "saving_results") return "Persisting Behavioral Baseline";
+    if (normalized === "navigation_pending") return "Opening Results";
     return "Generating Operational Insights...";
   }
   if (viewState === "failed") return "Upload Error";
-  if (viewState === "completion_error") return "Command Center Unavailable";
+  if (viewState === "completion_error") return "Results View Unavailable";
   if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
@@ -79,10 +79,10 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
     return "Generating Operational Insights...";
   }
   if (["building_fingerprint", "baseline_modeling", "building_baseline", "structural_scoring", "running_sii", "accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
-    return "Learning Behavior Baseline...";
+    return "Learning the Facility Behavior...";
   }
 
-  return cleanMessage || "Learning Behavior Baseline...";
+  return cleanMessage || "Learning the Facility Behavior...";
 }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
@@ -169,28 +169,28 @@ function completionSummary({ analysisResult }) {
 
 const FINGERPRINT_BUILD_STAGES = [
   {
-    id: "telemetry",
-    label: "Collecting Telemetry Evidence",
+    id: "evidence",
+    label: "Collecting Operational Evidence",
     shortLabel: "Evidence",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
   },
   {
     id: "relationships",
-    label: "Learning Operational Relationships",
+    label: "Discovering Operational Relationships",
     shortLabel: "Relationships",
-    states: ["processing", "building_fingerprint", "baseline_modeling"],
+    states: ["processing", "baseline_modeling"],
   },
   {
-    id: "systems",
-    label: "Identifying Operational Systems",
-    shortLabel: "Systems",
-    states: ["running_sii", "structural_scoring", "building_baseline"],
+    id: "organization",
+    label: "Organizing System Behavior",
+    shortLabel: "Organization",
+    states: ["running_sii", "structural_scoring", "building_baseline", "building_fingerprint"],
   },
   {
     id: "baseline",
     label: "Establishing Behavioral Baseline",
     shortLabel: "Baseline",
-    states: ["writing_state", "cognition_ready", "saving_result"],
+    states: ["writing_state", "cognition_ready", "saving_result", "saving_results"],
   },
 ];
 
@@ -204,51 +204,55 @@ const FINGERPRINT_RENDERER_PARTICLES = {
 };
 
 const FINGERPRINT_RIDGES = [
-  { phase: 0, detail: "core", path: "M80 55a40 40 0 1 1 0 80a40 40 0 1 1 0-80" },
-  { phase: 0, detail: "core", path: "M52 95h56" },
-  { phase: 1, detail: "branch", path: "M45 72c18-16 52-16 70 0" },
-  { phase: 1, detail: "branch", path: "M45 118c18 16 52 16 70 0" },
-  { phase: 2, detail: "outer", path: "M80 37a58 58 0 1 1 0 116a58 58 0 1 1 0-116" },
-  { phase: 2, detail: "outer", path: "M32 95c18-34 78-34 96 0" },
-  { phase: 2, detail: "outer", path: "M32 95c18 34 78 34 96 0" },
-  { phase: 3, detail: "fine", path: "M80 31v128" },
-  { phase: 3, detail: "fine", path: "M39 58c28 20 54 20 82 0" },
-  { phase: 3, detail: "fine", path: "M39 132c28-20 54-20 82 0" },
+  { phase: 0, detail: "core", path: "M80 96C80 82 90 72 104 72C119 72 130 84 130 99C130 118 113 132 91 132C66 132 48 115 48 92C48 64 70 44 101 44C127 44 148 58 156 80" },
+  { phase: 0, detail: "core", path: "M80 96C80 106 73 113 63 113C52 113 43 104 43 92C43 73 59 58 80 58C105 58 125 77 125 101C125 130 101 151 70 151" },
+  { phase: 1, detail: "branch", path: "M62 83C72 70 94 68 108 82C122 96 119 118 102 130" },
+  { phase: 1, detail: "branch", path: "M58 126C73 139 100 138 117 121C134 104 134 76 117 59" },
+  { phase: 1, detail: "branch", path: "M54 66C73 46 108 47 130 70C153 94 150 133 122 158" },
+  { phase: 2, detail: "outer", path: "M38 132C23 103 31 67 58 45C86 21 130 27 154 58C179 91 171 139 137 168" },
+  { phase: 2, detail: "outer", path: "M33 154C61 180 112 178 145 144C177 110 178 57 147 26" },
+  { phase: 2, detail: "outer", path: "M47 39C72 14 119 16 150 43" },
+  { phase: 3, detail: "fine", path: "M69 91C77 83 92 83 101 93C111 104 103 119 88 122" },
+  { phase: 3, detail: "fine", path: "M61 101C65 121 87 134 109 126" },
+  { phase: 3, detail: "fine", path: "M76 151C92 156 112 151 126 138" },
+  { phase: 3, detail: "fine", path: "M48 116C41 92 50 69 69 57" },
 ];
 
 
 const FINGERPRINT_EVIDENCE_POINTS = [
-  { x: 38, y: 68 }, { x: 55, y: 47 }, { x: 85, y: 39 }, { x: 112, y: 63 },
-  { x: 123, y: 98 }, { x: 105, y: 134 }, { x: 73, y: 146 }, { x: 43, y: 120 },
+  { x: 24, y: 52 }, { x: 42, y: 34 }, { x: 68, y: 24 }, { x: 98, y: 25 },
+  { x: 124, y: 38 }, { x: 142, y: 62 }, { x: 145, y: 95 }, { x: 132, y: 125 },
+  { x: 108, y: 150 }, { x: 76, y: 158 }, { x: 48, y: 143 }, { x: 28, y: 112 },
 ];
 
 const FINGERPRINT_RELATIONSHIP_LINKS = [
-  "M38 68C52 58 69 49 85 39",
-  "M85 39C98 48 108 54 112 63",
-  "M112 63C122 74 126 85 123 98",
-  "M123 98C119 116 112 127 105 134",
-  "M105 134C92 143 83 147 73 146",
-  "M73 146C58 139 48 130 43 120",
-  "M43 120C37 101 36 84 38 68",
-  "M55 47C72 86 92 109 105 134",
+  "M42 34C61 45 70 58 80 96",
+  "M98 25C91 47 86 67 80 96",
+  "M142 62C124 70 107 78 80 96",
+  "M132 125C111 119 95 110 80 96",
+  "M76 158C78 136 79 116 80 96",
+  "M28 112C48 108 65 103 80 96",
+  "M24 52C43 68 58 82 80 96",
+  "M124 38C110 60 98 78 80 96",
 ];
 
 const FINGERPRINT_CLUSTER_PATHS = [
-  "M48 75C62 54 96 52 112 76C128 99 111 131 82 137C54 142 34 101 48 75Z",
-  "M62 92C72 77 94 76 105 93C116 110 101 128 80 128C60 128 51 108 62 92Z",
+  "M45 63C62 43 99 41 120 62C142 84 136 124 108 142C78 160 43 139 39 103C37 86 38 75 45 63Z",
+  "M60 82C72 67 98 68 111 84C124 101 116 127 93 135C70 143 51 126 53 104C54 94 55 88 60 82Z",
+  "M66 92C75 82 91 82 101 94C109 105 102 122 86 126C71 129 60 116 61 103C62 99 63 95 66 92Z",
 ];
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "complete") {
-    return { id: "complete", label: "Behavior Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
+    return { id: "complete", label: "Behavioral Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
   }
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
     if (normalized === "saving_results") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving Behavior Baseline", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Persisting Behavioral Baseline", index: 3 };
     }
     if (normalized === "navigation_pending") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Loading Command Center", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Results", index: 3 };
     }
     return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
   }
@@ -387,11 +391,15 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const compatibilityMode = renderTier === "safe";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
   const statusTitle = complete
-    ? "Behavior Baseline Established"
+    ? "Behavioral Baseline Established"
     : compatibilityMode
       ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
-  const statusDetail = complete ? "Operational behavior baseline is ready" : compatibilityMode ? `Stage ${stageNumber} of ${stageCount} - results remain valid; no action required.` : `Stage ${stageNumber} of ${stageCount}`;
+  const statusDetail = complete
+    ? "The behavioral baseline has been established"
+    : compatibilityMode
+      ? "Analysis quality is unchanged. Full SII results remain valid."
+      : "Stage " + stageNumber + " of " + stageCount;
 
   useEffect(() => {
     if (forcedTier) return undefined;
@@ -457,7 +465,7 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
         <strong>{statusTitle}</strong>
         <span>{statusDetail}</span>
         {compatibilityMode && !complete ? (
-          <small>Renderer recovery selected this path. Analysis is not degraded; full SII results remain valid.</small>
+          <small>Analysis quality is unchanged. Full SII results remain valid. No action is required.</small>
         ) : null}
       </div>
       <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
@@ -473,8 +481,8 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
             <stop offset="1" stopColor="rgba(29, 216, 196, 0)" />
           </radialGradient>
         </defs>
-        <path className="upload-fingerprint-build__field" d="M80 31a64 64 0 1 1 0 128a64 64 0 1 1 0-128" />
-        <path className="upload-fingerprint-build__outline" d="M80 31a64 64 0 1 1 0 128a64 64 0 1 1 0-128" />
+        <path className="upload-fingerprint-build__field" d="M80 25C112 21 144 38 156 68C173 101 162 143 132 166C102 188 58 179 35 149C12 119 19 74 45 48C54 39 66 29 80 25Z" />
+        <path className="upload-fingerprint-build__outline" d="M80 25C112 21 144 38 156 68C173 101 162 143 132 166C102 188 58 179 35 149C12 119 19 74 45 48C54 39 66 29 80 25Z" />
         <g className="upload-fingerprint-build__relationship-links">
           {FINGERPRINT_RELATIONSHIP_LINKS.map((path, index) => (
             <path key={path} d={path} pathLength="100" style={{ "--link-index": index }} />
@@ -538,11 +546,11 @@ function uploadOrbStatus(viewState) {
 }
 
 function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
-  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning Behavior Baseline";
-  if (viewState === "complete") return "Behavior Baseline Active";
-  if (viewState === "failed") return hasSelectedFiles ? "Historical Data Ready" : "Awaiting Behavior Baseline";
+  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning Facility Behavior";
+  if (viewState === "complete") return "Behavioral Baseline Active";
+  if (viewState === "failed") return hasSelectedFiles ? "Historical Data Ready" : "Awaiting Behavioral Baseline";
   if (hasSelectedFiles) return "Historical Data Ready";
-  return "Awaiting Behavior Baseline";
+  return "Awaiting Behavioral Baseline";
 }
 
 function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
@@ -553,7 +561,7 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Timing", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
     ["Transfer", uploadTransfer?.label],
     ["Finalization", uploadJob?.result_available ? "Result available" : uploadJob?.first_usable_available ? "First result available" : null],
-    ["Worker", queuedWorkerDetail],
+    ["Processing status", queuedWorkerDetail],
     ["Stage detail", propagationLabel],
     ["Failure phase", uploadJob?.failure_phase ?? uploadDebug?.failurePhase],
     ["Failed route", uploadJob?.failure_url ?? uploadDebug?.uploadUrl],
@@ -670,7 +678,7 @@ export default function IntakeFlowPanel({
   }
 
   return (
-    <Panel title="Historical Data Analysis" className="span-7 upload-ops-panel upload-ops-panel--command">
+    <Panel title="Analyze Historical Telemetry" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
         <p className="intake-flow__subtitle">Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
@@ -688,7 +696,7 @@ export default function IntakeFlowPanel({
                 status={resolvedOrbStatus}
                 state={{
                   label: fingerprintStatus,
-                  visualLabel: "Behavior Baseline",
+                  visualLabel: "Behavioral Baseline",
                 }}
               />
               <div className="upload-analysis-card__status" aria-live="polite">
@@ -699,8 +707,8 @@ export default function IntakeFlowPanel({
 
             <div className="upload-analysis-card__content">
               <div className="upload-analysis-card__copy">
-                <p className="section-token">Historical Data Analysis</p>
-                <h3>Historical Data Analysis</h3>
+                <p className="section-token">Historical Telemetry</p>
+                <h3>Analyze Historical Telemetry</h3>
                 <p>Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
               </div>
 
@@ -719,7 +727,7 @@ export default function IntakeFlowPanel({
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)}>
-                  Analyze Dataset
+                  Analyze Historical Telemetry
                 </button>
               </div>
             </div>
@@ -746,15 +754,15 @@ export default function IntakeFlowPanel({
               <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>Behavior Baseline Established</strong>
+                <strong>Behavioral Baseline Established</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Behavior Baseline Established</h3>
+                <h3>Behavioral Baseline Established</h3>
                 <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
               </div>
-              <p className="upload-complete-message">Learned operational behavior is ready for command center review.</p>
+              <p className="upload-complete-message">The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.</p>
               <div className="upload-result-summary">
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
@@ -764,8 +772,8 @@ export default function IntakeFlowPanel({
                 ))}
               </div>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Open Command Center</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
+                <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze New Telemetry</button>
               </div>
             </div>
           </section>
@@ -777,18 +785,18 @@ export default function IntakeFlowPanel({
               <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>Behavior Baseline Established</strong>
+                <strong>Behavioral Baseline Established</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Command Center Unavailable</h3>
+                <h3>Results View Unavailable</h3>
                 <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
               </div>
-              <p className="upload-error-message">{errorMessage || "Results saved, but the Command Center could not be loaded."}</p>
+              <p className="upload-error-message">{errorMessage || "Results were saved, but the results view could not be loaded."}</p>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Retry Command Center</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Source</button>
+                <button type="button" className="command-button" onClick={onViewResults}>Retry Results</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze New Telemetry</button>
               </div>
             </div>
           </section>
@@ -801,7 +809,7 @@ export default function IntakeFlowPanel({
                 status={resolvedOrbStatus}
                 state={{
                   label: fingerprintStatus,
-                  visualLabel: "Behavior Baseline",
+                  visualLabel: "Behavioral Baseline",
                 }}
               />
               <div className="upload-analysis-card__status">

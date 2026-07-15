@@ -24,10 +24,10 @@ export default function IntakeStatusPanel({
   const baselineSeconds = timings?.baseline_build_seconds ?? null;
   const scoreSeconds = timings?.structural_scoring_seconds ?? null;
   const totalSeconds = timings?.total_job_seconds ?? latestUploadResult?.processing_stats?.engine_runtime_seconds ?? uploadJob?.processing_duration_seconds ?? null;
-  const processingMode = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
+  const processingProcessing Path = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
   const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? null;
   const baselineReference = activeFilename
-    ? `${activeFilename} (internal baseline)`
+    ? `${activeFilename} (behavioral baseline)`
     : "Awaiting telemetry file";
   const queuePending = Number(apiStatus?.queue?.pending ?? 0);
   const queueOldestPendingSeconds = Number(apiStatus?.queue?.oldest_pending_age_seconds ?? NaN);
@@ -40,9 +40,9 @@ export default function IntakeStatusPanel({
         <MetricGrid
           metrics={[
             { label: "Session", value: sessionState },
-            { label: "Backend", value: apiStatus.label },
-            { label: "Queue Pending", value: queuePending },
-            { label: "Oldest Pending", value: queueOldestPending },
+            { label: "Analysis Service", value: apiStatus.label },
+            { label: "Pending Analyses", value: queuePending },
+            { label: "Longest Wait", value: queueOldestPending },
             { label: "Last Analysis", value: showAnalysis && latestUploadSnapshot?.last_processed_at ? formatClockTime(latestUploadSnapshot.last_processed_at) : null },
             { label: "Baseline", value: baselineMessage },
           ]}
@@ -51,7 +51,7 @@ export default function IntakeStatusPanel({
       <Panel title="Processing" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <MetricGrid
           metrics={[
-            { label: "Mode", value: processingMode === "hash_cache_reused" ? "Cache Reused" : processingMode ? "Full Processing" : "Unavailable" },
+            { label: "Processing Path", value: processingProcessing Path === "hash_cache_reused" ? "Alternate Path" : processingProcessing Path ? "Standard Path" : "Unavailable" },
             { label: "Parse (s)", value: parseSeconds },
             { label: "Baseline (s)", value: baselineSeconds },
             { label: "Scoring (s)", value: scoreSeconds },
@@ -64,8 +64,8 @@ export default function IntakeStatusPanel({
         <Panel title="Latest System Review" className="span-12 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <MetricGrid
             metrics={[
-              { label: "Telemetry file", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting telemetry file" },
-              { label: "Reference Source", value: baselineReference },
+              { label: "Telemetry File", value: latestUploadSnapshot?.history?.[0]?.filename ?? "Awaiting telemetry file" },
+              { label: "Baseline Source", value: baselineReference },
               { label: "Change movement", value: latestUploadSnapshot?.history?.[0]?.diff?.neraium_score_delta },
               { label: "System read", value: latestUploadSnapshot?.history?.[0]?.operating_state },
             ]}

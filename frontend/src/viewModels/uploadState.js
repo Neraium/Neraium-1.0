@@ -294,7 +294,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
             ? `Dashboard is using ${latestUploadSnapshot?.last_filename ?? "the latest telemetry result"} as the active result.`
             : "Telemetry processing finished, but the system story is still being verified before engineer review."
           : latestStatus === "baseline_active"
-            ? "Live baseline is active. The next telemetry comparison will activate the structural state view."
+            ? "Live baseline is active. The next telemetry comparison will update the Command Center."
             : "No Active Session. Awaiting uploaded telemetry.",
       state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
       tone: uploadError

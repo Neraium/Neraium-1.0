@@ -79,7 +79,7 @@ function operationalStatus(model, queue) {
       label: "Analyzing Operational Behavior",
       tone: "loading",
       orbStatus: "learning",
-      stage: "Evidence  Relationships  Systems  Baseline",
+      stage: "Evidence  Relationships  Organization  Baseline",
       explanation: "Neraium is comparing facility behavior against learned operational relationships.",
     };
   }
@@ -260,11 +260,11 @@ function AdvancedDashboardSection({ model }) {
     <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
       <div className="command-section__header">
         <h2 id="dashboard-advanced-heading">Advanced Information</h2>
-        <p>Historical analysis, diagnostics, upload details, and developer information.</p>
+        <p>Analysis history, diagnostics, source details, and raw payloads.</p>
       </div>
       <div className="dashboard-advanced-stack">
         <details>
-          <summary>Historical Analysis</summary>
+          <summary>Analysis History</summary>
           {history?.length ? (
             <ul className="dashboard-advanced-list">
               {history.slice(0, 6).map((item, index) => <li key={item.id ?? index}>{item.datasetName ?? item.title ?? item.detail ?? "Historical analysis"}</li>)}
@@ -272,7 +272,7 @@ function AdvancedDashboardSection({ model }) {
           ) : <p>No saved analysis history is available.</p>}
         </details>
         <details>
-          <summary>Upload Details</summary>
+          <summary>Telemetry Source Details</summary>
           <DetailRows rows={model.dataSourceRows} />
         </details>
         <details>
@@ -280,7 +280,7 @@ function AdvancedDashboardSection({ model }) {
           <DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical />
         </details>
         <details>
-          <summary>Developer Information</summary>
+          <summary>Source Payload</summary>
           <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
         </details>
       </div>

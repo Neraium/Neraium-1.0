@@ -89,12 +89,12 @@ export default function useFacilityRuntime({
       apiStateRef.current = "online";
       setApiStatus({
         state: "online",
-        label: "Backend Online",
+        label: "Analysis Service Online",
         detail: `Last sync ${formatClockTime(checkTime)} CT.`,
         checkedAt: checkTime.toISOString(),
         attemptCount,
         endpoint: formatEndpoint(API_BASE_URL),
-        message: trigger === "scheduled" ? "Backend sync current." : "Facility sync refreshed.",
+        message: trigger === "scheduled" ? "Analysis service sync current." : "Facility sync refreshed.",
         queue: queueMetrics,
         diagnostics,
       });
@@ -103,16 +103,16 @@ export default function useFacilityRuntime({
       apiStateRef.current = "offline";
       setApiStatus({
         state: "offline",
-        label: "Backend Offline",
-        detail: "Backend connection unavailable. System data could not be loaded.",
+        label: "Analysis Service Offline",
+        detail: "Analysis service unavailable. System data could not be loaded.",
         checkedAt: checkTime.toISOString(),
         attemptCount,
         endpoint: formatEndpoint(API_BASE_URL),
-        message: "Backend connection unavailable. System data could not be loaded.",
+        message: "Analysis service unavailable. System data could not be loaded.",
         queue: null,
         diagnostics: null,
       });
-      setBackendError("Backend connection unavailable. System data could not be loaded.");
+      setBackendError("Analysis service unavailable. System data could not be loaded.");
       return false;
     } finally {
       healthRequestInFlightRef.current = false;
@@ -155,7 +155,7 @@ export default function useFacilityRuntime({
       setSystemsState("fallback");
       setBackendError((current) => {
         if (normalizedMessage === "Session expired. Refresh workspace.") return normalizedMessage;
-        if (apiStateRef.current === "offline") return "Backend connection unavailable. System data could not be loaded.";
+        if (apiStateRef.current === "offline") return "Analysis service unavailable. System data could not be loaded.";
         return current || API_CONFIG_WARNING;
       });
       return false;

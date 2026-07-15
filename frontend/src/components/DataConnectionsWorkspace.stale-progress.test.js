@@ -233,14 +233,14 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getAllByRole("heading", { name: "Historical Data Analysis" }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("heading", { name: "Analyze Historical Telemetry" }).length).toBeGreaterThan(0);
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Analyze Dataset", () => {
+it("selected file state shows filename, size, and Analyze Historical Telemetry", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -250,7 +250,7 @@ it("selected file state shows filename, size, and Analyze Dataset", () => {
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
   expect(screen.getByText("Historical Data Ready")).toBeTruthy();
 });
 
@@ -286,8 +286,8 @@ it("processing state uses the behavior baseline as the progress indicator", () =
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Learning Operational Relationships")).toBeTruthy();
-  expect(screen.getByText("Stage 2 of 4")).toBeTruthy();
+  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
+  expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
   expect(screen.getByText("1.0 KB")).toBeTruthy();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
@@ -352,7 +352,7 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   const renderer = document.querySelector(".upload-fingerprint-build");
   expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
   expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
-  expect(screen.getByText("Learning Operational Relationships")).toBeTruthy();
+  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
 });
 
 it("failed state shows retry and choose another file", () => {
@@ -392,12 +392,12 @@ it("complete state shows the behavior baseline completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Behavior Baseline Established" })).toBeTruthy();
-  expect(screen.getByText("Learned operational behavior is ready for command center review.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Behavioral Baseline Established" })).toBeTruthy();
+  expect(screen.getByText("The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.")).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Baseline"]);
-  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
   const details = screen.getByText("Advanced Details").closest("details");
   expect(details.open).toBe(false);
 });
@@ -506,7 +506,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -518,10 +518,10 @@ it("analyze another CSV resets the completed workspace", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Analyze Another Source" }));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Telemetry" }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);
@@ -581,8 +581,8 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByText("Learned operational behavior is ready for command center review.")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
+  expect(screen.getByText("The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
@@ -674,7 +674,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Identifying Operational Systems")).toBeTruthy();
+  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });

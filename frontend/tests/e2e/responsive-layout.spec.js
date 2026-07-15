@@ -55,7 +55,7 @@ async function expectNoVisibleButtonOverlap(page) {
 async function operationalLayoutMetrics(page) {
   return page.evaluate(() => {
     const main = document.querySelector('.operational-main');
-    const hero = document.querySelector('.command-center-hero');
+    const hero = document.querySelector('.command-center-hero') ?? main;
     const root = document.documentElement;
     const body = document.body;
     const mainRect = main?.getBoundingClientRect() ?? null;
@@ -120,8 +120,8 @@ test.describe("Responsive layout audit", () => {
   test("mobile workflow navigation remains visible and usable", async ({ page }) => {
     await openWorkspace(page, { width: 390, height: 844 });
     await page.getByRole("button", { name: /Data Sources/i }).first().click();
-    await expect(page.getByRole("region", { name: "Data Sources" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Import Historical CSV/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Telemetry Sources" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Analyze Historical Telemetry/i })).toBeVisible();
   });
 
   test("buttons do not overlap across responsive widths", async ({ page }) => {

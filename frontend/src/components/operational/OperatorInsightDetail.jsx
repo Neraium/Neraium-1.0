@@ -154,7 +154,7 @@ function evidenceSummary(evidence, index, labels = []) {
   const { baseline, current, delta } = relationshipMeasurement(evidence);
   if (baseline !== null && current !== null) {
     const magnitude = delta !== null ? " Overall change magnitude: " + delta.toFixed(2) + "." : "";
-    return label + ": Unitless coupling score changed from " + baseline.toFixed(2) + " to " + current.toFixed(2) + "; " + couplingInterpretation(baseline, current) + "." + magnitude;
+    return label + ": Behavioral Relationship Strength changed from " + baseline.toFixed(2) + " to " + current.toFixed(2) + "; " + couplingInterpretation(baseline, current) + "." + magnitude;
   }
   if (delta !== null) return label + ": Relationship change magnitude: " + delta.toFixed(2) + ".";
   return label + ": change detected, but no quantitative measurement was included in this result.";
@@ -169,11 +169,11 @@ function evidenceSummaries(insight, evidence) {
 function evidenceMetricRows(insight, evidence) {
   const firstMeasurement = evidence.map(relationshipMeasurement).find((item) => item.baseline !== null || item.current !== null || item.delta !== null) ?? {};
   const rows = [];
-  if (firstMeasurement.baseline !== null && firstMeasurement.baseline !== undefined) rows.push(["Baseline average", firstMeasurement.baseline.toFixed(2)]);
-  if (firstMeasurement.current !== null && firstMeasurement.current !== undefined) rows.push(["Current average", firstMeasurement.current.toFixed(2)]);
-  if (firstMeasurement.delta !== null && firstMeasurement.delta !== undefined) rows.push(["Percent change", firstMeasurement.delta.toFixed(2)]);
+  if (firstMeasurement.baseline !== null && firstMeasurement.baseline !== undefined) rows.push(["Baseline Relationship Strength", firstMeasurement.baseline.toFixed(2)]);
+  if (firstMeasurement.current !== null && firstMeasurement.current !== undefined) rows.push(["Current Relationship Strength", firstMeasurement.current.toFixed(2)]);
+  if (firstMeasurement.delta !== null && firstMeasurement.delta !== undefined) rows.push(["Relationship Change Magnitude", firstMeasurement.delta.toFixed(2)]);
   const persistence = Number(insight?.persistenceScore ?? insight?.persistence_score);
-  if (Number.isFinite(persistence)) rows.push(["Persistence score", persistence.toFixed(2)]);
+  if (Number.isFinite(persistence)) rows.push(["Persistence Score", persistence.toFixed(2)]);
   return rows;
 }
 
@@ -271,6 +271,46 @@ function defaultOperationalImpacts(causes, relationships) {
     "Reduced confidence in downstream operating assumptions",
     "Higher likelihood of manual investigation on the next operating cycle",
   ];
+}
+
+
+function insightSeverityLabel(insight) {
+  const severity = humanize(insight?.severity);
+  if (/critical/i.test(severity)) return "Critical";
+  if (/high|unstable/i.test(severity)) return "High";
+  if (/moderate|review|elevated/i.test(severity)) return "Moderate";
+  return severity || "Low";
+}
+
+function severityRationaleItems(insight, evidence, relationships, confidenceValue) {
+  const severity = insightSeverityLabel(insight);
+  const changedCount = Number(insight?.changedRelationshipCount ?? relationships.length);
+  const confidence = confidencePercent(insight) || confidenceValue;
+  const system = text(insight?.system || insight?.rawSystemName);
+  const items = [];
+
+  if (Number.isFinite(changedCount) && changedCount > 1) {
+    items.push(`${changedCount} high-impact operational relationships changed together.`);
+  } else if (Number.isFinite(changedCount) && changedCount === 1) {
+    items.push("A primary operational relationship changed from the learned baseline.");
+  }
+
+  if (system) {
+    items.push(`${system} is the affected operating system.`);
+  }
+
+  const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
+  if (measurements.length) {
+    const maxDelta = Math.max(...measurements.map((item) => item.delta));
+    items.push(`Largest relationship change magnitude: ${maxDelta.toFixed(2)}.`);
+  }
+
+  items.push("Historical operating pattern no longer matches the current analysis window.");
+  if (confidence) items.push(`Confidence: ${confidence}.`);
+
+  if (severity === "Critical") return items.slice(0, 5);
+  if (severity === "High") return items.slice(0, 4);
+  return items.slice(0, 3);
 }
 
 function confidenceEvidenceItems(insight, evidence) {
@@ -437,6 +477,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   ).flatMap((item) => Array.isArray(item) ? item : [item]));
   const expectedImpacts = (suppliedImpacts.length ? suppliedImpacts : defaultOperationalImpacts(causes, relationships)).slice(0, 6);
   const confidenceEvidence = confidenceEvidenceItems(insight, evidence);
+  const severityReasons = severityRationaleItems(insight, evidence, relationships, confidenceValue);
   const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships);
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
@@ -468,17 +509,28 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   const body = focusMode ? (
     <>
-      {expectedImpacts.length ? <Section title="Operational Impact"><BulletList items={expectedImpacts} /></Section> : null}
-
-      {focusRationale.length ? (
-        <Section title="Why Neraium surfaced it">
-          {focusRationale.map((line) => <p key={line}>{line}</p>)}
+      {evidenceLines.length || observedFacts.length ? (
+        <Section title="Observed Evidence">
+          <BulletList items={[...observedFacts, ...evidenceLines]} />
         </Section>
       ) : null}
 
+      {focusRationale.length || expectedImpacts.length ? (
+        <Section title="Interpretation">
+          {focusRationale.map((line) => <p key={line}>{line}</p>)}
+          <BulletList items={expectedImpacts} />
+        </Section>
+      ) : null}
+
+      <Section title="Possible Causes"><BulletList items={causes} /></Section>
+
       <Section title="Recommended Investigation"><BulletList items={investigationActions} /></Section>
 
-      {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
+      {severityReasons.length ? (
+        <Section title={`${insightSeverityLabel(insight)} because`}>
+          <CheckedList items={severityReasons} />
+        </Section>
+      ) : null}
 
       {advancedDiagnostics}
     </>
@@ -494,21 +546,34 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         {confidenceValue ? <div><dt>Overall Confidence</dt><dd>{confidenceValue}</dd></div> : null}
       </dl>
 
-      <Section title="What Changed">
-        {whatChanged.map((line) => <p key={line}>{line}</p>)}
-      </Section>
+      {evidenceLines.length || observedFacts.length || evidenceMetrics.length ? (
+        <Section title="Observed Evidence">
+          <BulletList items={[...observedFacts, ...evidenceLines]} />
+          {evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}
+        </Section>
+      ) : null}
 
-      {observedFacts.length ? <Section title="Observed Behavior"><BulletList items={observedFacts} /></Section> : null}
+      {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
 
-      {!focusMode && changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
+      {whatChanged.length || expectedImpacts.length || whyGenerated ? (
+        <Section title="Interpretation">
+          {whatChanged.map((line) => <p key={line}>{line}</p>)}
+          <BulletList items={expectedImpacts} />
+          {whyGenerated ? <p>{whyGenerated}</p> : null}
+        </Section>
+      ) : null}
 
-      {expectedImpacts.length ? <Section title="Expected Operational Impact"><BulletList items={expectedImpacts} /></Section> : null}
+      <Section title="Possible Causes"><BulletList items={causes} /></Section>
 
-      {actions.length ? <Section title="Recommended First Checks"><BulletList items={actions} /></Section> : null}
+      <Section title="Recommended Investigation"><BulletList items={investigationActions} /></Section>
 
-      {!focusMode && causes.length ? <Section title="Most Probable Operational Causes"><BulletList items={causes} /></Section> : null}
+      {severityReasons.length ? (
+        <Section title={`${insightSeverityLabel(insight)} because`}>
+          <CheckedList items={severityReasons} />
+        </Section>
+      ) : null}
 
-      {!focusMode && (confidenceValue || confidenceEvidence.length) ? (
+      {(confidenceValue || confidenceEvidence.length) ? (
         <Section title="Confidence Breakdown">
           {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
           {confidenceEvidence.length ? (
@@ -519,16 +584,6 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
           ) : null}
         </Section>
       ) : null}
-
-      {whyGenerated ? (
-        <Section title="Why Neraium Believes This">
-          <p>{whyGenerated}</p>
-        </Section>
-      ) : null}
-
-      {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
-
-      {evidenceMetrics.length ? <Section title="Evidence Metrics"><ContextGrid rows={evidenceMetrics} /></Section> : null}
 
       {!focusMode && (operationalMemory.rows.length || operationalMemory.similarEvents.length) ? (
         <Section title="Operational Memory">

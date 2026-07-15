@@ -41,7 +41,7 @@ describe("uploadFlow poll error classification", () => {
       state: "error",
       retryable: false,
       errorType: "job_not_found",
-      message: "Upload status unavailable.",
+      message: "Analysis status unavailable.",
     });
   });
 
@@ -109,7 +109,7 @@ describe("uploadFlow poll error classification", () => {
       state: "error",
       retryable: false,
       status: 404,
-      message: "Upload endpoint unavailable.",
+      message: "Telemetry intake unavailable.",
     });
   });
 

@@ -7,14 +7,14 @@ import {
 } from "./uploadContract";
 
 const INTAKE_STAGES = [
-  "Uploading telemetry batch",
-  "Validating CSV",
-  "Normalizing telemetry",
-  "Identifying systems",
-  "Mapping relationships",
-  "Building behavior baseline",
-  "Generating insights",
-  "Saving result",
+  "Upload",
+  "Validation",
+  "Preprocessing",
+  "Relationship Inference",
+  "Behavioral Organization",
+  "Behavioral Baseline",
+  "Operator Findings",
+  "Completion",
 ];
 
 export const SERVICE_UNAVAILABLE_UPLOAD_MESSAGE = "Analysis service temporarily unavailable. Please retry.";
@@ -65,7 +65,7 @@ export function buildUploadServiceUnavailablePayload({
   const serviceUnavailable = html || isTransientUploadServiceStatus(numericStatus);
   const message = serviceUnavailable
     ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
-    : "Upload response was not valid JSON.";
+    : "Analysis service response was unavailable.";
   return {
     status: "FAILED",
     processing_state: "failed",
@@ -123,7 +123,7 @@ function withResponseDiagnostics(payload, { status = null, rawBody = "", route =
   };
 }
 
-export function sanitizeUploadUserMessage(value, fallback = "Upload processing interrupted.") {
+export function sanitizeUploadUserMessage(value, fallback = "Telemetry analysis interrupted.") {
   const text = typeof value === "string"
     ? value.trim()
     : normalizeUploadContractErrorMessage(value);
@@ -154,24 +154,24 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       return {
         title: stage,
         detail: index === 2
-          ? "Reference learning begins after the telemetry batch is accepted."
-          : "Upload telemetry to begin structural analysis.",
+          ? "Preprocessing begins after the telemetry batch is accepted."
+          : "Upload historical telemetry to establish a behavioral baseline.",
         state: "standby",
         tone: index === 3 ? "review" : "info",
       };
     }
 
     const details = [
-      `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for processing.`,
-      `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} headers validated from the uploaded batch.`,
-      `${result.row_count ?? result.rows_processed ?? 0} telemetry rows normalized for analysis.`,
-      "System groups and primary operating patterns were identified.",
-      "Cross-signal relationships were mapped against baseline behavior.",
-      "Behavior baseline built from normalized telemetry.",
-      "Insights generated from the latest telemetry evidence.",
+      `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for analysis.`,
+      `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} telemetry fields validated from the uploaded batch.`,
+      `${result.row_count ?? result.rows_processed ?? 0} telemetry rows normalized for comparison.`,
+      "Meaningful operational relationships were inferred from the evidence.",
+      "Relationships were organized into visible subsystem behavior.",
+      "Behavioral baseline established from normalized telemetry.",
+      "Operator findings generated from observed evidence and interpretation.",
       operatorReviewReady
-        ? "Core result saved and ready for review."
-        : "Core result saved; final report details may still be finalizing.",
+        ? "Behavioral baseline saved and ready for review."
+        : "Behavioral baseline saved; operator findings are still finalizing.",
     ];
 
     return {
@@ -281,7 +281,7 @@ export function classifyUploadError(error, phase) {
       rawResponseBody: error.rawResponseBody ?? error.responseText ?? error.payload?.raw_response_body ?? "",
       responseStatus: error.status ?? error.payload?.response_status ?? null,
       finalMessage: isMissingStatusDuringPoll
-        ? "Upload status unavailable. The backend may have restarted or another ECS task may be serving polling."
+        ? "Analysis status is temporarily unavailable. Processing may still be active."
         : null,
       message: operatorUploadMessage({
         status: error.status,
@@ -354,7 +354,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return "Upload state unavailable.";
   }
   if (errorType === "shared_upload_queue_not_configured") {
-    return "Upload processing is unavailable because the analysis worker is not configured.";
+    return "Analysis processing is unavailable right now.";
   }
   if (errorType === "upload_queue_saturated") {
     return "Analysis service is busy. Retry shortly.";
@@ -362,12 +362,12 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "upload_enqueue_failed") {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "Upload processing is unavailable right now.";
+      : "Analysis processing is unavailable right now.";
   }
   if (errorType === "upload_status_unavailable") {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "Upload status remained unavailable after repeated retries.";
+      : "Analysis status remained unavailable after repeated retries.";
   }
   if (errorType === "service_unavailable" || [502, 503, 504].includes(Number(status))) {
     return SERVICE_UNAVAILABLE_UPLOAD_MESSAGE;
@@ -386,10 +386,10 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return detail ? `CSV could not be parsed: ${normalizeErrorMessage(detail)}` : "CSV could not be parsed.";
   }
   if (status === 404 || status === 405) {
-    return phase === "upload" ? "Upload endpoint unavailable." : "Upload status unavailable.";
+    return phase === "upload" ? "Telemetry intake unavailable." : "Analysis status unavailable.";
   }
   if (errorType === "job_not_found") {
-    return "Upload status unavailable.";
+    return "Analysis status unavailable.";
   }
   if (errorType === "sii_processing_failure") {
     return detail ? `Analysis processing failure: ${normalizeErrorMessage(detail)}` : "Analysis processing failure.";
@@ -399,14 +399,14 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
       ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
       : (typeof detail === "string" && detail.trim()
         ? normalizeErrorMessage(detail)
-        : "Upload processing is unavailable right now.");
+        : "Analysis processing is unavailable right now.");
   }
   if (phase === "poll") {
     return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";
   }
   return typeof detail === "string" && detail.trim()
     ? detail
-    : "Upload processing interrupted.";
+    : "Telemetry analysis interrupted.";
 }
 
 export function uploadStateMessage(uploadState) {
@@ -425,19 +425,19 @@ function uploadStageDetail(stage, index, job, roomContext) {
   }
   if (jobStatus === "complete") {
     return index === 7
-      ? "The app is using the latest uploaded structural state."
-      : "Stage complete.";
+      ? "The Command Center is using the established behavioral baseline."
+      : "Step complete.";
   }
   const details = [
-    job?.message ?? "Telemetry batch upload starts after operator confirmation.",
-    ["accepted", "queued", "validating_schema"].includes(jobStatus) ? job.progress_label : "CSV structure and key telemetry fields are being validated.",
-    ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized without loading the full export into memory.",
-    jobStatus === "baseline_modeling" ? job.progress_label : "System groupings and baseline patterns are being identified.",
-    jobStatus === "structural_scoring" ? job.progress_label : "Cross-signal relationships are being mapped against baseline behavior.",
-    jobStatus === "building_fingerprint" ? job.progress_label : "A behavior baseline is being assembled from normalized telemetry.",
-    jobStatus === "writing_state" ? job.progress_label : "Insights are being generated from the mapped system behavior.",
-    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The core result can complete before optional report finalization finishes.",
-    "Completion will refresh the structural state view.",
+    job?.message ?? "Telemetry upload starts after operator confirmation.",
+    ["accepted", "queued", "validating_schema"].includes(jobStatus) ? job.progress_label : "Telemetry structure and key fields are being validated.",
+    ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized for relationship inference.",
+    jobStatus === "baseline_modeling" ? job.progress_label : "Operational relationships are being inferred from the evidence.",
+    jobStatus === "structural_scoring" ? job.progress_label : "Relationship changes are being organized into subsystem behavior.",
+    jobStatus === "building_fingerprint" ? job.progress_label : "The behavioral baseline is being established from normalized telemetry.",
+    jobStatus === "writing_state" ? job.progress_label : "Operator findings are being generated from observed behavior.",
+    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavioral baseline is being persisted for Command Center review.",
+    "Completion will open the Command Center with the learned baseline.",
   ];
   return details[index] ?? stage;
 }

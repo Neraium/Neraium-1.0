@@ -33,10 +33,10 @@ function diagnosticsRows(diagnostics) {
     ["Build", displayValue(diagnostics.deployment?.build_sha)],
     ["Environment", displayValue(diagnostics.deployment?.app_env)],
     ["Process role", displayValue(diagnostics.deployment?.process_role)],
-    ["Upload state", displayValue(diagnostics.upload?.upload_state_backend)],
-    ["Queue", displayValue(diagnostics.upload?.queue_backend)],
-    ["Shared state", displayValue(diagnostics.upload?.upload_state_shared_configured)],
-    ["Worker", displayValue(diagnostics.worker?.startup_worker_started || diagnostics.worker?.configured_start_background_workers)],
+    ["Analysis state", displayValue(diagnostics.upload?.upload_state_backend)],
+    ["Pending analyses", displayValue(diagnostics.upload?.queue_backend)],
+    ["Shared analysis state", displayValue(diagnostics.upload?.upload_state_shared_configured)],
+    ["Background analysis", displayValue(diagnostics.worker?.startup_worker_started || diagnostics.worker?.configured_start_background_workers)],
     ["Latest upload", displayValue(diagnostics.upload?.latest_upload_session_id)],
     ["Latest status", displayValue(diagnostics.upload?.latest_upload_status || diagnostics.upload?.latest_upload_state)],
     ["Latest error", displayValue(diagnostics.upload?.latest_upload_error_type || diagnostics.upload?.latest_upload_message)],
@@ -102,7 +102,7 @@ export default function HelpChangelogWorkspace({
 
         <Panel title="Production diagnostics" className="span-12 observation-center__panel">
           {rows.length === 0 ? (
-            <EmptyState title="Diagnostics unavailable" body="Backend diagnostics will appear after the next health check." compact />
+            <EmptyState title="Diagnostics unavailable" body="Analysis service diagnostics will appear after the next health check." compact />
           ) : (
             <>
               <ul className="compact-list" data-testid="production-diagnostics">

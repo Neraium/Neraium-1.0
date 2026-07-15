@@ -107,10 +107,10 @@ function boundedFailureDelay(failureCount) {
 function queuedWorkerMessage(uploadJob) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (workerState === "starting") return "Worker starting...";
-  if (workerState === "active" || workerState === "running") return `Worker active • last update ${lastUpdate || "just now"}`;
-  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Still queued • waiting for worker";
-  if (workerState === "stalled") return "Possible stall • no worker update yet";
+  if (workerState === "starting") return "Preparing analysis resources...";
+  if (workerState === "active" || workerState === "running") return "Analysis active - last update " + (lastUpdate || "just now");
+  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Preparing analysis resources";
+  if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
   return "";
 }
 
@@ -488,8 +488,8 @@ export default function DataConnectionsWorkspace({
       processing_state: "saving_results",
       percent: 100,
       progress: 100,
-      progress_label: "Saving Behavior Baseline",
-      message: "Saving Behavior Baseline",
+      progress_label: "Persisting Behavioral Baseline",
+      message: "Persisting Behavioral Baseline",
     }));
     setUploadState("saving_results");
     logTelemetryStage("save request started", { jobId });
@@ -515,15 +515,15 @@ export default function DataConnectionsWorkspace({
         processing_state: "save_complete",
         percent: 100,
         progress: 100,
-        progress_label: "Behavior Baseline Established",
-        message: "Behavior Baseline Established",
+        progress_label: "Behavioral Baseline Established",
+        message: "Behavioral Baseline Established",
       }));
       logTelemetryStage("state hydration completed", { jobId });
       completionNavigationEligibleRef.current = true;
       setUploadState("save_complete");
       return completedPayload;
     } catch (error) {
-      const message = "Results saved, but the Command Center could not be loaded.";
+      const message = "Results were saved, but the results view could not be loaded.";
       logTelemetryStage("exception", { jobId, message: error?.message || String(error) });
       completionNavigationEligibleRef.current = false;
       setCompletionError(message);
@@ -575,7 +575,7 @@ export default function DataConnectionsWorkspace({
               const streamedStatus = normalizeUploadStatus(streamed.status);
               logTelemetryStatusProgress(streamedStatus, streamed);
               if (isTerminalCompletedPayload(streamed)) {
-                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Behavior Baseline", message: "Saving Behavior Baseline" };
+                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Persisting Behavioral Baseline", message: "Persisting Behavioral Baseline" };
                 logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
                 completionNavigationEligibleRef.current = false;
@@ -657,8 +657,8 @@ export default function DataConnectionsWorkspace({
               processing_state: "saving_results",
               percent: 100,
               progress: 100,
-              progress_label: "Saving Behavior Baseline",
-              message: "Saving Behavior Baseline",
+              progress_label: "Persisting Behavioral Baseline",
+              message: "Persisting Behavioral Baseline",
             };
             setUploadJob(completePayload);
             completionNavigationEligibleRef.current = false;
@@ -879,7 +879,7 @@ export default function DataConnectionsWorkspace({
     && normalizeUploadStatus(progressUploadJob?.status ?? progressUploadJob?.processing_state) !== "complete"
     && Date.now() - lastProgressAt > 6000
     && heartbeatTick >= 0;
-  const visibleStatusLabel = isProcessingQuiet ? "Still processing..." : statusLabel;
+  const visibleStatusLabel = isProcessingQuiet ? "Analysis is still progressing..." : statusLabel;
   const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
@@ -935,7 +935,7 @@ export default function DataConnectionsWorkspace({
     const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
     const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
     if (!payload || !hasResults) {
-      setCompletionError("Results saved, but the Command Center could not be loaded.");
+      setCompletionError("Results were saved, but the results view could not be loaded.");
       setUploadError("");
       setUploadState("completion_error");
       return;
@@ -947,14 +947,14 @@ export default function DataConnectionsWorkspace({
       ...(current ?? {}),
       status: "COMPLETE",
       processing_state: "navigation_pending",
-      progress_label: "Loading Command Center",
-      message: "Loading Command Center",
+      progress_label: "Opening Results",
+      message: "Opening Results",
     }));
     try {
       await onUploadComplete(payload, { navigateToGate: true });
       setUploadState("complete");
     } catch (error) {
-      const message = "Results saved, but the Command Center could not be loaded.";
+      const message = "Results were saved, but the results view could not be loaded.";
       logTelemetryStage("exception", { jobId: payload?.job_id ?? payload?.current_upload?.job_id ?? uploadJobIdRef.current ?? null, message: error?.message || String(error) });
       setCompletionError(message);
       setUploadError("");

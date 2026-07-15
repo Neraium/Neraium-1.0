@@ -225,7 +225,7 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Loading Command Center", "Preparing operational status...")}>
+        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Preparing operational status...")}>
           <OperationalWorkflowWorkspace
             liveOps={{
               ...liveOps,

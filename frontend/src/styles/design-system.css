@@ -915,7 +915,7 @@ button:focus-visible {
   position: absolute;
   inset: clamp(34px, 6vw, 58px);
   border: 1px solid rgba(146, 160, 170, 0.14);
-  border-radius: 50%;
+  border-radius: 45% 55% 48% 52%;
   box-shadow: inset 0 0 34px rgba(146, 160, 170, 0.04);
   opacity: 0.34;
   animation: fingerprint-build-breathe 3.2s ease-in-out infinite;
@@ -982,12 +982,12 @@ button:focus-visible {
   transition: opacity 520ms ease, stroke-dashoffset 900ms cubic-bezier(0.2, 0.76, 0.22, 1);
 }
 
-.upload-fingerprint-build[data-build-stage="telemetry"] .upload-fingerprint-build__evidence-points circle {
+.upload-fingerprint-build[data-build-stage="evidence"] .upload-fingerprint-build__evidence-points circle {
   opacity: 0.82;
 }
 
 .upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__evidence-points circle,
-.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__evidence-points circle,
+.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__evidence-points circle,
 .upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__evidence-points circle,
 .upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__evidence-points circle {
   opacity: 0.72;
@@ -996,14 +996,14 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__relationship-links path,
 .upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__relationship-links path,
 .upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__relationship-links path {
   opacity: 0.64;
   stroke-dashoffset: 0;
 }
 
-.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__clusters path,
+.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__clusters path,
 .upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__clusters path,
 .upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__clusters path {
   opacity: 0.86;
@@ -1038,13 +1038,13 @@ button:focus-visible {
 .upload-fingerprint-build__halo {
   position: absolute;
   inset: clamp(28px, 5vw, 48px);
-  border-radius: 50%;
+  border-radius: 45% 55% 48% 52%;
   background:
     conic-gradient(from 0deg, transparent, rgba(29, 216, 196, 0.18), transparent 31%, rgba(244, 210, 132, 0.12), transparent 68%, rgba(29, 216, 196, 0.16), transparent),
     radial-gradient(circle, transparent 58%, rgba(29, 216, 196, 0.18) 59%, transparent 61%);
   filter: blur(0.2px);
   opacity: 0.54;
-  animation: fingerprint-halo-rotate 16s linear infinite;
+  animation: fingerprint-halo-drift 12s ease-in-out infinite;
 }
 
 .upload-fingerprint-build__particles {
@@ -1145,7 +1145,7 @@ button:focus-visible {
 
 .upload-fingerprint-build--complete .upload-fingerprint-build__halo {
   opacity: 0.94;
-  animation-duration: 12s;
+  animation-duration: 10s;
 }
 
 .upload-fingerprint-build--complete .upload-fingerprint-build__print {
@@ -1273,8 +1273,9 @@ button:focus-visible {
   50% { transform: scale(1.012); }
 }
 
-@keyframes fingerprint-halo-rotate {
-  to { transform: rotate(360deg); }
+@keyframes fingerprint-halo-drift {
+  0%, 100% { transform: translate3d(-1%, 1%, 0) scale(0.99); }
+  50% { transform: translate3d(1.4%, -1.2%, 0) scale(1.015); }
 }
 
 @keyframes fingerprint-particle-flow {
@@ -1336,7 +1337,7 @@ button:focus-visible {
   background: conic-gradient(from 0deg, transparent, rgba(29, 216, 196, 0.18), transparent 38%, rgba(244, 210, 132, 0.12), transparent 72%, rgba(29, 216, 196, 0.14), transparent);
   filter: none;
   opacity: 0.6;
-  animation-duration: 20s;
+  animation-duration: 14s;
 }
 
 .upload-fingerprint-build--enhanced .upload-fingerprint-build__particles span {
