@@ -1,4 +1,6 @@
-import FacilityFingerprintMark from "./FacilityFingerprintMark";
+import { useMemo, useRef } from "react";
+
+import OperatorInsightDetail from "./OperatorInsightDetail";
 import OperationalOrb from "./OperationalOrb";
 
 function confidenceFallback(severity) {
@@ -8,187 +10,366 @@ function confidenceFallback(severity) {
   return "Low";
 }
 
+function confidencePercent(insight) {
+  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
+  if (!Number.isFinite(score)) return "";
+  const normalized = score > 1 ? score : score * 100;
+  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`;
+}
+
+function severityLabel(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text.includes("critical")) return "Critical";
+  if (text.includes("high") || text.includes("unstable")) return "High";
+  if (text.includes("moderate") || text.includes("review") || text.includes("elevated")) return "Moderate";
+  if (text.includes("low")) return "Low";
+  return value ? String(value) : "Low";
+}
+
+function severityRank(value) {
+  const severity = severityLabel(value).toLowerCase();
+  if (severity === "critical") return 4;
+  if (severity === "high") return 3;
+  if (severity === "moderate") return 2;
+  return 1;
+}
+
+function confidenceRank(insight) {
+  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
+  if (Number.isFinite(score)) return score > 1 ? score : score * 100;
+  const label = String(insight?.confidence ?? "").toLowerCase();
+  if (label.includes("high")) return 90;
+  if (label.includes("moderate")) return 70;
+  if (label.includes("low")) return 45;
+  return 0;
+}
 
 function dashboardInsightTitle(insight, relationships, fallback) {
   const supplied = String(insight?.summary || insight?.rawSummary || fallback || "").trim();
   if (supplied && !/relationship\s+(changed|shifted)|behavior\s+changed/i.test(supplied)) return supplied;
   const relationshipContext = (relationships ?? []).join(" ").toLowerCase();
   const context = [insight?.system, insight?.rawSystemName, insight?.title, insight?.summary, relationshipContext].join(" ").toLowerCase();
-  if (/pump.*(filter|pressure|flow)|filter.*(pump|pressure)|hydraulic/.test(context)) return "Pump Efficiency Degrading";
-  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water Quality Control Drift";
-  if (/pump|vfd|hydraulic/.test(context)) return "Pump Efficiency Degrading";
-  if (/(flow|pressure|dp|differential pressure|filter)/.test(relationshipContext)) return "Hydraulic Resistance Increasing";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat Transfer Performance Degrading";
-  return String(fallback ?? "Operating Behavior Changed").replace(/Relationship Changed/i, "Behavior Changed");
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Conductivity relationship changed";
+  if (/(filter|differential pressure|dp)/.test(relationshipContext)) return "Filter differential pressure relationship changed";
+  if (/pump|vfd|motor|power/.test(context)) return "Pump power relationship changed";
+  if (/(flow|pressure|hydraulic)/.test(relationshipContext)) return "Flow and pressure relationship changed";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat transfer relationship changed";
+  return String(fallback ?? "Operating behavior changed").replace(/Relationship Changed/i, "relationship changed");
 }
 
-export default function CommandCenterView({ model, helpers, onOpenInsight, onAnalyzeHistoricalData, onConnectLiveData, onResumePreviousSession, onViewSystems, onViewFingerprint }) {
-  const { EmptyOperationalState, PanelHeader, SummaryRows, Timeline, StatusBadge, formatActiveInsightCount, formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing, severityToTone } = helpers;
-  const primaryInsight = model.insights[0] ?? null;
-  const systems = model.analysisComplete ? model.dashboardSystemCards : [];
-  const showHeroStatusChip = model.commandCenterStatus?.label && model.commandCenterStatus.label !== model.commandCenterTitle;
-  const primaryInsightRelationships = primaryInsight ? insightRelationshipLabels(primaryInsight) : [];
-  const primaryInsightBriefing = primaryInsight ? operatorSummaryBriefing(primaryInsight, primaryInsightRelationships) : [];
-  const primaryInsightConfidence = primaryInsight
-    ? (formatConfidenceDisplay(primaryInsight.confidence, primaryInsight.confidenceScore) || confidenceFallback(primaryInsight.severity))
-    : "";
-  const primaryInsightTitle = primaryInsight ? dashboardInsightTitle(primaryInsight, primaryInsightRelationships, formatInsightTitle(primaryInsight)) : "No Operational Insights Yet";
-  const primaryObservedFacts = Array.isArray(primaryInsight?.observedFacts) ? primaryInsight.observedFacts.slice(0, 3) : [];
-  const primaryFirstAction = primaryInsight?.recommendedFirstAction || primaryInsight?.recommendedAction || primaryInsight?.operatorCheck || "";
+function cleanSubsystemName(value) {
+  return String(value || "Operational System")
+    .replace(/\s+\/\s+/g, " & ")
+    .replace(/\bsubsystem\b/gi, "system")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  function reviewCurrentInsight() {
-    if (primaryInsight && typeof onOpenInsight === "function") {
-      onOpenInsight(primaryInsight.id);
+function sanitizeId(value, fallback = "item") {
+  return String(value ?? fallback)
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || fallback;
+}
+
+function rankedInsights(insights) {
+  return [...(insights ?? [])].sort((left, right) => {
+    const severityDelta = severityRank(right?.severity) - severityRank(left?.severity);
+    if (severityDelta !== 0) return severityDelta;
+    const confidenceDelta = confidenceRank(right) - confidenceRank(left);
+    if (confidenceDelta !== 0) return confidenceDelta;
+    return String(left?.summary ?? left?.id ?? "").localeCompare(String(right?.summary ?? right?.id ?? ""));
+  });
+}
+
+function operationalStatus(model, queue) {
+  if (model.uiState?.key === "analyzing") {
+    return {
+      label: "Analysis in Progress",
+      tone: "loading",
+      orbStatus: "learning",
+      stage: "Learning operational relationships",
+      explanation: model.commandCenterMessage || "Neraium is comparing current relationships against historical operating behavior.",
+      action: null,
+    };
+  }
+
+  if (!model.analysisComplete) {
+    return {
+      label: model.commandCenterTitle || "Awaiting Initial Baseline",
+      tone: "neutral",
+      orbStatus: "awaiting",
+      stage: model.uiState?.sourceStatusLabel || "Waiting for telemetry",
+      explanation: model.commandCenterMessage || "The facility has not yet established an Operational Fingerprint.",
+      action: "Analyze Historical Data",
+    };
+  }
+
+  const criticalCount = queue.filter((insight) => severityLabel(insight?.severity) === "Critical").length;
+  const highCount = queue.filter((insight) => severityLabel(insight?.severity) === "High").length;
+  const topInsight = queue[0] ?? null;
+  const explanation = topInsight
+    ? statusExplanationForInsight(topInsight)
+    : "Current operation remains aligned with learned operating relationships.";
+
+  if (criticalCount > 0 || highCount > 1) {
+    return {
+      label: "Immediate Investigation",
+      tone: "critical",
+      orbStatus: "critical",
+      stage: "Immediate investigation",
+      explanation,
+      action: "Investigate Priority Issue",
+    };
+  }
+
+  if (queue.length > 0 || model.behaviorState === "Behavior Shift Detected") {
+    return {
+      label: "Investigation Recommended",
+      tone: "warning",
+      orbStatus: "warning",
+      stage: "Investigation recommended",
+      explanation,
+      action: "Investigate Priority Issue",
+    };
+  }
+
+  return {
+    label: "Healthy",
+    tone: "healthy",
+    orbStatus: "healthy",
+    stage: "Healthy",
+    explanation,
+    action: null,
+  };
+}
+
+function statusExplanationForInsight(insight) {
+  const system = cleanSubsystemName(insight?.system);
+  const relationshipCount = Number(insight?.changedRelationshipCount ?? insight?.affectedRelationships?.length ?? insight?.contributingRelationships?.length ?? 0);
+  if (relationshipCount > 1) return `${system} operating relationships changed.`;
+  if (relationshipCount === 1) return `${system} operating relationship changed.`;
+  return `${system} operating behavior changed.`;
+}
+
+function focusQueue() {
+  if (typeof document === "undefined") return;
+  const first = document.querySelector("[data-priority-item='true']");
+  if (first instanceof HTMLElement) first.focus();
+}
+
+function OperationalStatusSection({ model, status, selectedInsight, onAnalyzeHistoricalData, onSelectInsight }) {
+  function handlePrimaryAction() {
+    if (!model.analysisComplete) {
+      onAnalyzeHistoricalData?.();
       return;
     }
-    if (model.analysisComplete) onViewSystems();
+    if (selectedInsight?.id) onSelectInsight?.(selectedInsight.id);
+    focusQueue();
   }
 
   return (
-    <div className="operational-grid operational-grid--dashboard">
-      <section className="operational-panel operational-panel--command" aria-label="Command Center">
-        <div className="command-center-hero">
-          <OperationalOrb
-            state={model.orb}
-            status={model.orb.status}
-            hotspotCount={model.orb.hotspotCount}
-            hotspots={model.orb.hotspots}
-          />
-          <div className="command-center-hero__copy">
-            <span className="section-token">Operational Status</span>
-            <h2>{model.commandCenterTitle}</h2>
-            {showHeroStatusChip ? (
-              <StatusBadge
-                label={model.commandCenterStatus.label}
-                tone={model.commandCenterStatus.tone}
-                statusKey={model.commandCenterStatus.statusKey}
-              />
-            ) : null}
-            <p>{model.commandCenterMessage}</p>
-            <div className="operational-actions operational-actions--dashboard" aria-label="Primary actions">
-              {model.analysisComplete ? (
-                <button type="button" className="command-button" onClick={reviewCurrentInsight}>Review Insights</button>
-              ) : (
-                <button type="button" className="command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
-              )}
-              {model.analysisComplete ? (
-                <button type="button" className="secondary-command-button" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>Analyze Dataset</button>
-              ) : null}
-              <button type="button" className="secondary-command-button secondary-command-button--outline" onClick={onConnectLiveData} disabled={model.analyzeDisabled}>Connect Live Telemetry</button>
-            </div>
-            {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
-              <button type="button" className="operational-dashboard-resume" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
-            ) : null}
-          </div>
+    <section className={`command-section command-section--status command-section--${status.tone}`} aria-labelledby="operational-status-heading">
+      <div className="operational-status-orb-wrap">
+        <OperationalOrb
+          minimal
+          hideVisualLabel
+          state={{ ...model.orb, label: status.label, visualLabel: "Operational Status" }}
+          status={status.orbStatus}
+        />
+        <p className="operational-status-stage">{status.stage}</p>
+      </div>
+      <div className="operational-status-copy">
+        <h2 id="operational-status-heading">Operational Status</h2>
+        <p className="operational-status-value">{status.label}</p>
+        <p>{status.explanation}</p>
+        {status.action ? (
+          <button type="button" className="command-button" onClick={handlePrimaryAction} disabled={model.analyzeDisabled}>{status.action}</button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PriorityInvestigationQueue({ insights, selectedInsight, onSelectInsight, helpers }) {
+  const queueRef = useRef(null);
+  const { formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels } = helpers;
+
+  function handleKeyDown(event) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const buttons = Array.from(queueRef.current?.querySelectorAll("[data-priority-item='true']") ?? []);
+    const currentIndex = buttons.indexOf(event.target);
+    if (currentIndex === -1) return;
+    event.preventDefault();
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? buttons.length - 1
+        : event.key === "ArrowDown"
+          ? Math.min(buttons.length - 1, currentIndex + 1)
+          : Math.max(0, currentIndex - 1);
+    buttons[nextIndex]?.focus();
+  }
+
+  if (!insights.length) {
+    return (
+      <section className="command-section command-section--queue" aria-labelledby="priority-queue-heading">
+        <div className="command-section__header">
+          <h2 id="priority-queue-heading">Priority Investigation Queue</h2>
+          <p>No Active Investigations</p>
         </div>
+        <p className="priority-queue-empty">No priority investigations yet.</p>
       </section>
+    );
+  }
 
-      <section className="operational-panel operational-panel--state" aria-label="System Readiness">
-        <PanelHeader eyebrow="Operational State" title="System Readiness" subtitle="" />
-        <SummaryRows rows={model.dashboardSummaryRows} />
-      </section>
-
-
-      {model.analysisComplete ? (
-        <section className="operational-panel operational-panel--fingerprint-summary" aria-label="Operational Fingerprint">
-          <PanelHeader eyebrow="Operational Fingerprint" title="Established" subtitle="" />
-          <div className="fingerprint-summary-card">
-            <FacilityFingerprintMark className="fingerprint-summary-mark" state={model.orb} status={model.orb.status} label="Dashboard facility fingerprint" />
-            <SummaryRows rows={model.dashboardFingerprintRows} />
-            <button type="button" className="secondary-command-button" onClick={onViewFingerprint}>View History</button>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="operational-panel operational-panel--top-insight" aria-label="Top Operational Insight">
-        <PanelHeader eyebrow="Highest Priority" title={primaryInsightTitle} subtitle="" />
-        {primaryInsight ? (
-          <div className="command-center-insight">
-            <p>{primaryInsightBriefing[0] || "Operating behavior changed from the learned operating pattern."}</p>
-            <dl className="top-insight-facts">
-              <div>
-                <dt>Confidence</dt>
-                <dd>{primaryInsightConfidence}</dd>
-              </div>
-              <div>
-                <dt>Severity</dt>
-                <dd><span className={`severity-chip severity-chip--${severityToTone(primaryInsight.severity)}`}>{primaryInsight.severity}</span></dd>
-              </div>
-              {primaryFirstAction ? (
-                <div>
-                  <dt>First check</dt>
-                  <dd>{primaryFirstAction}</dd>
-                </div>
-              ) : null}
-            </dl>
-            {primaryObservedFacts.length ? (
-              <ul className="operator-briefing-list command-center-insight__observed">
-                {primaryObservedFacts.map((fact) => <li key={fact}>{fact}</li>)}
-              </ul>
-            ) : null}
-            <button type="button" className="secondary-command-button" onClick={() => onOpenInsight?.(primaryInsight.id)}>Open Insight</button>
-          </div>
-        ) : (
-          <EmptyOperationalState title="No Operational Insights Yet" body={model.emptyInsightMessage} />
-        )}
-      </section>
-
-      {!model.analysisComplete ? (
-        <section className="operational-panel operational-panel--value-prop" aria-label="Operational Intelligence">
-          <PanelHeader
-            eyebrow="What Neraium Does"
-            title="Operational Intelligence"
-            subtitle="Neraium establishes a behavioral baseline from facility telemetry, automatically identifies operational systems, and detects changes in system behavior before traditional alarms indicate a problem."
-          />
-        </section>
-      ) : null}
-
-      <section className="operational-panel operational-panel--dashboard-systems operational-panel--wide" aria-label="Systems requiring attention">
-        {model.analysisComplete ? (
-          <>
-            <PanelHeader eyebrow="Systems" title={model.systemsSectionTitle} subtitle="" />
-            <div className="systems-list systems-list--dashboard">
-              {systems.map((system) => (
-                <article className="system-summary-row system-summary-row--dashboard" key={system.id}>
-                  <div className="system-summary-row__primary">
-                    <strong>{system.name}</strong>
-                    <dl className="system-card-status">
-                      <div>
-                        <dt>Status</dt>
-                        <dd>{system.status}</dd>
-                      </div>
-                      {system.hasActiveIssue ? (
-                        <div>
-                          <dt>Severity</dt>
-                          <dd><span className={`severity-chip severity-chip--${severityToTone(system.severity)}`}>{system.severity}</span></dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  </div>
-                  <div className="system-summary-row__meta">
-                    <strong>{formatActiveInsightCount(system.activeInsights)}</strong>
-                    <small>{system.recommendedFirstAction || system.operationalSummary}</small>
-                  </div>
-                </article>
-              ))}
+  return (
+    <section className="command-section command-section--queue" aria-labelledby="priority-queue-heading">
+      <div className="command-section__header">
+        <h2 id="priority-queue-heading">Priority Investigation Queue</h2>
+        <p>Highest priority first.</p>
+      </div>
+      <div className="priority-queue" role="list" ref={queueRef} onKeyDown={handleKeyDown}>
+        {insights.map((insight, index) => {
+          const selected = selectedInsight?.id === insight.id;
+          const relationships = insightRelationshipLabels(insight);
+          const title = dashboardInsightTitle(insight, relationships, formatInsightTitle(insight));
+          const confidence = confidencePercent(insight) || formatConfidenceDisplay(insight.confidence, insight.confidenceScore) || confidenceFallback(insight.severity);
+          const detailId = `selected-investigation-${sanitizeId(insight.id, index + 1)}`;
+          return (
+            <div className="priority-queue-row-wrap" role="listitem" key={insight.id || index}>
+              <button
+                type="button"
+                className={selected ? "priority-queue-row is-selected" : "priority-queue-row"}
+                data-priority-item="true"
+                aria-expanded={selected}
+                aria-controls={detailId}
+                onClick={() => onSelectInsight?.(insight.id)}
+              >
+                <span className="priority-queue-row__rank">{index + 1}</span>
+                <span className="priority-queue-row__system">{cleanSubsystemName(insight.system)}</span>
+                <span className="priority-queue-row__title">{title}</span>
+                <span className={`priority-queue-row__severity priority-queue-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span>
+                <span className="priority-queue-row__confidence">{confidence}</span>
+              </button>
             </div>
-          </>
-        ) : (
-          <div className="systems-list systems-list--dashboard">
-            <article className="system-summary-row system-summary-row--dashboard system-summary-row--awaiting-telemetry">
-              <div>
-                <strong>{model.systemsSectionTitle}</strong>
-                <span>{model.systemsSectionSubtitle}</span>
-              </div>
-            </article>
-          </div>
-        )}
-      </section>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
-      <section className="operational-panel operational-panel--recent-activity operational-panel--wide" aria-label="Recent Activity">
-        <PanelHeader eyebrow="Recent Activity" title="Recent Operational Activity" subtitle="" />
-        <Timeline items={model.dashboardActivityItems} />
-      </section>
+function SelectedInvestigation({ insight }) {
+  const detailId = insight ? `selected-investigation-${sanitizeId(insight.id)}` : undefined;
+  return (
+    <section className="command-section command-section--selected-investigation" id={detailId} aria-labelledby="selected-investigation-heading">
+      <div className="command-section__header">
+        <h2 id="selected-investigation-heading">Selected Investigation</h2>
+        <p>Where to begin.</p>
+      </div>
+      {insight ? (
+        <OperatorInsightDetail insight={insight} inline focusMode />
+      ) : (
+        <p className="selected-investigation-empty">Select a priority item to review the recommended investigation path.</p>
+      )}
+    </section>
+  );
+}
+
+function SystemOverview({ systems, model }) {
+  return (
+    <section className="command-section command-section--systems" aria-labelledby="system-overview-heading">
+      <div className="command-section__header">
+        <h2 id="system-overview-heading">System Overview</h2>
+        <p>Supporting system information.</p>
+      </div>
+      {systems.length ? (
+        <div className="system-overview-list" role="list">
+          {systems.map((system) => (
+            <div className="system-overview-row" role="listitem" key={system.id}>
+              <strong>{system.name}</strong>
+              <span>{system.status}</span>
+              <span>{system.activeInsights} active insight{String(system.activeInsights) === "1" ? "" : "s"}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="priority-queue-empty">{model.systemsSectionTitle}: {model.systemsSectionSubtitle}</p>
+      )}
+    </section>
+  );
+}
+
+function AdvancedDashboardSection({ model }) {
+  const history = model.analysisHistory?.length ? model.analysisHistory : model.historyItems;
+  return (
+    <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
+      <div className="command-section__header">
+        <h2 id="dashboard-advanced-heading">Advanced</h2>
+        <p>Historical analysis, diagnostics, upload details, and developer information.</p>
+      </div>
+      <div className="dashboard-advanced-stack">
+        <details>
+          <summary>Historical Analysis</summary>
+          {history?.length ? (
+            <ul className="dashboard-advanced-list">
+              {history.slice(0, 6).map((item, index) => <li key={item.id ?? index}>{item.datasetName ?? item.title ?? item.detail ?? "Historical analysis"}</li>)}
+            </ul>
+          ) : <p>No saved analysis history is available.</p>}
+        </details>
+        <details>
+          <summary>Upload Details</summary>
+          <DetailRows rows={model.dataSourceRows} />
+        </details>
+        <details>
+          <summary>Raw Diagnostics</summary>
+          <DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical />
+        </details>
+        <details>
+          <summary>Developer Information</summary>
+          <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+function DetailRows({ rows = [], technical = false }) {
+  const visibleRows = rows.filter(([label, value]) => label && value !== null && value !== undefined && value !== "");
+  if (!visibleRows.length) return <p>No details available.</p>;
+  return (
+    <dl className={technical ? "dashboard-detail-rows dashboard-detail-rows--technical" : "dashboard-detail-rows"}>
+      {visibleRows.map(([label, value], index) => (
+        <div key={`${label}-${index}`}>
+          <dt>{label}</dt>
+          <dd>{technical ? <code>{String(value)}</code> : String(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onAnalyzeHistoricalData }) {
+  const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
+  const activeInsight = selectedInsight && queue.some((item) => item.id === selectedInsight.id)
+    ? selectedInsight
+    : queue[0] ?? null;
+  const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
+  const systems = model.analysisComplete ? model.dashboardSystemCards : [];
+
+  return (
+    <div className="operational-command-center" data-testid="operational-command-center">
+      <OperationalStatusSection
+        model={model}
+        status={status}
+        selectedInsight={activeInsight}
+        onAnalyzeHistoricalData={onAnalyzeHistoricalData}
+        onSelectInsight={onSelectInsight}
+      />
+      <PriorityInvestigationQueue insights={queue} selectedInsight={activeInsight} onSelectInsight={onSelectInsight} helpers={helpers} />
+      <SelectedInvestigation insight={activeInsight} />
+      <SystemOverview systems={systems} model={model} />
+      <AdvancedDashboardSection model={model} />
     </div>
   );
 }

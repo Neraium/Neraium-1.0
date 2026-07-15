@@ -123,45 +123,25 @@ afterEach(() => {
 });
 
 describe("OperationalWorkflowWorkspace system-first architecture", () => {
-  it("opens to Command Center with Neraium branding, orb, and fingerprint empty state", () => {
+  it("opens to a focused Command Center with status, queue, and supporting sections", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("heading", { name: "Awaiting Initial Baseline" })).toBeTruthy();
+    expect(screen.getByText("Awaiting Initial Baseline")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
-    expect(screen.getAllByText("Ready to Build Operational Fingerprint").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Operational Status" })).toBeTruthy();
     expect(screen.getByText("Connect telemetry or analyze historical data to establish the facility's Operational Fingerprint.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Awaiting Initial Baseline" })).toBeTruthy();
-    expect(screen.getByText("The facility has not yet established an Operational Fingerprint.")).toBeTruthy();
-    expect(screen.getAllByText("Systems").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Insights").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("0 Insights").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Operational Fingerprint").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Data Sources").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Not Connected").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Advanced").length).toBeGreaterThan(0);
-    const commandCenterSystems = screen.getByLabelText("Systems requiring attention");
-    expect(commandCenterSystems.querySelectorAll(".system-summary-row--dashboard")).toHaveLength(1);
-    expect(commandCenterSystems.textContent).toContain("0 Systems Discovered");
-    expect(commandCenterSystems.textContent).toContain("Systems will be identified automatically after the first successful telemetry analysis.");
-    expect(commandCenterSystems.textContent).not.toContain("HVAC and Central Plant");
-    expect(commandCenterSystems.textContent).not.toContain("Pools, Spas, and Water Features");
-    expect(commandCenterSystems.textContent).not.toContain("Water Treatment and Pumping");
-    expect(commandCenterSystems.textContent).not.toContain("Cooling Towers and Heat Rejection");
-    expect(commandCenterSystems.textContent).not.toContain("Building Automation");
-    expect(commandCenterSystems.textContent).not.toContain("Energy Infrastructure");
-    expect(commandCenterSystems.textContent).not.toContain("Utility Distribution");
-    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder/);
+    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
+    expect(screen.getByText("No priority investigations yet.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
+    expect(screen.getByText("Select a priority item to review the recommended investigation path.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "System Overview" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Advanced" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
-    expect(screen.getByText("Platform initialized")).toBeTruthy();
-    expect(screen.getAllByText("Waiting for telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByText("Operational Fingerprint pending")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Operational Intelligence" })).toBeTruthy();
-    expect(screen.getByText("Neraium establishes a behavioral baseline from facility telemetry, automatically identifies operational systems, and detects changes in system behavior before traditional alarms indicate a problem.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
-    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/Current\s+Site/);
+    expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
+    expect(screen.queryByLabelText("Systems requiring attention")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect Live Telemetry" })).toBeNull();
+    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder|Current\s+Site/);
     expect(screen.queryByRole("heading", { name: /Import Historical CSV/i })).toBeNull();
   });
 
@@ -285,37 +265,33 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
   });
 
-  it("opens the top Command Center insight in the Insights view", () => {
+  it("opens the top Command Center insight inline in the selected investigation", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    const openButton = screen.getByRole("button", { name: "Open Insight" });
-    fireEvent.click(openButton);
+    const priorityButton = screen.getAllByRole("button").find((button) => button.dataset.priorityItem === "true");
+    expect(priorityButton.textContent).toContain("Pump relationships changed");
+    expect(priorityButton.getAttribute("aria-expanded")).toBe("true");
+    expect(priorityButton.getAttribute("aria-controls")).toMatch(/^selected-investigation-/);
 
-    expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
-    expect(screen.getByLabelText("Insight detail")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
+    expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Expected Operational Impact")).toBeTruthy();
     expect(screen.getAllByText(/This relationship change is consistent with conditions such as increasing hydraulic resistance/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Confidence Breakdown")).toBeTruthy();
     expect(screen.getByText("Why Neraium Believes This")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "System Readiness" })).toBeNull();
-    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
-    expect(hasActiveNavButton(/Command Center/)).toBe(false);
-
-    const expandedCard = screen.getByRole("button", { name: "Hide Insight" }).closest(".insight-card");
-    expect(expandedCard.textContent).toContain("What Changed");
-    expect(expandedCard.textContent).toContain("Evidence");
-
-    fireEvent.click(screen.getByRole("button", { name: "Hide Insight" }));
-    expect(expandedCard.textContent).not.toContain("What Changed");
+    expect(screen.queryByText("Confidence Breakdown")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
+    expect(hasActiveNavButton(/Command Center/)).toBe(true);
+    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(false);
   });
 
-  it("keeps Systems card Open Insight wired to the shared insight selection flow", () => {
+  it("keeps Systems card Open Insight wired to the command-center selected investigation", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
@@ -325,11 +301,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
 
-    expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
-    expect(screen.getByLabelText("Insight detail")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
+    expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
-    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(true);
+    expect(hasActiveNavButton(/Command Center/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
 
@@ -340,7 +317,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByRole("heading", { name: "System Readiness" })).toBeTruthy();
+    expect(screen.getByText("Priority Investigation Queue")).toBeTruthy();
+    expect(screen.getByText("Selected Investigation")).toBeTruthy();
 
     clickNav("Systems");
     expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
@@ -493,15 +471,17 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
-    expect(workspaceText).toContain("The relationship between Filter Diff Pressure and Cum Chemical Feed Gal has shifted from its established operational baseline.");
-    expect(workspaceText).not.toContain("The relationship between The Historical Relationship Between");
+    const flowButton = screen.getAllByRole("button").find((button) => button.textContent.includes("Flow & Pressure Degrading"));
+    expect(flowButton).toBeTruthy();
+    fireEvent.click(flowButton);
 
-    clickNav("Insights");
-    expect(screen.getByLabelText("Neraium operational workspace").textContent).toContain("74%");
+    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
+    expect(workspaceText).toContain("The historical relationship between Filter Diff Pressure and Cum Chemical Feed Gal shifted from its established operating pattern.");
+    expect(workspaceText).not.toContain("The relationship between The Historical Relationship Between");
+    expect(workspaceText).toContain("74%");
   });
 
-  it("labels recent activity entries from each insight subsystem", () => {
+  it("lists each insight subsystem in the priority queue and system overview", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: bugRegressionAnalysis() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
@@ -509,8 +489,10 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     });
 
     const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
-    expect(workspaceText).toContain("Flow & Pressure behavior change classified");
-    expect(workspaceText).toContain("Disinfection behavior change classified");
+    expect(screen.getByText("Priority Investigation Queue")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "System Overview" })).toBeTruthy();
+    expect(workspaceText).toContain("Flow & Pressure");
+    expect(workspaceText).toContain("Disinfection");
   });
 
   it("uses evidence source identifiers instead of Signal N fallback titles", () => {

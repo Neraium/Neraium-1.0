@@ -178,12 +178,8 @@ export default function OperationalWorkflowWorkspace({
     if (!resultsNavigationKey || resultsNavigationHandledRef.current === resultsNavigationKey || !model.resultTabsReady) return;
     resultsNavigationHandledRef.current = resultsNavigationKey;
     const firstInsight = model.insights[0] ?? null;
-    if (firstInsight) {
-      setSelectedInsightId(firstInsight.id);
-      setActiveSection("insights");
-      return;
-    }
-    setActiveSection("systems");
+    setSelectedInsightId(firstInsight?.id ?? null);
+    setActiveSection("command-center");
   }, [model.insights, model.resultTabsReady, resultsNavigationKey]);
 
   const selectedInsight = selectedInsightId ? (model.insights.find((item) => item.id === selectedInsightId) ?? null) : null;
@@ -241,7 +237,7 @@ export default function OperationalWorkflowWorkspace({
   function openInsight(insightId) {
     const resolvedInsight = model.insights.find((item) => item.id === insightId) ?? model.insights[0] ?? null;
     setSelectedInsightId(resolvedInsight?.id ?? null);
-    navigate("insights");
+    setActiveSection("command-center");
   }
 
   function openOverviewFilePicker() {
@@ -345,6 +341,8 @@ export default function OperationalWorkflowWorkspace({
             model={model}
             helpers={viewHelpers}
             onOpenInsight={openInsight}
+            selectedInsight={selectedInsight}
+            onSelectInsight={setSelectedInsightId}
             onAnalyzeHistoricalData={openOverviewFilePicker}
             onConnectLiveData={connectLiveData}
             onResumePreviousSession={onResumePreviousSession}

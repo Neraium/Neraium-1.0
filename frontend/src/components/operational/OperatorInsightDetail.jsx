@@ -374,7 +374,7 @@ function ContextGrid({ rows }) {
   );
 }
 
-export default function OperatorInsightDetail({ insight, defaultOpen = false }) {
+export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
   const evidenceLines = unique([
     ...evidenceSummaries(insight, evidence),
@@ -434,10 +434,8 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false }) 
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
 
-  return (
-    <details className="insight-detail-card" aria-label="Insight detail" open={defaultOpen}>
-      <summary>Insight detail</summary>
-
+  const body = (
+    <>
       <div className="insight-briefing__header">
         <span className="section-token">{insight?.system || "Operational Insight"}</span>
         <h3>{insight?.summary || insight?.rawSummary || "Operational change detected"}</h3>
@@ -454,15 +452,15 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false }) 
 
       {observedFacts.length ? <Section title="Observed Behavior"><BulletList items={observedFacts} /></Section> : null}
 
-      {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
+      {!focusMode && changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
 
       {expectedImpacts.length ? <Section title="Expected Operational Impact"><BulletList items={expectedImpacts} /></Section> : null}
 
       {actions.length ? <Section title="Recommended First Checks"><BulletList items={actions} /></Section> : null}
 
-      {causes.length ? <Section title="Most Probable Operational Causes"><BulletList items={causes} /></Section> : null}
+      {!focusMode && causes.length ? <Section title="Most Probable Operational Causes"><BulletList items={causes} /></Section> : null}
 
-      {confidenceValue || confidenceEvidence.length ? (
+      {!focusMode && (confidenceValue || confidenceEvidence.length) ? (
         <Section title="Confidence Breakdown">
           {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
           {confidenceEvidence.length ? (
@@ -484,7 +482,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false }) 
 
       {evidenceMetrics.length ? <Section title="Evidence Metrics"><ContextGrid rows={evidenceMetrics} /></Section> : null}
 
-      {operationalMemory.rows.length || operationalMemory.similarEvents.length ? (
+      {!focusMode && (operationalMemory.rows.length || operationalMemory.similarEvents.length) ? (
         <Section title="Operational Memory">
           <ContextGrid rows={operationalMemory.rows} />
           <BulletList items={operationalMemory.similarEvents} />
@@ -515,6 +513,21 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false }) 
           </div>
         </details>
       ) : null}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className={focusMode ? "insight-detail-card insight-detail-card--selected" : "insight-detail-card"} aria-label="Selected investigation detail">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <details className="insight-detail-card" aria-label="Insight detail" open={defaultOpen}>
+      <summary>Insight detail</summary>
+      {body}
     </details>
   );
 }

@@ -205,7 +205,7 @@ function isRidgeVisible(ridge, index, ridgeCount, changedFamilies, status) {
   return index < ridgeCount;
 }
 
-export default function OperationalOrb({ state, status, hotspotCount, hotspots }) {
+export default function OperationalOrb({ state, status, hotspotCount, hotspots, minimal = false, hideVisualLabel = false }) {
   const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const resolvedStatus = normalizeStatus(status, state);
   const config = ORB_STATUS[resolvedStatus];
@@ -229,10 +229,15 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
   });
   const label = state?.label ?? config.label;
   const visualLabel = state?.visualLabel ?? config.visualLabel;
+  const className = [
+    "operational-orb",
+    `operational-orb--${resolvedStatus}`,
+    minimal ? "operational-orb--minimal" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={`operational-orb operational-orb--${resolvedStatus}`}
+      className={className}
       data-testid="operational-orb"
       data-status={resolvedStatus}
       aria-label={`Operational status: ${label}`}
@@ -240,7 +245,8 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
       <div className="operational-orb__glow" aria-hidden="true" />
       <div className="operational-orb__surface" aria-hidden="true">
         <div className="operational-orb__depth" />
-        <div className="operational-orb__particle-field" />
+        {!minimal ? <div className="operational-orb__particle-field" /> : null}
+        {!minimal ? (
         <div className="operational-orb__fingerprint">
           <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
             {visibleRidges.map((ridge) => (
@@ -277,6 +283,8 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
             ))}
           </svg>
         </div>
+        ) : null}
+        {!minimal ? (
         <div className="operational-orb__hotspots">
           {resolvedHotspots.map((hotspot, index) => (
             <i
@@ -292,10 +300,11 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots }
             />
           ))}
         </div>
+        ) : null}
         <div className="operational-orb__lens" />
         <div className="operational-orb__rim" />
       </div>
-      <span>{visualLabel}</span>
+      {hideVisualLabel ? null : <span>{visualLabel}</span>}
     </div>
   );
 }
