@@ -6,6 +6,28 @@ from app.services.upload_jobs import write_job
 from app.services.upload_state_repository import write_latest_upload_summary
 
 
+REQUIRED_COMPLETION_ARTIFACT_KEYS = (
+    "evidence_persisted",
+    "relationships_persisted",
+    "behavioral_structure_persisted",
+    "baseline_persisted",
+    "final_result_persisted",
+    "terminal_backend_state_published",
+)
+
+
+def complete_artifacts(**extra):
+    artifacts = {key: True for key in REQUIRED_COMPLETION_ARTIFACT_KEYS}
+    artifacts.update({
+        "runner_used": True,
+        "intelligence_present": True,
+        "processing_trace_present": True,
+        "engine_result_present": True,
+    })
+    artifacts.update(extra)
+    return artifacts
+
+
 def test_upload_status_complete_without_sii_contract_is_failed() -> None:
     client = TestClient(create_app())
     job_id = "contract-missing-sii"
@@ -52,20 +74,10 @@ def test_upload_status_complete_with_sii_contract_remains_complete() -> None:
             "result_summary": {
                 "filename": "contract.csv",
                 "sii_completed": True,
-                "sii_completion_artifacts": {
-                    "runner_used": True,
-                    "intelligence_present": True,
-                    "processing_trace_present": True,
-                    "engine_result_present": True,
-                },
+                "sii_completion_artifacts": complete_artifacts(),
             },
             "sii_completed": True,
-            "sii_completion_artifacts": {
-                "runner_used": True,
-                "intelligence_present": True,
-                "processing_trace_present": True,
-                "engine_result_present": True,
-            },
+            "sii_completion_artifacts": complete_artifacts(),
             "result_available": True,
             "first_usable_available": True,
         }

@@ -161,7 +161,7 @@ export function normalizeUploadStatus(status) {
     scoring_relationship_drift: "structural_scoring",
     building_propagation_model: "writing_state",
     generating_system_interpretation: "writing_state",
-    partial_complete: "cognition_ready",
+    partial_complete: UPLOAD_STATUSES.FAILED,
   };
 
   return map[raw] ?? raw ?? UPLOAD_STATUSES.IDLE;

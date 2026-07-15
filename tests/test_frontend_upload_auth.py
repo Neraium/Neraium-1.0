@@ -118,7 +118,7 @@ def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> Non
     assert "[propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
     assert "Uploading Historical Data..." in panel
-    assert "Learning Operational Fingerprint..." in panel
+    assert "Learning Operational Relationships" in panel
     assert "Generating Operational Insights..." in panel
 
 
@@ -309,6 +309,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Analyze Historical Data" in panel_source
+    assert "Analyze Dataset" in panel_source
     assert "Choose File" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

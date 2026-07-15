@@ -27,6 +27,8 @@ def summarize_result(result: dict[str, Any], *, build_scope: Callable[..., dict[
         "column_count": result.get("column_count", 0),
         "result_available": True,
         "sii_completed": True,
+        "sii_completion_artifacts": result.get("sii_completion_artifacts", {}),
+        "evidence_persisted": bool((result.get("evidence_persistence") or {}).get("persisted")),
         "replay_ready": len(timeline or []) > 0,
         "replay_frame_count": len(timeline or []),
         "latest_replay_frames": len(timeline or []),

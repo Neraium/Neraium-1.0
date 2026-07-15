@@ -232,6 +232,70 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
 
 
+
+REQUIRED_SII_COMPLETION_ARTIFACTS = (
+    "evidence_persisted",
+    "relationships_persisted",
+    "behavioral_structure_persisted",
+    "baseline_persisted",
+    "final_result_persisted",
+    "terminal_backend_state_published",
+)
+
+
+def _artifact_bool(value: Any) -> bool:
+    return value is True or str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def _relationship_model_persisted(result: dict[str, Any]) -> bool:
+    relationship_model = result.get("relationship_model") if isinstance(result.get("relationship_model"), dict) else {}
+    baseline = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
+    return bool(
+        isinstance(relationship_model, dict)
+        and (
+            "relationship_graph" in relationship_model
+            or "baseline_relationships" in relationship_model
+            or "top_relationship_changes" in relationship_model
+        )
+    ) or bool(
+        isinstance(baseline, dict)
+        and (
+            "relationship_graph" in baseline
+            or "baseline_relationships" in baseline
+            or "top_relationship_changes" in baseline
+        )
+    )
+
+
+def _build_sii_completion_artifacts(
+    result: dict[str, Any],
+    *,
+    evidence_persisted: bool,
+    final_result_persisted: bool = False,
+    terminal_backend_state_published: bool = False,
+    compatibility_mode: bool = False,
+) -> dict[str, bool]:
+    baseline = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
+    analysis_result = result.get("analysis_result") if isinstance(result.get("analysis_result"), dict) else {}
+    processing_trace = result.get("processing_trace") if isinstance(result.get("processing_trace"), dict) else {}
+    return {
+        "evidence_persisted": bool(evidence_persisted),
+        "relationships_persisted": _relationship_model_persisted(result),
+        "behavioral_structure_persisted": bool(result.get("sii_intelligence") and result.get("engine_result") and analysis_result.get("fingerprint")),
+        "baseline_persisted": bool(baseline and ("baseline_window_rows" in baseline or "columns_analyzed" in baseline or "relationship_graph" in baseline)),
+        "final_result_persisted": bool(final_result_persisted),
+        "terminal_backend_state_published": bool(terminal_backend_state_published),
+        "intelligence_present": bool(result.get("sii_intelligence")),
+        "processing_trace_present": bool(processing_trace),
+        "engine_result_present": bool(result.get("engine_result")),
+        "analysis_result_present": bool(analysis_result),
+        "compatibility_mode": bool(compatibility_mode),
+    }
+
+
+def _missing_sii_completion_artifacts(artifacts: dict[str, Any]) -> list[str]:
+    return [key for key in REQUIRED_SII_COMPLETION_ARTIFACTS if not _artifact_bool(artifacts.get(key))]
+
 def _finalize_completed_upload(
     *,
     job_id: str,
@@ -294,12 +358,58 @@ def _finalize_completed_upload(
     except Exception as exc:
         finalization["errors"].append(f"evidence_persistence: {exc}")
 
+    if not evidence_persisted:
+        raise RuntimeError("evidence_persistence_failed")
+
     finalization["completed_at"] = datetime.now(timezone.utc).isoformat()
     finalization["state"] = "complete" if not finalization["errors"] else "degraded"
     finalized_result["report_finalization"] = dict(finalization)
     finalized_summary["report_finalization"] = dict(finalization)
     finalized_result["sii_reliable_enough_to_show"] = bool(baseline_reliable)
     finalized_summary["sii_reliable_enough_to_show"] = bool(baseline_reliable)
+
+    artifacts = _build_sii_completion_artifacts(
+        finalized_result,
+        evidence_persisted=evidence_persisted,
+        final_result_persisted=True,
+        terminal_backend_state_published=True,
+        compatibility_mode=False,
+    )
+    missing_artifacts = _missing_sii_completion_artifacts(artifacts)
+    if missing_artifacts:
+        raise RuntimeError(f"sii_completion_artifacts_missing:{','.join(missing_artifacts)}")
+
+    processing_trace = finalized_result.get("processing_trace") if isinstance(finalized_result.get("processing_trace"), dict) else {}
+    processing_trace = {**processing_trace, "sii_completed": True, "completed_at": finalization["completed_at"]}
+    finalized_result["processing_trace"] = processing_trace
+    finalized_result["sii_completed"] = True
+    finalized_result["sii_completion_artifacts"] = artifacts
+    finalized_result["status"] = "COMPLETE"
+    finalized_result["processing_state"] = "complete"
+    finalized_summary.update({
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "percent": 100,
+        "progress": 100,
+        "progress_label": "Analysis ready.",
+        "message": "Analysis ready.",
+        "propagation_stage": "complete",
+        "propagation_progress": 100,
+        "propagation_label": "Analysis ready.",
+        "result_available": True,
+        "first_usable_available": True,
+        "sii_completed": True,
+        "evidence_persisted": True,
+        "sii_completion_artifacts": artifacts,
+    })
+    finalized_summary["result_summary"] = {
+        **dict(finalized_summary.get("result_summary") or {}),
+        "filename": filename,
+        "sii_completed": True,
+        "sii_completion_artifacts": artifacts,
+        "runner_errors": [],
+    }
+    finalized_summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
     _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
 
 
@@ -818,8 +928,7 @@ def _build_csv_result(
 
     _set_propagation_stage(job_id, stage="saving_result", progress=95, label=_progress_label("saving_result"))
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label=_progress_label("complete")))
-    _persist_completed_upload(job_id, result=result, summary=summary)
-    _start_optional_upload_finalization(
+    _finalize_completed_upload(
         job_id=job_id,
         filename=filename,
         now=now,
@@ -829,7 +938,7 @@ def _build_csv_result(
         result=result,
         summary=summary,
     )
-    return summary
+    return read_upload_status(job_id) or summary
 
 
 def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = None) -> dict[str, Any]:

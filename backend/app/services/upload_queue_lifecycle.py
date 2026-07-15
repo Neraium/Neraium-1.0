@@ -121,7 +121,32 @@ class UploadQueueLifecycleService:
         if path is None or not path.exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
             existing_status = self.read_upload_status(job_id) or {}
-            if existing_result or str(existing_status.get("status", "")).upper() == "COMPLETE":
+            existing_status_text = str(existing_status.get("status", "")).upper()
+            existing_artifacts = {}
+            if isinstance(existing_status.get("sii_completion_artifacts"), dict):
+                existing_artifacts = existing_status["sii_completion_artifacts"]
+            elif isinstance(existing_result, dict) and isinstance(existing_result.get("sii_completion_artifacts"), dict):
+                existing_artifacts = existing_result["sii_completion_artifacts"]
+            required_artifacts = {
+                "evidence_persisted",
+                "relationships_persisted",
+                "behavioral_structure_persisted",
+                "baseline_persisted",
+                "final_result_persisted",
+                "terminal_backend_state_published",
+            }
+            has_required_artifacts = all(existing_artifacts.get(key) is True for key in required_artifacts)
+            has_completed_status = (
+                existing_status_text == "COMPLETE"
+                and existing_status.get("sii_completed") is True
+                and has_required_artifacts
+            )
+            has_completed_result = (
+                isinstance(existing_result, dict)
+                and existing_result.get("sii_completed") is True
+                and has_required_artifacts
+            )
+            if has_completed_status or has_completed_result:
                 complete_upload_queue_job(job_id, "completed")
                 _log_queue_event(
                     self.logger,
@@ -203,33 +228,59 @@ class UploadQueueLifecycleService:
             else:
                 result = self.process_csv_file(path, filename=metadata.get("filename") or path.name, job_id=job_id)
             completed = self.read_upload_status(job_id) or {}
-            if metadata.get("runner_used") is False:
-                completed["runner_used"] = False
             completed["job_id"] = job_id
-            completed["status"] = "COMPLETE"
-
-            if completed.get("processing_state") == "partial_complete":
-                completed["result_available"] = True
-                completed["first_usable_available"] = True
-                completed["sii_completed"] = False
-                completed["replay_ready"] = False
-                completed["replay_frame_count"] = 0
-                completed["percent"] = 100
-                completed["progress"] = 100
-                completed.setdefault("message", "Upload completed, but full intelligence processing could not finish.")
-                completed["propagation_stage"] = "partial_complete"
-                completed["propagation_progress"] = 100
-                completed["propagation_label"] = "Partial upload complete."
-            else:
-                completed["processing_state"] = "complete"
-                completed["result_available"] = True
-                completed["percent"] = 100
-                completed["progress"] = 100
-                completed["message"] = "Telemetry processing complete."
-                completed["propagation_stage"] = "complete"
-                completed["propagation_progress"] = 100
-                completed["propagation_label"] = "Complete."
-            self.write_job(completed)
+            completed_status = str(completed.get("status") or "").upper()
+            if completed_status in {"FAILED", "TIMEOUT", "CANCELLED"}:
+                error_message = str(completed.get("error") or completed.get("message") or completed_status.lower())
+                mark_queue_job_failed(job_id, error_message)
+                complete_upload_queue_job(job_id, "failed", error_message)
+                self.write_job({
+                    **metadata,
+                    **completed,
+                    "job_id": job_id,
+                    "status": completed_status,
+                    "processing_state": str(completed.get("processing_state") or "failed").lower(),
+                    "result_available": False,
+                    "first_usable_available": False,
+                    "sii_completed": False,
+                    "replay_ready": False,
+                    "replay_frame_count": 0,
+                    "propagation_stage": "failed",
+                    "propagation_label": completed.get("propagation_label") or "Failed.",
+                })
+                _log_queue_event(
+                    self.logger,
+                    "job_failed",
+                    job_id=job_id,
+                    request_id=request_id,
+                    filename=filename,
+                    queue_status="failed",
+                    processing_stage=completed.get("processing_state") or "failed",
+                    elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+                    failure_reason=error_message,
+                )
+                return False
+            if completed_status != "COMPLETE":
+                error_message = f"terminal_status_missing:{completed_status or 'empty'}"
+                mark_queue_job_failed(job_id, error_message)
+                complete_upload_queue_job(job_id, "failed", error_message)
+                self.write_job({
+                    **metadata,
+                    **completed,
+                    "job_id": job_id,
+                    "status": "FAILED",
+                    "processing_state": "failed",
+                    "error_type": "terminal_status_missing",
+                    "error": error_message,
+                    "message": "Telemetry processing failed.",
+                    "progress_label": "Telemetry processing failed.",
+                    "result_available": False,
+                    "first_usable_available": False,
+                    "sii_completed": False,
+                    "propagation_stage": "failed",
+                    "propagation_label": "Failed.",
+                })
+                return False
             complete_upload_queue_job(job_id, "completed")
             _log_queue_event(
                 self.logger,

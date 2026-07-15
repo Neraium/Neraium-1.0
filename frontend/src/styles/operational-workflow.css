@@ -776,6 +776,11 @@
   gap: 10px;
 }
 
+.data-source-action-grid--single {
+  grid-template-columns: minmax(0, 520px);
+}
+
+
 .data-source-action {
   display: grid;
   align-content: center;

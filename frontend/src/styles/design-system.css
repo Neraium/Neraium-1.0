@@ -921,6 +921,120 @@ button:focus-visible {
   animation: fingerprint-build-breathe 3.2s ease-in-out infinite;
 }
 
+.upload-fingerprint-build__status small {
+  display: block;
+  max-width: min(360px, 86vw);
+  margin: 2px auto 0;
+  color: rgba(196, 218, 222, 0.78);
+  font-size: var(--type-label-xs);
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build__clusters path,
+.upload-fingerprint-build__baseline-lock {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.upload-fingerprint-build__relationship-links path {
+  opacity: 0;
+  stroke: rgba(29, 216, 196, 0.62);
+  stroke-width: 1.35;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 4px rgba(29, 216, 196, 0.28));
+  transition: opacity 520ms ease, stroke-dashoffset 900ms cubic-bezier(0.2, 0.76, 0.22, 1);
+  transition-delay: calc(var(--link-index, 0) * 55ms);
+}
+
+.upload-fingerprint-build__evidence-points circle {
+  opacity: 0.18;
+  fill: rgba(244, 210, 132, 0.88);
+  filter: drop-shadow(0 0 6px rgba(244, 210, 132, 0.42));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fingerprint-evidence-gather 3.8s cubic-bezier(0.18, 0.78, 0.24, 1) infinite;
+  animation-delay: calc(var(--point-index, 0) * 120ms);
+  transition: opacity 420ms ease, fill 420ms ease, r 420ms ease;
+}
+
+.upload-fingerprint-build__clusters path {
+  opacity: 0;
+  fill: rgba(29, 216, 196, 0.07);
+  stroke: rgba(218, 255, 249, 0.32);
+  stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 700ms ease, transform 900ms cubic-bezier(0.2, 0.76, 0.22, 1), fill 700ms ease;
+}
+
+.upload-fingerprint-build__baseline-lock {
+  opacity: 0;
+  stroke: rgba(244, 210, 132, 0.82);
+  stroke-width: 2.25;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 7px rgba(244, 210, 132, 0.28));
+  transition: opacity 520ms ease, stroke-dashoffset 900ms cubic-bezier(0.2, 0.76, 0.22, 1);
+}
+
+.upload-fingerprint-build[data-build-stage="telemetry"] .upload-fingerprint-build__evidence-points circle {
+  opacity: 0.82;
+}
+
+.upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__evidence-points circle,
+.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__evidence-points circle,
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__evidence-points circle,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__evidence-points circle {
+  opacity: 0.72;
+  fill: rgba(218, 255, 249, 0.9);
+  animation-duration: 5.4s;
+}
+
+.upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__relationship-links path {
+  opacity: 0.64;
+  stroke-dashoffset: 0;
+}
+
+.upload-fingerprint-build[data-build-stage="systems"] .upload-fingerprint-build__clusters path,
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__clusters path,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__clusters path {
+  opacity: 0.86;
+  transform: scale(1.02);
+}
+
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__clusters path,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__clusters path {
+  fill: rgba(29, 216, 196, 0.1);
+  stroke: rgba(218, 255, 249, 0.46);
+}
+
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__baseline-lock,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__baseline-lock {
+  opacity: 0.88;
+  stroke-dashoffset: 0;
+}
+
+.upload-fingerprint-build--safe .upload-fingerprint-build__relationship-links path,
+.upload-fingerprint-build--safe .upload-fingerprint-build__clusters path,
+.upload-fingerprint-build--safe .upload-fingerprint-build__baseline-lock {
+  filter: none;
+  transition: none;
+}
+
+@keyframes fingerprint-evidence-gather {
+  0%, 100% { transform: translate(0, 0) scale(0.92); }
+  44% { transform: translate(4px, 5px) scale(1.24); }
+  72% { transform: translate(1px, 1px) scale(1); }
+}
+
 .upload-fingerprint-build__halo {
   position: absolute;
   inset: clamp(28px, 5vw, 48px);
@@ -1350,7 +1464,8 @@ button:focus-visible {
   .upload-fingerprint-build__halo,
   .upload-fingerprint-build__particles span,
   .upload-fingerprint-build__print,
-  .upload-fingerprint-build__check {
+  .upload-fingerprint-build__check,
+  .upload-fingerprint-build__evidence-points circle {
     animation: none;
   }
 

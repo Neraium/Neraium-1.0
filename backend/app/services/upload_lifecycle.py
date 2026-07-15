@@ -21,7 +21,7 @@ LEGACY_STAGE_DEFAULTS: dict[str, tuple[int, str]] = {
     "scoring_relationship_drift": (75, "Scoring operating changes..."),
     "building_propagation_model": (85, "Preparing findings..."),
     "generating_system_interpretation": (95, "Saving result..."),
-    "partial_complete": (95, "Saving result..."),
+    "partial_complete": (100, "Upload failed."),
     "complete": (100, "Analysis ready."),
     "failed": (100, "Upload failed."),
 }
@@ -44,7 +44,7 @@ CANONICAL_STAGE_BY_LEGACY_STAGE = {
     "scoring_relationship_drift": "structural_scoring",
     "building_propagation_model": "writing_state",
     "generating_system_interpretation": "writing_state",
-    "partial_complete": "cognition_ready",
+    "partial_complete": "failed",
     "complete": "complete",
     "failed": "failed",
 }
@@ -118,7 +118,7 @@ PROCESSING_STATES = {
     "building_propagation_model",
     "generating_system_interpretation",
 }
-COMPLETE_STATES = {"complete", "partial_complete", "active"}
+COMPLETE_STATES = {"complete", "active"}
 ACTIVE_UPLOAD_STATUSES = PROCESSING_STATES | COMPLETE_STATES | {"active"}
 VISIBLE_UPLOAD_STATES = ACTIVE_UPLOAD_STATUSES | {"failed"}
 

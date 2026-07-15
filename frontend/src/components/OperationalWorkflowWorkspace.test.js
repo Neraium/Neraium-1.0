@@ -136,12 +136,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Advanced Information" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Analyze Historical Data" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Analyze Dataset" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(screen.queryByLabelText("Systems requiring attention")).toBeNull();
     expect(screen.queryByRole("button", { name: "Connect Live Telemetry" })).toBeNull();
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder|Current\s+Site/);
-    expect(screen.queryByRole("heading", { name: /Import Historical CSV/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Analyze Dataset/i })).toBeNull();
   });
 
   it("Data Sources analysis action opens the existing hidden file picker path", () => {
@@ -151,7 +151,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
     clickNav("Data Sources");
-    fireEvent.click(screen.getByRole("button", { name: /Import Historical CSV/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Analyze Dataset/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
@@ -184,7 +184,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Data Sources");
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: /Import Historical CSV/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Analyze Dataset/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,2"], "sources.csv", { type: "text/csv" });
@@ -200,13 +200,15 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Data Sources");
     expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Import Historical CSV/i })).toBeTruthy();
-    expect(screen.getByText("Analyze New Dataset")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Connect Live Telemetry/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Analyze Dataset/i })).toBeTruthy();
+    expect(screen.getAllByText("Analyze Dataset").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Historical Analysis")).toBeNull();
+    expect(screen.queryByText("Analyze New Dataset")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Import Historical CSV/i })).toBeNull();
     expect(screen.getByText("OPC-UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
-    expect(screen.getByText("PI System")).toBeTruthy();
-    expect(screen.getByText("SCADA / BMS")).toBeTruthy();
+    expect(screen.getByText("Historian integrations")).toBeTruthy();
+    expect(screen.getByText("BACnet")).toBeTruthy();
     expect(screen.getByText("Writeback")).toBeTruthy();
     expect(screen.getByText("Disabled (Read Only)")).toBeTruthy();
     expect(screen.getAllByText("Read-Only Architecture").length).toBeGreaterThan(0);

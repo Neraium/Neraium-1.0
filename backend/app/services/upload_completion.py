@@ -30,6 +30,7 @@ def build_partial_upload_artifacts(
         "run_id": job_id,
         "upload_id": job_id,
         "filename": filename,
+        "status": "FAILED",
         "row_count": row_count,
         "column_count": len(columns),
         "columns": columns,
@@ -42,7 +43,7 @@ def build_partial_upload_artifacts(
         "data_quality": {
             "status": "partial",
             "warnings": [
-                "Upload completed, but full intelligence processing could not finish.",
+                "Telemetry processing failed before full intelligence processing could finish.",
                 error_message,
             ],
         },
@@ -62,7 +63,7 @@ def build_partial_upload_artifacts(
         "sii_intelligence": {
             "sii_completed": False,
             "partial_result": True,
-            "warning": "Upload completed with partial processing.",
+            "warning": "Telemetry processing failed before full intelligence processing could finish.",
         },
         "sii_runner_result": {
             "runner_used": False,
@@ -99,12 +100,12 @@ def build_partial_upload_artifacts(
     summary = {
         "job_id": job_id,
         "status_url": f"/api/data/upload-status/{job_id}",
-        "status": "COMPLETE",
-        "processing_state": "partial_complete",
+        "status": "FAILED",
+        "processing_state": "failed",
         "percent": 100,
         "progress": 100,
-        "result_available": True,
-        "first_usable_available": True,
+        "result_available": False,
+        "first_usable_available": False,
         "sii_completed": False,
         "replay_ready": False,
         "replay_frame_count": 0,
@@ -117,12 +118,13 @@ def build_partial_upload_artifacts(
         "rows_processed": row_count,
         "columns_detected": len(columns),
         "chunk_count": chunk_count,
-        "warning": "Upload completed with partial processing.",
+        "warning": "Upload failed during intelligence processing.",
         "error": error_message,
-        "message": "Upload completed, but full intelligence processing could not finish.",
-        "propagation_stage": "partial_complete",
+        "message": "Telemetry processing failed.",
+        "progress_label": "Telemetry processing failed.",
+        "propagation_stage": "failed",
         "propagation_progress": 100,
-        "propagation_label": "Partial upload complete.",
+        "propagation_label": "Failed.",
     }
 
     result["analysis_result"] = empty_analysis_result(
@@ -130,13 +132,13 @@ def build_partial_upload_artifacts(
         upload_id=job_id,
         source_file=filename,
         status="failed",
-        message="Upload completed, but full intelligence processing could not finish.",
+        message="Telemetry processing failed before full intelligence processing could finish.",
         errors=[error_message],
     )
-    result["session_scope"] = build_session_scope(job_id, filename=filename, status="partial_complete")
+    result["session_scope"] = build_session_scope(job_id, filename=filename, status="failed")
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])
-    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="failed")
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
     return result, summary

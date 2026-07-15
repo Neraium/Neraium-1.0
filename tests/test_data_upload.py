@@ -14,6 +14,28 @@ from app.services import sii_runner, upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job, write_latest_upload_result, write_latest_upload_summary
 
 
+REQUIRED_COMPLETION_ARTIFACT_KEYS = (
+    "evidence_persisted",
+    "relationships_persisted",
+    "behavioral_structure_persisted",
+    "baseline_persisted",
+    "final_result_persisted",
+    "terminal_backend_state_published",
+)
+
+
+def completed_artifacts(**extra):
+    artifacts = {key: True for key in REQUIRED_COMPLETION_ARTIFACT_KEYS}
+    artifacts.update({
+        "intelligence_present": True,
+        "processing_trace_present": True,
+        "engine_result_present": True,
+        "analysis_result_present": True,
+    })
+    artifacts.update(extra)
+    return artifacts
+
+
 def post_csv(client: TestClient, filename: str, content: str):
     return client.post(
         "/api/data/upload",
@@ -609,6 +631,7 @@ def test_upload_status_propagation_progresses_from_queued_to_complete() -> None:
         "scoring_relationship_drift",
         "building_propagation_model",
         "generating_system_interpretation",
+        "saving_result",
         "complete",
     }
 
@@ -2029,7 +2052,7 @@ def test_upload_status_recovers_after_jobs_cache_clear() -> None:
             "columns_detected": 3,
             "result_available": True,
             "sii_completed": True,
-            "sii_completion_artifacts": {"runner_used": True},
+            "sii_completion_artifacts": completed_artifacts(),
         }
     )
     upload_jobs.JOBS.clear()
@@ -2588,3 +2611,167 @@ def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch
     payload = response.json()
     assert payload.get("worker_state") == "running"
     assert payload.get("worker_last_seen_at")
+
+
+
+def test_successful_csv_upload_completion_publishes_terminal_artifact_contract() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T08:{index:02d}:00Z,Flower 1,{74 + index * 0.2:.1f},{55 + index * 0.3:.1f},{850 + index * 4}"
+        for index in range(12)
+    )
+
+    upload = post_csv(client, "terminal-contract.csv", f"timestamp,room,temperature,humidity,co2\n{rows}")
+    assert upload.status_code == 202
+    status = wait_for_terminal_upload_status(client, upload.json()["status_url"])
+    job_id = upload.json()["job_id"]
+
+    assert status["status"] == "COMPLETE"
+    assert status["job_state"] == "completed"
+    assert status["terminal"] is True
+    assert status["message"] == "Analysis ready."
+    assert status["propagation_stage"] == "complete"
+    assert status["propagation_progress"] == 100
+    assert status["result_available"] is True
+    assert status["first_usable_available"] is True
+    assert status["sii_completed"] is True
+    assert status["evidence_persisted"] is True
+    for artifact_key in REQUIRED_COMPLETION_ARTIFACT_KEYS:
+        assert status["sii_completion_artifacts"][artifact_key] is True
+
+    result = upload_jobs.read_upload_result_by_job_id(job_id)
+    assert result is not None
+    assert result["sii_completed"] is True
+    assert result["evidence_persistence"]["persisted"] is True
+    assert isinstance(result.get("relationship_model"), dict)
+    assert "relationship_graph" in result["relationship_model"]
+    assert isinstance(result.get("baseline_analysis"), dict)
+    assert result["baseline_analysis"]
+    assert isinstance(result.get("analysis_result"), dict)
+    assert result["analysis_result"].get("fingerprint")
+
+    second_poll = client.get(upload.json()["status_url"]).json()
+    assert second_poll["status"] == "COMPLETE"
+    assert second_poll["job_state"] == "completed"
+    assert second_poll["terminal"] is True
+
+
+def test_compatibility_completion_uses_same_terminal_contract() -> None:
+    client = TestClient(create_app())
+    job_id = "compat-terminal-job"
+    write_job(
+        {
+            "job_id": job_id,
+            "filename": "compat.csv",
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "progress_label": "Telemetry processing complete.",
+            "result_available": True,
+            "first_usable_available": True,
+            "sii_completed": True,
+            "sii_completion_artifacts": completed_artifacts(compatibility_mode=True),
+            "result_summary": {
+                "filename": "compat.csv",
+                "sii_completed": True,
+                "sii_completion_artifacts": completed_artifacts(compatibility_mode=True),
+            },
+        }
+    )
+
+    payload = client.get(f"/api/data/upload-status/{job_id}").json()
+
+    assert payload["status"] == "COMPLETE"
+    assert payload["job_state"] == "completed_compatibility"
+    assert payload["terminal"] is True
+    assert payload["message"] == "Analysis ready."
+    assert payload["result_available"] is True
+    for artifact_key in REQUIRED_COMPLETION_ARTIFACT_KEYS:
+        assert payload["sii_completion_artifacts"][artifact_key] is True
+
+
+def test_refresh_after_completion_recovers_finished_analysis() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(
+        f"2026-05-01T09:{index:02d}:00Z,Flower 2,{73 + index * 0.15:.2f},{54 + index * 0.2:.2f}"
+        for index in range(10)
+    )
+    upload = post_csv(client, "refresh-complete.csv", f"timestamp,room,temperature,humidity\n{rows}")
+    terminal = wait_for_terminal_upload_status(client, upload.json()["status_url"])
+    assert terminal["status"] == "COMPLETE"
+
+    upload_jobs.JOBS.clear()
+    upload_jobs.LATEST_UPLOAD_CACHE["result"] = None
+    upload_jobs.LATEST_UPLOAD_CACHE["summary"] = None
+
+    recovered = client.get(upload.json()["status_url"]).json()
+
+    assert recovered["status"] == "COMPLETE"
+    assert recovered["job_state"] == "completed"
+    assert recovered["terminal"] is True
+    assert recovered["message"] == "Analysis ready."
+    for artifact_key in REQUIRED_COMPLETION_ARTIFACT_KEYS:
+        assert recovered["sii_completion_artifacts"][artifact_key] is True
+
+
+def test_queue_worker_preserves_canonical_completed_status(tmp_path) -> None:
+    client = TestClient(create_app())
+    upload_path = tmp_path / "queued-terminal.csv"
+    rows = "\n".join(
+        f"2026-05-01T10:{index:02d}:00Z,Zone A,{72 + index * 0.1:.1f},{52 + index * 0.2:.1f}"
+        for index in range(9)
+    )
+    upload_path.write_text(f"timestamp,room,temperature,humidity\n{rows}", encoding="utf-8")
+    job_id = "queue-terminal-job"
+    upload_jobs.write_job(
+        {
+            "job_id": job_id,
+            "filename": upload_path.name,
+            "file_path": str(upload_path),
+            "status": "PENDING",
+            "processing_state": "queued",
+            "propagation_stage": "queued",
+            "propagation_progress": 10,
+            "propagation_label": "Queued.",
+        }
+    )
+    upload_jobs.enqueue_upload_job(job_id)
+
+    assert upload_jobs.process_next_queued_upload_job() is True
+
+    status = client.get(f"/api/data/upload-status/{job_id}").json()
+    queue_entry = read_upload_queue_job(job_id) or {}
+    assert queue_entry.get("status") == "completed"
+    assert status["status"] == "COMPLETE"
+    assert status["job_state"] == "completed"
+    assert status["message"] == "Analysis ready."
+    assert status["result_available"] is True
+    assert status["sii_completed"] is True
+    for artifact_key in REQUIRED_COMPLETION_ARTIFACT_KEYS:
+        assert status["sii_completion_artifacts"][artifact_key] is True
+
+
+def test_completion_persistence_failure_marks_job_failed(monkeypatch, tmp_path) -> None:
+    client = TestClient(create_app())
+    upload_path = tmp_path / "persist-fail.csv"
+    rows = "\n".join(
+        f"2026-05-01T11:{index:02d}:00Z,Room A,{71 + index * 0.2:.1f},{51 + index * 0.25:.1f}"
+        for index in range(8)
+    )
+    upload_path.write_text(f"timestamp,room,temperature,humidity\n{rows}", encoding="utf-8")
+
+    def fail_completion(*args, **kwargs):
+        raise RuntimeError("completion write failed")
+
+    monkeypatch.setattr(upload_jobs, "_persist_completed_upload", fail_completion)
+
+    result = upload_jobs.process_csv_file(upload_path, filename="persist-fail.csv", job_id="persist-fail-job")
+    status = client.get("/api/data/upload-status/persist-fail-job").json()
+
+    assert result.get("status") == "FAILED"
+    assert status["status"] == "FAILED"
+    assert status["job_state"] == "failed"
+    assert status["terminal"] is True
+    assert status["result_available"] is False
+    assert status["first_usable_available"] is False
+    assert status["sii_completed"] is False
+    assert "completion write failed" in str(status.get("error") or "")

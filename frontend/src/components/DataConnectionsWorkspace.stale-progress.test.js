@@ -240,7 +240,7 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Analyze Historical Data", () => {
+it("selected file state shows filename, size, and Analyze Dataset", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -250,7 +250,7 @@ it("selected file state shows filename, size, and Analyze Historical Data", () =
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
   expect(screen.getByText("Historical Data Ready")).toBeTruthy();
 });
 
@@ -314,7 +314,7 @@ it("baseline renderer fallback keeps the active analysis job visible", () => {
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Continuing analysis in compatibility mode")).toBeTruthy();
+  expect(screen.getByText("Using an alternate processing path.")).toBeTruthy();
   expect(screen.getByText("fallback.csv")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   const renderer = document.querySelector(".upload-fingerprint-build");
@@ -506,7 +506,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -701,4 +701,129 @@ it("does not show processing 100 until status is complete", () => {
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
   expect(screen.queryByText(/replay/i)).toBeNull();
   expect(screen.queryByText("Replay status")).toBeNull();
+});
+
+
+it("continues polling when a result is available but backend state is still processing", async () => {
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: { job_id: "job-nonterminal-result", status_url: "/api/data/upload-status/job-nonterminal-result", status: "queued", message: "Upload accepted." },
+  });
+
+  const events = [];
+  const streamPayload = {
+    job_id: "job-nonterminal-result",
+    status: "PROCESSING",
+    job_state: "processing",
+    processing_state: "saving_result",
+    result_available: true,
+    first_usable_available: true,
+    progress_label: "Saving result...",
+    message: "Saving result...",
+    analysis_result: {
+      systems: [{ name: "Premature system" }],
+      insights: [{ title: "Premature insight" }],
+      fingerprint: { status: "Established" },
+    },
+  };
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-stream/job-nonterminal-result")) {
+      events.push("stream");
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamPayload)}\n\n`));
+            controller.close();
+          },
+        }),
+      };
+    }
+    if (String(path).includes("/api/data/upload-status/job-nonterminal-result")) {
+      events.push("status");
+      return jsonResponse({
+        job_id: "job-nonterminal-result",
+        status: "COMPLETE",
+        job_state: "completed",
+        terminal: true,
+        processing_state: "complete",
+        result_available: true,
+        first_usable_available: true,
+        progress_label: "Analysis ready.",
+        message: "Analysis ready.",
+        analysis_result: {
+          systems: [{ name: "Completed system" }],
+          insights: [{ title: "Completed insight" }],
+          fingerprint: { status: "Established" },
+        },
+      });
+    }
+    return jsonResponse({});
+  });
+  const onUploadComplete = vi.fn(async () => { events.push("complete"); });
+
+  renderWorkspace({ apiFetch, onUploadComplete });
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("nonterminal.csv")] } });
+  fireEvent.click(screen.getByTestId("process-upload-button"));
+
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-nonterminal-result", status: "COMPLETE" }), { navigateToGate: false });
+  });
+  expect(events.indexOf("status")).toBeGreaterThan(events.indexOf("stream"));
+  expect(events.indexOf("complete")).toBeGreaterThan(events.indexOf("status"));
+});
+
+it("prevents duplicate upload and polling events from repeated process clicks", async () => {
+  let releaseUpload;
+  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise((resolve) => {
+    releaseUpload = () => resolve({
+      ok: true,
+      status: 202,
+      payload: { job_id: "job-duplicate-click", status_url: "/api/data/upload-status/job-duplicate-click", status: "queued", message: "Upload accepted." },
+    });
+  }));
+
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/api/data/upload-stream/job-duplicate-click")) return jsonResponse({}, { ok: false, status: 404 });
+    if (String(path).includes("/api/data/upload-status/job-duplicate-click")) {
+      return jsonResponse({
+        job_id: "job-duplicate-click",
+        status: "COMPLETE",
+        job_state: "completed",
+        terminal: true,
+        processing_state: "complete",
+        result_available: true,
+        first_usable_available: true,
+        progress_label: "Analysis ready.",
+        message: "Analysis ready.",
+        analysis_result: {
+          systems: [{ name: "Completed system" }],
+          insights: [{ title: "Completed insight" }],
+          fingerprint: { status: "Established" },
+        },
+      });
+    }
+    return jsonResponse({});
+  });
+  const onUploadComplete = vi.fn(async () => {});
+
+  renderWorkspace({ apiFetch, onUploadComplete });
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("duplicate.csv")] } });
+  const processButton = screen.getByTestId("process-upload-button");
+  fireEvent.click(processButton);
+  fireEvent.click(processButton);
+
+  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    releaseUpload();
+  });
+
+  await waitFor(() => {
+    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-duplicate-click" }), { navigateToGate: false });
+  });
+  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  expect(apiFetch.mock.calls.filter(([path]) => String(path).includes("/api/data/upload-status/job-duplicate-click"))).toHaveLength(1);
 });

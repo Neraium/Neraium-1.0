@@ -161,6 +161,28 @@ function resolveFinalAnalysisResult(...candidates) {
   return null;
 }
 
+
+function canonicalJobState(payload = {}) {
+  const raw = String(payload?.job_state ?? payload?.jobState ?? "").trim().toLowerCase();
+  if (raw) return raw;
+  const normalizedStatus = normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state);
+  if (normalizedStatus === "complete") return "completed";
+  if (["failed", "error", "validation_error", "timeout"].includes(normalizedStatus)) return "failed";
+  if (normalizedStatus === "cancelled") return "cancelled";
+  if (normalizedStatus === "queued") return "queued";
+  return "processing";
+}
+
+function isTerminalCompletedPayload(payload = {}) {
+  const state = canonicalJobState(payload);
+  return state === "completed" || state === "completed_compatibility";
+}
+
+function isTerminalFailedPayload(payload = {}) {
+  const state = canonicalJobState(payload);
+  return state === "failed" || state === "cancelled";
+}
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -552,7 +574,7 @@ export default function DataConnectionsWorkspace({
             if (streamed) {
               const streamedStatus = normalizeUploadStatus(streamed.status);
               logTelemetryStatusProgress(streamedStatus, streamed);
-              if (streamedStatus === "complete") {
+              if (isTerminalCompletedPayload(streamed)) {
                 const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Behavior Baseline", message: "Saving Behavior Baseline" };
                 logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
@@ -626,7 +648,7 @@ export default function DataConnectionsWorkspace({
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
-          const terminalSuccess = normalizedStatus === "complete" || Boolean(normalizedPayload.result_available || normalizedPayload.first_usable_available);
+          const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
           if (terminalSuccess) {
             logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
             const completePayload = {
@@ -644,7 +666,7 @@ export default function DataConnectionsWorkspace({
             setUploadProcessingFlag(false);
             return completePayload;
           }
-          if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalizedStatus)) {
+          if (isTerminalFailedPayload(normalizedPayload)) {
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
           startTransition(() => {
@@ -733,7 +755,7 @@ export default function DataConnectionsWorkspace({
           startTransition(() => {
             setUploadJob(normalizedPayload);
           });
-          if (normalizedStatus === "complete" || payload?.result_available || payload?.first_usable_available) {
+          if (isTerminalCompletedPayload(normalizedPayload)) {
             return payload;
           }
         }

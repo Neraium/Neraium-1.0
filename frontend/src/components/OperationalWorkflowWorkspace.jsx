@@ -67,7 +67,7 @@ const EMPTY_TELEMETRY_COPY = {
   commandTitle: "Awaiting Initial Baseline",
   commandDetail: "The facility has not yet established a learned operational baseline.",
   fileStatus: "No source connected",
-  cta: "Analyze Historical Data",
+  cta: "Analyze Dataset",
   secondaryCta: "Connect Live Telemetry",
   headerStatus: "Waiting for telemetry",
 };
@@ -648,11 +648,17 @@ function buildRelationshipChangeRows(relationshipRows) {
     .slice(0, 12);
 }
 
-function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) {
+function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, telemetryConnected }) {
+  const historicalImported = sourceLabel !== "None";
+  const lastImport = historicalImported && !["No analysis yet", "Not analyzed yet", "Analysis in progress"].includes(lastAnalysis)
+    ? lastAnalysis
+    : "No import yet";
   return [
-    ["Historical Source", sourceLabel === "None" ? "Not Connected" : sourceLabel],
-    ["Live Telemetry", telemetryConnected ? "Connected" : "Not Connected"],
-    ["Last Analysis", lastAnalysis === "No analysis yet" || lastAnalysis === "Not analyzed yet" ? "No Analysis Yet" : lastAnalysis],
+    ["Historical CSV", historicalImported ? "Historical dataset imported" : "Historical CSV available"],
+    ["Historical rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "No historical dataset imported"],
+    ["Live connector", telemetryConnected ? "Source healthy" : "Live connector unavailable"],
+    ["Last import", lastImport],
+    ["Last successful synchronization", telemetryConnected ? lastAnalysis : "No live synchronization"],
     ["Writeback", "Disabled (Read Only)"],
   ];
 }
@@ -716,7 +722,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Analyze New Dataset",
+      primaryCtaLabel: "Analyze Dataset",
     };
   }
   if (analysisComplete) {
@@ -725,7 +731,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Operational assessment ready",
       storyProgressLabel: "Assessment based on selected telemetry",
-      primaryCtaLabel: "Analyze New Dataset",
+      primaryCtaLabel: "Analyze Dataset",
     };
   }
   return {
@@ -733,7 +739,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Analyze New Dataset",
+    primaryCtaLabel: "Analyze Dataset",
   };
 }
 

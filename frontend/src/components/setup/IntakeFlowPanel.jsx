@@ -216,6 +216,28 @@ const FINGERPRINT_RIDGES = [
   { phase: 3, detail: "fine", path: "M39 132c28-20 54-20 82 0" },
 ];
 
+
+const FINGERPRINT_EVIDENCE_POINTS = [
+  { x: 38, y: 68 }, { x: 55, y: 47 }, { x: 85, y: 39 }, { x: 112, y: 63 },
+  { x: 123, y: 98 }, { x: 105, y: 134 }, { x: 73, y: 146 }, { x: 43, y: 120 },
+];
+
+const FINGERPRINT_RELATIONSHIP_LINKS = [
+  "M38 68C52 58 69 49 85 39",
+  "M85 39C98 48 108 54 112 63",
+  "M112 63C122 74 126 85 123 98",
+  "M123 98C119 116 112 127 105 134",
+  "M105 134C92 143 83 147 73 146",
+  "M73 146C58 139 48 130 43 120",
+  "M43 120C37 101 36 84 38 68",
+  "M55 47C72 86 92 109 105 134",
+];
+
+const FINGERPRINT_CLUSTER_PATHS = [
+  "M48 75C62 54 96 52 112 76C128 99 111 131 82 137C54 142 34 101 48 75Z",
+  "M62 92C72 77 94 76 105 93C116 110 101 128 80 128C60 128 51 108 62 92Z",
+];
+
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "complete") {
     return { id: "complete", label: "Behavior Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
@@ -367,9 +389,9 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const statusTitle = complete
     ? "Behavior Baseline Established"
     : compatibilityMode
-      ? "Continuing analysis in compatibility mode"
+      ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
-  const statusDetail = complete ? "Operational behavior baseline is ready" : `Stage ${stageNumber} of ${stageCount}`;
+  const statusDetail = complete ? "Operational behavior baseline is ready" : compatibilityMode ? `Stage ${stageNumber} of ${stageCount} - results remain valid; no action required.` : `Stage ${stageNumber} of ${stageCount}`;
 
   useEffect(() => {
     if (forcedTier) return undefined;
@@ -418,6 +440,7 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       className={`upload-fingerprint-build upload-fingerprint-build--${renderTier}${complete ? " upload-fingerprint-build--complete" : ""}`}
       data-render-tier={renderTier}
       data-render-reason={renderProfile.reason}
+      data-build-stage={stage?.id || "evidence"}
       aria-label={`Analysis ${displayPercent}% complete`}
       aria-valuemin="0"
       aria-valuemax="100"
@@ -433,6 +456,9 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       <div className="upload-fingerprint-build__status">
         <strong>{statusTitle}</strong>
         <span>{statusDetail}</span>
+        {compatibilityMode && !complete ? (
+          <small>Renderer recovery selected this path. Analysis is not degraded; full SII results remain valid.</small>
+        ) : null}
       </div>
       <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
         <defs>
@@ -449,6 +475,22 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
         </defs>
         <path className="upload-fingerprint-build__field" d="M80 31a64 64 0 1 1 0 128a64 64 0 1 1 0-128" />
         <path className="upload-fingerprint-build__outline" d="M80 31a64 64 0 1 1 0 128a64 64 0 1 1 0-128" />
+        <g className="upload-fingerprint-build__relationship-links">
+          {FINGERPRINT_RELATIONSHIP_LINKS.map((path, index) => (
+            <path key={path} d={path} pathLength="100" style={{ "--link-index": index }} />
+          ))}
+        </g>
+        <g className="upload-fingerprint-build__evidence-points">
+          {FINGERPRINT_EVIDENCE_POINTS.map((point, index) => (
+            <circle key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="2.8" style={{ "--point-index": index }} />
+          ))}
+        </g>
+        <g className="upload-fingerprint-build__clusters">
+          {FINGERPRINT_CLUSTER_PATHS.map((path, index) => (
+            <path key={path} d={path} style={{ "--cluster-index": index }} />
+          ))}
+        </g>
+        <path className="upload-fingerprint-build__baseline-lock" d="M50 151C64 162 96 162 110 151" pathLength="100" />
         <g className="upload-fingerprint-build__ridges">
           {FINGERPRINT_RIDGES.map((ridge, index) => {
             const fill = ridgeProgress({ displayPercent, ridge, stageIndex, complete });
@@ -677,7 +719,7 @@ export default function IntakeFlowPanel({
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)}>
-                  Analyze Historical Data
+                  Analyze Dataset
                 </button>
               </div>
             </div>

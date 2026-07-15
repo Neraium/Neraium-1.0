@@ -7,6 +7,45 @@ from app.services.upload_lifecycle import (
 )
 
 
+
+REQUIRED_COMPLETION_ARTIFACTS = (
+    "evidence_persisted",
+    "relationships_persisted",
+    "behavioral_structure_persisted",
+    "baseline_persisted",
+    "final_result_persisted",
+    "terminal_backend_state_published",
+)
+
+
+def _truthy(value):
+    return value is True or str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def _canonical_job_state(status: str, payload: dict) -> str:
+    normalized = str(status or payload.get("status") or "").strip().upper()
+    processing_state = str(payload.get("processing_state") or payload.get("contract_stage") or "").strip().lower()
+    if normalized in {"COMPLETE", "COMPLETED", "SUCCESS"} or processing_state == "complete":
+        artifacts = payload.get("sii_completion_artifacts") or (payload.get("result_summary") or {}).get("sii_completion_artifacts") or {}
+        return "completed_compatibility" if _truthy(artifacts.get("compatibility_mode")) else "completed"
+    if normalized in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"} or processing_state in {"failed", "error", "timeout"}:
+        return "failed"
+    if normalized == "CANCELLED" or processing_state == "cancelled":
+        return "cancelled"
+    if normalized in {"PENDING", "QUEUED", "QUEUE"} or processing_state in {"queued", "pending"}:
+        return "queued"
+    return "processing"
+
+
+def _completion_artifacts(payload: dict) -> dict:
+    artifacts = payload.get("sii_completion_artifacts") or (payload.get("result_summary") or {}).get("sii_completion_artifacts") or {}
+    return artifacts if isinstance(artifacts, dict) else {}
+
+
+def _missing_completion_artifacts(payload: dict) -> list[str]:
+    artifacts = _completion_artifacts(payload)
+    return [key for key in REQUIRED_COMPLETION_ARTIFACTS if not _truthy(artifacts.get(key))]
+
 def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
     stage = infer_legacy_stage(raw_payload, normalized_status)
     default_progress, default_label = LEGACY_STAGE_DEFAULTS.get(stage, (0, "Processing telemetry."))
@@ -37,6 +76,8 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
             label=raw_payload.get("contract_label") or normalized["propagation_label"],
         )
     )
+    normalized["job_state"] = _canonical_job_state(normalized.get("status"), normalized)
+    normalized["terminal"] = normalized["job_state"] in {"completed", "completed_compatibility", "failed", "cancelled"}
     return normalized
 
 
@@ -61,15 +102,16 @@ def normalize_upload_status_payload(payload: dict) -> dict:
         normalized.setdefault("error", str(normalized.get("message") or status.title()))
         return _with_propagation_fields(normalized, payload, status)
     if status == "COMPLETE":
-        artifacts = payload.get("sii_completion_artifacts") or (payload.get("result_summary") or {}).get("sii_completion_artifacts") or {}
+        artifacts = _completion_artifacts(payload)
         sii_completed = bool(payload.get("sii_completed") or (payload.get("result_summary") or {}).get("sii_completed"))
         requires_contract_enforcement = "result_summary" in payload or "result_available" in payload
-        if requires_contract_enforcement and (not sii_completed or not artifacts):
+        missing_artifacts = _missing_completion_artifacts(payload)
+        if requires_contract_enforcement and (not sii_completed or missing_artifacts):
             normalized["status"] = "FAILED"
             normalized["sii_completed"] = False
             normalized["error_type"] = "sii_completion_missing"
             normalized["error"] = "sii_completion_missing"
-            normalized["message"] = "SII completion artifacts are missing."
+            normalized["message"] = "SII completion artifacts are missing: " + ", ".join(missing_artifacts or ["sii_completed"])
             return _with_propagation_fields(normalized, payload, "FAILED")
         if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
             normalized["progress_label"] = "Analysis ready."

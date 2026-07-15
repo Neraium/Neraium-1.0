@@ -123,6 +123,8 @@ def _merge_completed_result_fields(status_payload: dict[str, Any], result_payloa
             normalized["message"] = normalized.get("message") or "Analysis ready."
             normalized["progress_label"] = normalized.get("progress_label") or "Analysis ready."
     normalized["analysis_result"] = analysis_result
+    if isinstance(result_payload.get("sii_completion_artifacts"), dict):
+        normalized["sii_completion_artifacts"] = dict(result_payload["sii_completion_artifacts"])
     normalized["sii_reliable_enough_to_show"] = bool(result_payload.get("sii_reliable_enough_to_show"))
 
     evidence_persisted = bool(
@@ -508,8 +510,11 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "column_count": result_payload.get("column_count", 0),
             "rows_processed": result_payload.get("row_count", 0),
             "columns_detected": result_payload.get("column_count", 0),
-            "progress_label": "Telemetry processing complete.",
-            "message": "Telemetry processing complete.",
+            "progress_label": "Analysis ready.",
+            "message": "Analysis ready.",
+            "job_state": "completed",
+            "terminal": True,
+            "sii_completion_artifacts": result_payload.get("sii_completion_artifacts", {}),
             "error": None,
             "state_backend": upload_state_backend(),
             "analysis_result": ensure_analysis_result(result_payload),

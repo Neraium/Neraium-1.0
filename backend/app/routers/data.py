@@ -377,12 +377,15 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "column_count": latest_result.get("column_count", 0),
             "rows_processed": latest_result.get("row_count", 0),
             "columns_detected": latest_result.get("column_count", 0),
-            "progress_label": "Telemetry processing complete.",
-            "message": "Telemetry processing complete.",
+            "progress_label": "Analysis ready.",
+            "message": "Analysis ready.",
+            "job_state": "completed",
+            "terminal": True,
+            "sii_completion_artifacts": latest_result.get("sii_completion_artifacts", {}),
             "error": None,
             "propagation_stage": "complete",
             "propagation_progress": 100,
-            "propagation_label": "Complete.",
+            "propagation_label": "Analysis ready.",
             "state_backend": state_backend,
         }, job_id)
     if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
