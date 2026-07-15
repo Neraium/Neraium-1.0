@@ -13,9 +13,12 @@ const HelpChangelogWorkspace = lazy(() => import("./HelpChangelogWorkspace"));
 
 function renderLoadingPanel(title, message) {
   return (
-    <div className="workspace-grid">
-      <Panel title={title} className="span-12">
+    <div className="workspace-grid workspace-loading-shell">
+      <Panel title={title} className="span-12 workspace-loading-panel">
         <p className="narrative-text">{message}</p>
+        <div className="workspace-loading-panel__meter" aria-hidden="true">
+          <span />
+        </div>
       </Panel>
     </div>
   );
@@ -29,12 +32,13 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
           <div className="workspace-back-control" aria-label="Workspace navigation">
             <button
               type="button"
-              className="system-gate__settings-action"
+              className="workspace-back-control__button"
               onClick={handleBackToGate}
-              aria-label="Back to Workspace"
+              aria-label="Back to Command Center"
             >
-              Back to Workspace
+              Back to Command Center
             </button>
+            <span>Read-only operational intelligence</span>
           </div>
           {children}
         </div>
@@ -98,7 +102,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Telemetry Workspace", "Preparing telemetry intake...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Data Sources", "Preparing telemetry analysis workflow...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
@@ -221,7 +225,7 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Loading Command Center", "Preparing system overview...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Command Center", "Preparing operational status...")}>
           <OperationalWorkflowWorkspace
             liveOps={{
               ...liveOps,

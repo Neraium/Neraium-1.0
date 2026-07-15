@@ -12,7 +12,7 @@ const INTAKE_STAGES = [
   "Normalizing telemetry",
   "Identifying systems",
   "Mapping relationships",
-  "Building fingerprint",
+  "Building behavior baseline",
   "Generating insights",
   "Saving result",
 ];
@@ -167,7 +167,7 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       `${result.row_count ?? result.rows_processed ?? 0} telemetry rows normalized for analysis.`,
       "System groups and primary operating patterns were identified.",
       "Cross-signal relationships were mapped against baseline behavior.",
-      "Structural fingerprint built from the normalized telemetry.",
+      "Behavior baseline built from normalized telemetry.",
       "Insights generated from the latest telemetry evidence.",
       operatorReviewReady
         ? "Core result saved and ready for review."
@@ -354,10 +354,10 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return "Upload state unavailable.";
   }
   if (errorType === "shared_upload_queue_not_configured") {
-    return "Upload processing is unavailable because the shared upload queue is not configured.";
+    return "Upload processing is unavailable because the analysis worker is not configured.";
   }
   if (errorType === "upload_queue_saturated") {
-    return "Upload queue is saturated. Retry shortly.";
+    return "Analysis service is busy. Retry shortly.";
   }
   if (errorType === "upload_enqueue_failed") {
     return typeof detail === "string" && detail.trim()
@@ -434,7 +434,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
     ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized without loading the full export into memory.",
     jobStatus === "baseline_modeling" ? job.progress_label : "System groupings and baseline patterns are being identified.",
     jobStatus === "structural_scoring" ? job.progress_label : "Cross-signal relationships are being mapped against baseline behavior.",
-    jobStatus === "building_fingerprint" ? job.progress_label : "A structural fingerprint is being assembled from the normalized telemetry.",
+    jobStatus === "building_fingerprint" ? job.progress_label : "A behavior baseline is being assembled from normalized telemetry.",
     jobStatus === "writing_state" ? job.progress_label : "Insights are being generated from the mapped system behavior.",
     ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The core result can complete before optional report finalization finishes.",
     "Completion will refresh the structural state view.",

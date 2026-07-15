@@ -466,8 +466,8 @@ export default function DataConnectionsWorkspace({
       processing_state: "saving_results",
       percent: 100,
       progress: 100,
-      progress_label: "Saving Operational Fingerprint",
-      message: "Saving Operational Fingerprint",
+      progress_label: "Saving Behavior Baseline",
+      message: "Saving Behavior Baseline",
     }));
     setUploadState("saving_results");
     logTelemetryStage("save request started", { jobId });
@@ -493,8 +493,8 @@ export default function DataConnectionsWorkspace({
         processing_state: "save_complete",
         percent: 100,
         progress: 100,
-        progress_label: "Operational Fingerprint Established",
-        message: "Operational Fingerprint Established",
+        progress_label: "Behavior Baseline Established",
+        message: "Behavior Baseline Established",
       }));
       logTelemetryStage("state hydration completed", { jobId });
       completionNavigationEligibleRef.current = true;
@@ -553,7 +553,7 @@ export default function DataConnectionsWorkspace({
               const streamedStatus = normalizeUploadStatus(streamed.status);
               logTelemetryStatusProgress(streamedStatus, streamed);
               if (streamedStatus === "complete") {
-                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Operational Fingerprint", message: "Saving Operational Fingerprint" };
+                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Behavior Baseline", message: "Saving Behavior Baseline" };
                 logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
                 completionNavigationEligibleRef.current = false;
@@ -635,8 +635,8 @@ export default function DataConnectionsWorkspace({
               processing_state: "saving_results",
               percent: 100,
               progress: 100,
-              progress_label: "Saving Operational Fingerprint",
-              message: "Saving Operational Fingerprint",
+              progress_label: "Saving Behavior Baseline",
+              message: "Saving Behavior Baseline",
             };
             setUploadJob(completePayload);
             completionNavigationEligibleRef.current = false;

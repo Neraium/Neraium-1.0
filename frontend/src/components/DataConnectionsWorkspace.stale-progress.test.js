@@ -269,7 +269,7 @@ it("drag-over and drop use the premium upload card", () => {
   expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(false);
 });
 
-it("processing state uses the fingerprint as the progress indicator", () => {
+it("processing state uses the behavior baseline as the progress indicator", () => {
   renderPanel({
     uploadState: "running_sii",
     selectedFiles: [selectedCsv("progress.csv")],
@@ -280,10 +280,10 @@ it("processing state uses the fingerprint as the progress indicator", () => {
       processing_state: "building_fingerprint",
       percent: 65,
       progress: 65,
-      progress_label: "Building fingerprint...",
+      progress_label: "Building behavior baseline...",
       result_available: false,
     },
-    latestMessage: "Building fingerprint...",
+    latestMessage: "Building behavior baseline...",
   });
 
   expect(screen.getByText("Learning Operational Relationships")).toBeTruthy();
@@ -296,7 +296,7 @@ it("processing state uses the fingerprint as the progress indicator", () => {
 });
 
 
-it("fingerprint renderer fallback keeps the active analysis job visible", () => {
+it("baseline renderer fallback keeps the active analysis job visible", () => {
   window.localStorage.setItem("neraium.upload_fingerprint.compatibility_mode", "black-screen-recovery");
 
   renderPanel({
@@ -311,7 +311,7 @@ it("fingerprint renderer fallback keeps the active analysis job visible", () => 
       progress: 65,
       result_available: false,
     },
-    latestMessage: "Building fingerprint...",
+    latestMessage: "Building behavior baseline...",
   });
 
   expect(screen.getByText("Continuing analysis in compatibility mode")).toBeTruthy();
@@ -322,7 +322,7 @@ it("fingerprint renderer fallback keeps the active analysis job visible", () => 
   expect(renderer?.querySelector(".upload-fingerprint-build__particles")).toBeNull();
 });
 
-it("fingerprint renderer uses enhanced mode on mobile-capable constraints", () => {
+it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   vi.stubGlobal("matchMedia", (query) => ({
     matches: /max-width: 760px|hover: none/.test(query),
     media: query,
@@ -346,7 +346,7 @@ it("fingerprint renderer uses enhanced mode on mobile-capable constraints", () =
       progress: 65,
       result_available: false,
     },
-    latestMessage: "Building fingerprint...",
+    latestMessage: "Building behavior baseline...",
   });
 
   const renderer = document.querySelector(".upload-fingerprint-build");
@@ -375,7 +375,7 @@ it("failed state shows retry and choose another file", () => {
   expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
 });
 
-it("complete state shows the fingerprint completion moment", () => {
+it("complete state shows the behavior baseline completion moment", () => {
   renderPanel({
     uploadState: "complete",
     selectedFiles: [selectedCsv("complete.csv")],
@@ -392,10 +392,10 @@ it("complete state shows the fingerprint completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Operational Fingerprint Established" })).toBeTruthy();
-  expect(screen.getByText("Behavioral baseline successfully created.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Behavior Baseline Established" })).toBeTruthy();
+  expect(screen.getByText("Learned operational behavior is ready for command center review.")).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
-  expect(labels).toEqual(["Systems", "Insights", "Fingerprint"]);
+  expect(labels).toEqual(["Systems", "Insights", "Baseline"]);
   expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Another Source" })).toBeTruthy();
   const details = screen.getByText("Advanced Details").closest("details");
@@ -455,8 +455,9 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
   const item = screen.getByText("Insights").closest(".upload-result-summary__item");
   expect(item.textContent).toContain("4");
 
-  const fingerprintItem = screen.getByText("Fingerprint").closest(".upload-result-summary__item");
-  expect(fingerprintItem.textContent).toContain("Changed");
+  const baselineItem = Array.from(document.querySelectorAll(".upload-result-summary__item"))
+    .find((item) => item.textContent.startsWith("Baseline"));
+  expect(baselineItem.textContent).toContain("Changed");
 });
 
 it("shows finalizing results instead of fake zero counts before AnalysisResult is available", () => {
@@ -581,7 +582,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
   });
 
   expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByText("Behavioral baseline successfully created.")).toBeTruthy();
+  expect(screen.getByText("Learned operational behavior is ready for command center review.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });

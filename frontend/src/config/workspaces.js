@@ -3,7 +3,7 @@ export const WORKSPACES = [
     id: "system-body",
     label: "Command Center",
     eyebrow: "Operational State",
-    description: "Operational state overview, fingerprint status, system summary, and top insight.",
+    description: "Operational state, behavior baseline, system summary, and top finding.",
   },
   {
     id: "data-connections",
@@ -39,24 +39,24 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "HVAC and Central Plant",
-    scope: "Chilled water, boiler, air handling, equipment staging, and load response.",
+    name: "Central Plant and Airside Systems",
+    scope: "Thermal production, airside delivery, equipment staging, and load response.",
   },
   {
-    name: "Pools, Spas, and Water Features",
-    scope: "Feature circulation, heat load, chemistry response, and guest-facing water systems.",
+    name: "Aquatic Amenities and Water Features",
+    scope: "Circulation, heat load, treatment response, and guest-facing water systems.",
   },
   {
-    name: "Water Treatment and Pumping",
-    scope: "Pump power, flow, pressure, treatment performance, and process response.",
+    name: "Process Water and Pumping",
+    scope: "Flow, pressure, treatment performance, pump energy, and process response.",
   },
   {
-    name: "Cooling Towers and Heat Rejection",
-    scope: "Condenser water behavior, approach temperature, tower staging, and heat rejection.",
+    name: "Heat Rejection Systems",
+    scope: "Thermal rejection behavior, approach temperature, staging, and load response.",
   },
   {
-    name: "Building Automation",
-    scope: "BMS points, control states, schedules, setpoints, and occupancy-driven response.",
+    name: "Building Control Systems",
+    scope: "Control states, schedules, setpoints, occupancy signals, and facility response.",
   },
   {
     name: "Energy Infrastructure",

@@ -45,7 +45,7 @@ function suppressExpectedGateRenderWindowError() {
 }
 
 async function launchWorkspace() {
-  const launchButtons = screen.queryAllByRole("button", { name: "Launch Workspace" });
+  const launchButtons = screen.queryAllByRole("button", { name: "Open Command Center" });
   if (launchButtons.length) {
     fireEvent.click(launchButtons[0]);
   }

@@ -218,9 +218,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     expect(screen.getByRole("heading", { name: "0 Systems Discovered" })).toBeTruthy();
     expect(screen.getAllByText("Systems will be identified automatically after the first successful telemetry analysis.").length).toBeGreaterThan(0);
-    expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
-    expect(screen.queryByText("Pools, Spas, and Water Features")).toBeNull();
-    expect(screen.queryByText("Cooling Towers and Heat Rejection")).toBeNull();
+    expect(screen.queryByText("Central Plant and Airside Systems")).toBeNull();
+    expect(screen.queryByText("Aquatic Amenities and Water Features")).toBeNull();
+    expect(screen.queryByText("Heat Rejection Systems")).toBeNull();
     expect(screen.queryByText("Expected resort domain example, not a detected system")).toBeNull();
     expect(screen.queryByText("Example, not detected")).toBeNull();
   });
@@ -238,11 +238,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
   it("counts only real detected systems after telemetry analysis", () => {
     const placeholderSystems = [
-      "HVAC and Central Plant",
-      "Pools, Spas, and Water Features",
-      "Water Treatment and Pumping",
-      "Cooling Towers and Heat Rejection",
-      "Building Automation",
+      "Central Plant and Airside Systems",
+      "Aquatic Amenities and Water Features",
+      "Process Water and Pumping",
+      "Heat Rejection Systems",
+      "Building Control Systems",
       "Energy Infrastructure",
       "Utility Distribution",
     ].map((name, index) => ({ id: "placeholder-" + index, name, placeholder: true }));
@@ -262,7 +262,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Systems");
     expect(screen.getByText("Pump system")).toBeTruthy();
-    expect(screen.queryByText("HVAC and Central Plant")).toBeNull();
+    expect(screen.queryByText("Central Plant and Airside Systems")).toBeNull();
   });
 
   it("opens the top Command Center insight inline in the selected investigation", () => {

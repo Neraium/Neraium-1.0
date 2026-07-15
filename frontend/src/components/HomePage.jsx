@@ -5,23 +5,29 @@ import "../styles/home.css";
 
 const PLATFORM_CARDS = [
   {
-    title: "Behavior Intelligence",
-    body: "Learns normal operating relationships across systems.",
+    title: "Facility behavior",
+    body: "Learns how systems normally interact across the full operating environment.",
   },
   {
-    title: "Operational Insights",
-    body: "Identifies subsystem changes and explains why they matter.",
+    title: "Priority findings",
+    body: "Ranks operational changes by severity, confidence, and investigation value.",
   },
   {
-    title: "Decision Support",
-    body: "Prioritizes operational investigation instead of overwhelming operators with alarms.",
+    title: "Investigation support",
+    body: "Explains why behavior changed and where operators should begin.",
   },
+];
+
+const HERO_SIGNALS = [
+  ["Operational state", "Current facility behavior"],
+  ["What changed", "Relationships outside baseline"],
+  ["Where to begin", "Highest-priority finding"],
 ];
 
 const WORKFLOW_STEPS = [
   {
-    title: "Learn",
-    body: "Builds a working model of normal behavior across connected infrastructure.",
+    title: "Baseline",
+    body: "Builds a learned model of normal behavior across connected infrastructure.",
   },
   {
     title: "Observe",
@@ -34,12 +40,14 @@ const WORKFLOW_STEPS = [
 ];
 
 const SYSTEM_AREAS = [
-  "Treatment",
-  "Pumping",
-  "Distribution",
-  "Storage",
-  "Process loops",
-  "Telemetry integrity",
+  "Resorts",
+  "Commercial buildings",
+  "Hospitals",
+  "Manufacturing",
+  "District energy",
+  "Water treatment",
+  "Data centers",
+  "Chilled water plants",
 ];
 
 export default function HomePage({ onLaunchWorkspace }) {
@@ -80,7 +88,7 @@ export default function HomePage({ onLaunchWorkspace }) {
           <button type="button" onClick={() => scrollToSection("systems")}>Systems</button>
           <button type="button" onClick={() => scrollToSection("about")}>About</button>
         </nav>
-        <button type="button" className="home-nav__launch" onClick={onLaunchWorkspace}>Launch Workspace</button>
+        <button type="button" className="home-nav__launch" onClick={onLaunchWorkspace}>Open Command Center</button>
       </header>
 
       <main>
@@ -89,8 +97,17 @@ export default function HomePage({ onLaunchWorkspace }) {
             <p className="home-eyebrow">Operational Intelligence Platform</p>
             <h1 id="home-title">Operational Intelligence for Critical Infrastructure</h1>
             <p>
-              Neraium continuously learns how operational systems normally behave and identifies meaningful behavioral changes before traditional alarms reveal the problem.
+              Neraium learns how facilities normally behave, detects meaningful operational change, and shows teams where to investigate first.
             </p>
+          </div>
+
+          <div className="home-signal-strip" aria-label="Neraium command center focus">
+            {HERO_SIGNALS.map(([label, value]) => (
+              <div className="home-signal-strip__item" key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
           </div>
 
           <div
@@ -110,7 +127,7 @@ export default function HomePage({ onLaunchWorkspace }) {
           </div>
 
           <div className="home-hero__actions" aria-label="Primary actions">
-            <button type="button" className="home-command" onClick={onLaunchWorkspace}>Launch Workspace</button>
+            <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>
             <button type="button" className="home-secondary" onClick={() => scrollToSection("platform")}>View Platform</button>
           </div>
         </section>
@@ -148,8 +165,8 @@ export default function HomePage({ onLaunchWorkspace }) {
 
         <section id="systems" className="home-section home-section--systems" aria-labelledby="systems-title">
           <div className="home-section__header">
-            <p className="home-eyebrow">Systems</p>
-            <h2 id="systems-title">Designed around system relationships, not isolated tags.</h2>
+            <p className="home-eyebrow">Domains</p>
+            <h2 id="systems-title">Designed for infrastructure behavior, not a single equipment category.</h2>
           </div>
           <div className="home-system-list" aria-label="Infrastructure system areas">
             {SYSTEM_AREAS.map((area) => <span key={area}>{area}</span>)}
@@ -164,7 +181,7 @@ export default function HomePage({ onLaunchWorkspace }) {
               Neraium gives operators a focused view of infrastructure behavior, relationship changes, and investigation priorities across monitored systems.
             </p>
           </div>
-          <button type="button" className="home-command" onClick={onLaunchWorkspace}>Launch Workspace</button>
+          <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>
         </section>
       </main>
     </div>

@@ -256,6 +256,99 @@ button:focus-visible {
   box-shadow: var(--shadow-focus);
 }
 
+.workspace-shell-with-back {
+  min-height: 100svh;
+  background:
+    radial-gradient(780px 320px at 50% -120px, rgba(0, 122, 116, 0.14), transparent 72%),
+    linear-gradient(180deg, rgba(7, 12, 20, 0.99), rgba(5, 8, 14, 0.99));
+  color: var(--text-primary);
+}
+
+.workspace-back-control {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-height: 58px;
+  padding: 10px clamp(14px, 2vw, 24px);
+  border-bottom: 1px solid var(--surface-divider);
+  background: rgba(7, 12, 20, 0.88);
+  backdrop-filter: blur(16px);
+}
+
+.workspace-back-control__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--control-radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 0 13px;
+  font-size: var(--type-body-sm);
+  font-weight: 650;
+}
+
+.workspace-back-control__button:hover,
+.workspace-back-control__button:focus-visible {
+  border-color: rgba(0, 122, 116, 0.42);
+  background: rgba(0, 122, 116, 0.16);
+}
+
+.workspace-back-control span {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--type-body-sm);
+  text-align: right;
+}
+
+.workspace-loading-shell {
+  min-height: 100svh;
+  align-content: start;
+  padding: clamp(14px, 2vw, 24px);
+}
+
+.workspace-loading-panel .ops-panel__body {
+  gap: var(--space-12);
+}
+
+.workspace-loading-panel__meter {
+  width: min(360px, 100%);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.workspace-loading-panel__meter span {
+  display: block;
+  width: 44%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-brand), #d6a94f);
+  animation: workspaceLoadingSweep 1.8s ease-in-out infinite;
+}
+
+@keyframes workspaceLoadingSweep {
+  0% { transform: translateX(-110%); }
+  55%, 100% { transform: translateX(240%); }
+}
+
+@media (max-width: 620px) {
+  .workspace-back-control {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace-back-control span {
+    text-align: left;
+  }
+}
+
 .operational-workflow {
   background: transparent;
   color: var(--text-primary);
@@ -803,8 +896,8 @@ button:focus-visible {
   display: grid;
   justify-items: center;
   gap: 12px;
-  width: min(100%, 620px);
-  min-height: clamp(420px, 58vw, 560px);
+  width: min(100%, 520px);
+  min-height: clamp(330px, 44vw, 430px);
   overflow: hidden;
   padding: clamp(18px, 3vw, 30px);
   border: 0;
@@ -820,9 +913,9 @@ button:focus-visible {
 .upload-fingerprint-build::before {
   content: "";
   position: absolute;
-  inset: clamp(42px, 8vw, 76px);
+  inset: clamp(34px, 6vw, 58px);
   border: 1px solid rgba(146, 160, 170, 0.14);
-  border-radius: 48% 52% 46% 54% / 42% 44% 56% 58%;
+  border-radius: 50%;
   box-shadow: inset 0 0 34px rgba(146, 160, 170, 0.04);
   opacity: 0.34;
   animation: fingerprint-build-breathe 3.2s ease-in-out infinite;
@@ -830,13 +923,13 @@ button:focus-visible {
 
 .upload-fingerprint-build__halo {
   position: absolute;
-  inset: clamp(30px, 6vw, 54px);
+  inset: clamp(28px, 5vw, 48px);
   border-radius: 50%;
   background:
     conic-gradient(from 0deg, transparent, rgba(29, 216, 196, 0.18), transparent 31%, rgba(244, 210, 132, 0.12), transparent 68%, rgba(29, 216, 196, 0.16), transparent),
     radial-gradient(circle, transparent 58%, rgba(29, 216, 196, 0.18) 59%, transparent 61%);
   filter: blur(0.2px);
-  opacity: 0.76;
+  opacity: 0.54;
   animation: fingerprint-halo-rotate 16s linear infinite;
 }
 
@@ -891,7 +984,7 @@ button:focus-visible {
 .upload-fingerprint-build__print {
   position: relative;
   z-index: 2;
-  width: min(92%, 430px);
+  width: min(76%, 300px);
   height: auto;
   overflow: visible;
   filter: drop-shadow(0 0 10px rgba(29, 216, 196, 0.1));
@@ -1109,7 +1202,7 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build--enhanced {
-  min-height: clamp(390px, 86vw, 520px);
+  min-height: clamp(320px, 76vw, 420px);
   background:
     radial-gradient(circle at 50% 48%, rgba(29, 216, 196, 0.18), transparent 46%),
     linear-gradient(180deg, rgba(5, 15, 23, 0.84), rgba(4, 10, 17, 0.92));
@@ -1141,7 +1234,7 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build--enhanced .upload-fingerprint-build__print {
-  width: min(92%, 360px);
+  width: min(74%, 280px);
   filter: drop-shadow(0 0 12px rgba(29, 216, 196, 0.16));
   animation: fingerprint-print-breathe 4.6s ease-in-out infinite;
 }
@@ -1163,7 +1256,7 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build--safe {
-  min-height: clamp(360px, 82vw, 500px);
+  min-height: clamp(300px, 72vw, 390px);
   background: #041018;
   box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.06);
 }
@@ -1184,7 +1277,7 @@ button:focus-visible {
 }
 
 .upload-fingerprint-build--safe .upload-fingerprint-build__print {
-  width: min(88%, 340px);
+  width: min(74%, 270px);
   overflow: visible;
   filter: none;
   transform: none;
@@ -1241,7 +1334,7 @@ button:focus-visible {
 
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
   .upload-fingerprint-build {
-    min-height: clamp(360px, 92vw, 500px);
+    min-height: clamp(300px, 82vw, 390px);
     padding: 18px 14px 20px;
     transform: none;
   }
