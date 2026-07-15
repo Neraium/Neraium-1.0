@@ -1,5 +1,3 @@
-import FacilityFingerprintMark from "./FacilityFingerprintMark";
-
 export default function AdvancedDetailsView({ model, helpers, selectedInsightId, onAnalyzeSystem, onResumePreviousSession, onReopenHistoricalAnalysis, onDeleteHistoricalAnalysis }) {
   const { DetailGrid, EvidencePanel, PanelHeader, QualityList, StatusBadge, Timeline, formatConfidenceDisplay, prioritizeEvidenceGroups, severityToTone } = helpers;
   const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
@@ -97,18 +95,17 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
 
 function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
   if (!history.length) {
-    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed Operational Fingerprints will appear here after analysis.</p></div>;
+    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed behavior baselines will appear here after analysis.</p></div>;
   }
   return (
     <div className="analysis-history-list">
       {history.map((entry) => (
         <article className="analysis-history-card" key={entry.id}>
-          <FacilityFingerprintMark className="facility-fingerprint-mark--history" state={entry.orbState} status={entry.fingerprintStatus} label={entry.datasetName + " fingerprint"} />
           <div className="analysis-history-card__main">
             <span className="section-token">{formatHistoryTimestamp(entry.timestamp)}</span>
             <strong>{entry.datasetName}</strong>
             <dl>
-              <div><dt>Fingerprint</dt><dd>{entry.fingerprintStatus}</dd></div>
+              <div><dt>Baseline</dt><dd>{entry.fingerprintStatus}</dd></div>
               <div><dt>Systems</dt><dd>{entry.systemsCount}</dd></div>
               <div><dt>Insights</dt><dd>{entry.insightsCount}</dd></div>
             </dl>

@@ -8,7 +8,7 @@ const AVAILABLE_SOURCES = [
   {
     icon: "SII",
     label: "Historical Analysis",
-    detail: "Establish or refresh the Operational Fingerprint from available operating records.",
+    detail: "Establish or refresh the behavior baseline from available operating records.",
     status: "Available Today",
   },
 ];
@@ -30,7 +30,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <PanelHeader
           eyebrow="Status"
           title="Telemetry Sources"
-          subtitle="Connect read-only telemetry sources for Operational Fingerprint review."
+          subtitle="Connect read-only telemetry sources for behavior-baseline review."
         />
         <StatusBadge label={model.dashboardStatus.label} tone={model.dashboardStatus.tone} statusKey={model.dashboardStatus.statusKey} />
       </section>
@@ -40,7 +40,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <div className="data-source-action-grid">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>
             <strong>Analyze New Dataset</strong>
-            <span>Create or refresh the Operational Fingerprint.</span>
+            <span>Create or refresh the behavior baseline.</span>
           </button>
           <button type="button" className="secondary-command-button data-source-action" onClick={onSelectCsv} disabled={model.analyzeDisabled}>
             <strong>Import Historical CSV</strong>

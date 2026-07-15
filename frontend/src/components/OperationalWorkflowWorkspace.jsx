@@ -4,7 +4,6 @@ import PageContainer from "./layout/PageContainer";
 import AdvancedDetailsView from "./operational/AdvancedDetailsView";
 import CommandCenterView from "./operational/CommandCenterView";
 import DataSourcesView from "./operational/DataSourcesView";
-import FacilityFingerprintMark from "./operational/FacilityFingerprintMark";
 import FingerprintView from "./operational/FingerprintView";
 import InsightsView from "./operational/InsightsView";
 import SystemsView from "./operational/SystemsView";
@@ -16,7 +15,7 @@ const NAV_ITEMS = [
   { id: "command-center", label: "Command Center" },
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
-  { id: "fingerprint", label: "Operational Fingerprint" },
+  { id: "fingerprint", label: "Behavior Baseline" },
   { id: "data-sources", label: "Data Sources" },
   { id: "advanced", label: "Advanced" },
 ];
@@ -64,16 +63,16 @@ const hiddenFileInputStyle = {
 
 const EMPTY_TELEMETRY_COPY = {
   label: "Awaiting Initial Baseline",
-  detail: "Connect telemetry or analyze historical data to establish the facility's Operational Fingerprint.",
+  detail: "Connect telemetry or analyze historical data to establish the facility's learned operational baseline.",
   commandTitle: "Awaiting Initial Baseline",
-  commandDetail: "The facility has not yet established an Operational Fingerprint.",
+  commandDetail: "The facility has not yet established a learned operational baseline.",
   fileStatus: "No source connected",
   cta: "Analyze Historical Data",
   secondaryCta: "Connect Live Telemetry",
   headerStatus: "Waiting for telemetry",
 };
 const NO_TELEMETRY_STATUS = {
-  label: "Ready to Build Operational Fingerprint",
+  label: "Ready to Build Baseline",
   tone: "ready",
   statusKey: "ready",
   detail: EMPTY_TELEMETRY_COPY.detail,
@@ -91,13 +90,13 @@ const READY_TO_ANALYZE_STATUS = {
   detail: "Telemetry is ready for analysis.",
 };
 const ANALYZING_STATUS = {
-  label: "Building Operational Fingerprint...",
+  label: "Analyzing Operational Behavior...",
   tone: "learning",
   statusKey: "learning",
   detail: "Neraium is comparing current relationships against historical operating behavior.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
-  label: "System Online",
+  label: "Operational Baseline Active",
   tone: "active",
   statusKey: "active",
   detail: "Result ready.",
@@ -307,18 +306,15 @@ export default function OperationalWorkflowWorkspace({
         </div>
       </aside>
 
-      <main className="operational-main" aria-label="Neraium operational workspace">
+      <main className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium operational workspace">
         <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleOverviewFileSelection} />
-        <header className="operational-topbar">
+        {visibleSection !== "command-center" ? <header className="operational-topbar">
           <div>
             <p className="section-token">{model.headerEyebrow}</p>
             <h1>{model.headerTitle}</h1>
             <p className="operational-topbar__context">{model.headerSubtitle}</p>
           </div>
-          <div className="operational-topbar__status">
-            <StatusBadge label={model.dashboardStatus.label} tone={model.dashboardStatus.tone} statusKey={model.dashboardStatus.statusKey} />
-          </div>
-        </header>
+        </header> : null}
 
         <div className="operational-mobile-nav" aria-label="Mobile workflow navigation">
           {MOBILE_PRIMARY_NAV.map((item) => (
@@ -343,7 +339,6 @@ export default function OperationalWorkflowWorkspace({
             onOpenInsight={openInsight}
             selectedInsight={selectedInsight}
             onSelectInsight={setSelectedInsightId}
-            onAnalyzeHistoricalData={openOverviewFilePicker}
             onConnectLiveData={connectLiveData}
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
@@ -405,7 +400,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const analysisComplete = uiState.key === "analysisComplete" || uiState.key === "monitoringLive";
   const finding = canonicalFinding ?? liveOps?.canonicalFinding ?? null;
   const hasFinding = analysisComplete && Boolean(finding?.exists || liveOps?.findings?.length);
-  const primarySystem = firstText(roomContext?.primary, liveOps?.primaryWindow?.label, result?.system_name, "Primary Water System");
+  const primarySystem = firstText(roomContext?.primary, liveOps?.primaryWindow?.label, result?.system_name, "Primary Operational System");
   const baselineAvailable = analysisComplete && hasBaseline({ result, snapshot, relationshipRows, liveOps });
   const telemetryStatus = deriveTelemetryStatus({ result, snapshot, quality, liveOps, analysisComplete, telemetryAvailable, telemetryConnected });
   const dataQualityNotice = deriveDataQualityNotice({ quality, liveOps, analysisComplete });
@@ -424,7 +419,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const systemSummary = buildSystemSummary({ analysisComplete, identifiedSystemCount, telemetryConnected });
   const historyItems = buildHistoryItems({ liveOps, snapshot, result, insights, analysisComplete });
   const analysisHistory = Array.isArray(liveOps?.analysisHistory) ? liveOps.analysisHistory : [];
-  const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Water system");
+  const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Infrastructure");
   const facilityName = firstMeaningfulText(result?.facility_name, snapshot?.facility_name, liveOps?.facilityName, liveOps?.facility_name, currentSession?.facilityName, currentSession?.facility_name);
   const siteLabel = facilityName || "Operational Intelligence";
   const headerTitle = facilityName || (analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : "Command Center");
@@ -481,7 +476,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const relationshipChangeRows = buildRelationshipChangeRows(relationshipRows);
   const dataSourceRows = buildDataSourceRows({ sourceLabel, telemetryStatus, lastAnalysis, sourceRowCount, telemetryConnected });
   const commandCenterMessage = buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState });
-  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned operating fingerprint." : "Insights are generated automatically once an Operational Fingerprint has been established.";
+  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned operational baseline." : "Insights are generated automatically once a learned operational baseline has been established.";
 
   const resultTabsReady = analysisComplete;
 
@@ -595,7 +590,7 @@ function buildOrbRidgeActivity(insights) {
 
 function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetryConnected, insights }) {
   if (uiState.key === "analyzing") {
-    return { key: "analyzing", status: "learning", label: "Learning", tone: "learning", visualLabel: "Operational Fingerprint" };
+    return { key: "analyzing", status: "learning", label: "Learning", tone: "learning", visualLabel: "Operational Status" };
   }
   if (!analysisComplete) {
     return { key: "no-data", status: "awaiting", label: EMPTY_TELEMETRY_COPY.commandTitle, tone: "ready", visualLabel: "Operational Status" };
@@ -613,7 +608,7 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
       status,
       label: status === "critical" ? "Immediate Investigation Recommended" : status === "elevated" ? "Operational Changes Detected" : "Investigation Recommended",
       tone: "drift",
-      visualLabel: "Operational Fingerprint",
+      visualLabel: "Operational Status",
       hotspotCount,
       hotspots: buildOrbHotspots(insights, hotspotCount),
       ridgeActivity: buildOrbRidgeActivity(insights),
@@ -622,9 +617,9 @@ function deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetry
   }
 
   if (telemetryConnected) {
-    return { key: "monitoring", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Fingerprint" };
+    return { key: "monitoring", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Status" };
   }
-  return { key: "stable", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Fingerprint" };
+  return { key: "stable", status: "healthy", label: ANALYSIS_COMPLETE_STATUS.label, tone: "active", visualLabel: "Operational Status" };
 }
 
 function buildFingerprintRows({ fingerprintDrift, analysisComplete, baselineAvailable, behaviorState, relationshipRows }) {
@@ -665,8 +660,8 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, telemetryConnected }) 
 function buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS.detail;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.commandDetail;
-  if (insights.length) return "Highest-severity insight identifies equipment behavior that no longer matches the learned operating fingerprint.";
-  if (behaviorState === "Stable") return "Current operation remains aligned with the learned operating fingerprint.";
+  if (insights.length) return "Highest-severity finding identifies operational behavior that no longer matches the learned baseline.";
+  if (behaviorState === "Stable") return "Current operation remains aligned with the learned operational baseline.";
   return "Current operation is moving away from its established operating pattern.";
 }
 
@@ -866,7 +861,7 @@ function buildDashboardSummaryRows({ dashboardStatus, analysisComplete, identifi
       ["Connection State", "Not Connected"],
       ["Telemetry", "Waiting for telemetry"],
       ["Systems", SYSTEMS_PENDING.countLabel],
-      ["Operational Fingerprint", "Pending"],
+      ["Behavior baseline", "Pending"],
       ["Insights", "0 Insights"],
     ];
   }
@@ -894,10 +889,10 @@ function activityDetailForInsight(insight) {
   const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
   const relationships = insightRelationshipLabels(insight);
   if (relationships.length) return behaviorActivitySentence(relationships[0]);
-  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Hydraulic behavior no longer matches the learned fingerprint.";
-  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality control behavior deviated from the learned fingerprint.";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal response deviated from learned equipment behavior.";
-  return "Equipment behavior changed from its learned operating fingerprint.";
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Flow and pressure behavior no longer matches the learned baseline.";
+  if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Control behavior deviated from the learned baseline.";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal response deviated from learned operational behavior.";
+  return "Operational behavior changed from its learned baseline.";
 }
 
 function activityTitleForInsight(insight) {
@@ -937,8 +932,8 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     });
     if (timelineEntries.length) {
       return [{
-        id: "equipment-behavior-timeline",
-        title: "Equipment Behavior Timeline",
+        id: "operational-behavior-timeline",
+        title: "Operational Behavior Timeline",
         time: insights[0]?.detectedAt ?? lastAnalysis,
         detail: "Neraium translated the detected behavior change into the sequence an operator should review.",
         entries: timelineEntries.slice(0, 6),
@@ -948,9 +943,9 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
   return [
-    { id: "platform-initialized", icon: "✓", title: "Platform initialized", time: "Ready", detail: "Neraium Operational Intelligence is ready to build an operational fingerprint." },
+    { id: "platform-initialized", icon: "✓", title: "Platform initialized", time: "Ready", detail: "Neraium Operational Intelligence is ready to build a learned operational baseline." },
     { id: "waiting-for-telemetry", icon: "⏳", title: "Waiting for telemetry", time: "Not Connected", detail: "Connect historical or live telemetry when the facility source is ready." },
-    { id: "fingerprint-pending", icon: "○", title: "Operational Fingerprint pending", time: "Pending", detail: "The baseline will be created after the first successful telemetry analysis." },
+    { id: "baseline-pending", icon: "○", title: "Behavior baseline pending", time: "Pending", detail: "The baseline will be created after the first successful telemetry analysis." },
   ];
 }
 
@@ -1129,7 +1124,7 @@ function suggestedInvestigationSteps({ subsystem, relationshipLabels, insight })
   return [
     actionizeRecommendation(firstText(insight?.operatorCheck, insight?.recommendedAction, "Review the contributing signal trends.")),
     "Confirm current operating mode and setpoints match the intended sequence.",
-    "Compare equipment states against historical operation for the same load condition.",
+    "Compare operating states against historical operation for the same load condition.",
     "Review recent maintenance and operator logs for changes near the start of the shift.",
     "Monitor the next operating window to confirm whether the change persists.",
   ];
@@ -1814,7 +1809,7 @@ function whyNeraiumBelievesInsight(insight, relationships, evidenceLines) {
     return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed while the surrounding telemetry stayed comparable to its learned operating pattern. This combination most closely matches a real operational behavior change rather than an isolated reading.`;
   }
   if (evidenceLines[0]) {
-    return `Neraium generated this insight because the supporting evidence moved away from the learned operating fingerprint: ${evidenceLines[0]}`;
+    return `Neraium generated this insight because the supporting evidence moved away from the learned operational baseline: ${evidenceLines[0]}`;
   }
   return "";
 }
@@ -2564,14 +2559,14 @@ function formatEvidenceRange(range) {
   return [label, firstText(direct, comparison)].filter(Boolean).join(": ");
 }
 
-function Timeline({ items, state, status }) {
+function Timeline({ items }) {
   if (!items.length) return <EmptyOperationalState title="No history yet" body="Previous analyses and insight events will appear here over time." />;
   return (
     <ol className="operational-timeline">
       {items.map((item) => (
         <li key={item.id}>
           <div className="operational-timeline__meta">
-            <FacilityFingerprintMark className="facility-fingerprint-mark--timeline" state={state} status={status} label={item.title + " fingerprint"} />
+            <span className="operational-timeline__icon" aria-hidden="true" />
             <span>{item.time}</span>
           </div>
           <strong>{item.title}</strong>
@@ -3167,8 +3162,8 @@ function emergingRelationshipSentence(value, index = 0) {
 
 function behaviorActivitySentence(value, index = 0) {
   const endpoints = relationshipEndpointLabels(value, index);
-  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} stopped matching learned equipment behavior.`;
-  return `${relationshipSentenceLabel(value, index)} stopped matching learned equipment behavior.`;
+  if (endpoints.length >= 2) return `${endpoints[0]} and ${endpoints[1]} stopped matching learned operational behavior.`;
+  return `${relationshipSentenceLabel(value, index)} stopped matching learned operational behavior.`;
 }
 
 function insightTitleContext(insight) {
@@ -3609,7 +3604,7 @@ function hasBaseline({ result, snapshot, relationshipRows, liveOps }) {
 }
 
 function formatDomainLabel(value) {
-  return String(value ?? "Water system")
+  return String(value ?? "Infrastructure")
     .replaceAll("_", " ")
     .replaceAll("-", " ")
     .split(" ")

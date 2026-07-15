@@ -11,12 +11,12 @@ afterEach(() => {
 });
 
 describe("OperationalOrb", () => {
-  it("renders an awaiting Operational Fingerprint without hotspots", () => {
+  it("renders an awaiting operational baseline without hotspots", () => {
     render(h(OperationalOrb, { status: "awaiting" }));
 
     const orb = screen.getByTestId("operational-orb");
     expect(orb.getAttribute("data-status")).toBe("awaiting");
-    expect(orb.getAttribute("aria-label")).toContain("Awaiting Operational Fingerprint");
+    expect(orb.getAttribute("aria-label")).toContain("Awaiting Operational Baseline");
     expect(orb.querySelectorAll(".operational-orb__hotspot")).toHaveLength(0);
   });
 

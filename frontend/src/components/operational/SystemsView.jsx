@@ -1,5 +1,3 @@
-import FacilityFingerprintMark from "./FacilityFingerprintMark";
-
 export default function SystemsView({ model, helpers, onOpenInsight }) {
   const { DetailGrid, EmptyOperationalState, PanelHeader } = helpers;
   return (
@@ -12,7 +10,6 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
               <article className="system-summary-row system-summary-row--systems-view" key={system.id}>
                 <div>
                   <div className="system-summary-row__heading">
-                    <FacilityFingerprintMark className="facility-fingerprint-mark--card" state={model.orb} status={model.orb.status} label={system.name + " operational fingerprint"} />
                     <strong>{system.name}</strong>
                   </div>
                   {system.placeholder ? <small>Expected resort domain example, not a detected system</small> : null}

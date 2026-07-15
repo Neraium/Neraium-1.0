@@ -46,23 +46,15 @@ function confidenceRank(insight) {
 
 function dashboardInsightTitle(insight, relationships, fallback) {
   const supplied = String(insight?.summary || insight?.rawSummary || fallback || "").trim();
-  if (supplied && !/relationship\s+(changed|shifted)|behavior\s+changed/i.test(supplied)) return supplied;
+  if (supplied && !/relationships?\s+(changed|shifted)|behavior\s+changed/i.test(supplied)) return supplied;
   const relationshipContext = (relationships ?? []).join(" ").toLowerCase();
   const context = [insight?.system, insight?.rawSystemName, insight?.title, insight?.summary, relationshipContext].join(" ").toLowerCase();
-  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Conductivity relationship changed";
-  if (/(filter|differential pressure|dp)/.test(relationshipContext)) return "Filter differential pressure relationship changed";
-  if (/pump|vfd|motor|power/.test(context)) return "Pump power relationship changed";
+  if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Control relationship changed";
+  if (/(filter|differential pressure|dp)/.test(relationshipContext)) return "Resistance relationship changed";
+  if (/pump|vfd|motor|power/.test(context)) return "Power relationship changed";
   if (/(flow|pressure|hydraulic)/.test(relationshipContext)) return "Flow and pressure relationship changed";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat transfer relationship changed";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal relationship changed";
   return String(fallback ?? "Operating behavior changed").replace(/Relationship Changed/i, "relationship changed");
-}
-
-function cleanSubsystemName(value) {
-  return String(value || "Operational System")
-    .replace(/\s+\/\s+/g, " & ")
-    .replace(/\bsubsystem\b/gi, "system")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function sanitizeId(value, fallback = "item") {
@@ -84,23 +76,21 @@ function rankedInsights(insights) {
 function operationalStatus(model, queue) {
   if (model.uiState?.key === "analyzing") {
     return {
-      label: "Analysis in Progress",
+      label: "Analyzing Operational Behavior",
       tone: "loading",
       orbStatus: "learning",
-      stage: "Learning operational relationships",
-      explanation: model.commandCenterMessage || "Neraium is comparing current relationships against historical operating behavior.",
-      action: null,
+      stage: "Evidence  Relationships  Systems  Baseline",
+      explanation: "Neraium is comparing facility behavior against learned operational relationships.",
     };
   }
 
   if (!model.analysisComplete) {
     return {
-      label: model.commandCenterTitle || "Awaiting Initial Baseline",
+      label: model.commandCenterTitle || "Baseline Needed",
       tone: "neutral",
       orbStatus: "awaiting",
-      stage: model.uiState?.sourceStatusLabel || "Waiting for telemetry",
-      explanation: model.commandCenterMessage || "The facility has not yet established an Operational Fingerprint.",
-      action: "Analyze Historical Data",
+      stage: null,
+      explanation: model.commandCenterMessage || "Connect telemetry or analyze historical data to establish the learned operational baseline.",
     };
   }
 
@@ -113,12 +103,11 @@ function operationalStatus(model, queue) {
 
   if (criticalCount > 0 || highCount > 1) {
     return {
-      label: "Immediate Investigation",
+      label: "Critical",
       tone: "critical",
       orbStatus: "critical",
-      stage: "Immediate investigation",
+      stage: null,
       explanation,
-      action: "Investigate Priority Issue",
     };
   }
 
@@ -127,9 +116,8 @@ function operationalStatus(model, queue) {
       label: "Investigation Recommended",
       tone: "warning",
       orbStatus: "warning",
-      stage: "Investigation recommended",
+      stage: null,
       explanation,
-      action: "Investigate Priority Issue",
     };
   }
 
@@ -137,62 +125,38 @@ function operationalStatus(model, queue) {
     label: "Healthy",
     tone: "healthy",
     orbStatus: "healthy",
-    stage: "Healthy",
+    stage: null,
     explanation,
-    action: null,
   };
 }
 
 function statusExplanationForInsight(insight) {
-  const system = cleanSubsystemName(insight?.system);
   const relationshipCount = Number(insight?.changedRelationshipCount ?? insight?.affectedRelationships?.length ?? insight?.contributingRelationships?.length ?? 0);
-  if (relationshipCount > 1) return `${system} operating relationships changed.`;
-  if (relationshipCount === 1) return `${system} operating relationship changed.`;
-  return `${system} operating behavior changed.`;
+  if (relationshipCount > 1) return "Operational relationships no longer match the learned baseline.";
+  if (relationshipCount === 1) return "A key operational relationship no longer matches the learned baseline.";
+  return "Historical operating behavior changed.";
 }
 
-function focusQueue() {
-  if (typeof document === "undefined") return;
-  const first = document.querySelector("[data-priority-item='true']");
-  if (first instanceof HTMLElement) first.focus();
-}
-
-function OperationalStatusSection({ model, status, selectedInsight, onAnalyzeHistoricalData, onSelectInsight }) {
-  function handlePrimaryAction() {
-    if (!model.analysisComplete) {
-      onAnalyzeHistoricalData?.();
-      return;
-    }
-    if (selectedInsight?.id) onSelectInsight?.(selectedInsight.id);
-    focusQueue();
-  }
-
+function OperationalStatusSection({ model, status }) {
   return (
     <section className={`command-section command-section--status command-section--${status.tone}`} aria-labelledby="operational-status-heading">
-      <div className="operational-status-orb-wrap">
-        <OperationalOrb
-          minimal
-          hideVisualLabel
-          state={{ ...model.orb, label: status.label, visualLabel: "Operational Status" }}
-          status={status.orbStatus}
-        />
-        <p className="operational-status-stage">{status.stage}</p>
-      </div>
-      <div className="operational-status-copy">
-        <h2 id="operational-status-heading">Operational Status</h2>
-        <p className="operational-status-value">{status.label}</p>
-        <p>{status.explanation}</p>
-        {status.action ? (
-          <button type="button" className="command-button" onClick={handlePrimaryAction} disabled={model.analyzeDisabled}>{status.action}</button>
-        ) : null}
-      </div>
+      <h2 id="operational-status-heading">Operational Status</h2>
+      <OperationalOrb
+        minimal
+        hideVisualLabel
+        state={{ ...model.orb, label: status.label, visualLabel: "Operational Status" }}
+        status={status.orbStatus}
+      />
+      {status.stage ? <p className="operational-status-stage">{status.stage}</p> : null}
+      <p className="operational-status-value">{status.label}</p>
+      <p className="operational-status-explanation">{status.explanation}</p>
     </section>
   );
 }
 
-function PriorityInvestigationQueue({ insights, selectedInsight, onSelectInsight, helpers }) {
+function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpers }) {
   const queueRef = useRef(null);
-  const { formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels } = helpers;
+  const { formatConfidenceDisplay, formatInsightTitle, insightRelationshipLabels, operatorSummaryBriefing } = helpers;
 
   function handleKeyDown(event) {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -212,66 +176,56 @@ function PriorityInvestigationQueue({ insights, selectedInsight, onSelectInsight
 
   if (!insights.length) {
     return (
-      <section className="command-section command-section--queue" aria-labelledby="priority-queue-heading">
+      <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
         <div className="command-section__header">
-          <h2 id="priority-queue-heading">Priority Investigation Queue</h2>
-          <p>No Active Investigations</p>
+          <h2 id="operational-findings-heading">Operational Findings</h2>
+          <p>No active findings.</p>
         </div>
-        <p className="priority-queue-empty">No priority investigations yet.</p>
+        <p className="operational-findings-empty">No active operational findings.</p>
       </section>
     );
   }
 
+  const selectedDetailId = selectedInsight ? `selected-investigation-${sanitizeId(selectedInsight.id)}` : undefined;
+
   return (
-    <section className="command-section command-section--queue" aria-labelledby="priority-queue-heading">
+    <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
       <div className="command-section__header">
-        <h2 id="priority-queue-heading">Priority Investigation Queue</h2>
-        <p>Highest priority first.</p>
+        <h2 id="operational-findings-heading">Operational Findings</h2>
+        <p>Highest severity first.</p>
       </div>
-      <div className="priority-queue" role="list" ref={queueRef} onKeyDown={handleKeyDown}>
+      <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>
         {insights.map((insight, index) => {
           const selected = selectedInsight?.id === insight.id;
           const relationships = insightRelationshipLabels(insight);
           const title = dashboardInsightTitle(insight, relationships, formatInsightTitle(insight));
           const confidence = confidencePercent(insight) || formatConfidenceDisplay(insight.confidence, insight.confidenceScore) || confidenceFallback(insight.severity);
           const detailId = `selected-investigation-${sanitizeId(insight.id, index + 1)}`;
+          const summary = operatorSummaryBriefing(insight, relationships)[0] || statusExplanationForInsight(insight);
           return (
-            <div className="priority-queue-row-wrap" role="listitem" key={insight.id || index}>
+            <div className="operational-finding-row-wrap" role="listitem" key={insight.id || index}>
               <button
                 type="button"
-                className={selected ? "priority-queue-row is-selected" : "priority-queue-row"}
+                className={selected ? "operational-finding-row is-selected" : "operational-finding-row"}
                 data-priority-item="true"
                 aria-expanded={selected}
                 aria-controls={detailId}
                 onClick={() => onSelectInsight?.(insight.id)}
               >
-                <span className="priority-queue-row__rank">{index + 1}</span>
-                <span className="priority-queue-row__system">{cleanSubsystemName(insight.system)}</span>
-                <span className="priority-queue-row__title">{title}</span>
-                <span className={`priority-queue-row__severity priority-queue-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span>
-                <span className="priority-queue-row__confidence">{confidence}</span>
+                <span className="operational-finding-row__title">{title}</span>
+                <span className={`operational-finding-row__severity operational-finding-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span>
+                <span className="operational-finding-row__confidence">{confidence}</span>
+                <span className="operational-finding-row__summary">{summary}</span>
               </button>
             </div>
           );
         })}
       </div>
-    </section>
-  );
-}
-
-function SelectedInvestigation({ insight }) {
-  const detailId = insight ? `selected-investigation-${sanitizeId(insight.id)}` : undefined;
-  return (
-    <section className="command-section command-section--selected-investigation" id={detailId} aria-labelledby="selected-investigation-heading">
-      <div className="command-section__header">
-        <h2 id="selected-investigation-heading">Selected Investigation</h2>
-        <p>Where to begin.</p>
-      </div>
-      {insight ? (
-        <OperatorInsightDetail insight={insight} inline focusMode />
-      ) : (
-        <p className="selected-investigation-empty">Select a priority item to review the recommended investigation path.</p>
-      )}
+      {selectedInsight ? (
+        <div className="selected-investigation-panel" id={selectedDetailId}>
+          <OperatorInsightDetail insight={selectedInsight} inline focusMode />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -280,7 +234,7 @@ function SystemOverview({ systems, model }) {
   return (
     <section className="command-section command-section--systems" aria-labelledby="system-overview-heading">
       <div className="command-section__header">
-        <h2 id="system-overview-heading">System Overview</h2>
+        <h2 id="system-overview-heading">Supporting Systems</h2>
         <p>Supporting system information.</p>
       </div>
       {systems.length ? (
@@ -294,7 +248,7 @@ function SystemOverview({ systems, model }) {
           ))}
         </div>
       ) : (
-        <p className="priority-queue-empty">{model.systemsSectionTitle}: {model.systemsSectionSubtitle}</p>
+        <p className="operational-findings-empty">{model.systemsSectionTitle}: {model.systemsSectionSubtitle}</p>
       )}
     </section>
   );
@@ -305,7 +259,7 @@ function AdvancedDashboardSection({ model }) {
   return (
     <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
       <div className="command-section__header">
-        <h2 id="dashboard-advanced-heading">Advanced</h2>
+        <h2 id="dashboard-advanced-heading">Advanced Information</h2>
         <p>Historical analysis, diagnostics, upload details, and developer information.</p>
       </div>
       <div className="dashboard-advanced-stack">
@@ -349,7 +303,7 @@ function DetailRows({ rows = [], technical = false }) {
   );
 }
 
-export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onAnalyzeHistoricalData }) {
+export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
   const activeInsight = selectedInsight && queue.some((item) => item.id === selectedInsight.id)
     ? selectedInsight
@@ -359,15 +313,8 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
 
   return (
     <div className="operational-command-center" data-testid="operational-command-center">
-      <OperationalStatusSection
-        model={model}
-        status={status}
-        selectedInsight={activeInsight}
-        onAnalyzeHistoricalData={onAnalyzeHistoricalData}
-        onSelectInsight={onSelectInsight}
-      />
-      <PriorityInvestigationQueue insights={queue} selectedInsight={activeInsight} onSelectInsight={onSelectInsight} helpers={helpers} />
-      <SelectedInvestigation insight={activeInsight} />
+      <OperationalStatusSection model={model} status={status} />
+      <OperationalFindings insights={queue} selectedInsight={activeInsight} onSelectInsight={onSelectInsight} helpers={helpers} />
       <SystemOverview systems={systems} model={model} />
       <AdvancedDashboardSection model={model} />
     </div>

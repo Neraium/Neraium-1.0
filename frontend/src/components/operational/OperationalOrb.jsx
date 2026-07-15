@@ -2,33 +2,33 @@ import { useId } from "react";
 
 const ORB_STATUS = {
   awaiting: {
-    label: "Awaiting Operational Fingerprint",
+    label: "Awaiting Operational Baseline",
     visualLabel: "Operational Status",
     particleCount: 0,
   },
   learning: {
-    label: "Building Operational Fingerprint",
-    visualLabel: "Operational Fingerprint",
+    label: "Analyzing Operational Behavior",
+    visualLabel: "Operational Status",
     particleCount: 16,
   },
   healthy: {
-    label: "Operational Fingerprint Active",
-    visualLabel: "Operational Fingerprint",
+    label: "Healthy",
+    visualLabel: "Operational Status",
     particleCount: 7,
   },
   warning: {
     label: "Investigation Recommended",
-    visualLabel: "Operational Fingerprint",
+    visualLabel: "Operational Status",
     particleCount: 10,
   },
   elevated: {
     label: "Operational Changes Detected",
-    visualLabel: "Operational Fingerprint",
+    visualLabel: "Operational Status",
     particleCount: 12,
   },
   critical: {
-    label: "Immediate Investigation Recommended",
-    visualLabel: "Operational Fingerprint",
+    label: "Critical",
+    visualLabel: "Operational Status",
     particleCount: 14,
   },
 };

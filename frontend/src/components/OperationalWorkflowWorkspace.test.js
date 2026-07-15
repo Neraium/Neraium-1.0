@@ -123,21 +123,20 @@ afterEach(() => {
 });
 
 describe("OperationalWorkflowWorkspace system-first architecture", () => {
-  it("opens to a focused Command Center with status, queue, and supporting sections", () => {
+  it("opens to a focused Command Center with status, findings, and supporting sections", () => {
     renderWorkspace();
 
     expect(screen.getByText("Awaiting Initial Baseline")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Operational Status" })).toBeTruthy();
-    expect(screen.getByText("Connect telemetry or analyze historical data to establish the facility's Operational Fingerprint.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
-    expect(screen.getByText("No priority investigations yet.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
-    expect(screen.getByText("Select a priority item to review the recommended investigation path.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "System Overview" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Advanced" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze Historical Data" })).toBeTruthy();
+    expect(screen.getByText("The facility has not yet established a learned operational baseline.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
+    expect(screen.getByText("No active operational findings.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Advanced Information" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Analyze Historical Data" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(screen.queryByLabelText("Systems requiring attention")).toBeNull();
     expect(screen.queryByRole("button", { name: "Connect Live Telemetry" })).toBeNull();
@@ -145,13 +144,14 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByRole("heading", { name: /Import Historical CSV/i })).toBeNull();
   });
 
-  it("Analyze Historical Data opens the existing hidden file picker path", () => {
+  it("Data Sources analysis action opens the existing hidden file picker path", () => {
     const onCsvSelected = vi.fn();
     renderWorkspace({ onCsvSelected });
 
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: "Analyze Historical Data" }));
+    clickNav("Data Sources");
+    fireEvent.click(screen.getByRole("button", { name: /Import Historical CSV/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
@@ -273,18 +273,19 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     const priorityButton = screen.getAllByRole("button").find((button) => button.dataset.priorityItem === "true");
-    expect(priorityButton.textContent).toContain("Pump relationships changed");
+    expect(priorityButton.textContent).toMatch(/relationship changed|behavior changed/i);
     expect(priorityButton.getAttribute("aria-expanded")).toBe("true");
     expect(priorityButton.getAttribute("aria-controls")).toMatch(/^selected-investigation-/);
 
-    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
-    expect(screen.getByText("What Changed")).toBeTruthy();
-    expect(screen.getByText("Expected Operational Impact")).toBeTruthy();
-    expect(screen.getAllByText(/This relationship change is consistent with conditions such as increasing hydraulic resistance/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Why Neraium Believes This")).toBeTruthy();
+    expect(screen.getByText("Operational Impact")).toBeTruthy();
+    expect(screen.getAllByText(/degraded operating performance/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Why Neraium surfaced it")).toBeTruthy();
+    expect(screen.getByText("Recommended Investigation")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
+    expect(screen.queryByText("What Changed")).toBeNull();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
@@ -301,10 +302,10 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
 
-    expect(screen.getByRole("heading", { name: "Priority Investigation Queue" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Selected Investigation" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
-    expect(screen.getByText("What Changed")).toBeTruthy();
+    expect(screen.getByText("Operational Impact")).toBeTruthy();
     expect(screen.getByText("Evidence")).toBeTruthy();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
@@ -317,8 +318,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Priority Investigation Queue")).toBeTruthy();
-    expect(screen.getByText("Selected Investigation")).toBeTruthy();
+    expect(screen.getByText("Operational Findings")).toBeTruthy();
+    expect(screen.queryByText("Selected Investigation")).toBeNull();
 
     clickNav("Systems");
     expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
@@ -328,8 +329,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
     expect(screen.getByText("What Changed")).toBeTruthy();
 
-    clickNav("Fingerprint");
-    expect(screen.getAllByRole("heading", { name: "Operational Fingerprint" }).length).toBeGreaterThan(0);
+    clickNav("Behavior Baseline");
+    expect(screen.getAllByRole("heading", { name: "Behavior Baseline" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Behavior Windows")).toBeTruthy();
     expect(screen.getByText("System Relationship Changes")).toBeTruthy();
 
@@ -481,7 +482,7 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(workspaceText).toContain("74%");
   });
 
-  it("lists each insight subsystem in the priority queue and system overview", () => {
+  it("lists each insight subsystem in operational findings and supporting systems", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: bugRegressionAnalysis() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
@@ -489,8 +490,8 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     });
 
     const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
-    expect(screen.getByText("Priority Investigation Queue")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "System Overview" })).toBeTruthy();
+    expect(screen.getByText("Operational Findings")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
     expect(workspaceText).toContain("Flow & Pressure");
     expect(workspaceText).toContain("Disinfection");
   });

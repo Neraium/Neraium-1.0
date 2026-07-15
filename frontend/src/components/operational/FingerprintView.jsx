@@ -1,13 +1,13 @@
-import FacilityFingerprintMark from "./FacilityFingerprintMark";
+import OperationalOrb from "./OperationalOrb";
 
 export default function FingerprintView({ model, helpers }) {
   const { DetailGrid, EmptyOperationalState, PanelHeader, QualityList } = helpers;
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="Operational Fingerprint">
+      <section className="operational-panel operational-panel--wide" aria-label="Behavior Baseline">
         <div className="operational-view-identity operational-view-identity--fingerprint">
-          <PanelHeader eyebrow="Operational Fingerprint" title="Operational Fingerprint" subtitle="A learned baseline of how operational systems normally behave together." />
-          <FacilityFingerprintMark state={model.orb} status={model.orb.status} label="Facility operational identity" />
+          <PanelHeader eyebrow="Behavior Baseline" title="Behavior Baseline" subtitle="A learned baseline of how operational systems normally behave together." />
+          <OperationalOrb state={model.orb} status={model.orb.status} minimal hideVisualLabel />
         </div>
         <div className={`fingerprint-status fingerprint-status--${model.fingerprintDrift.tone}`}>
           <strong>{model.fingerprintStatusLabel}</strong>
@@ -29,7 +29,7 @@ export default function FingerprintView({ model, helpers }) {
         {model.relationshipChangeRows.length ? (
           <QualityList title="Changed relationships" items={model.relationshipChangeRows} empty="" />
         ) : (
-          <EmptyOperationalState title="No relationship changes available" body={model.analysisComplete ? "No material relationship drift was reported." : "Relationship changes will appear after an Operational Fingerprint is established."} />
+          <EmptyOperationalState title="No relationship changes available" body={model.analysisComplete ? "No material relationship drift was reported." : "Relationship changes will appear after a learned operational baseline is established."} />
         )}
       </section>
     </div>

@@ -243,7 +243,10 @@ function buildOperationalMemory(insight) {
 function cleanOperationalImpact(value) {
   return text(value)
     .replace(/^Operational impact:\s*/i, "")
-    .replace(/^If this persists,\s*/i, "If nothing is done, ");
+    .replace(/^If this persists,\s*/i, "If nothing is done, ")
+    .replace(/\bequipment degradation\b/gi, "degraded operating performance")
+    .replace(/\brecent maintenance\b/gi, "recent operating changes")
+    .replace(/\bmaintenance\b/gi, "operating changes");
 }
 
 function splitOperationalImpacts(values) {
@@ -258,14 +261,13 @@ function defaultOperationalImpacts(causes, relationships) {
   const relationshipText = relationships.join(" ").toLowerCase();
   if (/filter|dp|pressure|pump|flow|hydraulic/.test(`${causeText} ${relationshipText}`)) {
     return [
-      "Increased energy consumption",
-      "Reduced filtration efficiency",
-      "Elevated cavitation risk",
-      "Potential accelerated pump wear",
+      "Operating behavior moved away from the learned baseline",
+      "Efficiency or capacity may be degrading under comparable load",
+      "Downstream control assumptions may be less reliable",
     ];
   }
   return [
-    "Continued movement away from the learned operating fingerprint",
+    "Continued movement away from the learned operational baseline",
     "Reduced confidence in downstream operating assumptions",
     "Higher likelihood of manual investigation on the next operating cycle",
   ];
@@ -311,7 +313,7 @@ function whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
   }
   if (evidenceLine) {
-    return `Neraium generated this insight because the supporting evidence changed from the learned operating fingerprint: ${evidenceLine}`;
+    return `Neraium generated this insight because the supporting evidence changed from the learned operational baseline: ${evidenceLine}`;
   }
   return "";
 }
@@ -397,6 +399,11 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
     insight?.recommendedCheck,
     insight?.recommended_check
   ).flatMap((item) => text(item).split(/\n|;|•/g)).map((item) => item.trim())).slice(0, 6);
+  const investigationActions = actions.length ? actions : [
+    "Review the contributing signal trends for the selected operating window.",
+    "Compare the current operating mode against comparable historical operation.",
+    "Confirm whether the relationship change persists in the next operating cycle.",
+  ];
 
   const suppliedCauses = unique(toList(
     insight?.likelyCauses,
@@ -407,9 +414,9 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
     insight?.likely_causes
   ).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
   const causes = suppliedCauses.length ? suppliedCauses : [
-    "Filter fouling",
-    "Valve position changed",
-    "Pump efficiency degradation",
+    "Operating mode changed",
+    "Control relationship shifted",
+    "Sensor or telemetry drift",
     "Instrument drift",
   ];
 
@@ -433,8 +440,49 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships);
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
+  const advancedDiagnostics = evidence.length || insight?.id || insight?.metricName ? (
+    <details className="insight-evidence-drawer">
+      <summary>Advanced Diagnostics <span className="sr-only">Technical Details</span></summary>
+      <div className="insight-evidence-drawer__body">
+        <dl className="operational-detail-grid operational-detail-grid--technical">
+          {insight?.id ? <div><dt>Insight identifier</dt><dd><code>{insight.id}</code></dd></div> : null}
+          {insight?.metricName ? <div><dt>Signal identifier</dt><dd><code>{text(insight.metricName)}</code></dd></div> : null}
+          {insight?.confidenceRationale ? <div><dt>Diagnostic metadata</dt><dd>{text(insight.confidenceRationale)}</dd></div> : null}
+        </dl>
 
-  const body = (
+        {evidence.map((item, index) => {
+          const rows = usefulDiagnosticEntries(item);
+          if (!rows.length) return null;
+          return (
+            <div className="insight-evidence-item" key={item?.evidence_id ?? index}>
+              <dl className="operational-detail-grid operational-detail-grid--technical">
+                {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  ) : null;
+  const focusRationale = whyGenerated ? [whyGenerated] : whatChanged;
+
+  const body = focusMode ? (
+    <>
+      {expectedImpacts.length ? <Section title="Operational Impact"><BulletList items={expectedImpacts} /></Section> : null}
+
+      {focusRationale.length ? (
+        <Section title="Why Neraium surfaced it">
+          {focusRationale.map((line) => <p key={line}>{line}</p>)}
+        </Section>
+      ) : null}
+
+      <Section title="Recommended Investigation"><BulletList items={investigationActions} /></Section>
+
+      {evidenceLines.length ? <Section title="Evidence"><BulletList items={evidenceLines} /></Section> : null}
+
+      {advancedDiagnostics}
+    </>
+  ) : (
     <>
       <div className="insight-briefing__header">
         <span className="section-token">{insight?.system || "Operational Insight"}</span>
@@ -489,30 +537,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </Section>
       ) : null}
 
-      {evidence.length || insight?.id || insight?.metricName ? (
-        <details className="insight-evidence-drawer">
-          <summary>Advanced Diagnostics <span className="sr-only">Technical Details</span></summary>
-          <div className="insight-evidence-drawer__body">
-            <dl className="operational-detail-grid operational-detail-grid--technical">
-              {insight?.id ? <div><dt>Insight identifier</dt><dd><code>{insight.id}</code></dd></div> : null}
-              {insight?.metricName ? <div><dt>Signal identifier</dt><dd><code>{text(insight.metricName)}</code></dd></div> : null}
-              {insight?.confidenceRationale ? <div><dt>Diagnostic metadata</dt><dd>{text(insight.confidenceRationale)}</dd></div> : null}
-            </dl>
-
-            {evidence.map((item, index) => {
-              const rows = usefulDiagnosticEntries(item);
-              if (!rows.length) return null;
-              return (
-                <div className="insight-evidence-item" key={item?.evidence_id ?? index}>
-                  <dl className="operational-detail-grid operational-detail-grid--technical">
-                    {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}
-                  </dl>
-                </div>
-              );
-            })}
-          </div>
-        </details>
-      ) : null}
+      {advancedDiagnostics}
     </>
   );
 
