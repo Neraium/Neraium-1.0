@@ -203,44 +203,43 @@ const FINGERPRINT_RENDERER_PARTICLES = {
   safe: 0,
 };
 
-const FINGERPRINT_RIDGES = [
-  { phase: 0, detail: "core", path: "M80 96C80 82 90 72 104 72C119 72 130 84 130 99C130 118 113 132 91 132C66 132 48 115 48 92C48 64 70 44 101 44C127 44 148 58 156 80" },
-  { phase: 0, detail: "core", path: "M80 96C80 106 73 113 63 113C52 113 43 104 43 92C43 73 59 58 80 58C105 58 125 77 125 101C125 130 101 151 70 151" },
-  { phase: 1, detail: "branch", path: "M62 83C72 70 94 68 108 82C122 96 119 118 102 130" },
-  { phase: 1, detail: "branch", path: "M58 126C73 139 100 138 117 121C134 104 134 76 117 59" },
-  { phase: 1, detail: "branch", path: "M54 66C73 46 108 47 130 70C153 94 150 133 122 158" },
-  { phase: 2, detail: "outer", path: "M38 132C23 103 31 67 58 45C86 21 130 27 154 58C179 91 171 139 137 168" },
-  { phase: 2, detail: "outer", path: "M33 154C61 180 112 178 145 144C177 110 178 57 147 26" },
-  { phase: 2, detail: "outer", path: "M47 39C72 14 119 16 150 43" },
-  { phase: 3, detail: "fine", path: "M69 91C77 83 92 83 101 93C111 104 103 119 88 122" },
-  { phase: 3, detail: "fine", path: "M61 101C65 121 87 134 109 126" },
-  { phase: 3, detail: "fine", path: "M76 151C92 156 112 151 126 138" },
-  { phase: 3, detail: "fine", path: "M48 116C41 92 50 69 69 57" },
+const BASELINE_NETWORK_NODES = [
+  { x: 80, y: 94, r: 5.2, role: "core" },
+  { x: 50, y: 70, r: 3.3, role: "system" },
+  { x: 109, y: 65, r: 3.5, role: "system" },
+  { x: 119, y: 112, r: 3.1, role: "system" },
+  { x: 65, y: 132, r: 3.4, role: "system" },
+  { x: 35, y: 107, r: 2.6, role: "signal" },
+  { x: 76, y: 47, r: 2.5, role: "signal" },
+  { x: 137, y: 82, r: 2.4, role: "signal" },
+  { x: 101, y: 145, r: 2.5, role: "signal" },
 ];
 
-
-const FINGERPRINT_EVIDENCE_POINTS = [
-  { x: 24, y: 52 }, { x: 42, y: 34 }, { x: 68, y: 24 }, { x: 98, y: 25 },
-  { x: 124, y: 38 }, { x: 142, y: 62 }, { x: 145, y: 95 }, { x: 132, y: 125 },
-  { x: 108, y: 150 }, { x: 76, y: 158 }, { x: 48, y: 143 }, { x: 28, y: 112 },
+const BASELINE_NETWORK_LINKS = [
+  { phase: 0, path: "M35 107L50 70L76 47" },
+  { phase: 0, path: "M76 47L109 65L137 82" },
+  { phase: 1, path: "M50 70Q66 77 80 94" },
+  { phase: 1, path: "M109 65Q95 78 80 94" },
+  { phase: 1, path: "M80 94Q101 95 119 112" },
+  { phase: 2, path: "M80 94Q74 113 65 132" },
+  { phase: 2, path: "M65 132Q83 142 101 145" },
+  { phase: 2, path: "M119 112Q113 132 101 145" },
 ];
 
-const FINGERPRINT_RELATIONSHIP_LINKS = [
-  "M42 34C61 45 70 58 80 96",
-  "M98 25C91 47 86 67 80 96",
-  "M142 62C124 70 107 78 80 96",
-  "M132 125C111 119 95 110 80 96",
-  "M76 158C78 136 79 116 80 96",
-  "M28 112C48 108 65 103 80 96",
-  "M24 52C43 68 58 82 80 96",
-  "M124 38C110 60 98 78 80 96",
+const BASELINE_ORBITS = [
+  { phase: 1, path: "M37 93A44 31 0 1 0 125 93A44 31 0 1 0 37 93" },
+  { phase: 2, path: "M54 50A35 55 18 1 0 108 139A35 55 18 1 0 54 50" },
+  { phase: 3, path: "M30 72A58 58 -18 1 0 130 120A58 58 -18 1 0 30 72" },
 ];
 
-const FINGERPRINT_CLUSTER_PATHS = [
-  "M45 63C62 43 99 41 120 62C142 84 136 124 108 142C78 160 43 139 39 103C37 86 38 75 45 63Z",
-  "M60 82C72 67 98 68 111 84C124 101 116 127 93 135C70 143 51 126 53 104C54 94 55 88 60 82Z",
-  "M66 92C75 82 91 82 101 94C109 105 102 122 86 126C71 129 60 116 61 103C62 99 63 95 66 92Z",
-];
+function networkProgress({ displayPercent, phase, stageIndex, complete }) {
+  if (complete || stageIndex > phase) return 100;
+  if (stageIndex < phase) return 0;
+  const phaseStartPercent = [0, 35, 62, 84][phase] ?? 0;
+  const phaseEndPercent = [35, 62, 84, 99][phase] ?? 100;
+  const withinPhase = ((displayPercent - phaseStartPercent) / Math.max(1, phaseEndPercent - phaseStartPercent)) * 100;
+  return Math.max(12, Math.min(100, Math.round(withinPhase)));
+}
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "complete") {
@@ -470,55 +469,43 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       </div>
       <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
         <defs>
-          <linearGradient id="upload-fingerprint-ridge" x1="42" y1="24" x2="124" y2="170" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(226, 232, 236, 0.88)" />
-            <stop offset="0.58" stopColor="rgba(113, 128, 139, 0.72)" />
-            <stop offset="1" stopColor="rgba(29, 216, 196, 0.74)" />
+          <linearGradient id="upload-baseline-link" x1="38" y1="42" x2="126" y2="148" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(226, 232, 236, 0.82)" />
+            <stop offset="0.58" stopColor="rgba(113, 128, 139, 0.7)" />
+            <stop offset="1" stopColor="rgba(29, 216, 196, 0.78)" />
           </linearGradient>
-          <radialGradient id="upload-fingerprint-core" cx="50%" cy="52%" r="58%">
+          <radialGradient id="upload-fingerprint-core" cx="50%" cy="50%" r="58%">
             <stop offset="0" stopColor="rgba(92, 107, 118, 0.18)" />
             <stop offset="0.7" stopColor="rgba(29, 216, 196, 0.05)" />
             <stop offset="1" stopColor="rgba(29, 216, 196, 0)" />
           </radialGradient>
+          <filter id="upload-baseline-node-glow" x="-200%" y="-200%" width="500%" height="500%">
+            <feGaussianBlur stdDeviation="2.4" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
         </defs>
-        <path className="upload-fingerprint-build__field" d="M80 25C112 21 144 38 156 68C173 101 162 143 132 166C102 188 58 179 35 149C12 119 19 74 45 48C54 39 66 29 80 25Z" />
-        <path className="upload-fingerprint-build__outline" d="M80 25C112 21 144 38 156 68C173 101 162 143 132 166C102 188 58 179 35 149C12 119 19 74 45 48C54 39 66 29 80 25Z" />
-        <g className="upload-fingerprint-build__relationship-links">
-          {FINGERPRINT_RELATIONSHIP_LINKS.map((path, index) => (
-            <path key={path} d={path} pathLength="100" style={{ "--link-index": index }} />
-          ))}
-        </g>
-        <g className="upload-fingerprint-build__evidence-points">
-          {FINGERPRINT_EVIDENCE_POINTS.map((point, index) => (
-            <circle key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="2.8" style={{ "--point-index": index }} />
-          ))}
-        </g>
-        <g className="upload-fingerprint-build__clusters">
-          {FINGERPRINT_CLUSTER_PATHS.map((path, index) => (
-            <path key={path} d={path} style={{ "--cluster-index": index }} />
-          ))}
-        </g>
-        <path className="upload-fingerprint-build__baseline-lock" d="M50 151C64 162 96 162 110 151" pathLength="100" />
-        <g className="upload-fingerprint-build__ridges">
-          {FINGERPRINT_RIDGES.map((ridge, index) => {
-            const fill = ridgeProgress({ displayPercent, ridge, stageIndex, complete });
-            return (
-              <path
-                key={ridge.path}
-                className="upload-fingerprint-build__ridge"
-                d={ridge.path}
-                data-ridge-phase={ridge.phase}
-                data-ridge-detail={ridge.detail}
-                pathLength="100"
-                style={{
-                  "--ridge-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill,
-                  "--ridge-opacity": fill > 0 ? 0.16 + (fill / 100) * 0.84 : 0.03,
-                  "--ridge-delay": compatibilityMode ? "0ms" : (index * 38) + "ms",
-                }}
-              />
-            );
+        <circle className="upload-fingerprint-build__field" cx="80" cy="95" r="69" />
+        <g className="upload-fingerprint-build__orbits">
+          {BASELINE_ORBITS.map((orbit, index) => {
+            const fill = networkProgress({ displayPercent, phase: orbit.phase, stageIndex, complete });
+            return <path key={orbit.path} d={orbit.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--orbit-index": index }} />;
           })}
         </g>
+        <g className="upload-fingerprint-build__relationship-links">
+          {BASELINE_NETWORK_LINKS.map((link, index) => {
+            const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
+            return <path key={link.path} d={link.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--link-index": index }} />;
+          })}
+        </g>
+        <g className="upload-fingerprint-build__evidence-points" filter="url(#upload-baseline-node-glow)">
+          {BASELINE_NETWORK_NODES.map((node, index) => (
+            <g key={`${node.x}-${node.y}`} className={`upload-fingerprint-build__network-node upload-fingerprint-build__network-node--${node.role}`} style={{ "--point-index": index }}>
+              <circle className="upload-fingerprint-build__node-orbit" cx={node.x} cy={node.y} r={node.r + 4.5} />
+              <circle className="upload-fingerprint-build__node-core" cx={node.x} cy={node.y} r={node.r} />
+            </g>
+          ))}
+        </g>
+        <circle className="upload-fingerprint-build__baseline-lock" cx="80" cy="95" r="18" pathLength="100" />
       </svg>
       {complete ? <div className="upload-fingerprint-build__ripple" aria-hidden="true" /> : null}
       {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
