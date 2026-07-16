@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors.csv_connector import CSVConnector
+from app.connectors.database_connector import DatabaseConnector
 from app.connectors.models import ConnectorDescriptor
 from app.connectors.placeholders import (
     BACnetConnector,
     BASBMSConnector,
-    DatabaseConnector,
     HaywardConnector,
     MQTTConnector,
     ModbusConnector,
@@ -56,8 +56,8 @@ def build_connector_descriptors() -> list[ConnectorDescriptor]:
         ConnectorDescriptor(
             connector_type="database",
             display_name="Database",
-            functional=False,
-            description="Scaffold for relational or warehouse telemetry ingestion.",
+            functional=True,
+            description="Run bounded read-only SQLite or PostgreSQL telemetry queries and normalize the results.",
         ),
         ConnectorDescriptor(
             connector_type="mqtt",

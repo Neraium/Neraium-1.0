@@ -5,7 +5,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-from app.connectors.models import ConnectorActionResponse, ConnectorHealthStatus, ConnectorTestRequest, RestConnectorRequest
+from app.connectors.models import (
+    ConnectorActionResponse,
+    ConnectorHealthStatus,
+    ConnectorTestRequest,
+    DatabaseConnectorRequest,
+    RestConnectorRequest,
+)
 from app.connectors.registry import CONNECTOR_CLASSES, build_connector_descriptors, get_connector
 from app.connectors.store import read_health_state, upsert_health_status
 from app.core.security import require_admin_role, require_api_access
@@ -120,6 +126,42 @@ def ingest_rest_connector(request: Request, payload: RestConnectorRequest) -> di
     )
     update_runtime_health(request, health)
     return build_action_response(batch, health, "REST telemetry normalized and ready for engine ingestion.")
+
+
+@router.post("/connectors/database/test")
+def test_database_connector(request: Request, payload: DatabaseConnectorRequest) -> dict[str, Any]:
+    connector = build_connector_instance("database", payload.model_dump())
+    validation_result = connector.validate_connection()
+    health = connector.health_check()
+    if validation_result.get("ok") is False:
+        raise HTTPException(status_code=400, detail=validation_result.get("message", "Database connector validation failed."))
+    update_runtime_health(request, health)
+    return ConnectorActionResponse(
+        connector_type="database",
+        message=validation_result.get("message", "Database connector validated."),
+        connection_status=health.connection_status,
+        masked_configuration=health.masked_configuration,
+    ).model_dump()
+
+
+@router.post("/connectors/database/ingest")
+def ingest_database_connector(request: Request, payload: DatabaseConnectorRequest) -> dict[str, Any]:
+    connector = build_connector_instance("database", payload.model_dump())
+    batch = normalize_or_fail(connector)
+    health = ConnectorHealthStatus(
+        connector_type="database",
+        display_name=connector.display_name,
+        functional=True,
+        connection_status="ready",
+        last_sync_time=batch.last_sync_time,
+        sensors_detected=batch.sensor_count,
+        records_ingested=batch.record_count,
+        warnings=batch.warnings,
+        errors=[issue.message for issue in batch.errors[:8]],
+        masked_configuration=connector.health_check().masked_configuration,
+    )
+    update_runtime_health(request, health)
+    return build_action_response(batch, health, "Database telemetry normalized and ready for engine ingestion.")
 
 
 @router.get("/connectors/health")

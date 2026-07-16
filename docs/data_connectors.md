@@ -18,7 +18,7 @@ Connectors are responsible for transport, basic validation, and normalization on
 
 - `csv`: functional. Handles local CSV upload and normalization.
 - `rest`: functional. Polls a REST endpoint and normalizes JSON telemetry payloads.
-- `database`: scaffold only.
+- `database`: functional. Runs bounded read-only queries against SQLite or PostgreSQL and normalizes result rows.
 - `mqtt`: scaffold only.
 - `opcua`: scaffold only.
 - `bacnet`: scaffold only.
@@ -57,5 +57,6 @@ Timestamps are parsed through the shared backend timestamp parser and normalized
 
 - CSV normalization infers units from common sensor names when a unit is not supplied.
 - REST ingestion currently expects a JSON list or a top-level `records`, `data`, `items`, or `telemetry` array.
-- Placeholder connectors expose health and lifecycle scaffolding but do not yet connect to live systems.
+- Database queries are limited to one `SELECT` or `WITH` statement, execute in a read-only database session, and return at most 5,000 rows by default (configurable up to 10,000).
+- MQTT, OPC UA, BACnet, and vendor-specific placeholder connectors expose health and lifecycle scaffolding but do not yet connect to live systems.
 - The connector layer prepares normalized telemetry for the existing engine boundary; it does not yet orchestrate full historical backfill workflows or live industrial subscriptions.

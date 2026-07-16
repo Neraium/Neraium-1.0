@@ -34,11 +34,6 @@ class PlaceholderConnector(ConnectorBase):
         )
 
 
-class DatabaseConnector(PlaceholderConnector):
-    connector_type = "database"
-    display_name = "Database"
-
-
 class MQTTConnector(PlaceholderConnector):
     connector_type = "mqtt"
     display_name = "MQTT"

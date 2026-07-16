@@ -105,6 +105,16 @@ class RestConnectorRequest(BaseModel):
     sample_payload: dict[str, Any] | None = None
 
 
+class DatabaseConnectorRequest(BaseModel):
+    source_id: str = "customer-database"
+    system_id: str = "facility-database"
+    database_url: str
+    query: str
+    parameters: dict[str, Any] | list[Any] | None = None
+    latest_query: str | None = None
+    max_rows: int = Field(default=5000, ge=1, le=10_000)
+
+
 class ConnectorActionResponse(BaseModel):
     connector_type: str
     message: str
