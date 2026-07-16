@@ -30,12 +30,12 @@ docker build -q -t "$IMAGE_NAME" "$TMP_DIR" >/dev/null
 docker run -d --name "$CONTAINER_NAME"   -e POSTGRES_USER=postgres   -e POSTGRES_PASSWORD=postgres   -e POSTGRES_DB=neraium   -p 127.0.0.1::5432   "$IMAGE_NAME"   -c ssl=on   -c ssl_cert_file=/var/lib/postgresql/certs/server.crt   -c ssl_key_file=/var/lib/postgresql/certs/server.key >/dev/null
 
 for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER_NAME" pg_isready -U postgres -d neraium >/dev/null 2>&1; then
+  if docker exec "$CONTAINER_NAME" pg_isready -h 127.0.0.1 -U postgres -d neraium >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-if ! docker exec "$CONTAINER_NAME" pg_isready -U postgres -d neraium >/dev/null 2>&1; then
+if ! docker exec "$CONTAINER_NAME" pg_isready -h 127.0.0.1 -U postgres -d neraium >/dev/null 2>&1; then
   docker logs "$CONTAINER_NAME" >&2
   exit 1
 fi
