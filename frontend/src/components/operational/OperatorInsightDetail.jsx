@@ -1,3 +1,7 @@
+import { lazy, Suspense } from "react";
+
+const RelationshipExplorer = lazy(() => import("./RelationshipExplorer"));
+
 function toList(...values) {
   return values.flatMap((value) => {
     if (Array.isArray(value)) return value;
@@ -131,7 +135,7 @@ function relationshipLabels(insight) {
       relationship.source_columns,
       relationship.sourceColumns
     ).map(signalName).filter(Boolean);
-    if (columns.length >= 2) return columns[0] + " ↔ " + columns[1];
+    if (columns.length >= 2) return columns[0] + " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â " + columns[1];
     return text(relationship) || "Supporting relationship " + (itemIndex + 1);
   }).filter(Boolean);
 }
@@ -250,7 +254,7 @@ function cleanOperationalImpact(value) {
 }
 
 function splitOperationalImpacts(values) {
-  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|•/g))
+  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢/g))
     .flatMap((value) => value.split(/(?<=\.)\s+(?=[A-Z])/g))
     .map((item) => item.trim())
     .filter(Boolean));
@@ -350,7 +354,7 @@ function whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     return `Neraium detected that ${observed.charAt(0).toLowerCase()}${observed.slice(1)} while the ${relationship} relationship moved away from its learned operating pattern. This combination most closely matches a real operational behavior change rather than normal demand movement.`;
   }
   if (relationship) {
-    return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
+    return `Neraium detected that the historical relationship between ${relationship.replace(" ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
   }
   if (evidenceLine) {
     return `Neraium generated this insight because the supporting evidence changed from the learned operational baseline: ${evidenceLine}`;
@@ -386,15 +390,6 @@ function DiagnosticValue({ value }) {
   return <>{text(value)}</>;
 }
 
-function Section({ title, children }) {
-  return (
-    <section className="insight-briefing__section">
-      <h4>{title}</h4>
-      {children}
-    </section>
-  );
-}
-
 function BulletList({ items }) {
   const visible = unique(items.map(text)).slice(0, 6);
   if (!visible.length) return null;
@@ -425,23 +420,60 @@ function Disclosure({ title, children, className = "" }) {
   );
 }
 
-function PriorityActions({ actions, explain = false }) {
-  const labels = ["Recommended First", "Recommended Second", "Recommended Third"];
+function PriorityActions({ actions, signals = [], impacts = [], explain = false }) {
+  const labels = ["Priority 1", "Priority 2", "Priority 3"];
+  const reasons = [
+    "Tests the strongest observed relationship change directly before other conditions can obscure it.",
+    "Determines whether an operating or control change explains the deviation.",
+    "Rules out equipment or instrumentation effects if the first checks do not explain the change.",
+  ];
   return (
     <ol className={explain ? "investigation-priorities investigation-priorities--explained" : "investigation-priorities"}>
       {actions.slice(0, 3).map((action, index) => (
-        <li key={action}>
+        <li key={action} className="investigation-card">
           {explain ? <span>{labels[index]}</span> : null}
           <strong>{action}</strong>
-          {explain ? <p>{index === 0
-            ? "Start here because it tests the strongest observed change directly."
-            : index === 1
-              ? "Check this next to determine whether an operating change explains the deviation."
-              : "Use this to rule out equipment or instrumentation effects if the first checks do not explain the change."}</p> : null}
+          {explain ? <dl className="investigation-card__details">
+            <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â validates the primary operational risk" : "Moderate ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â narrows the likely cause")}</dd></div>
+            <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship drift and persistence evidence"}</dd></div>
+            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against the current fingerprint."}</dd></div>
+            <div><dt>Why this order</dt><dd>{reasons[index]}</dd></div>
+          </dl> : null}
         </li>
       ))}
     </ol>
   );
+}
+
+function InvestigationTimeline({ insight, context }) {
+  const values = Object.fromEntries(context);
+  const events = [
+    ["Baseline established", values["Historical baseline period"] || text(insight?.baselineEstablishedAt) || "Healthy operating behavior learned"],
+    ["Drift first detected", values["Current comparison window began"] || text(insight?.firstDetectedAt) || "Start of the current comparison window"],
+    ["Severity escalation", text(insight?.severityEscalatedAt) || `${insightSeverityLabel(insight)} threshold reached`],
+    ["Latest observation", values["Observed through"] || formatDateTime(insight?.detectedAt) || "Most recent analysis"],
+  ];
+  return <ol className="investigation-timeline">{events.map(([label, value], index) => (
+    <li key={label}><details><summary><span>{index + 1}</span><strong>{label}</strong><time>{value}</time></summary><p>{index === 0 ? "The learned healthy pattern used for comparison." : index === 1 ? "The first point where current behavior diverged from that pattern." : index === 2 ? "Corroborating evidence raised the operational priority." : "The latest evidence included in this insight."}</p></details></li>
+  ))}</ol>;
+}
+
+function OperatorActions({ insight, subsystem }) {
+  const exportReport = () => {
+    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), subsystem, insight }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `neraium-investigation-${text(insight?.id) || "report"}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  return <div className="operator-quick-actions" aria-label="Operator actions">
+    <button type="button" onClick={() => document.getElementById("insight-evidence")?.scrollIntoView({ behavior: "smooth" })}>Inspect affected equipment</button>
+    <button type="button" onClick={() => document.getElementById("fingerprint-comparison")?.scrollIntoView({ behavior: "smooth" })}>Compare fingerprints</button>
+    <button type="button" onClick={() => document.getElementById("relationship-explorer")?.scrollIntoView({ behavior: "smooth" })}>View related subsystems</button>
+    <button type="button" onClick={exportReport}>Export investigation report</button>
+  </div>;
 }
 
 export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
@@ -508,16 +540,22 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     || `The ${subsystem} subsystem changed behavior, and multiple operational relationships corroborated the shift. The combined evidence supports investigation.`;
   const interpretation = `The simultaneous reorganization of ${relationships.length ? relationships.slice(0, 3).join(", ") : `relationships within ${subsystem}`} indicates that the subsystem is operating differently from its learned behavioral baseline.`;
+  const operationalStatus = severity === "Critical" ? "Critical" : severity === "High" ? "Investigation Recommended" : severity === "Moderate" ? "Watch" : "Normal";
+  const relationshipModels = relationships.map((label, index) => ({ label, evidence: evidence[index], measurement: relationshipMeasurement(evidence[index]) }));
+  const supportingSignals = unique(evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals, item?.source_columns, item?.sourceColumns)).map(signalName));
+  const confidenceRaises = unique(toList(insight?.confidenceIncreaseFactors, insight?.confidence_increase_factors, ...confidenceEvidence)).slice(0, 5);
+  const confidenceLowers = unique(toList(insight?.confidenceDecreaseFactors, insight?.confidence_decrease_factors, "Missing or delayed telemetry", "A short observation window", "Evidence that the change matches a planned operating mode")).slice(0, 4);
 
   const body = (
     <div className="insight-layered">
       <section className="insight-situation-card" aria-labelledby="insight-situation-title">
         <div className="insight-situation-card__meta">
-          <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{severity}</span>
-          <span>{subsystem}</span>
+          <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
+          <span>Affected subsystem: {subsystem}</span>
           {confidenceValue ? <span>Confidence {confidenceValue}</span> : null}
         </div>
         <h3 id="insight-situation-title">{behavioralSummary}</h3>
+        {primaryRelationship ? <p className="insight-primary-relationship"><span>Primary relationship change</span><strong>{primaryRelationship}</strong></p> : null}
       </section>
 
       {severityReasons.length ? (
@@ -540,6 +578,8 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </section>
       </div>
 
+      <OperatorActions insight={insight} subsystem={subsystem} />
+
       <section className="insight-summary-card insight-summary-card--why">
         <span className="insight-summary-card__eyebrow">Evidence</span>
         <h4>Why Neraium surfaced this</h4>
@@ -547,8 +587,35 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
       </section>
 
       <div className="insight-disclosure-stack" aria-label="Additional insight detail">
+        <Disclosure title="Investigation Timeline"><InvestigationTimeline insight={insight} context={changeContext} /></Disclosure>
+
+        <Disclosure title="Prioritized Investigation Workflow">
+          <PriorityActions actions={investigationActions} signals={supportingSignals} impacts={expectedImpacts} explain />
+        </Disclosure>
+
+        <Disclosure title="Relationship Explorer">
+          <div id="relationship-explorer"><Suspense fallback={<p>Loading relationship explorerÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense></div>
+        </Disclosure>
+
+        <Disclosure title="Historical Comparison">
+          <div id="fingerprint-comparison" className="fingerprint-comparison">
+            <section><span>Current fingerprint</span><strong>{behavioralSummary}</strong></section>
+            <section><span>Previous fingerprint</span><strong>{text(insight?.previousFingerprint) || "Behavior was closer to the learned operating pattern."}</strong></section>
+            <section><span>Healthy baseline</span><strong>{text(insight?.healthyBaseline) || "Relationships remained stable inside the learned range."}</strong></section>
+          </div>
+          <p className="comparison-note">Only material relationship differences are shown.</p>
+        </Disclosure>
+
+        <Disclosure title="Primary Evidence" className="insight-evidence-group">
+          <div id="insight-evidence"><BulletList items={evidenceLines.slice(0, 3)} />{evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}</div>
+        </Disclosure>
+
+        <Disclosure title="Supporting Evidence" className="insight-evidence-group"><BulletList items={evidenceLines.slice(3)} /></Disclosure>
+
+        <Disclosure title="Historical Context" className="insight-evidence-group"><ContextGrid rows={changeContext} />{operationalMemory.rows.length ? <ContextGrid rows={operationalMemory.rows} /> : null}<BulletList items={operationalMemory.similarEvents} /></Disclosure>
+
         <Disclosure title="Observed Evidence">
-          <BulletList items={evidenceLines} />
+          <p>Relationship measurements and observed facts are organized above as primary and supporting evidence.</p>
           {evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}
         </Disclosure>
 
@@ -560,7 +627,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         <Disclosure title="Possible Causes"><BulletList items={causes} /></Disclosure>
 
         <Disclosure title="Recommended Investigation">
-          <PriorityActions actions={investigationActions} explain />
+          <PriorityActions actions={investigationActions} signals={supportingSignals} impacts={expectedImpacts} explain />
         </Disclosure>
 
         <Disclosure title="Supporting Relationships">
@@ -576,6 +643,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         <Disclosure title="Confidence">
           {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
           <CheckedList items={confidenceEvidence} />
+          <div className="confidence-drivers"><section><h5>What would raise confidence</h5><CheckedList items={confidenceRaises} /></section><section><h5>What would lower confidence</h5><BulletList items={confidenceLowers} /></section></div>
         </Disclosure>
 
         <Disclosure title="Advanced Diagnostics">

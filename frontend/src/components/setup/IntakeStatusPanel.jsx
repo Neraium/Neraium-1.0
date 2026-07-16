@@ -24,7 +24,7 @@ export default function IntakeStatusPanel({
   const baselineSeconds = timings?.baseline_build_seconds ?? null;
   const scoreSeconds = timings?.structural_scoring_seconds ?? null;
   const totalSeconds = timings?.total_job_seconds ?? latestUploadResult?.processing_stats?.engine_runtime_seconds ?? uploadJob?.processing_duration_seconds ?? null;
-  const processingProcessing Path = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
+  const processingPath = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
   const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? null;
   const baselineReference = activeFilename
     ? `${activeFilename} (behavioral baseline)`
@@ -51,7 +51,7 @@ export default function IntakeStatusPanel({
       <Panel title="Processing" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <MetricGrid
           metrics={[
-            { label: "Processing Path", value: processingProcessing Path === "hash_cache_reused" ? "Alternate Path" : processingProcessing Path ? "Standard Path" : "Unavailable" },
+            { label: "Processing Path", value: processingPath === "hash_cache_reused" ? "Alternate Path" : processingPath ? "Standard Path" : "Unavailable" },
             { label: "Parse (s)", value: parseSeconds },
             { label: "Baseline (s)", value: baselineSeconds },
             { label: "Scoring (s)", value: scoreSeconds },

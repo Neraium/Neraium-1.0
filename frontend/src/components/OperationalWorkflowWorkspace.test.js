@@ -365,6 +365,29 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText(/1\.111111/)).toBeTruthy();
   });
 
+  it("provides the operator-first investigation workflow", async () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    clickNav("Insights");
+    expect(screen.getByText(/Affected subsystem:/)).toBeTruthy();
+    expect(screen.getByText("Primary relationship change")).toBeTruthy();
+    expect(screen.getByText("Investigation Timeline")).toBeTruthy();
+    expect(screen.getByText("Prioritized Investigation Workflow")).toBeTruthy();
+    expect(screen.getByText("Relationship Explorer")).toBeTruthy();
+    expect(screen.getByText("Historical Comparison")).toBeTruthy();
+    expect(screen.getByText("Primary Evidence")).toBeTruthy();
+    expect(screen.getByText("Supporting Evidence")).toBeTruthy();
+    expect(screen.getByText("Historical Context")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Inspect affected equipment" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compare fingerprints" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "View related subsystems" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Export investigation report" })).toBeTruthy();
+  });
+
   it("maps two changed relationships to two evidence lines", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),

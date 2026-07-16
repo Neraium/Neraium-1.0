@@ -4219,3 +4219,41 @@ button.insight-card {
     min-height: auto;
   }
 }
+
+
+/* Operator-first investigation workflow */
+.insight-primary-relationship { display:grid; gap:4px; margin:0; color:var(--ops-ink-soft); }
+.insight-primary-relationship span, .fingerprint-comparison span { color:var(--ops-ink-muted); font-size:.72rem; font-weight:720; letter-spacing:.08em; text-transform:uppercase; }
+.operator-quick-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.operator-quick-actions button, .relationship-explorer__list button { min-height:44px; border:1px solid var(--ops-line); border-radius:8px; background:rgba(255,255,255,.025); color:var(--ops-ink-soft); padding:10px 14px; cursor:pointer; }
+.operator-quick-actions button:hover, .operator-quick-actions button:focus-visible, .relationship-explorer__list button[aria-pressed="true"] { border-color:rgba(92,193,167,.55); color:var(--ops-ink); }
+.investigation-card__details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 0; }
+.investigation-card__details div { border-left:2px solid var(--ops-line); padding-left:10px; }
+.investigation-card__details dt { color:var(--ops-ink-muted); font-size:.72rem; text-transform:uppercase; }
+.investigation-card__details dd { margin:3px 0 0; color:var(--ops-ink-soft); line-height:1.45; }
+.investigation-timeline { display:grid; gap:0; margin:0; padding:0; list-style:none; }
+.investigation-timeline li { border-left:1px solid var(--ops-line); padding:0 0 14px 18px; }
+.investigation-timeline summary { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; cursor:pointer; }
+.investigation-timeline summary > span { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:rgba(92,193,167,.14); color:#8de3c8; }
+.investigation-timeline time { color:var(--ops-ink-muted); font-size:.8rem; }
+.investigation-timeline p { margin:10px 0 0 34px; color:var(--ops-ink-soft); }
+.relationship-explorer { display:grid; grid-template-columns:minmax(190px,.35fr) minmax(0,1fr); gap:18px; }
+.relationship-explorer__list { display:grid; gap:8px; align-content:start; }
+.relationship-explorer__list button { text-align:left; }
+.relationship-explorer__detail { border:1px solid var(--ops-line); border-radius:10px; padding:18px; }
+.relationship-explorer__detail h5 { margin:0 0 14px; }
+.relationship-strengths { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.relationship-strengths span { display:grid; gap:5px; color:var(--ops-ink-muted); }
+.relationship-strengths strong { color:var(--ops-ink); font-size:1.15rem; }
+.fingerprint-comparison, .confidence-drivers { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.fingerprint-comparison section, .confidence-drivers section { display:grid; gap:8px; border:1px solid var(--ops-line); border-radius:9px; padding:16px; }
+.fingerprint-comparison strong { font-weight:560; line-height:1.45; }
+.comparison-note { color:var(--ops-ink-muted) !important; font-size:.82rem; }
+.confidence-drivers { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.confidence-drivers h5 { margin:0; }
+@media (max-width:720px) {
+  .investigation-card__details, .relationship-explorer, .fingerprint-comparison, .confidence-drivers, .relationship-strengths { grid-template-columns:1fr; }
+  .investigation-timeline summary { grid-template-columns:auto 1fr; }
+  .investigation-timeline time { grid-column:2; }
+  .operator-quick-actions { display:grid; grid-template-columns:1fr; }
+}
