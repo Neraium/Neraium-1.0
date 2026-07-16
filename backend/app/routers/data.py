@@ -603,21 +603,6 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "worker_dispatch_status": worker_dispatch_status,
         }
         upload_jobs.write_job(summary)
-        enqueue_upload_job(job_id)
-        if worker_dispatch_status == "thread_dispatched":
-            _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
-        _log_upload_event(
-            "job_queued",
-            request_id=request_id,
-            endpoint="/api/data/upload",
-            filename=filename,
-            file_size_bytes=file_size_bytes,
-            job_id=job_id,
-            queue_status="pending",
-            worker_dispatch_status=worker_dispatch_status,
-            processing_stage="queued",
-            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
-        )
         record_audit_event(
             actor=actor,
             action="upload.accepted",
@@ -628,7 +613,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         )
         run_id = summary.get("job_id")
         if run_id:
-            record = upsert_evidence_run(
+            upsert_evidence_run(
                 {
                     "run_id": run_id,
                     "source_name": filename,
@@ -661,8 +646,21 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                     "deformation_started_at": None,
                 }
             )
-            if record:
-                upsert_evidence_run(record)
+        enqueue_upload_job(job_id)
+        if worker_dispatch_status == "thread_dispatched":
+            _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+        _log_upload_event(
+            "job_queued",
+            request_id=request_id,
+            endpoint="/api/data/upload",
+            filename=filename,
+            file_size_bytes=file_size_bytes,
+            job_id=job_id,
+            queue_status="pending",
+            worker_dispatch_status=worker_dispatch_status,
+            processing_stage="queued",
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
     except Exception as exc:
         try:
             if temp_path:

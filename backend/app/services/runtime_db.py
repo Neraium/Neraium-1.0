@@ -938,12 +938,14 @@ def upsert_evidence_run_db(record: dict[str, Any]) -> None:
         )
 
 
-def list_evidence_runs_db(limit: int = 50) -> list[dict[str, Any]]:
+def list_evidence_runs_db(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     init_runtime_db()
+    bounded_limit = max(1, min(int(limit), 1001))
+    bounded_offset = max(0, int(offset))
     with db_connection() as connection:
         rows = connection.execute(
-            "SELECT payload_json FROM evidence_runs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            "SELECT payload_json FROM evidence_runs ORDER BY created_at DESC, run_id DESC LIMIT ? OFFSET ?",
+            (bounded_limit, bounded_offset),
         ).fetchall()
     return [json.loads(row["payload_json"]) for row in rows]
 

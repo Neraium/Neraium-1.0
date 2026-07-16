@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
+from app.connectors.limits import MAX_CONNECTOR_RESPONSE_BYTES
 from app.connectors.models import (
     ConnectorActionResponse,
     ConnectorHealthStatus,
@@ -62,7 +63,18 @@ async def upload_csv_connector(
     if Path(filename).suffix.lower() != ".csv":
         raise HTTPException(status_code=400, detail="Only CSV files are supported for the CSV connector.")
 
-    content_bytes = await file.read()
+    content = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > MAX_CONNECTOR_RESPONSE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"CSV connector upload exceeds the {MAX_CONNECTOR_RESPONSE_BYTES}-byte limit.",
+            )
+    content_bytes = bytes(content)
     if not content_bytes:
         raise HTTPException(status_code=400, detail="CSV dataset is empty.")
 

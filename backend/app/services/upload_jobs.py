@@ -21,7 +21,6 @@ from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
-from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
 from app.services.upload_parser import json_payload_to_csv_text
@@ -773,6 +772,10 @@ def _build_csv_result(
     overall_urgency = "unstable" if max_room_urgency == "unstable" else ("review" if max_room_urgency == "review" else "nominal")
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
+
+    # Pandas-backed relationship analysis is only needed once an upload reaches
+    # the structural pipeline; keep it out of API process startup.
+    from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
 
     pipeline = run_structural_analysis_pipeline(
         job_id=job_id,

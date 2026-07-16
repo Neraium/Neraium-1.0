@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
+import "../../../styles/workspace-system-body-entry.css";
 
 export default function SystemBodyWorkspace({
   systemState,

@@ -14,7 +14,6 @@ from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
 from app.services.telemetry_classification import build_telemetry_signal_catalog, update_catalog_from_baseline
-from app.services.telemetry_normalization import build_normalization_report
 
 
 def _inline_replay_generation_enabled() -> bool:
@@ -111,6 +110,9 @@ def run_structural_analysis_pipeline(
     stage_notifier(job_id, stage="building_fingerprint", progress=84, label="Building fingerprint...")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
+    # Dataframe normalization is upload-only work and should not extend API startup.
+    from app.services.telemetry_normalization import build_normalization_report
+
     normalization_report = build_normalization_report(
         rows=rows,
         numeric_columns=numeric_columns,

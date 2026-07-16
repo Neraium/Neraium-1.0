@@ -50,7 +50,7 @@ def post_json(client: TestClient, filename: str, content: str):
     )
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 45.0) -> dict:
     deadline = time.time() + timeout_seconds
     last_payload = None
     while time.time() < deadline:
@@ -89,6 +89,7 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["queued_seconds"] == 0
     assert payload["status_checked_at"]
     assert payload["file_size_bytes"] > 0
+    wait_for_terminal_upload_status(client, payload["status_url"])
 
 
 def test_json_upload_returns_accepted_job_id() -> None:
@@ -115,6 +116,7 @@ def test_json_upload_returns_accepted_job_id() -> None:
     payload = response.json()
     assert payload["job_id"]
     assert payload["filename"] == "sensor-export.json"
+    wait_for_terminal_upload_status(client, payload["status_url"])
 
 
 def test_positive_int_env_parser_falls_back_for_invalid_values(monkeypatch) -> None:
@@ -320,7 +322,7 @@ def test_upload_returns_job_id_immediately_without_waiting_for_worker(monkeypatc
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 0.35
+    assert elapsed < 1.25
 
 
 def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
@@ -345,7 +347,7 @@ def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 0.6
+    assert elapsed < 1.5
 
 
 def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:

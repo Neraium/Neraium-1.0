@@ -349,25 +349,23 @@ class UploadQueueLifecycleService:
             )
             mark_queue_job_failed(job_id, error_message)
             complete_upload_queue_job(job_id, "failed", error_message)
-            self.write_job(
-                {
-                    **metadata,
-                    **current,
-                    "job_id": job_id,
-                    "status": "FAILED",
-                    "processing_state": "failed",
-                    "error_type": "processing_error",
-                    "error": error_message,
-                    "message": f"Telemetry processing failed: {error_message}",
-                    "progress_label": "Telemetry processing failed.",
-                    "result_available": False,
-                    "first_usable_available": False,
-                    "replay_ready": False,
-                    "replay_frame_count": 0,
-                    "propagation_stage": "failed",
-                    "propagation_label": "Failed.",
-                }
-            )
+            failed_payload = {
+                **metadata,
+                **current,
+                "job_id": job_id,
+                "status": "FAILED",
+                "processing_state": "failed",
+                "error_type": "processing_error",
+                "error": error_message,
+                "message": f"Telemetry processing failed: {error_message}",
+                "progress_label": "Telemetry processing failed.",
+                "result_available": False,
+                "first_usable_available": False,
+                "replay_ready": False,
+                "replay_frame_count": 0,
+                "propagation_stage": "failed",
+                "propagation_label": "Failed.",
+            }
             try:
                 from app.services.evidence_store import upsert_evidence_run
 
@@ -406,5 +404,6 @@ class UploadQueueLifecycleService:
                     }
                 )
             except Exception:
-                pass
+                self.logger.exception("failed_evidence_persistence_failed job_id=%s", job_id)
+            self.write_job(failed_payload)
             return False

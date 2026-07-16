@@ -13,6 +13,10 @@ from app.services.runtime_db import list_evidence_runs_db, upsert_evidence_run_d
 RUNTIME_DIR = get_settings().runtime_dir
 EVIDENCE_DIR = RUNTIME_DIR / "evidence"
 EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
+MAX_EVIDENCE_PAGE_SIZE = 100
+DEFAULT_EVIDENCE_PAGE_SIZE = 50
+EVIDENCE_HISTORY_CONTEXT = 500
+
 FEEDBACK_CATEGORIES = [
     "confirmed_issue",
     "known_operational_change",
@@ -36,9 +40,29 @@ def evidence_runs_path() -> Path:
     return EVIDENCE_RUNS_PATH
 
 
-def list_evidence_runs(limit: int = 50) -> list[dict[str, Any]]:
-    items = _load_raw_evidence_runs(limit=max(limit, 500))
-    return _annotate_and_sort_evidence_runs(items)[:limit]
+def list_evidence_runs(limit: int = DEFAULT_EVIDENCE_PAGE_SIZE) -> list[dict[str, Any]]:
+    return list_evidence_runs_page(limit=limit)["runs"]
+
+
+def list_evidence_runs_page(*, limit: int = DEFAULT_EVIDENCE_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
+    page_size = max(1, min(int(limit), MAX_EVIDENCE_PAGE_SIZE))
+    page_offset = max(0, int(offset))
+    raw_items = _load_raw_evidence_runs(
+        limit=page_size + EVIDENCE_HISTORY_CONTEXT + 1,
+        offset=page_offset,
+    )
+    page_items = raw_items[:page_size]
+    page_ids = {str(item.get("run_id") or "") for item in page_items}
+    annotated = _annotate_and_sort_evidence_runs(raw_items[: page_size + EVIDENCE_HISTORY_CONTEXT])
+    runs = [item for item in annotated if str(item.get("run_id") or "") in page_ids]
+    has_more = len(raw_items) > page_size
+    return {
+        "runs": runs,
+        "limit": page_size,
+        "offset": page_offset,
+        "has_more": has_more,
+        "next_offset": page_offset + page_size if has_more else None,
+    }
 
 
 def read_evidence_run(run_id: str) -> dict[str, Any] | None:
@@ -270,10 +294,14 @@ def csv_escape(value: Any) -> str:
     return text
 
 
-def _load_raw_evidence_runs(limit: int = 500) -> list[dict[str, Any]]:
-    db_items = list_evidence_runs_db(limit=limit)
+def _load_raw_evidence_runs(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
+    db_items = list_evidence_runs_db(limit=limit, offset=offset)
     if db_items:
         return [item for item in db_items if isinstance(item, dict)]
+    # Only consult the legacy JSON store when SQLite has no evidence at all.
+    # Otherwise an empty final DB page could incorrectly restart pagination.
+    if offset > 0 and list_evidence_runs_db(limit=1, offset=0):
+        return []
     path = evidence_runs_path()
     if not path.exists():
         return []
@@ -283,18 +311,124 @@ def _load_raw_evidence_runs(limit: int = 500) -> list[dict[str, Any]]:
         return []
     if not isinstance(payload, list):
         return []
-    return [item for item in payload if isinstance(item, dict)]
+    items = [item for item in payload if isinstance(item, dict)]
+    return items[max(0, offset) : max(0, offset) + max(1, limit)]
 
 
 def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ordered = sorted(items, key=_evidence_sort_key)
     annotated: list[dict[str, Any]] = []
-    history: list[dict[str, Any]] = []
+    history_index = _new_annotation_history_index()
     for item in ordered:
-        annotated.append(_annotate_evidence_record(item, history))
-        history.append(item)
+        annotated.append(_annotate_evidence_record_indexed(item, history_index))
+        _index_annotation_history(item, history_index)
     annotated.sort(key=_evidence_sort_key, reverse=True)
     return annotated
+
+
+def _new_annotation_history_index() -> dict[str, Any]:
+    return {
+        "next_bit": 1,
+        "historical_masks": {},
+        "historical_category_masks": {},
+        "historical_categories": {},
+        "latest_reviewed": {},
+    }
+
+
+def _record_observation_keys(record: dict[str, Any]) -> tuple[str, set[str]]:
+    observation_type = str(record.get("observation_type") or "").strip()
+    variables = {str(variable).strip() for variable in (record.get("variables") or []) if str(variable).strip()}
+    return observation_type, variables
+
+
+def _index_annotation_history(record: dict[str, Any], index: dict[str, Any]) -> None:
+    observation_type, variables = _record_observation_keys(record)
+    if not observation_type or not variables:
+        return
+
+    category = str(record.get("latest_feedback_category") or "").strip()
+    if category:
+        bit = int(index["next_bit"])
+        index["next_bit"] = bit << 1
+        index["historical_categories"].setdefault(observation_type, set()).add(category)
+        for variable in variables:
+            key = (observation_type, variable)
+            index["historical_masks"][key] = int(index["historical_masks"].get(key, 0)) | bit
+            category_key = (observation_type, variable, category)
+            index["historical_category_masks"][category_key] = int(index["historical_category_masks"].get(category_key, 0)) | bit
+
+    if build_validation_event_history(record):
+        for variable in variables:
+            index["latest_reviewed"][(observation_type, variable)] = record
+
+
+def _historical_fact_from_index(record: dict[str, Any], index: dict[str, Any]) -> str | None:
+    observation_type, variables = _record_observation_keys(record)
+    if not observation_type or not variables:
+        return None
+
+    match_mask = 0
+    for variable in variables:
+        match_mask |= int(index["historical_masks"].get((observation_type, variable), 0))
+    match_count = match_mask.bit_count()
+    if not match_count:
+        return None
+
+    category_counts: dict[str, int] = {}
+    for category in index["historical_categories"].get(observation_type, set()):
+        category_mask = 0
+        for variable in variables:
+            category_mask |= int(index["historical_category_masks"].get((observation_type, variable, category), 0))
+        count = category_mask.bit_count()
+        if count:
+            category_counts[category] = count
+    if not category_counts:
+        return None
+
+    dominant_category, dominant_count = sorted(category_counts.items(), key=lambda entry: (-entry[1], entry[0]))[0]
+    category_label = _feedback_category_label(dominant_category)
+    ordered_variables = [str(variable).strip() for variable in (record.get("variables") or []) if str(variable).strip()]
+    variable_names = ", ".join(ordered_variables[:2])
+    variable_phrase = variable_names if variable_names else "these variables"
+    return (
+        f"Similar {observation_type.replace('_', ' ')} observations involving {variable_phrase} "
+        f"were later marked {category_label} in {dominant_count} of {match_count} previous investigations."
+    )
+
+
+def _before_after_from_index(record: dict[str, Any], index: dict[str, Any]) -> dict[str, Any]:
+    observation_type, variables = _record_observation_keys(record)
+    if not observation_type or not variables:
+        return {"available": False, "summary": "No prior reviewed intervention is available for comparison."}
+    candidates = {
+        str(candidate.get("run_id") or ""): candidate
+        for variable in variables
+        if (candidate := index["latest_reviewed"].get((observation_type, variable))) is not None
+    }
+    if not candidates:
+        return {"available": False, "summary": "No prior reviewed intervention is available for comparison."}
+    before = sorted(candidates.values(), key=_evidence_sort_key)[-1]
+    return _compare_intervention_records(record, before)
+
+
+def _annotate_evidence_record_indexed(record: dict[str, Any], index: dict[str, Any]) -> dict[str, Any]:
+    historical_fact = _historical_fact_from_index(record, index)
+    validation_event_history = build_validation_event_history(record)
+    latest_feedback = validation_event_history[0] if validation_event_history else {}
+    latest_category = str(record.get("latest_feedback_category") or latest_feedback.get("category") or "").strip()
+    validation_status = validation_status_for_category(latest_category) if latest_category else record.get("validation_status")
+    validation_outcome = str(latest_feedback.get("outcome") or record.get("validation_outcome") or "").strip()
+    if not validation_outcome and latest_category:
+        validation_outcome = validation_outcome_for_category(latest_category)
+    return {
+        **record,
+        "historical_fact": historical_fact or record.get("historical_fact") or None,
+        "validation_event_history": validation_event_history,
+        "validation_status": validation_status,
+        "validation_outcome": validation_outcome,
+        "before_after_intervention": _before_after_from_index(record, index),
+    }
 
 
 def _annotate_evidence_record(record: dict[str, Any], prior_records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -388,6 +522,12 @@ def build_before_after_intervention(record: dict[str, Any], prior_records: list[
         return {"available": False, "summary": "No prior reviewed intervention is available for comparison."}
 
     before = sorted(candidates, key=_evidence_sort_key)[-1]
+    return _compare_intervention_records(record, before)
+
+
+def _compare_intervention_records(record: dict[str, Any], before: dict[str, Any]) -> dict[str, Any]:
+    current_variables = {str(variable).strip() for variable in (record.get("variables") or []) if str(variable).strip()}
+    current_strength = _drift_strength(record)
     before_strength = _drift_strength(before)
     before_variables = {str(variable).strip() for variable in (before.get("variables") or []) if str(variable).strip()}
     shared_variables = sorted(current_variables.intersection(before_variables))

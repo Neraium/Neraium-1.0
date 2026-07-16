@@ -156,6 +156,10 @@ class OperatorFeedbackRequest(BaseModel):
 
 class EvidenceRunsListResponse(BaseModel):
     runs: list[EvidenceRunResponse] = Field(default_factory=list)
+    limit: int = 50
+    offset: int = 0
+    has_more: bool = False
+    next_offset: int | None = None
 
 
 class LatestEvidenceResponse(BaseModel):

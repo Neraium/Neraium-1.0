@@ -1,9 +1,9 @@
 import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
-import HomePage from "./HomePage";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
+const HomePage = lazy(() => import("./HomePage"));
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
 const OperationalWorkflowWorkspace = lazy(() => import("./OperationalWorkflowWorkspace"));
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
@@ -94,7 +94,9 @@ export default function AppWorkspaceRouter({
     return (
       <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
         <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-          <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
+          <Suspense fallback={renderLoadingPanel("Loading Neraium", "Preparing the application...")}>
+            <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
+          </Suspense>
         </div>
       </AppErrorBoundary>
     );

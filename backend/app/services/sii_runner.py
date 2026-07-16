@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
 from app.services.runtime_db import read_latest_payload, upsert_latest_payload
 from app.services.telemetry_classification import signal_classification, telemetry_catalog_by_column
-from app.services.telemetry_normalization import SENTINEL
+from app.services.telemetry_constants import SENTINEL
 
 import numpy as np
 

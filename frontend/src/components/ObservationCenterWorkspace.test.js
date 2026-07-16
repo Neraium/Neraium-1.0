@@ -281,4 +281,37 @@ describe("ObservationCenterWorkspace", () => {
     ));
   });
 
+  it("loads issue history in bounded pages", async () => {
+    installLocalStorageMock();
+    const buildRun = (index) => ({
+      run_id: `run-${index}`,
+      source_type: "csv_upload",
+      source_name: "telemetry.csv",
+      status: "completed",
+      created_at: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+      observation_type: "trajectory_drift",
+      observation_status: "open",
+      variables: ["temperature", "humidity"],
+      drift_metrics: { baseline_distance: index / 100 },
+      evidence_summary: ["System behavior changed."],
+      data_conditions: ["complete"],
+    });
+    const apiFetch = vi.fn(async (url) => {
+      if (String(url).includes("offset=50")) {
+        return createResponse({ runs: Array.from({ length: 10 }, (_, index) => buildRun(index + 50)), has_more: false, next_offset: null });
+      }
+      return createResponse({ runs: Array.from({ length: 50 }, (_, index) => buildRun(index)), has_more: true, next_offset: 50 });
+    });
+
+    renderWorkspace({ apiFetch });
+
+    const loadOlder = await screen.findByRole("button", { name: "Load older issues" });
+    expect(apiFetch).toHaveBeenCalledWith("/api/evidence/runs?limit=50&offset=0", { accessCode: "" });
+    fireEvent.click(loadOlder);
+
+    await waitFor(() => expect(screen.getByText("60 issue records loaded.")).toBeTruthy());
+    expect(apiFetch).toHaveBeenCalledWith("/api/evidence/runs?limit=50&offset=50", { accessCode: "" });
+    expect(screen.queryByRole("button", { name: "Load older issues" })).toBeNull();
+  });
+
 });

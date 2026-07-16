@@ -28,6 +28,8 @@ const FEEDBACK_OUTCOME_OPTIONS = [
 const NOTIFICATION_STORAGE_KEY = "neraium.observation_notifications.v1";
 const VARIABLE_ALIAS_STORAGE_KEY = "neraium.variable_aliases.v1";
 const PENDING_OBSERVATION_STORAGE_KEY = "neraium.pending_observation.v1";
+const ISSUE_PAGE_SIZE = 50;
+const MAX_LOADED_ISSUE_RUNS = 200;
 
 function loadJsonStorage(key, fallback) {
   if (typeof window === "undefined") return fallback;
@@ -285,6 +287,10 @@ export default function ObservationCenterWorkspace({
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [listStatus, setListStatus] = useState("");
+  const [pagination, setPagination] = useState({ hasMore: false, nextOffset: null });
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -304,42 +310,78 @@ export default function ObservationCenterWorkspace({
   const [aliasDraft, setAliasDraft] = useState("");
   const [selectedVariables, setSelectedVariables] = useState(["", ""]);
   const latestSeenRunId = useRef("");
+  const notificationPrefsRef = useRef(notificationPrefs);
+  const aliasesRef = useRef(aliases);
+  const runsRef = useRef(runs);
 
   useEffect(() => {
+    notificationPrefsRef.current = notificationPrefs;
     if (typeof window !== "undefined") {
       window.localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notificationPrefs));
     }
   }, [notificationPrefs]);
 
   useEffect(() => {
+    aliasesRef.current = aliases;
     if (typeof window !== "undefined") {
       window.localStorage.setItem(VARIABLE_ALIAS_STORAGE_KEY, JSON.stringify(aliases));
     }
   }, [aliases]);
 
   useEffect(() => {
+    runsRef.current = runs;
+  }, [runs]);
+
+  useEffect(() => {
     let cancelled = false;
-    async function loadRuns() {
+    let requestInFlight = false;
+
+    async function loadRuns({ background = false } = {}) {
+      if (requestInFlight) return;
+      if (background && typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      requestInFlight = true;
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+        setError("");
+      }
       try {
-        if (!cancelled) {
-          setLoading(true);
-          setError("");
-        }
-        const response = await apiFetch("/api/evidence/runs", { accessCode });
+        const response = await apiFetch(`/api/evidence/runs?limit=${ISSUE_PAGE_SIZE}&offset=0`, { accessCode });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
         }
         if (cancelled) return;
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
-        console.info("[neraium] issues fetch status", { count: nextRuns.length });
+        console.info("[neraium] issues fetch status", { count: nextRuns.length, background });
         const newestRun = nextRuns[0]?.run_id ?? "";
         const pendingRunId = readPendingObservationRunId();
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
-          maybeNotifyForObservation(nextRuns[0], notificationPrefs, aliases);
+          maybeNotifyForObservation(nextRuns[0], notificationPrefsRef.current, aliasesRef.current);
         }
         latestSeenRunId.current = newestRun;
-        setRuns(nextRuns);
+        const freshPagination = {
+          hasMore: Boolean(payload?.has_more),
+          nextOffset: Number.isInteger(payload?.next_offset) ? payload.next_offset : null,
+        };
+        const loadedIds = new Set(runsRef.current.map((run) => String(run?.run_id ?? "")));
+        const newlyInsertedCount = nextRuns.filter((run) => !loadedIds.has(String(run?.run_id ?? ""))).length;
+        setPagination((current) => {
+          if (!background || current.nextOffset === null) return freshPagination;
+          return {
+            hasMore: current.hasMore || freshPagination.hasMore,
+            nextOffset: current.nextOffset + newlyInsertedCount,
+          };
+        });
+        setRuns((current) => {
+          const known = new Set(nextRuns.map((run) => String(run?.run_id ?? "")));
+          const merged = [...nextRuns, ...current.filter((run) => !known.has(String(run?.run_id ?? "")))]
+            .slice(0, MAX_LOADED_ISSUE_RUNS);
+          runsRef.current = merged;
+          return merged;
+        });
+        setListStatus("");
         setSelectedRunId((current) => {
           const preferred = current || pendingRunId || newestRun || "";
           if (pendingRunId && nextRuns.some((run) => run.run_id === pendingRunId)) {
@@ -351,18 +393,27 @@ export default function ObservationCenterWorkspace({
       } catch (loadError) {
         if (cancelled) return;
         console.warn("[neraium] issues fetch status", { error: String(loadError?.message ?? loadError) });
-        setError(String(loadError?.message ?? loadError));
+        if (!background || runsRef.current.length === 0) {
+          setError(String(loadError?.message ?? loadError));
+        } else {
+          setListStatus("Issue refresh failed; showing the last loaded records.");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        requestInFlight = false;
+        if (!cancelled) {
+          if (background) setRefreshing(false);
+          else setLoading(false);
+        }
       }
     }
+
     loadRuns();
-    const timer = window.setInterval(loadRuns, 15000);
+    const timer = window.setInterval(() => loadRuns({ background: true }), 15000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [accessCode, aliases, apiFetch, notificationPrefs]);
+  }, [accessCode, apiFetch]);
 
   const persistedRunIds = useMemo(
     () => new Set(runs.map((run) => String(run?.run_id ?? "")).filter(Boolean)),
@@ -503,6 +554,38 @@ export default function ObservationCenterWorkspace({
         type: run?.observation_type ?? "observation",
       }));
   }, [reviewRuns, selectedVariables]);
+
+  async function loadOlderRuns() {
+    if (loadingOlder || !pagination.hasMore || pagination.nextOffset === null || runs.length >= MAX_LOADED_ISSUE_RUNS) return;
+    setLoadingOlder(true);
+    setListStatus("");
+    try {
+      const response = await apiFetch(
+        `/api/evidence/runs?limit=${ISSUE_PAGE_SIZE}&offset=${pagination.nextOffset}`,
+        { accessCode },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
+      }
+      const olderRuns = Array.isArray(payload?.runs) ? payload.runs : [];
+      setRuns((current) => {
+        const known = new Set(current.map((run) => String(run?.run_id ?? "")));
+        const merged = [...current, ...olderRuns.filter((run) => !known.has(String(run?.run_id ?? "")))]
+          .slice(0, MAX_LOADED_ISSUE_RUNS);
+        runsRef.current = merged;
+        return merged;
+      });
+      setPagination({
+        hasMore: Boolean(payload?.has_more),
+        nextOffset: Number.isInteger(payload?.next_offset) ? payload.next_offset : null,
+      });
+    } catch (loadError) {
+      setListStatus(`Older issues could not be loaded: ${String(loadError?.message ?? loadError)}`);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   async function submitFeedback() {
     if (!selectedRun?.run_id || !selectedRunAllowsFeedback) return;
@@ -681,6 +764,20 @@ export default function ObservationCenterWorkspace({
               </article>
             </div>
           )}
+          <div className="intake-flow__controls observation-center__pagination">
+            <span className="observation-feedback-state" role="status" aria-live="polite">
+              {loadingOlder
+                ? "Loading older issues..."
+                : refreshing
+                  ? "Refreshing issues..."
+                  : listStatus || `${runs.length} issue records loaded.`}
+            </span>
+            {pagination.hasMore && runs.length < MAX_LOADED_ISSUE_RUNS ? (
+              <button type="button" className="command-button command-button--secondary" onClick={loadOlderRuns} disabled={loadingOlder}>
+                Load older issues
+              </button>
+            ) : null}
+          </div>
         </Panel>
 
         <Panel title="Review Issue" className="span-5 observation-center__panel observation-center__panel--detail">

@@ -5,7 +5,8 @@ from typing import Any
 import pandas as pd
 from psycopg import Connection
 
-from app.services.telemetry_normalization import IntegrityProfile, SENTINEL
+from app.services.telemetry_constants import SENTINEL
+from app.services.telemetry_normalization import IntegrityProfile
 
 
 def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:

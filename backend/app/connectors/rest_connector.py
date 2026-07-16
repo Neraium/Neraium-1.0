@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
 
 from app.connectors.base import ConnectorBase
 from app.connectors.csv_connector import CONTEXT_COLUMNS, infer_unit, slugify
+from app.connectors.limits import (
+    MAX_CONNECTOR_RESPONSE_BYTES,
+    enforce_normalization_budget,
+    enforce_source_row_limit,
+)
 from app.connectors.models import ConnectorHealthStatus, NormalizedConnectorBatch, NormalizedTelemetryRecord, ValidationIssue
 from app.connectors.validation import deduplicate_records, normalize_timestamp_value, normalize_unit, summarize_issues, validate_numeric_value, validate_unit
 from app.services.data_quality import detect_timestamp_column
@@ -75,9 +81,18 @@ class RESTConnector(ConnectorBase):
         if not raw_data:
             raise ValueError("REST API returned no telemetry records.")
 
+        enforce_source_row_limit(raw_data)
         timestamp_column = detect_timestamp_column(list(raw_data[0].keys()))
         if timestamp_column is None:
             raise ValueError("REST telemetry is missing a timestamp field.")
+        sensor_columns = [
+            column_name
+            for column_name, value in raw_data[0].items()
+            if column_name.strip().lower() != timestamp_column.lower()
+            and column_name.strip().lower() not in CONTEXT_COLUMNS
+            and not isinstance(value, (dict, list))
+        ]
+        enforce_normalization_budget(row_count=len(raw_data), sensor_count=len(sensor_columns))
 
         for row_index, row in enumerate(raw_data, start=1):
             normalized_timestamp = normalize_timestamp_value(row.get(timestamp_column))
@@ -206,21 +221,37 @@ class RESTConnector(ConnectorBase):
 
         try:
             with httpx.Client(timeout=10.0, transport=self.transport) as client:
-                response = client.request(
+                with client.stream(
                     method,
                     endpoint,
                     headers=headers,
                     json=self.config.get("sample_payload"),
-                )
-            response.raise_for_status()
+                ) as response:
+                    response.raise_for_status()
+                    content_length = response.headers.get("content-length")
+                    try:
+                        declared_size = int(content_length) if content_length else None
+                    except ValueError:
+                        raise ValueError("REST API returned an invalid Content-Length header.") from None
+                    if declared_size is not None and declared_size > MAX_CONNECTOR_RESPONSE_BYTES:
+                        raise ValueError(
+                            f"REST API response exceeds the {MAX_CONNECTOR_RESPONSE_BYTES}-byte connector limit."
+                        )
+                    content = bytearray()
+                    for chunk in response.iter_bytes():
+                        content.extend(chunk)
+                        if len(content) > MAX_CONNECTOR_RESPONSE_BYTES:
+                            raise ValueError(
+                                f"REST API response exceeds the {MAX_CONNECTOR_RESPONSE_BYTES}-byte connector limit."
+                            )
         except httpx.HTTPStatusError as exc:
             raise ValueError(f"REST API returned status {exc.response.status_code}.") from None
         except httpx.HTTPError:
             raise ValueError("REST API could not be reached. Check the endpoint and network path.") from None
 
         try:
-            return response.json()
-        except ValueError:
+            return json.loads(content)
+        except (UnicodeDecodeError, json.JSONDecodeError):
             raise ValueError("REST API response was not valid JSON.") from None
 
     def _extract_records(self, payload: Any) -> list[dict[str, Any]]:
@@ -235,6 +266,7 @@ class RESTConnector(ConnectorBase):
 
         if isinstance(payload, list):
             if all(isinstance(item, dict) for item in payload):
+                enforce_source_row_limit(payload)
                 return payload
             raise ValueError("REST API response list must contain objects.")
 

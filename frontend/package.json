@@ -12,7 +12,8 @@
     "test": "vitest --environment jsdom",
     "test:e2e": "playwright test",
     "setup:codex": "npm ci && npx playwright install --with-deps chromium",
-    "verify": "npm run lint:ci && npm run build && npm test -- --run"
+    "verify": "npm run lint:ci && npm run build && npm run perf:budget && npm test -- --run",
+    "perf:budget": "node scripts/check-performance-budgets.cjs"
   },
   "dependencies": {
     "react": "^18.2.0",

@@ -1,4 +1,7 @@
 export async function fetchApiHealth({ apiFetch, accessCode }) {
+  const readyRequest = apiFetch("/api/ready", { accessCode })
+    .then(async (readyResponse) => (readyResponse.ok ? readyResponse.json() : null))
+    .catch(() => null);
   const response = await apiFetch("/api/health", { accessCode });
   if (!response.ok) {
     throw new Error(`Unexpected response: ${response.status}`);
@@ -7,14 +10,5 @@ export async function fetchApiHealth({ apiFetch, accessCode }) {
   if (payload.status !== "ok") {
     throw new Error("Health response was not ok.");
   }
-  let readyPayload = null;
-  try {
-    const readyResponse = await apiFetch("/api/ready", { accessCode });
-    if (readyResponse.ok) {
-      readyPayload = await readyResponse.json();
-    }
-  } catch {
-    readyPayload = null;
-  }
-  return { ...payload, ready: readyPayload };
+  return { ...payload, ready: await readyRequest };
 }

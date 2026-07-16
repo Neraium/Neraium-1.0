@@ -7,4 +7,7 @@ export default defineConfig({
       jsxRuntime: "automatic",
     }),
   ],
+  build: {
+    manifest: true,
+  },
 });

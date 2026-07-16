@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from app.connectors.base import ConnectorBase
+from app.connectors.limits import (
+    MAX_CONNECTOR_SOURCE_ROWS,
+    enforce_normalization_budget,
+    enforce_source_row_limit,
+)
 from app.connectors.models import ConnectorHealthStatus, NormalizedConnectorBatch, NormalizedTelemetryRecord, ValidationIssue
 from app.connectors.validation import deduplicate_records, normalize_timestamp_value, normalize_unit, summarize_issues, validate_numeric_value, validate_unit
 from app.services.data_quality import detect_timestamp_column
@@ -60,7 +65,12 @@ class CSVConnector(ConnectorBase):
     def fetch_historical(self) -> list[dict[str, Any]]:
         raw_content = self.config.get("content", "")
         reader = csv.DictReader(io.StringIO(raw_content))
-        return [dict(row) for row in reader]
+        rows: list[dict[str, Any]] = []
+        for row in reader:
+            rows.append(dict(row))
+            if len(rows) > MAX_CONNECTOR_SOURCE_ROWS:
+                enforce_source_row_limit(rows)
+        return rows
 
     def stream_latest(self) -> list[dict[str, Any]]:
         rows = self.fetch_historical()
@@ -77,9 +87,18 @@ class CSVConnector(ConnectorBase):
         if not raw_data:
             raise ValueError("CSV dataset is empty. Upload a file with timestamped telemetry rows.")
 
+        enforce_source_row_limit(raw_data)
         timestamp_column = detect_timestamp_column(list(raw_data[0].keys()))
         if timestamp_column is None:
             raise ValueError("CSV dataset is missing a timestamp column. Add a column like timestamp or recorded_at.")
+        sensor_columns = [
+            column_name
+            for column_name in raw_data[0]
+            if column_name
+            and column_name.strip().lower() != timestamp_column.lower()
+            and column_name.strip().lower() not in CONTEXT_COLUMNS
+        ]
+        enforce_normalization_budget(row_count=len(raw_data), sensor_count=len(sensor_columns))
 
         for row_index, row in enumerate(raw_data, start=2):
             normalized_timestamp = normalize_timestamp_value(row.get(timestamp_column))

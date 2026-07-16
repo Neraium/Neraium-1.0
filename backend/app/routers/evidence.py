@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
-from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs, read_evidence_run, record_operator_feedback
+from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_operator_feedback
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
 from app.services.upload_state_repository import read_evidence_by_identity
@@ -15,8 +15,11 @@ router = APIRouter(tags=["evidence"], dependencies=[Depends(require_api_access)]
 
 
 @router.get("/evidence/runs", response_model=EvidenceRunsListResponse)
-def get_evidence_runs() -> dict[str, Any]:
-    return {"runs": list_evidence_runs(limit=100)}
+def get_evidence_runs(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    return list_evidence_runs_page(limit=limit, offset=offset)
 
 
 @router.get("/evidence/runs/{run_id}", response_model=EvidenceRunResponse)

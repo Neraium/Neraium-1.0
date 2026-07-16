@@ -6,10 +6,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.telemetry_constants import SENTINEL
+
 SAMPLE_INTERVAL_SECONDS = 60
 SHORT_DROP_THRESHOLD = 3
 COMPLETENESS_FLOOR = 0.80
-SENTINEL = -9999.0
 
 
 @dataclass
